@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  hashedPassword String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  role           String    @default("developer") // developer, team_lead, product_manager, etc.
+  team           String?
+  currentFocus   String?
+  expertise      String[]
+  slackId        String?   // User's Slack ID for notifications
+
+  accounts       Account[]
+  posts          Post[]
+  comments       Comment[]
+  reactions      Reaction[]
+  mentions       Mention[]
+  bookmarks      Bookmark[]
+  sentMessages   Message[]  @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  conversations  Conversation[] @relation("UserConversations")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  type        String // UPDATE, BLOCKER, IDEA, QUESTION
+  message     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  authorId    String
+  isAutomated Boolean  @default(false)
+  priority    String   @default("normal") // normal, high, critical
+  
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags        Tag[]
+  comments    Comment[]
+  reactions   Reaction[]
+  mentions    Mention[]
+  bookmarks   Bookmark[]
+}
+
+model Tag {
+  id     String   @id @default(cuid())
+  name   String   @unique
+  posts  Post[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  postId    String
+  authorId  String
+  
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reactions Reaction[]
+}
+
+model Reaction {
+  id         String  @id @default(cuid())
+  type       String // 👍, 🎉, 👀, 💡, etc.
+  postId     String?
+  commentId  String?
+  authorId   String
+  
+  post       Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  author     User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  @@unique([authorId, postId, type, commentId])
+}
+
+model Mention {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([postId, userId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([postId, userId])
+}
+
+model GitHubIntegration {
+  id           String @id @default(cuid())
+  repositoryUrl String
+  accessToken  String
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+  read           Boolean  @default(false)
+  senderId       String
+  receiverId     String
+  conversationId String
+
+  sender         User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver       User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  messages   Message[]
+  participants User[]   @relation("UserConversations")
+  
+  @@index([createdAt])
+} 
