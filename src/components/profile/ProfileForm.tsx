@@ -174,7 +174,7 @@ export default function ProfileForm({ user }: ProfileFormProps) {
               className="bg-background border-border/60 focus:border-primary focus:ring-primary"
             />
             <p className="text-xs text-muted-foreground">
-              You'll receive a Slack notification when someone comments on your posts
+              You&apos;ll receive a Slack notification when someone comments on your posts
             </p>
           </div>
 

@@ -33,7 +33,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -51,7 +50,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 
-// Type that matches Prisma's response structure
+// Type that matches Prisma&apos;s response structure
 export type PrismaPost = Post & {
   author: User;
   tags: Tag[];
@@ -115,9 +114,6 @@ export default function PostItem({
   const [likesCount, setLikesCount] = useState(
     post.reactions.filter((reaction) => reaction.type === "LIKE").length
   );
-  const [bookmarksCount, setBookmarksCount] = useState(
-    post.reactions.filter((reaction) => reaction.type === "BOOKMARK").length
-  );
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -157,6 +153,7 @@ export default function PostItem({
         description: liked ? "Removed like" : "Added like"
       });
     } catch (error) {
+      console.error("Failed to like post:", error);
       toast({
         title: "Error",
         description: "Failed to like post",
@@ -182,12 +179,12 @@ export default function PostItem({
       // Update local state
       const newBookmarkedState = !bookmarked;
       setBookmarked(newBookmarkedState);
-      setBookmarksCount(prev => newBookmarkedState ? prev + 1 : prev - 1);
       
       toast({
         description: bookmarked ? "Removed bookmark" : "Added bookmark"
       });
     } catch (error) {
+      console.error("Failed to bookmark post:", error);
       toast({
         title: "Error",
         description: "Failed to bookmark post",
@@ -224,6 +221,7 @@ export default function PostItem({
       // Refresh the page to show the new comment
       router.refresh();
     } catch (error) {
+      console.error("Failed to add comment:", error);
       toast({
         title: "Error",
         description: "Failed to add comment",
@@ -597,7 +595,7 @@ export default function PostItem({
           <DialogHeader>
             <DialogTitle>Edit Post</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Make changes to your post. Click save when you're done.
+              Make changes to your post. Click save when you&apos;re done.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit}>
@@ -609,7 +607,7 @@ export default function PostItem({
                   name="message"
                   value={editFormData.message}
                   onChange={handleEditChange}
-                  placeholder="What's happening in your development world?"
+                  placeholder="What&apos;s happening in your development world?"
                   rows={4}
                   className="resize-none bg-background border-border/60 focus:border-primary focus:ring-primary"
                 />

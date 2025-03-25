@@ -6,8 +6,6 @@ import {
   UserIcon,
   QueueListIcon,
   HashtagIcon,
-  ChatBubbleLeftEllipsisIcon,
-  CogIcon,
   PlusCircleIcon,
   BookmarkIcon,
   EnvelopeIcon,

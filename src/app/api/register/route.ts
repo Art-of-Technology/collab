@@ -7,20 +7,29 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, email, password, role, team, currentFocus } = body;
 
+    if (!name || !email || !password) {
+      return NextResponse.json(
+        { message: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
     // Check if the email is already registered
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: {
+        email
+      }
     });
 
     if (existingUser) {
       return NextResponse.json(
         { message: "Email already registered" },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
     // Hash the password
-    const hashedPassword = await hash(password, 10);
+    const hashedPassword = await hash(password, 12);
 
     // Create the new user
     const user = await prisma.user.create({
@@ -28,16 +37,16 @@ export async function POST(req: Request) {
         name,
         email,
         hashedPassword,
-        role,
+        role: role || "developer",
         team,
-        currentFocus,
-        expertise: [], // Initialize as an empty array
-      },
+        currentFocus
+      }
     });
 
-    // Return the user without the password
-    const { hashedPassword: _, ...userWithoutPassword } = user;
-    return NextResponse.json(userWithoutPassword, { status: 201 });
+    // Create a sanitized version without the password
+    const { ...userWithoutPassword } = user;
+
+    return NextResponse.json(userWithoutPassword);
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(
@@ -45,4 +54,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-} 
+}

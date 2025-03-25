@@ -2,12 +2,6 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  TagIcon, 
-  PaperClipIcon, 
-  FaceSmileIcon,
-  ArrowUpCircleIcon,
-} from "@heroicons/react/24/outline";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,15 +47,6 @@ export default function CreatePostForm() {
       ...prev,
       [name]: value,
     }));
-  };
-
-  const handleCancel = () => {
-    setFormData({
-      message: "",
-      type: "UPDATE",
-      tags: "",
-      priority: "normal",
-    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

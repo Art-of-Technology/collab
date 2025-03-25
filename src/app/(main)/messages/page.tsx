@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "@heroicons/react/24/outline";
-import { Conversation, Message } from "@prisma/client";
+import { Conversation } from "@prisma/client";
 
 // Define types for the conversations data structure
 interface ConversationWithDetails extends Conversation {
@@ -36,24 +36,6 @@ export default async function MessagesPage() {
   if (!user) {
     redirect("/login");
   }
-  
-  // Get all users for starting new conversations
-  const users = await prisma.user.findMany({
-    where: {
-      id: {
-        not: user.id
-      }
-    },
-    select: {
-      id: true,
-      name: true,
-      image: true,
-      role: true
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  });
   
   // Get user with conversations
   const userWithConversations = await prisma.user.findUnique({
@@ -132,7 +114,7 @@ export default async function MessagesPage() {
       
       {conversationsWithCounts.length === 0 ? (
         <div className="text-center py-12 px-6 rounded-lg border border-border/40 bg-card/30 shadow-sm">
-          <p className="text-muted-foreground mb-4">You don't have any conversations yet</p>
+          <p className="text-muted-foreground mb-4">You don&apos;t have any conversations yet</p>
           <Button asChild variant="default" size="lg" className="shadow-md hover:shadow-lg transition-all">
             <Link href="/messages/new">Start a new conversation</Link>
           </Button>

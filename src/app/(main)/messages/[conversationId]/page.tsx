@@ -2,21 +2,17 @@ import { getCurrentUser } from "@/lib/session";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import MessageInput from "@/components/messages/MessageInput";
 import MessageList from "@/components/messages/MessageList";
 
-interface ConversationPageProps {
-  params: {
-    conversationId: string;
-  };
-}
-
-export default async function ConversationPage({ params }: ConversationPageProps) {
+export default async function ConversationPage({
+  params,
+}: {
+  params: { conversationId: string };
+}) {
   const { conversationId } = params;
   const currentUser = await getCurrentUser();
   
@@ -79,7 +75,7 @@ export default async function ConversationPage({ params }: ConversationPageProps
   });
   
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-w-4xl mx-auto border border-border/40 rounded-lg shadow-lg overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-4xl mx-auto border border-border/40 rounded-lg shadow-lg overflow-hidden">
       {/* Fixed header */}
       <div className="bg-card/95 border-b border-border/40 p-4 flex items-center gap-4 z-10 rounded-t-lg sticky top-0">
         <Button asChild variant="ghost" size="icon" className="hover:bg-background/50">

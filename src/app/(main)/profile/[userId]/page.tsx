@@ -1,36 +1,41 @@
 import { getCurrentUser } from "@/lib/session";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PostList from "@/components/posts/PostList";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 
-export default async function UserProfilePage({
-  params
-}: {
-  params: { userId: string }
-}) {
+interface UserProfilePageProps {
+  params: {
+    userId: string;
+  };
+}
+
+export default async function UserProfilePage({ params }: UserProfilePageProps) {
+  const { userId } = params;
   const currentUser = await getCurrentUser();
   
   if (!currentUser) {
     redirect("/login");
   }
   
-  // Check if viewing own profile
-  if (currentUser.id === params.userId) {
+  // If this is the current user's profile, redirect to /profile
+  if (userId === currentUser.id) {
     redirect("/profile");
   }
   
-  // Get the requested user
+  // Get the user
   const user = await prisma.user.findUnique({
     where: {
-      id: params.userId
+      id: userId
     }
   });
   
   if (!user) {
-    redirect("/404");
+    notFound();
   }
   
   // Get user's posts
@@ -71,21 +76,63 @@ export default async function UserProfilePage({
     }
   });
   
+  // Check if there's a conversation between the users already
+  const existingConversation = await prisma.conversation.findFirst({
+    where: {
+      AND: [
+        {
+          participants: {
+            some: {
+              id: currentUser.id
+            }
+          }
+        },
+        {
+          participants: {
+            some: {
+              id: user.id
+            }
+          }
+        }
+      ]
+    }
+  });
+  
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 overflow-x-hidden">
+      <div className="flex items-center gap-2 mb-6">
+        <Button asChild variant="ghost" size="icon">
+          <Link href="/timeline">
+            <ArrowLeftIcon className="h-5 w-5" />
+          </Link>
+        </Button>
+        <h1 className="text-xl font-bold">User Profile</h1>
+      </div>
+      
       <Card className="mb-8 border-border/40 bg-card/95 shadow-lg hover:shadow-xl transition-all duration-300">
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
-              <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-              <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                {user.name?.charAt(0).toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="text-2xl font-bold">{user.name}</h1>
-              <p className="text-muted-foreground">{user.role || "Developer"}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
+                <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
+                <AvatarFallback className="text-lg bg-primary/10 text-primary">
+                  {user.name?.charAt(0).toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="text-2xl font-bold">{user.name}</h2>
+                <p className="text-muted-foreground">{user.role || "Developer"}</p>
+                {user.team && (
+                  <p className="text-sm text-muted-foreground">Team: {user.team}</p>
+                )}
+              </div>
             </div>
+            
+            <Button asChild variant="outline">
+              <Link href={existingConversation ? `/messages/${existingConversation.id}` : `/messages/new/${user.id}`}>
+                Message
+              </Link>
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -106,57 +153,20 @@ export default async function UserProfilePage({
         </CardContent>
       </Card>
       
-      <Tabs defaultValue="posts" className="mb-8">
-        <TabsList className="bg-card/80 border border-border/40">
-          <TabsTrigger value="posts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Posts</TabsTrigger>
-          <TabsTrigger value="about" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">About</TabsTrigger>
-        </TabsList>
-        <TabsContent value="posts" className="mt-4">
+      <Card className="border-border/40 bg-card/95 shadow-md">
+        <CardHeader className="pb-2 border-b border-border/40">
+          <h2 className="text-xl font-semibold">{user.name}&apos;s Posts</h2>
+        </CardHeader>
+        <CardContent className="pt-4">
           {userPosts.length > 0 ? (
             <PostList posts={userPosts} currentUserId={currentUser.id} />
           ) : (
-            <Card className="border-border/40 bg-card/95 shadow-md">
-              <CardContent className="p-8 text-center text-muted-foreground">
-                <p>This user hasn't created any posts yet.</p>
-              </CardContent>
-            </Card>
+            <div className="p-4 text-center text-muted-foreground">
+              <p>This user hasn&apos;t created any posts yet.</p>
+            </div>
           )}
-        </TabsContent>
-        <TabsContent value="about" className="mt-4">
-          <Card className="border-border/40 bg-card/95 shadow-md">
-            <CardContent className="p-6">
-              {user.expertise && user.expertise.length > 0 ? (
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold mb-2">Expertise</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {(user.expertise as string[]).map((skill, index) => (
-                      <span key={index} className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm border border-primary/20 hover:bg-primary/20 transition-colors">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              
-              {user.currentFocus ? (
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Current Focus</h3>
-                  <p className="text-muted-foreground">{user.currentFocus}</p>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-center">This user hasn't added any information yet.</p>
-              )}
-              
-              {user.team && (
-                <div className="mt-4">
-                  <h3 className="text-lg font-semibold mb-2">Team</h3>
-                  <p className="text-muted-foreground">{user.team}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 } 

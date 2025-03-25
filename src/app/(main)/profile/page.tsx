@@ -104,7 +104,7 @@ export default async function ProfilePage() {
           ) : (
             <Card className="border-border/40 bg-card/95 shadow-md">
               <CardContent className="p-8 text-center text-muted-foreground">
-                <p>You haven't created any posts yet.</p>
+                <p>You haven&apos;t created any posts yet.</p>
               </CardContent>
             </Card>
           )}

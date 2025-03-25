@@ -1,20 +1,35 @@
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+import { XCircleIcon } from "@heroicons/react/24/outline";
 import PostList from "@/components/posts/PostList";
 import CreatePostForm from "@/components/posts/CreatePostForm";
 import FilterTabs from "@/components/posts/FilterTabs";
 import { Badge } from "@/components/ui/badge";
-import { XCircleIcon } from "@heroicons/react/24/outline";
-import Link from "next/link";
+
+interface TimelinePageProps {
+  searchParams: { 
+    filter?: string;
+    tag?: string;
+  }
+}
+
+// Define a proper type for the where clause
+interface WhereClause {
+  type?: string;
+  tags?: {
+    some: {
+      name: string;
+    }
+  }
+}
 
 export const dynamic = 'force-dynamic';
 
 export default async function TimelinePage({
   searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined }
-}) {
+}: TimelinePageProps) {
   const user = await getCurrentUser();
   
   if (!user) {
@@ -25,7 +40,7 @@ export default async function TimelinePage({
   const tag = typeof searchParams.tag === 'string' ? searchParams.tag : undefined;
   
   // Build query based on filter
-  const whereClause: any = {};
+  const whereClause: WhereClause = {};
   
   if (filter) {
     // Map URL filter to database filter

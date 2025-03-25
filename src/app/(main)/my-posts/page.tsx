@@ -11,8 +11,8 @@ export default async function MyPostsPage() {
     redirect("/login");
   }
   
-  // Get user's posts
-  const myPosts = await prisma.post.findMany({
+  // Get user posts
+  const userPosts = await prisma.post.findMany({
     where: {
       authorId: user.id
     },
@@ -36,16 +36,21 @@ export default async function MyPostsPage() {
   
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 overflow-x-hidden">
-      <h1 className="text-2xl font-bold mb-6">My Posts</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">My Posts</h1>
+        <p className="text-muted-foreground">
+          View and manage your posts
+        </p>
+      </div>
       
-      {myPosts.length > 0 ? (
-        <PostList posts={myPosts} currentUserId={user.id} />
-      ) : (
+      {userPosts.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
-            <p>You haven't created any posts yet.</p>
+            <p>You haven&apos;t created any posts yet.</p>
           </CardContent>
         </Card>
+      ) : (
+        <PostList posts={userPosts} currentUserId={user.id} />
       )}
     </div>
   );

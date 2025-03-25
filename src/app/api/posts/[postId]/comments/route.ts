@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 
 // Slack webhook URL from the environment variables
-const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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";
+const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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";
 
 // Function to send Slack notification
 async function sendSlackNotification(userId: string, postAuthorId: string, commentText: string, postId: string) {

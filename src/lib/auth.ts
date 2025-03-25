@@ -1,6 +1,6 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcrypt";
-import NextAuth, { type DefaultSession, AuthOptions } from "next-auth";
+import { type DefaultSession, AuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GithubProvider from "next-auth/providers/github";
 import { prisma } from "./prisma";

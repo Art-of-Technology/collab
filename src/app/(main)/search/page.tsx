@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { MagnifyingGlassIcon, TagIcon, UserIcon } from "@heroicons/react/24/outline";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -104,7 +104,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Search Results</h1>
         <p className="text-muted-foreground">
-          Found {totalResults} results for "{query}"
+          Found {totalResults} results for &quot;{query}&quot;
         </p>
       </div>
       
@@ -237,7 +237,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           {totalResults === 0 && (
             <Card className="border-border/40 bg-card/95 shadow-md">
               <CardContent className="p-8 text-center text-muted-foreground">
-                <p>No results found for "{query}"</p>
+                <p>No results found for &quot;{query}&quot;</p>
                 <p className="text-sm mt-1">Try searching for something else or check your spelling</p>
               </CardContent>
             </Card>
@@ -250,7 +250,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           ) : (
             <Card className="border-border/40 bg-card/95 shadow-md">
               <CardContent className="p-8 text-center text-muted-foreground">
-                <p>No posts found for "{query}"</p>
+                <p>No posts found for &quot;{query}&quot;</p>
               </CardContent>
             </Card>
           )}
@@ -293,7 +293,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           ) : (
             <Card className="border-border/40 bg-card/95 shadow-md">
               <CardContent className="p-8 text-center text-muted-foreground">
-                <p>No people found for "{query}"</p>
+                <p>No people found for &quot;{query}&quot;</p>
               </CardContent>
             </Card>
           )}
@@ -324,7 +324,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           ) : (
             <Card className="border-border/40 bg-card/95 shadow-md">
               <CardContent className="p-8 text-center text-muted-foreground">
-                <p>No tags found for "{query}"</p>
+                <p>No tags found for &quot;{query}&quot;</p>
               </CardContent>
             </Card>
           )}

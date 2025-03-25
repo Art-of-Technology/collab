@@ -56,6 +56,17 @@ export async function POST(req: Request) {
   }
 }
 
+// Define interface for query parameters
+interface PostQueryFilters {
+  type?: string;
+  authorId?: string;
+  tags?: {
+    some: {
+      name: string;
+    }
+  };
+}
+
 export async function GET(req: Request) {
   try {
     const currentUser = await getCurrentUser();
@@ -74,7 +85,7 @@ export async function GET(req: Request) {
     const limit = Number(searchParams.get("limit") || "20");
     
     // Build the query
-    const query: any = {};
+    const query: PostQueryFilters = {};
     
     // Filter by type if provided
     if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
