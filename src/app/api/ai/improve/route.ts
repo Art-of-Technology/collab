@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from "axios"
 import { getCurrentUser } from "@/lib/session";
 import { NextResponse } from "next/server";
 
