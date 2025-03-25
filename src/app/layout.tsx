@@ -6,7 +6,7 @@ import { fontSans } from "@/lib/fonts";
 import SessionProvider from "@/providers/SessionProvider";
 
 export const metadata = {
-  title: "Devitter",
+  title: "Weezboo Teams",
   description: "A social platform for developers",
 };
 
