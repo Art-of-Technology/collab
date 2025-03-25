@@ -21,7 +21,7 @@ export default async function Home() {
           <div className="md:w-1/2 flex flex-col items-start">
             <div className="flex items-center gap-3 mb-6">
               <LogoIcon className="h-12 w-12 text-primary" />
-              <h1 className="text-5xl font-bold">Devitter</h1>
+              <h1 className="text-5xl font-bold">Weezboo Teams</h1>
             </div>
             <h2 className="text-3xl font-bold mb-6">
               The internal timeline for developer teams
@@ -84,7 +84,7 @@ export default async function Home() {
       {/* Footer */}
       <footer className="bg-card/80 border-t border-border/30 py-8">
         <div className="container mx-auto px-4">
-          <p className="text-center text-muted-foreground">© 2025 Devitter. All rights reserved.</p>
+          <p className="text-center text-muted-foreground">© 2025 Weezboo. All rights reserved.</p>
         </div>
       </footer>
     </div>

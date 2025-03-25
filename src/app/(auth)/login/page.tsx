@@ -18,7 +18,7 @@ export default async function LoginPage() {
           <Link href="/" className="mb-4">
             <LogoIcon className="h-12 w-12 text-primary" />
           </Link>
-          <h1 className="text-3xl font-bold">Devitter</h1>
+          <h1 className="text-3xl font-bold">Weezboo Teams</h1>
           <p className="mt-2 text-muted-foreground">Connect with your development team</p>
         </div>
         

@@ -62,8 +62,8 @@ export default function Navbar() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center space-x-2">
-            <LogoIcon className="h-8 w-8 text-primary" />
-            <span className="font-bold text-xl">Devitter</span>
+            <LogoIcon className="h-2 w-2 text-primary" width={50} height={50} />
+            <span className="font-bold text-xl">Weezboo Teams</span>
           </Link>
         </div>
 
