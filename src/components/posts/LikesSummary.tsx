@@ -2,9 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  HeartIcon as HeartSolidIcon,
-} from "@heroicons/react/24/solid";
 
 type ReactionWithAuthor = {
   id: string;

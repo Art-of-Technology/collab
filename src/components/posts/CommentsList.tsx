@@ -67,7 +67,6 @@ const CommentComponent = ({
   const [showReplies, setShowReplies] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const [showLikes, setShowLikes] = useState(false);
   const [likesData, setLikesData] = useState<any[]>(
     comment.reactions?.filter(reaction => reaction.type === "LIKE") || []
   );
@@ -95,14 +94,6 @@ const CommentComponent = ({
 
   // Count likes for this comment
   const likesCount = likesData.length;
-
-  // Get users who liked the comment
-  const likedByUsers = likesData
-    .map(reaction => {
-      // If we have the author object use it, otherwise create a minimal one with just the ID
-      return reaction.author || { id: reaction.authorId, name: "User", image: null };
-    })
-    .slice(0, 3) || [];
 
   // Function to handle like button click with server data only
   const handleLike = async () => {
