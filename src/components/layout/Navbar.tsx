@@ -85,9 +85,9 @@ export default function Navbar() {
             <>
               <Button variant="ghost" size="icon" className="relative hover-effect">
                 <BellIcon className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
-                  3
-                </span>
+                {/* <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
+                  
+                </span> */}
               </Button>
 
               {/* Profile dropdown */}

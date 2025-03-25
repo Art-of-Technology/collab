@@ -58,6 +58,11 @@ export async function PATCH(
       return new NextResponse("Message is required", { status: 400 });
     }
 
+    //TODO: Get length from config or environment variable
+    if (message.length > 160) { // Arbitrary limit 
+      return new NextResponse("Message is too long", { status: 400 });
+    }
+
     if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
       return new NextResponse("Invalid post type", { status: 400 });
     }
