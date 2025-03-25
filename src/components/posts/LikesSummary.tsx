@@ -122,7 +122,11 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
   return (
     <div
       className="text-muted-foreground text-sm mb-4 cursor-pointer hover:text-foreground transition-colors"
-      onClick={onShowAllLikes}
+      onClick={() => {
+        if (likesWithAuthor.length > 0) {
+          onShowAllLikes();
+        }
+      }}
     >
       {renderLikesSummary()}
     </div>
