@@ -35,9 +35,13 @@ export default async function TimelinePage({
   if (!user) {
     redirect("/login");
   }
+  const _searchParams = await searchParams;
+  // Safely handle searchParams - check if they exist first before awaiting
+  const filterParam = _searchParams?.filter ? await _searchParams.filter : undefined;
+  const tagParam = _searchParams?.tag ? await _searchParams.tag : undefined;
   
-  const filter = typeof searchParams.filter === 'string' ? searchParams.filter.toLowerCase() : undefined;
-  const tag = typeof searchParams.tag === 'string' ? searchParams.tag : undefined;
+  const filter = typeof filterParam === 'string' ? filterParam.toLowerCase() : undefined;
+  const tag = typeof tagParam === 'string' ? tagParam : undefined;
   
   // Build query based on filter
   const whereClause: WhereClause = {};

@@ -5,7 +5,13 @@ import { NextResponse } from "next/server";
 
 
 async function improveEnglishText(userInput: string) {
-    const apiKey = process.env.OPENAPI_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
+    
+    if (!apiKey) {
+        console.error('OpenAI API key is missing');
+        return null;
+    }
+    
     const endpoint = 'https://api.openai.com/v1/chat/completions';
 
     const messages = [
@@ -34,7 +40,12 @@ async function improveEnglishText(userInput: string) {
                 },
             }
         );
-        console.log(response.data.choices[0].message.content)
+        
+        if (!response.data?.choices?.[0]?.message?.content) {
+            console.error('Unexpected API response format:', response.data);
+            return null;
+        }
+        
         const improvedText = response.data.choices[0].message.content.trim();
         return improvedText;
     } catch (error: any) {
@@ -43,7 +54,11 @@ async function improveEnglishText(userInput: string) {
     }
 }
 
-function normalizeText(text: string): string {
+function normalizeText(text: string | null): string {
+    if (!text) {
+        return "Failed to improve text. Please try again.";
+    }
+    
     if (text.startsWith('"')) {
         text = text.slice(1);
     }
@@ -55,19 +70,42 @@ function normalizeText(text: string): string {
 
 
 export async function POST(req: Request) {
-    const currentUser = await getCurrentUser();
-    if (!currentUser?.id) {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser?.id) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+        
+        const body = await req.json();
+        const { text } = body;
+        
+        if (!text || typeof text !== 'string') {
+            return NextResponse.json(
+                { error: "Text input is required" },
+                { status: 400 }
+            );
+        }
+        
+        const result = await improveEnglishText(text);
+        
+        if (!result) {
+            return NextResponse.json(
+                { error: "Failed to improve text. Please try again." },
+                { status: 500 }
+            );
+        }
+
+        return NextResponse.json({
+            message: normalizeText(result)
+        });
+    } catch (error) {
+        console.error('Error in improve API:', error);
         return NextResponse.json(
-            { error: "Unauthorized" },
-            { status: 401 }
+            { error: "An unexpected error occurred" },
+            { status: 500 }
         );
     }
-    const body = await req.json();
-    const { text } = body;
-    const result = await improveEnglishText(text);
-
-    return NextResponse.json({
-        message: normalizeText(result)
-    });
-
 }
