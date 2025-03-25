@@ -7,12 +7,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
   SelectTrigger,
-  SelectValue 
+  SelectValue
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
@@ -23,13 +23,14 @@ export default function CreatePostForm() {
   const { toast } = useToast();
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
+  const [isTextImproverLoading, setIsTextImproverLoading] = useState(false);
   const [formData, setFormData] = useState({
     message: "",
     type: "UPDATE",
     tags: "",
     priority: "normal",
   });
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleChange = (
@@ -49,9 +50,8 @@ export default function CreatePostForm() {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const improveText = async () => {
+
     if (!formData.message.trim()) {
       toast({
         title: "Error",
@@ -60,15 +60,57 @@ export default function CreatePostForm() {
       });
       return;
     }
-    
+
+    setIsTextImproverLoading(true);
+
+    const response = await fetch("/api/ai/improve", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: formData.message,
+      }),
+    });
+
+
+    if (!response.ok) {
+      setIsTextImproverLoading(false);
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || "Failed to create post");
+    }
+
+    const data = await response.json();
+
+    setFormData({
+      ...formData,
+      message: data.message
+    });
+
+    setIsTextImproverLoading(false);
+
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.message.trim()) {
+      toast({
+        title: "Error",
+        description: "Message is required",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
-    
+
     try {
       // Process tags into an array
       const tagsArray = formData.tags
         ? formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
         : [];
-      
+
       const response = await fetch("/api/posts", {
         method: "POST",
         headers: {
@@ -81,12 +123,12 @@ export default function CreatePostForm() {
           priority: formData.priority,
         }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.message || "Failed to create post");
       }
-      
+
       // Reset form
       setFormData({
         message: "",
@@ -94,10 +136,10 @@ export default function CreatePostForm() {
         tags: "",
         priority: "normal",
       });
-      
+
       // Refresh the page to show the new post
       router.refresh();
-      
+
       toast({
         title: "Success",
         description: "Post created successfully"
@@ -144,11 +186,20 @@ export default function CreatePostForm() {
                 required
               />
             </div>
+
+            <Button
+              type="button"
+              disabled={isLoading || !formData.message.trim()}
+              className="bg-primary hover:bg-primary/90 transition-colors"
+              onClick={() => { improveText() }}
+            >
+              {isTextImproverLoading   ? 'Please wait...' : "Improve with AI"}
+            </Button>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="postType">Post Type</Label>
-              <Select 
+              <Select
                 value={formData.type}
                 onValueChange={(value) => handleSelectChange("type", value)}
               >
@@ -165,7 +216,7 @@ export default function CreatePostForm() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <Select 
+              <Select
                 value={formData.priority}
                 onValueChange={(value) => handleSelectChange("priority", value)}
               >
@@ -192,12 +243,12 @@ export default function CreatePostForm() {
             />
           </div>
           <div className="flex justify-end">
-            <Button 
-              type="submit" 
-              disabled={isLoading || !formData.message.trim()} 
+            <Button
+              type="submit"
+              disabled={isLoading || !formData.message.trim()}
               className="bg-primary hover:bg-primary/90 transition-colors"
             >
-              {isLoading ? 
+              {isLoading ?
                 <div className="flex items-center gap-2">
                   <span className="animate-spin">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -207,7 +258,7 @@ export default function CreatePostForm() {
                   </span>
                   <span>Posting...</span>
                 </div>
-                : 
+                :
                 "Post"
               }
             </Button>
