@@ -28,6 +28,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "framer-motion": "^12.6.0",
     "lucide-react": "^0.483.0",
     "motion": "^12.6.0",
     "next": "15.2.3",
@@ -42,8 +43,8 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcrypt": "^5.0.2",
-    "@types/node": "^20",
-    "@types/react": "^19",
+    "@types/node": "^20.17.27",
+    "@types/react": "^19.0.12",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
@@ -52,6 +53,6 @@
     "prisma": "^6.5.0",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5"
+    "typescript": "^5.8.2"
   }
 }

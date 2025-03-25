@@ -34,6 +34,7 @@ model User {
   sentMessages   Message[]  @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   conversations  Conversation[] @relation("UserConversations")
+  commentLikes   CommentLike[]
 }
 
 model Account {
@@ -86,10 +87,14 @@ model Comment {
   updatedAt DateTime @updatedAt
   postId    String
   authorId  String
+  parentId  String?
   
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   reactions Reaction[]
+  likes     CommentLike[]
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies   Comment[] @relation("CommentReplies")
 }
 
 model Reaction {
@@ -128,6 +133,18 @@ model Bookmark {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@unique([postId, userId])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+  
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([commentId, userId])
 }
 
 model GitHubIntegration {

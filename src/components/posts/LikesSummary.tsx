@@ -79,7 +79,7 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
     } else if (likesWithAuthor.length === 1) {
       return (
         <span>
-          <HeartSolidIcon className="h-4 w-4 text-rose-500" />Liked by{" "}
+          Liked by{" "}
           <Link href={`/profile/${likesWithAuthor[0].author.id}`} className="font-semibold hover:underline">
             {likesWithAuthor[0].author.name}
           </Link>

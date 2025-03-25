@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { Comment, Reaction, User } from "@prisma/client";
+
+// Define types based on Prisma models
+type CommentWithAuthorAndReactions = Comment & {
+  author: User;
+  reactions: (Reaction & {
+    author: {
+      id: string;
+      name: string | null;
+      image: string | null;
+    }
+  })[];
+  replies?: CommentWithAuthorAndReactions[];
+};
 
 // Slack webhook URL from the environment variables
 const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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";
@@ -120,20 +134,24 @@ export async function POST(
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
-    const { postId } = params;
-    const { message } = await req.json();
+    const _params = await params;
+    const postId = await _params.postId;
+    const body = await req.json();
+    const { message, parentId } = body;
     
-    if (!message || typeof message !== "string" || !message.trim()) {
-      return new NextResponse("Comment message is required", { status: 400 });
+    if (!message || message.trim() === "") {
+      return new NextResponse("Message is required", { status: 400 });
     }
     
-    // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
-    });
-    
-    if (!post) {
-      return new NextResponse("Post not found", { status: 404 });
+    // Verify parentId references a valid comment if provided
+    if (parentId) {
+      const parentComment = await prisma.comment.findUnique({
+        where: { id: parentId, postId },
+      });
+      
+      if (!parentComment) {
+        return new NextResponse("Parent comment not found", { status: 404 });
+      }
     }
     
     // Create the comment
@@ -142,57 +160,117 @@ export async function POST(
         message,
         postId,
         authorId: user.id,
+        parentId: parentId || null, // Explicitly set to null if not provided
       },
       include: {
-        author: true,
-      }
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+      },
     });
     
-    // Send Slack notification
-    await sendSlackNotification(user.id, post.authorId, message, postId);
-    
     return NextResponse.json(comment);
-    
   } catch (error) {
-    console.error("Comment error:", error);
+    console.error("Error creating comment:", error);
     return new NextResponse("Internal error", { status: 500 });
   }
 }
 
 export async function GET(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { postId: string } }
 ) {
   try {
-    const currentUser = await getCurrentUser();
+    const _params = await params;
+    const postId = await _params.postId;
     
-    if (!currentUser?.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-    
-    const { postId } = params;
-    
-    const comments = await prisma.comment.findMany({
+    // First, get all top-level comments (those without a parent)
+    const topLevelComments = await prisma.comment.findMany({
       where: {
         postId,
-      },
-      include: {
-        author: true,
+        parentId: null, // Only get comments without a parent
       },
       orderBy: {
-        createdAt: "desc",
+        createdAt: 'desc',
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
       },
     });
     
-    return NextResponse.json(comments);
+    // Then, get all replies (comments with a parentId)
+    const replies = await prisma.comment.findMany({
+      where: {
+        postId,
+        NOT: {
+          parentId: null, // Only get comments with a parent
+        },
+      },
+      orderBy: {
+        createdAt: 'asc', // Sort replies chronologically
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    
+    // Group replies by their parentId for easier assignment
+    const repliesByParentId = replies.reduce((acc, reply) => {
+      const parentId = reply.parentId as string;
+      if (!acc[parentId]) {
+        acc[parentId] = [];
+      }
+      acc[parentId].push(reply);
+      return acc;
+    }, {} as Record<string, any[]>);
+    
+    // Attach replies to their parent comments
+    const commentsWithReplies = topLevelComments.map(comment => ({
+      ...comment,
+      replies: repliesByParentId[comment.id] || [],
+    }));
+    
+    return NextResponse.json({ comments: commentsWithReplies });
   } catch (error) {
-    console.error("[COMMENTS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal error" },
-      { status: 500 }
-    );
+    console.error("Error fetching comments:", error);
+    return new NextResponse("Internal error", { status: 500 });
   }
 } 
