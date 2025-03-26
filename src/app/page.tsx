@@ -1,9 +1,4 @@
-import Link from "next/link";
-import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { LogoIcon } from "@/components/icons/LogoIcon";
 import { getAuthSession } from "@/lib/auth";
 
 export default async function Home() {

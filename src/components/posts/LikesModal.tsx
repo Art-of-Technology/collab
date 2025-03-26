@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -37,8 +37,8 @@ export default function LikesModal({ postId, isOpen, onOpenChange, initialLikes 
   const [likesWithAuthor, setLikesWithAuthor] = useState<ReactionWithAuthor[]>(initialLikes);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch likes when the modal opens if not provided
-  const fetchLikes = async () => {
+  // Wrap fetchLikes with useCallback to prevent it from changing on every render
+  const fetchLikes = useCallback(async () => {
     // Don't fetch if we already have data
     if (initialLikes.length > 0) {
       setLikesWithAuthor(initialLikes);
@@ -70,7 +70,7 @@ export default function LikesModal({ postId, isOpen, onOpenChange, initialLikes 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [postId, initialLikes, toast]);
 
   // Fetch likes when the modal opens
   useEffect(() => {

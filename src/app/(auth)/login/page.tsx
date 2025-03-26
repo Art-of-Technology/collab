@@ -2,7 +2,7 @@ import LoginForm from "@/components/auth/LoginForm";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LogoIcon } from "@/components/icons/LogoIcon";
+import LogoIcon from "@/components/icons/LogoIcon";
 
 export default async function LoginPage() {
   const user = await getCurrentUser();

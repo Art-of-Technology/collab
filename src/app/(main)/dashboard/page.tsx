@@ -7,8 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AlertTriangle, Lightbulb, MessageSquare, Heart, HelpCircle, Sparkles, Clock, TrendingUp, Tag, CheckCircle, User, Users } from "lucide-react";
-import CreatePostForm from "@/components/posts/CreatePostForm";
+import { AlertTriangle, Lightbulb, MessageSquare, Heart, HelpCircle, Sparkles, TrendingUp, Tag, CheckCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -22,24 +21,6 @@ export default async function DashboardPage() {
   if (!session?.user) {
     redirect("/login");
   }
-
-  // Fetch latest posts across all categories
-  const latestPosts = await prisma.post.findMany({
-    take: 5,
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      author: true,
-      tags: true,
-      _count: {
-        select: {
-          comments: true,
-          reactions: true,
-        },
-      },
-    },
-  });
 
   // Fetch recent blockers
   const latestBlockers = await prisma.post.findMany({
@@ -282,7 +263,7 @@ export default async function DashboardPage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold">Welcome back, {session.user.name}</h1>
         <p className="text-muted-foreground">
-          Here's what's happening in your development world today
+          Here&apos;s what&apos;s happening in your development world today
         </p>
       </div>
 
@@ -367,16 +348,16 @@ export default async function DashboardPage() {
                       <p className="text-sm mt-1">
                         {activity.type === "like" && activity.post ? (
                           <>
-                            Liked <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}'s</Link> post:
+                            Liked <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
                             <Link href={`/posts/${activity.post.id}`} className="text-primary hover:underline group-hover:text-primary/80">
-                              "{truncateText(activity.post.message, 60)}"
+                              &quot;{truncateText(activity.post.message, 60)}&quot;
                             </Link>
                           </>
                         ) : activity.type === "comment" && activity.post ? (
                           <>
-                            Commented on <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}'s</Link> post:
+                            Commented on <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
                             <Link href={`/posts/${activity.post.id}`} className="text-primary hover:underline group-hover:text-primary/80">
-                              "{truncateText(activity.message || "", 60)}"
+                              &quot;{truncateText(activity.message || "", 60)}&quot;
                             </Link>
                           </>
                         ) : (
@@ -402,7 +383,7 @@ export default async function DashboardPage() {
               Your Recent Activity
             </CardTitle>
             <CardDescription>
-              Posts you've created recently
+              Posts you&apos;ve created recently
               <Link href="/my-posts" className="ml-2 text-primary hover:underline">
                 View all
               </Link>
@@ -442,7 +423,7 @@ export default async function DashboardPage() {
                 ))
               ) : (
                 <div className="py-4 text-center text-muted-foreground">
-                  <p>You haven't created any posts yet</p>
+                  <p>You haven&apos;t created any posts yet</p>
                   <Button className="mt-2">
                     <Link href="/posts/create">Create your first post</Link>
                   </Button>
@@ -451,11 +432,11 @@ export default async function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-
       </div>
 
       {/* Your activity and unanswered questions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
         {/* Blockers Section */}
         <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
           <CardHeader className="pb-2">
@@ -552,7 +533,7 @@ export default async function DashboardPage() {
                         <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(post.createdAt, { addSuffix: true })}
                         </span>
-                        <Link href={`/timeline?filter=${post.type.toLowerCase()}`}>
+                        <Link href={`/timeline?filter=${post.type.toLowerCase()}s`}>
                           <Badge variant={getPostBadgeVariant(post.type)} className="text-xs cursor-pointer hover:bg-muted">
                             {post.type}
                           </Badge>
