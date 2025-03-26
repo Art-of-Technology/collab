@@ -35,6 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 type Author = {
   id: string;
@@ -47,12 +48,19 @@ interface FeatureRequestDetailProps {
     id: string;
     title: string;
     description: string;
+    html?: string | null;
     status: string;
     createdAt: string;
-    author: Author;
+    updatedAt: string;
     voteScore: number;
     upvotes: number;
     downvotes: number;
+    authorId: string;
+    author: Author;
+    _count?: {
+      votes?: number;
+      comments?: number;
+    };
   };
   userVote: number | null;
   isAdmin: boolean;
@@ -339,7 +347,7 @@ export default function FeatureRequestDetail({
         </div>
       )}
       
-      <CardContent className="p-6">
+      <CardContent className="pt-4 pb-6">
         <div className="flex gap-6">
           {/* Vote controls */}
           <div className="flex flex-col items-center gap-1">
@@ -376,19 +384,27 @@ export default function FeatureRequestDetail({
           </div>
           
           {/* Feature request content */}
-          <div className="flex-1 space-y-5">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8 border border-border/40">
-                <AvatarImage src={featureRequest.author.image || undefined} alt={featureRequest.author.name || "User"} />
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  {featureRequest.author.name?.charAt(0) || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <span className="font-medium">{featureRequest.author.name}</span>
-            </div>
-            
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="whitespace-pre-wrap text-foreground leading-relaxed">{featureRequest.description}</p>
+          <div className="flex-1 space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Avatar className="h-8 w-8 border border-border/40">
+                  <AvatarImage src={featureRequest.author.image || undefined} alt={featureRequest.author.name || "User"} />
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {featureRequest.author.name?.charAt(0) || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="font-medium">{featureRequest.author.name}</span>
+              </div>
+              
+              <h3 className="text-lg font-medium">Description</h3>
+              {featureRequest.html ? (
+                <MarkdownContent 
+                  content={featureRequest.html} 
+                  className="mt-2"
+                />
+              ) : (
+                <p className="mt-2 whitespace-pre-line">{featureRequest.description}</p>
+              )}
             </div>
           </div>
         </div>

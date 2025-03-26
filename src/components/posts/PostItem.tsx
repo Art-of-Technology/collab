@@ -149,6 +149,7 @@ export default function PostItem({
       <CardContent className="pt-2">
         <PostContent 
           message={post.message}
+          html={post.html}
           tags={post.tags}
           likesCount={likesCount}
           commentsCount={commentsCount}

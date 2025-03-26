@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -17,24 +16,24 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
-import { TextImproverButton } from "@/components/ui/text-improver-button";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 export default function CreatePostForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
+  const [isImproving, setIsImproving] = useState(false);
   const [formData, setFormData] = useState({
     message: "",
+    messageHtml: "",
     type: "UPDATE",
     tags: "",
     priority: "normal",
   });
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -50,11 +49,57 @@ export default function CreatePostForm() {
     }));
   };
 
-  const handleImprovedText = (improvedText: string) => {
+  const handleEditorChange = (html: string, markdown: string) => {
     setFormData(prev => ({
       ...prev,
-      message: improvedText
+      message: markdown,
+      messageHtml: html
     }));
+  };
+
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) {
+      return text;
+    }
+    
+    setIsImproving(true);
+    toast({
+      title: "Improving text...",
+      description: "Please wait while AI improves your text"
+    });
+    
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return the improved text to be displayed in the popup
+      return improvedText;
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to improve text. Please try again.",
+        variant: "destructive"
+      });
+      console.error(error);
+      // Return original text if there was an error
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +138,7 @@ export default function CreatePostForm() {
         },
         body: JSON.stringify({
           message: formData.message,
+          html: formData.messageHtml,
           type: formData.type,
           tags: tagsArray,
           priority: formData.priority,
@@ -107,6 +153,7 @@ export default function CreatePostForm() {
       // Reset form
       setFormData({
         message: "",
+        messageHtml: "",
         type: "UPDATE",
         tags: "",
         priority: "normal",
@@ -150,36 +197,24 @@ export default function CreatePostForm() {
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <div className="relative">
-              <Textarea
-                placeholder="What you are up to today?"
-                className="min-h-24 resize-none bg-background border-border/60 focus:border-primary focus:ring-primary"
-                value={formData.message}
-                name="message"
-                onChange={handleChange}
-                ref={textareaRef}
-                required
-              />
-              
-              {160 - formData.message.length < 0 ? (
-                <p className="mt-1 text-right text-xs text-destructive">
-                  {formData.message.length - 160} characters over the limit
-                </p>
-              ) : (
-                <p className="mt-1 text-right text-xs text-muted-foreground">
-                  {160 - formData.message.length} characters remaining
-                </p>
-              )}
-              
-              <div className="absolute mb-1 right-2 bottom-6">
-                <TextImproverButton 
-                  text={formData.message}
-                  onImprovedText={handleImprovedText}
-                  disabled={isLoading}
-                  maxLength={160}
-                />
-              </div>
-            </div>
+            <MarkdownEditor
+              content={formData.message}
+              onChange={handleEditorChange}
+              placeholder="What you are up to today?"
+              minHeight="100px"
+              maxHeight="300px"
+              onAiImprove={handleAiImprove}
+            />
+            
+            {160 - (formData.message?.length || 0) < 0 ? (
+              <p className="mt-1 text-right text-xs text-destructive">
+                {(formData.message?.length || 0) - 160} characters over the limit
+              </p>
+            ) : (
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {160 - (formData.message?.length || 0)} characters remaining
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -230,7 +265,7 @@ export default function CreatePostForm() {
           <div className="flex justify-end">
             <Button
               type="submit"
-              disabled={isLoading || !formData.message.trim()}
+              disabled={isLoading || !formData.message.trim() || isImproving}
               className="bg-primary hover:bg-primary/90 transition-colors"
             >
               {isLoading ?

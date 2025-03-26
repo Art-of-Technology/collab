@@ -6,7 +6,8 @@ import { prisma } from "@/lib/prisma";
 // Validation schemas
 const featureRequestSchema = z.object({
   title: z.string().min(1).max(100),
-  description: z.string().min(1).max(1000),
+  description: z.string().min(1).max(2000),
+  html: z.string().optional(),
 });
 
 const getFeatureRequestsParamsSchema = z.object({
@@ -155,13 +156,14 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const { title, description } = validated.data;
+    const { title, description, html } = validated.data;
     console.log("Creating feature request:", { title, authorId: session.user.id });
 
     const featureRequest = await prisma.featureRequest.create({
       data: {
         title,
         description,
+        html: html || null,
         authorId: session.user.id,
       },
       include: {

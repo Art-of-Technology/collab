@@ -63,6 +63,7 @@ model Post {
   id          String   @id @default(cuid())
   type        String // UPDATE, BLOCKER, IDEA, QUESTION
   message     String   @db.Text
+  html        String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   authorId    String
@@ -86,6 +87,7 @@ model Tag {
 model Comment {
   id               String   @id @default(cuid())
   message          String
+  html             String?  @db.Text
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   authorId         String
@@ -190,6 +192,7 @@ model FeatureRequest {
   id          String                  @id @default(cuid())
   title       String
   description String
+  html        String?                 @db.Text
   status      String                  @default("pending") // pending, accepted, rejected, completed
   createdAt   DateTime                @default(now())
   updatedAt   DateTime                @updatedAt

@@ -2,10 +2,20 @@ import type { Post, User, Tag, Comment, Reaction } from "@prisma/client";
 
 // Post with all relations from Prisma
 export type PrismaPost = Post & {
+  html?: string | null;
   author: User;
   tags: Tag[];
-  comments: (Comment & { author: User })[];
+  comments: (Comment & {
+    author: User;
+    html?: string | null;
+    reactions?: Reaction[];
+    replies?: any[];
+  })[];
   reactions: Reaction[];
+  _count?: {
+    comments: number;
+    reactions: number;
+  };
 };
 
 // Reaction with author details
@@ -24,8 +34,12 @@ export type ReactionWithAuthor = {
 export type CommentWithAuthor = {
   id: string;
   message: string;
+  html?: string | null;
   createdAt: Date;
   author: User;
+  reactions?: Reaction[];
+  parentId?: string | null;
+  replies?: CommentWithAuthor[];
 };
 
 // Badge variants

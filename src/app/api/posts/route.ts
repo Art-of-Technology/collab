@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
     
     const body = await req.json();
-    const { message, type, tags, priority } = body;
+    const { message, html, type, tags, priority } = body;
     
     // Validation
     if (!message || !message.trim()) {
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     const post = await prisma.post.create({
       data: {
         message,
+        html: html || null, // Store HTML content if provided
         type,
         priority,
         author: {

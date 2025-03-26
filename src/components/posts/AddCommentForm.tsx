@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { TextImproverButton } from "@/components/ui/text-improver-button";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 interface AddCommentFormProps {
   postId: string;
@@ -18,11 +17,51 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
   const router = useRouter();
   const { toast } = useToast();
   const [commentText, setCommentText] = useState("");
+  const [commentHtml, setCommentHtml] = useState("");
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isImproving, setIsImproving] = useState(false);
 
-  const handleImprovedText = (improvedText: string) => {
-    setCommentText(improvedText);
+  const handleEditorChange = (html: string, markdown: string) => {
+    setCommentHtml(html);
+    setCommentText(markdown);
+  };
+
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) return text;
+    
+    setIsImproving(true);
+    
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return improved text to display in the UI
+      return improvedText;
+    } catch (error) {
+      console.error("Error improving text:", error);
+      toast({
+        title: "Error",
+        description: "Failed to improve text",
+        variant: "destructive"
+      });
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -40,12 +79,15 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
         },
         body: JSON.stringify({
           message: commentText,
+          html: commentHtml
         }),
       });
 
       if (!response.ok) throw new Error();
 
       setCommentText("");
+      setCommentHtml("");
+      
       toast({
         description: "Comment added"
       });
@@ -73,29 +115,22 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
         </AvatarFallback>
       </Avatar>
       <div className="flex-1">
-        <div className="relative">
-          <Textarea
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            placeholder="Add a comment..."
-            className="min-h-[40px] resize-none mb-2 pr-10 focus:ring-1 focus:ring-primary focus:border-primary/50"
-            ref={textareaRef}
-          />
-          <div className="absolute right-2 bottom-2">
-            <TextImproverButton
-              text={commentText}
-              onImprovedText={handleImprovedText}
-              disabled={isAddingComment}
-              size="sm"
-            />
-          </div>
-        </div>
+        <MarkdownEditor
+          onChange={handleEditorChange}
+          placeholder="Add a comment..."
+          minHeight="80px"
+          maxHeight="250px"
+          compact={true}
+          className="mb-2"
+          content={commentText}
+          onAiImprove={handleAiImprove}
+        />
         <div className="flex justify-end">
           <Button
             type="submit"
             size="sm"
             variant="ghost"
-            disabled={!commentText.trim() || isAddingComment}
+            disabled={!commentText.trim() || isAddingComment || isImproving}
             className="text-primary hover:text-primary/90"
           >
             {isAddingComment ? "Posting..." : "Post"}

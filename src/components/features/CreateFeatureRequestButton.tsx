@@ -26,156 +26,149 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { TextImproverButton } from "@/components/ui/text-improver-button";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { useRouter } from "next/navigation";
 
-const featureRequestFormSchema = z.object({
-  title: z
-    .string()
-    .min(5, { message: "Title must be at least 5 characters." })
-    .max(100, { message: "Title must not exceed 100 characters." }),
-  description: z
-    .string()
-    .min(20, { message: "Description must be at least 20 characters." })
-    .max(1000, { message: "Description must not exceed 1000 characters." }),
+const formSchema = z.object({
+  title: z.string().min(5, {
+    message: "Title must be at least 5 characters.",
+  }).max(100, {
+    message: "Title must not be longer than 100 characters.",
+  }),
+  description: z.string().min(20, {
+    message: "Description must be at least 20 characters.",
+  }).max(2000, {
+    message: "Description must not be longer than 2000 characters.",
+  }),
 });
 
-type FeatureRequestFormValues = z.infer<typeof featureRequestFormSchema>;
-
 export default function CreateFeatureRequestButton() {
-  const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImproving, setIsImproving] = useState(false);
+  const [descriptionHtml, setDescriptionHtml] = useState("");
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const form = useForm<FeatureRequestFormValues>({
-    resolver: zodResolver(featureRequestFormSchema),
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
     },
   });
 
-  const handleTitleImproved = (improvedText: string) => {
-    form.setValue("title", improvedText, { 
-      shouldValidate: true,
-      shouldDirty: true 
-    });
+  const handleEditorChange = (html: string, markdown: string) => {
+    setDescriptionHtml(html);
+    form.setValue('description', markdown);
   };
 
-  const handleDescriptionImproved = (improvedText: string) => {
-    form.setValue("description", improvedText, { 
-      shouldValidate: true,
-      shouldDirty: true 
-    });
-  };
-
-  const onSubmit = async (values: FeatureRequestFormValues) => {
-    setIsSubmitting(true);
-    console.log("Submitting feature request:", values);
-
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) return text;
+    
+    setIsImproving(true);
+    
     try {
-      const response = await fetch("/api/features", {
+      const response = await fetch("/api/ai/improve", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ text })
       });
-
-      console.log("API response status:", response.status);
-
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error("Error response:", errorData);
-        
-        // Show specific error message if available
-        if (errorData?.error) {
-          toast({
-            title: "Failed to create feature request",
-            description: errorData.error,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Failed to create feature request",
-            description: `Server responded with status: ${response.status}`,
-            variant: "destructive",
-          });
-        }
-        setIsSubmitting(false);
-        return;
+        throw new Error("Failed to improve text");
       }
-
+      
       const data = await response.json();
-      console.log("Feature request created:", data);
-
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      return improvedText;
+    } catch (error) {
+      console.error("Error improving text:", error);
       toast({
-        title: "Feature request created!",
-        description: "Your feature request has been submitted successfully.",
+        title: "Error",
+        description: "Failed to improve text",
+        variant: "destructive"
       });
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
+  };
 
-      setIsOpen(false);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    
+    try {
+      const response = await fetch('/api/features', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: values.title,
+          description: values.description,
+          html: descriptionHtml,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create feature request');
+      }
+      
       form.reset();
-      window.location.reload(); // Refresh to show the new feature request
+      setDescriptionHtml("");
+      setIsOpen(false);
+      toast({
+        title: 'Success',
+        description: 'Your feature request has been submitted.',
+      });
+      
+      router.refresh();
     } catch (error) {
       console.error("Error submitting feature request:", error);
       toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to create feature request. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-primary hover:bg-primary/90 transition-colors">
+        <Button variant="default" className="gap-2">
           <PlusCircle className="h-4 w-4" />
-          <span>New Feature Request</span>
+          Request Feature
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px] bg-card/95 backdrop-blur-sm border-border/40">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Submit a Feature Request
-          </DialogTitle>
+          <DialogTitle>Request a New Feature</DialogTitle>
           <DialogDescription>
-            Suggest a new feature or improvement for the platform. Be clear and
-            specific about what you&apos;d like to see.
+            Describe the feature you would like to see in our platform.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="title"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Title</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Input 
-                        placeholder="A short, descriptive title for your feature request" 
-                        {...field} 
-                        className="bg-background border-border/60 focus:border-primary focus:ring-primary pr-10"
-                      />
-                    </FormControl>
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                      <TextImproverButton 
-                        text={field.value}
-                        onImprovedText={handleTitleImproved}
-                        disabled={isSubmitting}
-                        size="sm"
-                        maxLength={100}
-                      />
-                    </div>
-                  </div>
+                  <FormControl>
+                    <Input placeholder="Feature title" {...field} />
+                  </FormControl>
                   <FormDescription>
-                    Summarize your request in a clear, concise title.
+                    A clear, concise title for your feature request.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -187,58 +180,39 @@ export default function CreateFeatureRequestButton() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Description</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Describe your feature request in detail. What problem does it solve? How would it work?" 
-                        className="min-h-[150px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary pr-10" 
-                        {...field} 
-                      />
-                    </FormControl>
-                    <div className="absolute right-2 bottom-2">
-                      <TextImproverButton 
-                        text={field.value}
-                        onImprovedText={handleDescriptionImproved}
-                        disabled={isSubmitting}
-                        maxLength={1000}
-                      />
-                    </div>
-                  </div>
+                  <FormControl>
+                    <MarkdownEditor
+                      content={field.value}
+                      onChange={handleEditorChange}
+                      placeholder="Provide a detailed description of the feature..."
+                      minHeight="200px"
+                      maxHeight="400px"
+                      className="min-h-[200px]"
+                      onAiImprove={handleAiImprove}
+                    />
+                  </FormControl>
                   <FormDescription>
-                    Provide as much detail as possible about how this feature would work and why it&apos;s valuable.
+                    Explain in detail why this feature would be valuable.
                   </FormDescription>
-                  <div className="text-right text-xs text-muted-foreground mt-1">
-                    {field.value.length} / 1000 characters
-                  </div>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsOpen(false)}
-                disabled={isSubmitting}
-                className="border-border/60 hover:bg-secondary/80 transition-colors"
-              >
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={isSubmitting}
-                className="bg-primary hover:bg-primary/90 transition-colors"
-              >
+              <Button type="submit" disabled={isSubmitting || isImproving}>
                 {isSubmitting ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Submitting...</span>
-                  </div>
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    <span>Submit Request</span>
-                  </div>
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Submit Request
+                  </>
                 )}
               </Button>
             </DialogFooter>

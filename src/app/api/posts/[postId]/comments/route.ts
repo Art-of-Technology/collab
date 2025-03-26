@@ -16,7 +16,7 @@ export async function POST(
     const _params = await params;
     const postId = await _params.postId;
     const body = await req.json();
-    const { message, parentId } = body;
+    const { message, html, parentId } = body;
 
     if (!message || message.trim() === "") {
       return new NextResponse("Message is required", { status: 400 });
@@ -37,6 +37,7 @@ export async function POST(
     const comment = await prisma.comment.create({
       data: {
         message,
+        html: html || null, // Store HTML content if provided
         postId,
         authorId: user.id,
         parentId: parentId || null, // Explicitly set to null if not provided

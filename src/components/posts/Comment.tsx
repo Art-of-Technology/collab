@@ -9,10 +9,12 @@ import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import { AnimatePresence, motion } from "framer-motion";
 import type { User } from "@prisma/client";
 import { CommentReplyForm } from "./CommentReplyForm";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 export type CommentWithAuthor = {
   id: string;
   message: string;
+  html?: string | null;
   createdAt: Date;
   author: User;
   reactions?: {
@@ -127,16 +129,21 @@ export function Comment({
         </Avatar>
         <div className="flex-1">
           <div className="rounded-lg">
-            <div className="flex items-start">
-              <div>
-                <Link
-                  href={`/profile/${comment.author.id}`}
-                  className="font-semibold text-sm hover:underline mr-2"
-                >
-                  {comment.author.name}
-                </Link>
+            <div className="flex flex-col">
+              <Link
+                href={`/profile/${comment.author.id}`}
+                className="font-semibold text-sm hover:underline"
+              >
+                {comment.author.name}
+              </Link>
+              {comment.html ? (
+                <MarkdownContent 
+                  content={comment.html} 
+                  className="text-sm"
+                />
+              ) : (
                 <span className="text-sm">{comment.message}</span>
-              </div>
+              )}
             </div>
 
             <div className="flex gap-4 mt-1 text-xs">

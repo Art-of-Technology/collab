@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { TextImproverButton } from "@/components/ui/text-improver-button";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
 interface CommentReplyFormProps {
   postId: string;
@@ -23,12 +22,53 @@ export function CommentReplyForm({
   onCancel
 }: CommentReplyFormProps) {
   const [replyText, setReplyText] = useState("");
+  const [replyHtml, setReplyHtml] = useState("");
   const [isAddingReply, setIsAddingReply] = useState(false);
+  const [isImproving, setIsImproving] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleImprovedText = (improvedText: string) => {
-    setReplyText(improvedText);
+  const handleEditorChange = (html: string, markdown: string) => {
+    setReplyHtml(html);
+    setReplyText(markdown);
+  };
+
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) return text;
+    
+    setIsImproving(true);
+    
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return improved text
+      return improvedText;
+    } catch (error) {
+      console.error("Error improving text:", error);
+      toast({
+        title: "Error",
+        description: "Failed to improve text",
+        variant: "destructive"
+      });
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
   };
 
   const handleReply = async () => {
@@ -44,6 +84,7 @@ export function CommentReplyForm({
         },
         body: JSON.stringify({
           message: replyText,
+          html: replyHtml,
           parentId: parentCommentId,
         }),
       });
@@ -51,6 +92,7 @@ export function CommentReplyForm({
       if (!response.ok) throw new Error();
 
       setReplyText("");
+      setReplyHtml("");
       
       toast({
         description: "Reply added"
@@ -77,22 +119,16 @@ export function CommentReplyForm({
     <div className="mt-2">
       <div className="flex gap-2 items-start">
         <div className="flex-1">
-          <div className="relative">
-            <Textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder={`Reply to ${parentCommentAuthor}...`}
-              className="min-h-[40px] text-xs resize-none mb-1 focus:ring-1 focus:ring-primary focus:border-primary/50 pr-10"
-            />
-            <div className="absolute right-2 bottom-2">
-              <TextImproverButton
-                text={replyText}
-                onImprovedText={handleImprovedText}
-                disabled={isAddingReply}
-                size="sm"
-              />
-            </div>
-          </div>
+          <MarkdownEditor
+            onChange={handleEditorChange}
+            placeholder={`Reply to ${parentCommentAuthor}...`}
+            minHeight="80px"
+            maxHeight="200px"
+            compact={true}
+            className="mb-2"
+            content={replyText}
+            onAiImprove={handleAiImprove}
+          />
           <div className="flex justify-end gap-2">
             <Button
               type="button"
@@ -107,7 +143,7 @@ export function CommentReplyForm({
               type="button"
               size="sm"
               onClick={handleReply}
-              disabled={!replyText.trim() || isAddingReply}
+              disabled={!replyText.trim() || isAddingReply || isImproving}
               className="text-xs h-7"
             >
               {isAddingReply ? "Posting..." : "Reply"}

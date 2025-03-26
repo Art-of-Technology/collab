@@ -3,13 +3,13 @@
 import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { Comment, CommentWithAuthor } from "@/components/posts/Comment";
+import { Comment } from "@/components/posts/Comment";
 import { AddCommentForm } from "@/components/posts/AddCommentForm";
 import { organizeCommentsIntoTree, initializeLikedCommentsState } from "@/utils/commentHelpers";
 
 interface CommentsListProps {
   postId: string;
-  comments: CommentWithAuthor[];
+  comments: any[]; // Use a more generic type to avoid type conflicts
   currentUserId: string;
 }
 

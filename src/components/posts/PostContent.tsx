@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ChatBubbleLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 type Tag = {
   id: string;
@@ -11,6 +12,7 @@ type Tag = {
 
 interface PostContentProps {
   message: string;
+  html?: string | null;
   tags: Tag[];
   likesCount: number;
   commentsCount: number;
@@ -19,6 +21,7 @@ interface PostContentProps {
 
 export default function PostContent({
   message,
+  html,
   tags,
   likesCount,
   commentsCount,
@@ -26,7 +29,11 @@ export default function PostContent({
 }: PostContentProps) {
   return (
     <div>
-      <p className="whitespace-pre-wrap">{message}</p>
+      {html ? (
+        <MarkdownContent content={html} />
+      ) : (
+        <p className="whitespace-pre-wrap">{message}</p>
+      )}
 
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-3">
