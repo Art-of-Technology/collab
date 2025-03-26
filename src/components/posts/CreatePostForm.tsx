@@ -15,11 +15,8 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// import { Badge } from "@/components/ui/badge";
-import { WandSparkles } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
-import { CoolMode } from "../magicui/cool-mode";
 import { TextImproverButton } from "@/components/ui/text-improver-button";
 
 export default function CreatePostForm() {

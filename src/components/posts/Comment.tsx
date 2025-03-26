@@ -3,11 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
-import { useToast } from "@/hooks/use-toast";
 import { AnimatePresence, motion } from "framer-motion";
 import type { User } from "@prisma/client";
 import { CommentReplyForm } from "./CommentReplyForm";
@@ -54,8 +52,6 @@ export function Comment({
 }: CommentProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
-  const { toast } = useToast();
-  const router = useRouter();
   const [likesData, setLikesData] = useState<any[]>(
     comment.reactions?.filter(reaction => reaction.type === "LIKE") || []
   );
