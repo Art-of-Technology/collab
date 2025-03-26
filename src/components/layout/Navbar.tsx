@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogoIcon } from "@/components/icons/LogoIcon";
+import LogoIcon from "@/components/icons/LogoIcon";
 
 export default function Navbar() {
   const { data: session } = useSession();
