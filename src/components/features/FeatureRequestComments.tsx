@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, MessageSquare } from "lucide-react";
+import { TextImproverButton } from "@/components/ui/text-improver-button";
 
 type User = {
   id: string;
@@ -38,6 +39,10 @@ export default function FeatureRequestComments({
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleImprovedText = (improvedText: string) => {
+    setNewComment(improvedText);
+  };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,13 +106,23 @@ export default function FeatureRequestComments({
       
       {currentUserId && (
         <form onSubmit={handleSubmitComment} className="space-y-3">
-          <Textarea
-            placeholder="Add your comment..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className="min-h-[100px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary transition-all"
-            disabled={isSubmitting}
-          />
+          <div className="relative">
+            <Textarea
+              placeholder="Add your comment..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="min-h-[100px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary transition-all pr-10"
+              disabled={isSubmitting}
+            />
+            <div className="absolute right-2 bottom-2">
+              <TextImproverButton 
+                text={newComment}
+                onImprovedText={handleImprovedText}
+                disabled={isSubmitting}
+                size="sm"
+              />
+            </div>
+          </div>
           <div className="flex justify-end">
             <Button 
               type="submit" 

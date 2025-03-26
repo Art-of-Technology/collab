@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TextImproverButton } from "@/components/ui/text-improver-button";
 
 const featureRequestFormSchema = z.object({
   title: z
@@ -53,6 +54,20 @@ export default function CreateFeatureRequestButton() {
       description: "",
     },
   });
+
+  const handleTitleImproved = (improvedText: string) => {
+    form.setValue("title", improvedText, { 
+      shouldValidate: true,
+      shouldDirty: true 
+    });
+  };
+
+  const handleDescriptionImproved = (improvedText: string) => {
+    form.setValue("description", improvedText, { 
+      shouldValidate: true,
+      shouldDirty: true 
+    });
+  };
 
   const onSubmit = async (values: FeatureRequestFormValues) => {
     setIsSubmitting(true);
@@ -141,13 +156,24 @@ export default function CreateFeatureRequestButton() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="A short, descriptive title for your feature request" 
-                      {...field} 
-                      className="bg-background border-border/60 focus:border-primary focus:ring-primary"
-                    />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input 
+                        placeholder="A short, descriptive title for your feature request" 
+                        {...field} 
+                        className="bg-background border-border/60 focus:border-primary focus:ring-primary pr-10"
+                      />
+                    </FormControl>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <TextImproverButton 
+                        text={field.value}
+                        onImprovedText={handleTitleImproved}
+                        disabled={isSubmitting}
+                        size="sm"
+                        maxLength={100}
+                      />
+                    </div>
+                  </div>
                   <FormDescription>
                     Summarize your request in a clear, concise title.
                   </FormDescription>
@@ -161,13 +187,23 @@ export default function CreateFeatureRequestButton() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Describe your feature request in detail. What problem does it solve? How would it work?" 
-                      className="min-h-[150px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary" 
-                      {...field} 
-                    />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Describe your feature request in detail. What problem does it solve? How would it work?" 
+                        className="min-h-[150px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary pr-10" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <div className="absolute right-2 bottom-2">
+                      <TextImproverButton 
+                        text={field.value}
+                        onImprovedText={handleDescriptionImproved}
+                        disabled={isSubmitting}
+                        maxLength={1000}
+                      />
+                    </div>
+                  </div>
                   <FormDescription>
                     Provide as much detail as possible about how this feature would work and why it&apos;s valuable.
                   </FormDescription>
