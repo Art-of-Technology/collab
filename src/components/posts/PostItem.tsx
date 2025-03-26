@@ -58,7 +58,7 @@ export default function PostItem({
 }: PostItemProps) {
   // Basic state
   const [likesCount, setLikesCount] = useState(
-    post.reactions.filter((reaction) => reaction.type === "LIKE").length
+    post.reactions.filter((reaction: { type: string; }) => reaction.type === "LIKE").length
   );
   const [likesWithAuthor, setLikesWithAuthor] = useState<ReactionWithAuthor[]>([]);
   
@@ -74,10 +74,10 @@ export default function PostItem({
   
   // Get initial liked and bookmarked state
   const initialLiked = post.reactions.some(
-    (reaction) => reaction.authorId === currentUserId && reaction.type === "LIKE"
+    (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "LIKE"
   );
   const initialBookmarked = post.reactions.some(
-    (reaction) => reaction.authorId === currentUserId && reaction.type === "BOOKMARK"
+    (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "BOOKMARK"
   );
 
   // Initial edit form data
@@ -85,7 +85,7 @@ export default function PostItem({
     message: post.message,
     type: post.type,
     priority: post.priority,
-    tags: post.tags.map(tag => tag.name).join(", ")
+    tags: post.tags.map((tag: { name: any; }) => tag.name).join(", ")
   };
 
   // Get badge variants
@@ -94,7 +94,7 @@ export default function PostItem({
 
   // Handle like change
   const handleLikeChange = (newLikedState: boolean) => {
-    setLikesCount(prev => newLikedState ? prev + 1 : prev - 1);
+    setLikesCount((prev: number) => newLikedState ? prev + 1 : prev - 1);
     
     // If already loaded likes data, refresh it
     if (likesWithAuthor.length > 0 || isLikesDialogOpen) {

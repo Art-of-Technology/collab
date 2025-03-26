@@ -1,0 +1,299 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type Author = {
+  id: string;
+  name: string | null;
+  image: string | null;
+};
+
+interface FeatureRequest {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  author: Author;
+  voteScore: number;
+  upvotes: number;
+  downvotes: number;
+  _count: {
+    comments: number;
+  };
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  totalPages: number;
+  totalCount: number;
+}
+
+interface FeatureRequestsListProps {
+  currentUserId?: string;
+}
+
+export default function FeatureRequestsList({ currentUserId }: FeatureRequestsListProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+
+  // Get query params
+  const status = searchParams.get("status") || "all";
+  const orderBy = searchParams.get("orderBy") || "latest";
+  const page = parseInt(searchParams.get("page") || "1");
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    totalCount: 0,
+  });
+
+  // Status options for filter
+  const statusOptions = [
+    { value: "all", label: "All Statuses" },
+    { value: "pending", label: "Pending" },
+    { value: "accepted", label: "Accepted" },
+    { value: "rejected", label: "Rejected" },
+    { value: "completed", label: "Completed" },
+  ];
+
+  // Order options for sorting
+  const orderOptions = [
+    { value: "latest", label: "Latest" },
+    { value: "oldest", label: "Oldest" },
+    { value: "most_votes", label: "Most Votes" },
+    { value: "least_votes", label: "Least Votes" },
+  ];
+
+  // Helper function to update URL parameters
+  const updateQueryParams = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    if (value && value !== "all") {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    
+    // Reset to page 1 when changing filters
+    if (key !== "page") {
+      params.set("page", "1");
+    }
+    
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Handle filter and order changes
+  const handleStatusChange = (value: string) => {
+    updateQueryParams("status", value);
+  };
+
+  const handleOrderChange = (value: string) => {
+    updateQueryParams("orderBy", value);
+  };
+
+  // Handle pagination
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > pagination.totalPages) return;
+    updateQueryParams("page", newPage.toString());
+  };
+
+  // Fetch feature requests
+  useEffect(() => {
+    const fetchFeatureRequests = async () => {
+      setIsLoading(true);
+      try {
+        let url = `/api/features?page=${page}&limit=10`;
+        if (status && status !== "all") url += `&status=${status}`;
+        if (orderBy) url += `&orderBy=${orderBy}`;
+
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch feature requests");
+        }
+        
+        const data = await response.json();
+        setFeatureRequests(data.featureRequests);
+        setPagination(data.pagination);
+      } catch (error) {
+        console.error("Error fetching feature requests:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load feature requests",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeatureRequests();
+  }, [status, orderBy, page, toast]);
+
+  // Get a badge variant based on status
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending</Badge>;
+      case "accepted":
+        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">Accepted</Badge>;
+      case "rejected":
+        return <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-200">Rejected</Badge>;
+      case "completed":
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">Completed</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  // Truncate description for preview
+  const truncateText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + "...";
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between">
+        <div className="flex flex-wrap gap-3">
+          <Select value={status} onValueChange={handleStatusChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={orderBy} onValueChange={handleOrderChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              {orderOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="text-sm text-muted-foreground">
+          {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : featureRequests.length === 0 ? (
+        <div className="text-center py-12 bg-card rounded-lg border border-border">
+          <p className="text-muted-foreground">No feature requests found</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {featureRequests.map((request) => (
+            <Link href={`/features/${request.id}`} key={request.id} className="block">
+              <Card className="hover:shadow-md transition-shadow overflow-hidden">
+                <div className="p-6">
+                  <div className="flex justify-between">
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-semibold">{request.title}</h3>
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        <span>
+                          {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
+                        </span>
+                        {getStatusBadge(request.status)}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center justify-center min-w-[70px] text-center">
+                      <span className={`text-2xl font-bold ${request.voteScore > 0 ? 'text-green-600' : request.voteScore < 0 ? 'text-red-600' : ''}`}>
+                        {request.voteScore}
+                      </span>
+                      <span className="text-xs text-muted-foreground">votes</span>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 text-sm text-muted-foreground line-clamp-2">
+                    {truncateText(request.description, 200)}
+                  </p>
+
+                  <div className="mt-4 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={request.author.image || undefined} alt={request.author.name || "User"} />
+                        <AvatarFallback>
+                          {request.author.name?.charAt(0) || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium">{request.author.name}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {request._count.comments} comment{request._count.comments !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(pagination.page - 1)}
+            disabled={pagination.page === 1 || isLoading}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          <div className="text-sm">
+            Page {pagination.page} of {pagination.totalPages}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(pagination.page + 1)}
+            disabled={pagination.page === pagination.totalPages || isLoading}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+} 

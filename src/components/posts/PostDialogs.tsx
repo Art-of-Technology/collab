@@ -213,7 +213,7 @@ export default function PostDialogs({
                   name="message"
                   value={editFormData.message}
                   onChange={handleEditChange}
-                  placeholder="What's happening in your development world?"
+                  placeholder="What you are up to today?"
                   rows={4}
                   className="resize-none bg-background border-border/60 focus:border-primary focus:ring-primary"
                 />
