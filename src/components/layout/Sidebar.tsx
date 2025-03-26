@@ -9,6 +9,7 @@ import {
   PlusCircleIcon,
   BookmarkIcon,
   EnvelopeIcon,
+  Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,12 @@ export default function Sidebar({ pathname }: SidebarProps) {
   const { data: session } = useSession();
 
   const navigation = [
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: Squares2X2Icon,
+      current: pathname === "/dashboard",
+    },
     {
       name: "Timeline",
       href: "/timeline",
@@ -91,9 +98,11 @@ export default function Sidebar({ pathname }: SidebarProps) {
         </div>
 
         <div className="border-t border-border pt-4 mt-4">
-          <Button className="w-full bg-primary hover:bg-primary/90" size="sm">
-            <PlusCircleIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-            New Post
+          <Button className="w-full bg-primary hover:bg-primary/90" size="sm" asChild>
+            <Link href="/timeline">
+              <PlusCircleIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+              New Post
+            </Link>
           </Button>
         </div>
 

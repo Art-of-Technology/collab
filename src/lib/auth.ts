@@ -4,6 +4,7 @@ import { type DefaultSession, AuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GithubProvider from "next-auth/providers/github";
 import { prisma } from "./prisma";
+import { getServerSession } from "next-auth/next";
 
 // Extend the next-auth session types
 declare module "next-auth" {
@@ -113,3 +114,7 @@ export const authConfig: AuthOptions = {
     },
   },
 }; 
+
+export async function getAuthSession() {
+  return await getServerSession(authConfig);
+} 
