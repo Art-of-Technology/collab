@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
 
 type User = {
   id: string;
@@ -44,7 +44,7 @@ export default function FeatureRequestComments({
     
     if (!currentUserId) {
       toast({
-        title: "Error",
+        title: "Authentication required",
         description: "You must be logged in to comment",
         variant: "destructive",
       });
@@ -76,11 +76,12 @@ export default function FeatureRequestComments({
       
       toast({
         title: "Comment added",
-        description: "Your comment has been added",
+        description: "Your comment has been added successfully",
       });
       
       router.refresh();
     } catch (error) {
+      console.error("Comment submission error:", error);
       toast({
         title: "Error",
         description: "Failed to add comment",
@@ -93,7 +94,10 @@ export default function FeatureRequestComments({
   
   return (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold">Comments ({comments.length})</h3>
+      <div className="flex items-center gap-2">
+        <MessageSquare className="h-5 w-5 text-primary" />
+        <h3 className="text-xl font-semibold">Comments ({comments.length})</h3>
+      </div>
       
       {currentUserId && (
         <form onSubmit={handleSubmitComment} className="space-y-3">
@@ -101,18 +105,22 @@ export default function FeatureRequestComments({
             placeholder="Add your comment..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            className="min-h-[100px]"
+            className="min-h-[100px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary transition-all"
             disabled={isSubmitting}
           />
           <div className="flex justify-end">
-            <Button type="submit" disabled={isSubmitting || !newComment.trim()}>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || !newComment.trim()}
+              className="bg-primary hover:bg-primary/90 transition-colors"
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Submitting...
                 </>
               ) : (
-                "Submit Comment"
+                "Add Comment"
               )}
             </Button>
           </div>
@@ -120,29 +128,34 @@ export default function FeatureRequestComments({
       )}
       
       {comments.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          No comments yet. Be the first to comment!
+        <div className="text-center py-8 text-muted-foreground bg-secondary/20 rounded-lg">
+          <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+          <p>No comments yet. Be the first to comment!</p>
         </div>
       ) : (
         <div className="space-y-4">
           {comments.map((comment) => (
             <div
               key={comment.id}
-              className="bg-card p-4 rounded-lg border border-border/50"
+              className="bg-card/95 p-4 rounded-lg border border-border/40 hover:shadow-md transition-all duration-200"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <Avatar className="h-6 w-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Avatar className="h-7 w-7 border border-border/40">
                   <AvatarImage src={comment.author.image || undefined} alt={comment.author.name || "User"} />
-                  <AvatarFallback>
+                  <AvatarFallback className="bg-primary/10 text-primary">
                     {comment.author.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="font-medium text-sm">{comment.author.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                </span>
+                <div className="flex flex-col xs:flex-row xs:items-center gap-0 xs:gap-2">
+                  <span className="font-medium text-sm">{comment.author.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                  </span>
+                </div>
               </div>
-              <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+              <div className="pl-9">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{comment.content}</p>
+              </div>
             </div>
           ))}
         </div>

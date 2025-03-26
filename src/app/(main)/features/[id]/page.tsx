@@ -32,6 +32,7 @@ export async function generateMetadata({ params }: FeatureRequestPageProps) {
       description: featureRequest.description.substring(0, 160),
     };
   } catch (error) {
+    console.error("Error generating metadata:", error);
     return {
       title: "Feature Request",
     };
@@ -138,7 +139,7 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
           <FeatureRequestDetail
             featureRequest={formattedFeatureRequest}
             userVote={userVote}
-            isAdmin={user?.role === "ADMIN"}
+            isAdmin={user?.role === "admin"}
             currentUserId={session.user.id}
           />
           

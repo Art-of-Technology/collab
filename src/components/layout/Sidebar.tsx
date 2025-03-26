@@ -10,13 +10,10 @@ import {
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
-import { ChatBubbleLeftRightIcon as MessageSquare } from "@heroicons/react/24/outline";
-import { UsersIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   pathname?: string;
@@ -24,7 +21,6 @@ interface SidebarProps {
 
 export default function Sidebar({ pathname = "" }: SidebarProps) {
   const { data: session } = useSession();
-  const isActive = (path: string) => pathname.startsWith(path);
 
   const navigation = [
     {

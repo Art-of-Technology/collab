@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +42,6 @@ const featureRequestFormSchema = z.object({
 type FeatureRequestFormValues = z.infer<typeof featureRequestFormSchema>;
 
 export default function CreateFeatureRequestButton() {
-  const router = useRouter();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,17 +117,20 @@ export default function CreateFeatureRequestButton() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Sparkles className="h-4 w-4" />
+        <Button className="gap-2 bg-primary hover:bg-primary/90 transition-colors">
+          <PlusCircle className="h-4 w-4" />
           <span>New Feature Request</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className="sm:max-w-[525px] bg-card/95 backdrop-blur-sm border-border/40">
         <DialogHeader>
-          <DialogTitle>Submit a Feature Request</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Submit a Feature Request
+          </DialogTitle>
           <DialogDescription>
             Suggest a new feature or improvement for the platform. Be clear and
-            specific about what you'd like to see.
+            specific about what you&apos;d like to see.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -141,7 +142,11 @@ export default function CreateFeatureRequestButton() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="A short, descriptive title for your feature request" {...field} />
+                    <Input 
+                      placeholder="A short, descriptive title for your feature request" 
+                      {...field} 
+                      className="bg-background border-border/60 focus:border-primary focus:ring-primary"
+                    />
                   </FormControl>
                   <FormDescription>
                     Summarize your request in a clear, concise title.
@@ -159,34 +164,45 @@ export default function CreateFeatureRequestButton() {
                   <FormControl>
                     <Textarea 
                       placeholder="Describe your feature request in detail. What problem does it solve? How would it work?" 
-                      className="min-h-[150px]" 
+                      className="min-h-[150px] resize-none bg-background border-border/60 focus:border-primary focus:ring-primary" 
                       {...field} 
                     />
                   </FormControl>
                   <FormDescription>
-                    Provide as much detail as possible about how this feature would work and why it's valuable.
+                    Provide as much detail as possible about how this feature would work and why it&apos;s valuable.
                   </FormDescription>
+                  <div className="text-right text-xs text-muted-foreground mt-1">
+                    {field.value.length} / 1000 characters
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsOpen(false)}
                 disabled={isSubmitting}
+                className="border-border/60 hover:bg-secondary/80 transition-colors"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="bg-primary hover:bg-primary/90 transition-colors"
+              >
                 {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Submitting...</span>
+                  </div>
                 ) : (
-                  "Submit Request"
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Submit Request</span>
+                  </div>
                 )}
               </Button>
             </DialogFooter>

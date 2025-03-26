@@ -15,12 +15,15 @@ import {
   CheckCircle,
   XCircle,
   ThumbsUp,
+  MoreVertical,
+  AlertTriangle
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
@@ -73,13 +76,14 @@ export default function FeatureRequestDetail({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   
   const isAuthor = currentUserId === featureRequest.author.id;
 
   const handleVote = async (value: number) => {
     if (!currentUserId) {
       toast({
-        title: "Error",
+        title: "Authentication required",
         description: "You must be logged in to vote",
         variant: "destructive",
       });
@@ -90,12 +94,15 @@ export default function FeatureRequestDetail({
     
     setIsVoting(true);
     try {
+      // If clicking the same vote again, we're removing the vote
+      const effectiveValue = currentUserVote === value ? 0 : value;
+      
       const response = await fetch(`/api/features/${featureRequest.id}/vote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ value }),
+        body: JSON.stringify({ value: effectiveValue }),
       });
 
       if (!response.ok) {
@@ -108,7 +115,21 @@ export default function FeatureRequestDetail({
       setDownvotes(data.downvotes);
       setCurrentUserVote(data.vote?.value || null);
       
+      // Give feedback on vote
+      if (effectiveValue === 0) {
+        toast({
+          title: "Vote removed",
+          description: "Your vote has been removed",
+        });
+      } else {
+        toast({
+          title: "Vote recorded",
+          description: `You ${effectiveValue > 0 ? 'upvoted' : 'downvoted'} this feature request`,
+        });
+      }
+      
     } catch (error) {
+      console.error("Vote error:", error);
       toast({
         title: "Error",
         description: "Failed to vote on this feature request",
@@ -121,6 +142,7 @@ export default function FeatureRequestDetail({
 
   const updateStatus = async (status: string) => {
     if (isUpdatingStatus) return;
+    setStatusError(null);
     
     setIsUpdatingStatus(true);
     try {
@@ -133,21 +155,26 @@ export default function FeatureRequestDetail({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update status");
+        const errorData = await response.json().catch(() => null);
+        console.error("Status update error:", errorData);
+        throw new Error(errorData?.error || "Failed to update status");
       }
 
       setCurrentStatus(status);
       
       toast({
         title: "Status updated",
-        description: `Feature request is now ${status}`,
+        description: `Feature request is now marked as ${status}`,
       });
       
       router.refresh();
     } catch (error) {
+      console.error("Status update error:", error);
+      setStatusError((error as Error).message || "Failed to update the status");
+      
       toast({
         title: "Error",
-        description: "Failed to update the status",
+        description: (error as Error).message || "Failed to update the status",
         variant: "destructive",
       });
     } finally {
@@ -169,13 +196,14 @@ export default function FeatureRequestDetail({
       }
 
       toast({
-        title: "Deleted",
+        title: "Success",
         description: "Feature request has been deleted",
       });
       
       router.push("/features");
       router.refresh();
     } catch (error) {
+      console.error("Delete error:", error);
       toast({
         title: "Error",
         description: "Failed to delete this feature request",
@@ -191,28 +219,28 @@ export default function FeatureRequestDetail({
     switch (status) {
       case "pending":
         return (
-          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">
+          <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 transition-colors">
             <Hourglass className="h-3 w-3 mr-1" />
             Pending
           </Badge>
         );
       case "accepted":
         return (
-          <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">
+          <Badge variant="secondary" className="bg-green-500/10 text-green-600 transition-colors">
             <CheckCircle className="h-3 w-3 mr-1" />
             Accepted
           </Badge>
         );
       case "rejected":
         return (
-          <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-200">
+          <Badge variant="secondary" className="bg-red-500/10 text-red-600 transition-colors">
             <XCircle className="h-3 w-3 mr-1" />
             Rejected
           </Badge>
         );
       case "completed":
         return (
-          <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">
+          <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 transition-colors">
             <ThumbsUp className="h-3 w-3 mr-1" />
             Completed
           </Badge>
@@ -223,10 +251,10 @@ export default function FeatureRequestDetail({
   };
 
   return (
-    <Card className="overflow-hidden bg-card/95 backdrop-blur-sm border-border/50 hover:shadow-md transition-shadow">
+    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-start justify-between pb-2">
         <div className="space-y-1">
-          <CardTitle className="text-2xl">{featureRequest.title}</CardTitle>
+          <CardTitle className="text-2xl font-bold">{featureRequest.title}</CardTitle>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>
               Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
@@ -237,64 +265,95 @@ export default function FeatureRequestDetail({
         
         {(isAdmin || isAuthor) && (
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={isUpdatingStatus}>
-                    {isUpdatingStatus ? "Updating..." : "Update Status"}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => updateStatus("pending")}>
-                    <Hourglass className="mr-2 h-4 w-4 text-yellow-500" />
-                    <span>Mark as Pending</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-secondary/80 transition-colors">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {isAdmin && (
+                  <>
+                    <DropdownMenuItem 
+                      onClick={() => updateStatus("pending")}
+                      disabled={isUpdatingStatus || currentStatus === "pending"}
+                      className="hover:text-yellow-600 cursor-pointer"
+                    >
+                      <Hourglass className="mr-2 h-4 w-4 text-yellow-500" />
+                      <span>Mark as Pending</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => updateStatus("accepted")}
+                      disabled={isUpdatingStatus || currentStatus === "accepted"}
+                      className="hover:text-green-600 cursor-pointer"
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                      <span>Accept</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => updateStatus("rejected")}
+                      disabled={isUpdatingStatus || currentStatus === "rejected"}
+                      className="hover:text-red-600 cursor-pointer"
+                    >
+                      <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                      <span>Reject</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => updateStatus("completed")}
+                      disabled={isUpdatingStatus || currentStatus === "completed"}
+                      className="hover:text-blue-600 cursor-pointer"
+                    >
+                      <ThumbsUp className="mr-2 h-4 w-4 text-blue-500" />
+                      <span>Mark as Completed</span>
+                    </DropdownMenuItem>
+                    
+                    {isAuthor && <DropdownMenuSeparator />}
+                  </>
+                )}
+                
+                {isAuthor && (
+                  <DropdownMenuItem 
+                    onClick={() => setIsDeleteDialogOpen(true)}
+                    disabled={isDeleting}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    {isDeleting ? "Deleting..." : "Delete Request"}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updateStatus("accepted")}>
-                    <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                    <span>Accept</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updateStatus("rejected")}>
-                    <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                    <span>Reject</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updateStatus("completed")}>
-                    <ThumbsUp className="mr-2 h-4 w-4 text-blue-500" />
-                    <span>Mark as Completed</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            
-            {isAuthor && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                onClick={() => setIsDeleteDialogOpen(true)}
-                disabled={isDeleting}
-              >
-                {isDeleting ? "Deleting..." : "Delete"}
-              </Button>
-            )}
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </CardHeader>
       
+      {statusError && (
+        <div className="mx-6 mt-2 p-2 bg-red-100 border border-red-200 text-red-800 text-sm rounded-md">
+          <div className="flex items-center">
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            <span>Error updating status: {statusError}</span>
+          </div>
+          <div className="mt-1 text-xs">
+            Please check your permissions or try again later.
+          </div>
+        </div>
+      )}
+      
       <CardContent className="p-6">
         <div className="flex gap-6">
           {/* Vote controls */}
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => handleVote(1)}
               disabled={isVoting || !currentUserId}
-              className={`rounded-full ${currentUserVote === 1 ? 'bg-green-100 text-green-600' : ''}`}
+              className={`rounded-full hover:bg-green-100 transition-all ${currentUserVote === 1 ? 'bg-green-100 text-green-600 shadow-sm' : ''}`}
             >
               <ArrowUpIcon className="h-5 w-5" />
             </Button>
             
-            <span className={`font-bold text-lg ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
+            <span className={`font-bold text-lg transition-colors ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
               {voteScore}
             </span>
             
@@ -303,7 +362,7 @@ export default function FeatureRequestDetail({
               size="icon"
               onClick={() => handleVote(-1)}
               disabled={isVoting || !currentUserId}
-              className={`rounded-full ${currentUserVote === -1 ? 'bg-red-100 text-red-600' : ''}`}
+              className={`rounded-full hover:bg-red-100 transition-all ${currentUserVote === -1 ? 'bg-red-100 text-red-600 shadow-sm' : ''}`}
             >
               <ArrowDownIcon className="h-5 w-5" />
             </Button>
@@ -317,11 +376,11 @@ export default function FeatureRequestDetail({
           </div>
           
           {/* Feature request content */}
-          <div className="flex-1 space-y-4">
+          <div className="flex-1 space-y-5">
             <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-8 w-8 border border-border/40">
                 <AvatarImage src={featureRequest.author.image || undefined} alt={featureRequest.author.name || "User"} />
-                <AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary">
                   {featureRequest.author.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
@@ -329,7 +388,7 @@ export default function FeatureRequestDetail({
             </div>
             
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="whitespace-pre-wrap">{featureRequest.description}</p>
+              <p className="whitespace-pre-wrap text-foreground leading-relaxed">{featureRequest.description}</p>
             </div>
           </div>
         </div>
@@ -337,16 +396,19 @@ export default function FeatureRequestDetail({
       
       {/* Delete confirmation dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-card/95 backdrop-blur-sm border-border/40">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure you want to delete this?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your feature request and remove it from our servers.
+              This action cannot be undone. This will permanently delete your feature request and all associated votes and comments.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteFeatureRequest} className="bg-red-500 hover:bg-red-600">
+            <AlertDialogCancel className="border-border/40 hover:bg-secondary/80 transition-colors">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteFeatureRequest} 
+              className="bg-red-500 hover:bg-red-600 transition-colors"
+            >
               {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

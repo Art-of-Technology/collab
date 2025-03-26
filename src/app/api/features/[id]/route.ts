@@ -106,7 +106,7 @@ export async function PATCH(
       select: { role: true },
     });
 
-    const isAdmin = user?.role === "ADMIN";
+    const isAdmin = user?.role === "admin";
     const isAuthor = featureRequest.authorId === session.user.id;
 
     // Only the author can update title and description

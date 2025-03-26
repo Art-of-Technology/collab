@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Filter, ArrowUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -46,11 +46,7 @@ interface PaginationInfo {
   totalCount: number;
 }
 
-interface FeatureRequestsListProps {
-  currentUserId?: string;
-}
-
-export default function FeatureRequestsList({ currentUserId }: FeatureRequestsListProps) {
+export default function FeatureRequestsList() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -157,13 +153,13 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
-        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending</Badge>;
+        return <Badge variant="secondary" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors">Pending</Badge>;
       case "accepted":
-        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">Accepted</Badge>;
+        return <Badge variant="secondary" className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors">Accepted</Badge>;
       case "rejected":
-        return <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-200">Rejected</Badge>;
+        return <Badge variant="secondary" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors">Rejected</Badge>;
       case "completed":
-        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">Completed</Badge>;
+        return <Badge variant="secondary" className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 transition-colors">Completed</Badge>;
       default:
         return null;
     }
@@ -177,10 +173,14 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Filter className="h-4 w-4" />
+            <span>Filter:</span>
+          </div>
           <Select value={status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -192,8 +192,12 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
             </SelectContent>
           </Select>
 
+          <div className="flex items-center gap-2 text-muted-foreground text-sm ml-2">
+            <ArrowUpDown className="h-4 w-4" />
+            <span>Sort:</span>
+          </div>
           <Select value={orderBy} onValueChange={handleOrderChange}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -206,7 +210,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
           </Select>
         </div>
 
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm bg-secondary/50 py-1 px-3 rounded-full text-secondary-foreground">
           {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
         </div>
       </div>
@@ -216,18 +220,18 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : featureRequests.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg border border-border">
+        <Card className="text-center py-12 bg-card/95 backdrop-blur-sm border-border/40 shadow-lg">
           <p className="text-muted-foreground">No feature requests found</p>
-        </div>
+        </Card>
       ) : (
         <div className="space-y-4">
           {featureRequests.map((request) => (
-            <Link href={`/features/${request.id}`} key={request.id} className="block">
-              <Card className="hover:shadow-md transition-shadow overflow-hidden">
+            <Link href={`/features/${request.id}`} key={request.id} className="block group">
+              <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
                 <div className="p-6">
                   <div className="flex justify-between">
-                    <div className="space-y-1">
-                      <h3 className="text-xl font-semibold">{request.title}</h3>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-semibold group-hover:text-primary transition-colors">{request.title}</h3>
                       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span>
                           {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
@@ -236,22 +240,28 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                       </div>
                     </div>
                     <div className="flex flex-col items-center justify-center min-w-[70px] text-center">
-                      <span className={`text-2xl font-bold ${request.voteScore > 0 ? 'text-green-600' : request.voteScore < 0 ? 'text-red-600' : ''}`}>
+                      <span className={`text-2xl font-bold transition-colors ${
+                        request.voteScore > 0 
+                          ? 'text-green-600' 
+                          : request.voteScore < 0 
+                            ? 'text-red-600' 
+                            : ''
+                      }`}>
                         {request.voteScore}
                       </span>
                       <span className="text-xs text-muted-foreground">votes</span>
                     </div>
                   </div>
 
-                  <p className="mt-4 text-sm text-muted-foreground line-clamp-2">
+                  <p className="mt-4 text-sm text-muted-foreground line-clamp-2 group-hover:text-foreground/90 transition-colors">
                     {truncateText(request.description, 200)}
                   </p>
 
                   <div className="mt-4 flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
+                      <Avatar className="h-6 w-6 border border-border/40">
                         <AvatarImage src={request.author.image || undefined} alt={request.author.name || "User"} />
-                        <AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary">
                           {request.author.name?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
@@ -270,17 +280,19 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-6">
+        <div className="flex justify-center items-center gap-4 mt-8">
           <Button
             variant="outline"
             size="sm"
             onClick={() => handlePageChange(pagination.page - 1)}
             disabled={pagination.page === 1 || isLoading}
+            className="bg-background border-border/60 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
           </Button>
 
-          <div className="text-sm">
+          <div className="text-sm bg-secondary/30 py-1 px-3 rounded-md">
             Page {pagination.page} of {pagination.totalPages}
           </div>
 
@@ -289,8 +301,10 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
             size="sm"
             onClick={() => handlePageChange(pagination.page + 1)}
             disabled={pagination.page === pagination.totalPages || isLoading}
+            className="bg-background border-border/60 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
           >
-            <ChevronRight className="h-4 w-4" />
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
       )}
