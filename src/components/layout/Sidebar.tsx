@@ -3,24 +3,23 @@
 import Link from "next/link";
 import {
   HomeIcon,
-  UserIcon,
-  QueueListIcon,
   HashtagIcon,
-  PlusCircleIcon,
-  BookmarkIcon,
+  UserGroupIcon,
+  PlusIcon,
   EnvelopeIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
+import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface SidebarProps {
-  pathname: string;
+  pathname?: string;
 }
 
-export default function Sidebar({ pathname }: SidebarProps) {
+export default function Sidebar({ pathname = "" }: SidebarProps) {
   const { data: session } = useSession();
 
   const navigation = [
@@ -39,13 +38,13 @@ export default function Sidebar({ pathname }: SidebarProps) {
     {
       name: "My Posts",
       href: "/my-posts",
-      icon: QueueListIcon,
+      icon: UserGroupIcon,
       current: pathname === "/my-posts",
     },
     {
       name: "Bookmarks",
       href: "/bookmarks",
-      icon: BookmarkIcon,
+      icon: PlusIcon,
       current: pathname === "/bookmarks",
     },
     {
@@ -65,6 +64,12 @@ export default function Sidebar({ pathname }: SidebarProps) {
       href: "/tags",
       icon: HashtagIcon,
       current: pathname === "/tags",
+    },
+    {
+      name: "Feature Requests",
+      href: "/features",
+      icon: LightBulbIcon,
+      current: pathname === "/features",
     },
   ];
 
@@ -100,7 +105,7 @@ export default function Sidebar({ pathname }: SidebarProps) {
         <div className="border-t border-border pt-4 mt-4">
           <Button className="w-full bg-primary hover:bg-primary/90" size="sm" asChild>
             <Link href="/timeline">
-              <PlusCircleIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+              <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
               New Post
             </Link>
           </Button>

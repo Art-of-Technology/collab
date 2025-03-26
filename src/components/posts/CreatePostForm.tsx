@@ -198,7 +198,7 @@ export default function CreatePostForm() {
           <div className="space-y-2">
             <div className="relative">
               <Textarea
-                placeholder="What's happening in your development world?"
+                placeholder="What you are up to today?"
                 className="min-h-24 resize-none bg-background border-border/60 focus:border-primary focus:ring-primary"
                 value={formData.message}
                 name="message"
