@@ -8,6 +8,7 @@ import {
   PlusIcon,
   EnvelopeIcon,
   Squares2X2Icon,
+  RectangleStackIcon
 } from "@heroicons/react/24/outline";
 import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
@@ -34,6 +35,12 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
       href: "/timeline",
       icon: HomeIcon,
       current: pathname === "/timeline",
+    },
+    {
+      name: "Tasks",
+      href: "/tasks",
+      icon: RectangleStackIcon,
+      current: pathname === "/tasks",
     },
     {
       name: "My Posts",
