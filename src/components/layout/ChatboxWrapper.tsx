@@ -100,9 +100,9 @@ const ChatboxWrapper = () => {
 
   return (
     <aside 
-      className={`fixed right-0 top-0 h-screen bg-card border-l border-border transition-all duration-150 ease-in-out overflow-hidden pt-16 
+      className={`fixed right-0 top-16 bottom-0 z-50 bg-card border-l border-border transition-all duration-150 ease-in-out overflow-hidden shadow-lg
       ${isChatOpen ? 'w-[360px]' : 'w-0'} 
-      md:w-[360px] md:translate-x-[100%] md:${isChatOpen ? 'translate-x-0' : ''}`}
+      `}
     >
       <div className="w-full h-full" id="chat-widget-container" />
     </aside>

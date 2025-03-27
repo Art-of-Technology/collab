@@ -99,16 +99,16 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-card/90 border-b backdrop-blur-sm">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-card border-b h-16 shadow-md">
+      <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-2 ml-6">
             <LogoIcon className="h-2 w-2 text-primary" width={50} height={50} />
             <span className="font-bold text-xl">Weezboo Teams</span>
           </Link>
         </div>
 
-        <div className="flex-1 max-w-lg mx-6 hidden md:block">
+        <div className="flex-1 max-w-lg mx-auto">
           <form onSubmit={handleSearch} className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -121,7 +121,7 @@ export default function Navbar() {
           </form>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mr-6">
           {session ? (
             <>
               <Button variant="ghost" size="icon" className="relative hover-effect">

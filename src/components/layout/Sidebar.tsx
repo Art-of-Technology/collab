@@ -14,7 +14,6 @@ import {
 import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 
@@ -125,59 +124,57 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
   };
 
   return (
-    <Card className="sticky top-20 bg-card/95 backdrop-blur-sm border-none shadow-md">
-      <CardContent className="p-4">
-        <div className="space-y-1">
-          {navigation.map((item) => (
-            <Button
-              key={item.name}
-              variant={item.current ? "secondary" : "ghost"}
-              className={`w-full justify-start transition-colors hover-effect ${
-                item.current ? "bg-secondary" : ""
-              }`}
-              asChild
+    <div className="space-y-6">
+      <div className="space-y-1">
+        {navigation.map((item) => (
+          <Button
+            key={item.name}
+            variant={item.current ? "secondary" : "ghost"}
+            className={`w-full justify-start transition-colors hover-effect ${
+              item.current ? "bg-secondary" : ""
+            }`}
+            asChild
+          >
+            <Link
+              href={item.href}
+              aria-current={item.current ? "page" : undefined}
             >
-              <Link
-                href={item.href}
-                aria-current={item.current ? "page" : undefined}
-              >
-                <item.icon
-                  className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                    item.current ? "text-primary" : "text-muted-foreground"
-                  }`}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{item.name}</span>
-              </Link>
-            </Button>
-          ))}
-        </div>
-
-        <div className="border-t border-border pt-4 mt-4">
-          <Button className="w-full bg-primary hover:bg-primary/90" size="sm" asChild>
-            <Link href="/timeline">
-              <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-              New Post
+              <item.icon
+                className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                  item.current ? "text-primary" : "text-muted-foreground"
+                }`}
+                aria-hidden="true"
+              />
+              <span className="truncate">{item.name}</span>
             </Link>
           </Button>
-        </div>
+        ))}
+      </div>
 
-        {session?.user && (
-          <div className="border-t border-border pt-4 mt-4">
-            <div className="flex items-center space-x-3">
-              {renderAvatar()}
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">
-                  {session.user.name}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {session.user.role || "Developer"}
-                </p>
-              </div>
+      <div className="border-t border-border pt-4">
+        <Button className="w-full bg-primary hover:bg-primary/90" size="sm" asChild>
+          <Link href="/timeline">
+            <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+            New Post
+          </Link>
+        </Button>
+      </div>
+
+      {session?.user && (
+        <div className="border-t border-border pt-4">
+          <div className="flex items-center space-x-3">
+            {renderAvatar()}
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate">
+                {session.user.name}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {session.user.role || "Developer"}
+              </p>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 } 
