@@ -1,7 +1,7 @@
-# Product Requirements Document: Devitter
+# Product Requirements Document: Collab
 
 ## Project Information
-**Project Name:** Devitter
+**Project Name:** Collab
 **Date:** 2025-03-24
 **Author:** Emma, Product Manager
 
@@ -11,7 +11,7 @@ Create a project similar to Twitter but focused on internal work tracking and in
 ## 1. Product Definition
 
 ### 1.1 Product Vision
-Devitter is an internal communication platform designed specifically for software development teams that prioritizes simplicity and effectiveness, enabling transparent work tracking and knowledge sharing without the overhead of complex project management systems.
+Collab is an internal communication platform designed specifically for software development teams that prioritizes simplicity and effectiveness, enabling transparent work tracking and knowledge sharing without the overhead of complex project management systems.
 
 ### 1.2 Product Goals
 1. **Simplify Internal Communication**: Create a streamlined platform that requires minimal training and setup while effectively facilitating team information sharing.
@@ -61,14 +61,14 @@ quadrantChart
     "Linear": [0.70, 0.90]
     "Trello": [0.80, 0.40]
     "GitHub Discussions": [0.65, 0.95]
-    "Devitter (Our Product)": [0.90, 0.85]
+    "Collab (Our Product)": [0.90, 0.85]
 ```
 
 ## 2. Technical Specifications
 
 ### 2.1 Requirements Analysis
 
-Devitter must provide a streamlined communication platform with a focus on simplicity and effectiveness for software development teams. The core of the platform will be a timeline-based feed where users can post updates about their work, challenges, and ideas. The platform should avoid the complexity of traditional project management tools while still providing enough structure to organize information effectively.
+Collab must provide a streamlined communication platform with a focus on simplicity and effectiveness for software development teams. The core of the platform will be a timeline-based feed where users can post updates about their work, challenges, and ideas. The platform should avoid the complexity of traditional project management tools while still providing enough structure to organize information effectively.
 
 Key areas of focus:
 
@@ -124,7 +124,7 @@ Key areas of focus:
 #### Main Feed Page
 ```
 +-----------------------------------------------------+
-|  DEVITTER                          [Profile] [Search] |
+|  Collab                          [Profile] [Search] |
 +-----------------------------------------------------+
 |                                                     |
 |  + Create New Post                                  |
@@ -201,7 +201,7 @@ Key areas of focus:
 #### User Profile Page
 ```
 +-----------------------------------------------------+
-|  DEVITTER                          [Profile] [Search] |
+|  Collab                          [Profile] [Search] |
 +-----------------------------------------------------+
 |                                                     |
 |  [Profile Image]  Jane Doe                          |
@@ -232,7 +232,7 @@ Key areas of focus:
 #### Team Dashboard
 ```
 +-----------------------------------------------------+
-|  DEVITTER                          [Profile] [Search] |
+|  Collab                          [Profile] [Search] |
 +-----------------------------------------------------+
 |                                                     |
 |  TEAM DASHBOARD: Frontend Team                      |
@@ -380,11 +380,11 @@ Key areas of focus:
 
 ## 5. Conclusion
 
-Devitter aims to solve the communication challenges faced by software development teams by providing a simple yet effective platform for sharing work updates, challenges, and ideas. By focusing on simplicity and avoiding the complexity pitfalls of tools like Jira and Notion, Devitter can become an integral part of a development team's daily workflow.
+Collab aims to solve the communication challenges faced by software development teams by providing a simple yet effective platform for sharing work updates, challenges, and ideas. By focusing on simplicity and avoiding the complexity pitfalls of tools like Jira and Notion, Collab can become an integral part of a development team's daily workflow.
 
-The timeline-based approach, inspired by Twitter's original purpose as an internal communication tool, provides a familiar paradigm that requires minimal training while still offering powerful capabilities for information sharing and discovery. By carefully implementing the requirements outlined in this document and addressing the open questions through user research and testing, Devitter can deliver substantial value to software development teams of all sizes.
+The timeline-based approach, inspired by Twitter's original purpose as an internal communication tool, provides a familiar paradigm that requires minimal training while still offering powerful capabilities for information sharing and discovery. By carefully implementing the requirements outlined in this document and addressing the open questions through user research and testing, Collab can deliver substantial value to software development teams of all sizes.
 
-Key differentiators for Devitter:
+Key differentiators for Collab:
 1. **Simplicity First**: Clean UI with minimal cognitive load
 2. **Developer-Centric**: Designed specifically for software team workflows
 3. **Automated Updates**: Reduces manual reporting through dev tool integrations

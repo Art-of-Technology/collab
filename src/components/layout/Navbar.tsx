@@ -103,7 +103,7 @@ export default function Navbar() {
       <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center space-x-2 ml-6">
-            <Image src="/logo.png" width={125} height={125} alt="Collabri" />
+            <Image src="/logo-v2.png" width={125} height={125} alt="Collab" />
           </Link>
         </div>
 

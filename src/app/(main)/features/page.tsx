@@ -6,8 +6,8 @@ import CreateFeatureRequestButton from "@/components/features/CreateFeatureReque
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
-  title: "Feature Requests | Devitter",
-  description: "Submit and vote on feature requests for Devitter",
+  title: "Feature Requests",
+  description: "Submit and vote on feature requests for your projects",
 };
 
 export default async function FeatureRequestsPage() {

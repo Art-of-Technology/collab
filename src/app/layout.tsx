@@ -9,7 +9,7 @@ import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 
 export const metadata = {
-  title: "Collabri",
+  title: "Collab",
   description: "A collabration platform for teams",
 };
 

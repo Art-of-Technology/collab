@@ -18,13 +18,13 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 
   if (!post) {
     return {
-      title: "Post Not Found | Devitter",
+      title: "Post Not Found",
       description: "The requested post could not be found.",
     };
   }
 
   return {
-    title: `${post.author.name}'s Post | Devitter`,
+    title: `${post.author.name}'s Post`,
     description: post.message.substring(0, 160),
   };
 }
