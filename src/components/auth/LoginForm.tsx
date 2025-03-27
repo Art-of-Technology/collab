@@ -50,7 +50,7 @@ export default function LoginForm() {
       </Button>
       
       <p className="text-center text-sm text-muted-foreground">
-        By signing in, you agree to our Terms and Privacy Policy.
+        By signing in, you agree to our <br /> Terms and Privacy Policy.
       </p>
     </div>
   );
