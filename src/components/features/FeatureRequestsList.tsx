@@ -54,7 +54,7 @@ export default function FeatureRequestsList() {
 
   // Get query params
   const status = searchParams.get("status") || "all";
-  const orderBy = searchParams.get("orderBy") || "latest";
+  const orderBy = searchParams.get("orderBy") || "most_votes";
   const page = parseInt(searchParams.get("page") || "1");
 
   const [isLoading, setIsLoading] = useState(true);
