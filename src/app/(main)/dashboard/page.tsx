@@ -11,7 +11,7 @@ import { AlertTriangle, Lightbulb, MessageSquare, Heart, HelpCircle, Sparkles, T
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Dashboard | Devitter",
+  title: "Dashboard",
   description: "Your team's development activity dashboard",
 };
 
