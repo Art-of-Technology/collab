@@ -104,18 +104,18 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
   // Render the avatar based on user data
   const renderAvatar = () => {
     if (userData?.useCustomAvatar) {
-      return <CustomAvatar user={userData} size="md" className="border-2 border-primary/10" />;
+      return <CustomAvatar user={userData} size="md" className="border-2 border-[#2a2929]" />;
     }
 
     return (
-      <Avatar className="border-2 border-primary/10">
+      <Avatar className="border-2 border-[#2a2929]">
         {session?.user?.image ? (
           <AvatarImage
             src={session.user.image}
             alt={session.user.name || "User"}
           />
         ) : (
-          <AvatarFallback className="bg-primary/10 text-primary">
+          <AvatarFallback className="bg-gray-800 text-gray-200">
             {session?.user?.name?.charAt(0).toUpperCase() || "U"}
           </AvatarFallback>
         )}
@@ -124,14 +124,14 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-gray-300">
       <div className="space-y-1">
         {navigation.map((item) => (
           <Button
             key={item.name}
             variant={item.current ? "secondary" : "ghost"}
-            className={`w-full justify-start transition-colors hover-effect ${
-              item.current ? "bg-secondary" : ""
+            className={`w-full justify-start transition-colors ${
+              item.current ? "bg-[#1c1c1c] text-white" : "text-gray-400 hover:text-gray-200 hover:bg-[#1c1c1c]"
             }`}
             asChild
           >
@@ -141,7 +141,7 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
             >
               <item.icon
                 className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                  item.current ? "text-primary" : "text-muted-foreground"
+                  item.current ? "text-blue-500" : "text-gray-400"
                 }`}
                 aria-hidden="true"
               />
@@ -151,8 +151,8 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
         ))}
       </div>
 
-      <div className="border-t border-border pt-4">
-        <Button className="w-full bg-primary hover:bg-primary/90" size="sm" asChild>
+      <div className="border-t border-[#2a2929] pt-4">
+        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" size="sm" asChild>
           <Link href="/timeline">
             <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
             New Post
@@ -161,14 +161,14 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
       </div>
 
       {session?.user && (
-        <div className="border-t border-border pt-4">
+        <div className="border-t border-[#2a2929] pt-4">
           <div className="flex items-center space-x-3">
             {renderAvatar()}
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">
+              <p className="font-medium truncate text-gray-200">
                 {session.user.name}
               </p>
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-xs text-gray-400 truncate">
                 {session.user.role || "Developer"}
               </p>
             </div>

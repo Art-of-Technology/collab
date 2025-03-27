@@ -99,22 +99,22 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-card border-b h-16 shadow-md">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#191919] border-b border-[#2a2929] h-16 shadow-md">
       <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center space-x-2 ml-6">
             <LogoIcon className="h-2 w-2 text-primary" width={50} height={50} />
-            <span className="font-bold text-xl">Weezboo Teams</span>
+            <span className="font-bold text-xl text-white">Weezboo Teams</span>
           </Link>
         </div>
 
         <div className="flex-1 max-w-lg mx-auto">
           <form onSubmit={handleSearch} className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               type="search"
               placeholder="Search posts, people, or tags"
-              className="pl-9 bg-background border-none"
+              className="pl-9 bg-[#1c1c1c] border-[#2a2929] text-gray-200 focus:border-gray-500"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -124,23 +124,20 @@ export default function Navbar() {
         <div className="flex items-center gap-2 mr-6">
           {session ? (
             <>
-              <Button variant="ghost" size="icon" className="relative hover-effect">
+              <Button variant="ghost" size="icon" className="relative hover:bg-[#1c1c1c] text-gray-400">
                 <BellIcon className="h-5 w-5" />
-                {/* <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
-                  
-                </span> */}
               </Button>
 
               {/* Chat toggle button */}
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="relative hover-effect" 
+                className="relative hover:bg-[#1c1c1c] text-gray-400" 
                 onClick={toggleChat}
               >
                 <MessageCircle className="h-5 w-5" />
                 {isChatOpen && (
-                  <span className="absolute bottom-1 right-1 bg-primary rounded-full w-2 h-2" />
+                  <span className="absolute bottom-1 right-1 bg-blue-500 rounded-full w-2 h-2" />
                 )}
               </Button>
 
@@ -151,16 +148,16 @@ export default function Navbar() {
                     {renderAvatar()}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuContent className="w-56 bg-[#1c1c1c] border-[#2a2929] text-gray-200" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{session?.user?.name}</p>
-                      <p className="text-xs leading-none text-muted-foreground">
+                      <p className="text-xs leading-none text-gray-400">
                         {session?.user?.email}
                       </p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuSeparator className="bg-[#2a2929]" />
                   <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
                       <Link href="/profile">Your Profile</Link>
@@ -169,7 +166,7 @@ export default function Navbar() {
                       <Link href="/my-posts">My Posts</Link>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuSeparator className="bg-[#2a2929]" />
                   <DropdownMenuItem onClick={handleSignOut}>
                     Sign out
                   </DropdownMenuItem>
@@ -177,7 +174,7 @@ export default function Navbar() {
               </DropdownMenu>
             </>
           ) : (
-            <Button variant="outline">Sign In</Button>
+            <Button variant="outline" className="border-[#2a2929] hover:bg-[#1c1c1c] text-gray-200">Sign In</Button>
           )}
         </div>
       </div>

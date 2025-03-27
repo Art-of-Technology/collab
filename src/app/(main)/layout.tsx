@@ -20,14 +20,14 @@ export default function MainLayout({
       
       <div className="flex h-[calc(100vh-4rem)]">
         {/* Left sidebar - fixed width */}
-        <div className="w-64 fixed top-16 bottom-0 left-0 bg-card/95 border-r border-border z-40 overflow-y-auto">
+        <div className="w-64 fixed top-16 bottom-0 left-0 bg-[#191919] border-r border-[#2a2929] z-40 overflow-y-auto">
           <div className="p-4">
             <Sidebar pathname={pathname} />
           </div>
         </div>
         
         {/* Main content area - with left padding to account for sidebar */}
-        <main className="flex-1 ml-64 pt-20 pb-8 px-4 overflow-y-auto">
+        <main className="flex-1 ml-64 pt-20 pb-8 px-4 overflow-y-auto bg-[#191919]">
           <div className="max-w-5xl mx-auto">
             {children}
           </div>
