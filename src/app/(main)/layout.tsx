@@ -15,16 +15,23 @@ export default function MainLayout({
   
   return (
     <div className="min-h-screen bg-[#191919]">
+      {/* Top navbar - full width */}
       <Navbar />
-      <div className="container mx-auto px-4 pt-20 pb-10">
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="md:w-1/4 xl:w-1/5">
+      
+      <div className="flex h-[calc(100vh-4rem)]">
+        {/* Left sidebar - fixed width */}
+        <div className="w-64 fixed top-16 bottom-0 left-0 bg-[#191919] border-r border-[#2a2929] z-40 overflow-y-auto">
+          <div className="p-4">
             <Sidebar pathname={pathname} />
           </div>
-          <main className="md:w-3/4 xl:w-4/5">
-            {children}
-          </main>
         </div>
+        
+        {/* Main content area - with left padding to account for sidebar */}
+        <main className="flex-1 ml-64 pt-20 pb-8 px-4 overflow-y-auto bg-[#191919]">
+          <div className="max-w-5xl mx-auto">
+            {children}
+          </div>
+        </main>
       </div>
       
       {/* Chat Widget */}

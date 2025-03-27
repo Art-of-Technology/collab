@@ -23,11 +23,11 @@
   --background: #1c1c1c;
   --foreground: #ededed;
   --primary: #22c55e;
-  --card-bg: #1e1e1e;
+  --card-bg: #1c1c1c;
   --card-border: #333333;
   --navbar-bg: #0a0a0a;
   --sidebar-bg: #1a1a1a;
-  --hover-bg: #2a2a2a;
+  --hover-bg: #1c1c1c;
   --text-primary: #ffffff;
   --text-secondary: #a0aec0;
   --text-muted: #718096;
@@ -98,19 +98,19 @@
     --background: 0 0% 11%;  /* #1c1c1c */
     --foreground: 0 0% 95%;  /* #f2f2f2 */
     
-    --card: 0 0% 13%;  /* #212121 */
+    --card: 0 0% 11%;  /* #1c1c1c */
     --card-foreground: 0 0% 95%;  /* #f2f2f2 */
     
-    --popover: 0 0% 13%;  /* #212121 */
+    --popover: 0 0% 11%;  /* #1c1c1c */
     --popover-foreground: 0 0% 95%;  /* #f2f2f2 */
     
     --primary: 142 71% 45%;  /* #22c55e (green) */
     --primary-foreground: 0 0% 100%;  /* #ffffff */
     
-    --secondary: 0 0% 16%;  /* #292929 */
+    --secondary: 0 0% 11%;  /* #1c1c1c */
     --secondary-foreground: 0 0% 90%;  /* #e6e6e6 */
     
-    --muted: 0 0% 15%;  /* #262626 */
+    --muted: 0 0% 11%;  /* #1c1c1c */
     --muted-foreground: 0 0% 65%;  /* #a6a6a6 */
     
     --accent: 142 71% 45%;  /* #22c55e with 10% opacity */
@@ -151,8 +151,8 @@
   
   /* Make cards stand out slightly from background */
   .card {
-    background-color: #212121;
-    border-color: #2e2e2e;
+    background-color: #1c1c1c;
+    border-color: #2a2929;
   }
   
   /* Add subtle hover effects */
@@ -161,7 +161,7 @@
   }
   
   .hover-effect:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: #1c1c1c;
     transform: translateY(-1px);
   }
   
@@ -196,8 +196,8 @@
   
   /* Improve navbar with subtle border */
   nav {
-    border-bottom: 1px solid #2e2e2e;
-    background-color: rgba(28, 28, 28, 0.8);
+    border-bottom: 1px solid #2a2929;
+    background-color: #191919;
     backdrop-filter: blur(10px);
   }
 }
