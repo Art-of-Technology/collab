@@ -15,6 +15,17 @@ interface User {
   currentFocus: string | null;
   expertise: string[];
   slackId: string | null;
+  
+  // Custom avatar fields
+  avatarSkinTone?: number | null;
+  avatarEyes?: number | null;
+  avatarBrows?: number | null;
+  avatarMouth?: number | null;
+  avatarNose?: number | null;
+  avatarHair?: number | null;
+  avatarEyewear?: number | null;
+  avatarAccessory?: number | null;
+  useCustomAvatar?: boolean;
 }
 
 // Post model

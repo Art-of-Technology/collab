@@ -6,6 +6,9 @@ const nextConfig = {
     // TODO: Fix the proper type issue in the page components
     ignoreBuildErrors: true,
   },
+  images: {
+    domains: ['lh3.googleusercontent.com'],
+  },
 }
 
 module.exports = nextConfig 

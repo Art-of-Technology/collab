@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   HomeIcon,
@@ -14,6 +15,7 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 interface SidebarProps {
   pathname?: string;
@@ -21,6 +23,26 @@ interface SidebarProps {
 
 export default function Sidebar({ pathname = "" }: SidebarProps) {
   const { data: session } = useSession();
+  const [userData, setUserData] = useState<any>(null);
+
+  // Fetch the current user data for avatar
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (session?.user) {
+        try {
+          const response = await fetch("/api/user/me");
+          if (response.ok) {
+            const data = await response.json();
+            setUserData(data.user);
+          }
+        } catch (error) {
+          console.error("Failed to fetch user data:", error);
+        }
+      }
+    };
+
+    fetchUserData();
+  }, [session]);
 
   const navigation = [
     {
@@ -73,6 +95,28 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
     },
   ];
 
+  // Render the avatar based on user data
+  const renderAvatar = () => {
+    if (userData?.useCustomAvatar) {
+      return <CustomAvatar user={userData} size="md" className="border-2 border-primary/10" />;
+    }
+
+    return (
+      <Avatar className="border-2 border-primary/10">
+        {session?.user?.image ? (
+          <AvatarImage
+            src={session.user.image}
+            alt={session.user.name || "User"}
+          />
+        ) : (
+          <AvatarFallback className="bg-primary/10 text-primary">
+            {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+          </AvatarFallback>
+        )}
+      </Avatar>
+    );
+  };
+
   return (
     <Card className="sticky top-20 bg-card/95 backdrop-blur-sm border-none shadow-md">
       <CardContent className="p-4">
@@ -114,18 +158,7 @@ export default function Sidebar({ pathname = "" }: SidebarProps) {
         {session?.user && (
           <div className="border-t border-border pt-4 mt-4">
             <div className="flex items-center space-x-3">
-              <Avatar className="border-2 border-primary/10">
-                {session.user.image ? (
-                  <AvatarImage
-                    src={session.user.image}
-                    alt={session.user.name || "User"}
-                  />
-                ) : (
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {session.user.name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                )}
-              </Avatar>
+              {renderAvatar()}
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">
                   {session.user.name}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, Fragment, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -8,6 +8,7 @@ import {
   BellIcon, 
   MagnifyingGlassIcon 
 } from "@heroicons/react/24/outline";
+import { MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,12 +23,35 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import LogoIcon from "@/components/icons/LogoIcon";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { useUiContext } from "@/context/UiContext";
 
 export default function Navbar() {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
+  const { isChatOpen, toggleChat } = useUiContext();
   const [searchQuery, setSearchQuery] = useState("");
+  const [userData, setUserData] = useState<any>(null);
+
+  // Fetch the current user data for avatar
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (session?.user) {
+        try {
+          const response = await fetch("/api/user/me");
+          if (response.ok) {
+            const data = await response.json();
+            setUserData(data.user);
+          }
+        } catch (error) {
+          console.error("Failed to fetch user data:", error);
+        }
+      }
+    };
+
+    fetchUserData();
+  }, [session]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -55,6 +79,23 @@ export default function Navbar() {
       .join("")
       .toUpperCase()
       .substring(0, 2);
+  };
+
+  // Render the avatar based on user data
+  const renderAvatar = () => {
+    if (userData?.useCustomAvatar) {
+      return <CustomAvatar user={userData} size="md" />;
+    }
+
+    return (
+      <Avatar>
+        {session?.user?.image ? (
+          <AvatarImage src={session.user.image} alt={session.user.name || "User"} />
+        ) : (
+          <AvatarFallback>{getInitials(session?.user?.name || "")}</AvatarFallback>
+        )}
+      </Avatar>
+    );
   };
 
   return (
@@ -90,17 +131,24 @@ export default function Navbar() {
                 </span> */}
               </Button>
 
+              {/* Chat toggle button */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative hover-effect" 
+                onClick={toggleChat}
+              >
+                <MessageCircle className="h-5 w-5" />
+                {isChatOpen && (
+                  <span className="absolute bottom-1 right-1 bg-primary rounded-full w-2 h-2" />
+                )}
+              </Button>
+
               {/* Profile dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar>
-                      {session?.user?.image ? (
-                        <AvatarImage src={session.user.image} alt={session.user.name || "User"} />
-                      ) : (
-                        <AvatarFallback>{getInitials(session?.user?.name || "")}</AvatarFallback>
-                      )}
-                    </Avatar>
+                  <Button variant="ghost" className="rounded-full p-0 h-10 w-10 overflow-hidden">
+                    {renderAvatar()}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>

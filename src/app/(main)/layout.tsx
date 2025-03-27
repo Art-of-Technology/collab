@@ -1,8 +1,9 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
-import { usePathname } from "next/navigation";
+import ChatboxWrapper from "@/components/layout/ChatboxWrapper";
 
 export default function MainLayout({
   children,
@@ -11,7 +12,7 @@ export default function MainLayout({
 }>) {
   // Get the current path to highlight active menu items
   const pathname = usePathname();
-
+  
   return (
     <div className="min-h-screen bg-[#191919]">
       <Navbar />
@@ -25,6 +26,9 @@ export default function MainLayout({
           </main>
         </div>
       </div>
+      
+      {/* Chat Widget */}
+      <ChatboxWrapper />
     </div>
   );
 } 

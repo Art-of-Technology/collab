@@ -6,6 +6,7 @@ import PostList from "@/components/posts/PostList";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
@@ -57,12 +58,16 @@ export default async function ProfilePage() {
       <Card className="mb-8 border-border/40 bg-card/95 shadow-lg hover:shadow-xl transition-all duration-300">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
-              <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-              <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                {user.name?.charAt(0).toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
+            {user.useCustomAvatar ? (
+              <CustomAvatar user={user} size="lg" className="border-2 border-primary/20 shadow-md" />
+            ) : (
+              <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
+                <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
+                <AvatarFallback className="text-lg bg-primary/10 text-primary">
+                  {user.name?.charAt(0).toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+            )}
             <div>
               <h1 className="text-2xl font-bold">{user.name}</h1>
               <p className="text-muted-foreground">{user.role || "Developer"}</p>

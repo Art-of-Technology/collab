@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { BadgeVariant } from "./types";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 interface PostHeaderProps {
   authorId: string;
@@ -28,6 +29,7 @@ interface PostHeaderProps {
   };
   onEditClick: () => void;
   onDeleteClick: () => void;
+  author?: any; // Add the full author object
 }
 
 export default function PostHeader({
@@ -42,15 +44,23 @@ export default function PostHeader({
   priorityDisplay,
   onEditClick,
   onDeleteClick,
+  author,
 }: PostHeaderProps) {
+  // Check if we have the full author object with custom avatar data
+  const hasCustomAvatar = author && author.useCustomAvatar;
+  
   return (
     <div className="flex flex-row items-start space-y-0 pb-2 bg-card/50">
-      <Avatar className="h-10 w-10 mr-3 border border-primary/10">
-        <AvatarImage src={authorImage || undefined} alt={authorName || "User"} />
-        <AvatarFallback className="bg-primary/10 text-primary">
-          {authorName?.charAt(0).toUpperCase() || "U"}
-        </AvatarFallback>
-      </Avatar>
+      {hasCustomAvatar ? (
+        <CustomAvatar user={author} size="md" className="mr-3 border border-primary/10" />
+      ) : (
+        <Avatar className="h-10 w-10 mr-3 border border-primary/10">
+          <AvatarImage src={authorImage || undefined} alt={authorName || "User"} />
+          <AvatarFallback className="bg-primary/10 text-primary">
+            {authorName?.charAt(0).toUpperCase() || "U"}
+          </AvatarFallback>
+        </Avatar>
+      )}
       <div className="flex-1">
         <div className="flex justify-between items-center mb-1">
           <div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcrypt";
 import { prisma } from "@/lib/prisma";
+import { generateRandomAvatar } from "@/lib/avatar-generator";
 
 export async function POST(req: Request) {
   try {
@@ -30,8 +31,11 @@ export async function POST(req: Request) {
 
     // Hash the password
     const hashedPassword = await hash(password, 12);
+    
+    // Generate random avatar configuration
+    const randomAvatar = generateRandomAvatar();
 
-    // Create the new user
+    // Create the new user with random avatar
     const user = await prisma.user.create({
       data: {
         name,
@@ -39,7 +43,17 @@ export async function POST(req: Request) {
         hashedPassword,
         role: role || "developer",
         team,
-        currentFocus
+        currentFocus,
+        // Add avatar configuration
+        avatarSkinTone: randomAvatar.avatarSkinTone,
+        avatarEyes: randomAvatar.avatarEyes,
+        avatarBrows: randomAvatar.avatarBrows,
+        avatarMouth: randomAvatar.avatarMouth,
+        avatarNose: randomAvatar.avatarNose,
+        avatarHair: randomAvatar.avatarHair,
+        avatarEyewear: randomAvatar.avatarEyewear,
+        avatarAccessory: randomAvatar.avatarAccessory,
+        useCustomAvatar: true // Enable custom avatar by default
       }
     });
 

@@ -24,6 +24,17 @@ model User {
   currentFocus   String?
   expertise      String[]
   slackId        String? // User's Slack ID for notifications
+  
+  // Custom avatar fields
+  avatarSkinTone Int?     @default(1)
+  avatarEyes     Int?     @default(1)
+  avatarBrows    Int?     @default(1)
+  avatarMouth    Int?     @default(1)
+  avatarNose     Int?     @default(1)
+  avatarHair     Int?     @default(1)
+  avatarEyewear  Int?     @default(0) // 0 means none
+  avatarAccessory Int?    @default(0) // 0 means none
+  useCustomAvatar Boolean @default(false)
 
   accounts               Account[]
   posts                  Post[]

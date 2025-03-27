@@ -7,6 +7,7 @@ import PostList from "@/components/posts/PostList";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 interface UserProfilePageProps {
   params: {
@@ -113,12 +114,16 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
-                <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-                <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                  {user.name?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
+              {user.useCustomAvatar ? (
+                <CustomAvatar user={user} size="lg" className="border-2 border-primary/20 shadow-md" />
+              ) : (
+                <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
+                  <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
+                  <AvatarFallback className="text-lg bg-primary/10 text-primary">
+                    {user.name?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div>
                 <h2 className="text-2xl font-bold">{user.name}</h2>
                 <p className="text-muted-foreground">{user.role || "Developer"}</p>

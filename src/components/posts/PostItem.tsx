@@ -143,6 +143,7 @@ export default function PostItem({
           priorityDisplay={priorityDisplay}
           onEditClick={() => setIsEditDialogOpen(true)}
           onDeleteClick={() => setIsDeleteDialogOpen(true)}
+          author={post.author}
         />
       </CardHeader>
       

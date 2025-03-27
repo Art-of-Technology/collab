@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 export default function CreatePostForm() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function CreatePostForm() {
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [formData, setFormData] = useState({
     message: "",
     messageHtml: "",
@@ -31,6 +33,25 @@ export default function CreatePostForm() {
     tags: "",
     priority: "normal",
   });
+  
+  // Fetch the current user data
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/user/me");
+        if (response.ok) {
+          const userData = await response.json();
+          setCurrentUser(userData.user);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
+      }
+    };
+
+    if (session?.user) {
+      fetchCurrentUser();
+    }
+  }, [session?.user]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -178,16 +199,27 @@ export default function CreatePostForm() {
     }
   };
 
+  // Render the avatar based on user data
+  const renderAvatar = () => {
+    if (currentUser?.useCustomAvatar) {
+      return <CustomAvatar user={currentUser} size="md" className="border border-border/40" />;
+    }
+    
+    return (
+      <Avatar className="h-10 w-10 border border-border/40">
+        <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+        <AvatarFallback className="bg-primary/10 text-primary">
+          {session?.user?.name?.charAt(0) || "U"}
+        </AvatarFallback>
+      </Avatar>
+    );
+  };
+
   return (
     <Card className="mb-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 border-border/40 bg-card/95">
       <CardHeader className="pb-3 relative">
         <div className="flex space-x-4">
-          <Avatar className="h-10 w-10 border border-border/40">
-            <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {session?.user?.name?.charAt(0) || "U"}
-            </AvatarFallback>
-          </Avatar>
+          {renderAvatar()}
           <div className="flex-1 space-y-1">
             <p className="text-sm font-medium leading-none">{session?.user?.name || "Anonymous"}</p>
             <p className="text-xs text-muted-foreground">@{session?.user?.email?.split('@')[0] || "username"}</p>

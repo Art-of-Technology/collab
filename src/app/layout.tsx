@@ -4,6 +4,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 import { fontSans } from "@/lib/fonts";
 import SessionProvider from "@/providers/SessionProvider";
+import Script from "next/script";
+import { UiProvider } from "@/context/UiContext";
+import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 
 export const metadata = {
   title: "Weezboo Teams",
@@ -19,10 +22,19 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={cn("min-h-screen bg-background font-sans antialiased", fontSans.variable)}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <SessionProvider>
-            {children}
-            <Toaster />
-          </SessionProvider>
+          <UiProvider>
+            <CustomThemeProvider>
+              <SessionProvider>
+                {children}
+                <Toaster />
+              </SessionProvider>
+              <Script
+                src="https://api.chatproject.io/chat-widget.js"
+                id="chat-widget-script"
+                strategy="lazyOnload"
+              />
+            </CustomThemeProvider>
+          </UiProvider>
         </ThemeProvider>
       </body>
     </html>

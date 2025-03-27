@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { User } from "@prisma/client";
 import { CommentReplyForm } from "./CommentReplyForm";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 export type CommentWithAuthor = {
   id: string;
@@ -118,15 +119,22 @@ export function Comment({
     setShowReplies(prev => !prev);
   };
 
+  // Check if the author has a custom avatar
+  const hasCustomAvatar = comment.author && comment.author.useCustomAvatar;
+
   return (
     <div className={`mb-2 ${isReply ? 'reply-comment' : 'top-level-comment'}`}>
       <div className="flex gap-2 hover:bg-muted/50 p-2 rounded-lg">
-        <Avatar className="h-7 w-7">
-          <AvatarImage src={comment.author.image || undefined} alt={comment.author.name || "User"} />
-          <AvatarFallback>
-            {comment.author.name?.charAt(0).toUpperCase() || "U"}
-          </AvatarFallback>
-        </Avatar>
+        {hasCustomAvatar ? (
+          <CustomAvatar user={comment.author} size="sm" />
+        ) : (
+          <Avatar className="h-7 w-7">
+            <AvatarImage src={comment.author.image || undefined} alt={comment.author.name || "User"} />
+            <AvatarFallback>
+              {comment.author.name?.charAt(0).toUpperCase() || "U"}
+            </AvatarFallback>
+          </Avatar>
+        )}
         <div className="flex-1">
           <div className="rounded-lg">
             <div className="flex flex-col">

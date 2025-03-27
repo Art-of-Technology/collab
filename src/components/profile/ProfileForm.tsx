@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
+import AvatarEditor from "@/components/profile/AvatarEditor";
 
 interface ProfileFormProps {
   user: {
@@ -19,6 +22,16 @@ interface ProfileFormProps {
     currentFocus?: string | null;
     expertise: string[] | [];
     slackId?: string | null;
+    image?: string | null;
+    avatarSkinTone?: number | null;
+    avatarEyes?: number | null;
+    avatarBrows?: number | null;
+    avatarMouth?: number | null;
+    avatarNose?: number | null;
+    avatarHair?: number | null;
+    avatarEyewear?: number | null;
+    avatarAccessory?: number | null;
+    useCustomAvatar?: boolean;
   };
 }
 
@@ -26,6 +39,7 @@ export default function ProfileForm({ user }: ProfileFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: user.name || "",
     team: user.team || "",
@@ -84,6 +98,38 @@ export default function ProfileForm({ user }: ProfileFormProps) {
       setIsSubmitting(false);
     }
   };
+  
+  const handleSaveAvatar = async (avatarData: any) => {
+    try {
+      const response = await fetch("/api/user/avatar", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          avatarSkinTone: avatarData.avatarSkinTone,
+          avatarEyes: avatarData.avatarEyes,
+          avatarBrows: avatarData.avatarBrows,
+          avatarMouth: avatarData.avatarMouth,
+          avatarNose: avatarData.avatarNose,
+          avatarHair: avatarData.avatarHair,
+          avatarEyewear: avatarData.avatarEyewear,
+          avatarAccessory: avatarData.avatarAccessory,
+          useCustomAvatar: avatarData.useCustomAvatar,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update avatar");
+      }
+
+      router.refresh();
+      return Promise.resolve();
+    } catch (error) {
+      console.error(error);
+      return Promise.reject(error);
+    }
+  };
 
   return (
     <Card className="border-border/40 bg-card/95 shadow-lg">
@@ -94,6 +140,40 @@ export default function ProfileForm({ user }: ProfileFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Avatar Section */}
+        <div className="flex flex-col items-center mb-8 sm:flex-row sm:items-start sm:space-x-6">
+          <div className="relative group mb-4 sm:mb-0">
+            {user.useCustomAvatar ? (
+              <CustomAvatar user={user} size="xl" className="border-4 border-primary/20 shadow-lg" />
+            ) : (
+              <Avatar className="h-24 w-24 border-4 border-primary/20 shadow-lg">
+                <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
+                <AvatarFallback className="text-2xl bg-primary/10 text-primary">
+                  {user.name?.charAt(0).toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+            )}
+            <div 
+              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full flex items-center justify-center cursor-pointer"
+              onClick={() => setIsAvatarEditorOpen(true)}
+            >
+              <span className="text-white font-medium text-xs sm:text-sm">Change Avatar</span>
+            </div>
+          </div>
+          <div className="text-center sm:text-left">
+            <h3 className="text-lg font-medium">{user.name || "Your Name"}</h3>
+            <p className="text-muted-foreground">{user.role || "Developer"}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2"
+              onClick={() => setIsAvatarEditorOpen(true)}
+            >
+              Customize Avatar
+            </Button>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Display Name</Label>
@@ -201,6 +281,14 @@ export default function ProfileForm({ user }: ProfileFormProps) {
           </CardFooter>
         </form>
       </CardContent>
+      
+      {/* Avatar Editor Modal */}
+      <AvatarEditor 
+        open={isAvatarEditorOpen}
+        onOpenChange={setIsAvatarEditorOpen}
+        user={user}
+        onSave={handleSaveAvatar}
+      />
     </Card>
   );
 } 
