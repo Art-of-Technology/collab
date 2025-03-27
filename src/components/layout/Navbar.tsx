@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, Fragment, useEffect } from "react";
+import { useState, useEffect } from "react";
+import   Image   from "next/image"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -103,8 +104,7 @@ export default function Navbar() {
       <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center space-x-2 ml-6">
-            <LogoIcon className="h-2 w-2 text-primary" width={50} height={50} />
-            <span className="font-bold text-xl text-white">Weezboo Teams</span>
+            <Image src="/logo.png" width={125} height={125} alt="Collabri" />
           </Link>
         </div>
 
