@@ -196,7 +196,7 @@ export default async function DashboardPage() {
       type: "LIKE",
     },
     orderBy: {
-      id: "desc", // Use id for ordering since createdAt may not be available
+      createdAt: "desc",
     },
     include: {
       author: true,
@@ -210,8 +210,10 @@ export default async function DashboardPage() {
 
   // Truncate text to a specified length
   const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
+    // First strip HTML tags
+    const strippedText = text.replace(/<[^>]*>?/gm, '');
+    if (strippedText.length <= maxLength) return strippedText;
+    return strippedText.substring(0, maxLength) + "...";
   };
 
   // Get badge variant based on post type
@@ -243,18 +245,13 @@ export default async function DashboardPage() {
       message: comment.message,
       post: comment.post
     })),
-    ...validLikes.map((like, index) => {
-      // Create a safer way to generate timestamps that doesn't rely on parsing IDs
-      // Use the index to create a distributed time range (newest to older)
-      const minutesAgo = index * 30 + 5; // 5, 35, 65, 95, 125 minutes ago
-      return {
-        type: "like" as const,
-        id: like.id,
-        createdAt: new Date(Date.now() - minutesAgo * 60000),
-        author: like.author,
-        post: like.post,
-      };
-    })
+    ...validLikes.map((like) => ({
+      type: "like" as const,
+      id: like.id,
+      createdAt: like.createdAt,
+      author: like.author,
+      post: like.post,
+    }))
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 5);
 
