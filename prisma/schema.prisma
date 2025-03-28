@@ -125,6 +125,7 @@ model Reaction {
   postId    String?
   commentId String?
   authorId  String
+  createdAt DateTime @default(now())
 
   post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
   comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
