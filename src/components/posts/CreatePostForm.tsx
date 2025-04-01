@@ -90,7 +90,7 @@ export default function CreatePostForm() {
     });
     
     try {
-      const response = await fetch("/api/ai/improve", {
+      const response = await fetch("/api/ai/shorten", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
