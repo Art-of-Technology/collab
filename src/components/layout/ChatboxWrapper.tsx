@@ -65,7 +65,7 @@ const ChatboxWrapper = () => {
       setTriggerUpdate((prev) => prev + 1)
     }
 
-    if (window.ChatWidget) {
+   /* if (window.ChatWidget) {
       initChatWidget()
     } else {
       const intervalId = setInterval(() => {
@@ -75,7 +75,7 @@ const ChatboxWrapper = () => {
         }
       }, 100)
       return () => clearInterval(intervalId)
-    }
+    }*/
   }, []) // Keep this empty to only run once on mount
 
   // Update widget config when user data changes
