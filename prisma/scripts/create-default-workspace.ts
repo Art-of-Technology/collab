@@ -68,9 +68,9 @@ async function main() {
     // Create the default workspace
     const defaultWorkspace = await prisma.workspace.create({
       data: {
-        name: 'Default Workspace',
-        slug: 'default-workspace',
-        description: 'Default workspace containing all existing data',
+        name: 'Weezboo',
+        slug: 'weezboo',
+        description: 'We are a team who are passionate about creating great products',
         ownerId: owner.id,
       },
     });

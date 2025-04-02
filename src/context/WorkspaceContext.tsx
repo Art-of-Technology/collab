@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
@@ -43,7 +43,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWorkspaces = async () => {
+  const fetchWorkspaces = useCallback(async () => {
     if (status === 'loading' || !session?.user) {
       return;
     }
@@ -80,7 +80,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [session, status, currentWorkspace]);
 
   useEffect(() => {
     if (session?.user) {
@@ -90,7 +90,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       setCurrentWorkspace(null);
       setIsLoading(false);
     }
-  }, [session, status]);
+  }, [session, status, fetchWorkspaces]);
 
   // Sync localStorage workspace ID to cookie on initial load
   useEffect(() => {

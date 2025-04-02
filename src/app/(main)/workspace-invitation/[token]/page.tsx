@@ -15,9 +15,8 @@ interface InvitationPageProps {
   };
 }
 
-export default async function WorkspaceInvitationPage({ params }: InvitationPageProps) {
-  const _params = await params;
-  const { token } = _params;
+export default function WorkspaceInvitationPage({ params }: InvitationPageProps) {
+  const { token } = params;
   const { data: session, status } = useSession();
   const router = useRouter();
   const { refreshWorkspaces } = useWorkspace();
@@ -168,7 +167,7 @@ export default async function WorkspaceInvitationPage({ params }: InvitationPage
               </p>
               {invitation.workspace.description && (
                 <p className="text-muted-foreground text-sm italic">
-                  "{invitation.workspace.description}"
+                  &quot;{invitation.workspace.description}&quot;
                 </p>
               )}
               <p className="text-xs text-muted-foreground">

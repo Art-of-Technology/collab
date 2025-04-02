@@ -8,8 +8,6 @@ import Script from "next/script";
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
-import { getServerSession } from 'next-auth';
-import { authOptions } from './api/auth/[...nextauth]/route';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
@@ -25,8 +23,6 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
-
   return (
     <html className="min-h-screen h-screen overflow-hidden" lang="en" suppressHydrationWarning>
       <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
