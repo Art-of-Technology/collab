@@ -379,9 +379,14 @@ export default function KanbanView() {
         <Droppable droppableId="board" type="column" direction="horizontal">
           {(provided) => (
             <div
-              className="flex gap-4 overflow-x-auto pb-4"
+              className="flex gap-4 overflow-x-auto pb-4 scrollbar-container"
               ref={provided.innerRef}
               {...provided.droppableProps}
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'var(--border) transparent',
+                paddingBottom: '12px', /* Ensure space for the scrollbar */
+              }}
             >
               {(localBoardState.columns || []).sort((a, b) => a.order - b.order).map((column, index) => (
                 <Draggable key={column.id} draggableId={column.id} index={index}>

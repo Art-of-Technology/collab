@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { TaskDetailContent, Task } from "@/components/tasks/TaskDetailContent";
+import { Task } from "@/components/tasks/TaskDetailContent";
+import TaskWrapper from "./TaskWrapper";
+
+export const dynamic = 'force-dynamic';
 
 interface TaskDetailPageProps {
   params: {
@@ -99,15 +102,14 @@ async function getTaskDetails(taskIdOrKey: string): Promise<Task | null> {
 }
 
 export default async function TaskDetailPage({ params, searchParams }: TaskDetailPageProps) {
-  const task = await getTaskDetails(params.taskId);
-  const boardId = searchParams?.boardId || '';
+  const _params = await params;
+  const _searchParams = await searchParams;
+  const task = await getTaskDetails(_params.taskId);
+  const boardId = _searchParams?.boardId || '';
   
   if (!task) {
     notFound();
   }
-  
-  // This is a server component, so we'll simulate the refresh by using 
-  // a client-side component for comments and other interactive elements
   
   return (
     <div className="container py-6 space-y-6">
@@ -121,13 +123,7 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
       </div>
       
       <Suspense fallback={<div>Loading task details...</div>}>
-        <TaskDetailContent
-          task={task}
-          isLoading={false}
-          error={null}
-          onRefresh={() => {}}
-          showHeader={true}
-        />
+        <TaskWrapper task={task} showHeader={true} />
       </Suspense>
     </div>
   );
