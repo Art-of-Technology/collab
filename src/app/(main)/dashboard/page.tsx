@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertTriangle, Lightbulb, MessageSquare, Heart, HelpCircle, Sparkles, TrendingUp, Tag, CheckCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -22,11 +23,45 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  // Get current workspace from cookie
+  const cookieStore = await cookies();
+  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
+
+  // If no workspace ID found, we need to get the user's workspaces
+  let workspaceId = currentWorkspaceId;
+  
+  if (!workspaceId) {
+    // Get user's first workspace
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id } } }
+        ]
+      },
+      orderBy: {
+        createdAt: 'asc'
+      },
+      select: { id: true }
+    });
+    
+    if (workspace) {
+      workspaceId = workspace.id;
+    }
+  }
+
+  // If we still don't have a workspaceId, we'll just show nothing
+  // Alternatively, we could redirect to the workspace creation page
+  if (!workspaceId) {
+    redirect('/create-workspace');
+  }
+
   // Fetch recent blockers
   const latestBlockers = await prisma.post.findMany({
     take: 5,
     where: {
       type: "BLOCKER",
+      workspaceId: workspaceId
     },
     orderBy: {
       createdAt: "desc",
@@ -48,6 +83,7 @@ export default async function DashboardPage() {
     take: 5,
     where: {
       type: "IDEA",
+      workspaceId: workspaceId
     },
     orderBy: {
       createdAt: "desc",
@@ -69,6 +105,7 @@ export default async function DashboardPage() {
     take: 5,
     where: {
       type: "QUESTION",
+      workspaceId: workspaceId
     },
     orderBy: {
       createdAt: "desc",
@@ -90,6 +127,7 @@ export default async function DashboardPage() {
     take: 5,
     where: {
       authorId: session.user.id,
+      workspaceId: workspaceId
     },
     orderBy: {
       createdAt: "desc",
@@ -113,6 +151,13 @@ export default async function DashboardPage() {
         _count: "desc",
       },
     },
+    where: {
+      posts: {
+        some: {
+          workspaceId: workspaceId
+        }
+      }
+    },
     include: {
       _count: {
         select: {
@@ -132,6 +177,7 @@ export default async function DashboardPage() {
       type: {
         in: ["QUESTION", "BLOCKER"],
       },
+      workspaceId: workspaceId
     },
     orderBy: {
       createdAt: "desc",
@@ -154,6 +200,7 @@ export default async function DashboardPage() {
         createdAt: {
           gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
         },
+        workspaceId: workspaceId
       },
     }),
     prisma.comment.count({
@@ -161,15 +208,25 @@ export default async function DashboardPage() {
         createdAt: {
           gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
         },
+        post: {
+          workspaceId: workspaceId
+        }
       },
     }),
-    prisma.reaction.count(), // Count all reactions since there's no createdAt field
+    prisma.reaction.count({
+      where: {
+        post: {
+          workspaceId: workspaceId
+        }
+      }
+    }), // Count all reactions since there's no createdAt field
     prisma.post.count({
       where: {
         type: "BLOCKER",
         createdAt: {
           gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
         },
+        workspaceId: workspaceId
       },
     }),
   ]);
@@ -179,6 +236,11 @@ export default async function DashboardPage() {
     take: 5,
     orderBy: {
       createdAt: "desc",
+    },
+    where: {
+      post: {
+        workspaceId: workspaceId
+      }
     },
     include: {
       author: true,
@@ -194,6 +256,9 @@ export default async function DashboardPage() {
     take: 5,
     where: {
       type: "LIKE",
+      post: {
+        workspaceId: workspaceId
+      }
     },
     orderBy: {
       createdAt: "desc",

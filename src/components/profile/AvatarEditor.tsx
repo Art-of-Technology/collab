@@ -99,15 +99,12 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
   
   // Handle selecting a layer type
   const handleSelectLayer = (type: FaceLayerType, index: number) => {
-    console.log(`Selecting ${type} with index ${index}`);
-    
     // Always enable custom avatar when selecting a layer
     setUseCustomAvatar(true);
     
     // Update the specific part based on type
     switch (type) {
       case 'skintone':
-        console.log(`Setting skin tone from ${skinTone} to ${index}`);
         setSkinTone(index);
         break;
       case 'eyes':

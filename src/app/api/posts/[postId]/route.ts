@@ -49,7 +49,8 @@ export async function PATCH(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { postId } = params;
+    const _params = await params;
+    const { postId } = _params;
     const body = await req.json();
     const { message, type, tags, priority } = body;
 
@@ -130,7 +131,8 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { postId } = params;
+    const _params = await params;
+    const { postId } = _params;
 
     // Verify the post exists
     const existingPost = await prisma.post.findUnique({

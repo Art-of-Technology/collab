@@ -46,7 +46,8 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     redirect("/sign-in");
   }
 
-  const { id } = params;
+  const _params = await params;
+  const { id } = _params;
 
   try {
     const featureRequest = await prisma.featureRequest.findUnique({

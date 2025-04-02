@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PostList from "@/components/posts/PostList";
+import { cookies } from "next/headers";
 
 interface SearchPageProps {
   searchParams: { [key: string]: string | string[] | undefined };
@@ -20,6 +21,38 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     redirect("/login");
   }
   
+  // Get current workspace from cookie
+  const cookieStore = await cookies();
+  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
+
+  // If no workspace ID found, we need to get the user's workspaces
+  let workspaceId = currentWorkspaceId;
+  
+  if (!workspaceId) {
+    // Get user's first workspace
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id } } }
+        ]
+      },
+      orderBy: {
+        createdAt: 'asc'
+      },
+      select: { id: true }
+    });
+    
+    if (workspace) {
+      workspaceId = workspace.id;
+    }
+  }
+
+  // If we still don't have a workspaceId, redirect to create workspace
+  if (!workspaceId) {
+    redirect('/create-workspace');
+  }
+  
   const query = typeof searchParams.q === 'string' ? searchParams.q.trim() : '';
   const activeTab = typeof searchParams.tab === 'string' ? searchParams.tab : 'all';
   
@@ -27,9 +60,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     redirect("/timeline");
   }
   
-  // Search for posts
+  // Search for posts within the current workspace
   const posts = await prisma.post.findMany({
     where: {
+      workspaceId: workspaceId,
       OR: [
         { message: { contains: query, mode: 'insensitive' } },
         { tags: { some: { name: { contains: query, mode: 'insensitive' } } } }
@@ -53,14 +87,24 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     },
   });
   
-  // Search for users
+  // Search for users in the current workspace
   const users = await prisma.user.findMany({
     where: {
-      OR: [
-        { name: { contains: query, mode: 'insensitive' } },
-        { email: { contains: query, mode: 'insensitive' } },
-        { role: { contains: query, mode: 'insensitive' } },
-        { team: { contains: query, mode: 'insensitive' } }
+      AND: [
+        {
+          OR: [
+            { name: { contains: query, mode: 'insensitive' } },
+            { email: { contains: query, mode: 'insensitive' } },
+            { role: { contains: query, mode: 'insensitive' } },
+            { team: { contains: query, mode: 'insensitive' } }
+          ]
+        },
+        {
+          OR: [
+            { ownedWorkspaces: { some: { id: workspaceId } } },
+            { workspaceMemberships: { some: { workspaceId: workspaceId } } }
+          ]
+        }
       ]
     },
     orderBy: {
@@ -74,21 +118,28 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       team: true,
       _count: {
         select: {
-          posts: true
+          posts: {
+            where: { workspaceId: workspaceId }
+          }
         }
       }
     }
   });
   
-  // Search for tags
+  // Search for tags in the current workspace
   const tags = await prisma.tag.findMany({
     where: {
-      name: { contains: query, mode: 'insensitive' }
+      name: { contains: query, mode: 'insensitive' },
+      posts: {
+        some: { workspaceId: workspaceId }
+      }
     },
     include: {
       _count: {
         select: {
-          posts: true
+          posts: {
+            where: { workspaceId: workspaceId }
+          }
         }
       }
     },

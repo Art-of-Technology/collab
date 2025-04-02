@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import   Image   from "next/image"
+import Image from "next/image"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUiContext } from "@/context/UiContext";
+import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -107,6 +108,13 @@ export default function Navbar() {
           </Link>
         </div>
 
+        {/* Workspace selector */}
+        {session && (
+          <div className="hidden md:flex items-center ml-4">
+            <WorkspaceSelector />
+          </div>
+        )}
+
         <div className="flex-1 max-w-lg mx-auto">
           <form onSubmit={handleSearch} className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -163,6 +171,9 @@ export default function Navbar() {
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/my-posts">My Posts</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/workspaces">Manage Workspaces</Link>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="bg-[#2a2929]" />

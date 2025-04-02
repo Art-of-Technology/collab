@@ -68,22 +68,7 @@ export function CustomAvatar({ size = "md", user, className = "" }: CustomAvatar
   const eyewear = user.avatarEyewear || 0;
   const accessory = user.avatarAccessory || 0;
   
-  // Debug: Log when rendering with different skin tones
-  React.useEffect(() => {
-    console.log("CustomAvatar rendering with skin tone:", skinTone);
-    console.log("Complete avatar data:", {
-      skinTone,
-      eyes,
-      brows,
-      mouth,
-      nose,
-      hair,
-      eyewear,
-      accessory,
-      useCustomAvatar: user.useCustomAvatar
-    });
-  }, [skinTone, eyes, brows, mouth, nose, hair, eyewear, accessory, user.useCustomAvatar]);
-  
+
   // Helper function to build the correct image path
   const getImagePath = (part: string, index: number) => {
     // Ensure index is within valid range

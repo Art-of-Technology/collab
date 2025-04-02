@@ -18,11 +18,13 @@ import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export default function CreatePostForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
+  const { currentWorkspace } = useWorkspace();
   const [isLoading, setIsLoading] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -144,6 +146,15 @@ export default function CreatePostForm() {
       return;
     }
 
+    if (!currentWorkspace) {
+      toast({
+        title: "Error",
+        description: "No workspace selected",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -163,6 +174,7 @@ export default function CreatePostForm() {
           type: formData.type,
           tags: tagsArray,
           priority: formData.priority,
+          workspaceId: currentWorkspace.id,
         }),
       });
 

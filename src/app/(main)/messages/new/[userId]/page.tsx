@@ -10,7 +10,8 @@ interface NewMessagePageProps {
 }
 
 export default async function NewMessageWithUserPage({ params }: NewMessagePageProps) {
-  const { userId } = params;
+  const _params = await params;
+  const { userId } = _params;
   const currentUser = await getCurrentUser();
   
   if (!currentUser) {

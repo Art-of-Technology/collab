@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cookies } from "next/headers";
 
 export default async function TagsPage() {
   const user = await getCurrentUser();
@@ -12,12 +13,55 @@ export default async function TagsPage() {
     redirect("/login");
   }
   
-  // Get all tags and count of posts for each tag
+  // Get current workspace from cookie
+  const cookieStore = await cookies();
+  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
+
+  // If no workspace ID found, we need to get the user's workspaces
+  let workspaceId = currentWorkspaceId;
+  
+  if (!workspaceId) {
+    // Get user's first workspace
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id } } }
+        ]
+      },
+      orderBy: {
+        createdAt: 'asc'
+      },
+      select: { id: true }
+    });
+    
+    if (workspace) {
+      workspaceId = workspace.id;
+    }
+  }
+
+  // If we still don't have a workspaceId, redirect to create workspace
+  if (!workspaceId) {
+    redirect('/create-workspace');
+  }
+  
+  // Get all tags and count of posts for each tag in the current workspace
   const tagsWithCount = await prisma.tag.findMany({
+    where: {
+      posts: {
+        some: {
+          workspaceId: workspaceId
+        }
+      }
+    },
     include: {
       _count: {
         select: {
-          posts: true
+          posts: {
+            where: {
+              workspaceId: workspaceId
+            }
+          }
         }
       }
     },

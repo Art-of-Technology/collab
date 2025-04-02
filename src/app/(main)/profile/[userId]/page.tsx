@@ -16,7 +16,8 @@ interface UserProfilePageProps {
 }
 
 export default async function UserProfilePage({ params }: UserProfilePageProps) {
-  const { userId } = params;
+  const _params = await params;
+  const { userId } = _params;
   const currentUser = await getCurrentUser();
   
   if (!currentUser) {

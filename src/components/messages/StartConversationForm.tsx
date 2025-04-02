@@ -20,11 +20,12 @@ interface User {
 }
 
 interface StartConversationFormProps {
-  users: User[];
+  users?: User[];
+  recipient?: User;
 }
 
-export default function StartConversationForm({ users }: StartConversationFormProps) {
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+export default function StartConversationForm({ users = [], recipient }: StartConversationFormProps) {
+  const [selectedUser, setSelectedUser] = useState<User | null>(recipient || null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -83,7 +84,7 @@ export default function StartConversationForm({ users }: StartConversationFormPr
     }
   };
 
-  if (users.length === 0) {
+  if (users.length === 0 && !recipient) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">No users available to message</p>

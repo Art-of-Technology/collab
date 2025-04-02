@@ -26,8 +26,6 @@ export async function GET(req: NextRequest) {
     const pageParam = url.searchParams.get("page");
     const limitParam = url.searchParams.get("limit");
 
-    console.log("GET /api/features - Query params:", { status, orderBy, pageParam, limitParam });
-    
     const validated = getFeatureRequestsParamsSchema.safeParse({
       status,
       orderBy,
@@ -134,17 +132,14 @@ export async function GET(req: NextRequest) {
 
 // POST handler for creating a new feature request
 export async function POST(req: NextRequest) {
-  console.log("POST /api/features - Received request");
   try {
     const session = await getAuthSession();
-    console.log("User session:", session ? "authenticated" : "not authenticated");
 
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    console.log("Request body:", body);
     
     const validated = featureRequestSchema.safeParse(body);
 
@@ -157,7 +152,6 @@ export async function POST(req: NextRequest) {
     }
 
     const { title, description, html } = validated.data;
-    console.log("Creating feature request:", { title, authorId: session.user.id });
 
     const featureRequest = await prisma.featureRequest.create({
       data: {
@@ -177,7 +171,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    console.log("Feature request created:", featureRequest.id);
     return NextResponse.json(featureRequest, { status: 201 });
   } catch (error) {
     console.error("Error creating feature request:", error);

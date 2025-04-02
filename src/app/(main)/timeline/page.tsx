@@ -7,6 +7,7 @@ import PostList from "@/components/posts/PostList";
 import CreatePostForm from "@/components/posts/CreatePostForm";
 import FilterTabs from "@/components/posts/FilterTabs";
 import { Badge } from "@/components/ui/badge";
+import { cookies } from "next/headers";
 
 interface TimelinePageProps {
   searchParams: { 
@@ -22,7 +23,8 @@ interface WhereClause {
     some: {
       name: string;
     }
-  }
+  };
+  workspaceId?: string;
 }
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +37,39 @@ export default async function TimelinePage({
   if (!user) {
     redirect("/login");
   }
+
+  // Get current workspace from cookie
+  const cookieStore = await cookies();
+  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
+
+  // If no workspace ID found, we need to get the user's workspaces
+  let workspaceId = currentWorkspaceId;
+  
+  if (!workspaceId) {
+    // Get user's first workspace
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id } } }
+        ]
+      },
+      orderBy: {
+        createdAt: 'asc'
+      },
+      select: { id: true }
+    });
+    
+    if (workspace) {
+      workspaceId = workspace.id;
+    }
+  }
+
+  // If we still don't have a workspaceId, redirect to create workspace
+  if (!workspaceId) {
+    redirect('/create-workspace');
+  }
+  
   const _searchParams = await searchParams;
   // Safely handle searchParams - check if they exist first before awaiting
   const filterParam = _searchParams?.filter ? await _searchParams.filter : undefined;
@@ -44,7 +79,9 @@ export default async function TimelinePage({
   const tag = typeof tagParam === 'string' ? tagParam : undefined;
   
   // Build query based on filter
-  const whereClause: WhereClause = {};
+  const whereClause: WhereClause = {
+    workspaceId: workspaceId // Add workspace filter
+  };
   
   if (filter) {
     // Map URL filter to database filter
