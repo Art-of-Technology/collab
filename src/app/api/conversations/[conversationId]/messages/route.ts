@@ -14,7 +14,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const { conversationId } = params;
+    const _params = await params;
+    const { conversationId } = _params;
     
     // Verify the user is part of the conversation
     const conversation = await prisma.conversation.findFirst({
@@ -82,7 +83,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const { conversationId } = params;
+    const _params = await params;
+    const { conversationId } = _params;
     
     // Verify the user is part of the conversation
     const conversation = await prisma.conversation.findFirst({

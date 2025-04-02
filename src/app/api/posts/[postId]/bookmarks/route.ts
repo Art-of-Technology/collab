@@ -16,7 +16,8 @@ export async function POST(
       );
     }
     
-    const { postId } = params;
+    const _params = await params;
+    const { postId } = _params;
     
     // Verify the post exists
     const post = await prisma.post.findUnique({
@@ -81,7 +82,8 @@ export async function GET(
       );
     }
     
-    const { postId } = params;
+    const _params = await params;
+    const { postId } = _params;
     
     // Check if the current user has bookmarked this post
     const bookmark = await prisma.bookmark.findFirst({

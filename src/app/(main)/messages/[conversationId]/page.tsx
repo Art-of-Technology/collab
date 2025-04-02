@@ -13,7 +13,8 @@ export default async function ConversationPage({
 }: {
   params: { conversationId: string };
 }) {
-  const { conversationId } = params;
+  const _params = await params;
+  const { conversationId } = _params;
   const currentUser = await getCurrentUser();
   
   if (!currentUser) {

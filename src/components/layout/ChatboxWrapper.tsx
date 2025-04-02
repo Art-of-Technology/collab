@@ -60,7 +60,6 @@ const ChatboxWrapper = () => {
         defaultChannel: 'cm7debezu0003ke0la2emlo1c'
       })
 
-      console.log('Initializing widget')
       initialized.current = true
       // Trigger a re-render to ensure the update effect runs with the initialized state
       setTriggerUpdate((prev) => prev + 1)
@@ -71,7 +70,6 @@ const ChatboxWrapper = () => {
     } else {
       const intervalId = setInterval(() => {
         if (window.ChatWidget) {
-          console.log('ChatWidget became available')
           clearInterval(intervalId)
           initChatWidget()
         }
@@ -83,7 +81,6 @@ const ChatboxWrapper = () => {
   // Update widget config when user data changes
   useEffect(() => {
     if (!initialized.current || !window.ChatWidget) {
-      console.log('Widget not ready for update yet')
       return
     }
 

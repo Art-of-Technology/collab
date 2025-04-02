@@ -7,13 +7,18 @@ import SessionProvider from "@/providers/SessionProvider";
 import Script from "next/script";
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
+import { WorkspaceProvider } from '@/context/WorkspaceContext';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 
-export const metadata = {
-  title: "Collab",
-  description: "A collabration platform for teams",
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'Collab',
+  description: 'An application for teams to share updates, blockers, ideas, and questions.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -26,21 +31,28 @@ export default function RootLayout({
       <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       <link rel="manifest" href="/site.webmanifest" />
 
-      <body className={cn("min-h-screen h-screen bg-background font-sans antialiased", fontSans.variable)}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <UiProvider>
-            <CustomThemeProvider>
-              <SessionProvider>
-                {children}
-                <Toaster />
-              </SessionProvider>
-              <Script
-                src="https://api.chatproject.io/chat-widget.js"
-                id="chat-widget-script"
-                strategy="lazyOnload"
-              />
-            </CustomThemeProvider>
-          </UiProvider>
+      <body className={cn("min-h-screen h-screen bg-background font-sans antialiased", fontSans.variable, inter.className)}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          forcedTheme="dark"
+          disableTransitionOnChange
+        >
+          <SessionProvider>
+            <WorkspaceProvider>
+              <UiProvider>
+                <CustomThemeProvider>
+                  {children}
+                  <Toaster />
+                  <Script
+                    src="https://api.chatproject.io/chat-widget.js"
+                    id="chat-widget-script"
+                    strategy="lazyOnload"
+                  />
+                </CustomThemeProvider>
+              </UiProvider>
+            </WorkspaceProvider>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>

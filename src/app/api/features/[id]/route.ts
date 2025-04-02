@@ -15,7 +15,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const _params = await params;
+    const { id } = _params;
 
     const featureRequest = await prisma.featureRequest.findUnique({
       where: { id },
@@ -80,7 +81,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const _params = await params;
+    const { id } = _params;
     const body = await req.json();
     const validated = updateFeatureRequestSchema.safeParse(body);
 
@@ -179,7 +181,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const _params = await params;
+    const { id } = _params;
 
     // Check if the feature request exists
     const featureRequest = await prisma.featureRequest.findUnique({

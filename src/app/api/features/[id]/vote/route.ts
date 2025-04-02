@@ -19,7 +19,8 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const _params = await params;
+    const { id } = _params;
     const body = await req.json();
     const validated = voteSchema.safeParse(body);
 

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
     
     const body = await req.json();
-    const { message, html, type, tags, priority } = body;
+    const { message, html, type, tags, priority, workspaceId } = body;
     
     // Validation
     if (!message || !message.trim()) {
@@ -25,6 +25,25 @@ export async function POST(req: Request) {
     if (!["normal", "high", "critical"].includes(priority)) {
       return new NextResponse("Invalid priority", { status: 400 });
     }
+
+    if (!workspaceId) {
+      return new NextResponse("Workspace is required", { status: 400 });
+    }
+    
+    // Verify user has access to the workspace
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        id: workspaceId,
+        OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id } } }
+        ]
+      }
+    });
+
+    if (!workspace) {
+      return new NextResponse("Workspace not found or access denied", { status: 403 });
+    }
     
     // Create post with tags
     const post = await prisma.post.create({
@@ -36,6 +55,9 @@ export async function POST(req: Request) {
         author: {
           connect: { id: user.id }
         },
+        workspace: {
+          connect: { id: workspaceId }
+        },
         tags: {
           connectOrCreate: tags.map((tag: string) => ({
             where: { name: tag },
@@ -45,7 +67,8 @@ export async function POST(req: Request) {
       },
       include: {
         author: true,
-        tags: true
+        tags: true,
+        workspace: true
       }
     });
     
@@ -61,6 +84,7 @@ export async function POST(req: Request) {
 interface PostQueryFilters {
   type?: string;
   authorId?: string;
+  workspaceId?: string;
   tags?: {
     some: {
       name: string;
@@ -83,6 +107,7 @@ export async function GET(req: Request) {
     const type = searchParams.get("type");
     const tag = searchParams.get("tag");
     const authorId = searchParams.get("authorId");
+    const workspaceId = searchParams.get("workspaceId");
     const limit = Number(searchParams.get("limit") || "20");
     
     // Build the query
@@ -96,6 +121,31 @@ export async function GET(req: Request) {
     // Filter by author if provided
     if (authorId) {
       query.authorId = authorId;
+    }
+
+    // Filter by workspace
+    if (workspaceId) {
+      query.workspaceId = workspaceId;
+    } else {
+      // Get workspaces the user has access to
+      const accessibleWorkspaces = await prisma.workspace.findMany({
+        where: {
+          OR: [
+            { ownerId: currentUser.id },
+            { members: { some: { userId: currentUser.id } } }
+          ]
+        },
+        select: { id: true }
+      });
+      
+      if (accessibleWorkspaces.length === 0) {
+        return NextResponse.json([]);
+      }
+      
+      // Include workspaceId IN filter
+      query.workspaceId = {
+        in: accessibleWorkspaces.map(w => w.id)
+      } as any; // Type workaround for the query filter
     }
     
     // Filter by tag if provided
@@ -126,6 +176,14 @@ export async function GET(req: Request) {
             image: true,
             role: true,
             team: true,
+          },
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            logoUrl: true,
           },
         },
         tags: true,
