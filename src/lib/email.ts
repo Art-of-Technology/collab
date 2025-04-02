@@ -33,7 +33,7 @@ export async function sendEmail({
   subject, 
   html, 
   text,
-  from = process.env.EMAIL_FROM || 'noreply@devitter.com',
+  from = process.env.EMAIL_FROM || 'noreply@collab.com',
 }: { 
   to: string; 
   subject: string; 
@@ -74,12 +74,12 @@ export async function sendWorkspaceInvitationEmail({
   // Generate invitation URL if not provided
   const url = invitationUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/workspace-invitation/${invitationToken}`;
   
-  const subject = `${inviterName} invited you to join ${workspaceName} on Devitter`;
+  const subject = `${inviterName} invited you to join ${workspaceName} on Collab`;
   
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>You've been invited to join ${workspaceName}</h2>
-      <p>${inviterName} has invited you to collaborate on Devitter.</p>
+      <p>${inviterName} has invited you to collaborate on Collab.</p>
       <div style="margin: 30px 0;">
         <a href="${url}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
           Accept Invitation

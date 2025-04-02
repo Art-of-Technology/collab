@@ -14,8 +14,8 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Devitter - Developer-focused social network',
-  description: 'A social media application for developers to share updates, blockers, ideas, and questions.',
+  title: 'Collab',
+  description: 'An application for teams to share updates, blockers, ideas, and questions.',
 };
 
 export default async function RootLayout({
