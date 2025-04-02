@@ -6,7 +6,6 @@ import { getCurrentUser } from "@/lib/session";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { TaskDetailContent, Task } from "@/components/tasks/TaskDetailContent";
-import TaskPageClient from "./page.client";
 
 interface TaskDetailPageProps {
   params: {
@@ -86,7 +85,17 @@ async function getTaskDetails(taskIdOrKey: string): Promise<Task | null> {
     throw new Error("Access denied");
   }
   
-  return task as Task;
+  // Map database attachments to component interface
+  const transformedTask = {
+    ...task,
+    attachments: task.attachments.map(attachment => ({
+      id: attachment.id,
+      name: attachment.fileName,
+      url: attachment.fileUrl
+    }))
+  };
+  
+  return transformedTask as Task;
 }
 
 export default async function TaskDetailPage({ params, searchParams }: TaskDetailPageProps) {

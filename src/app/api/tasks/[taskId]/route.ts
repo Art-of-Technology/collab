@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { userSelectFields } from "@/lib/user-utils";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { taskId: string } }
 ) {
+  const _params = await params;
   try {
     const user = await getCurrentUser();
 
@@ -13,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const taskIdOrKey = params.taskId;
+    const taskIdOrKey = _params.taskId;
     
     // Check if it's an issue key (like WZB-2) or a task ID
     const isIssueKey = /^[A-Z]+-\d+$/.test(taskIdOrKey);
@@ -23,15 +25,28 @@ export async function GET(
       ? await prisma.task.findFirst({
           where: { issueKey: taskIdOrKey },
           include: {
-            assignee: true,
-            reporter: true,
+            assignee: {
+              select: userSelectFields,
+            },
+            reporter: {
+              select: userSelectFields,
+            },
             column: true,
             taskBoard: true,
             workspace: true,
             labels: true,
             comments: {
               include: {
-                author: true,
+                author: {
+                  select: userSelectFields,
+                },
+                reactions: {
+                  include: {
+                    author: {
+                      select: userSelectFields,
+                    },
+                  },
+                },
               },
               orderBy: {
                 createdAt: "desc",
@@ -43,15 +58,28 @@ export async function GET(
       : await prisma.task.findUnique({
           where: { id: taskIdOrKey },
           include: {
-            assignee: true,
-            reporter: true,
+            assignee: {
+              select: userSelectFields,
+            },
+            reporter: {
+              select: userSelectFields,
+            },
             column: true,
             taskBoard: true,
             workspace: true,
             labels: true,
             comments: {
               include: {
-                author: true,
+                author: {
+                  select: userSelectFields,
+                },
+                reactions: {
+                  include: {
+                    author: {
+                      select: userSelectFields,
+                    },
+                  },
+                },
               },
               orderBy: {
                 createdAt: "desc",

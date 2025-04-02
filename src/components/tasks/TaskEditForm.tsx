@@ -69,6 +69,9 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
   const [descriptionMarkdown, setDescriptionMarkdown] = useState("");
   const descriptionRef = useRef(descriptionMarkdown);
   
+  // Add isImproving state after other state declarations
+  const [isImproving, setIsImproving] = useState(false);
+  
   const form = useForm<TaskEditFormValues>({
     resolver: zodResolver(taskEditSchema),
     defaultValues: {
@@ -144,11 +147,50 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
   }, [taskId, form, toast, isOpen]);
   
   // Handle description change from markdown editor
-  const handleDescriptionChange = useCallback((markdown: string, html: string) => {
+  const handleDescriptionChange = useCallback((markdown: string) => {
     setDescriptionMarkdown(markdown);
     descriptionRef.current = markdown;
     form.setValue("description", markdown);
   }, [form]);
+  
+  // Add handleAiImprove function after handleDescriptionChange
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) return text;
+    
+    setIsImproving(true);
+    
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return improved text
+      return improvedText;
+    } catch (error) {
+      console.error("Error improving text:", error);
+      toast({
+        title: "Error",
+        description: "Failed to improve text",
+        variant: "destructive"
+      });
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
+  };
   
   const onSubmit = async (values: TaskEditFormValues) => {
     setIsSaving(true);
@@ -165,9 +207,6 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
       if (!response.ok) {
         throw new Error("Failed to update task");
       }
-      
-      // Get the updated task to update the TaskDetailModal
-      const updatedTask = await response.json();
       
       toast({
         title: "Task updated",
@@ -231,7 +270,9 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
                   initialValue={descriptionRef.current}
                   onChange={handleDescriptionChange}
                   placeholder="Task description (supports markdown)"
-                  minHeight="150px"
+                  minHeight="200px"
+                  maxHeight="350px"
+                  onAiImprove={handleAiImprove}
                 />
               </FormControl>
               <FormMessage />

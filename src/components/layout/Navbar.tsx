@@ -117,7 +117,9 @@ export default function Navbar() {
 
         <div className="flex-1 max-w-lg mx-auto">
           <form onSubmit={handleSearch} className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 flex items-center justify-center">
+              <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+            </div>
             <Input
               type="search"
               placeholder="Search posts, people, or tags"

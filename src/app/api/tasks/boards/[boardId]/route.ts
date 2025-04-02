@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { userSelectFields } from "@/lib/user-utils";
 
 // Define a Task interface
 interface TaskWithPosition {
@@ -43,11 +42,7 @@ export async function GET(
             tasks: {
               include: {
                 assignee: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                  },
+                  select: userSelectFields,
                 },
                 _count: {
                   select: {

@@ -73,8 +73,6 @@ export default function CreateBoardDialog({
         const error = await response.json();
         throw new Error(error.error || "Failed to create board");
       }
-
-      const board = await response.json();
       
       toast({
         title: "Board created",

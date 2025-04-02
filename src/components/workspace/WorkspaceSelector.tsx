@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { PlusCircle, ChevronDown, Building2, Settings, UserPlus, Lock } from 'lucide-react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { Button } from '@/components/ui/button';
@@ -49,11 +50,15 @@ const WorkspaceSelector = () => {
         >
           <div className="flex items-center gap-2 truncate">
             {currentWorkspace.logoUrl ? (
-              <img 
-                src={currentWorkspace.logoUrl} 
-                alt={currentWorkspace.name} 
-                className="h-5 w-5 rounded-sm" 
-              />
+              <div className="relative h-5 w-5 rounded-sm overflow-hidden">
+                <Image 
+                  src={currentWorkspace.logoUrl} 
+                  alt={currentWorkspace.name} 
+                  fill
+                  sizes="20px"
+                  className="object-contain"
+                />
+              </div>
             ) : (
               <Building2 className="h-4 w-4 opacity-70" />
             )}
@@ -78,11 +83,15 @@ const WorkspaceSelector = () => {
           >
             <div className="flex items-center gap-2 w-full">
               {workspace.logoUrl ? (
-                <img 
-                  src={workspace.logoUrl} 
-                  alt={workspace.name} 
-                  className="h-5 w-5 rounded-sm" 
-                />
+                <div className="relative h-5 w-5 rounded-sm overflow-hidden">
+                  <Image 
+                    src={workspace.logoUrl} 
+                    alt={workspace.name} 
+                    fill
+                    sizes="20px"
+                    className="object-contain"
+                  />
+                </div>
               ) : (
                 <Building2 className="h-4 w-4 opacity-70" />
               )}

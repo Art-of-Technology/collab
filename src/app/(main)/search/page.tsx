@@ -14,6 +14,8 @@ interface SearchPageProps {
   searchParams: { [key: string]: string | string[] | undefined };
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const user = await getCurrentUser();
   

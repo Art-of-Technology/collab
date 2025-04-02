@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import DashboardButton from '@/components/workspace/DashboardButton';
+import Image from 'next/image';
 
 export default async function WorkspacesPage() {
   const session = await getServerSession(authOptions);
@@ -81,10 +82,12 @@ export default async function WorkspacesPage() {
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
                     {workspace.logoUrl ? (
-                      <img 
+                      <Image 
                         src={workspace.logoUrl} 
                         alt={workspace.name} 
                         className="h-10 w-10 rounded-md" 
+                        width={40}
+                        height={40}
                       />
                     ) : (
                       <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">

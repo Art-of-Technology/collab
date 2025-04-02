@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageSquare, Paperclip } from "lucide-react";
 import { useTaskModal } from "@/context/TaskModalContext";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 export interface TaskCardProps {
   id: string;
@@ -15,6 +16,7 @@ export interface TaskCardProps {
     id: string;
     name: string | null;
     image: string | null;
+    useCustomAvatar?: boolean;
   } | null;
   commentCount: number;
   attachmentCount: number;
@@ -75,12 +77,18 @@ export default function TaskCard({
             
             <div className="flex items-center justify-between pt-2">
               {assignee ? (
-                <Avatar className="h-6 w-6">
-                  <AvatarImage src={assignee.image || undefined} alt={assignee.name || ""} />
-                  <AvatarFallback>{assignee.name?.substring(0, 2) || "U"}</AvatarFallback>
-                </Avatar>
+                assignee.useCustomAvatar ? (
+                  <div className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]">
+                    <CustomAvatar user={assignee} size="sm" />
+                  </div>
+                ) : (
+                  <Avatar className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]">
+                    <AvatarImage src={assignee.image || undefined} alt={assignee.name || ""} />
+                    <AvatarFallback>{assignee.name?.substring(0, 2) || "U"}</AvatarFallback>
+                  </Avatar>
+                )
               ) : (
-                <div className="h-6 w-6" />
+                <div className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]" />
               )}
               
               <div className="flex items-center gap-2 text-muted-foreground">

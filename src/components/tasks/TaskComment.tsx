@@ -1,23 +1,29 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import { AnimatePresence, motion } from "framer-motion";
-import type { User } from "@prisma/client";
-import { CommentReplyForm } from "./CommentReplyForm";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { TaskCommentReplyForm } from "./TaskCommentReplyForm";
+import Link from "next/link";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 
-export type CommentWithAuthor = {
+export type TaskCommentAuthor = {
   id: string;
-  message: string;
+  name: string | null;
+  image: string | null;
+  useCustomAvatar?: boolean;
+};
+
+export type TaskCommentWithAuthor = {
+  id: string;
+  content: string;
   html?: string | null;
   createdAt: Date;
-  author: User;
+  author: TaskCommentAuthor;
   reactions?: {
     id: string;
     type: string;
@@ -26,15 +32,16 @@ export type CommentWithAuthor = {
       id: string;
       name?: string | null;
       image?: string | null;
+      useCustomAvatar?: boolean;
     };
   }[];
   parentId?: string | null;
-  replies?: CommentWithAuthor[];
+  replies?: TaskCommentWithAuthor[];
 };
 
-interface CommentProps {
-  comment: CommentWithAuthor;
-  postId: string;
+interface TaskCommentProps {
+  comment: TaskCommentWithAuthor;
+  taskId: string;
   currentUserId: string;
   onReplyAdded: () => void;
   likedComments: Record<string, boolean>;
@@ -43,16 +50,16 @@ interface CommentProps {
   isReply?: boolean;
 }
 
-export function Comment({
+export function TaskComment({
   comment,
-  postId,
+  taskId,
   currentUserId,
   onReplyAdded,
   likedComments,
   onLikeComment,
   onRefreshLikes,
   isReply = false,
-}: CommentProps) {
+}: TaskCommentProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
   const [likesData, setLikesData] = useState<any[]>(
@@ -98,16 +105,16 @@ export function Comment({
 
   // Keep likesData in sync with likedComments state
   useEffect(() => {
+    // Extract the liked state for this comment to a separate variable
+    const isLikedByCurrentUser = likedComments[comment.id];
+    
     // When the liked state changes, ensure likesData reflects this change
     const currentUserLikeExists = likesData.some(
       reaction => reaction.authorId === currentUserId && reaction.type === "LIKE"
     );
 
-    // Extract the complex expression to a separate variable
-    const isLikedInState = likedComments[comment.id];
-
     // If server says liked but not in our state, fetch latest data
-    if (isLikedInState !== currentUserLikeExists) {
+    if (isLikedByCurrentUser !== currentUserLikeExists) {
       const updateLikesData = async () => {
         const refreshedLikes = await onRefreshLikes(comment.id);
         setLikesData(refreshedLikes || []);
@@ -115,20 +122,17 @@ export function Comment({
 
       updateLikesData();
     }
-  }, [comment.id, currentUserId, likesData, likedComments, onRefreshLikes]);
+  }, [comment.id, currentUserId, likesData, onRefreshLikes, likedComments]);
 
   // Toggle function to show/hide replies
   const toggleReplies = () => {
     setShowReplies(prev => !prev);
   };
 
-  // Check if the author has a custom avatar
-  const hasCustomAvatar = comment.author && comment.author.useCustomAvatar;
-
   return (
     <div className={`mb-2 ${isReply ? 'reply-comment' : 'top-level-comment'}`}>
       <div className="flex gap-2 hover:bg-muted/50 p-2 rounded-lg">
-        {hasCustomAvatar ? (
+        {comment.author.useCustomAvatar ? (
           <CustomAvatar user={comment.author} size="sm" />
         ) : (
           <Avatar className="h-7 w-7">
@@ -148,12 +152,11 @@ export function Comment({
                 {comment.author.name}
               </Link>
               {comment.html ? (
-                <MarkdownContent 
-                  content={comment.html} 
-                  className="text-sm"
-                />
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <MarkdownContent content={comment.html} className="text-sm" />
+                </div>
               ) : (
-                <span className="text-sm">{comment.message}</span>
+                <span className="text-sm">{comment.content}</span>
               )}
             </div>
 
@@ -176,8 +179,8 @@ export function Comment({
           </div>
 
           {isReplying && (
-            <CommentReplyForm
-              postId={postId}
+            <TaskCommentReplyForm
+              taskId={taskId}
               parentCommentId={comment.id}
               parentCommentAuthor={comment.author.name || "User"}
               onReplyAdded={() => {
@@ -285,9 +288,9 @@ export function Comment({
                       }
                     }}
                   >
-                    <Comment
+                    <TaskComment
                       comment={reply}
-                      postId={postId}
+                      taskId={taskId}
                       currentUserId={currentUserId}
                       onReplyAdded={onReplyAdded}
                       likedComments={likedComments}

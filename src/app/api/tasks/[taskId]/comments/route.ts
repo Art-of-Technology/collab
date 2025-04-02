@@ -51,6 +51,17 @@ export async function GET(
             image: true,
           },
         },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -80,7 +91,7 @@ export async function POST(
     }
 
     const taskId = params.taskId;
-    const { content } = await request.json();
+    const { content, html, parentId } = await request.json();
 
     if (!content) {
       return NextResponse.json(
@@ -111,12 +122,31 @@ export async function POST(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
+    // If parentId is provided, make sure it exists and belongs to the same task
+    if (parentId) {
+      const parentComment = await prisma.taskComment.findFirst({
+        where: {
+          id: parentId,
+          taskId,
+        },
+      });
+
+      if (!parentComment) {
+        return NextResponse.json(
+          { error: "Parent comment not found" },
+          { status: 404 }
+        );
+      }
+    }
+
     // Create the comment
     const comment = await prisma.taskComment.create({
       data: {
         content,
+        html,
         authorId: user.id,
         taskId,
+        parentId,
       },
       include: {
         author: {
@@ -126,6 +156,7 @@ export async function POST(
             image: true,
           },
         },
+        reactions: true,
       },
     });
 

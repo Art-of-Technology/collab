@@ -7,6 +7,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { taskId: string } }
 ) {
+  const _params = await params;
   try {
     const currentUser = await getCurrentUser();
 
@@ -17,7 +18,7 @@ export async function PATCH(
       );
     }
 
-    const { taskId } = params;
+    const { taskId } = _params;
     const { columnId, position } = await req.json();
 
     if (!columnId) {
@@ -75,7 +76,7 @@ export async function PATCH(
     }
 
     // Begin a transaction to handle position updates
-    await prisma.$transaction(async (tx: typeof prisma) => {
+    await prisma.$transaction(async (tx) => {
       const currentPosition = task.position || 0;
       
       // If moving to a different column

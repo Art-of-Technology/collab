@@ -33,12 +33,12 @@ export default function PostPageContent({ post, currentUserId }: PostPageContent
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
-          <PostItem 
-            post={post}
-            isExpanded={true}
-            toggleExpand={() => {}}
-            currentUserId={currentUserId}
-          />
+      <PostItem 
+        post={post}
+        isExpanded={true}
+        toggleExpand={() => {}}
+        currentUserId={currentUserId}
+      />
         </div>
         <div className="space-y-6">
           <LinkedTasks postId={post.id} />

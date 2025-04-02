@@ -53,6 +53,7 @@ model User {
   assignedTasks        Task[]                  @relation("AssignedTasks")
   reportedTasks        Task[]                  @relation("ReportedTasks")
   taskComments         TaskComment[]
+  taskCommentReactions TaskCommentReaction[]
   taskAttachments      TaskAttachment[]
   taskActivities       TaskActivity[]
 }
@@ -393,15 +394,36 @@ model Task {
 model TaskComment {
   id        String   @id @default(cuid())
   content   String
+  html      String?
   taskId    String
   authorId  String
+  parentId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  task      Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent    TaskComment?          @relation("TaskCommentToTaskComment", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   TaskComment[]         @relation("TaskCommentToTaskComment")
+  reactions TaskCommentReaction[]
 
   @@index([taskId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model TaskCommentReaction {
+  id            String      @id @default(cuid())
+  type          String      // LIKE, etc.
+  taskCommentId String
+  authorId      String
+  createdAt     DateTime    @default(now())
+  
+  taskComment   TaskComment @relation(fields: [taskCommentId], references: [id], onDelete: Cascade)
+  author        User        @relation(fields: [authorId], references: [id])
+
+  @@unique([authorId, taskCommentId, type])
+  @@index([taskCommentId])
   @@index([authorId])
 }
 

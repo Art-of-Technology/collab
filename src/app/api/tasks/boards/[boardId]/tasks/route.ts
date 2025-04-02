@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { userSelectFields } from "@/lib/user-utils";
 
 // GET /api/tasks/boards/[boardId]/tasks - Get all tasks for a board
 export async function GET(
@@ -84,12 +85,7 @@ export async function GET(
       where: filters,
       include: {
         assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
+          select: userSelectFields,
         },
         column: {
           select: {

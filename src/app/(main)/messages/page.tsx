@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { Conversation } from "@prisma/client";
 
+export const dynamic = 'force-dynamic';
+
 // Define types for the conversations data structure
 interface ConversationWithDetails extends Conversation {
   participants: {

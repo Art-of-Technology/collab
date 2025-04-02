@@ -55,7 +55,7 @@ export default function KanbanView() {
     return (
       <div className="text-center py-16">
         <h3 className="text-xl font-medium">No columns found</h3>
-        <p className="text-muted-foreground">This board doesn't have any columns yet.</p>
+        <p className="text-muted-foreground">This board doesn&apos;t have any columns yet.</p>
         <Button
           className="mt-4"
           onClick={() => {

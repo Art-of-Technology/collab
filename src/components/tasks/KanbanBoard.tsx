@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import KanbanView from "@/components/tasks/KanbanView";
 import BoardSettings from "@/components/tasks/BoardSettings";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +10,6 @@ import { Cog } from "lucide-react";
 
 export default function KanbanBoard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
   const { selectedBoard, refreshBoards } = useTasks();
 
@@ -46,8 +44,6 @@ export default function KanbanBoard() {
       if (!response.ok) {
         throw new Error("Failed to update board");
       }
-
-      const updatedBoard = await response.json();
 
       toast({
         title: "Board updated",

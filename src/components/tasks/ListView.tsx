@@ -11,20 +11,20 @@ import Link from "next/link";
 export default function ListView() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedBoard, selectedBoardId } = useTasks();
+  const { selectedBoardId } = useTasks();
 
   useEffect(() => {
     const fetchTasks = async () => {
       if (!selectedBoardId) return;
-      
+
       try {
         setLoading(true);
         const response = await fetch(`/api/tasks?boardId=${selectedBoardId}`);
-        
+
         if (!response.ok) {
           throw new Error("Failed to fetch tasks");
         }
-        
+
         const data = await response.json();
         setTasks(data);
       } catch (error) {
@@ -82,14 +82,14 @@ export default function ListView() {
                 <Badge variant="outline">{task.status || task.column?.name || "New"}</Badge>
               </TableCell>
               <TableCell>
-                <Badge 
-                  variant="outline" 
+                <Badge
+                  variant="outline"
                   className={
-                    task.priority === "high" 
-                      ? "border-red-500 text-red-500" 
+                    task.priority === "high"
+                      ? "border-red-500 text-red-500"
                       : task.priority === "medium"
-                      ? "border-amber-500 text-amber-500"
-                      : "border-blue-500 text-blue-500"
+                        ? "border-amber-500 text-amber-500"
+                        : "border-blue-500 text-blue-500"
                   }
                 >
                   {task.priority}

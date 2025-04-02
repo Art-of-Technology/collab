@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -23,7 +22,6 @@ import CreateBoardDialog from "./CreateBoardDialog";
 export default function TaskBoardSelector() {
   const [open, setOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const router = useRouter();
   const { boards, selectedBoardId, selectBoard, refreshBoards } = useTasks();
 
   return (

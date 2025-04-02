@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cookies } from "next/headers";
 
+export const dynamic = 'force-dynamic';
+
 export default async function TagsPage() {
   const user = await getCurrentUser();
   

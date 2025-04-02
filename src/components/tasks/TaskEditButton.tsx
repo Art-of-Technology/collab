@@ -38,7 +38,7 @@ export function TaskEditButton({ taskId, onEditSuccess }: TaskEditButtonProps) {
         <Pencil className="h-4 w-4" />
         Edit
       </Button>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[800px]">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
           <DialogDescription>

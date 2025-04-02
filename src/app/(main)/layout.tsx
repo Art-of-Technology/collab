@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
-import ChatboxWrapper from "@/components/layout/ChatboxWrapper";
 
 export default function MainLayout({
   children,
@@ -35,7 +34,7 @@ export default function MainLayout({
       </div>
       
       {/* Chat Widget */}
-      <ChatboxWrapper />
+      {/* <ChatboxWrapper /> */}
     </div>
   );
 } 

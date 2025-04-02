@@ -40,7 +40,6 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import dynamic from "next/dynamic";
 
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
@@ -124,10 +123,56 @@ export default function CreateTaskForm({
     },
   });
 
-  // Fetch boards when component mounts or when form is opened or workspace changes
+  // First define fetchColumns with useCallback before it's used in any useEffect
+  const fetchColumns = useCallback(async (boardId: string) => {
+    if (!boardId) return;
+    
+    let isMounted = true;
+    
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/tasks/boards/${boardId}/columns`);
+      
+      if (!isMounted) return;
+      
+      if (response.ok) {
+        const data = await response.json();
+        setColumns(data);
+        
+        // Set default column if none is selected
+        if (data.length > 0 && isMounted) {
+          form.setValue("columnId", data[0].id);
+        }
+      } else {
+        // In case of error, clear columns
+        if (isMounted) {
+          setColumns([]);
+          form.setValue("columnId", null);
+        }
+      }
+    } catch (error) {
+      if (isMounted) {
+        console.error("Error fetching columns:", error);
+        setColumns([]);
+        form.setValue("columnId", null);
+      }
+    } finally {
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [form, setColumns, setIsLoading]);
+
+  // Then use fetchColumns in the useEffect
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchBoards = async () => {
-      if (!currentWorkspace || !isOpen) return;
+      if (!currentWorkspace || !isOpen || !isMounted) return;
       
       try {
         setIsLoading(true);
@@ -139,6 +184,8 @@ export default function CreateTaskForm({
         
         const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`);
         
+        if (!isMounted) return;
+        
         if (response.ok) {
           const data = await response.json();
           setBoards(data);
@@ -148,50 +195,30 @@ export default function CreateTaskForm({
             ? initialData.taskBoardId 
             : data.length > 0 ? data[0].id : "";
             
-          if (boardToUse) {
+          if (boardToUse && isMounted) {
             form.setValue("taskBoardId", boardToUse);
             fetchColumns(boardToUse);
           }
         }
       } catch (error) {
-        console.error("Error fetching boards:", error);
+        if (isMounted) {
+          console.error("Error fetching boards:", error);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchBoards();
-  }, [currentWorkspace, form, isOpen, initialData]);
-
-  // Fetch columns when board changes
-  const fetchColumns = async (boardId: string) => {
-    if (!boardId) return;
     
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/tasks/boards/${boardId}/columns`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setColumns(data);
-        
-        // Set default column if none is selected
-        if (data.length > 0) {
-          form.setValue("columnId", data[0].id);
-        }
-      } else {
-        // In case of error, clear columns
-        setColumns([]);
-        form.setValue("columnId", null);
-      }
-    } catch (error) {
-      console.error("Error fetching columns:", error);
-      setColumns([]);
-      form.setValue("columnId", null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return () => {
+      isMounted = false;
+    };
+    // Only run this effect when workspace, form, or dialog state changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspace, isOpen, initialData?.taskBoardId]);
 
   // Handle board change
   const handleBoardChange = (boardId: string) => {
@@ -233,18 +260,55 @@ export default function CreateTaskForm({
 
   // Create stable refs for editor state
   const editorContentRef = useRef(descriptionMarkdown);
-
-  const [descriptionHtml, setDescriptionHtml] = useState("");
-  
-  // Create a ref to persist description state between renders
-  const descriptionRef = useRef("");
   
   // Use useCallback for the description change handler to maintain referential equality
-  const handleDescriptionChange = useCallback((markdown: string, html: string) => {
+  const handleDescriptionChange = useCallback((markdown: string) => {
     setDescriptionMarkdown(markdown);
     editorContentRef.current = markdown;
     form.setValue("description", markdown);
   }, [form]);
+
+  // Update the onSubmit function to include AI improve functionality
+  const [isImproving, setIsImproving] = useState(false);
+
+  // Add handleAiImprove function
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) return text;
+    
+    setIsImproving(true);
+    
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return improved text
+      return improvedText;
+    } catch (error) {
+      console.error("Error improving text:", error);
+      toast({
+        title: "Error",
+        description: "Failed to improve text",
+        variant: "destructive"
+      });
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
+  };
 
   // Form submission
   const onSubmit = async (values: TaskFormValues) => {
@@ -282,7 +346,7 @@ export default function CreateTaskForm({
         throw new Error(error.error || "Failed to create task");
       }
 
-      const task = await response.json();
+      await response.json();
       
       toast({
         title: "Task created",
@@ -308,7 +372,7 @@ export default function CreateTaskForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Task</DialogTitle>
         </DialogHeader>
@@ -332,7 +396,7 @@ export default function CreateTaskForm({
             <FormField
               control={form.control}
               name="description"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel htmlFor="description">Description</FormLabel>
                   <FormControl>
@@ -340,7 +404,9 @@ export default function CreateTaskForm({
                       initialValue={editorContentRef.current}
                       onChange={handleDescriptionChange}
                       placeholder="Describe the task..."
-                      minHeight="150px"
+                      minHeight="200px"
+                      maxHeight="350px"
+                      onAiImprove={handleAiImprove}
                     />
                   </FormControl>
                   <FormMessage />

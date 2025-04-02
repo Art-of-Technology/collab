@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -9,8 +9,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { TaskEditButton } from "@/components/tasks/TaskEditButton";
-import { TaskCommentForm } from "@/components/tasks/TaskCommentForm";
+import { TaskCommentsList } from "@/components/tasks/TaskCommentsList";
 import { ShareButton } from "@/components/tasks/ShareButton";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -55,11 +56,13 @@ export interface Task {
     id: string;
     name: string | null;
     image: string | null;
+    useCustomAvatar?: boolean;
   } | null;
   reporter?: {
     id: string;
     name: string | null;
     image: string | null;
+    useCustomAvatar?: boolean;
   } | null;
   column?: {
     id: string;
@@ -210,39 +213,19 @@ export function TaskDetailContent({
             <CardHeader>
               <CardTitle>Comments</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               {task.comments.length > 0 ? (
-                task.comments.map((comment: TaskComment) => (
-                  <div key={comment.id} className="flex gap-4 pb-4 border-b">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={comment.author?.image || ""} alt={comment.author?.name || ""} />
-                      <AvatarFallback>
-                        {comment.author?.name?.charAt(0) || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="space-y-1 flex-1">
-                      <div className="flex justify-between items-start">
-                        <p className="text-sm font-medium">{comment.author?.name}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(comment.createdAt)}
-                        </span>
-                      </div>
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
-                        <MarkdownContent content={comment.content} />
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <TaskCommentsList 
+                  taskId={task.id}
+                  comments={task.comments}
+                  currentUserId={task.reporter?.id || ""}
+                  userImage={task.reporter?.image}
+                  onRefresh={onRefresh}
+                />
               ) : (
                 <p className="text-muted-foreground italic">No comments yet</p>
               )}
             </CardContent>
-            <CardFooter>
-              <TaskCommentForm 
-                taskId={task.id} 
-                onCommentAdded={onRefresh}
-              />
-            </CardFooter>
           </Card>
         </div>
         
@@ -266,15 +249,19 @@ export function TaskDetailContent({
                 <p className="text-sm font-medium mb-1">Assignee</p>
                 {task.assignee ? (
                   <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage 
-                        src={task.assignee.image || ""} 
-                        alt={task.assignee.name || ""} 
-                      />
-                      <AvatarFallback>
-                        {task.assignee.name?.charAt(0) || "U"}
-                      </AvatarFallback>
-                    </Avatar>
+                    {task.assignee.useCustomAvatar ? (
+                      <CustomAvatar user={task.assignee} size="sm" />
+                    ) : (
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage 
+                          src={task.assignee.image || ""} 
+                          alt={task.assignee.name || ""} 
+                        />
+                        <AvatarFallback>
+                          {task.assignee.name?.charAt(0) || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
                     <span className="text-sm">{task.assignee.name}</span>
                   </div>
                 ) : (
@@ -286,15 +273,19 @@ export function TaskDetailContent({
                 <p className="text-sm font-medium mb-1">Reporter</p>
                 {task.reporter ? (
                   <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage 
-                        src={task.reporter.image || ""} 
-                        alt={task.reporter.name || ""} 
-                      />
-                      <AvatarFallback>
-                        {task.reporter.name?.charAt(0) || "U"}
-                      </AvatarFallback>
-                    </Avatar>
+                    {task.reporter.useCustomAvatar ? (
+                      <CustomAvatar user={task.reporter} size="sm" />
+                    ) : (
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage 
+                          src={task.reporter.image || ""} 
+                          alt={task.reporter.name || ""} 
+                        />
+                        <AvatarFallback>
+                          {task.reporter.name?.charAt(0) || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
                     <span className="text-sm">{task.reporter.name}</span>
                   </div>
                 ) : (

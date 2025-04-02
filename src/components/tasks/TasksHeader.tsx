@@ -30,7 +30,7 @@ export default function TasksHeader() {
         <div>
           <h1 className="text-3xl font-bold">Tasks</h1>
           <p className="text-muted-foreground">
-            Manage and track your team's tasks
+            Manage and track your team&apos;s tasks
           </p>
         </div>
         <div className="flex items-center gap-2">

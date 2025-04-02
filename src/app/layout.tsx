@@ -11,7 +11,14 @@ import { WorkspaceProvider } from '@/context/WorkspaceContext';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
-const inter = Inter({ subsets: ['latin'] });
+// Load the Inter font with display swap for better font loading performance
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap', 
+  preload: true
+});
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Collab',
@@ -25,11 +32,22 @@ export default async function RootLayout({
 }) {
   return (
     <html className="min-h-screen h-screen overflow-hidden" lang="en" suppressHydrationWarning>
-      <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-      <link rel="shortcut icon" href="/favicon.ico" />
-      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-      <link rel="manifest" href="/site.webmanifest" />
+      <head>
+        {/* Preload critical CSS */}
+        <link rel="preload" href="/globals.css" as="style" />
+        
+        {/* Preload Logo */}
+        <link rel="preload" href="/logo-v2.png" as="image" />
+        
+        {/* Preload common assets */}
+        <link rel="preload" href="/icons/search.svg" as="image" />
+        
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+      </head>
 
       <body className={cn("min-h-screen h-screen bg-background font-sans antialiased", fontSans.variable, inter.className)}>
         <ThemeProvider
