@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProfilePage() {
   const user = await getCurrentUser();
   

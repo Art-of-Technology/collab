@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
 import InviteMemberForm from './InviteMemberForm';
 import WorkspaceDetailsEditor from './WorkspaceDetailsEditor';
+import Image from 'next/image';
 
 interface WorkspacePageProps {
   params: {
@@ -122,10 +123,12 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
       <div className="flex flex-col md:flex-row justify-between gap-6 mb-8">
         <div className="flex items-center gap-4">
           {workspace.logoUrl ? (
-            <img 
+            <Image 
               src={workspace.logoUrl} 
               alt={workspace.name} 
               className="h-16 w-16 rounded-md" 
+              width={64}
+              height={64}
             />
           ) : (
             <div className="h-16 w-16 rounded-md bg-primary/10 flex items-center justify-center">

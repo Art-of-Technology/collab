@@ -60,8 +60,16 @@ export async function POST(req: Request) {
         },
         tags: {
           connectOrCreate: tags.map((tag: string) => ({
-            where: { name: tag },
-            create: { name: tag }
+            where: { 
+              name_workspaceId: {
+                name: tag,
+                workspaceId
+              }
+            },
+            create: { 
+              name: tag,
+              workspaceId 
+            }
           }))
         }
       },

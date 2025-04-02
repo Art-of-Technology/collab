@@ -65,7 +65,7 @@ const ChatboxWrapper = () => {
       setTriggerUpdate((prev) => prev + 1)
     }
 
-    if (window.ChatWidget) {
+   if (window.ChatWidget) {
       initChatWidget()
     } else {
       const intervalId = setInterval(() => {

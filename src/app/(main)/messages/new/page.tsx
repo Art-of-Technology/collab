@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MagnifyingGlassIcon, ArrowLeftIcon } from "@heroicons/react/24/outline";
 
+export const dynamic = 'force-dynamic';
+
 export default async function NewMessagePage() {
   const user = await getCurrentUser();
   

@@ -33,7 +33,9 @@ const FaceLayer = ({ src, alt, className = "", priority = false, zIndex = 1 }: F
           setHasError(true);
         }}
         loading={priority ? "eager" : "lazy"}
-        unoptimized={true} 
+        unoptimized={true}
+        // Add proper sizes to help loading
+        sizes="(max-width: 640px) 24px, 36px"
       />
     </div>
   );
@@ -80,10 +82,10 @@ export function CustomAvatar({ size = "md", user, className = "" }: CustomAvatar
   
   // Size classes
   const sizeClasses = {
-    sm: "h-8 w-8",
-    md: "h-10 w-10",
-    lg: "h-16 w-16",
-    xl: "h-24 w-24",
+    sm: "!h-8 !w-8 min-h-[2rem] min-w-[2rem]",
+    md: "!h-10 !w-10 min-h-[2.5rem] min-w-[2.5rem]",
+    lg: "!h-16 !w-16 min-h-[4rem] min-w-[4rem]",
+    xl: "!h-24 !w-24 min-h-[6rem] min-w-[6rem]",
   };
   
   // If custom avatar is not enabled, render the default avatar

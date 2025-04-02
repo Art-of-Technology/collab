@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 
+// Force dynamic rendering for all routes that use getCurrentUser
+export const dynamic = 'force-dynamic';
+
 export async function getCurrentUser() {
   try {
     const session = await getServerSession(authOptions);

@@ -48,6 +48,14 @@ model User {
   ownedWorkspaces      Workspace[]             @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[]
   workspaceInvitations WorkspaceInvitation[]
+  
+  // Task-related fields
+  assignedTasks        Task[]                  @relation("AssignedTasks")
+  reportedTasks        Task[]                  @relation("ReportedTasks")
+  taskComments         TaskComment[]
+  taskCommentReactions TaskCommentReaction[]
+  taskAttachments      TaskAttachment[]
+  taskActivities       TaskActivity[]
 }
 
 model Account {
@@ -87,6 +95,7 @@ model Post {
   reactions   Reaction[]
   tags        Tag[]      @relation("PostToTag")
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  tasks       Task[]     // Tasks associated with this post
 
   @@index([workspaceId])
 }
@@ -267,6 +276,9 @@ model Workspace {
   posts           Post[]
   tags            Tag[]
   featureRequests FeatureRequest[]
+  taskBoards      TaskBoard[]
+  tasks           Task[]
+  taskLabels      TaskLabel[]
 }
 
 model WorkspaceMember {
@@ -297,4 +309,167 @@ model WorkspaceInvitation {
   invitedBy User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@unique([email, workspaceId])
+}
+
+// Task Management models
+model TaskBoard {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String
+  isDefault   Boolean       @default(false)
+  issuePrefix String?       // For generating issue keys like WZB-123
+  nextIssueNumber Int       @default(1) // To keep track of incremental issue numbers
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  columns   TaskColumn[]
+  tasks     Task[]
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+}
+
+model TaskColumn {
+  id          String   @id @default(cuid())
+  name        String
+  order       Int
+  color       String?  @default("#6366F1") // Default indigo color
+  taskBoardId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  taskBoard TaskBoard @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@unique([name, taskBoardId])
+  @@index([taskBoardId])
+}
+
+model Task {
+  id           String        @id @default(cuid())
+  title        String
+  description  String?
+  status       String?       // For list view filtering (e.g., "To Do", "In Progress", "Done")
+  priority     String        @default("medium") // low, medium, high, urgent
+  type         String        @default("task") // task, bug, feature, improvement, etc.
+  issueKey     String?       // Stored issue key like WZB-123
+  storyPoints  Int?
+  dueDate      DateTime?
+  columnId     String?
+  taskBoardId  String?
+  workspaceId  String
+  assigneeId   String?
+  reporterId   String
+  parentTaskId String?       // For subtasks
+  postId       String?       // For tasks linked to posts
+  position     Int?          // Position within a column for ordering
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  column      TaskColumn?      @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  taskBoard   TaskBoard?       @relation(fields: [taskBoardId], references: [id], onDelete: SetNull)
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee    User?            @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter    User             @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
+  parentTask  Task?            @relation("TaskToSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks    Task[]           @relation("TaskToSubtasks")
+  post        Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  comments    TaskComment[]
+  attachments TaskAttachment[]
+  labels      TaskLabel[]      @relation("TaskToLabel")
+  activity    TaskActivity[]
+
+  @@index([columnId])
+  @@index([taskBoardId])
+  @@index([workspaceId])
+  @@index([assigneeId])
+  @@index([reporterId])
+  @@index([parentTaskId])
+  @@index([postId])
+  @@index([issueKey])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  content   String
+  html      String?
+  taskId    String
+  authorId  String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  task      Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent    TaskComment?          @relation("TaskCommentToTaskComment", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   TaskComment[]         @relation("TaskCommentToTaskComment")
+  reactions TaskCommentReaction[]
+
+  @@index([taskId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model TaskCommentReaction {
+  id            String      @id @default(cuid())
+  type          String      // LIKE, etc.
+  taskCommentId String
+  authorId      String
+  createdAt     DateTime    @default(now())
+  
+  taskComment   TaskComment @relation(fields: [taskCommentId], references: [id], onDelete: Cascade)
+  author        User        @relation(fields: [authorId], references: [id])
+
+  @@unique([authorId, taskCommentId, type])
+  @@index([taskCommentId])
+  @@index([authorId])
+}
+
+model TaskAttachment {
+  id        String   @id @default(cuid())
+  fileName  String
+  fileUrl   String
+  fileSize  Int?
+  fileType  String?
+  taskId    String
+  uploaderId String
+  createdAt DateTime @default(now())
+  
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([uploaderId])
+}
+
+model TaskLabel {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#6366F1") // Default indigo color
+  workspaceId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]    @relation("TaskToLabel")
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+}
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  action    String   // created, updated, commented, etc.
+  details   String?  // JSON string with details of the activity
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+  
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
 }

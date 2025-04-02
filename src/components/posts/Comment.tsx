@@ -103,8 +103,11 @@ export function Comment({
       reaction => reaction.authorId === currentUserId && reaction.type === "LIKE"
     );
 
+    // Extract the complex expression to a separate variable
+    const isLikedInState = likedComments[comment.id];
+
     // If server says liked but not in our state, fetch latest data
-    if (likedComments[comment.id] !== currentUserLikeExists) {
+    if (isLikedInState !== currentUserLikeExists) {
       const updateLikesData = async () => {
         const refreshedLikes = await onRefreshLikes(comment.id);
         setLikesData(refreshedLikes || []);
@@ -112,7 +115,7 @@ export function Comment({
 
       updateLikesData();
     }
-  }, [likedComments[comment.id], comment.id, currentUserId, likesData, onRefreshLikes]);
+  }, [comment.id, currentUserId, likesData, likedComments, onRefreshLikes]);
 
   // Toggle function to show/hide replies
   const toggleReplies = () => {

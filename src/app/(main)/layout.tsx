@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
-import ChatboxWrapper from "@/components/layout/ChatboxWrapper";
 
 export default function MainLayout({
   children,
@@ -28,14 +27,14 @@ export default function MainLayout({
         
         {/* Main content area - with left padding to account for sidebar */}
         <main className="flex-1 ml-64 pt-20 pb-8 px-4 overflow-y-auto bg-[#191919]">
-          <div className="max-w-5xl mx-auto">
+          <div className="mx-auto w-full p-12">
             {children}
           </div>
         </main>
       </div>
       
       {/* Chat Widget */}
-      <ChatboxWrapper />
+      {/* <ChatboxWrapper /> */}
     </div>
   );
 } 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -46,7 +46,8 @@ import {
 import { Input } from "@/components/ui/input";
 
 interface MarkdownEditorProps {
-  onChange?: (html: string, markdown: string) => void;
+  onChange?: (markdown: string, html: string) => void;
+  initialValue?: string;
   content?: string;
   placeholder?: string;
   className?: string;
@@ -59,6 +60,7 @@ interface MarkdownEditorProps {
 export function MarkdownEditor({
   onChange,
   content = "",
+  initialValue = "",
   placeholder = "Write something...",
   className = "",
   minHeight = "150px",
@@ -73,6 +75,9 @@ export function MarkdownEditor({
   const [isImproving, setIsImproving] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
+
+  // Use a stable reference for initialValue to prevent re-renders
+  const initialContentRef = useRef(initialValue || content);
 
   const editor = useEditor({
     extensions: [
@@ -98,7 +103,7 @@ export function MarkdownEditor({
       }),
       Color,
     ],
-    content,
+    content: initialContentRef.current,
     editorProps: {
       attributes: {
         class: cn(
@@ -115,9 +120,9 @@ export function MarkdownEditor({
       const markdown = editor.storage.markdown?.getMarkdown() || html;
       
       // Call onChange callback with both formats
-      onChange?.(html, markdown);
+      onChange?.(markdown, html);
     },
-  });
+  }, []); // Empty dependency array to ensure editor only initializes once
 
   const addLink = useCallback(() => {
     if (!editor || !linkUrl) return;
