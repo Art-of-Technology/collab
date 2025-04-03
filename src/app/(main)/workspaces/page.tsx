@@ -21,15 +21,15 @@ interface WorkspacesPageProps {
 
 export default async function WorkspacesPage({ searchParams }: WorkspacesPageProps) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user) {
     redirect('/login');
   }
-  
+
   // Get the active tab from URL params
   const _searchParams = await searchParams;
   const activeTab = _searchParams?.tab === 'invitations' ? 'invitations' : 'workspaces';
-  
+
   // Fetch user's workspaces
   const workspaces = await prisma.workspace.findMany({
     where: {
@@ -53,7 +53,7 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
     },
     orderBy: { createdAt: 'desc' }
   });
-  
+
   // Fetch pending invitations
   const pendingInvitations = await prisma.workspaceInvitation.findMany({
     where: {
@@ -76,9 +76,9 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
     },
     orderBy: { createdAt: 'desc' }
   });
-  
+
   const ownedWorkspacesCount = workspaces.filter(w => w.ownerId === session.user.id).length;
-  
+
   return (
     <div className="container max-w-5xl py-8">
       <div className="flex justify-between items-center mb-8">
@@ -87,24 +87,17 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
           <p className="text-muted-foreground mt-1">Manage your workspaces and invitations</p>
         </div>
         <div className="flex items-center gap-2">
-          {session.user.role === 'admin' ? (
-            ownedWorkspacesCount < 3 ? (
-              <Link href="/create-workspace">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Workspace
-                </Button>
-              </Link>
-            ) : (
-              <Button variant="outline" disabled>
-                <DollarSign className="mr-2 h-4 w-4" />
-                Upgrade for more workspaces
+          {ownedWorkspacesCount < 3 ? (
+            <Link href="/create-workspace">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Workspace
               </Button>
-            )
+            </Link>
           ) : (
-            <Button variant="outline" disabled title="Only admins can create workspaces">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Workspace
+            <Button variant="outline" disabled>
+              <DollarSign className="mr-2 h-4 w-4" />
+              Upgrade for more workspaces
             </Button>
           )}
         </div>
@@ -132,10 +125,10 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
                         {workspace.logoUrl ? (
-                          <Image 
-                            src={workspace.logoUrl} 
-                            alt={workspace.name} 
-                            className="h-10 w-10 rounded-md" 
+                          <Image
+                            src={workspace.logoUrl}
+                            alt={workspace.name}
+                            className="h-10 w-10 rounded-md"
                             width={40}
                             height={40}
                           />
@@ -156,21 +149,21 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
                       </div>
                     </div>
                   </CardHeader>
-                  
+
                   <CardContent>
                     {workspace.description && (
                       <CardDescription className="mb-4">{workspace.description}</CardDescription>
                     )}
-                    
+
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Users className="h-4 w-4" />
                       <span>{workspace.members.length + 1} members</span>
                     </div>
                   </CardContent>
-                  
+
                   <CardFooter className="flex justify-between">
                     <DashboardButton workspaceId={workspace.id} />
-                    
+
                     {(workspace.ownerId === session.user.id || session.user.role === 'admin') ? (
                       <Link href={`/workspaces/${workspace.id}`}>
                         <Button variant="secondary">
@@ -193,22 +186,12 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
               <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
               <h2 className="text-xl font-semibold mb-2">No workspaces yet</h2>
               <p className="text-muted-foreground mb-4">Create a workspace to start collaborating with your team</p>
-              {session.user.role === 'admin' ? (
-                <Link href="/create-workspace">
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Workspace
-                  </Button>
-                </Link>
-              ) : (
-                <div className="space-y-2 text-center">
-                  <Button disabled title="Only admins can create workspaces">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Workspace
-                  </Button>
-                  <p className="text-sm text-muted-foreground">Only admins can create workspaces. Please contact an administrator.</p>
-                </div>
-              )}
+              <Link href="/create-workspace">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Your First Workspace
+                </Button>
+              </Link>
             </div>
           )}
         </TabsContent>
@@ -222,10 +205,10 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
                         {invitation.workspace.logoUrl ? (
-                          <Image 
-                            src={invitation.workspace.logoUrl} 
-                            alt={invitation.workspace.name} 
-                            className="h-10 w-10 rounded-md" 
+                          <Image
+                            src={invitation.workspace.logoUrl}
+                            alt={invitation.workspace.name}
+                            className="h-10 w-10 rounded-md"
                             width={40}
                             height={40}
                           />
@@ -244,7 +227,7 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
                       </div>
                     </div>
                   </CardHeader>
-                  
+
                   <CardContent>
                     <div className="space-y-2 mb-4">
                       <p className="text-sm">
@@ -262,7 +245,7 @@ export default async function WorkspacesPage({ searchParams }: WorkspacesPagePro
                       </div>
                     </div>
                   </CardContent>
-                  
+
                   <CardFooter className="flex justify-end">
                     <Button asChild>
                       <Link href={`/workspace-invitation/${invitation.token}`}>

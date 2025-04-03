@@ -47,14 +47,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    
-    // Check if user is an admin
-    if (session.user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Only administrators can create workspaces.' },
-        { status: 403 }
-      );
-    }
 
     const body = await request.json();
     const { name, slug, description, logoUrl } = body;
