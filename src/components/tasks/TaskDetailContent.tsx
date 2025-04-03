@@ -12,6 +12,7 @@ import { TaskEditButton } from "@/components/tasks/TaskEditButton";
 import { TaskCommentsList } from "@/components/tasks/TaskCommentsList";
 import { ShareButton } from "@/components/tasks/ShareButton";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { TaskComment } from "@/components/tasks/TaskComment";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -199,13 +200,15 @@ export function TaskDetailContent({
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              {task.description ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <MarkdownContent content={task.description} />
-                </div>
-              ) : (
-                <p className="text-muted-foreground italic">No description provided</p>
-              )}
+              <div className="min-h-[100px]">
+                {task.description ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <MarkdownContent content={task.description} />
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground italic">No description provided</p>
+                )}
+              </div>
             </CardContent>
           </Card>
           
@@ -213,18 +216,14 @@ export function TaskDetailContent({
             <CardHeader>
               <CardTitle>Comments</CardTitle>
             </CardHeader>
-            <CardContent>
-              {task.comments.length > 0 ? (
-                <TaskCommentsList 
-                  taskId={task.id}
-                  comments={task.comments}
-                  currentUserId={task.reporter?.id || ""}
-                  userImage={task.reporter?.image}
-                  onRefresh={onRefresh}
-                />
-              ) : (
-                <p className="text-muted-foreground italic">No comments yet</p>
-              )}
+            <CardContent className="relative z-0">
+              <TaskCommentsList 
+                taskId={task.id}
+                comments={task.comments}
+                currentUserId={task.reporter?.id || ""}
+                userImage={task.reporter?.image}
+                onRefresh={onRefresh}
+              />
             </CardContent>
           </Card>
         </div>

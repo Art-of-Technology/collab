@@ -65,29 +65,31 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
 
   return (
     <Dialog open={!!taskId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2">
           <DialogTitle className="sr-only">Task Details</DialogTitle>
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <Button size="sm" variant="ghost" asChild>
+              <Link href={`/tasks/${taskId}`} target="_blank" className="flex items-center gap-1">
+                <ExternalLink className="h-4 w-4" />
+                <span>View Full</span>
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </DialogHeader>
-        <div className="absolute right-4 top-4 flex items-center gap-2">
-          <Button size="sm" variant="ghost" asChild>
-            <Link href={`/tasks/${taskId}`} target="_blank" className="flex items-center gap-1">
-              <ExternalLink className="h-4 w-4" />
-              <span>View Full</span>
-            </Link>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
         
-        <TaskDetailContent
-          task={task}
-          isLoading={loading}
-          error={error}
-          onRefresh={refreshTaskDetails}
-          onClose={onClose}
-        />
+        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+          <TaskDetailContent
+            task={task}
+            isLoading={loading}
+            error={error}
+            onRefresh={refreshTaskDetails}
+            onClose={onClose}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

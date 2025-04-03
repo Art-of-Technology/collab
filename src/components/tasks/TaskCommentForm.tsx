@@ -129,20 +129,20 @@ export function TaskCommentForm({ taskId, onCommentAdded, userImage, currentUser
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 w-full">
-        <div className="flex gap-2 items-start border-t pt-3 border-border/30">
-          <Avatar className="h-8 w-8">
+        <div className="flex gap-2 items-start border-t pt-3 border-border/30 relative z-10">
+          <Avatar className="h-8 w-8 shrink-0">
             <AvatarImage src={userImage || undefined} alt="User" />
             <AvatarFallback>
               {currentUserId ? currentUserId.charAt(0).toUpperCase() : "U"}
             </AvatarFallback>
           </Avatar>
           
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <FormField
               control={form.control}
               name="content"
               render={() => (
-                <FormItem>
+                <FormItem className="min-h-[100px]">
                   <FormControl>
                     <MarkdownEditor
                       onChange={handleEditorChange}
@@ -150,7 +150,7 @@ export function TaskCommentForm({ taskId, onCommentAdded, userImage, currentUser
                       minHeight="80px"
                       maxHeight="250px"
                       compact={true}
-                      className="mb-2"
+                      className="mb-2 bg-background rounded-md"
                       content={commentText}
                       onAiImprove={handleAiImprove}
                     />

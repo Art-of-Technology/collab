@@ -89,7 +89,50 @@ export async function PATCH(
     // Process tags - disconnect all existing tags and connect new ones
     const tagsArray = Array.isArray(tags) ? tags : [];
     
-    // Update the post
+    // First, disconnect all existing tags
+    await prisma.post.update({
+      where: { id: postId },
+      data: {
+        tags: {
+          set: [] // Remove all tag connections
+        }
+      }
+    });
+    
+    // Create or find tags and connect them
+    const tagConnections = [];
+    const workspaceId = existingPost.workspaceId;
+    
+    for (const tagName of tagsArray) {
+      let tag;
+      
+      // Try to find an existing tag
+      try {
+        tag = await prisma.tag.findFirst({
+          where: {
+            name: tagName,
+            workspaceId: workspaceId
+          }
+        });
+        
+        // If tag doesn't exist, create it
+        if (!tag) {
+          tag = await prisma.tag.create({
+            data: {
+              name: tagName,
+              workspaceId: workspaceId
+            }
+          });
+        }
+        
+        tagConnections.push({ id: tag.id });
+      } catch (error) {
+        console.error(`Error processing tag ${tagName}:`, error);
+        // Continue with other tags even if one fails
+      }
+    }
+    
+    // Update the post with new data and connect tags
     const updatedPost = await prisma.post.update({
       where: { id: postId },
       data: {
@@ -97,14 +140,7 @@ export async function PATCH(
         type,
         priority,
         tags: {
-          disconnect: await prisma.tag.findMany({
-            where: { posts: { some: { id: postId } } },
-            select: { id: true }
-          }),
-          connectOrCreate: tagsArray.map((tag: string) => ({
-            where: { name: tag },
-            create: { name: tag }
-          }))
+          connect: tagConnections
         }
       },
       include: {
