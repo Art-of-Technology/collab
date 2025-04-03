@@ -95,7 +95,11 @@ export default function LinkedTasks({ postId }: LinkedTasksProps) {
   }
 
   // Helper to render status badge
-  const renderStatusBadge = (status: string) => {
+  const renderStatusBadge = (status: string | null | undefined) => {
+    if (!status) {
+      return <Badge variant="outline">No Status</Badge>;
+    }
+    
     switch (status.toLowerCase()) {
       case "to do":
         return <Badge variant="outline">To Do</Badge>;

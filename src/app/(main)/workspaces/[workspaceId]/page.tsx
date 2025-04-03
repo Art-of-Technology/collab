@@ -14,11 +14,20 @@ import { CustomAvatar } from '@/components/ui/custom-avatar';
 import InviteMemberForm from './InviteMemberForm';
 import WorkspaceDetailsEditor from './WorkspaceDetailsEditor';
 import Image from 'next/image';
+import CancelInvitationButton from '@/components/workspace/CancelInvitationButton';
+import { revalidatePath } from 'next/cache';
 
 interface WorkspacePageProps {
   params: {
     workspaceId: string;
   };
+}
+
+// Server action to refresh the page
+async function refreshWorkspace(workspaceId: string) {
+  'use server';
+  revalidatePath(`/workspaces/${workspaceId}`);
+  revalidatePath('/workspaces');
 }
 
 export default async function WorkspacePage({ params }: WorkspacePageProps) {
@@ -276,9 +285,11 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
                         </div>
                         {canManage && (
                           <div className="mt-3">
-                            <Button variant="outline" size="sm">
-                              Cancel Invitation
-                            </Button>
+                            <CancelInvitationButton 
+                              invitationId={invitation.id} 
+                              workspaceId={workspaceId}
+                              revalidateAction={refreshWorkspace}
+                            />
                           </div>
                         )}
                       </div>

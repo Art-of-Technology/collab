@@ -10,6 +10,7 @@ import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import Link from "next/link";
 
 // Load the Inter font with display swap for better font loading performance
 const inter = Inter({ 
@@ -21,7 +22,7 @@ const inter = Inter({
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Collab',
+  title: 'Collab by Weezboo',
   description: 'An application for teams to share updates, blockers, ideas, and questions.',
 };
 
@@ -60,7 +61,25 @@ export default async function RootLayout({
             <WorkspaceProvider>
               <UiProvider>
                 <CustomThemeProvider>
-                  {children}
+                  <main className="min-h-screen flex flex-col">
+                    {children}
+                  </main>
+                  
+                  <footer className="border-t py-6 md:py-8">
+                    <div className="container flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+                      <div>
+                        <p>© {new Date().getFullYear()} Collab by Weezboo. All rights reserved.</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Link href="/privacy-policy" className="hover:text-foreground transition-colors">
+                          Privacy Policy
+                        </Link>
+                        <Link href="/terms" className="hover:text-foreground transition-colors">
+                          Terms & Conditions
+                        </Link>
+                      </div>
+                    </div>
+                  </footer>
                   <Toaster />
                   <Script
                     src="https://api.chatproject.io/chat-widget.js"

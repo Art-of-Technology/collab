@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Building2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Building2, CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -16,7 +16,19 @@ interface InvitationPageProps {
 }
 
 export default function WorkspaceInvitationPage({ params }: InvitationPageProps) {
-  const { token } = params;
+  const [token, setToken] = useState<string>('');
+  
+  // Handle the promise params
+  useEffect(() => {
+    async function resolveParams() {
+      if (params) {
+        const resolvedParams = await params;
+        setToken(resolvedParams.token);
+      }
+    }
+    resolveParams();
+  }, [params]);
+  
   const { data: session, status } = useSession();
   const router = useRouter();
   const { refreshWorkspaces } = useWorkspace();
@@ -26,10 +38,11 @@ export default function WorkspaceInvitationPage({ params }: InvitationPageProps)
   const [invitation, setInvitation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  const [hasMoreInvitations, setHasMoreInvitations] = useState<boolean>(false);
   
   useEffect(() => {
     async function fetchInvitation() {
-      if (status === 'loading') return;
+      if (status === 'loading' || !token) return;
       
       try {
         setIsLoading(true);
@@ -42,6 +55,14 @@ export default function WorkspaceInvitationPage({ params }: InvitationPageProps)
         
         const invitationData = await response.json();
         setInvitation(invitationData);
+        
+        // Check if user has more invitations
+        const invitationsResponse = await fetch('/api/workspaces/invitations');
+        if (invitationsResponse.ok) {
+          const invitations = await invitationsResponse.json();
+          // Check if there are invitations other than the current one
+          setHasMoreInvitations(invitations.filter((inv: any) => inv.token !== token).length > 0);
+        }
       } catch (err) {
         console.error('Error fetching invitation:', err);
         setError(err instanceof Error ? err.message : 'An error occurred while fetching the invitation');
@@ -135,6 +156,16 @@ export default function WorkspaceInvitationPage({ params }: InvitationPageProps)
               You have successfully joined {invitation?.workspace?.name}. Redirecting...
             </CardDescription>
           </CardHeader>
+          {hasMoreInvitations && (
+            <CardFooter className="flex justify-center pt-2">
+              <Button variant="outline" asChild>
+                <Link href="/workspaces?tab=invitations">
+                  View other invitations
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardFooter>
+          )}
         </Card>
       </div>
     );
