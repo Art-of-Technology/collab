@@ -129,9 +129,9 @@ export function TaskCommentsList({
   );
 
   return (
-    <>
+    <div className="space-y-4">
       {organizedComments.length > 0 && (
-        <div className="space-y-4 mb-4">
+        <div className="space-y-4 mb-4 max-h-[400px] overflow-y-auto pr-2">
           {organizedComments.map((comment) => (
             <TaskComment
               key={`${comment.id}-${likedComments[comment.id] ? 'liked' : 'notliked'}`}
@@ -147,12 +147,14 @@ export function TaskCommentsList({
         </div>
       )}
 
-      <TaskCommentForm 
-        taskId={taskId} 
-        currentUserId={currentUserId}
-        userImage={userImage}
-        onCommentAdded={handleReplyAdded}
-      />
-    </>
+      <div className="pt-4 mt-4 border-t border-border/30">
+        <TaskCommentForm 
+          taskId={taskId} 
+          currentUserId={currentUserId}
+          userImage={userImage}
+          onCommentAdded={handleReplyAdded}
+        />
+      </div>
+    </div>
   );
 } 

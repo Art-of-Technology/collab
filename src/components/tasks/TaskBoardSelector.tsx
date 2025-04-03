@@ -34,17 +34,19 @@ export default function TaskBoardSelector() {
             aria-expanded={open}
             className="w-[250px] justify-between"
           >
-            {selectedBoardId
-              ? boards.find((board) => board.id === selectedBoardId)?.name
-              : "Select board..."}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <span className="truncate mr-1">
+              {selectedBoardId
+                ? boards.find((board) => board.id === selectedBoardId)?.name
+                : "Select board..."}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 flex-none" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[250px] p-0">
           <Command>
-            <CommandInput placeholder="Search board..." />
+            <CommandInput placeholder="Search board..." className="border-none focus:ring-0" />
             <CommandEmpty>No board found.</CommandEmpty>
-            <CommandGroup>
+            <CommandGroup className="max-h-[300px] overflow-y-auto">
               {boards.map((board) => (
                 <CommandItem
                   key={board.id}
@@ -53,14 +55,15 @@ export default function TaskBoardSelector() {
                     selectBoard(board.id);
                     setOpen(false);
                   }}
+                  className="flex items-center"
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "mr-2 h-4 w-4 flex-none",
                       selectedBoardId === board.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {board.name}
+                  <span className="truncate">{board.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
