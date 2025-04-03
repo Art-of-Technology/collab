@@ -8,6 +8,7 @@ import Script from "next/script";
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
+import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from "next/link";
@@ -48,6 +49,9 @@ export default async function RootLayout({
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
+        
+        {/* Hotjar Tracking */}
+        <Hotjar />
       </head>
 
       <body className={cn("min-h-screen h-screen bg-background font-sans antialiased", fontSans.variable, inter.className)}>
