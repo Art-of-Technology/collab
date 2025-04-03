@@ -23,6 +23,15 @@ export async function GET(
     const _params = await params;
     const { workspaceId } = _params;
 
+    // Get current user's role
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    // Check if the user is a global admin
+    const isGlobalAdmin = currentUser?.role === 'admin';
+
     // Check if workspace exists and user is a member or owner
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -42,7 +51,7 @@ export async function GET(
 
     const isOwnerOrMember = workspace.ownerId === session.user.id || workspace.members.length > 0;
 
-    if (!isOwnerOrMember) {
+    if (!isOwnerOrMember && !isGlobalAdmin) {
       return NextResponse.json(
         { error: 'You do not have access to this workspace' },
         { status: 403 }
@@ -102,7 +111,16 @@ export async function POST(
       );
     }
 
-    // Check if workspace exists and user is a member or owner
+    // Get current user's role
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    // Check if the user is a global admin
+    const isGlobalAdmin = currentUser?.role === 'admin';
+
+    // Check if workspace exists
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       include: {
@@ -122,9 +140,10 @@ export async function POST(
       );
     }
 
+    // Allow access if user is global admin, workspace owner, or workspace admin
     const isOwnerOrAdmin = workspace.ownerId === session.user.id || workspace.members.length > 0;
-
-    if (!isOwnerOrAdmin) {
+    
+    if (!isOwnerOrAdmin && !isGlobalAdmin) {
       return NextResponse.json(
         { error: 'You do not have permission to invite members to this workspace' },
         { status: 403 }
@@ -203,6 +222,106 @@ export async function POST(
     console.error('Error creating invitation:', error);
     return NextResponse.json(
       { error: 'Failed to create invitation' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/workspaces/[workspaceId]/invitations?id=invitationId - Cancel/delete an invitation
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { workspaceId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const _params = await params;
+    const { workspaceId } = _params;
+    
+    // Get the invitation ID from the URL search params
+    const url = new URL(request.url);
+    const invitationId = url.searchParams.get('id');
+    
+    if (!invitationId) {
+      return NextResponse.json(
+        { error: 'Invitation ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Get current user's role
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    // Check if the user is a global admin
+    const isGlobalAdmin = currentUser?.role === 'admin';
+
+    // Get the invitation to check permissions
+    const invitation = await prisma.workspaceInvitation.findUnique({
+      where: { id: invitationId },
+      include: {
+        workspace: {
+          select: {
+            ownerId: true,
+            members: {
+              where: {
+                userId: session.user.id,
+                role: { in: ['owner', 'admin'] }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!invitation) {
+      return NextResponse.json(
+        { error: 'Invitation not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if invitation belongs to the specified workspace
+    if (invitation.workspaceId !== workspaceId) {
+      return NextResponse.json(
+        { error: 'Invitation does not belong to this workspace' },
+        { status: 403 }
+      );
+    }
+
+    // Check if the user has permission to cancel the invitation
+    // Allow if user is global admin, workspace owner, or workspace admin
+    const isOwnerOrAdmin = invitation.workspace.ownerId === session.user.id || invitation.workspace.members.length > 0;
+    
+    if (!isOwnerOrAdmin && !isGlobalAdmin) {
+      return NextResponse.json(
+        { error: 'You do not have permission to cancel this invitation' },
+        { status: 403 }
+      );
+    }
+
+    // Delete the invitation
+    await prisma.workspaceInvitation.delete({
+      where: { id: invitationId }
+    });
+
+    return NextResponse.json({ 
+      success: true,
+      message: 'Invitation cancelled successfully'
+    });
+  } catch (error) {
+    console.error('Error cancelling invitation:', error);
+    return NextResponse.json(
+      { error: 'Failed to cancel invitation' },
       { status: 500 }
     );
   }

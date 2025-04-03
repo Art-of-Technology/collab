@@ -5,9 +5,10 @@ import Image from "next/image"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { 
-  BellIcon, 
-  MagnifyingGlassIcon 
+import {
+  BellIcon,
+  MagnifyingGlassIcon,
+  Bars3Icon
 } from "@heroicons/react/24/outline";
 import { MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -23,17 +24,41 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUiContext } from "@/context/UiContext";
+import { useSidebar } from "@/components/providers/SidebarProvider";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 
-export default function Navbar() {
+interface NavbarProps {
+  hasWorkspaces: boolean;
+  shouldShowSearch: boolean;
+  userEmail?: string;
+  userName?: string;
+  userImage?: string;
+}
+
+export default function Navbar({
+  hasWorkspaces,
+  shouldShowSearch,
+  userEmail,
+  userName,
+  userImage
+}: NavbarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const { isChatOpen, toggleChat } = useUiContext();
+  const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
   const [userData, setUserData] = useState<any>(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Fetch the current user data for avatar
   useEffect(() => {
@@ -58,6 +83,7 @@ export default function Navbar() {
     e.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setMobileSearchOpen(false);
     }
   };
 
@@ -88,92 +114,174 @@ export default function Navbar() {
       return <CustomAvatar user={userData} size="md" />;
     }
 
+    // Use server-provided values with fallback to session values for SSR
+    const displayName = userName || session?.user?.name || '';
+    const displayImage = userImage || session?.user?.image;
+
     return (
       <Avatar>
-        {session?.user?.image ? (
-          <AvatarImage src={session.user.image} alt={session.user.name || "User"} />
+        {displayImage ? (
+          <AvatarImage src={displayImage} alt={displayName || "User"} />
         ) : (
-          <AvatarFallback>{getInitials(session?.user?.name || "")}</AvatarFallback>
+          <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
         )}
       </Avatar>
     );
   };
 
+  // Calculate email to show in dropdown
+  const displayEmail = userEmail || session?.user?.email || '';
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#191919] border-b border-[#2a2929] h-16 shadow-md">
-      <div className="h-full px-4 flex items-center justify-between">
+      <div className="h-full px-2 md:px-4 flex items-center justify-between">
+        {/* Left section: Mobile menu + search on mobile, Logo on desktop */}
         <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center space-x-2 ml-6">
-            <Image src="/logo-v2.png" width={125} height={125} alt="Collab" />
+          {/* Mobile menu toggle button - only on mobile */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden text-gray-400 hover:bg-[#1c1c1c]"
+            onClick={toggleSidebar}
+          >
+            <Bars3Icon className="h-5 w-5" />
+          </Button>
+
+          {/* Mobile search dialog - only on mobile */}
+          {shouldShowSearch && (
+            <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden hover:bg-[#1c1c1c] text-gray-400"
+                >
+                  <MagnifyingGlassIcon className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-gray-700">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Search</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSearch} className="mt-2">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <Input
+                      type="search"
+                      placeholder="Search..."
+                      className="pl-9 pr-4 py-2 bg-[#252525] border-gray-700 text-white text-sm rounded-md w-full"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="mt-3 w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    Search
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Desktop Logo - only visible on desktop */}
+          <div className="hidden md:flex items-center space-x-4">
+            <Link href="/" className="flex items-center">
+              <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-8 w-auto" />
+            </Link>
+
+            {/* Workspace selector in desktop - next to logo */}
+            {hasWorkspaces && (
+              <div className="flex items-center">
+                <WorkspaceSelector />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Center section: Logo - only on mobile */}
+        <div className="md:hidden absolute left-1/2 transform -translate-x-1/2 flex items-center justify-center">
+          <Link href="/" className="flex items-center">
+            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-8 w-auto" />
           </Link>
         </div>
 
-        {/* Workspace selector */}
-        {session && (
-          <div className="hidden md:flex items-center ml-4">
-            <WorkspaceSelector />
-          </div>
-        )}
-
-        <div className="flex-1 max-w-lg mx-auto">
-          <form onSubmit={handleSearch} className="relative">
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 flex items-center justify-center">
-              <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+        {/* Middle section for desktop: Search */}
+        <div className="hidden md:flex flex-1 items-center justify-center space-x-4 px-4">
+          {/* Desktop search */}
+          {shouldShowSearch && (
+            <div className="w-full max-w-lg">
+              <form onSubmit={handleSearch} className="relative">
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 flex items-center justify-center">
+                  <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+                </div>
+                <Input
+                  type="search"
+                  placeholder="Search posts, people, or tags"
+                  className="pl-9 bg-[#1c1c1c] border-[#2a2929] text-gray-200 focus:border-gray-500"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </form>
             </div>
-            <Input
-              type="search"
-              placeholder="Search posts, people, or tags"
-              className="pl-9 bg-[#1c1c1c] border-[#2a2929] text-gray-200 focus:border-gray-500"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </form>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 mr-6">
+        {/* Right section: Notifications, chat, profile */}
+        <div className="flex items-center gap-1 md:gap-2">
           {session ? (
             <>
-              <Button variant="ghost" size="icon" className="relative hover:bg-[#1c1c1c] text-gray-400">
-                <BellIcon className="h-5 w-5" />
-              </Button>
+              {hasWorkspaces && (
+                <>
+                  <Button variant="ghost" size="icon" className="relative hover:bg-[#1c1c1c] text-gray-400">
+                    <BellIcon className="h-5 w-5" />
+                  </Button>
 
-              {/* Chat toggle button */}
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="relative hover:bg-[#1c1c1c] text-gray-400" 
-                onClick={toggleChat}
-              >
-                <MessageCircle className="h-5 w-5" />
-                {isChatOpen && (
-                  <span className="absolute bottom-1 right-1 bg-blue-500 rounded-full w-2 h-2" />
-                )}
-              </Button>
+                  {/* Chat toggle button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative hover:bg-[#1c1c1c] text-gray-400"
+                    onClick={toggleChat}
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    {isChatOpen && (
+                      <span className="absolute bottom-1 right-1 bg-blue-500 rounded-full w-2 h-2" />
+                    )}
+                  </Button>
+                </>
+              )}
 
               {/* Profile dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="rounded-full p-0 h-10 w-10 overflow-hidden">
+                  <Button variant="ghost" className="rounded-full p-0 h-8 w-8 md:h-10 md:w-10 overflow-hidden">
                     {renderAvatar()}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 bg-[#1c1c1c] border-[#2a2929] text-gray-200" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{session?.user?.name}</p>
+                      <p className="text-sm font-medium leading-none">{userName || session?.user?.name}</p>
                       <p className="text-xs leading-none text-gray-400">
-                        {session?.user?.email}
+                        {displayEmail}
                       </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-[#2a2929]" />
                   <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                      <Link href="/profile">Your Profile</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/my-posts">My Posts</Link>
-                    </DropdownMenuItem>
+                    {hasWorkspaces && (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <Link href="/profile">Your Profile</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href="/my-posts">My Posts</Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuItem asChild>
                       <Link href="/workspaces">Manage Workspaces</Link>
                     </DropdownMenuItem>

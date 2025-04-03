@@ -11,8 +11,9 @@ interface PostPageProps {
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const _params = await params;
   const post = await prisma.post.findUnique({
-    where: { id: params.postId },
+    where: { id: _params.postId },
     include: { author: true },
   });
 
@@ -36,11 +37,27 @@ export default async function PostPage({ params }: PostPageProps) {
     redirect("/login");
   }
 
+  const _params = await params;
   const post = await prisma.post.findUnique({
-    where: { id: params.postId },
+    where: { id: _params.postId },
     include: {
       author: true,
       tags: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          members: {
+            where: {
+              userId: session.user.id
+            },
+            select: {
+              id: true
+            }
+          },
+          ownerId: true
+        }
+      },
       comments: {
         include: {
           author: true,
@@ -76,6 +93,30 @@ export default async function PostPage({ params }: PostPageProps) {
 
   if (!post) {
     redirect("/dashboard");
+  }
+
+  // Check if user has access to the workspace this post belongs to
+  const isWorkspaceOwner = post.workspace?.ownerId === session.user.id;
+  const isMember = post.workspace?.members && post.workspace.members.length > 0;
+  const hasAccess = isWorkspaceOwner || isMember;
+  
+  if (!hasAccess) {
+    // User doesn't have access to this post, redirect to welcome page if they have no workspaces
+    const userWorkspaces = await prisma.workspace.findMany({
+      where: {
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id } } }
+        ]
+      },
+      take: 1
+    });
+    
+    if (userWorkspaces.length === 0) {
+      redirect('/welcome');
+    } else {
+      redirect('/timeline');
+    }
   }
 
   return <PostPageContent post={post} currentUserId={session.user.id} />;

@@ -7,8 +7,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { taskId: string } }
 ) {
-  const _params = await params;
   try {
+    const _params = await params;
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {

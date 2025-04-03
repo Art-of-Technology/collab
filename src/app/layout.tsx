@@ -8,6 +8,7 @@ import Script from "next/script";
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
+import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
@@ -21,7 +22,7 @@ const inter = Inter({
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Collab',
+  title: 'Collab by Weezboo',
   description: 'An application for teams to share updates, blockers, ideas, and questions.',
 };
 
@@ -31,7 +32,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html className="min-h-screen h-screen overflow-hidden" lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Preload critical CSS */}
         <link rel="preload" href="/globals.css" as="style" />
@@ -47,9 +48,12 @@ export default async function RootLayout({
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
+        
+        {/* Hotjar Tracking */}
+        <Hotjar />
       </head>
 
-      <body className={cn("min-h-screen h-screen bg-background font-sans antialiased", fontSans.variable, inter.className)}>
+      <body className={cn("bg-background font-sans antialiased", fontSans.variable, inter.className)}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -60,7 +64,9 @@ export default async function RootLayout({
             <WorkspaceProvider>
               <UiProvider>
                 <CustomThemeProvider>
-                  {children}
+                  <main className="flex flex-col">
+                    {children}
+                  </main>
                   <Toaster />
                   <Script
                     src="https://api.chatproject.io/chat-widget.js"

@@ -1,5 +1,4 @@
 import { getCurrentUser } from "@/lib/session";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { XCircleIcon } from "@heroicons/react/24/outline";
@@ -7,13 +6,13 @@ import PostList from "@/components/posts/PostList";
 import CreatePostForm from "@/components/posts/CreatePostForm";
 import FilterTabs from "@/components/posts/FilterTabs";
 import { Badge } from "@/components/ui/badge";
-import { cookies } from "next/headers";
+import { verifyWorkspaceAccess } from "@/lib/workspace-helpers";
 
 interface TimelinePageProps {
   searchParams: { 
     filter?: string;
     tag?: string;
-  }
+  };
 }
 
 // Define a proper type for the where clause
@@ -34,46 +33,13 @@ export default async function TimelinePage({
 }: TimelinePageProps) {
   const user = await getCurrentUser();
   
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Get current workspace from cookie
-  const cookieStore = await cookies();
-  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
-
-  // If no workspace ID found, we need to get the user's workspaces
-  let workspaceId = currentWorkspaceId;
-  
-  if (!workspaceId) {
-    // Get user's first workspace
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
-      },
-      orderBy: {
-        createdAt: 'asc'
-      },
-      select: { id: true }
-    });
-    
-    if (workspace) {
-      workspaceId = workspace.id;
-    }
-  }
-
-  // If we still don't have a workspaceId, redirect to create workspace
-  if (!workspaceId) {
-    redirect('/create-workspace');
-  }
+  // Verify workspace access and redirect if needed
+  const workspaceId = await verifyWorkspaceAccess(user);
   
   const _searchParams = await searchParams;
-  // Safely handle searchParams - check if they exist first before awaiting
-  const filterParam = _searchParams?.filter ? await _searchParams.filter : undefined;
-  const tagParam = _searchParams?.tag ? await _searchParams.tag : undefined;
+  // Safely handle searchParams
+  const filterParam = _searchParams?.filter;
+  const tagParam = _searchParams?.tag;
   
   const filter = typeof filterParam === 'string' ? filterParam.toLowerCase() : undefined;
   const tag = typeof tagParam === 'string' ? tagParam : undefined;
@@ -163,7 +129,7 @@ export default async function TimelinePage({
         <FilterTabs />
       </div>
       
-      <PostList posts={posts} currentUserId={user.id} />
+      <PostList posts={posts} currentUserId={user?.id || ''} />
     </div>
   );
 } 

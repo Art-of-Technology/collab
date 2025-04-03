@@ -1,40 +1,81 @@
-"use client";
-
-import { usePathname } from "next/navigation";
+import React from "react";
+import { redirect } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
-import Sidebar from "@/components/layout/Sidebar";
+import { getAuthSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import SidebarProvider from "@/components/providers/SidebarProvider";
+import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
 
-export default function MainLayout({
+export default async function MainLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Get the current path to highlight active menu items
-  const pathname = usePathname();
+  // Get the current user session
+  const session = await getAuthSession();
   
+  if (!session?.user) {
+    redirect("/login");
+  }
+  
+  // Get current path from pathname
+  const pathname = /* @ts-expect-error Server Component */
+    URL.pathname || "";
+  
+  // Check if user has any workspaces
+  const userWorkspaces = await prisma.workspace.findMany({
+    where: {
+      OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id } } }
+      ]
+    },
+    select: { id: true },
+    take: 1
+  });
+  
+  const hasWorkspaces = userWorkspaces.length > 0;
+  
+  // Special paths that should not show sidebar
+  const isWelcomePage = pathname === '/welcome';
+  const isInvitationPage = pathname.startsWith('/workspace-invitation/');
+  
+  // Determine whether to show sidebar
+  const shouldShowSidebar = hasWorkspaces && !isWelcomePage && !isInvitationPage;
+  
+  // Pre-rendered layout with sidebar
+  if (shouldShowSidebar) {
+    return (
+      <SidebarProvider>
+        <LayoutWithSidebar 
+          pathname={pathname || '/'} 
+          session={session}
+          hasWorkspaces={hasWorkspaces}
+        >
+          {children}
+        </LayoutWithSidebar>
+      </SidebarProvider>
+    );
+  }
+  
+  // Pre-rendered layout without sidebar
   return (
     <div className="min-h-screen bg-[#191919]">
       {/* Top navbar - full width */}
-      <Navbar />
+      <Navbar 
+        hasWorkspaces={hasWorkspaces}
+        shouldShowSearch={false}
+        userEmail={session.user.email || ''}
+        userName={session.user.name || ''}
+        userImage={session.user.image || ''}
+      />
       
-      <div className="flex h-[calc(100vh-4rem)]">
-        {/* Left sidebar - fixed width */}
-        <div className="w-64 fixed top-16 bottom-0 left-0 bg-[#191919] border-r border-[#2a2929] z-40 overflow-y-auto">
-          <div className="p-4">
-            <Sidebar pathname={pathname} />
-          </div>
+      {/* Main content area - full width */}
+      <main className="pt-20 pb-8 px-4 overflow-y-auto bg-[#191919]">
+        <div className="mx-auto w-full p-12">
+          {children}
         </div>
-        
-        {/* Main content area - with left padding to account for sidebar */}
-        <main className="flex-1 ml-64 pt-20 pb-8 px-4 overflow-y-auto bg-[#191919]">
-          <div className="mx-auto w-full p-12">
-            {children}
-          </div>
-        </main>
-      </div>
-      
-      {/* Chat Widget */}
-      {/* <ChatboxWrapper /> */}
+      </main>
     </div>
   );
 } 

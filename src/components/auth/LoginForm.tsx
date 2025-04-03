@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import Link from "next/link";
 
 export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +51,8 @@ export default function LoginForm() {
       </Button>
       
       <p className="text-center text-sm text-muted-foreground">
-        By signing in, you agree to our <br /> Terms and Privacy Policy.
+        By signing in, you agree to our <br /> 
+        <Link href="/terms" className="text-primary hover:underline">Terms</Link> and <Link href="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>.
       </p>
     </div>
   );
