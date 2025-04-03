@@ -120,6 +120,8 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     // Format the feature request data
     const formattedFeatureRequest = {
       ...featureRequest,
+      createdAt: featureRequest.createdAt.toISOString(),
+      updatedAt: featureRequest.updatedAt.toISOString(),
       voteScore: featureRequest._count.votes - downvotesCount,
       upvotes: featureRequest._count.votes,
       downvotes: downvotesCount,
@@ -147,7 +149,11 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
           <div className="mt-8 bg-card/95 backdrop-blur-sm border rounded-lg border-border/50 p-6">
             <FeatureRequestComments
               featureRequestId={id}
-              comments={comments}
+              comments={comments.map(comment => ({
+                ...comment,
+                createdAt: comment.createdAt.toISOString(),
+                updatedAt: comment.updatedAt.toISOString(),
+              }))}
               currentUserId={session.user.id}
             />
           </div>

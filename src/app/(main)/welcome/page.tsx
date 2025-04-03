@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Building2, UserPlus, Plus, Mail, ArrowRight } from "lucide-react";
+import { Building2, Plus, Mail, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -52,9 +52,6 @@ export default async function WelcomePage() {
     orderBy: { createdAt: "desc" }
   });
 
-  // Check if user is admin (can create workspaces)
-  const isAdmin = session.user.role === "admin";
-
   return (
     <div className="container max-w-4xl py-8">
       <div className="flex flex-col items-center text-center mb-8">
@@ -87,29 +84,19 @@ export default async function WelcomePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isAdmin ? (
-                <div className="flex flex-col items-center justify-center gap-4 p-6 bg-gray-50 dark:bg-gray-900 rounded-lg text-center">
-                  <Building2 className="h-12 w-12 text-primary" />
-                  <p className="text-lg font-medium">Start collaborating with your team</p>
-                  <p className="text-muted-foreground max-w-sm">
-                    Create a workspace to share updates, track tasks, and collaborate with your team members.
-                  </p>
-                  <Button className="mt-2" asChild>
-                    <Link href="/create-workspace">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create a Workspace
-                    </Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-4 p-6 bg-gray-50 dark:bg-gray-900 rounded-lg text-center">
-                  <UserPlus className="h-12 w-12 text-muted-foreground" />
-                  <p className="text-lg font-medium">Admin privileges required</p>
-                  <p className="text-muted-foreground max-w-sm">
-                    Only administrators can create workspaces. Please contact your system administrator or accept an invitation.
-                  </p>
-                </div>
-              )}
+              <div className="flex flex-col items-center justify-center gap-4 p-6 bg-stone-800 rounded-lg text-center">
+                <Building2 className="h-12 w-12 text-primary" />
+                <p className="text-lg font-medium">Start collaborating with your team</p>
+                <p className="text-muted-foreground max-w-sm">
+                  Create a workspace to share updates, track tasks, and collaborate with your team members.
+                </p>
+                <Button className="mt-2" asChild>
+                  <Link href="/create-workspace">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create a Workspace
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -143,7 +130,7 @@ export default async function WelcomePage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center gap-4 p-6 bg-gray-50 dark:bg-gray-900 rounded-lg text-center">
+                <div className="flex flex-col items-center justify-center gap-4 p-6 bg-stone-800 rounded-lg text-center">
                   <Mail className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No pending invitations</p>
                   <p className="text-muted-foreground max-w-sm">

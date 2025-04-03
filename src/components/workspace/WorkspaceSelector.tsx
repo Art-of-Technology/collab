@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { PlusCircle, ChevronDown, Building2, Settings, UserPlus, Lock } from 'lucide-react';
+import { PlusCircle, ChevronDown, Building2, Settings, UserPlus } from 'lucide-react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { Button } from '@/components/ui/button';
 import { useSession } from 'next-auth/react';
@@ -30,7 +30,7 @@ const WorkspaceSelector = () => {
   const { currentWorkspace, workspaces, switchWorkspace, isLoading } = useWorkspace();
   const { data: session } = useSession();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  
+
   const isAdmin = session?.user?.role === 'admin';
   const isWorkspaceOwner = (currentWorkspace as WorkspaceWithOwner)?.ownerId === session?.user?.id;
   const canManageWorkspace = isAdmin || isWorkspaceOwner;
@@ -51,9 +51,9 @@ const WorkspaceSelector = () => {
           <div className="flex items-center gap-2 truncate">
             {currentWorkspace.logoUrl ? (
               <div className="relative h-5 w-5 rounded-sm overflow-hidden">
-                <Image 
-                  src={currentWorkspace.logoUrl} 
-                  alt={currentWorkspace.name} 
+                <Image
+                  src={currentWorkspace.logoUrl}
+                  alt={currentWorkspace.name}
                   fill
                   sizes="20px"
                   className="object-contain"
@@ -71,7 +71,7 @@ const WorkspaceSelector = () => {
         <DropdownMenuLabel>Your workspaces</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {workspaces.map((workspace) => (
-          <DropdownMenuItem 
+          <DropdownMenuItem
             key={workspace.id}
             className={`cursor-pointer ${workspace.id === currentWorkspace.id ? 'bg-accent' : ''}`}
             onClick={() => {
@@ -84,9 +84,9 @@ const WorkspaceSelector = () => {
             <div className="flex items-center gap-2 w-full">
               {workspace.logoUrl ? (
                 <div className="relative h-5 w-5 rounded-sm overflow-hidden">
-                  <Image 
-                    src={workspace.logoUrl} 
-                    alt={workspace.name} 
+                  <Image
+                    src={workspace.logoUrl}
+                    alt={workspace.name}
                     fill
                     sizes="20px"
                     className="object-contain"
@@ -100,30 +100,14 @@ const WorkspaceSelector = () => {
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        
-        {isAdmin ? (
-          <Link href="/create-workspace">
-            <DropdownMenuItem onClick={() => setDropdownOpen(false)} className="cursor-pointer">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              <span>Create new workspace</span>
-            </DropdownMenuItem>
-          </Link>
-        ) : (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="px-2 py-1.5 text-sm opacity-50 flex items-center cursor-not-allowed">
-                  <Lock className="mr-2 h-4 w-4" />
-                  <span>Create new workspace</span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Only admins can create workspaces</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-        
+
+        <Link href="/create-workspace">
+          <DropdownMenuItem onClick={() => setDropdownOpen(false)} className="cursor-pointer">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            <span>Create new workspace</span>
+          </DropdownMenuItem>
+        </Link>
+
         {canManageWorkspace ? (
           <Link href={`/workspaces/${currentWorkspace.id}`}>
             <DropdownMenuItem onClick={() => setDropdownOpen(false)} className="cursor-pointer">
@@ -146,7 +130,7 @@ const WorkspaceSelector = () => {
             </Tooltip>
           </TooltipProvider>
         )}
-        
+
         <Link href={`/workspaces`}>
           <DropdownMenuItem onClick={() => setDropdownOpen(false)} className="cursor-pointer">
             <UserPlus className="mr-2 h-4 w-4" />
