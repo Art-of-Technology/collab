@@ -42,85 +42,152 @@ export async function GET(req: NextRequest) {
     }
 
     const { status: validatedStatus, orderBy: validatedOrderBy, page = 1, limit = 10 } = validated.data;
-    const skip = (page - 1) * limit;
-
+    
     // Build the filter
     const where = validatedStatus && validatedStatus !== "all"
       ? { status: validatedStatus }
       : {};
 
-    // Build the sort order
+    // Build the sort order for database queries
     let orderByClause: any = { createdAt: "desc" };
     if (validatedOrderBy === "oldest") {
       orderByClause = { createdAt: "asc" };
     }
-
-    // Fetch feature requests
-    const totalCount = await prisma.featureRequest.count({ where });
     
-    const featureRequests = await prisma.featureRequest.findMany({
-      where,
-      orderBy: orderByClause,
-      skip,
-      take: limit,
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-        _count: {
-          select: {
-            votes: {
-              where: { value: 1 },
+    // For vote-based sorting, we need to fetch all matching records first
+    // then sort them by votes, and then apply pagination
+    if (validatedOrderBy === "most_votes" || validatedOrderBy === "least_votes") {
+      // Count total matching records for pagination info
+      const totalCount = await prisma.featureRequest.count({ where });
+      
+      // Fetch all feature requests that match the filter
+      const allFeatureRequests = await prisma.featureRequest.findMany({
+        where,
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
             },
-            comments: true,
+          },
+          _count: {
+            select: {
+              votes: {
+                where: { value: 1 },
+              },
+              comments: true,
+            },
           },
         },
-      },
-    });
-
-    // Calculate vote score and format response
-    const formattedFeatureRequests = await Promise.all(
-      featureRequests.map(async (request: any) => {
-        // Get upvotes and downvotes
-        const upvotes = await prisma.featureVote.count({
-          where: { featureRequestId: request.id, value: 1 },
-        });
-        
-        const downvotes = await prisma.featureVote.count({
-          where: { featureRequestId: request.id, value: -1 },
-        });
-        
-        const voteScore = upvotes - downvotes;
-        
-        return {
-          ...request,
-          voteScore,
-          upvotes,
-          downvotes,
-        };
-      })
-    );
-
-    // Sort by votes if needed
-    if (validatedOrderBy === "most_votes") {
-      formattedFeatureRequests.sort((a: any, b: any) => b.voteScore - a.voteScore);
-    } else if (validatedOrderBy === "least_votes") {
-      formattedFeatureRequests.sort((a: any, b: any) => a.voteScore - b.voteScore);
+      });
+      
+      // Calculate vote score for each request
+      const formattedFeatureRequests = await Promise.all(
+        allFeatureRequests.map(async (request: any) => {
+          // Get upvotes and downvotes
+          const upvotes = await prisma.featureVote.count({
+            where: { featureRequestId: request.id, value: 1 },
+          });
+          
+          const downvotes = await prisma.featureVote.count({
+            where: { featureRequestId: request.id, value: -1 },
+          });
+          
+          const voteScore = upvotes - downvotes;
+          
+          return {
+            ...request,
+            voteScore,
+            upvotes,
+            downvotes,
+          };
+        })
+      );
+      
+      // Sort by votes
+      if (validatedOrderBy === "most_votes") {
+        formattedFeatureRequests.sort((a: any, b: any) => b.voteScore - a.voteScore);
+      } else {
+        formattedFeatureRequests.sort((a: any, b: any) => a.voteScore - b.voteScore);
+      }
+      
+      // Apply pagination after sorting
+      const skip = (page - 1) * limit;
+      const paginatedResults = formattedFeatureRequests.slice(skip, skip + limit);
+      
+      return NextResponse.json({
+        featureRequests: paginatedResults,
+        pagination: {
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / limit),
+          totalCount,
+        },
+      });
+    } 
+    // For date-based sorting, we can use the database's built-in pagination
+    else {
+      const skip = (page - 1) * limit;
+      const totalCount = await prisma.featureRequest.count({ where });
+      
+      const featureRequests = await prisma.featureRequest.findMany({
+        where,
+        orderBy: orderByClause,
+        skip,
+        take: limit,
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          _count: {
+            select: {
+              votes: {
+                where: { value: 1 },
+              },
+              comments: true,
+            },
+          },
+        },
+      });
+      
+      // Calculate vote score and format response
+      const formattedFeatureRequests = await Promise.all(
+        featureRequests.map(async (request: any) => {
+          // Get upvotes and downvotes
+          const upvotes = await prisma.featureVote.count({
+            where: { featureRequestId: request.id, value: 1 },
+          });
+          
+          const downvotes = await prisma.featureVote.count({
+            where: { featureRequestId: request.id, value: -1 },
+          });
+          
+          const voteScore = upvotes - downvotes;
+          
+          return {
+            ...request,
+            voteScore,
+            upvotes,
+            downvotes,
+          };
+        })
+      );
+      
+      return NextResponse.json({
+        featureRequests: formattedFeatureRequests,
+        pagination: {
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / limit),
+          totalCount,
+        },
+      });
     }
-
-    return NextResponse.json({
-      featureRequests: formattedFeatureRequests,
-      pagination: {
-        page,
-        limit,
-        totalPages: Math.ceil(totalCount / limit),
-        totalCount,
-      },
-    });
   } catch (error) {
     console.error("Error fetching feature requests:", error);
     return NextResponse.json(
