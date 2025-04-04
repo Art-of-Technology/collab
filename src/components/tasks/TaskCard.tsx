@@ -3,9 +3,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageSquare, Paperclip } from "lucide-react";
+import { MessageSquare, Paperclip, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
 import { useTaskModal } from "@/context/TaskModalContext";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import React from "react";
 
 export interface TaskCardProps {
   id: string;
@@ -49,6 +50,33 @@ export default function TaskCard({
     }
   };
 
+  // Get type badge with icon
+  const getTypeBadge = (type: string) => {
+    // Ensure consistent uppercase formatting for types
+    const normalizedType = type?.toUpperCase() || "TASK";
+    
+    const typeIcons: Record<string, React.ReactNode> = {
+      "TASK": <CheckSquare className="h-3 w-3 mr-1" />,
+      "BUG": <Bug className="h-3 w-3 mr-1" />,
+      "FEATURE": <Sparkles className="h-3 w-3 mr-1" />,
+      "IMPROVEMENT": <TrendingUp className="h-3 w-3 mr-1" />,
+    };
+
+    const typeColors: Record<string, string> = {
+      "TASK": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      "BUG": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      "FEATURE": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      "IMPROVEMENT": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+    };
+    
+    return (
+      <Badge className={`${typeColors[normalizedType] || "bg-gray-100 text-gray-800"} px-1.5 py-0.5 flex items-center text-xs`}>
+        {typeIcons[normalizedType] || <CheckSquare className="h-3 w-3 mr-1" />}
+        <span>{normalizedType}</span>
+      </Badge>
+    );
+  };
+
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     openTaskModal(id);
@@ -60,9 +88,7 @@ export default function TaskCard({
         <CardContent className="p-3">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Badge variant="outline" className="capitalize">
-                {type}
-              </Badge>
+              {getTypeBadge(type)}
               <div className={`h-2 w-2 rounded-full ${getPriorityColor(priority)}`} />
             </div>
             

@@ -21,7 +21,8 @@ export async function PATCH(
       priority, 
       status, 
       dueDate, 
-      assigneeId 
+      assigneeId,
+      type 
     } = await request.json();
 
     // Find the task to check workspace access and get current values
@@ -58,7 +59,7 @@ export async function PATCH(
       const column = await prisma.taskColumn.findFirst({
         where: {
           name: status,
-          taskBoardId: task.taskBoardId,
+          taskBoardId: task.taskBoardId || undefined,
         },
       });
       
@@ -74,6 +75,7 @@ export async function PATCH(
         title: title !== undefined ? title : undefined,
         description: description !== undefined ? description : undefined,
         priority: priority !== undefined ? priority : undefined,
+        type: type !== undefined ? type : undefined,
         columnId: columnId,
         dueDate: dueDate !== undefined ? dueDate : undefined,
         assigneeId: assigneeId !== undefined ? assigneeId || null : undefined,

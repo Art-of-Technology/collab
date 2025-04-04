@@ -15,9 +15,11 @@ interface FeatureRequestPageProps {
 }
 
 export async function generateMetadata({ params }: FeatureRequestPageProps) {
+  const _params = await params;
+  const { id } = _params;
   try {
     const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { author: true },
     });
 

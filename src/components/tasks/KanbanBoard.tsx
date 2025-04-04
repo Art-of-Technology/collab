@@ -6,12 +6,15 @@ import BoardSettings from "@/components/tasks/BoardSettings";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
 import { Button } from "@/components/ui/button";
-import { Cog } from "lucide-react";
+import { Cog, Lock } from "lucide-react";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function KanbanBoard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { toast } = useToast();
   const { selectedBoard, refreshBoards } = useTasks();
+  const { canManageBoard, isLoading: permissionsLoading } = useWorkspacePermissions();
 
   if (!selectedBoard) {
     return (
@@ -72,24 +75,34 @@ export default function KanbanBoard() {
             <p className="text-muted-foreground">{selectedBoard.description}</p>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsSettingsOpen(true)}
-        >
-          <Cog className="h-4 w-4 mr-1" />
-          Settings
-        </Button>
+        
+        {permissionsLoading ? (
+          <Button variant="outline" size="sm" disabled>
+            <Cog className="h-4 w-4 mr-1 animate-spin" />
+            Loading...
+          </Button>
+        ) : canManageBoard && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsSettingsOpen(true)}
+          >
+            <Cog className="h-4 w-4 mr-1" />
+            Settings
+          </Button>
+        )}
       </div>
 
       <KanbanView />
 
-      <BoardSettings
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        board={selectedBoard}
-        onSubmit={handleBoardSettingsSubmit}
-      />
+      {canManageBoard && (
+        <BoardSettings
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          board={selectedBoard}
+          onSubmit={handleBoardSettingsSubmit}
+        />
+      )}
     </div>
   );
 } 

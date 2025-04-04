@@ -40,17 +40,35 @@ export async function POST(
       );
     }
 
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    // Check if user has admin rights in the workspace
+    const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
         userId: currentUser.id,
         workspaceId: board.workspaceId,
       },
     });
 
-    if (!hasAccess) {
+    if (!userWorkspaceMembership) {
       return NextResponse.json(
         { error: "You don't have access to this board" },
+        { status: 403 }
+      );
+    }
+
+    // Check if the user is the workspace owner
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: board.workspaceId },
+      select: { ownerId: true },
+    });
+
+    const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
+    const isWorkspaceAdmin = userWorkspaceMembership.role === 'admin' || userWorkspaceMembership.role === 'owner';
+    const isGlobalAdmin = currentUser.role === 'admin';
+
+    // Only allow workspace admins, workspace owners, or global admins to create columns
+    if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {
+      return NextResponse.json(
+        { error: "You don't have permission to create columns in this board" },
         { status: 403 }
       );
     }

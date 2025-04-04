@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TaskCard from "@/components/tasks/TaskCard";
-import { Loader2, Plus, MoreVertical } from "lucide-react";
+import { Loader2, Plus, MoreVertical, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
 import { Button } from "@/components/ui/button";
@@ -24,17 +24,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function KanbanView() {
   const [loading, setLoading] = useState(false);
   const [isColumnDialogOpen, setIsColumnDialogOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [newTaskColumnId, setNewTaskColumnId] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { toast } = useToast();
   const { selectedBoard, selectedBoardId, refreshBoards } = useTasks();
   const [localBoardState, setLocalBoardState] = useState(selectedBoard);
   const isDraggingRef = useRef(false);
   const pendingUpdateRef = useRef(false);
+  const { canManageBoard, isLoading: permissionsLoading } = useWorkspacePermissions();
 
   // Initialize local state when selected board changes, but not during drag operations
   useEffect(() => {
@@ -56,17 +62,25 @@ export default function KanbanView() {
       <div className="text-center py-16">
         <h3 className="text-xl font-medium">No columns found</h3>
         <p className="text-muted-foreground">This board doesn&apos;t have any columns yet.</p>
-        <Button
-          className="mt-4"
-          onClick={() => {
-            setEditingColumnId(null);
-            setNewColumnName("");
-            setIsColumnDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Column
-        </Button>
+        
+        {permissionsLoading ? (
+          <Button className="mt-4" disabled>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Loading...
+          </Button>
+        ) : canManageBoard && (
+          <Button
+            className="mt-4"
+            onClick={() => {
+              setEditingColumnId(null);
+              setNewColumnName("");
+              setIsColumnDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Column
+          </Button>
+        )}
       </div>
     );
   }
@@ -359,24 +373,115 @@ export default function KanbanView() {
     }
   };
 
+  // Handle task creation
+  const handleCreateTask = async (columnId: string) => {
+    if (!newTaskTitle.trim()) {
+      return;
+    }
+    
+    setIsCreatingTask(true);
+    try {
+      // Get the current workspace ID from the board
+      const response = await fetch(`/api/tasks/boards/${selectedBoardId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch board details");
+      }
+      const boardData = await response.json();
+      const workspaceId = boardData.workspaceId;
+      
+      // Create a temporary task for optimistic UI
+      const tempId = `temp-${Date.now()}`;
+      const tempTask = {
+        id: tempId,
+        title: newTaskTitle,
+        position: (localBoardState.columns?.find(col => col.id === columnId)?.tasks?.length || 0),
+        type: "task",
+        priority: "medium",
+      };
+      
+      // Update local state with the new task
+      const updatedColumns = localBoardState.columns?.map(col => {
+        if (col.id === columnId) {
+          return {
+            ...col,
+            tasks: [...(col.tasks || []), tempTask],
+          };
+        }
+        return col;
+      });
+      
+      setLocalBoardState({
+        ...localBoardState,
+        columns: updatedColumns || [],
+      });
+      
+      // Send task creation request to server
+      const createResponse = await fetch(`/api/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTaskTitle,
+          columnId,
+          taskBoardId: selectedBoardId,
+          workspaceId,
+          type: "task",
+          priority: "medium",
+        }),
+      });
+      
+      if (!createResponse.ok) {
+        throw new Error("Failed to create task");
+      }
+      
+      toast({
+        title: "Task created",
+        description: "New task has been created successfully",
+      });
+      
+      // Refresh board data
+      await refreshBoards();
+    } catch (error) {
+      console.error("Error creating task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create task",
+        variant: "destructive",
+      });
+    } finally {
+      setNewTaskTitle("");
+      setNewTaskColumnId(null);
+      setIsCreatingTask(false);
+    }
+  };
+
   return (
     <>
-      <div className="flex justify-end mb-4">
-        <Button
-          variant="outline"
-          onClick={() => {
-            setEditingColumnId(null);
-            setNewColumnName("");
-            setIsColumnDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Column
-        </Button>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-md font-medium">Board Columns</h3>
+        
+        {permissionsLoading ? (
+          <Button size="sm" variant="outline" disabled>
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            Loading...
+          </Button>
+        ) : canManageBoard && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setEditingColumnId(null);
+              setNewColumnName("");
+              setIsColumnDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Column
+          </Button>
+        )}
       </div>
       
       <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
-        <Droppable droppableId="board" type="column" direction="horizontal">
+        <Droppable droppableId="columns" direction="horizontal" type="column">
           {(provided) => (
             <div
               className="flex gap-4 overflow-x-auto pb-4 scrollbar-container"
@@ -389,7 +494,12 @@ export default function KanbanView() {
               }}
             >
               {(localBoardState.columns || []).sort((a, b) => a.order - b.order).map((column, index) => (
-                <Draggable key={column.id} draggableId={column.id} index={index}>
+                <Draggable 
+                  key={column.id} 
+                  draggableId={column.id} 
+                  index={index}
+                  isDragDisabled={!canManageBoard}
+                >
                   {(provided) => (
                     <div
                       ref={provided.innerRef}
@@ -397,7 +507,7 @@ export default function KanbanView() {
                       className="flex-shrink-0 w-[300px]"
                     >
                       <Card className="border-t-4" style={{ borderTopColor: column.color || undefined }}>
-                        <CardHeader className="px-3 py-2" {...provided.dragHandleProps}>
+                        <CardHeader className="px-3 py-2" {...(canManageBoard ? provided.dragHandleProps : {})}>
                           <div className="flex justify-between items-center">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
                               {column.name}
@@ -405,34 +515,37 @@ export default function KanbanView() {
                                 {column.tasks?.length || 0}
                               </span>
                             </CardTitle>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => {
-                                    setEditingColumnId(column.id);
-                                    setNewColumnName(column.name);
-                                    setIsColumnDialogOpen(true);
-                                  }}
-                                >
-                                  Edit Column
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => handleDeleteColumn(column.id)}
-                                >
-                                  Delete Column
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            
+                            {canManageBoard ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem 
+                                    onClick={() => {
+                                      setEditingColumnId(column.id);
+                                      setNewColumnName(column.name);
+                                      setIsColumnDialogOpen(true);
+                                    }}
+                                  >
+                                    Edit Column
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => handleDeleteColumn(column.id)}
+                                  >
+                                    Delete Column
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : null}
                           </div>
                         </CardHeader>
-                        <CardContent className="px-2 pb-2 space-y-2 max-h-[60vh] overflow-y-auto">
+                        <CardContent className="px-2 pb-2 space-y-2 max-h-[60vh] overflow-y-auto relative group">
                           <Droppable droppableId={column.id} type="task">
                             {(provided, snapshot) => (
                               <div
@@ -475,6 +588,62 @@ export default function KanbanView() {
                                   </div>
                                 )}
                                 {provided.placeholder}
+
+                                {/* Quick create task input */}
+                                {newTaskColumnId === column.id ? (
+                                  <form 
+                                    className="mt-2 bg-background border rounded-md overflow-hidden"
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      handleCreateTask(column.id);
+                                    }}
+                                  >
+                                    <Input
+                                      autoFocus
+                                      placeholder="What needs to be done?"
+                                      value={newTaskTitle}
+                                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                                      disabled={isCreatingTask}
+                                      className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                    />
+                                    <div className="flex justify-between p-2 bg-muted/20">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        type="button"
+                                        onClick={() => {
+                                          setNewTaskColumnId(null);
+                                          setNewTaskTitle("");
+                                        }}
+                                      >
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        type="submit"
+                                        disabled={!newTaskTitle.trim() || isCreatingTask}
+                                      >
+                                        {isCreatingTask ? (
+                                          <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Creating...
+                                          </>
+                                        ) : (
+                                          "Create"
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <Button
+                                    onClick={() => setNewTaskColumnId(column.id)}
+                                    className="w-full mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                    variant="ghost"
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Create task
+                                  </Button>
+                                )}
                               </div>
                             )}
                           </Droppable>
@@ -490,51 +659,53 @@ export default function KanbanView() {
         </Droppable>
       </DragDropContext>
       
-      {/* Column Dialog */}
-      <Dialog open={isColumnDialogOpen} onOpenChange={setIsColumnDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>
-              {editingColumnId ? "Edit Column" : "Add New Column"}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="columnName">Column Name</Label>
-              <Input
-                id="columnName"
-                placeholder="Enter column name"
-                value={newColumnName}
-                onChange={(e) => setNewColumnName(e.target.value)}
-              />
+      {/* Column Dialog - Only shown for admins/owners */}
+      {canManageBoard && (
+        <Dialog open={isColumnDialogOpen} onOpenChange={setIsColumnDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingColumnId ? "Edit Column" : "Add New Column"}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="columnName">Column Name</Label>
+                <Input
+                  id="columnName"
+                  placeholder="Enter column name"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setNewColumnName("");
-                setEditingColumnId(null);
-                setIsColumnDialogOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleColumnSubmit} disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setNewColumnName("");
+                  setEditingColumnId(null);
+                  setIsColumnDialogOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleColumnSubmit} disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 } 
