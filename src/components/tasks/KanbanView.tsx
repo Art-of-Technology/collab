@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TaskCard from "@/components/tasks/TaskCard";
-import { Loader2, Plus, MoreVertical, Lock } from "lucide-react";
+import { Loader2, Plus, MoreVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function KanbanView() {
   const [loading, setLoading] = useState(false);

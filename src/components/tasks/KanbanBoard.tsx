@@ -6,9 +6,8 @@ import BoardSettings from "@/components/tasks/BoardSettings";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
 import { Button } from "@/components/ui/button";
-import { Cog, Lock } from "lucide-react";
+import { Cog } from "lucide-react";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function KanbanBoard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

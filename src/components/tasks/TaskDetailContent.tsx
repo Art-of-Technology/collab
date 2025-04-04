@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Loader2, Check, X, Edit, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp, Share as ShareIcon, ChevronDown } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -23,14 +23,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import React from "react";
-import { 
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from "@/components/ui/command";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 
 // Format date helper
@@ -125,7 +117,7 @@ const getStatusBadge = (status: string) => {
     "CANCELLED": "bg-red-500",
     "BLOCKED": "bg-yellow-500"
   };
-  
+
   return (
     <Badge className={`${statusColors[status] || "bg-slate-500"} text-white`}>
       {status}
@@ -141,14 +133,14 @@ const getPriorityBadge = (priority: string) => {
     "HIGH": "bg-orange-100 text-orange-800",
     "CRITICAL": "bg-red-100 text-red-800"
   };
-  
+
   const priorityIcons: Record<string, string> = {
     "LOW": "↓",
     "MEDIUM": "→",
     "HIGH": "↑",
     "CRITICAL": "‼️"
   };
-  
+
   return (
     <Badge className={priorityColors[priority] || "bg-slate-100 text-slate-800"}>
       {priorityIcons[priority]} {priority}
@@ -156,11 +148,11 @@ const getPriorityBadge = (priority: string) => {
   );
 };
 
-export function TaskDetailContent({ 
-  task, 
-  isLoading, 
-  error, 
-  onRefresh, 
+export function TaskDetailContent({
+  task,
+  isLoading,
+  error,
+  onRefresh,
   showHeader = true,
   onClose
 }: TaskDetailContentProps) {
@@ -170,26 +162,21 @@ export function TaskDetailContent({
   const [editingDescription, setEditingDescription] = useState(false);
   const [savingDescription, setSavingDescription] = useState(false);
   const [description, setDescription] = useState(task?.description || "");
-  const [descriptionHtml, setDescriptionHtml] = useState("");
   const [savingAssignee, setSavingAssignee] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingPriority, setSavingPriority] = useState(false);
   const [savingType, setSavingType] = useState(false);
   const [savingDueDate, setSavingDueDate] = useState(false);
   const [dueDate, setDueDate] = useState<Date | undefined>(task?.dueDate);
-  const [users, setUsers] = useState<User[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
   const { toast } = useToast();
   const router = useRouter();
   const { refreshBoards } = useTasks();
-  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
-  const [assigneeSelectOpen, setAssigneeSelectOpen] = useState(false);
-  
-  const handleDescriptionChange = useCallback((md: string, html: string) => {
+
+  const handleDescriptionChange = useCallback((md: string) => {
     setDescription(md);
-    setDescriptionHtml(html);
   }, []);
-  
+
   const saveTaskField = async (field: string, value: any) => {
     try {
       const response = await fetch(`/api/tasks/${task?.id}/edit`, {
@@ -199,22 +186,22 @@ export function TaskDetailContent({
         },
         body: JSON.stringify({ [field]: value }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`Failed to update ${field}`);
       }
-      
+
       toast({
         title: 'Updated',
         description: `Task ${field} updated successfully`,
       });
-      
+
       onRefresh();
-      
+
       // Refresh the page to reflect changes in all views
       await refreshBoards();
       router.refresh();
-      
+
       return true;
     } catch (error) {
       console.error(`Error updating ${field}:`, error);
@@ -226,7 +213,7 @@ export function TaskDetailContent({
       return false;
     }
   };
-  
+
   // Save title changes
   const handleSaveTitle = async () => {
     if (!title.trim()) {
@@ -237,7 +224,7 @@ export function TaskDetailContent({
       });
       return;
     }
-    
+
     setSavingTitle(true);
     try {
       const success = await saveTaskField('title', title);
@@ -248,13 +235,13 @@ export function TaskDetailContent({
       setSavingTitle(false);
     }
   };
-  
+
   // Cancel title editing
   const handleCancelTitle = () => {
     setTitle(task?.title || "");
     setEditingTitle(false);
   };
-  
+
   // Save description changes
   const handleSaveDescription = async () => {
     setSavingDescription(true);
@@ -267,13 +254,13 @@ export function TaskDetailContent({
       setSavingDescription(false);
     }
   };
-  
+
   // Cancel description editing
   const handleCancelDescription = () => {
     setDescription(task?.description || "");
     setEditingDescription(false);
   };
-  
+
   // Handle assignee change
   const handleAssigneeChange = async (userId: string) => {
     setSavingAssignee(true);
@@ -283,7 +270,7 @@ export function TaskDetailContent({
       setSavingAssignee(false);
     }
   };
-  
+
   // Handle status change
   const handleStatusChange = async (status: string) => {
     setSavingStatus(true);
@@ -293,7 +280,7 @@ export function TaskDetailContent({
       setSavingStatus(false);
     }
   };
-  
+
   // Handle priority change
   const handlePriorityChange = async (priority: string) => {
     setSavingPriority(true);
@@ -303,7 +290,7 @@ export function TaskDetailContent({
       setSavingPriority(false);
     }
   };
-  
+
   // Handle type change
   const handleTypeChange = async (type: string) => {
     setSavingType(true);
@@ -313,7 +300,7 @@ export function TaskDetailContent({
       setSavingType(false);
     }
   };
-  
+
   // Handle due date change
   const handleDueDateChange = async (date: Date | undefined) => {
     setDueDate(date);
@@ -324,26 +311,26 @@ export function TaskDetailContent({
       setSavingDueDate(false);
     }
   };
-  
+
   // Get type badge
   const getTypeBadge = (type: string) => {
     // Ensure consistent uppercase formatting for types
     const normalizedType = type?.toUpperCase() || "TASK";
-    
+
     const typeColors: Record<string, string> = {
       "TASK": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
       "BUG": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
       "FEATURE": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
       "IMPROVEMENT": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
     };
-    
+
     const typeIcons: Record<string, React.ReactNode> = {
       "TASK": <CheckSquare className="h-3.5 w-3.5 mr-1" />,
       "BUG": <Bug className="h-3.5 w-3.5 mr-1" />,
       "FEATURE": <Sparkles className="h-3.5 w-3.5 mr-1" />,
       "IMPROVEMENT": <TrendingUp className="h-3.5 w-3.5 mr-1" />,
     };
-    
+
     return (
       <Badge className={`${typeColors[normalizedType] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"} px-2 py-1 flex items-center`}>
         {typeIcons[normalizedType] || <CheckSquare className="h-3.5 w-3.5 mr-1" />}
@@ -351,11 +338,11 @@ export function TaskDetailContent({
       </Badge>
     );
   };
-  
+
   // Load statuses and users when task details are viewed
   const loadFieldOptions = useCallback(async () => {
     if (!task) return;
-    
+
     try {
       // Fetch statuses (columns) for the task's board
       const columnsResponse = await fetch(`/api/boards/${task.taskBoard?.id}/columns`);
@@ -363,28 +350,16 @@ export function TaskDetailContent({
         const columnsData = await columnsResponse.json();
         setStatuses(columnsData.map((col: any) => col.name));
       }
-      
-      // Fetch workspace members for assignee options
-      const membersResponse = await fetch(`/api/workspaces/${task.workspaceId}/members`);
-      if (membersResponse.ok) {
-        const membersData = await membersResponse.json();
-        setUsers(membersData.map((member: any) => ({
-          id: member.user.id,
-          name: member.user.name,
-          image: member.user.image,
-          useCustomAvatar: member.user.useCustomAvatar || false
-        })));
-      }
     } catch (error) {
       console.error("Error loading field options:", error);
     }
   }, [task]);
-  
+
   // Load field options on first render
   useEffect(() => {
     loadFieldOptions();
   }, [loadFieldOptions]);
-  
+
   // Update state when task changes
   useEffect(() => {
     if (task) {
@@ -393,13 +368,7 @@ export function TaskDetailContent({
       setDueDate(task.dueDate);
     }
   }, [task]);
-  
-  // Filter users based on search query
-  const filteredUsers = users.filter(user => 
-    !assigneeSearchQuery || 
-    (user.name?.toLowerCase().includes(assigneeSearchQuery.toLowerCase()))
-  );
-  
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -407,7 +376,7 @@ export function TaskDetailContent({
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="text-center py-12">
@@ -418,7 +387,7 @@ export function TaskDetailContent({
       </div>
     );
   }
-  
+
   if (!task) {
     return (
       <div className="text-center py-12">
@@ -454,9 +423,9 @@ export function TaskDetailContent({
                     placeholder="Task title"
                   />
                   <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={handleCancelTitle}
                       disabled={savingTitle}
                       className="h-8"
@@ -464,8 +433,8 @@ export function TaskDetailContent({
                       <X className="h-4 w-4 mr-1" />
                       Cancel
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={handleSaveTitle}
                       disabled={savingTitle}
                       className="h-8"
@@ -485,7 +454,7 @@ export function TaskDetailContent({
                   </div>
                 </div>
               ) : (
-                <div 
+                <div
                   className="group relative cursor-pointer"
                   onClick={() => setEditingTitle(true)}
                 >
@@ -495,7 +464,7 @@ export function TaskDetailContent({
                   <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
                 </div>
               )}
-              
+
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <Badge variant="outline" className="font-mono px-2">
                   {task.issueKey}
@@ -508,9 +477,9 @@ export function TaskDetailContent({
                       <CustomAvatar user={task.reporter} size="sm" />
                     ) : (
                       <Avatar className="h-5 w-5">
-                        <AvatarImage 
-                          src={task.reporter?.image || ""} 
-                          alt={task.reporter?.name || ""} 
+                        <AvatarImage
+                          src={task.reporter?.image || ""}
+                          alt={task.reporter?.name || ""}
                         />
                         <AvatarFallback className="text-[10px]">
                           {task.reporter?.name?.charAt(0) || "U"}
@@ -522,7 +491,7 @@ export function TaskDetailContent({
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               {savingType ? (
                 <div className="flex items-center h-9 px-3">
@@ -555,22 +524,22 @@ export function TaskDetailContent({
                   </SelectContent>
                 </Select>
               )}
-              
+
               <ShareButton taskId={task.id} issueKey={task.issueKey || ""} />
             </div>
           </div>
         </div>
       )}
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-6">
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between py-3 bg-muted/30 border-b">
               <CardTitle className="text-md">Description</CardTitle>
               {!editingDescription && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setEditingDescription(true)}
                   className="h-8 w-8 p-0 rounded-full"
                 >
@@ -590,17 +559,17 @@ export function TaskDetailContent({
                       maxHeight="400px"
                     />
                     <div className="flex justify-end gap-2 mt-4">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleCancelDescription}
                         disabled={savingDescription}
                       >
                         <X className="h-4 w-4 mr-1" />
                         Cancel
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={handleSaveDescription}
                         disabled={savingDescription}
                       >
@@ -619,7 +588,7 @@ export function TaskDetailContent({
                     </div>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
                     onClick={() => setEditingDescription(true)}
                   >
@@ -638,13 +607,13 @@ export function TaskDetailContent({
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="py-3 bg-muted/30 border-b">
               <CardTitle className="text-md">Comments</CardTitle>
             </CardHeader>
             <CardContent className="relative z-0 p-4">
-              <TaskCommentsList 
+              <TaskCommentsList
                 taskId={task.id}
                 comments={task.comments}
                 currentUserId={task.reporter?.id || ""}
@@ -654,7 +623,7 @@ export function TaskDetailContent({
             </CardContent>
           </Card>
         </div>
-        
+
         <div className="space-y-6">
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="py-3 bg-muted/30 border-b">
@@ -686,7 +655,7 @@ export function TaskDetailContent({
                   </Select>
                 )}
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium mb-1">Priority</p>
                 {savingPriority ? (
@@ -711,7 +680,7 @@ export function TaskDetailContent({
                   </Select>
                 )}
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium mb-1">Assignee</p>
                 {savingAssignee ? (
@@ -727,7 +696,7 @@ export function TaskDetailContent({
                   />
                 )}
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium mb-1">Reporter</p>
                 <div className="flex items-center h-9 px-3 text-sm border rounded-md">
@@ -737,9 +706,9 @@ export function TaskDetailContent({
                         <CustomAvatar user={task.reporter} size="sm" />
                       ) : (
                         <Avatar className="h-5 w-5">
-                          <AvatarImage 
-                            src={task.reporter.image || ""} 
-                            alt={task.reporter.name || ""} 
+                          <AvatarImage
+                            src={task.reporter.image || ""}
+                            alt={task.reporter.name || ""}
                           />
                           <AvatarFallback className="text-[10px]">
                             {task.reporter.name?.charAt(0) || "U"}
@@ -753,7 +722,7 @@ export function TaskDetailContent({
                   )}
                 </div>
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium mb-1">Due Date</p>
                 {savingDueDate ? (
@@ -788,7 +757,7 @@ export function TaskDetailContent({
               </div>
             </CardContent>
           </Card>
-          
+
           {task.attachments && task.attachments.length > 0 && (
             <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
               <CardHeader className="py-3 bg-muted/30 border-b">
@@ -798,9 +767,9 @@ export function TaskDetailContent({
                 <ul className="space-y-2">
                   {task.attachments.map((attachment) => (
                     <li key={attachment.id}>
-                      <Link 
-                        href={attachment.url} 
-                        target="_blank" 
+                      <Link
+                        href={attachment.url}
+                        target="_blank"
                         className="text-sm text-primary hover:underline flex items-center gap-1"
                       >
                         {attachment.name || "File"}

@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CalendarIcon, Loader2, CheckSquare, Bug, Sparkles, TrendingUp, ChevronDown } from "lucide-react";
+import { CalendarIcon, Loader2, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -40,16 +40,6 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { 
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from "@/components/ui/command";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import { BoardSelect } from "./selectors/BoardSelect";
 
@@ -107,9 +97,7 @@ export default function CreateTaskForm({
   postId,
 }: CreateTaskFormProps) {
   const { currentWorkspace } = useWorkspace();
-  const [boards, setBoards] = useState<Board[]>([]);
   const [columns, setColumns] = useState<Column[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
@@ -190,7 +178,6 @@ export default function CreateTaskForm({
       try {
         setIsLoading(true);
         // Clear existing state
-        setBoards([]);
         setColumns([]);
         
         const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`);
@@ -199,7 +186,6 @@ export default function CreateTaskForm({
         
         if (response.ok) {
           const data = await response.json();
-          setBoards(data);
           
           // Always set a board if available to prevent empty board selection
           if (data.length > 0 && isMounted) {
@@ -231,53 +217,6 @@ export default function CreateTaskForm({
     // Only run this effect when workspace, form, or dialog state changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWorkspace, isOpen, initialData?.taskBoardId]);
-
-  // Handle board change
-  const handleBoardChange = (boardId: string) => {
-    setColumns([]); // Clear columns first
-    form.setValue("taskBoardId", boardId);
-    form.setValue("columnId", null);
-    fetchColumns(boardId);
-  };
-
-  // Fetch workspace members for assignee selection
-  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
-  const [assigneeSelectOpen, setAssigneeSelectOpen] = useState(false);
-
-  useEffect(() => {
-    const fetchMembers = async () => {
-      if (!currentWorkspace) return;
-      
-      try {
-        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/members`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Create a map to deduplicate members by ID
-          const uniqueUsers = new Map();
-          data.forEach((member: any) => {
-            if (member.user) {
-              uniqueUsers.set(member.user.id, {
-                ...member.user,
-                useCustomAvatar: member.user.useCustomAvatar || false
-              });
-            }
-          });
-          setUsers(Array.from(uniqueUsers.values()));
-        }
-      } catch (error) {
-        console.error("Error fetching members:", error);
-      }
-    };
-
-    fetchMembers();
-  }, [currentWorkspace]);
-
-  // Filter users based on search query
-  const filteredUsers = users.filter(user => 
-    !assigneeSearchQuery || 
-    (user.name?.toLowerCase().includes(assigneeSearchQuery.toLowerCase()))
-  );
 
   // In the onSubmit function, handle HTML and markdown content
   const [descriptionMarkdown, setDescriptionMarkdown] = useState("");
