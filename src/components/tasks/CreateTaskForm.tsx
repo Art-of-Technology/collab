@@ -76,13 +76,6 @@ interface Column {
   name: string;
 }
 
-interface User {
-  id: string;
-  name: string;
-  image?: string;
-  useCustomAvatar?: boolean;
-}
-
 interface CreateTaskFormProps {
   isOpen: boolean;
   onClose: () => void;

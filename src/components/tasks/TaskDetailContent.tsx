@@ -54,14 +54,6 @@ export interface TaskAttachment {
   url: string;
 }
 
-// Define a User interface to fix type errors
-interface User {
-  id: string;
-  name: string | null;
-  image?: string | null;
-  useCustomAvatar?: boolean;
-}
-
 export interface Task {
   id: string;
   title: string;
