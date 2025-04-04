@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -40,6 +40,8 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { AssigneeSelect } from "./selectors/AssigneeSelect";
+import { BoardSelect } from "./selectors/BoardSelect";
 
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
@@ -51,7 +53,7 @@ const MarkdownEditor = memo(BaseMarkdownEditor);
 const taskFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  type: z.string().default("task"),
+  type: z.string().default("TASK"),
   priority: z.string().default("medium"),
   storyPoints: z.number().optional().nullable(),
   dueDate: z.date().optional().nullable(),
@@ -74,12 +76,6 @@ interface Column {
   name: string;
 }
 
-interface User {
-  id: string;
-  name: string;
-  image?: string;
-}
-
 interface CreateTaskFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -94,9 +90,7 @@ export default function CreateTaskForm({
   postId,
 }: CreateTaskFormProps) {
   const { currentWorkspace } = useWorkspace();
-  const [boards, setBoards] = useState<Board[]>([]);
   const [columns, setColumns] = useState<Column[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
@@ -111,7 +105,7 @@ export default function CreateTaskForm({
     defaultValues: {
       title: initialData?.title || "",
       description: initialData?.description || "",
-      type: initialData?.type || "task",
+      type: initialData?.type || "TASK",
       priority: initialData?.priority || "medium",
       storyPoints: initialData?.storyPoints || null,
       dueDate: initialData?.dueDate || null,
@@ -177,10 +171,7 @@ export default function CreateTaskForm({
       try {
         setIsLoading(true);
         // Clear existing state
-        setBoards([]);
         setColumns([]);
-        form.setValue("taskBoardId", "");
-        form.setValue("columnId", null);
         
         const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`);
         
@@ -188,14 +179,14 @@ export default function CreateTaskForm({
         
         if (response.ok) {
           const data = await response.json();
-          setBoards(data);
           
-          // Set the provided board ID or use the first available board
-          const boardToUse = initialData?.taskBoardId && data.some((b: Board) => b.id === initialData.taskBoardId) 
-            ? initialData.taskBoardId 
-            : data.length > 0 ? data[0].id : "";
-            
-          if (boardToUse && isMounted) {
+          // Always set a board if available to prevent empty board selection
+          if (data.length > 0 && isMounted) {
+            // Set the provided board ID or use the first available board
+            const boardToUse = initialData?.taskBoardId && data.some((b: Board) => b.id === initialData.taskBoardId) 
+              ? initialData.taskBoardId 
+              : data[0].id;
+              
             form.setValue("taskBoardId", boardToUse);
             fetchColumns(boardToUse);
           }
@@ -219,41 +210,6 @@ export default function CreateTaskForm({
     // Only run this effect when workspace, form, or dialog state changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWorkspace, isOpen, initialData?.taskBoardId]);
-
-  // Handle board change
-  const handleBoardChange = (boardId: string) => {
-    setColumns([]); // Clear columns first
-    form.setValue("taskBoardId", boardId);
-    form.setValue("columnId", null);
-    fetchColumns(boardId);
-  };
-
-  // Fetch workspace members for assignee selection
-  useEffect(() => {
-    const fetchMembers = async () => {
-      if (!currentWorkspace) return;
-      
-      try {
-        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/members`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Create a map to deduplicate members by ID
-          const uniqueUsers = new Map();
-          data.forEach((member: any) => {
-            if (member.user) {
-              uniqueUsers.set(member.user.id, member.user);
-            }
-          });
-          setUsers(Array.from(uniqueUsers.values()));
-        }
-      } catch (error) {
-        console.error("Error fetching members:", error);
-      }
-    };
-
-    fetchMembers();
-  }, [currentWorkspace]);
 
   // In the onSubmit function, handle HTML and markdown content
   const [descriptionMarkdown, setDescriptionMarkdown] = useState("");
@@ -427,14 +383,44 @@ export default function CreateTaskForm({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
+                          <SelectValue placeholder="Select type">
+                            {field.value && (
+                              <div className="flex items-center">
+                                {field.value === "TASK" && <CheckSquare className="h-3.5 w-3.5 mr-2 text-blue-600" />}
+                                {field.value === "BUG" && <Bug className="h-3.5 w-3.5 mr-2 text-red-600" />}
+                                {field.value === "FEATURE" && <Sparkles className="h-3.5 w-3.5 mr-2 text-green-600" />}
+                                {field.value === "IMPROVEMENT" && <TrendingUp className="h-3.5 w-3.5 mr-2 text-purple-600" />}
+                                {field.value}
+                              </div>
+                            )}
+                          </SelectValue>
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="task">Task</SelectItem>
-                        <SelectItem value="bug">Bug</SelectItem>
-                        <SelectItem value="feature">Feature</SelectItem>
-                        <SelectItem value="improvement">Improvement</SelectItem>
+                        <SelectItem value="TASK">
+                          <div className="flex items-center">
+                            <CheckSquare className="h-3.5 w-3.5 mr-2 text-blue-600" />
+                            TASK
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="BUG">
+                          <div className="flex items-center">
+                            <Bug className="h-3.5 w-3.5 mr-2 text-red-600" />
+                            BUG
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="FEATURE">
+                          <div className="flex items-center">
+                            <Sparkles className="h-3.5 w-3.5 mr-2 text-green-600" />
+                            FEATURE
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="IMPROVEMENT">
+                          <div className="flex items-center">
+                            <TrendingUp className="h-3.5 w-3.5 mr-2 text-purple-600" />
+                            IMPROVEMENT
+                          </div>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -475,26 +461,18 @@ export default function CreateTaskForm({
                 control={form.control}
                 name="assigneeId"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Assignee</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value || "unassigned"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Unassigned" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <AssigneeSelect
+                        value={field.value === "unassigned" ? null : field.value}
+                        onChange={(value) => {
+                          form.setValue("assigneeId", value);
+                        }}
+                        isLoading={isLoading}
+                        workspaceId={currentWorkspace?.id}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -544,56 +522,50 @@ export default function CreateTaskForm({
               <FormField
                 control={form.control}
                 name="taskBoardId"
-                render={({ field }) => (
+                render={({ field: boardField }) => (
                   <FormItem>
                     <FormLabel>Board</FormLabel>
-                    <Select
-                      onValueChange={handleBoardChange}
-                      defaultValue={field.value}
-                      disabled={isLoading}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select board" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {boards.map((board) => (
-                          <SelectItem key={board.id} value={board.id}>
-                            {board.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <BoardSelect
+                        boardValue={boardField.value}
+                        onBoardChange={(boardId) => {
+                          form.setValue("taskBoardId", boardId);
+                          form.setValue("columnId", null);
+                        }}
+                        disabled={isLoading}
+                        workspaceId={currentWorkspace?.id}
+                        showColumns={false}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
+              
               <FormField
                 control={form.control}
                 name="columnId"
-                render={({ field }) => (
+                render={({ field: columnField }) => (
                   <FormItem>
                     <FormLabel>Column</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || undefined}
-                      disabled={isLoading || columns.length === 0}
-                    >
-                      <FormControl>
+                    <FormControl>
+                      <Select
+                        value={columnField.value || undefined}
+                        onValueChange={columnField.onChange}
+                        disabled={isLoading || columns.length === 0}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select column" />
                         </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {columns.map((column) => (
-                          <SelectItem key={column.id} value={column.id}>
-                            {column.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        <SelectContent>
+                          {columns.map((column) => (
+                            <SelectItem key={column.id} value={column.id}>
+                              {column.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

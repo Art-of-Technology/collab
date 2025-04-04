@@ -164,13 +164,30 @@ export async function PATCH(
       where: {
         userId: currentUser.id,
         workspaceId: existingBoard.workspaceId,
-        role: { in: ["owner", "admin"] },
       },
     });
 
     if (!userWorkspaceMembership) {
       return NextResponse.json(
-        { error: "You don't have permission to update this board" },
+        { error: "You don't have access to this board" },
+        { status: 403 }
+      );
+    }
+
+    // Check if the user is the workspace owner
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: existingBoard.workspaceId },
+      select: { ownerId: true },
+    });
+
+    const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
+    const isWorkspaceAdmin = userWorkspaceMembership.role === 'admin' || userWorkspaceMembership.role === 'owner';
+    const isGlobalAdmin = currentUser.role === 'admin';
+
+    // Only allow workspace admins, workspace owners, or global admins to update board settings
+    if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {
+      return NextResponse.json(
+        { error: "You don't have permission to update board settings" },
         { status: 403 }
       );
     }
