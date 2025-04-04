@@ -130,8 +130,7 @@ const ResizableImage = Image.extend({
       let startHeight = 0;
       
       // Add click handler to open full size image in new tab/window
-      img.addEventListener('click', (e) => {
-        // If user is resizing, don't open the image
+      img.addEventListener('click', () => {
         if (isResizing) return;
         // Open image in new tab
         window.open(src, '_blank');
