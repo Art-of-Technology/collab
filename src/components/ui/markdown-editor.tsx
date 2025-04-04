@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useRef } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -10,6 +10,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TextStyle from "@tiptap/extension-text-style";
 import Heading from "@tiptap/extension-heading";
 import Color from "@tiptap/extension-color";
+import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -44,6 +46,7 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import { uploadImage } from "@/utils/cloudinary";
 
 interface MarkdownEditorProps {
   onChange?: (markdown: string, html: string) => void;
@@ -56,6 +59,397 @@ interface MarkdownEditorProps {
   compact?: boolean;
   onAiImprove?: (text: string) => Promise<string>;
 }
+
+// Custom Image extension with resize functionality
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        renderHTML: (attributes) => {
+          if (!attributes.width) {
+            return {};
+          }
+          return { width: attributes.width };
+        },
+      },
+      height: {
+        default: null,
+        renderHTML: (attributes) => {
+          if (!attributes.height) {
+            return {};
+          }
+          return { height: attributes.height };
+        },
+      },
+      // Keep track of the original image dimensions
+      originalWidth: {
+        default: null,
+        parseHTML: () => null,
+        renderHTML: () => ({}),
+      },
+      originalHeight: {
+        default: null,
+        parseHTML: () => null,
+        renderHTML: () => ({}),
+      },
+    };
+  },
+  addNodeView() {
+    return ((props: NodeViewRendererProps) => {
+      const { node, editor, getPos } = props;
+      const { src, alt, title, width, height } = node.attrs;
+      
+      // Create the container element
+      const container = document.createElement('div');
+      container.classList.add('image-resizable-container');
+      
+      // Create the image element
+      const img = document.createElement('img');
+      img.src = src;
+      if (alt) img.alt = alt;
+      if (title) img.title = title;
+      if (width) img.width = width;
+      if (height) img.height = height;
+      
+      img.classList.add('resizable-image');
+      img.style.cursor = 'pointer';
+      
+      // Add a tooltip to show resize instructions
+      const tooltip = document.createElement('div');
+      tooltip.className = 'image-tooltip';
+      tooltip.textContent = '✨ Drag corners to resize • Click to view full size';
+      container.appendChild(tooltip);
+      
+      // Make image resizable
+      let isResizing = false;
+      let startX = 0;
+      let startY = 0;
+      let startWidth = 0;
+      let startHeight = 0;
+      
+      // Add click handler to open full size image in new tab/window
+      img.addEventListener('click', (e) => {
+        // If user is resizing, don't open the image
+        if (isResizing) return;
+        // Open image in new tab
+        window.open(src, '_blank');
+      });
+      
+      // Create resize handles
+      const handles = ['se', 'sw', 'ne', 'nw', 'n', 's', 'e', 'w'];
+      handles.forEach(handlePos => {
+        const handle = document.createElement('div');
+        handle.classList.add('resize-handle', `handle-${handlePos}`);
+        handle.style.position = 'absolute';
+        handle.style.width = '8px';
+        handle.style.height = '8px';
+        handle.style.backgroundColor = 'white';
+        handle.style.border = '1px solid #3b82f6';
+        handle.style.zIndex = '2';
+        
+        // Position the handle based on its position code
+        switch(handlePos) {
+          case 'se': // bottom-right
+            handle.style.bottom = '-4px';
+            handle.style.right = '-4px';
+            handle.style.cursor = 'nwse-resize';
+            break;
+          case 'sw': // bottom-left
+            handle.style.bottom = '-4px';
+            handle.style.left = '-4px';
+            handle.style.cursor = 'nesw-resize';
+            break;
+          case 'ne': // top-right
+            handle.style.top = '-4px';
+            handle.style.right = '-4px';
+            handle.style.cursor = 'nesw-resize';
+            break;
+          case 'nw': // top-left
+            handle.style.top = '-4px';
+            handle.style.left = '-4px';
+            handle.style.cursor = 'nwse-resize';
+            break;
+          case 'n': // top-center
+            handle.style.top = '-4px';
+            handle.style.left = '50%';
+            handle.style.transform = 'translateX(-50%)';
+            handle.style.cursor = 'ns-resize';
+            break;
+          case 's': // bottom-center
+            handle.style.bottom = '-4px';
+            handle.style.left = '50%';
+            handle.style.transform = 'translateX(-50%)';
+            handle.style.cursor = 'ns-resize';
+            break;
+          case 'e': // middle-right
+            handle.style.top = '50%';
+            handle.style.right = '-4px';
+            handle.style.transform = 'translateY(-50%)';
+            handle.style.cursor = 'ew-resize';
+            break;
+          case 'w': // middle-left
+            handle.style.top = '50%';
+            handle.style.left = '-4px';
+            handle.style.transform = 'translateY(-50%)';
+            handle.style.cursor = 'ew-resize';
+            break;
+        }
+        
+        // Only show handles when image is hovered
+        handle.style.display = 'none';
+        
+        // Add resize functionality
+        handle.addEventListener('mousedown', (e: MouseEvent) => {
+          isResizing = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          startWidth = img.width;
+          startHeight = img.height;
+          
+          // Add event listeners to handle resize
+          document.addEventListener('mousemove', handleResize);
+          document.addEventListener('mouseup', stopResize);
+          
+          // Prevent default behavior and propagation
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        
+        const handleResize = (e: MouseEvent) => {
+          if (!isResizing) return;
+          
+          // Calculate new dimensions based on handle position
+          let newWidth = startWidth;
+          let newHeight = startHeight;
+          
+          // Determine resize behavior based on handle position
+          if (handlePos.includes('e')) {
+            newWidth = startWidth + (e.clientX - startX);
+          } else if (handlePos.includes('w')) {
+            newWidth = startWidth - (e.clientX - startX);
+          }
+          
+          if (handlePos.includes('s')) {
+            newHeight = startHeight + (e.clientY - startY);
+          } else if (handlePos.includes('n')) {
+            newHeight = startHeight - (e.clientY - startY);
+          }
+          
+          // Maintain aspect ratio by default (unless shift key is pressed)
+          if (!e.shiftKey) {
+            const ratio = startWidth / startHeight;
+            // Determine which dimension is dominant in this resize operation
+            const widthDominant = Math.abs(newWidth / startWidth - 1) > Math.abs(newHeight / startHeight - 1);
+            
+            if (widthDominant) {
+              newHeight = newWidth / ratio;
+            } else {
+              newWidth = newHeight * ratio;
+            }
+          }
+          
+          // Apply size limits
+          newWidth = Math.max(30, newWidth);  // min width 30px
+          newHeight = Math.max(30, newHeight); // min height 30px
+          
+          // Update image dimensions
+          img.width = Math.round(newWidth);
+          img.height = Math.round(newHeight);
+          
+          // Update the node attributes for persistence
+          if (typeof getPos === 'function') {
+            editor.commands.command(({ tr }) => {
+              tr.setNodeMarkup(getPos(), undefined, { 
+                ...node.attrs, 
+                width: Math.round(newWidth),
+                height: Math.round(newHeight),
+              });
+              return true;
+            });
+          }
+        };
+        
+        const stopResize = () => {
+          isResizing = false;
+          document.removeEventListener('mousemove', handleResize);
+          document.removeEventListener('mouseup', stopResize);
+        };
+        
+        container.appendChild(handle);
+      });
+      
+      // Show handles on hover, hide on mouseout
+      container.addEventListener('mouseenter', () => {
+        if (!isResizing) {
+          container.querySelectorAll('.resize-handle').forEach(handle => {
+            (handle as HTMLElement).style.display = 'block';
+          });
+        }
+      });
+      
+      container.addEventListener('mouseleave', () => {
+        if (!isResizing) {
+          container.querySelectorAll('.resize-handle').forEach(handle => {
+            (handle as HTMLElement).style.display = 'none';
+          });
+        }
+      });
+      
+      // Set container styles
+      container.style.position = 'relative';
+      container.style.display = 'inline-block';
+      container.style.lineHeight = '0';
+      
+      // Add image to container
+      container.appendChild(img);
+      
+      // Store original dimensions if not already set
+      if (!node.attrs.originalWidth || !node.attrs.originalHeight) {
+        img.onload = () => {
+          const originalWidth = img.naturalWidth;
+          const originalHeight = img.naturalHeight;
+          
+          if (typeof getPos === 'function') {
+            editor.commands.command(({ tr }) => {
+              tr.setNodeMarkup(getPos(), undefined, { 
+                ...node.attrs, 
+                originalWidth,
+                originalHeight,
+              });
+              return true;
+            });
+          }
+        };
+      }
+      
+      return {
+        dom: container,
+        update: (updatedNode) => {
+          // Update only if src has changed
+          if (updatedNode.attrs.src !== img.src) {
+            img.src = updatedNode.attrs.src;
+          }
+          if (updatedNode.attrs.width) img.width = updatedNode.attrs.width;
+          if (updatedNode.attrs.height) img.height = updatedNode.attrs.height;
+          return true;
+        },
+        destroy: () => {
+          // Clean up event listeners
+          img.onload = null;
+        }
+      };
+    }) as NodeViewRenderer;
+  },
+});
+
+// Apply image CSS
+const imageCSS = `
+.image-resizable-container {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+  transition: all 0.2s ease;
+  margin: 2px;
+}
+.resizable-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  transition: all 0.25s ease;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+.image-resizable-container:hover .resizable-image {
+  filter: brightness(0.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+.resize-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background-color: #ffffff;
+  border: 1.5px solid rgba(59, 130, 246, 0.8);
+  border-radius: 50%;
+  z-index: 2;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.2s ease, transform 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.image-resizable-container:hover .resize-handle {
+  opacity: 1;
+  transform: scale(1);
+}
+.resize-handle:hover {
+  background-color: rgba(59, 130, 246, 0.9);
+  border-color: white;
+  transform: scale(1.2);
+}
+.resize-handle:active {
+  background-color: rgba(59, 130, 246, 1);
+  transform: scale(1.3);
+}
+.image-tooltip {
+  position: absolute;
+  top: -38px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 3;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateX(-50%) translateY(5px);
+}
+.image-resizable-container:hover .image-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.image-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(0, 0, 0, 0.75) transparent transparent transparent;
+}
+`;
+
+// Extension to add custom CSS to the editor
+const CustomCSS = Extension.create({
+  name: 'customCSS',
+  addOptions() {
+    return {
+      css: imageCSS,
+    };
+  },
+  onCreate() {
+    const style = document.createElement('style');
+    style.setAttribute('data-tiptap-custom-css', '');
+    style.textContent = this.options.css;
+    document.head.appendChild(style);
+  },
+  onDestroy() {
+    const style = document.querySelector('[data-tiptap-custom-css]');
+    if (style) {
+      style.remove();
+    }
+  },
+});
 
 export function MarkdownEditor({
   onChange,
@@ -75,6 +469,8 @@ export function MarkdownEditor({
   const [isImproving, setIsImproving] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Use a stable reference for initialValue to prevent re-renders
   const initialContentRef = useRef(initialValue || content);
@@ -88,11 +484,13 @@ export function MarkdownEditor({
           class: 'text-primary underline cursor-pointer',
         },
       }),
-      Image.configure({
+      // Replace Image with ResizableImage
+      ResizableImage.configure({
         HTMLAttributes: {
-          class: 'rounded-md max-w-full h-auto',
+          class: 'resizable-image',
         },
       }),
+      CustomCSS.configure({ css: imageCSS }),
       Underline,
       Placeholder.configure({
         placeholder,
@@ -123,6 +521,100 @@ export function MarkdownEditor({
       onChange?.(markdown, html);
     },
   }, []); // Empty dependency array to ensure editor only initializes once
+
+  // Handle paste event for images
+  useEffect(() => {
+    if (!editor) return;
+
+    const handlePaste = async (event: ClipboardEvent) => {
+      // Check if items are available in clipboard
+      if (!event.clipboardData?.items) return;
+      
+      // Look for image data in clipboard
+      for (let i = 0; i < event.clipboardData.items.length; i++) {
+        const item = event.clipboardData.items[i];
+        
+        // Check if the pasted content is an image
+        if (item.type.indexOf('image') === 0) {
+          // Prevent default paste behavior
+          event.preventDefault();
+          
+          try {
+            setIsUploadingImage(true);
+            
+            // Get the image file from clipboard
+            const file = item.getAsFile();
+            if (!file) continue;
+            
+            // Upload to Cloudinary
+            const imageUrl = await uploadImage(file);
+            
+            // Insert the image into the editor
+            editor.chain().focus().setImage({ src: imageUrl }).run();
+          } catch (error) {
+            console.error('Error handling pasted image:', error);
+          } finally {
+            setIsUploadingImage(false);
+          }
+          break;
+        }
+      }
+    };
+    
+    // Handle drop event for images
+    const handleDrop = async (event: DragEvent) => {
+      if (!event.dataTransfer?.files) return;
+      
+      // Look for image files in the dropped data
+      for (let i = 0; i < event.dataTransfer.files.length; i++) {
+        const file = event.dataTransfer.files[i];
+        
+        // Check if the dropped file is an image
+        if (file.type.indexOf('image') === 0) {
+          // Prevent default drop behavior
+          event.preventDefault();
+          
+          try {
+            setIsUploadingImage(true);
+            
+            // Upload to Cloudinary
+            const imageUrl = await uploadImage(file);
+            
+            // Insert the image into the editor
+            editor.chain().focus().setImage({ src: imageUrl }).run();
+          } catch (error) {
+            console.error('Error handling dropped image:', error);
+          } finally {
+            setIsUploadingImage(false);
+          }
+          break;
+        }
+      }
+    };
+
+    // Handle dragover event to enable dropping
+    const handleDragOver = (event: DragEvent) => {
+      // Prevent default to allow drop
+      event.preventDefault();
+    };
+
+    // Get the DOM element of the editor
+    const editorElement = editorContainerRef.current;
+    
+    if (editorElement) {
+      // Add event listeners for paste and drop
+      editorElement.addEventListener('paste', handlePaste);
+      editorElement.addEventListener('drop', handleDrop);
+      editorElement.addEventListener('dragover', handleDragOver);
+      
+      // Cleanup function
+      return () => {
+        editorElement.removeEventListener('paste', handlePaste);
+        editorElement.removeEventListener('drop', handleDrop);
+        editorElement.removeEventListener('dragover', handleDragOver);
+      };
+    }
+  }, [editor]);
 
   const addLink = useCallback(() => {
     if (!editor || !linkUrl) return;
@@ -429,17 +921,31 @@ export function MarkdownEditor({
                       variant="ghost"
                       size="icon"
                       className={buttonSize}
+                      disabled={isUploadingImage}
                     >
-                      <ImageIcon size={iconSize} />
+                      {isUploadingImage ? (
+                        <Loader2 size={iconSize} className="animate-spin" />
+                      ) : (
+                        <ImageIcon size={iconSize} />
+                      )}
                     </Button>
                   </PopoverTrigger>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Image</TooltipContent>
+                <TooltipContent side="bottom">
+                  {isUploadingImage ? "Uploading image..." : "Image (paste or drop)"}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <PopoverContent className="w-80 p-3">
               <div className="flex flex-col gap-2">
-                <div className="text-sm font-medium">Insert Image URL</div>
+                <div className="text-sm font-medium flex items-center gap-2 mb-1">
+                  <ImageIcon size={16} className="text-primary" />
+                  <span>Insert Image</span>
+                </div>
+                <div className="text-xs text-muted-foreground mb-3 bg-muted/40 p-2 rounded-md flex items-start gap-2">
+                  <span className="text-primary mt-0.5">💡</span>
+                  <span>Paste with Ctrl+V, drop an image, or enter URL below</span>
+                </div>
                 <div className="flex gap-2">
                   <Input
                     type="url"
@@ -448,7 +954,24 @@ export function MarkdownEditor({
                     onChange={(e) => setImageUrl(e.target.value)}
                     className="flex-1"
                   />
-                  <Button onClick={addImage} disabled={!imageUrl}>Add</Button>
+                  <Button onClick={addImage} disabled={!imageUrl} className="shrink-0">Add</Button>
+                </div>
+                <div className="text-xs text-muted-foreground mt-3 border-t pt-3 border-border/50">
+                  <p className="mb-2 font-medium text-foreground/80">Image Features:</p>
+                  <ul className="grid grid-cols-1 gap-1.5">
+                    <li className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0"></span>
+                      <span>Resize by dragging any corner handle</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0"></span>
+                      <span>Click image to view full size</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0"></span>
+                      <span>Hold Shift to change proportions</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </PopoverContent>
@@ -516,8 +1039,18 @@ export function MarkdownEditor({
         </TooltipProvider>
       </div>
 
-      <div className="flex-1 relative">
+      <div className="flex-1 relative" ref={editorContainerRef}>
         <EditorContent editor={editor} className="w-full" />
+        
+        {/* Overlay when uploading */}
+        {isUploadingImage && (
+          <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-background border shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Uploading image...</span>
+            </div>
+          </div>
+        )}
         
         {/* AI Improvement UI (Jira style with site colors) */}
         {showImprovePopover && improvedText && (
