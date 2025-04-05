@@ -1,29 +1,13 @@
 import { getCurrentUser } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
-import Link from "next/link";
-import { XCircleIcon } from "@heroicons/react/24/outline";
-import PostList from "@/components/posts/PostList";
-import CreatePostForm from "@/components/posts/CreatePostForm";
-import FilterTabs from "@/components/posts/FilterTabs";
-import { Badge } from "@/components/ui/badge";
+import { getPosts } from "@/actions/post";
 import { verifyWorkspaceAccess } from "@/lib/workspace-helpers";
+import TimelineClient from "@/components/timeline/TimelineClient";
 
 interface TimelinePageProps {
   searchParams: { 
     filter?: string;
     tag?: string;
   };
-}
-
-// Define a proper type for the where clause
-interface WhereClause {
-  type?: string;
-  tags?: {
-    some: {
-      name: string;
-    }
-  };
-  workspaceId?: string;
 }
 
 export const dynamic = 'force-dynamic';
@@ -36,62 +20,30 @@ export default async function TimelinePage({
   // Verify workspace access and redirect if needed
   const workspaceId = await verifyWorkspaceAccess(user);
   
-  const _searchParams = await searchParams;
   // Safely handle searchParams
-  const filterParam = _searchParams?.filter;
-  const tagParam = _searchParams?.tag;
+  const filterParam = searchParams?.filter;
+  const tagParam = searchParams?.tag;
   
   const filter = typeof filterParam === 'string' ? filterParam.toLowerCase() : undefined;
   const tag = typeof tagParam === 'string' ? tagParam : undefined;
   
-  // Build query based on filter
-  const whereClause: WhereClause = {
-    workspaceId: workspaceId // Add workspace filter
+  // Map URL filter to database filter
+  const filterMap: { [key: string]: string } = {
+    'updates': 'UPDATE',
+    'blockers': 'BLOCKER',
+    'ideas': 'IDEA',
+    'questions': 'QUESTION',
   };
   
-  if (filter) {
-    // Map URL filter to database filter
-    const filterMap: { [key: string]: string } = {
-      'updates': 'UPDATE',
-      'blockers': 'BLOCKER',
-      'ideas': 'IDEA',
-      'questions': 'QUESTION',
-    };
-    
-    if (filterMap[filter]) {
-      whereClause.type = filterMap[filter];
-    }
-  }
+  // Get the type filter value if it exists
+  const typeFilter = filter && filterMap[filter] ? filterMap[filter] as any : undefined;
   
-  // Add tag filter if provided
-  if (tag) {
-    whereClause.tags = {
-      some: {
-        name: tag
-      }
-    };
-  }
-  
-  // Fetch posts with applied filter
-  const posts = await prisma.post.findMany({
-    where: whereClause,
-    take: 20,
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      author: true,
-      tags: true,
-      comments: {
-        include: {
-          author: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      reactions: true,
-    },
+  // Fetch initial posts using the server action
+  const initialPosts = await getPosts({
+    type: typeFilter,
+    tag: tag,
+    workspaceId,
+    limit: 20
   });
   
   return (
@@ -103,33 +55,10 @@ export default async function TimelinePage({
         </p>
       </div>
       
-      {tag && (
-        <div className="mb-6 flex items-center">
-          <p className="mr-2">Showing posts tagged:</p>
-          <div className="flex items-center">
-            <Badge variant="secondary" className="px-3 py-1">
-              #{tag}
-            </Badge>
-            <Link 
-              href="/timeline" 
-              className="ml-2 text-muted-foreground hover:text-foreground"
-              aria-label="Clear tag filter"
-            >
-              <XCircleIcon className="h-5 w-5" />
-            </Link>
-          </div>
-        </div>
-      )}
-      
-      <div className="mb-6">
-        <CreatePostForm />
-      </div>
-      
-      <div className="mb-6">
-        <FilterTabs />
-      </div>
-      
-      <PostList posts={posts} currentUserId={user?.id || ''} />
+      <TimelineClient 
+        initialPosts={initialPosts} 
+        currentUserId={user?.id || ''} 
+      />
     </div>
   );
 } 

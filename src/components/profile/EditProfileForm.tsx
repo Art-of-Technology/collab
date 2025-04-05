@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { User } from "@prisma/client";
 import { useRouter } from "next/navigation";
+import { useUpdateUserProfile } from "@/hooks/queries/useUser";
 
 interface EditProfileFormProps {
   user: Partial<User>;
@@ -12,12 +13,15 @@ interface EditProfileFormProps {
 
 export default function EditProfileForm({ user, onCancel }: EditProfileFormProps) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState(user.name || "");
   const [team, setTeam] = useState(user.team || "");
   const [currentFocus, setCurrentFocus] = useState(user.currentFocus || "");
   const [expertiseInput, setExpertiseInput] = useState("");
   const [expertise, setExpertise] = useState<string[]>(user.expertise || []);
+  
+  // Use TanStack Query mutation
+  const updateProfileMutation = useUpdateUserProfile();
+  const isLoading = updateProfileMutation.isPending;
   
   const handleAddExpertise = () => {
     if (!expertiseInput.trim()) return;
@@ -35,25 +39,14 @@ export default function EditProfileForm({ user, onCancel }: EditProfileFormProps
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     
     try {
-      const response = await fetch("/api/users/me", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          team,
-          currentFocus,
-          expertise,
-        }),
+      await updateProfileMutation.mutateAsync({
+        name,
+        team,
+        currentFocus,
+        expertise,
       });
-      
-      if (!response.ok) {
-        throw new Error("Failed to update profile");
-      }
       
       toast.success("Profile updated successfully");
       router.refresh();
@@ -61,8 +54,6 @@ export default function EditProfileForm({ user, onCancel }: EditProfileFormProps
     } catch (error) {
       toast.error("Something went wrong");
       console.error(error);
-    } finally {
-      setIsLoading(false);
     }
   };
   

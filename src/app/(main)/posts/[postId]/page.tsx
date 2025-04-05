@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import PostPageContent from "@/components/posts/PostPageContent";
+import { getPostById } from "@/actions/post";
+import PostDetailClient from "@/components/posts/PostDetailClient";
 
 interface PostPageProps {
   params: {
@@ -37,87 +38,27 @@ export default async function PostPage({ params }: PostPageProps) {
     redirect("/login");
   }
 
-  const _params = await params;
-  const post = await prisma.post.findUnique({
-    where: { id: _params.postId },
-    include: {
-      author: true,
-      tags: true,
-      workspace: {
-        select: {
-          id: true,
-          name: true,
-          members: {
-            where: {
-              userId: session.user.id
-            },
-            select: {
-              id: true
-            }
-          },
-          ownerId: true
-        }
-      },
-      comments: {
-        include: {
-          author: true,
-          reactions: {
-            include: {
-              author: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      reactions: {
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!post) {
-    redirect("/dashboard");
-  }
-
-  // Check if user has access to the workspace this post belongs to
-  const isWorkspaceOwner = post.workspace?.ownerId === session.user.id;
-  const isMember = post.workspace?.members && post.workspace.members.length > 0;
-  const hasAccess = isWorkspaceOwner || isMember;
-  
-  if (!hasAccess) {
-    // User doesn't have access to this post, redirect to welcome page if they have no workspaces
-    const userWorkspaces = await prisma.workspace.findMany({
-      where: {
-        OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
-        ]
-      },
-      take: 1
-    });
+  try {
+    const _params = await params;
+    // Get post data with server action
+    const post = await getPostById(_params.postId);
     
-    if (userWorkspaces.length === 0) {
-      redirect('/welcome');
-    } else {
-      redirect('/timeline');
+    return (
+      <PostDetailClient 
+        postId={_params.postId}
+        initialPost={post}
+        currentUserId={session.user.id}
+      />
+    );
+  } catch (error) {
+    // If server action fails (unauthorized, not found), redirect appropriately
+    // Check for specific error messages to determine where to redirect
+    if (error instanceof Error && error.message.includes("access")) {
+      // User doesn't have access to this post, redirect to timeline
+      return redirect('/timeline');
     }
+    
+    // Generic error handling, redirect to dashboard
+    return redirect('/dashboard');
   }
-
-  return <PostPageContent post={post} currentUserId={session.user.id} />;
 } 

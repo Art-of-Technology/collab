@@ -3,18 +3,23 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Gauge } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useWorkspace } from '@/context/WorkspaceContext';
 
 interface DashboardButtonProps {
   workspaceId: string;
 }
 
 export default function DashboardButton({ workspaceId }: DashboardButtonProps) {
+  const router = useRouter();
+  const { switchWorkspace } = useWorkspace();
+
   const handleClick = () => {
-    // Set both localStorage and cookie
-    localStorage.setItem('currentWorkspaceId', workspaceId);
-    document.cookie = `currentWorkspaceId=${workspaceId}; path=/; max-age=31536000; SameSite=Lax`;
+    // Set workspace context
+    switchWorkspace(workspaceId);
+    
     // Navigate to dashboard
-    window.location.href = '/dashboard';
+    router.push('/dashboard');
   };
 
   return (

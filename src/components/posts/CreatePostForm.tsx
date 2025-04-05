@@ -19,15 +19,20 @@ import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useCreatePost } from "@/hooks/queries/usePost";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 export default function CreatePostForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
   const { currentWorkspace } = useWorkspace();
-  const [isLoading, setIsLoading] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // Use TanStack Query hooks
+  const { data: currentUser } = useCurrentUser();
+  const createPostMutation = useCreatePost();
+  
   const [formData, setFormData] = useState({
     message: "",
     messageHtml: "",
@@ -35,25 +40,6 @@ export default function CreatePostForm() {
     tags: "",
     priority: "normal",
   });
-  
-  // Fetch the current user data
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const response = await fetch("/api/user/me");
-        if (response.ok) {
-          const userData = await response.json();
-          setCurrentUser(userData.user);
-        }
-      } catch (error) {
-        console.error("Failed to fetch user data:", error);
-      }
-    };
-
-    if (session?.user) {
-      fetchCurrentUser();
-    }
-  }, [session?.user]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -155,33 +141,21 @@ export default function CreatePostForm() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
       // Process tags into an array
       const tagsArray = formData.tags
         ? formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
         : [];
 
-      const response = await fetch("/api/posts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: formData.message,
-          html: formData.messageHtml,
-          type: formData.type,
-          tags: tagsArray,
-          priority: formData.priority,
-          workspaceId: currentWorkspace.id,
-        }),
+      // Use TanStack Query mutation
+      await createPostMutation.mutateAsync({
+        message: formData.message,
+        html: formData.messageHtml,
+        type: formData.type as 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION',
+        tags: tagsArray,
+        priority: formData.priority as 'normal' | 'high' | 'critical',
+        workspaceId: currentWorkspace.id,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.message || "Failed to create post");
-      }
 
       // Reset form
       setFormData({
@@ -192,36 +166,31 @@ export default function CreatePostForm() {
         priority: "normal",
       });
 
-      // Refresh the page to show the new post
-      router.refresh();
-
       toast({
         title: "Success",
         description: "Post created successfully"
       });
+
     } catch (error) {
+      console.error("Failed to create post:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create post",
         variant: "destructive"
       });
-      console.error(error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Render the avatar based on user data
   const renderAvatar = () => {
-    if (currentUser?.useCustomAvatar) {
-      return <CustomAvatar user={currentUser} size="md" className="border border-border/40" />;
-    }
+    if (!currentUser) return null;
     
-    return (
-      <Avatar className="h-10 w-10 border border-border/40">
-        <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+    return currentUser.useCustomAvatar ? (
+      <CustomAvatar user={currentUser} size="sm" />
+    ) : (
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || "User"} />
         <AvatarFallback className="bg-primary/10 text-primary">
-          {session?.user?.name?.charAt(0) || "U"}
+          {session?.user?.name?.charAt(0).toUpperCase() || "U"}
         </AvatarFallback>
       </Avatar>
     );
@@ -309,10 +278,10 @@ export default function CreatePostForm() {
           <div className="flex justify-end">
             <Button
               type="submit"
-              disabled={isLoading || !formData.message.trim() || isImproving}
+              disabled={isImproving}
               className="bg-primary hover:bg-primary/90 transition-colors"
             >
-              {isLoading ?
+              {isImproving ? (
                 <div className="flex items-center gap-2">
                   <span className="animate-spin">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -320,11 +289,11 @@ export default function CreatePostForm() {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                   </span>
-                  <span>Posting...</span>
+                  <span>Improving...</span>
                 </div>
-                :
+              ) : (
                 "Post"
-              }
+              )}
             </Button>
           </div>
         </form>

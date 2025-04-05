@@ -1,40 +1,23 @@
-import { getCurrentUser } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
-import PostList from "@/components/posts/PostList";
-import { Card, CardContent } from "@/components/ui/card";
+import { getAuthSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getUserPosts } from "@/actions/post";
 import { verifyWorkspaceAccess } from "@/lib/workspace-helpers";
+import UserPostsList from "@/components/posts/UserPostsList";
 
 export const dynamic = 'force-dynamic';
 
 export default async function MyPostsPage() {
-  const user = await getCurrentUser();
+  const session = await getAuthSession();
+  
+  if (!session?.user) {
+    redirect("/login");
+  }
   
   // Verify workspace access and redirect if needed
-  const workspaceId = await verifyWorkspaceAccess(user);
+  const workspaceId = await verifyWorkspaceAccess({ id: session.user.id });
   
-  // Get user posts
-  const userPosts = await prisma.post.findMany({
-    where: {
-      authorId: user?.id || '',
-      workspaceId: workspaceId
-    },
-    orderBy: {
-      createdAt: "desc"
-    },
-    include: {
-      author: true,
-      tags: true,
-      comments: {
-        include: {
-          author: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      reactions: true,
-    },
-  });
+  // Get user posts for initial data
+  const initialPosts = await getUserPosts(session.user.id, workspaceId);
   
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 overflow-x-hidden">
@@ -45,15 +28,11 @@ export default async function MyPostsPage() {
         </p>
       </div>
       
-      {userPosts.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            <p>You haven&apos;t created any posts yet.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <PostList posts={userPosts} currentUserId={user?.id || ''} />
-      )}
+      <UserPostsList 
+        userId={session.user.id} 
+        workspaceId={workspaceId} 
+        initialPosts={initialPosts} 
+      />
     </div>
   );
 } 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { usePostReactions } from "@/hooks/queries/useReaction";
 
 type ReactionWithAuthor = {
   id: string;
@@ -33,51 +33,13 @@ interface LikesModalProps {
 }
 
 export default function LikesModal({ postId, isOpen, onOpenChange, initialLikes = [] }: LikesModalProps) {
-  const { toast } = useToast();
-  const [likesWithAuthor, setLikesWithAuthor] = useState<ReactionWithAuthor[]>(initialLikes);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Wrap fetchLikes with useCallback to prevent it from changing on every render
-  const fetchLikes = useCallback(async () => {
-    // Don't fetch if we already have data
-    if (initialLikes.length > 0) {
-      setLikesWithAuthor(initialLikes);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/posts/${postId}/reactions`);
-      
-      if (!response.ok) {
-        throw new Error("Failed to fetch likes");
-      }
-      
-      const data = await response.json();
-      // Filter only LIKE reactions and include author details
-      const likes = data.reactions.filter((reaction: ReactionWithAuthor) => 
-        reaction.type === "LIKE"
-      );
-      
-      setLikesWithAuthor(likes);
-    } catch (error) {
-      console.error("Failed to get likes:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load likes",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [postId, initialLikes, toast]);
-
-  // Fetch likes when the modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchLikes();
-    }
-  }, [isOpen, fetchLikes]);
+  // Use TanStack Query to fetch reactions
+  const { data, isLoading } = usePostReactions(postId);
+  
+  // Only show likes (filter out other reaction types)
+  const likesWithAuthor = data?.reactions
+    ? data.reactions.filter((reaction: any) => reaction.type === "LIKE")
+    : initialLikes;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

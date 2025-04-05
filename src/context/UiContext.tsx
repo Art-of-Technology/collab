@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface UiContextType {
   isLoggedIn: boolean;
@@ -23,27 +24,16 @@ interface UiProviderProps {
 export const UiProvider = ({ children }: UiProviderProps) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  
+  // Use TanStack Query hook instead of direct fetch
+  const { data: userData, isError } = useCurrentUser();
 
   const toggleChat = () => setIsChatOpen(prev => !prev);
 
-  // Check if user is logged in
+  // Update login status based on user data
   useEffect(() => {
-    // This is a simple check - you may want to use your actual auth system
-    const checkAuth = async () => {
-      try {
-        // You can replace this with your actual auth check
-        const response = await fetch("/api/user/me");
-        if (response.ok) {
-          setIsLoggedIn(true);
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error);
-        setIsLoggedIn(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+    setIsLoggedIn(!!userData && !isError);
+  }, [userData, isError]);
 
   return (
     <UiContext.Provider

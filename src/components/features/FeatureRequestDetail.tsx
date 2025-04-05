@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,9 @@ import {
   XCircle,
   ThumbsUp,
   MoreVertical,
-  AlertTriangle
+  AlertTriangle,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -36,6 +38,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useVoteOnFeature, useUpdateFeatureStatus } from "@/hooks/queries/useFeature";
 
 type Author = {
   id: string;
@@ -75,6 +85,8 @@ export default function FeatureRequestDetail({
 }: FeatureRequestDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const voteOnFeature = useVoteOnFeature();
+  const updateStatus = useUpdateFeatureStatus();
   const [isVoting, setIsVoting] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(featureRequest.status);
   const [voteScore, setVoteScore] = useState(featureRequest.voteScore);
@@ -88,7 +100,7 @@ export default function FeatureRequestDetail({
   
   const isAuthor = currentUserId === featureRequest.author.id;
 
-  const handleVote = async (value: number) => {
+  const handleVote = (value: 1 | -1) => {
     if (!currentUserId) {
       toast({
         title: "Authentication required",
@@ -102,40 +114,18 @@ export default function FeatureRequestDetail({
     
     setIsVoting(true);
     try {
-      // If clicking the same vote again, we're removing the vote
-      const effectiveValue = currentUserVote === value ? 0 : value;
-      
-      const response = await fetch(`/api/features/${featureRequest.id}/vote`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ value: effectiveValue }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to vote");
-      }
-
-      const data = await response.json();
-      setVoteScore(data.voteScore);
-      setUpvotes(data.upvotes);
-      setDownvotes(data.downvotes);
-      setCurrentUserVote(data.vote?.value || null);
-      
-      // Give feedback on vote
-      if (effectiveValue === 0) {
-        toast({
-          title: "Vote removed",
-          description: "Your vote has been removed",
-        });
-      } else {
-        toast({
-          title: "Vote recorded",
-          description: `You ${effectiveValue > 0 ? 'upvoted' : 'downvoted'} this feature request`,
-        });
-      }
-      
+      voteOnFeature.mutate(
+        { featureRequestId: featureRequest.id, value },
+        {
+          onError: () => {
+            toast({
+              title: "Error",
+              description: "Failed to register your vote",
+              variant: "destructive",
+            });
+          }
+        }
+      );
     } catch (error) {
       console.error("Vote error:", error);
       toast({
@@ -148,32 +138,24 @@ export default function FeatureRequestDetail({
     }
   };
 
-  const updateStatus = async (status: string) => {
+  const handleStatusChange = (status: string) => {
     if (isUpdatingStatus) return;
     setStatusError(null);
     
     setIsUpdatingStatus(true);
     try {
-      const response = await fetch(`/api/features/${featureRequest.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error("Status update error:", errorData);
-        throw new Error(errorData?.error || "Failed to update status");
-      }
-
-      setCurrentStatus(status);
-      
-      toast({
-        title: "Status updated",
-        description: `Feature request is now marked as ${status}`,
-      });
+      updateStatus.mutate(
+        { featureRequestId: featureRequest.id, status: status as any },
+        {
+          onError: () => {
+            toast({
+              title: "Error",
+              description: "Failed to update status",
+              variant: "destructive",
+            });
+          }
+        }
+      );
       
       router.refresh();
     } catch (error) {
@@ -283,7 +265,7 @@ export default function FeatureRequestDetail({
                 {isAdmin && (
                   <>
                     <DropdownMenuItem 
-                      onClick={() => updateStatus("pending")}
+                      onClick={() => handleStatusChange("pending")}
                       disabled={isUpdatingStatus || currentStatus === "pending"}
                       className="hover:text-yellow-600 cursor-pointer"
                     >
@@ -291,7 +273,7 @@ export default function FeatureRequestDetail({
                       <span>Mark as Pending</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onClick={() => updateStatus("accepted")}
+                      onClick={() => handleStatusChange("accepted")}
                       disabled={isUpdatingStatus || currentStatus === "accepted"}
                       className="hover:text-green-600 cursor-pointer"
                     >
@@ -299,7 +281,7 @@ export default function FeatureRequestDetail({
                       <span>Accept</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onClick={() => updateStatus("rejected")}
+                      onClick={() => handleStatusChange("rejected")}
                       disabled={isUpdatingStatus || currentStatus === "rejected"}
                       className="hover:text-red-600 cursor-pointer"
                     >
@@ -307,7 +289,7 @@ export default function FeatureRequestDetail({
                       <span>Reject</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onClick={() => updateStatus("completed")}
+                      onClick={() => handleStatusChange("completed")}
                       disabled={isUpdatingStatus || currentStatus === "completed"}
                       className="hover:text-blue-600 cursor-pointer"
                     >
@@ -358,7 +340,7 @@ export default function FeatureRequestDetail({
               disabled={isVoting || !currentUserId}
               className={`rounded-full hover:bg-green-100 transition-all ${currentUserVote === 1 ? 'bg-green-100 text-green-600 shadow-sm' : ''}`}
             >
-              <ArrowUpIcon className="h-5 w-5" />
+              <ChevronUp className="h-6 w-6" />
             </Button>
             
             <span className={`font-bold text-lg transition-colors ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
@@ -372,7 +354,7 @@ export default function FeatureRequestDetail({
               disabled={isVoting || !currentUserId}
               className={`rounded-full hover:bg-red-100 transition-all ${currentUserVote === -1 ? 'bg-red-100 text-red-600 shadow-sm' : ''}`}
             >
-              <ArrowDownIcon className="h-5 w-5" />
+              <ChevronDown className="h-6 w-6" />
             </Button>
             
             <div className="text-xs text-muted-foreground mt-1">

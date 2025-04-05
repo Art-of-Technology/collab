@@ -9,12 +9,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
+import { useFaceLayerCounts, useUpdateUserAvatar } from '@/hooks/queries/useAvatar';
 
 interface AvatarEditorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: any;
-  onSave: (data: any) => Promise<void>;
+  onSave?: (data: any) => Promise<void>; // Make optional since we'll use the mutation
 }
 
 type FaceLayerType = 'skintone' | 'eyes' | 'brows' | 'mouth' | 'nose' | 'hair' | 'eyewear' | 'accessory';
@@ -33,8 +34,14 @@ const DEFAULT_LAYER_COUNTS = {
 
 export default function AvatarEditor({ open, onOpenChange, user, onSave }: AvatarEditorProps) {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [layerCounts, setLayerCounts] = useState(DEFAULT_LAYER_COUNTS);
+  
+  // Use TanStack Query to fetch layer counts
+  const { data: layerCountsData, isLoading: isLoadingCounts } = useFaceLayerCounts();
+  const layerCounts = layerCountsData?.layerCounts || DEFAULT_LAYER_COUNTS;
+  
+  // Use the mutation for saving
+  const updateAvatarMutation = useUpdateUserAvatar();
+  const isLoading = updateAvatarMutation.isPending;
   
   // Separate state for each avatar part for more reliable updates
   const [useCustomAvatar, setUseCustomAvatar] = useState(user.useCustomAvatar || false);
@@ -59,24 +66,8 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
       setHair(user.avatarHair || 1);
       setEyewear(user.avatarEyewear || 0);
       setAccessory(user.avatarAccessory || 0);
-      fetchLayerCounts();
     }
   }, [user, open]);
-  
-  // Fetch actual counts from the API
-  const fetchLayerCounts = async () => {
-    try {
-      const response = await fetch('/api/face-layers/counts');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.layerCounts) {
-          setLayerCounts(data.layerCounts);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch layer counts:', error);
-    }
-  };
   
   // Helper to get the current preview user object
   const getPreviewUser = useCallback(() => {
@@ -156,12 +147,27 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
   };
   
   const handleSave = async () => {
-    setIsLoading(true);
     try {
       // Create the user object with our current state
-      const updatedUser = getPreviewUser();
+      const updatedUserData = {
+        useCustomAvatar,
+        avatarSkinTone: skinTone,
+        avatarEyes: eyes,
+        avatarBrows: brows,
+        avatarMouth: mouth,
+        avatarNose: nose,
+        avatarHair: hair,
+        avatarEyewear: eyewear,
+        avatarAccessory: accessory,
+      };
       
-      await onSave(updatedUser);
+      // Use the custom save function if provided, otherwise use the mutation
+      if (onSave) {
+        await onSave(getPreviewUser());
+      } else {
+        await updateAvatarMutation.mutateAsync(updatedUserData);
+      }
+      
       toast({
         title: "Success",
         description: "Avatar updated successfully",
@@ -174,8 +180,6 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
         description: "Failed to update avatar",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
   

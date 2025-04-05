@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { 
@@ -17,20 +17,22 @@ import {
 import { Loader2, ChevronDown } from "lucide-react";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspaceMembers } from "@/hooks/queries/useWorkspace";
 
 interface User {
   id: string;
   name: string | null;
   image?: string | null;
   useCustomAvatar?: boolean;
-  avatarAccessory?: number;
-  avatarBrows?: number;
-  avatarEyes?: number;
-  avatarEyewear?: number;
-  avatarHair?: number;
-  avatarMouth?: number;
-  avatarNose?: number;
-  avatarSkinTone?: number;
+  avatarAccessory?: number | null;
+  avatarBrows?: number | null;
+  avatarEyes?: number | null;
+  avatarEyewear?: number | null;
+  avatarHair?: number | null;
+  avatarMouth?: number | null;
+  avatarNose?: number | null;
+  avatarSkinTone?: number | null;
+  role?: string;
 }
 
 interface AssigneeSelectProps {
@@ -53,55 +55,23 @@ export function AssigneeSelect({
   workspaceId
 }: AssigneeSelectProps) {
   const { currentWorkspace } = useWorkspace();
-  const [users, setUsers] = useState<User[]>([]);
+  const wsId = workspaceId || currentWorkspace?.id;
+  
+  // Use TanStack Query for fetching workspace members
+  const { data, isLoading: membersLoading } = useWorkspaceMembers(wsId);
+  
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // Fetch workspace members for assignee selection
-  useEffect(() => {
-    const fetchMembers = async () => {
-      const wsId = workspaceId || currentWorkspace?.id;
-      if (!wsId) return;
-      
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${wsId}/members`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Create a map to deduplicate members by ID
-          const uniqueUsers = new Map();
-          data.forEach((member: any) => {
-            if (member.user) {
-              // Ensure all avatar properties are included
-              uniqueUsers.set(member.user.id, {
-                id: member.user.id,
-                name: member.user.name,
-                image: member.user.image,
-                useCustomAvatar: member.user.useCustomAvatar || false,
-                avatarAccessory: member.user.avatarAccessory || 0,
-                avatarBrows: member.user.avatarBrows || 1,
-                avatarEyes: member.user.avatarEyes || 1,
-                avatarEyewear: member.user.avatarEyewear || 0,
-                avatarHair: member.user.avatarHair || 1,
-                avatarMouth: member.user.avatarMouth || 1,
-                avatarNose: member.user.avatarNose || 1,
-                avatarSkinTone: member.user.avatarSkinTone || 1
-              });
-            }
-          });
-          setUsers(Array.from(uniqueUsers.values()));
-        }
-      } catch (error) {
-        console.error("Error fetching members:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMembers();
-  }, [currentWorkspace, workspaceId]);
+  
+  // Process users from the server response
+  const users = data?.members
+    ? data.members.map(member => member.user)
+    : [];
+    
+  // Add the workspace owner to the list if they exist
+  if (data?.workspace?.owner && !users.some(user => user.id === data.workspace.owner.id)) {
+    users.push(data.workspace.owner);
+  }
 
   // Find the selected user
   const selectedUser = value && value !== "unassigned" 
@@ -142,7 +112,7 @@ export function AssigneeSelect({
     );
   };
 
-  if (isLoading || loading) {
+  if (isLoading || membersLoading) {
     return (
       <div className="flex items-center h-10 px-3 text-sm border rounded-md">
         <Loader2 className="h-4 w-4 mr-2 animate-spin" />

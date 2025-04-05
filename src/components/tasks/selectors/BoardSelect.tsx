@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Select,
   SelectContent,
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { Loader2, ChevronDown, Layout } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspaceBoards, useBoardColumns } from "@/hooks/queries/useTask";
 
 interface Board {
   id: string;
@@ -56,89 +57,45 @@ export function BoardSelect({
   className = ''
 }: BoardSelectProps) {
   const { currentWorkspace } = useWorkspace();
-  const [boards, setBoards] = useState<Board[]>([]);
-  const [columns, setColumns] = useState<Column[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const wsId = workspaceId || currentWorkspace?.id;
+  
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Fetch columns for a specific board
-  const fetchColumns = useCallback(async (boardId: string) => {
-    if (!boardId) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/tasks/boards/${boardId}/columns`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setColumns(data);
-        
-        // Set first column if onColumnChange is provided and no column is selected
-        if (data.length > 0 && onColumnChange && !columnValue) {
-          onColumnChange(data[0].id);
-        }
-      } else {
-        setColumns([]);
-        if (onColumnChange) {
-          onColumnChange(null as any);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching columns:", error);
-      setColumns([]);
-      if (onColumnChange) {
-        onColumnChange(null as any);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [columnValue, onColumnChange]);
-
-  // Fetch boards for the workspace
+  
+  // Use TanStack Query hooks
+  const { 
+    data: boards = [], 
+    isLoading: boardsLoading 
+  } = useWorkspaceBoards(wsId);
+  
+  const { 
+    data: columns = [], 
+    isLoading: columnsLoading 
+  } = useBoardColumns(boardValue);
+  
+  // Set default board if none selected and boards are available
   useEffect(() => {
-    const wsId = workspaceId || currentWorkspace?.id;
-    if (!wsId) return;
-    
-    const fetchBoards = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${wsId}/boards`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          setBoards(data);
-          
-          // Set default board if needed
-          if (data.length > 0 && !boardValue) {
-            const defaultBoardId = data[0].id;
-            onBoardChange(defaultBoardId);
-            if (showColumns) {
-              fetchColumns(defaultBoardId);
-            }
-          } else if (boardValue && showColumns) {
-            fetchColumns(boardValue);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching boards:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchBoards();
-  }, [currentWorkspace, workspaceId, boardValue, onBoardChange, fetchColumns, showColumns]);
+    if (boards.length > 0 && !boardValue) {
+      onBoardChange(boards[0].id);
+    }
+  }, [boards, boardValue, onBoardChange]);
+  
+  // Set default column if none selected and columns are available
+  useEffect(() => {
+    if (columns.length > 0 && onColumnChange && !columnValue) {
+      onColumnChange(columns[0].id);
+    }
+  }, [columns, columnValue, onColumnChange]);
 
   // Handle board change
   const handleBoardSelect = (boardId: string) => {
     onBoardChange(boardId);
     setOpen(false);
     setSearchQuery("");
-    setColumns([]);
+    
+    // Reset column when board changes
     if (showColumns && onColumnChange) {
       onColumnChange(null as any);
-      fetchColumns(boardId);
     }
   };
 
@@ -150,6 +107,9 @@ export function BoardSelect({
 
   // Find the selected board
   const selectedBoard = boardValue ? boards.find(b => b.id === boardValue) : null;
+  
+  // Determine if we're in a loading state
+  const isLoading = boardsLoading || (showColumns && columnsLoading && boardValue);
 
   if (isLoading && !boards.length) {
     return (
@@ -162,7 +122,7 @@ export function BoardSelect({
 
   return (
     <div className={`${className} ${showColumns ? 'space-y-4' : ''}`}>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal={true}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -216,7 +176,7 @@ export function BoardSelect({
         <Select
           value={columnValue || undefined}
           onValueChange={onColumnChange}
-          disabled={disabled || isLoading || columns.length === 0}
+          disabled={disabled || columnsLoading || columns.length === 0}
         >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select column" />
@@ -232,4 +192,4 @@ export function BoardSelect({
       )}
     </div>
   );
-} 
+}

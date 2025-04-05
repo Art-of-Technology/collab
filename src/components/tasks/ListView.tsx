@@ -1,43 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTasks } from "@/context/TasksContext";
 import Link from "next/link";
+import { useBoardTasks } from "@/hooks/queries/useTask";
+
+// Task type definition based on what we're using in the component
+interface Task {
+  id: string;
+  title: string;
+  status?: string | null;
+  priority: string;
+  type: string;
+  issueKey?: string | null;
+  column?: {
+    id: string;
+    name: string;
+  } | null;
+  assignee?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+}
 
 export default function ListView() {
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const { selectedBoardId } = useTasks();
+  const { data: tasks, isLoading } = useBoardTasks(selectedBoardId);
 
-  useEffect(() => {
-    const fetchTasks = async () => {
-      if (!selectedBoardId) return;
-
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/tasks?boardId=${selectedBoardId}`);
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch tasks");
-        }
-
-        const data = await response.json();
-        setTasks(data);
-      } catch (error) {
-        console.error("Error fetching tasks:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTasks();
-  }, [selectedBoardId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center h-[50vh]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -45,7 +39,7 @@ export default function ListView() {
     );
   }
 
-  if (tasks.length === 0) {
+  if (!tasks || tasks.length === 0) {
     return (
       <div className="text-center py-16">
         <h3 className="text-xl font-medium">No tasks found</h3>
@@ -68,7 +62,7 @@ export default function ListView() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tasks.map((task) => (
+          {tasks.map((task: Task) => (
             <TableRow key={task.id}>
               <TableCell className="text-xs font-medium text-muted-foreground">
                 {task.issueKey || task.id.substring(0, 8)}

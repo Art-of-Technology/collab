@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import AvatarEditor from "@/components/profile/AvatarEditor";
+import { useUpdateUserProfile, useUpdateUserAvatar } from "@/hooks/queries/useUser";
 
 interface ProfileFormProps {
   user: {
@@ -38,7 +39,6 @@ interface ProfileFormProps {
 export default function ProfileForm({ user }: ProfileFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: user.name || "",
@@ -47,6 +47,10 @@ export default function ProfileForm({ user }: ProfileFormProps) {
     expertise: user.expertise?.length ? user.expertise.join(", ") : "",
     slackId: user.slackId || "",
   });
+
+  // Use TanStack Query mutations
+  const updateProfileMutation = useUpdateUserProfile();
+  const updateAvatarMutation = useUpdateUserAvatar();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -58,7 +62,6 @@ export default function ProfileForm({ user }: ProfileFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
     try {
       // Convert expertise string to array
@@ -66,27 +69,15 @@ export default function ProfileForm({ user }: ProfileFormProps) {
         ? formData.expertise.split(",").map((item) => item.trim()).filter(Boolean)
         : [];
 
-      const response = await fetch("/api/user/profile", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...formData,
-          expertise: expertiseArray,
-        }),
+      await updateProfileMutation.mutateAsync({
+        ...formData,
+        expertise: expertiseArray,
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update profile");
-      }
 
       toast({
         title: "Success",
         description: "Your profile has been updated",
       });
-
-      router.refresh();
     } catch (error) {
       toast({
         title: "Error",
@@ -94,36 +85,23 @@ export default function ProfileForm({ user }: ProfileFormProps) {
         variant: "destructive",
       });
       console.error(error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
   
   const handleSaveAvatar = async (avatarData: any) => {
     try {
-      const response = await fetch("/api/user/avatar", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          avatarSkinTone: avatarData.avatarSkinTone,
-          avatarEyes: avatarData.avatarEyes,
-          avatarBrows: avatarData.avatarBrows,
-          avatarMouth: avatarData.avatarMouth,
-          avatarNose: avatarData.avatarNose,
-          avatarHair: avatarData.avatarHair,
-          avatarEyewear: avatarData.avatarEyewear,
-          avatarAccessory: avatarData.avatarAccessory,
-          useCustomAvatar: avatarData.useCustomAvatar,
-        }),
+      await updateAvatarMutation.mutateAsync({
+        avatarSkinTone: avatarData.avatarSkinTone,
+        avatarEyes: avatarData.avatarEyes,
+        avatarBrows: avatarData.avatarBrows,
+        avatarMouth: avatarData.avatarMouth,
+        avatarNose: avatarData.avatarNose,
+        avatarHair: avatarData.avatarHair,
+        avatarEyewear: avatarData.avatarEyewear,
+        avatarAccessory: avatarData.avatarAccessory,
+        useCustomAvatar: avatarData.useCustomAvatar,
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update avatar");
-      }
-
-      router.refresh();
+      
       return Promise.resolve();
     } catch (error) {
       console.error(error);
@@ -258,37 +236,27 @@ export default function ProfileForm({ user }: ProfileFormProps) {
             </p>
           </div>
 
-          <CardFooter className="px-0 pt-4">
+          <CardFooter className="px-0 pb-0 pt-6 flex justify-end">
             <Button 
               type="submit" 
-              disabled={isSubmitting}
-              className="bg-primary hover:bg-primary/90 transition-colors"
+              disabled={updateProfileMutation.isPending}
+              className="w-full sm:w-auto"
             >
-              {isSubmitting ? 
-                <div className="flex items-center gap-2">
-                  <span className="animate-spin">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  </span>
-                  <span>Saving...</span>
-                </div>
-                : 
-                "Save Changes"
-              }
+              {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </CardFooter>
         </form>
+        
+        {/* Avatar Editor Modal */}
+        {isAvatarEditorOpen && (
+          <AvatarEditor 
+            user={user}
+            open={isAvatarEditorOpen}
+            onOpenChange={setIsAvatarEditorOpen}
+            onSave={handleSaveAvatar}
+          />
+        )}
       </CardContent>
-      
-      {/* Avatar Editor Modal */}
-      <AvatarEditor 
-        open={isAvatarEditorOpen}
-        onOpenChange={setIsAvatarEditorOpen}
-        user={user}
-        onSave={handleSaveAvatar}
-      />
     </Card>
   );
 } 

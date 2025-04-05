@@ -3,10 +3,10 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import FeatureRequestDetail from "@/components/features/FeatureRequestDetail";
 import FeatureRequestComments from "@/components/features/FeatureRequestComments";
+import { getFeatureRequestById } from "@/actions/feature";
 
 interface FeatureRequestPageProps {
   params: {
@@ -18,10 +18,7 @@ export async function generateMetadata({ params }: FeatureRequestPageProps) {
   const _params = await params;
   const { id } = _params;
   try {
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
-      include: { author: true },
-    });
+    const featureRequest = await getFeatureRequestById(id);
 
     if (!featureRequest) {
       return {
@@ -48,86 +45,14 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     redirect("/sign-in");
   }
 
-  const _params = await params;
-  const { id } = _params;
+  const { id } = params;
 
   try {
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-        votes: {
-          where: {
-            userId: session.user.id,
-          },
-          select: {
-            value: true,
-          },
-        },
-        _count: {
-          select: {
-            votes: {
-              where: {
-                value: 1,
-              },
-            },
-            comments: true
-          },
-        },
-      },
-    });
+    const featureRequest = await getFeatureRequestById(id);
 
     if (!featureRequest) {
       notFound();
     }
-
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true },
-    });
-
-    // Get user's vote if any
-    const userVote = featureRequest.votes.length > 0 ? featureRequest.votes[0].value : null;
-
-    // Get comments
-    const comments = await prisma.featureRequestComment.findMany({
-      where: { featureRequestId: id },
-      orderBy: { createdAt: "desc" },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-      },
-    });
-
-    // Count downvotes separately
-    const downvotesCount = await prisma.featureVote.count({
-      where: {
-        featureRequestId: id,
-        value: -1,
-      },
-    });
-
-    // Format the feature request data
-    const formattedFeatureRequest = {
-      ...featureRequest,
-      createdAt: featureRequest.createdAt.toISOString(),
-      updatedAt: featureRequest.updatedAt.toISOString(),
-      voteScore: featureRequest._count.votes - downvotesCount,
-      upvotes: featureRequest._count.votes,
-      downvotes: downvotesCount,
-    };
 
     return (
       <div className="container max-w-4xl py-8">
@@ -142,20 +67,16 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
 
         <div className="space-y-8">
           <FeatureRequestDetail
-            featureRequest={formattedFeatureRequest}
-            userVote={userVote}
-            isAdmin={user?.role === "admin"}
+            featureRequest={featureRequest}
+            userVote={featureRequest.userVote}
+            isAdmin={featureRequest.isAdmin}
             currentUserId={session.user.id}
           />
           
           <div className="mt-8 bg-card/95 backdrop-blur-sm border rounded-lg border-border/50 p-6">
             <FeatureRequestComments
               featureRequestId={id}
-              comments={comments.map(comment => ({
-                ...comment,
-                createdAt: comment.createdAt.toISOString(),
-                updatedAt: comment.updatedAt.toISOString(),
-              }))}
+              comments={featureRequest.comments}
               currentUserId={session.user.id}
             />
           </div>

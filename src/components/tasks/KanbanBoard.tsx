@@ -8,12 +8,16 @@ import { useTasks } from "@/context/TasksContext";
 import { Button } from "@/components/ui/button";
 import { Cog } from "lucide-react";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { useUpdateBoard } from "@/hooks/queries/useTask";
 
 export default function KanbanBoard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { toast } = useToast();
   const { selectedBoard, refreshBoards } = useTasks();
   const { canManageBoard, isLoading: permissionsLoading } = useWorkspacePermissions();
+  
+  // Use the update board mutation hook if we have a board selected
+  const updateBoardMutation = useUpdateBoard(selectedBoard?.id || '');
 
   if (!selectedBoard) {
     return (
@@ -35,23 +39,14 @@ export default function KanbanBoard() {
     issuePrefix?: string;
   }) => {
     try {
-      const response = await fetch(`/api/tasks/boards/${selectedBoard.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update board");
-      }
-
+      await updateBoardMutation.mutateAsync(data);
+      
       toast({
         title: "Board updated",
         description: "Board settings have been updated successfully",
       });
       
+      // Refresh boards to update UI
       refreshBoards();
     } catch (error) {
       console.error("Error updating board:", error);
@@ -85,9 +80,10 @@ export default function KanbanBoard() {
             variant="outline"
             size="sm"
             onClick={() => setIsSettingsOpen(true)}
+            disabled={updateBoardMutation.isPending}
           >
             <Cog className="h-4 w-4 mr-1" />
-            Settings
+            {updateBoardMutation.isPending ? "Updating..." : "Settings"}
           </Button>
         )}
       </div>

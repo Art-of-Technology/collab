@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
-import { AnimatePresence, motion } from "framer-motion";
 import type { User } from "@prisma/client";
 import { CommentReplyForm } from "./CommentReplyForm";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { useCommentReactions, useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
 
 export type CommentWithAuthor = {
   id: string;
@@ -37,9 +37,6 @@ interface CommentProps {
   postId: string;
   currentUserId: string;
   onReplyAdded: () => void;
-  likedComments: Record<string, boolean>;
-  onLikeComment: (commentId: string) => Promise<boolean>;
-  onRefreshLikes: (commentId: string) => Promise<any[]>;
   isReply?: boolean;
 }
 
@@ -48,74 +45,43 @@ export function Comment({
   postId,
   currentUserId,
   onReplyAdded,
-  likedComments,
-  onLikeComment,
-  onRefreshLikes,
   isReply = false,
 }: CommentProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
-  const [likesData, setLikesData] = useState<any[]>(
-    comment.reactions?.filter(reaction => reaction.type === "LIKE") || []
-  );
-
-  // Refresh likes data on component mount only
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchInitialLikes = async () => {
-      const refreshedLikes = await onRefreshLikes(comment.id);
-
-      // Only update state if component is still mounted
-      if (isMounted) {
-        setLikesData(refreshedLikes || []);
-      }
-    };
-
-    fetchInitialLikes();
-
-    // Cleanup function to prevent state updates after unmount
-    return () => {
-      isMounted = false;
-    };
-  }, [comment.id, onRefreshLikes]); // Only depend on stable dependencies
-
+  
+  // Use TanStack Query hooks for reactions
+  const { data: reactionsData } = useCommentReactions(comment.id);
+  const addReactionMutation = useAddReaction();
+  const removeReactionMutation = useRemoveReaction();
+  
+  // Get reactions from query data
+  const reactions = reactionsData?.reactions || comment.reactions || [];
+  const hasReacted = reactionsData?.hasReacted || false;
+  
   // Count likes for this comment
-  const likesCount = likesData.length;
+  const likesCount = reactions.length;
 
-  // Function to handle like button click with server data only
+  // Function to handle like button click
   const handleLike = async () => {
     try {
-      // Call the parent's onLikeComment function and wait for it to complete
-      await onLikeComment(comment.id);
-
-      // The likedComments state will be updated by handleLikeComment
-      // The useEffect watching likedComments[comment.id] will handle updating likesData
+      if (hasReacted) {
+        // Remove reaction if already liked
+        await removeReactionMutation.mutateAsync({
+          type: 'LIKE',
+          commentId: comment.id
+        });
+      } else {
+        // Add reaction if not liked
+        await addReactionMutation.mutateAsync({
+          type: 'LIKE',
+          commentId: comment.id
+        });
+      }
     } catch (error) {
       console.error("Error handling like:", error);
     }
   };
-
-  // Keep likesData in sync with likedComments state
-  useEffect(() => {
-    // When the liked state changes, ensure likesData reflects this change
-    const currentUserLikeExists = likesData.some(
-      reaction => reaction.authorId === currentUserId && reaction.type === "LIKE"
-    );
-
-    // Extract the complex expression to a separate variable
-    const isLikedInState = likedComments[comment.id];
-
-    // If server says liked but not in our state, fetch latest data
-    if (isLikedInState !== currentUserLikeExists) {
-      const updateLikesData = async () => {
-        const refreshedLikes = await onRefreshLikes(comment.id);
-        setLikesData(refreshedLikes || []);
-      };
-
-      updateLikesData();
-    }
-  }, [comment.id, currentUserId, likesData, likedComments, onRefreshLikes]);
 
   // Toggle function to show/hide replies
   const toggleReplies = () => {
@@ -189,10 +155,11 @@ export function Comment({
           )}
         </div>
         <button
-          className={`flex ml-auto items-center hover:text-primary ${likedComments[comment.id] ? 'text-red-500' : 'text-muted-foreground'}`}
+          className={`flex ml-auto items-center hover:text-primary ${hasReacted ? 'text-red-500' : 'text-muted-foreground'}`}
           onClick={handleLike}
+          disabled={addReactionMutation.isPending || removeReactionMutation.isPending}
         >
-          {likedComments[comment.id] ? (
+          {hasReacted ? (
             <HeartIconSolid className="h-3.5 w-3.5" />
           ) : (
             <HeartIconOutline className="h-3.5 w-3.5" />
@@ -200,106 +167,30 @@ export function Comment({
         </button>
       </div>
 
-      {/* Render nested replies - with collapsible functionality and animation */}
+      {/* Replies section */}
       {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-1 ml-8">
+        <div className="ml-8 mt-1">
           <button
             onClick={toggleReplies}
-            className="text-xs text-muted-foreground hover:text-primary cursor-pointer flex items-center mb-1 transition-colors duration-200 group"
+            className="text-xs text-muted-foreground hover:text-primary mb-1"
           >
-            <div className="w-6 h-[1px] bg-border/60 mr-2 group-hover:bg-primary/30 transition-colors duration-200"></div>
-            <span className="flex items-center gap-1">
-              {showReplies ? (
-                <>
-                  <motion.svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    animate={{ rotate: 180 }}
-                    transition={{ duration: 0.2 }}
-                    className="transition-transform duration-200"
-                  >
-                    <path d="M6 9l6 6 6-6" />
-                  </motion.svg>
-                  <span className="text-xs">Hide</span>
-                </>
-              ) : (
-                <>
-                  <motion.svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    animate={{ rotate: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="transition-transform duration-200"
-                  >
-                    <path d="M6 9l6 6 6-6" />
-                  </motion.svg>
-                  <span className="text-xs">View</span>
-                </>
-              )}
-              {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
-            </span>
+            {showReplies ? "Hide replies" : `Show ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`}
           </button>
-
-          <AnimatePresence>
-            {showReplies && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{
-                  opacity: 1,
-                  height: "auto",
-                  transition: {
-                    height: { duration: 0.3, ease: "easeOut" },
-                    opacity: { duration: 0.2, delay: 0.1 }
-                  }
-                }}
-                exit={{
-                  opacity: 0,
-                  height: 0,
-                  transition: {
-                    height: { duration: 0.3, ease: "easeIn" },
-                    opacity: { duration: 0.2 }
-                  }
-                }}
-                className="space-y-2 mt-2 overflow-hidden"
-              >
-                {comment.replies.map((reply, index) => (
-                  <motion.div
-                    key={`${reply.id}-${likedComments[reply.id] ? 'liked' : 'notliked'}`}
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{
-                      opacity: 1,
-                      y: 0,
-                      transition: { 
-                        duration: 0.2,
-                        delay: index * 0.05 // Staggered animation delay based on index
-                      }
-                    }}
-                  >
-                    <Comment
-                      comment={reply}
-                      postId={postId}
-                      currentUserId={currentUserId}
-                      onReplyAdded={onReplyAdded}
-                      likedComments={likedComments}
-                      onLikeComment={onLikeComment}
-                      onRefreshLikes={onRefreshLikes}
-                      isReply={true}
-                    />
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          
+          {showReplies && (
+            <div className="space-y-2 mt-1">
+              {comment.replies.map(reply => (
+                <Comment
+                  key={reply.id}
+                  comment={reply}
+                  postId={postId}
+                  currentUserId={currentUserId}
+                  onReplyAdded={onReplyAdded}
+                  isReply={true}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

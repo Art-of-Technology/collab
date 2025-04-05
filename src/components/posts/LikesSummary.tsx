@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { usePostReactions } from "@/hooks/queries/useReaction";
 
 type ReactionWithAuthor = {
   id: string;
@@ -18,55 +19,22 @@ interface LikesSummaryProps {
   likesCount: number;
   likesWithAuthor: ReactionWithAuthor[];
   onShowAllLikes: () => void;
-  postId: string; // Added postId to fetch likes if needed
+  postId: string;
 }
 
 export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes, onShowAllLikes, postId }: LikesSummaryProps) {
-  const [likesWithAuthor, setLikesWithAuthor] = useState<ReactionWithAuthor[]>(initialLikes);
-  const [isLoading, setIsLoading] = useState(initialLikes.length === 0 && likesCount > 0);
-
-  // Fetch likes data if not provided but we know there are likes
-  useEffect(() => {
-    const fetchLikesData = async () => {
-      if (initialLikes.length === 0 && likesCount > 0) {
-        setIsLoading(true);
-        try {
-          const response = await fetch(`/api/posts/${postId}/reactions`);
-
-          if (!response.ok) {
-            throw new Error("Failed to fetch likes");
-          }
-
-          const data = await response.json();
-          // Filter only LIKE reactions and include author details
-          const likes = data.reactions.filter((reaction: ReactionWithAuthor) =>
-            reaction.type === "LIKE"
-          );
-
-          setLikesWithAuthor(likes);
-        } catch (error) {
-          console.error("Failed to get likes:", error);
-          // Don't show toast for this silent fetch
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchLikesData();
-  }, [initialLikes, likesCount, postId]);
-
-  // Update state when props change
-  useEffect(() => {
-    if (initialLikes.length > 0) {
-      setLikesWithAuthor(initialLikes);
-      setIsLoading(false);
-    }
-  }, [initialLikes]);
+  // Use TanStack Query for reactions, but only if we need to fetch them
+  const shouldFetch = initialLikes.length === 0 && likesCount > 0;
+  const { data, isLoading } = usePostReactions(postId);
+  
+  // Use initial likes if provided, otherwise use the data from the query
+  const likesWithAuthor = initialLikes.length > 0 
+    ? initialLikes 
+    : data?.reactions?.filter((reaction: any) => reaction.type === "LIKE") || [];
 
   // Get a formatted summary of who liked the post
   const renderLikesSummary = () => {
-    if (isLoading) {
+    if (isLoading && shouldFetch) {
       return `${likesCount} ${likesCount === 1 ? "person" : "people"} liked this`;
     }
 

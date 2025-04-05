@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useWorkspace } from '@/context/WorkspaceContext';
+import { useCreateWorkspace } from '@/hooks/queries/useWorkspace';
 
 const workspaceFormSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name cannot exceed 50 characters'),
@@ -36,10 +36,9 @@ const workspaceFormSchema = z.object({
 type WorkspaceFormValues = z.infer<typeof workspaceFormSchema>;
 
 export function CreateWorkspaceForm() {
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { refreshWorkspaces } = useWorkspace();
   const { toast } = useToast();
+  const createWorkspaceMutation = useCreateWorkspace();
   
   const form = useForm<WorkspaceFormValues>({
     resolver: zodResolver(workspaceFormSchema),
@@ -66,30 +65,14 @@ export function CreateWorkspaceForm() {
   }, [watchName, form]);
   
   async function onSubmit(data: WorkspaceFormValues) {
-    setIsLoading(true);
-    
     try {
-      const response = await fetch('/api/workspaces', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create workspace');
-      }
-      
-      const workspace = await response.json();
+      const workspace = await createWorkspaceMutation.mutateAsync(data);
       
       toast({
         title: "Success",
         description: "Workspace created successfully!"
       });
       
-      await refreshWorkspaces();
       router.push(`/workspaces/${workspace.id}`);
     } catch (error) {
       console.error('Error creating workspace:', error);
@@ -98,8 +81,6 @@ export function CreateWorkspaceForm() {
         description: error instanceof Error ? error.message : 'Failed to create workspace',
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
   }
   
@@ -183,8 +164,12 @@ export function CreateWorkspaceForm() {
         />
         
         <div className="pt-4">
-          <Button type="submit" disabled={isLoading} className="w-full">
-            {isLoading ? (
+          <Button 
+            type="submit" 
+            disabled={createWorkspaceMutation.isPending} 
+            className="w-full"
+          >
+            {createWorkspaceMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating Workspace...

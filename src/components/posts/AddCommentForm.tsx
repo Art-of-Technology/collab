@@ -6,20 +6,24 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { useCreateComment } from "@/hooks/queries/useComment";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface AddCommentFormProps {
   postId: string;
-  currentUserId: string;
-  userImage?: string | null;
 }
 
-export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentFormProps) {
+export function AddCommentForm({ postId }: AddCommentFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [commentText, setCommentText] = useState("");
   const [commentHtml, setCommentHtml] = useState("");
-  const [isAddingComment, setIsAddingComment] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
+  
+  // Use TanStack Query hooks
+  const { data: currentUser } = useCurrentUser();
+  const createCommentMutation = useCreateComment();
 
   const handleEditorChange = (html: string, markdown: string) => {
     setCommentHtml(html);
@@ -69,21 +73,12 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
 
     if (!commentText.trim()) return;
 
-    setIsAddingComment(true);
-
     try {
-      const response = await fetch(`/api/posts/${postId}/comments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: commentText,
-          html: commentHtml
-        }),
+      await createCommentMutation.mutateAsync({
+        postId,
+        message: commentText,
+        html: commentHtml
       });
-
-      if (!response.ok) throw new Error();
 
       setCommentText("");
       setCommentHtml("");
@@ -91,9 +86,6 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
       toast({
         description: "Comment added"
       });
-
-      // Refresh the page to show the new comment
-      router.refresh();
     } catch (error) {
       console.error("Failed to add comment:", error);
       toast({
@@ -101,19 +93,23 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
         description: "Failed to add comment",
         variant: "destructive"
       });
-    } finally {
-      setIsAddingComment(false);
     }
   };
 
+  if (!currentUser) return null;
+
   return (
     <form onSubmit={handleAddComment} className="flex gap-2 items-start mt-3 border-t pt-3 border-border/30">
-      <Avatar className="h-8 w-8">
-        <AvatarImage src={userImage || undefined} alt="User" />
-        <AvatarFallback>
-          {currentUserId.charAt(0).toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
+      {currentUser.useCustomAvatar ? (
+        <CustomAvatar user={currentUser} size="sm" />
+      ) : (
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={currentUser.image || undefined} alt={currentUser.name || "User"} />
+          <AvatarFallback>
+            {currentUser.name?.charAt(0).toUpperCase() || "U"}
+          </AvatarFallback>
+        </Avatar>
+      )}
       <div className="flex-1">
         <MarkdownEditor
           onChange={handleEditorChange}
@@ -130,10 +126,10 @@ export function AddCommentForm({ postId, currentUserId, userImage }: AddCommentF
             type="submit"
             size="sm"
             variant="ghost"
-            disabled={!commentText.trim() || isAddingComment || isImproving}
+            disabled={!commentText.trim() || createCommentMutation.isPending || isImproving}
             className="text-primary hover:text-primary/90"
           >
-            {isAddingComment ? "Posting..." : "Post"}
+            {createCommentMutation.isPending ? "Posting..." : "Post"}
           </Button>
         </div>
       </div>

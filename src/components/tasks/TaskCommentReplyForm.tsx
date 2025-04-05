@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
 
 interface TaskCommentReplyFormProps {
   taskId: string;
   parentCommentId: string;
   parentCommentAuthor: string;
-  onReplyAdded: () => void;
   onCancel: () => void;
 }
 
@@ -18,19 +17,54 @@ export function TaskCommentReplyForm({
   taskId,
   parentCommentId,
   parentCommentAuthor,
-  onReplyAdded,
   onCancel
 }: TaskCommentReplyFormProps) {
-  const [replyText, setReplyText] = useState("");
-  const [replyHtml, setReplyHtml] = useState("");
-  const [isAddingReply, setIsAddingReply] = useState(false);
+  const [content, setContent] = useState("");
+  const [contentHtml, setContentHtml] = useState("");
   const [isImproving, setIsImproving] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
+  const addCommentMutation = useAddTaskComment();
 
-  const handleEditorChange = (html: string, markdown: string) => {
-    setReplyHtml(html);
-    setReplyText(markdown);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!content.trim()) {
+      toast({
+        title: "Error",
+        description: "Reply cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      await addCommentMutation.mutateAsync({ 
+        taskId, 
+        content, 
+        parentId: parentCommentId 
+      });
+      
+      toast({
+        title: "Success",
+        description: "Reply added successfully",
+      });
+      
+      setContent("");
+      setContentHtml("");
+      onCancel();
+    } catch (error) {
+      console.error("Failed to add reply:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add reply",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditorChange = (markdown: string, html: string) => {
+    setContent(markdown);
+    setContentHtml(html);
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {
@@ -71,86 +105,33 @@ export function TaskCommentReplyForm({
     }
   };
 
-  const handleReply = async () => {
-    if (!replyText.trim()) return;
-
-    setIsAddingReply(true);
-
-    try {
-      const response = await fetch(`/api/tasks/${taskId}/comments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: replyText,
-          html: replyHtml,
-          parentId: parentCommentId,
-        }),
-      });
-
-      if (!response.ok) throw new Error();
-
-      setReplyText("");
-      setReplyHtml("");
-      
-      toast({
-        description: "Reply added"
-      });
-
-      // Notify parent that a reply was added
-      onReplyAdded();
-
-      // Refresh the page to show the new reply
-      router.refresh();
-    } catch (error) {
-      console.error("Failed to add reply:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add reply",
-        variant: "destructive"
-      });
-    } finally {
-      setIsAddingReply(false);
-    }
-  };
-
   return (
-    <div className="mt-2">
-      <div className="flex gap-2 items-start">
-        <div className="flex-1">
-          <MarkdownEditor
-            onChange={handleEditorChange}
-            placeholder={`Reply to ${parentCommentAuthor}...`}
-            minHeight="80px"
-            maxHeight="200px"
-            compact={true}
-            className="mb-2"
-            content={replyText}
-            onAiImprove={handleAiImprove}
-          />
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onCancel}
-              className="text-xs h-7"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleReply}
-              disabled={!replyText.trim() || isAddingReply || isImproving}
-              className="text-xs h-7"
-            >
-              {isAddingReply ? "Posting..." : "Reply"}
-            </Button>
-          </div>
-        </div>
+    <form onSubmit={handleSubmit} className="mt-2 space-y-2">
+      <MarkdownEditor
+        onChange={handleEditorChange}
+        placeholder={`Reply to ${parentCommentAuthor}...`}
+        minHeight="60px"
+        maxHeight="150px"
+        content={content}
+        onAiImprove={handleAiImprove}
+      />
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          size="sm"
+          disabled={addCommentMutation.isPending || !content.trim() || isImproving}
+        >
+          {addCommentMutation.isPending ? "Submitting..." : "Reply"}
+        </Button>
       </div>
-    </div>
+    </form>
   );
 } 

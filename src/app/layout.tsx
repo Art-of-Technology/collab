@@ -8,6 +8,7 @@ import Script from "next/script";
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
+import { QueryProvider } from '@/providers/QueryProvider';
 import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
@@ -61,21 +62,23 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <SessionProvider>
-            <WorkspaceProvider>
-              <UiProvider>
-                <CustomThemeProvider>
-                  <main className="flex flex-col">
-                    {children}
-                  </main>
-                  <Toaster />
-                  <Script
-                    src="https://api.chatproject.io/chat-widget.js"
-                    id="chat-widget-script"
-                    strategy="lazyOnload"
-                  />
-                </CustomThemeProvider>
-              </UiProvider>
-            </WorkspaceProvider>
+            <QueryProvider>
+              <WorkspaceProvider>
+                <UiProvider>
+                  <CustomThemeProvider>
+                    <main className="flex flex-col">
+                      {children}
+                    </main>
+                    <Toaster />
+                    <Script
+                      src="https://api.chatproject.io/chat-widget.js"
+                      id="chat-widget-script"
+                      strategy="lazyOnload"
+                    />
+                  </CustomThemeProvider>
+                </UiProvider>
+              </WorkspaceProvider>
+            </QueryProvider>
           </SessionProvider>
         </ThemeProvider>
       </body>

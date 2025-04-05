@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { useWorkspace } from './WorkspaceContext';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
@@ -65,23 +65,28 @@ interface TasksProviderProps {
   children: ReactNode;
   initialBoardId?: string;
   initialView?: 'kanban' | 'list';
+  initialBoards?: Board[];
+  workspaceId?: string;
 }
 
 export const TasksProvider = ({ 
   children, 
   initialBoardId,
-  initialView = 'kanban' 
+  initialView = 'kanban',
+  initialBoards = [],
+  workspaceId
 }: TasksProviderProps) => {
   const { currentWorkspace } = useWorkspace();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const isFirstRender = useRef(true);
   
   // State management
-  const [boards, setBoards] = useState<Board[]>([]);
+  const [boards, setBoards] = useState<Board[]>(initialBoards);
   const [selectedBoardId, setSelectedBoardId] = useState<string>(initialBoardId || '');
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initialBoards.length);
   const [view, setView] = useState<'kanban' | 'list'>(initialView);
 
   // Memoize this function to prevent rerenders
@@ -104,14 +109,29 @@ export const TasksProvider = ({
   useEffect(() => {
     let isMounted = true;
     
-    if (!currentWorkspace) return;
+    // If we have initial boards and this is the first render, skip the fetch
+    if (initialBoards.length > 0 && isFirstRender.current) {
+      isFirstRender.current = false;
+      
+      if (!selectedBoardId && initialBoards.length > 0) {
+        setSelectedBoardId(initialBoards[0].id);
+        if (pathname.includes('/tasks')) {
+          updateUrlSearchParams({ board: initialBoards[0].id });
+        }
+      }
+      return;
+    }
+    
+    // Use workspaceId prop if provided, otherwise fallback to currentWorkspace
+    const wsId = workspaceId || (currentWorkspace ? currentWorkspace.id : null);
+    if (!wsId) return;
     
     const fetchBoards = async () => {
       if (!isMounted) return;
       
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`);
+        const response = await fetch(`/api/workspaces/${wsId}/boards`);
         
         if (!isMounted) return;
         
@@ -147,7 +167,7 @@ export const TasksProvider = ({
     return () => {
       isMounted = false;
     };
-  }, [currentWorkspace, updateUrlSearchParams, pathname, selectedBoardId]);
+  }, [currentWorkspace, updateUrlSearchParams, pathname, selectedBoardId, workspaceId]);
 
   // Fetch selected board details
   useEffect(() => {
@@ -204,11 +224,13 @@ export const TasksProvider = ({
 
   // Refresh boards handler
   const refreshBoards = useCallback(async () => {
-    if (!currentWorkspace) return;
+    // Use workspaceId prop if provided, otherwise fallback to currentWorkspace
+    const wsId = workspaceId || (currentWorkspace ? currentWorkspace.id : null);
+    if (!wsId) return;
     
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`);
+      const response = await fetch(`/api/workspaces/${wsId}/boards`);
       
       if (response.ok) {
         const data = await response.json();
@@ -235,7 +257,7 @@ export const TasksProvider = ({
     } finally {
       setIsLoading(false);
     }
-  }, [currentWorkspace, selectedBoardId, pathname, updateUrlSearchParams]);
+  }, [currentWorkspace, selectedBoardId, pathname, updateUrlSearchParams, workspaceId]);
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({

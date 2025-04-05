@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useFeatureRequests, useVoteOnFeature } from "@/hooks/queries/useFeature";
 
 type Author = {
   id: string;
@@ -46,25 +47,21 @@ interface PaginationInfo {
   totalCount: number;
 }
 
-export default function FeatureRequestsList() {
+interface FeatureRequestsListProps {
+  currentUserId: string;
+}
+
+export default function FeatureRequestsList({ currentUserId }: FeatureRequestsListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const voteMutation = useVoteOnFeature();
 
   // Get query params
   const status = searchParams.get("status") || "all";
   const orderBy = searchParams.get("orderBy") || "most_votes";
   const page = parseInt(searchParams.get("page") || "1");
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
-  const [pagination, setPagination] = useState<PaginationInfo>({
-    page: 1,
-    limit: 10,
-    totalPages: 1,
-    totalCount: 0,
-  });
 
   // Status options for filter
   const statusOptions = [
@@ -82,6 +79,22 @@ export default function FeatureRequestsList() {
     { value: "most_votes", label: "Most Votes" },
     { value: "least_votes", label: "Least Votes" },
   ];
+
+  // Fetch data using TanStack Query
+  const { data, isLoading, error } = useFeatureRequests({
+    page,
+    limit: 10,
+    status,
+    orderBy
+  });
+
+  const featureRequests = data?.featureRequests || [];
+  const pagination = data?.pagination || {
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    totalCount: 0
+  };
 
   // Helper function to update URL parameters
   const updateQueryParams = (key: string, value: string) => {
@@ -116,49 +129,48 @@ export default function FeatureRequestsList() {
     updateQueryParams("page", newPage.toString());
   };
 
-  // Fetch feature requests
-  useEffect(() => {
-    const fetchFeatureRequests = async () => {
-      setIsLoading(true);
-      try {
-        let url = `/api/features?page=${page}&limit=10`;
-        if (status && status !== "all") url += `&status=${status}`;
-        if (orderBy) url += `&orderBy=${orderBy}`;
-
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error("Failed to fetch feature requests");
+  // Handle voting
+  const handleVote = (featureRequestId: string, value: 1 | -1) => {
+    voteMutation.mutate(
+      { featureRequestId, value },
+      {
+        onError: (error) => {
+          toast({
+            title: "Error",
+            description: "Failed to vote on feature request",
+            variant: "destructive",
+          });
         }
-        
-        const data = await response.json();
-        setFeatureRequests(data.featureRequests);
-        setPagination(data.pagination);
-      } catch (error) {
-        console.error("Error fetching feature requests:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load feature requests",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
       }
-    };
+    );
+  };
 
-    fetchFeatureRequests();
-  }, [status, orderBy, page, toast]);
+  // Display error message if query fails
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load feature requests",
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
 
   // Get a badge variant based on status
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
+      case "PENDING":
         return <Badge variant="secondary" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors">Pending</Badge>;
       case "accepted":
+      case "PLANNED":
         return <Badge variant="secondary" className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors">Accepted</Badge>;
       case "rejected":
+      case "DECLINED":
         return <Badge variant="secondary" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors">Rejected</Badge>;
       case "completed":
+      case "COMPLETED":
+      case "IN_PROGRESS":
         return <Badge variant="secondary" className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 transition-colors">Completed</Badge>;
       default:
         return null;
@@ -265,7 +277,9 @@ export default function FeatureRequestsList() {
                           {request.author.name?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">{request.author.name}</span>
+                      <span className="text-sm font-medium">
+                        {request.author.id === currentUserId ? "You" : request.author.name}
+                      </span>
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {request._count.comments} comment{request._count.comments !== 1 ? "s" : ""}

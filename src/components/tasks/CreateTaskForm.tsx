@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useCreateTask, useWorkspaceBoards, useBoardColumns } from "@/hooks/queries/useTask";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,11 +91,10 @@ export default function CreateTaskForm({
   postId,
 }: CreateTaskFormProps) {
   const { currentWorkspace } = useWorkspace();
-  const [columns, setColumns] = useState<Column[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const createTaskMutation = useCreateTask();
   
   // Use a stable form key that doesn't change on re-renders
   const formKey = isOpen ? postId || "new-task" : "closed";
@@ -117,99 +117,45 @@ export default function CreateTaskForm({
     },
   });
 
-  // First define fetchColumns with useCallback before it's used in any useEffect
-  const fetchColumns = useCallback(async (boardId: string) => {
-    if (!boardId) return;
-    
-    let isMounted = true;
-    
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/tasks/boards/${boardId}/columns`);
-      
-      if (!isMounted) return;
-      
-      if (response.ok) {
-        const data = await response.json();
-        setColumns(data);
-        
-        // Set default column if none is selected
-        if (data.length > 0 && isMounted) {
-          form.setValue("columnId", data[0].id);
-        }
-      } else {
-        // In case of error, clear columns
-        if (isMounted) {
-          setColumns([]);
-          form.setValue("columnId", null);
-        }
-      }
-    } catch (error) {
-      if (isMounted) {
-        console.error("Error fetching columns:", error);
-        setColumns([]);
-        form.setValue("columnId", null);
-      }
-    } finally {
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [form, setColumns, setIsLoading]);
+  // Use TanStack Query hooks for fetching workspace boards
+  const wsId = currentWorkspace?.id;
+  const { 
+    data: boards = [],
+    isLoading: boardsLoading
+  } = useWorkspaceBoards(wsId);
+  
+  // Get the selected board ID from the form
+  const boardId = form.watch('taskBoardId');
+  
+  // Use TanStack Query for fetching board columns
+  const {
+    data: columns = [],
+    isLoading: columnsLoading
+  } = useBoardColumns(boardId);
+  
+  const isLoading = boardsLoading || columnsLoading;
 
-  // Then use fetchColumns in the useEffect
+  // Set default board and column when data loads
   useEffect(() => {
-    let isMounted = true;
+    if (!isOpen || !wsId) return;
     
-    const fetchBoards = async () => {
-      if (!currentWorkspace || !isOpen || !isMounted) return;
-      
-      try {
-        setIsLoading(true);
-        // Clear existing state
-        setColumns([]);
+    // Set default board when boards are loaded
+    if (boards.length > 0 && !boardId) {
+      // Set the provided board ID or use the first available board
+      const boardToUse = initialData?.taskBoardId && boards.some((b: Board) => b.id === initialData.taskBoardId) 
+        ? initialData.taskBoardId 
+        : boards[0].id;
         
-        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`);
-        
-        if (!isMounted) return;
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Always set a board if available to prevent empty board selection
-          if (data.length > 0 && isMounted) {
-            // Set the provided board ID or use the first available board
-            const boardToUse = initialData?.taskBoardId && data.some((b: Board) => b.id === initialData.taskBoardId) 
-              ? initialData.taskBoardId 
-              : data[0].id;
-              
-            form.setValue("taskBoardId", boardToUse);
-            fetchColumns(boardToUse);
-          }
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error("Error fetching boards:", error);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchBoards();
-    
-    return () => {
-      isMounted = false;
-    };
-    // Only run this effect when workspace, form, or dialog state changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWorkspace, isOpen, initialData?.taskBoardId]);
+      form.setValue("taskBoardId", boardToUse);
+    }
+  }, [boards, boardId, form, initialData?.taskBoardId, isOpen, wsId]);
+  
+  // Set default column when columns are loaded
+  useEffect(() => {
+    if (columns.length > 0 && !form.getValues('columnId')) {
+      form.setValue("columnId", columns[0].id);
+    }
+  }, [columns, form]);
 
   // In the onSubmit function, handle HTML and markdown content
   const [descriptionMarkdown, setDescriptionMarkdown] = useState("");
@@ -280,29 +226,40 @@ export default function CreateTaskForm({
     try {
       setIsSubmitting(true);
       
-      // Convert "unassigned" assigneeId to null
-      const submissionValues = {
-        ...values,
-        assigneeId: values.assigneeId === "unassigned" ? null : values.assigneeId,
+      // Create a properly typed task object
+      const taskData = {
+        title: values.title,
+        description: values.description,
+        workspaceId: currentWorkspace.id,
+        priority: values.priority.toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH',
+        status: 'TODO' as const,
       };
       
-      const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...submissionValues,
-          workspaceId: currentWorkspace.id,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create task");
+      // Add due date if it's not null
+      if (values.dueDate) {
+        (taskData as any).dueDate = values.dueDate;
       }
-
-      await response.json();
+      
+      // Add assignee only if it's a valid value
+      if (values.assigneeId && values.assigneeId !== "unassigned") {
+        (taskData as any).assigneeId = values.assigneeId;
+      }
+      
+      // Add board and column if they're set
+      if (values.taskBoardId) {
+        (taskData as any).taskBoardId = values.taskBoardId;
+      }
+      
+      if (values.columnId) {
+        (taskData as any).columnId = values.columnId;
+      }
+      
+      // Add linked post if available
+      if (values.postId) {
+        (taskData as any).linkedPostIds = [values.postId];
+      }
+      
+      await createTaskMutation.mutateAsync(taskData);
       
       toast({
         title: "Task created",
@@ -599,8 +556,8 @@ export default function CreateTaskForm({
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <Button type="submit" disabled={isSubmitting || createTaskMutation.isPending}>
+                {isSubmitting || createTaskMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Creating...

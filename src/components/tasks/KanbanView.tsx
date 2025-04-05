@@ -7,6 +7,7 @@ import TaskCard from "@/components/tasks/TaskCard";
 import { Loader2, Plus, MoreVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,21 +26,36 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { 
+  useCreateColumn, 
+  useUpdateColumn, 
+  useDeleteColumn, 
+  useReorderColumns, 
+  useMoveTask,
+  useCreateTask 
+} from "@/hooks/queries/useTask";
 
 export default function KanbanView() {
-  const [loading, setLoading] = useState(false);
   const [isColumnDialogOpen, setIsColumnDialogOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [newTaskColumnId, setNewTaskColumnId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { toast } = useToast();
   const { selectedBoard, selectedBoardId, refreshBoards } = useTasks();
+  const { currentWorkspace } = useWorkspace();
   const [localBoardState, setLocalBoardState] = useState(selectedBoard);
   const isDraggingRef = useRef(false);
   const pendingUpdateRef = useRef(false);
   const { canManageBoard, isLoading: permissionsLoading } = useWorkspacePermissions();
+
+  // Set up mutation hooks
+  const createColumnMutation = useCreateColumn(selectedBoardId || "");
+  const updateColumnMutation = useUpdateColumn();
+  const deleteColumnMutation = useDeleteColumn();
+  const reorderColumnsMutation = useReorderColumns(selectedBoardId || "");
+  const moveTaskMutation = useMoveTask();
+  const createTaskMutation = useCreateTask();
 
   // Initialize local state when selected board changes, but not during drag operations
   useEffect(() => {
@@ -107,7 +123,6 @@ export default function KanbanView() {
     // Handle column reordering
     if (type === "column") {
       try {
-        setLoading(true);
         const reorderedColumns = Array.from(localBoardState.columns || []);
         const [movedColumn] = reorderedColumns.splice(source.index, 1);
         reorderedColumns.splice(destination.index, 0, movedColumn);
@@ -129,16 +144,8 @@ export default function KanbanView() {
           order: idx,
         }));
         
-        // Save new order to server
-        const response = await fetch(`/api/tasks/boards/${selectedBoardId}/columns/reorder`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ columns: columnsWithUpdatedOrder }),
-        });
-        
-        if (!response.ok) {
-          throw new Error("Failed to update column order");
-        }
+        // Use the reorderColumns mutation
+        await reorderColumnsMutation.mutateAsync(columnsWithUpdatedOrder);
         
         // Refresh server data after successful update
         await refreshBoards();
@@ -150,7 +157,6 @@ export default function KanbanView() {
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
         pendingUpdateRef.current = false;
       }
       return;
@@ -159,7 +165,6 @@ export default function KanbanView() {
     // Handle task movement between columns
     if (type === "task") {
       try {
-        setLoading(true);
         const sourceColumnId = source.droppableId;
         const destinationColumnId = destination.droppableId;
         
@@ -197,19 +202,14 @@ export default function KanbanView() {
           columns: updatedColumns,
         });
         
-        // Send task move request to server
-        const response = await fetch(`/api/tasks/${movedTask.id}/move`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        // Use the moveTask mutation
+        await moveTaskMutation.mutateAsync({
+          taskId: movedTask.id,
+          data: {
             columnId: destinationColumnId,
             position: destination.index,
-          }),
+          }
         });
-        
-        if (!response.ok) {
-          throw new Error("Failed to move task");
-        }
         
         // Refresh server data after successful update
         await refreshBoards();
@@ -221,7 +221,6 @@ export default function KanbanView() {
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
         pendingUpdateRef.current = false;
       }
     }
@@ -244,7 +243,7 @@ export default function KanbanView() {
     }
     
     pendingUpdateRef.current = true;
-    setLoading(true);
+    
     try {
       if (editingColumnId) {
         // Optimistically update the column name in local state
@@ -257,16 +256,11 @@ export default function KanbanView() {
           columns: updatedColumns || [],
         });
         
-        // Update existing column
-        const response = await fetch(`/api/tasks/columns/${editingColumnId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: newColumnName }),
+        // Use updateColumn mutation
+        await updateColumnMutation.mutateAsync({
+          columnId: editingColumnId,
+          data: { name: newColumnName }
         });
-        
-        if (!response.ok) {
-          throw new Error("Failed to update column");
-        }
         
         toast({
           title: "Column updated",
@@ -290,19 +284,11 @@ export default function KanbanView() {
           columns: [...(localBoardState.columns || []), newColumn],
         });
         
-        // Create new column on server
-        const response = await fetch(`/api/tasks/boards/${selectedBoardId}/columns`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: newColumnName,
-            order: newColumnOrder,
-          }),
+        // Use createColumn mutation
+        await createColumnMutation.mutateAsync({
+          name: newColumnName,
+          order: newColumnOrder,
         });
-        
-        if (!response.ok) {
-          throw new Error("Failed to create column");
-        }
         
         toast({
           title: "Column created",
@@ -320,7 +306,6 @@ export default function KanbanView() {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
       setNewColumnName("");
       setEditingColumnId(null);
       setIsColumnDialogOpen(false);
@@ -335,7 +320,7 @@ export default function KanbanView() {
     }
     
     pendingUpdateRef.current = true;
-    setLoading(true);
+    
     try {
       // Optimistically remove the column from local state
       const updatedColumns = localBoardState.columns?.filter(col => col.id !== columnId) || [];
@@ -345,13 +330,8 @@ export default function KanbanView() {
         columns: updatedColumns,
       });
       
-      const response = await fetch(`/api/tasks/columns/${columnId}`, {
-        method: "DELETE",
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to delete column");
-      }
+      // Use deleteColumn mutation
+      await deleteColumnMutation.mutateAsync(columnId);
       
       toast({
         title: "Column deleted",
@@ -367,7 +347,6 @@ export default function KanbanView() {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
       pendingUpdateRef.current = false;
     }
   };
@@ -378,17 +357,8 @@ export default function KanbanView() {
       return;
     }
     
-    setIsCreatingTask(true);
     try {
-      // Get the current workspace ID from the board
-      const response = await fetch(`/api/tasks/boards/${selectedBoardId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch board details");
-      }
-      const boardData = await response.json();
-      const workspaceId = boardData.workspaceId;
-      
-      // Create a temporary task for optimistic UI
+      // Optimistically add task to local state
       const tempId = `temp-${Date.now()}`;
       const tempTask = {
         id: tempId,
@@ -414,23 +384,15 @@ export default function KanbanView() {
         columns: updatedColumns || [],
       });
       
-      // Send task creation request to server
-      const createResponse = await fetch(`/api/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTaskTitle,
-          columnId,
-          taskBoardId: selectedBoardId,
-          workspaceId,
-          type: "task",
-          priority: "medium",
-        }),
+      // Get the workspaceId from context
+      await createTaskMutation.mutateAsync({
+        title: newTaskTitle,
+        workspaceId: currentWorkspace?.id || "",
+        priority: "MEDIUM",
+        status: "TODO",
+        taskBoardId: selectedBoardId || "",
+        columnId: columnId
       });
-      
-      if (!createResponse.ok) {
-        throw new Error("Failed to create task");
-      }
       
       toast({
         title: "Task created",
@@ -449,9 +411,15 @@ export default function KanbanView() {
     } finally {
       setNewTaskTitle("");
       setNewTaskColumnId(null);
-      setIsCreatingTask(false);
     }
   };
+
+  const isLoading = createColumnMutation.isPending || 
+                    updateColumnMutation.isPending || 
+                    deleteColumnMutation.isPending || 
+                    reorderColumnsMutation.isPending ||
+                    moveTaskMutation.isPending;
+  const isCreatingTask = createTaskMutation.isPending;
 
   return (
     <>
@@ -472,6 +440,7 @@ export default function KanbanView() {
               setNewColumnName("");
               setIsColumnDialogOpen(true);
             }}
+            disabled={isLoading}
           >
             <Plus className="h-4 w-4 mr-1" />
             Add Column
@@ -529,6 +498,7 @@ export default function KanbanView() {
                                       setNewColumnName(column.name);
                                       setIsColumnDialogOpen(true);
                                     }}
+                                    disabled={isLoading}
                                   >
                                     Edit Column
                                   </DropdownMenuItem>
@@ -536,6 +506,7 @@ export default function KanbanView() {
                                   <DropdownMenuItem
                                     className="text-destructive"
                                     onClick={() => handleDeleteColumn(column.id)}
+                                    disabled={isLoading}
                                   >
                                     Delete Column
                                   </DropdownMenuItem>
@@ -614,6 +585,7 @@ export default function KanbanView() {
                                           setNewTaskColumnId(null);
                                           setNewTaskTitle("");
                                         }}
+                                        disabled={isCreatingTask}
                                       >
                                         Cancel
                                       </Button>
@@ -638,6 +610,7 @@ export default function KanbanView() {
                                     onClick={() => setNewTaskColumnId(column.id)}
                                     className="w-full mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                     variant="ghost"
+                                    disabled={isLoading}
                                   >
                                     <Plus className="h-4 w-4 mr-1" />
                                     Create task
@@ -688,11 +661,12 @@ export default function KanbanView() {
                   setEditingColumnId(null);
                   setIsColumnDialogOpen(false);
                 }}
+                disabled={isLoading}
               >
                 Cancel
               </Button>
-              <Button onClick={handleColumnSubmit} disabled={loading}>
-                {loading ? (
+              <Button onClick={handleColumnSubmit} disabled={isLoading}>
+                {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Saving...

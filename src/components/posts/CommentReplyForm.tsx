@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { useCreateComment } from "@/hooks/queries/useComment";
 
 interface CommentReplyFormProps {
   postId: string;
@@ -23,10 +24,12 @@ export function CommentReplyForm({
 }: CommentReplyFormProps) {
   const [replyText, setReplyText] = useState("");
   const [replyHtml, setReplyHtml] = useState("");
-  const [isAddingReply, setIsAddingReply] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  
+  // Use TanStack Query hooks
+  const createCommentMutation = useCreateComment();
 
   const handleEditorChange = (html: string, markdown: string) => {
     setReplyHtml(html);
@@ -74,22 +77,13 @@ export function CommentReplyForm({
   const handleReply = async () => {
     if (!replyText.trim()) return;
 
-    setIsAddingReply(true);
-
     try {
-      const response = await fetch(`/api/posts/${postId}/comments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: replyText,
-          html: replyHtml,
-          parentId: parentCommentId,
-        }),
+      await createCommentMutation.mutateAsync({
+        postId,
+        message: replyText,
+        html: replyHtml,
+        parentId: parentCommentId,
       });
-
-      if (!response.ok) throw new Error();
 
       setReplyText("");
       setReplyHtml("");
@@ -100,9 +94,6 @@ export function CommentReplyForm({
 
       // Notify parent that a reply was added
       onReplyAdded();
-
-      // Refresh the page to show the new reply
-      router.refresh();
     } catch (error) {
       console.error("Failed to add reply:", error);
       toast({
@@ -110,8 +101,6 @@ export function CommentReplyForm({
         description: "Failed to add reply",
         variant: "destructive"
       });
-    } finally {
-      setIsAddingReply(false);
     }
   };
 
@@ -143,10 +132,10 @@ export function CommentReplyForm({
               type="button"
               size="sm"
               onClick={handleReply}
-              disabled={!replyText.trim() || isAddingReply || isImproving}
+              disabled={!replyText.trim() || createCommentMutation.isPending || isImproving}
               className="text-xs h-7"
             >
-              {isAddingReply ? "Posting..." : "Reply"}
+              {createCommentMutation.isPending ? "Posting..." : "Reply"}
             </Button>
           </div>
         </div>

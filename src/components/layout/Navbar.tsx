@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,6 +35,7 @@ import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUiContext } from "@/context/UiContext";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -57,27 +58,10 @@ export default function Navbar({
   const { isChatOpen, toggleChat } = useUiContext();
   const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
-  const [userData, setUserData] = useState<any>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-
-  // Fetch the current user data for avatar
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (session?.user) {
-        try {
-          const response = await fetch("/api/user/me");
-          if (response.ok) {
-            const data = await response.json();
-            setUserData(data.user);
-          }
-        } catch (error) {
-          console.error("Failed to fetch user data:", error);
-        }
-      }
-    };
-
-    fetchUserData();
-  }, [session]);
+  
+  // Use TanStack Query hook to fetch user data
+  const { data: userData } = useCurrentUser();
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
