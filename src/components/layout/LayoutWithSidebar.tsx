@@ -6,6 +6,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
+import AssistantWrapper from "@/components/layout/AssistantWrapper";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -88,6 +89,9 @@ export default function LayoutWithSidebar({
             {children}
           </div>
         </main>
+
+        {/* AI Assistant */}
+        <AssistantWrapper />
       </div>
     </div>
   );

@@ -8,7 +8,8 @@ import { signOut, useSession } from "next-auth/react";
 import {
   BellIcon,
   MagnifyingGlassIcon,
-  Bars3Icon
+  Bars3Icon,
+  SparklesIcon
 } from "@heroicons/react/24/outline";
 import { MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -55,7 +56,7 @@ export default function Navbar({
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { isChatOpen, toggleChat } = useUiContext();
+  const { isChatOpen, toggleChat, isAssistantOpen, toggleAssistant } = useUiContext();
   const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -233,6 +234,19 @@ export default function Navbar({
                     <MessageCircle className="h-5 w-5" />
                     {isChatOpen && (
                       <span className="absolute bottom-1 right-1 bg-blue-500 rounded-full w-2 h-2" />
+                    )}
+                  </Button>
+
+                  {/* AI Assistant toggle button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative hover:bg-[#1c1c1c] text-gray-400"
+                    onClick={toggleAssistant}
+                  >
+                    <SparklesIcon className="h-5 w-5" />
+                    {isAssistantOpen && (
+                      <span className="absolute bottom-1 right-1 bg-purple-500 rounded-full w-2 h-2" />
                     )}
                   </Button>
                 </>
