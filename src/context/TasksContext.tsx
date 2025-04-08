@@ -87,8 +87,8 @@ interface TasksProviderProps {
   children: ReactNode;
   initialBoardId?: string;
   initialView?: 'kanban' | 'list' | 'hierarchy';
-  workspaceId?: string;
   initialBoards?: Board[];
+  workspaceId?: string;
 }
 
 export const TasksProvider = ({ 
@@ -103,7 +103,8 @@ export const TasksProvider = ({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isInitialLoad = useRef(true);
-  const hasInitializedRef = useRef(false);
+  // Add ref to track the last workspace ID we processed
+  const lastWorkspaceIdRef = useRef<string | undefined | null>(null);
   
   // State management
   const [boards, setBoards] = useState<Board[]>(initialBoards);
@@ -157,8 +158,8 @@ export const TasksProvider = ({
         isInitialLoad.current = false;
     }
     
-  // Include view and selectedBoardId as dependencies
-  }, [searchParams, view, selectedBoardId]); 
+  // Remove 'view' and 'selectedBoardId' from dependencies to prevent loop
+  }, [searchParams]); 
 
   // Effect to sync state changes TO URL (runs only when state changes *after* initial load)
   useEffect(() => {
@@ -178,107 +179,9 @@ export const TasksProvider = ({
       console.log("State change updating URL with:", paramsToSet);
       updateUrlSearchParams(paramsToSet);
     }
-  }, [view, selectedBoardId, pathname, updateUrlSearchParams, router]); // Added router dependency
+  // Add router to dependencies
+  }, [view, selectedBoardId, pathname, updateUrlSearchParams, router]); 
   
-  // Fetch initial list of boards if not provided
-  useEffect(() => {
-    const wsId = workspaceId || currentWorkspace?.id;
-    if (!wsId || initialBoards.length > 0 || hasInitializedRef.current) {
-        // Only set loading false if it wasn't already false
-        if(isLoading) setIsLoading(false); 
-        return;
-    } 
-
-    // Mark as initialized to prevent multiple fetches
-    hasInitializedRef.current = true;
-
-    let isMounted = true;
-    const fetchInitialBoards = async () => {
-      console.log("Fetching initial boards...");
-      // Set loading true only if starting the fetch
-      if(!isLoading) setIsLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${wsId}/boards`);
-        if (!isMounted) return;
-        if (response.ok) {
-          const data = await response.json();
-          if (!isMounted) return;
-          setBoards(data);
-          // Only set default board if selectedBoardId is empty and we have boards
-          if (!selectedBoardId && data.length > 0) {
-             console.log("Setting default board (initial fetch):", data[0].id);
-             setSelectedBoardId(data[0].id);
-          }
-        } else {
-          console.error('Failed to fetch initial boards');
-        }
-      } catch (error) {
-        console.error('Error fetching initial boards:', error);
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-    fetchInitialBoards();
-    return () => { isMounted = false; };
-  // Remove isLoading and selectedBoardId from dependencies
-  }, [workspaceId, currentWorkspace?.id, initialBoards.length]); 
-
-  // Fetch selected board details when selectedBoardId changes
-  useEffect(() => {
-    if (!selectedBoardId) {
-        setSelectedBoard(null); 
-        return; 
-    }
-    
-    // Check if we already have this board's data with columns
-    const existingBoardData = boards.find(b => b.id === selectedBoardId);
-    if (existingBoardData?.columns) {
-        setSelectedBoard(existingBoardData);
-        return; // Skip fetch if we already have column data
-    }
-    
-    let isMounted = true;
-    const fetchSelectedBoardDetails = async () => {
-      console.log(`Fetching details for board: ${selectedBoardId}`);
-      // Set loading state before starting fetch
-      if(!isDetailLoading) setIsDetailLoading(true);
-      
-      try {
-        const response = await fetch(`/api/tasks/boards/${selectedBoardId}`); 
-        if (!isMounted) return;
-        if (response.ok) {
-          const data = await response.json();
-          setSelectedBoard(data);
-        } else {
-          console.error('Failed to fetch selected board details');
-          setSelectedBoard(null);
-        }
-      } catch (error) {
-        console.error('Error fetching selected board details:', error);
-        setSelectedBoard(null);
-      } finally {
-        if (isMounted) setIsDetailLoading(false);
-      }
-    };
-    
-    fetchSelectedBoardDetails();
-    return () => { isMounted = false; };
-  // Remove isDetailLoading from dependencies to prevent loops
-  }, [selectedBoardId, boards]); 
-
-  // Handlers should ONLY update state, let effects handle URL
-  const selectBoard = useCallback((boardId: string) => {
-    if (boardId !== selectedBoardId) {
-        setSelectedBoardId(boardId);
-    }
-  }, [selectedBoardId]);
-
-  const setViewWithUrlUpdate = useCallback((newView: 'kanban' | 'list' | 'hierarchy') => {
-      if (newView !== view) {
-        setView(newView);
-      }
-  }, [view]);
-
   // Refresh boards handler
   const refreshBoards = useCallback(async () => {
     const wsId = workspaceId || currentWorkspace?.id;
@@ -306,6 +209,10 @@ export const TasksProvider = ({
                  const boardData = await boardResponse.json();
                  setSelectedBoard(boardData);
              }
+        } else if (data.length > 0) {
+            // If no board is selected but we have boards, select the first one
+            console.log("No board selected, defaulting to first board:", data[0].id);
+            setSelectedBoardId(data[0].id);
         }
       } else {
           console.error("Failed to refresh boards list");
@@ -316,6 +223,121 @@ export const TasksProvider = ({
       setIsLoading(false);
     }
   }, [workspaceId, currentWorkspace?.id, selectedBoardId]);
+  
+  // Workspace change detection - simpler approach
+  useEffect(() => {
+    const activeWorkspaceId = workspaceId || currentWorkspace?.id;
+    
+    // If workspace ID changed and is valid
+    if (activeWorkspaceId && activeWorkspaceId !== lastWorkspaceIdRef.current) {
+      console.log(`Workspace changed: ${lastWorkspaceIdRef.current} -> ${activeWorkspaceId}`);
+      
+      // Update our reference
+      lastWorkspaceIdRef.current = activeWorkspaceId;
+      
+      // Force a boards refresh by directly calling refreshBoards in the next tick
+      // This avoids dependencies and state updates that might cause loops
+      setTimeout(() => {
+        console.log("Triggering boards refresh for new workspace");
+        refreshBoards();
+      }, 0);
+    }
+  // Add refreshBoards to dependencies
+  }, [workspaceId, currentWorkspace?.id, refreshBoards]); 
+
+  // Fetch initial list of boards if not provided
+  useEffect(() => {
+    const wsId = workspaceId || currentWorkspace?.id;
+    if (!wsId || initialBoards.length > 0) {
+        // Only set loading false if it wasn't already false
+        if(isLoading) setIsLoading(false); 
+        return;
+    } 
+
+    let isMounted = true;
+    const fetchInitialBoards = async () => {
+      console.log("Fetching initial boards...");
+      // Set loading true only if starting the fetch
+      if(!isLoading) setIsLoading(true);
+      try {
+        const response = await fetch(`/api/workspaces/${wsId}/boards`);
+        if (!isMounted) return;
+        if (response.ok) {
+          const data = await response.json();
+          if (!isMounted) return;
+          setBoards(data);
+          if (!selectedBoardId && data.length > 0) {
+             console.log("Setting default board (initial fetch):", data[0].id);
+             setSelectedBoardId(data[0].id);
+          }
+        } else {
+          console.error('Failed to fetch initial boards');
+        }
+      } catch (error) {
+        console.error('Error fetching initial boards:', error);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    fetchInitialBoards();
+    return () => { isMounted = false; };
+  // Keep dependencies minimal to avoid loops
+  }, [workspaceId, currentWorkspace?.id, initialBoards.length]); 
+
+  // Fetch selected board details when selectedBoardId changes
+  useEffect(() => {
+    if (!selectedBoardId) {
+        setSelectedBoard(null); 
+        return; 
+    }
+    let isMounted = true;
+    const fetchSelectedBoardDetails = async () => {
+      console.log(`Fetching details for board: ${selectedBoardId}`);
+      const existingBoardData = boards.find(b => b.id === selectedBoardId);
+      // Only set detail loading if we don't have column data
+      if (!existingBoardData?.columns) {
+          if(!isDetailLoading) setIsDetailLoading(true); 
+      } else {
+          // Already have details, update state and ensure loading is false
+          setSelectedBoard(existingBoardData);
+          if(isDetailLoading) setIsDetailLoading(false);
+          return; // Skip fetch
+      }
+      
+      try {
+        const response = await fetch(`/api/tasks/boards/${selectedBoardId}`); 
+        if (!isMounted) return;
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedBoard(data);
+        } else {
+          console.error('Failed to fetch selected board details');
+          setSelectedBoard(null);
+        }
+      } catch (error) {
+        console.error('Error fetching selected board details:', error);
+        setSelectedBoard(null);
+      } finally {
+        if (isMounted) setIsDetailLoading(false);
+      }
+    };
+    fetchSelectedBoardDetails();
+    return () => { isMounted = false; };
+  // Keep dependencies minimal to avoid loops
+  }, [selectedBoardId, boards]);
+
+  // Handlers should ONLY update state, let effects handle URL
+  const selectBoard = useCallback((boardId: string) => {
+    if (boardId !== selectedBoardId) {
+        setSelectedBoardId(boardId);
+    }
+  }, [selectedBoardId]);
+
+  const setViewWithUrlUpdate = useCallback((newView: 'kanban' | 'list' | 'hierarchy') => {
+      if (newView !== view) {
+        setView(newView);
+      }
+  }, [view]);
 
   // Refresh functions for hierarchy items
   const refreshMilestones = useCallback(async () => {
