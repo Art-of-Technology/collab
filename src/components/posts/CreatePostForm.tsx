@@ -89,7 +89,11 @@ export default function CreatePostForm() {
       }
       
       const data = await response.json();
+
       
+      console.log("AI response:", data);
+      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
+
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
       
@@ -208,6 +212,7 @@ export default function CreatePostForm() {
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
+            {/* <CollabInput /> */}
             <MarkdownEditor
               content={formData.message}
               onChange={handleEditorChange}

@@ -17,21 +17,22 @@ async function improveEnglishText(userInput: string) {
     const messages = [
         {
             role: 'system',
-            content: 'You are a helpful assistant that improves the clarity, grammar, and natural flow of English text without changing its meaning and keep it under 160 characters, remove unnecessary words and phrases.',
+            content: `You are a helpful assistant that improves the clarity, grammar, and natural flow of English text written by a diverse development team. Do not change the original meaning. If the text is longer than 160 characters, shorten it while preserving the core message. Remove unnecessary words. Then categorise the message as one of the following: "Update", "Blocker", "Idea", or "Question". If the message mentions an issue that prevents progress, classify it as a "Blocker".`,
         },
         {
             role: 'user',
-            content: `Please improve the following text in English:\n"${userInput}"`,
+            content: `Please improve the following message and classify it. Respond in JSON format like { "message": "", "category": "" }:\n"${userInput}"`,
         },
     ];
+    
 
     try {
         const response = await axios.post(
             endpoint,
             {
-                model: 'gpt-3.5-turbo',
+                model: 'gpt-4-turbo',
                 messages: messages,
-                temperature: 0.7,
+                temperature: 0.3,
             },
             {
                 headers: {
@@ -40,33 +41,33 @@ async function improveEnglishText(userInput: string) {
                 },
             }
         );
-        
+
         if (!response.data?.choices?.[0]?.message?.content) {
             console.error('Unexpected API response format:', response.data);
             return null;
         }
-        
-        const improvedText = response.data.choices[0].message.content.trim();
-        return improvedText;
+
+        const json = JSON.parse(response.data.choices[0].message.content)
+        return json;
     } catch (error: any) {
         console.error('Error improving text:', error.response?.data || error.message);
         return null;
     }
 }
 
-function normalizeText(text: string | null): string {
-    if (!text) {
-        return "Failed to improve text. Please try again.";
-    }
+// function normalizeText(text: string | null): string {
+//     if (!text) {
+//         return "Failed to improve text. Please try again.";
+//     }
     
-    if (text.startsWith('"')) {
-        text = text.slice(1);
-    }
-    if (text.endsWith('"')) {
-        text = text.slice(0, -1);
-    }
-    return text;
-}
+//     if (text.startsWith('"')) {
+//         text = text.slice(1);
+//     }
+//     if (text.endsWith('"')) {
+//         text = text.slice(0, -1);
+//     }
+//     return text;
+// }
 
 
 export async function POST(req: Request) {
@@ -98,9 +99,7 @@ export async function POST(req: Request) {
             );
         }
 
-        return NextResponse.json({
-            message: normalizeText(result)
-        });
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error in improve API:', error);
         return NextResponse.json(
