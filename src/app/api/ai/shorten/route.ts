@@ -55,19 +55,19 @@ async function improveEnglishText(userInput: string) {
     }
 }
 
-function normalizeText(text: string | null): string {
-    if (!text) {
-        return "Failed to improve text. Please try again.";
-    }
+// function normalizeText(text: string | null): string {
+//     if (!text) {
+//         return "Failed to improve text. Please try again.";
+//     }
     
-    if (text.startsWith('"')) {
-        text = text.slice(1);
-    }
-    if (text.endsWith('"')) {
-        text = text.slice(0, -1);
-    }
-    return text;
-}
+//     if (text.startsWith('"')) {
+//         text = text.slice(1);
+//     }
+//     if (text.endsWith('"')) {
+//         text = text.slice(0, -1);
+//     }
+//     return text;
+// }
 
 
 export async function POST(req: Request) {
