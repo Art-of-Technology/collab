@@ -162,7 +162,6 @@ export default function CreateTaskForm({
 
   // Debug mutations
   useEffect(() => {
-    console.log("CreateTaskMutation object:", createTaskMutation);
   }, [createTaskMutation]);
 
   const workspaceId = initialData.workspaceId || currentWorkspace?.id;
@@ -257,7 +256,6 @@ export default function CreateTaskForm({
 
   // Form submission
   const onSubmit = async (values: TaskFormValues) => {
-    console.log("onSubmit function called with values:", values);
 
     // Check for required values before proceeding
     if (!values.title) {
@@ -268,11 +266,8 @@ export default function CreateTaskForm({
 
     try {
       setIsSubmitting(true);
-      console.log("Setting isSubmitting to true");
-      console.log("Form submitted with values:", values);
 
       const boardIdToSubmit = values.taskBoardId || selectedBoardId;
-      console.log("boardIdToSubmit:", boardIdToSubmit);
       if (!boardIdToSubmit) {
         console.log("Board is required, stopping submission");
         toast({ title: "Error", description: "Board is required.", variant: "destructive" });

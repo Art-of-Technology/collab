@@ -25,13 +25,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { milestoneId: string } }
 ) {
+  const _params = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { milestoneId } = params;
+    const { milestoneId } = _params;
     if (!milestoneId) {
       return NextResponse.json({ error: "Milestone ID is required" }, { status: 400 });
     }
@@ -77,13 +78,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { milestoneId: string } }
 ) {
+  const _params = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { milestoneId } = params;
+    const { milestoneId } = _params;
     if (!milestoneId) {
       return NextResponse.json({ error: "Milestone ID is required" }, { status: 400 });
     }

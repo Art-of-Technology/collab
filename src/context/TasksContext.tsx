@@ -103,6 +103,7 @@ export const TasksProvider = ({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isInitialLoad = useRef(true);
+  const hasInitializedRef = useRef(false);
   
   // State management
   const [boards, setBoards] = useState<Board[]>(initialBoards);
@@ -182,11 +183,14 @@ export const TasksProvider = ({
   // Fetch initial list of boards if not provided
   useEffect(() => {
     const wsId = workspaceId || currentWorkspace?.id;
-    if (!wsId || initialBoards.length > 0) {
+    if (!wsId || initialBoards.length > 0 || hasInitializedRef.current) {
         // Only set loading false if it wasn't already false
         if(isLoading) setIsLoading(false); 
         return;
     } 
+
+    // Mark as initialized to prevent multiple fetches
+    hasInitializedRef.current = true;
 
     let isMounted = true;
     const fetchInitialBoards = async () => {
@@ -200,6 +204,7 @@ export const TasksProvider = ({
           const data = await response.json();
           if (!isMounted) return;
           setBoards(data);
+          // Only set default board if selectedBoardId is empty and we have boards
           if (!selectedBoardId && data.length > 0) {
              console.log("Setting default board (initial fetch):", data[0].id);
              setSelectedBoardId(data[0].id);
@@ -215,8 +220,8 @@ export const TasksProvider = ({
     };
     fetchInitialBoards();
     return () => { isMounted = false; };
-  // Added isLoading and selectedBoardId as dependencies
-  }, [workspaceId, currentWorkspace?.id, initialBoards.length, isLoading, selectedBoardId]); 
+  // Remove isLoading and selectedBoardId from dependencies
+  }, [workspaceId, currentWorkspace?.id, initialBoards.length]); 
 
   // Fetch selected board details when selectedBoardId changes
   useEffect(() => {
@@ -224,19 +229,19 @@ export const TasksProvider = ({
         setSelectedBoard(null); 
         return; 
     }
+    
+    // Check if we already have this board's data with columns
+    const existingBoardData = boards.find(b => b.id === selectedBoardId);
+    if (existingBoardData?.columns) {
+        setSelectedBoard(existingBoardData);
+        return; // Skip fetch if we already have column data
+    }
+    
     let isMounted = true;
     const fetchSelectedBoardDetails = async () => {
       console.log(`Fetching details for board: ${selectedBoardId}`);
-      const existingBoardData = boards.find(b => b.id === selectedBoardId);
-      // Only set detail loading if we don't have column data
-      if (!existingBoardData?.columns) {
-          if(!isDetailLoading) setIsDetailLoading(true); 
-      } else {
-          // Already have details, update state and ensure loading is false
-          setSelectedBoard(existingBoardData);
-          if(isDetailLoading) setIsDetailLoading(false);
-          return; // Skip fetch
-      }
+      // Set loading state before starting fetch
+      if(!isDetailLoading) setIsDetailLoading(true);
       
       try {
         const response = await fetch(`/api/tasks/boards/${selectedBoardId}`); 
@@ -255,9 +260,11 @@ export const TasksProvider = ({
         if (isMounted) setIsDetailLoading(false);
       }
     };
+    
     fetchSelectedBoardDetails();
     return () => { isMounted = false; };
-  }, [selectedBoardId, boards, isDetailLoading]); // Added isDetailLoading
+  // Remove isDetailLoading from dependencies to prevent loops
+  }, [selectedBoardId, boards]); 
 
   // Handlers should ONLY update state, let effects handle URL
   const selectBoard = useCallback((boardId: string) => {
@@ -422,7 +429,7 @@ export const TasksProvider = ({
     boards,
     selectedBoard,
     selectedBoardId,
-    combinedIsLoading, // Added combinedIsLoading
+    combinedIsLoading,
     view,
     setViewWithUrlUpdate,
     selectBoard,
