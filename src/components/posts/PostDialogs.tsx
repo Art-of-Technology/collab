@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { useDeletePost, useUpdatePost } from "@/hooks/queries/usePost";
 
 interface PostDialogsProps {
   postId: string;
@@ -47,9 +48,15 @@ export default function PostDialogs({
 }: PostDialogsProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editFormData, setEditFormData] = useState(initialEditData);
+  
+  // Use TanStack Query mutations
+  const deletePostMutation = useDeletePost();
+  const updatePostMutation = useUpdatePost(postId);
+  
+  // Derive loading states from mutations
+  const isDeleting = deletePostMutation.isPending;
+  const isSubmitting = updatePostMutation.isPending;
 
   const handleEditChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -69,44 +76,27 @@ export default function PostDialogs({
   };
 
   const handleDeletePost = async () => {
-    if (isDeleting) return;
-
-    setIsDeleting(true);
-
     try {
-      const response = await fetch(`/api/posts/${postId}`, {
-        method: "DELETE"
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.message || "Failed to delete post");
-      }
-
+      await deletePostMutation.mutateAsync(postId);
+      
       setIsDeleteDialogOpen(false);
-
+      
       toast({
         description: "Post deleted successfully"
       });
-
-      // Refresh the page to remove the deleted post
-      router.refresh();
-
+      
+      // Router navigation is handled by the mutation
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete post",
         variant: "destructive"
       });
-    } finally {
-      setIsDeleting(false);
     }
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (isSubmitting) return;
 
     if (!editFormData.message.trim()) {
       toast({
@@ -117,49 +107,34 @@ export default function PostDialogs({
       return;
     }
 
-    setIsSubmitting(true);
-
     try {
       // Process tags into an array
       const tagsArray = editFormData.tags
         ? editFormData.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
         : [];
 
-      const response = await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: editFormData.message,
-          type: editFormData.type,
-          tags: tagsArray,
-          priority: editFormData.priority,
-        }),
+      await updatePostMutation.mutateAsync({
+        message: editFormData.message,
+        type: editFormData.type as any,
+        tags: tagsArray,
+        priority: editFormData.priority as any,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.message || "Failed to update post");
-      }
 
       setIsEditDialogOpen(false);
 
       toast({
         description: "Post updated successfully"
       });
-
-      // Refresh the page to show the updated post
+      
+      // Refresh the page to show updated post
       router.refresh();
-
+      
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update post",
         variant: "destructive"
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

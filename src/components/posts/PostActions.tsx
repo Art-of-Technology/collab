@@ -23,6 +23,8 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
+import { useIsPostBookmarked, useAddBookmark, useRemoveBookmark } from "@/hooks/queries/useBookmark";
 
 interface PostActionsProps {
   postId: string;
@@ -41,9 +43,17 @@ export default function PostActions({
 }: PostActionsProps) {
   const { toast } = useToast();
   const [liked, setLiked] = useState(initialLiked);
-  const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // TanStack Query hooks for bookmarks
+  const { data: isBookmarked = initialBookmarked } = useIsPostBookmarked(postId);
+  const addBookmarkMutation = useAddBookmark();
+  const removeBookmarkMutation = useRemoveBookmark();
+  
+  // TanStack Query hooks for reactions (likes)
+  const addReactionMutation = useAddReaction();
+  const removeReactionMutation = useRemoveReaction();
 
   const postUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/posts/${postId}` 
@@ -51,17 +61,17 @@ export default function PostActions({
 
   const handleLike = async () => {
     try {
-      const response = await fetch(`/api/posts/${postId}/reactions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: "LIKE",
-        }),
-      });
-
-      if (!response.ok) throw new Error();
+      if (liked) {
+        await removeReactionMutation.mutateAsync({
+          type: 'LIKE',
+          postId
+        });
+      } else {
+        await addReactionMutation.mutateAsync({
+          type: 'LIKE',
+          postId
+        });
+      }
 
       // Update local state
       const newLikedState = !liked;
@@ -85,24 +95,14 @@ export default function PostActions({
 
   const handleBookmark = async () => {
     try {
-      const response = await fetch(`/api/posts/${postId}/reactions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: "BOOKMARK",
-        }),
-      });
-
-      if (!response.ok) throw new Error();
-
-      // Update local state
-      const newBookmarkedState = !bookmarked;
-      setBookmarked(newBookmarkedState);
+      if (isBookmarked) {
+        await removeBookmarkMutation.mutateAsync(postId);
+      } else {
+        await addBookmarkMutation.mutateAsync(postId);
+      }
 
       toast({
-        description: bookmarked ? "Removed bookmark" : "Added bookmark"
+        description: isBookmarked ? "Removed bookmark" : "Added bookmark"
       });
     } catch (error) {
       console.error("Failed to bookmark post:", error);
@@ -148,6 +148,7 @@ export default function PostActions({
           variant="ghost"
           size="sm"
           className="flex items-center gap-1 hover-effect"
+          disabled={addReactionMutation.isPending || removeReactionMutation.isPending}
         >
           {liked ? (
             <HeartSolidIcon className="h-4 w-4 text-rose-500" />
@@ -170,8 +171,9 @@ export default function PostActions({
           variant="ghost"
           size="sm"
           className="flex items-center gap-1 hover-effect"
+          disabled={addBookmarkMutation.isPending || removeBookmarkMutation.isPending}
         >
-          {bookmarked ? (
+          {isBookmarked ? (
             <BookmarkSolidIcon className="h-4 w-4 text-indigo-500" />
           ) : (
             <BookmarkIcon className="h-4 w-4" />

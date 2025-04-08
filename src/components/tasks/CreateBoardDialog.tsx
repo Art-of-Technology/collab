@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
+import { useCreateBoard } from "@/hooks/queries/useTask";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,12 +30,14 @@ export default function CreateBoardDialog({
 }: CreateBoardDialogProps) {
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     issuePrefix: "",
   });
+  
+  // Use the mutation hook
+  const createBoardMutation = useCreateBoard();
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
@@ -55,24 +58,13 @@ export default function CreateBoardDialog({
       return;
     }
 
-    setLoading(true);
     try {
-      const response = await fetch(`/api/workspaces/${currentWorkspace.id}/boards`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description || undefined,
-          issuePrefix: formData.issuePrefix || undefined,
-        }),
+      await createBoardMutation.mutateAsync({
+        workspaceId: currentWorkspace.id,
+        name: formData.name,
+        description: formData.description || undefined,
+        issuePrefix: formData.issuePrefix || undefined,
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create board");
-      }
       
       toast({
         title: "Board created",
@@ -95,8 +87,6 @@ export default function CreateBoardDialog({
         description: error.message || "Failed to create board",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -158,8 +148,8 @@ export default function CreateBoardDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? (
+          <Button onClick={handleSubmit} disabled={createBoardMutation.isPending}>
+            {createBoardMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating...

@@ -29,6 +29,9 @@ export async function POST(request: NextRequest) {
       workspaceId,
       assigneeId,
       parentTaskId,
+      storyId,
+      epicId,
+      milestoneId,
       postId,
       labels,
     } = body;
@@ -77,24 +80,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // If no column ID is provided, find the first column
+    // Find the first column if columnId is not provided
     let actualColumnId = columnId;
     if (!actualColumnId) {
       const firstColumn = await prisma.taskColumn.findFirst({
         where: {
-          taskBoardId,
+          taskBoardId: taskBoardId,
         },
         orderBy: {
-          order: "asc",
+          order: 'asc',
         },
       });
-
+      
       if (firstColumn) {
         actualColumnId = firstColumn.id;
       }
     }
 
-    // Create task
+    // Create the task
     const task = await prisma.task.create({
       data: {
         title,
@@ -110,6 +113,9 @@ export async function POST(request: NextRequest) {
         workspaceId,
         assigneeId,
         parentTaskId,
+        storyId,
+        epicId,
+        milestoneId,
         postId,
         reporterId: session.user.id,
         // Create activity record for task creation
@@ -144,6 +150,12 @@ export async function POST(request: NextRequest) {
         column: true,
         taskBoard: true,
         labels: true,
+        story: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
       },
     });
 
@@ -174,6 +186,9 @@ export async function GET(request: NextRequest) {
     const boardId = url.searchParams.get('boardId');
     const columnId = url.searchParams.get('columnId');
     const assigneeId = url.searchParams.get('assigneeId');
+    const storyId = url.searchParams.get('storyId');
+    const epicId = url.searchParams.get('epicId');
+    const milestoneId = url.searchParams.get('milestoneId');
 
     // Construct query filters
     const filters: any = {};
@@ -188,6 +203,18 @@ export async function GET(request: NextRequest) {
 
     if (assigneeId) {
       filters.assigneeId = assigneeId === 'unassigned' ? null : assigneeId;
+    }
+
+    if (storyId) {
+      filters.storyId = storyId;
+    }
+
+    if (epicId) {
+      filters.epicId = epicId;
+    }
+
+    if (milestoneId) {
+      filters.milestoneId = milestoneId;
     }
 
     // Fetch tasks with filters
@@ -212,6 +239,12 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             image: true,
+          },
+        },
+        story: {
+          select: {
+            id: true,
+            title: true,
           },
         },
         _count: {

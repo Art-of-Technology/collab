@@ -114,7 +114,7 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
         descriptionRef.current = taskData.description || "";
         
         // Fetch statuses (columns) for the task's board
-        const columnsResponse = await fetch(`/api/boards/${taskData.taskBoardId}/columns`);
+        const columnsResponse = await fetch(`/api/tasks/boards/${taskData.taskBoardId}/columns`);
         if (columnsResponse.ok) {
           const columnsData = await columnsResponse.json();
           setStatuses(columnsData.map((col: any) => col.name));

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp, Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -16,7 +16,6 @@ import { TaskComment } from "@/components/tasks/TaskComment";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
 import { useTasks } from "@/context/TasksContext";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -24,6 +23,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import React from "react";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
+import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -39,7 +39,30 @@ export interface TaskComment {
     id: string;
     name: string | null;
     image: string | null;
+    useCustomAvatar?: boolean;
+    avatarSkinTone?: number | null;
+    avatarEyes?: number | null;
+    avatarBrows?: number | null;
+    avatarMouth?: number | null;
+    avatarNose?: number | null;
+    avatarHair?: number | null;
+    avatarEyewear?: number | null;
+    avatarAccessory?: number | null;
   };
+  html?: string | null;
+  parentId?: string | null;
+  reactions?: {
+    id: string;
+    type: string;
+    authorId: string;
+    author?: {
+      id: string;
+      name?: string | null;
+      image?: string | null;
+      useCustomAvatar?: boolean;
+    };
+  }[];
+  replies?: TaskComment[];
 }
 
 export interface TaskLabel {
@@ -57,8 +80,8 @@ export interface TaskAttachment {
 export interface Task {
   id: string;
   title: string;
-  description?: string;
-  status: string;
+  description?: string | null;
+  status: string | null;
   priority: string;
   type: string;
   createdAt: Date;
@@ -89,15 +112,42 @@ export interface Task {
   storyPoints?: number;
   issueKey?: string | null;
   workspaceId: string;
+  milestoneId?: string;
+  milestone?: {
+    id: string;
+    title: string;
+  };
+  epicId?: string;
+  epic?: {
+    id: string;
+    title: string;
+  };
+  storyId?: string;
+  story?: {
+    id: string;
+    title: string;
+  };
+  parentTaskId?: string;
+  parentTask?: {
+    id: string;
+    title: string;
+    issueKey?: string;
+  };
+  subtasks?: {
+    id: string;
+    title: string;
+    issueKey?: string;
+    status: string;
+  }[];
 }
 
 interface TaskDetailContentProps {
   task: Task | null;
-  isLoading: boolean;
   error: string | null;
   onRefresh: () => void;
   showHeader?: boolean;
   onClose?: () => void;
+  boardId?: string;
 }
 
 // Client-side implementation of status badge
@@ -142,17 +192,18 @@ const getPriorityBadge = (priority: string) => {
 
 export function TaskDetailContent({
   task,
-  isLoading,
   error,
   onRefresh,
   showHeader = true,
-  onClose
+  onClose,
+  boardId
 }: TaskDetailContentProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [savingTitle, setSavingTitle] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [savingDescription, setSavingDescription] = useState(false);
+  const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [description, setDescription] = useState(task?.description || "");
   const [savingAssignee, setSavingAssignee] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -161,13 +212,69 @@ export function TaskDetailContent({
   const [savingDueDate, setSavingDueDate] = useState(false);
   const [dueDate, setDueDate] = useState<Date | undefined>(task?.dueDate);
   const [statuses, setStatuses] = useState<string[]>([]);
+  const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
   const { toast } = useToast();
-  const router = useRouter();
   const { refreshBoards } = useTasks();
+  const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
+
+  // Update comments state when task changes
+  useEffect(() => {
+    if (task?.comments) {
+      console.log("Task comments from TaskDetailContent:", task.comments);
+      // Make sure comments have the right structure
+      const structuredComments = task.comments.map(comment => ({
+        ...comment,
+        author: comment.author || {
+          id: "unknown",
+          name: "Unknown User",
+          image: null
+        }
+      }));
+      setComments(structuredComments);
+    }
+  }, [task?.comments]);
 
   const handleDescriptionChange = useCallback((md: string) => {
     setDescription(md);
   }, []);
+
+  const handleAiImproveDescription = async (text: string): Promise<string> => {
+    if (isImprovingDescription || !text.trim()) return text;
+    
+    setIsImprovingDescription(true);
+    
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return improved text
+      return improvedText;
+    } catch (error) {
+      console.error("Error improving text:", error);
+      toast({
+        title: "Error",
+        description: "Failed to improve text",
+        variant: "destructive"
+      });
+      return text;
+    } finally {
+      setIsImprovingDescription(false);
+    }
+  };
 
   const saveTaskField = async (field: string, value: any) => {
     try {
@@ -183,16 +290,36 @@ export function TaskDetailContent({
         throw new Error(`Failed to update ${field}`);
       }
 
+      const updatedTask = await response.json();
+      
       toast({
         title: 'Updated',
         description: `Task ${field} updated successfully`,
       });
 
-      onRefresh();
-
-      // Refresh the page to reflect changes in all views
-      await refreshBoards();
-      router.refresh();
+      // Don't trigger a full refresh which causes modal to disappear
+      // Just update the necessary state
+      if (field === 'title') {
+        setTitle(updatedTask.title);
+      } else if (field === 'description') {
+        setDescription(updatedTask.description || "");
+      } else if (field === 'assigneeId') {
+        // The assignee is already updated in the UI by AssigneeSelect
+      } else if (field === 'status') {
+        // The status is already updated in the UI by the Select
+      } else if (field === 'priority') {
+        // The priority is already updated in the UI by the Select
+      } else if (field === 'type') {
+        // The type is already updated in the UI by the Select
+      } else if (field === 'dueDate') {
+        setDueDate(updatedTask.dueDate);
+      }
+      
+      // Refresh in background without causing UI flicker
+      setTimeout(() => {
+        onRefresh();
+        refreshBoards();
+      }, 100);
 
       return true;
     } catch (error) {
@@ -265,9 +392,24 @@ export function TaskDetailContent({
 
   // Handle status change
   const handleStatusChange = async (status: string) => {
+    if (!task) return;
+    
     setSavingStatus(true);
     try {
-      await saveTaskField('status', status);
+      // If task has a column, update the column ID based on the status
+      if (task.column) {
+        // Find the column ID that matches the selected status
+        const statusesToColumn = (statuses || []).map((s, index) => ({ status: s, index }));
+        console.log("Updating column status:", status, statusesToColumn);
+        
+        // Update the status and column together
+        await saveTaskField('status', status);
+      } else {
+        // Just update the status directly
+        await saveTaskField('status', status);
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
     } finally {
       setSavingStatus(false);
     }
@@ -336,16 +478,35 @@ export function TaskDetailContent({
     if (!task) return;
 
     try {
-      // Fetch statuses (columns) for the task's board
-      const columnsResponse = await fetch(`/api/boards/${task.taskBoard?.id}/columns`);
-      if (columnsResponse.ok) {
-        const columnsData = await columnsResponse.json();
-        setStatuses(columnsData.map((col: any) => col.name));
+      // Set default statuses in case there's no board attached
+      const defaultStatuses = ["TO DO", "IN PROGRESS", "REVIEW", "DONE"];
+      
+      // First try task's own board ID, then fall back to boardId prop if available
+      const effectiveBoardId = task.taskBoard?.id || boardId;
+      
+      // Only fetch statuses if we have a valid board ID
+      if (effectiveBoardId) {
+        // Fetch statuses (columns) for the board
+        const columnsResponse = await fetch(`/api/tasks/boards/${effectiveBoardId}/columns`);
+        if (columnsResponse.ok) {
+          const columnsData = await columnsResponse.json();
+          setStatuses(columnsData.map((col: any) => col.name));
+        } else {
+          // Fall back to default statuses if request fails
+          console.warn("Failed to fetch board columns, using default statuses");
+          setStatuses(defaultStatuses);
+        }
+      } else {
+        // If no board ID, use default statuses
+        console.info("No task board ID available, using default statuses");
+        setStatuses(defaultStatuses);
       }
     } catch (error) {
       console.error("Error loading field options:", error);
+      // Set default statuses in case of error
+      setStatuses(["TO DO", "IN PROGRESS", "REVIEW", "DONE"]);
     }
-  }, [task]);
+  }, [task, boardId]);
 
   // Load field options on first render
   useEffect(() => {
@@ -355,19 +516,20 @@ export function TaskDetailContent({
   // Update state when task changes
   useEffect(() => {
     if (task) {
+      console.log("Task details:", {
+        title: task.title,
+        status: task.status,
+        columnName: task.column?.name,
+        priority: task.priority,
+        boardId: task.taskBoard?.id || boardId
+      });
+      
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(task.dueDate);
     }
-  }, [task]);
+  }, [task, boardId]);
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -399,25 +561,33 @@ export function TaskDetailContent({
             <div className="space-y-2 flex-1">
               {editingTitle ? (
                 <div className="flex flex-col gap-2 w-full">
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSaveTitle();
-                      } else if (e.key === 'Escape') {
-                        handleCancelTitle();
-                      }
-                    }}
-                    placeholder="Task title"
-                  />
+                  <div className="relative">
+                    <Input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSaveTitle();
+                        } else if (e.key === 'Escape') {
+                          handleCancelTitle();
+                        }
+                      }}
+                      placeholder="Task title"
+                      disabled={savingTitle}
+                    />
+                    {savingTitle && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
                       onClick={handleCancelTitle}
                       disabled={savingTitle}
                       className="h-8"
@@ -425,8 +595,8 @@ export function TaskDetailContent({
                       <X className="h-4 w-4 mr-1" />
                       Cancel
                     </Button>
-                    <Button
-                      size="sm"
+                    <Button 
+                      size="sm" 
                       onClick={handleSaveTitle}
                       disabled={savingTitle}
                       className="h-8"
@@ -446,7 +616,7 @@ export function TaskDetailContent({
                   </div>
                 </div>
               ) : (
-                <div
+                <div 
                   className="group relative cursor-pointer"
                   onClick={() => setEditingTitle(true)}
                 >
@@ -485,15 +655,11 @@ export function TaskDetailContent({
             </div>
 
             <div className="flex items-center gap-3">
-              {savingType ? (
-                <div className="flex items-center h-9 px-3">
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  <span className="text-sm">Saving...</span>
-                </div>
-              ) : (
+              <div className="relative">
                 <Select
                   value={task.type}
                   onValueChange={handleTypeChange}
+                  disabled={savingType}
                 >
                   <SelectTrigger className="min-w-[130px] h-10 border-dashed hover:border-primary hover:text-primary transition-colors">
                     <SelectValue>
@@ -515,8 +681,13 @@ export function TaskDetailContent({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-              )}
-
+                {savingType && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                )}
+              </div>
+              
               <ShareButton taskId={task.id} issueKey={task.issueKey || ""} />
             </div>
           </div>
@@ -543,25 +714,35 @@ export function TaskDetailContent({
               <div>
                 {editingDescription ? (
                   <div className="p-4 space-y-3 bg-muted/10">
-                    <MarkdownEditor
-                      initialValue={description}
-                      onChange={handleDescriptionChange}
-                      placeholder="Add a description..."
-                      minHeight="150px"
-                      maxHeight="400px"
-                    />
+                    <div className="relative">
+                      <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
+                        <MarkdownEditor
+                          initialValue={description}
+                          onChange={handleDescriptionChange}
+                          placeholder="Add a description..."
+                          minHeight="150px"
+                          maxHeight="400px"
+                          onAiImprove={handleAiImproveDescription}
+                        />
+                      </div>
+                      {savingDescription && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex justify-end gap-2 mt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
                         onClick={handleCancelDescription}
                         disabled={savingDescription}
                       >
                         <X className="h-4 w-4 mr-1" />
                         Cancel
                       </Button>
-                      <Button
-                        size="sm"
+                      <Button 
+                        size="sm" 
                         onClick={handleSaveDescription}
                         disabled={savingDescription}
                       >
@@ -580,7 +761,7 @@ export function TaskDetailContent({
                     </div>
                   </div>
                 ) : (
-                  <div
+                  <div 
                     className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
                     onClick={() => setEditingDescription(true)}
                   >
@@ -605,12 +786,11 @@ export function TaskDetailContent({
               <CardTitle className="text-md">Comments</CardTitle>
             </CardHeader>
             <CardContent className="relative z-0 p-4">
-              <TaskCommentsList
+              <TaskCommentsList 
                 taskId={task.id}
-                comments={task.comments}
+                initialComments={comments}
                 currentUserId={task.reporter?.id || ""}
                 userImage={task.reporter?.image}
-                onRefresh={onRefresh}
               />
             </CardContent>
           </Card>
@@ -624,15 +804,11 @@ export function TaskDetailContent({
             <CardContent className="p-4 space-y-4">
               <div>
                 <p className="text-sm font-medium mb-1">Status</p>
-                {savingStatus ? (
-                  <div className="flex items-center h-9 px-3 text-sm">
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </div>
-                ) : (
+                <div className="relative">
                   <Select
-                    value={task.column?.name || "TO DO"}
+                    value={task.column?.name || task.status || "TO DO"}
                     onValueChange={handleStatusChange}
+                    disabled={savingStatus}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -645,20 +821,21 @@ export function TaskDetailContent({
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                  {savingStatus && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
                 <p className="text-sm font-medium mb-1">Priority</p>
-                {savingPriority ? (
-                  <div className="flex items-center h-9 px-3 text-sm">
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </div>
-                ) : (
+                <div className="relative">
                   <Select
                     value={task.priority || "MEDIUM"}
                     onValueChange={handlePriorityChange}
+                    disabled={savingPriority}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -670,23 +847,29 @@ export function TaskDetailContent({
                       <SelectItem value="URGENT">{getPriorityBadge("URGENT")}</SelectItem>
                     </SelectContent>
                   </Select>
-                )}
+                  {savingPriority && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
                 <p className="text-sm font-medium mb-1">Assignee</p>
-                {savingAssignee ? (
-                  <div className="flex items-center h-9 px-3 text-sm">
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </div>
-                ) : (
+                <div className="relative">
                   <AssigneeSelect
                     value={task.assignee?.id}
                     onChange={handleAssigneeChange}
                     workspaceId={task.workspaceId}
+                    disabled={savingAssignee}
                   />
-                )}
+                  {savingAssignee && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -717,12 +900,7 @@ export function TaskDetailContent({
 
               <div>
                 <p className="text-sm font-medium mb-1">Due Date</p>
-                {savingDueDate ? (
-                  <div className="flex items-center h-9 px-3 text-sm">
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </div>
-                ) : (
+                <div className="relative">
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -731,6 +909,7 @@ export function TaskDetailContent({
                           "w-full justify-start text-left font-normal",
                           !dueDate && "text-muted-foreground"
                         )}
+                        disabled={savingDueDate}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {dueDate ? format(dueDate, "MMM d, yyyy") : "Set due date"}
@@ -745,7 +924,127 @@ export function TaskDetailContent({
                       />
                     </PopoverContent>
                   </Popover>
+                  {savingDueDate && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Relations Section */}
+              <div className="border-t border-border/50 pt-4 mt-2">
+                <h3 className="text-sm font-medium mb-3">Relations</h3>
+
+                {/* Milestone */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Milestone</p>
+                  {task.milestone ? (
+                    <Link href={`/milestones/${task.milestoneId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                        Milestone
+                      </Badge>
+                      <span>{task.milestone.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No milestone linked
+                    </div>
+                  )}
+                </div>
+
+                {/* Epic */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Epic</p>
+                  {task.epic ? (
+                    <Link href={`/epics/${task.epicId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                        Epic
+                      </Badge>
+                      <span>{task.epic.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No epic linked
+                    </div>
+                  )}
+                </div>
+
+                {/* Story */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Story</p>
+                  {task.story ? (
+                    <Link href={`/stories/${task.storyId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        Story
+                      </Badge>
+                      <span>{task.story.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No story linked
+                    </div>
+                  )}
+                </div>
+
+                {/* Parent Task */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Parent Task</p>
+                  {task.parentTask ? (
+                    <Link href={`/tasks/${task.parentTaskId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                        {task.parentTask.issueKey || 'Task'}
+                      </Badge>
+                      <span>{task.parentTask.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No parent task
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtasks */}
+                {task.subtasks && task.subtasks.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs font-medium mb-1 text-muted-foreground">Subtasks</p>
+                    <ul className="space-y-2">
+                      {task.subtasks.map((subtask) => (
+                        <li key={subtask.id}>
+                          <Link href={`/tasks/${subtask.id}`} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                                {subtask.issueKey || 'Task'}
+                              </Badge>
+                              <span className="truncate">{subtask.title}</span>
+                            </div>
+                            <Badge className={`${
+                              subtask.status === 'DONE' ? 'bg-green-500' : 
+                              subtask.status === 'IN PROGRESS' ? 'bg-blue-500' : 
+                              'bg-gray-500'
+                            } text-white flex-shrink-0 ml-1`}>
+                              {subtask.status}
+                            </Badge>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
+
+                {/* Create Subtask Button */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-2"
+                  onClick={() => {
+                    // Open task creation modal with parent task ID prefilled
+                    setSubtaskFormOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Create Subtask
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -774,6 +1073,18 @@ export function TaskDetailContent({
           )}
         </div>
       </div>
+
+      {/* Subtask Creation Modal */}
+      {subtaskFormOpen && (
+        <CreateTaskForm
+          isOpen={subtaskFormOpen}
+          onClose={() => setSubtaskFormOpen(false)}
+          initialData={{
+            parentTaskId: task.id,
+            taskBoardId: task.taskBoard?.id || "",
+          }}
+        />
+      )}
     </div>
   );
 } 

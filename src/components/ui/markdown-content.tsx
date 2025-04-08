@@ -1,6 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { marked } from 'marked';
+import { useEffect, useState } from 'react';
 
 interface MarkdownContentProps {
   content: string;
@@ -8,6 +10,21 @@ interface MarkdownContentProps {
 }
 
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
+  const [html, setHtml] = useState('');
+  
+  useEffect(() => {
+    // Convert markdown to HTML safely
+    try {
+      const htmlContent = marked.parse(content);
+      if (typeof htmlContent === 'string') {
+        setHtml(htmlContent);
+      }
+    } catch (error) {
+      console.error('Error parsing markdown:', error);
+      setHtml(`<p>${content}</p>`);
+    }
+  }, [content]);
+  
   return (
     <div 
       className={cn(
@@ -20,7 +37,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
         "prose-blockquote:border-l-2 prose-blockquote:border-primary/40 prose-blockquote:pl-4 prose-blockquote:my-1",
         className
       )}
-      dangerouslySetInnerHTML={{ __html: content }}
+      dangerouslySetInnerHTML={{ __html: html }}
     />
   );
 } 

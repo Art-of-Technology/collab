@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,8 @@ import { signOut, useSession } from "next-auth/react";
 import {
   BellIcon,
   MagnifyingGlassIcon,
-  Bars3Icon
+  Bars3Icon,
+  SparklesIcon
 } from "@heroicons/react/24/outline";
 import { MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +36,7 @@ import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUiContext } from "@/context/UiContext";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -54,30 +56,13 @@ export default function Navbar({
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { isChatOpen, toggleChat } = useUiContext();
+  const { isChatOpen, toggleChat, isAssistantOpen, toggleAssistant } = useUiContext();
   const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
-  const [userData, setUserData] = useState<any>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-
-  // Fetch the current user data for avatar
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (session?.user) {
-        try {
-          const response = await fetch("/api/user/me");
-          if (response.ok) {
-            const data = await response.json();
-            setUserData(data.user);
-          }
-        } catch (error) {
-          console.error("Failed to fetch user data:", error);
-        }
-      }
-    };
-
-    fetchUserData();
-  }, [session]);
+  
+  // Use TanStack Query hook to fetch user data
+  const { data: userData } = useCurrentUser();
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -249,6 +234,19 @@ export default function Navbar({
                     <MessageCircle className="h-5 w-5" />
                     {isChatOpen && (
                       <span className="absolute bottom-1 right-1 bg-blue-500 rounded-full w-2 h-2" />
+                    )}
+                  </Button>
+
+                  {/* AI Assistant toggle button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative hover:bg-[#1c1c1c] text-gray-400"
+                    onClick={toggleAssistant}
+                  >
+                    <SparklesIcon className="h-5 w-5" />
+                    {isAssistantOpen && (
+                      <span className="absolute bottom-1 right-1 bg-purple-500 rounded-full w-2 h-2" />
                     )}
                   </Button>
                 </>

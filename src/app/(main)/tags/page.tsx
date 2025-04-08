@@ -1,131 +1,17 @@
-import { getCurrentUser } from "@/lib/session";
+import { getTags } from "@/actions/tag";
+import TagsClient from "@/components/tags/TagsClient";
+import { getAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { cookies } from "next/headers";
-
-export const dynamic = 'force-dynamic';
 
 export default async function TagsPage() {
-  const user = await getCurrentUser();
-  
-  if (!user) {
+  const session = await getAuthSession();
+  if (!session?.user) {
     redirect("/login");
   }
-  
-  // Get current workspace from cookie
-  const cookieStore = await cookies();
-  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
 
-  // If no workspace ID found, we need to get the user's workspaces
-  let workspaceId = currentWorkspaceId;
-  
-  if (!workspaceId) {
-    // Get user's first workspace
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
-      },
-      orderBy: {
-        createdAt: 'asc'
-      },
-      select: { id: true }
-    });
-    
-    if (workspace) {
-      workspaceId = workspace.id;
-    }
-  }
+  // Get initial data from server action
+  const initialData = await getTags();
 
-  // If we still don't have a workspaceId, redirect to create workspace
-  if (!workspaceId) {
-    redirect('/create-workspace');
-  }
-  
-  // Get all tags and count of posts for each tag in the current workspace
-  const tagsWithCount = await prisma.tag.findMany({
-    where: {
-      posts: {
-        some: {
-          workspaceId: workspaceId
-        }
-      }
-    },
-    include: {
-      _count: {
-        select: {
-          posts: {
-            where: {
-              workspaceId: workspaceId
-            }
-          }
-        }
-      }
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  });
-  
-  // Group tags by first letter for better UI organization
-  const groupedTags: Record<string, typeof tagsWithCount> = {};
-  
-  tagsWithCount.forEach(tag => {
-    const firstLetter = tag.name.charAt(0).toUpperCase();
-    if (!groupedTags[firstLetter]) {
-      groupedTags[firstLetter] = [];
-    }
-    groupedTags[firstLetter].push(tag);
-  });
-  
-  // Sort the keys alphabetically
-  const sortedLetters = Object.keys(groupedTags).sort();
-  
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-6 overflow-x-hidden">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Tags</h1>
-        <p className="text-muted-foreground">
-          Browse posts by topic
-        </p>
-      </div>
-      
-      {tagsWithCount.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            <p>No tags have been created yet.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {sortedLetters.map(letter => (
-            <div key={letter} className="space-y-2">
-              <h2 className="text-xl font-semibold border-b pb-2">{letter}</h2>
-              <div className="flex flex-wrap gap-3">
-                {groupedTags[letter].map(tag => (
-                  <Link 
-                    key={tag.id} 
-                    href={`/timeline?tag=${encodeURIComponent(tag.name)}`}
-                    className="no-underline"
-                  >
-                    <Badge variant="outline" className="text-sm px-3 py-1 hover:bg-secondary transition-colors whitespace-nowrap">
-                      #{tag.name}
-                      <span className="ml-2 bg-muted-foreground/20 rounded-full px-2 py-0.5 text-xs">
-                        {tag._count.posts}
-                      </span>
-                    </Badge>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  // Pass data to the client component
+  return <TagsClient initialData={initialData} />;
 } 

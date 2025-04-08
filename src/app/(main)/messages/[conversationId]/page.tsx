@@ -1,12 +1,12 @@
-import { getCurrentUser } from "@/lib/session";
 import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { getAuthSession } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import MessageInput from "@/components/messages/MessageInput";
-import MessageList from "@/components/messages/MessageList";
+import ConversationMessages from "@/components/messages/ConversationMessages";
+import { getConversationById } from "@/actions/message";
 
 export default async function ConversationPage({
   params,
@@ -15,65 +15,20 @@ export default async function ConversationPage({
 }) {
   const _params = await params;
   const { conversationId } = _params;
-  const currentUser = await getCurrentUser();
+  const session = await getAuthSession();
   
-  if (!currentUser) {
+  if (!session?.user) {
     redirect("/login");
   }
   
-  // Verify the user is part of the conversation
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      participants: {
-        some: {
-          id: currentUser.id
-        }
-      }
-    },
-    include: {
-      participants: true,
-      messages: {
-        include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              image: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'asc'
-        }
-      }
-    }
-  });
+  // Get conversation data
+  const conversation = await getConversationById(conversationId);
   
-  if (!conversation) {
+  if (!conversation || !conversation.otherParticipant) {
     notFound();
   }
   
-  // Find the other participant
-  const otherParticipant = conversation.participants.find(
-    participant => participant.id !== currentUser.id
-  );
-  
-  if (!otherParticipant) {
-    notFound();
-  }
-  
-  // Mark unread messages as read
-  await prisma.message.updateMany({
-    where: {
-      conversationId,
-      receiverId: currentUser.id,
-      read: false
-    },
-    data: {
-      read: true
-    }
-  });
+  const { otherParticipant, messages } = conversation;
   
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-4xl mx-auto border border-border/40 rounded-lg shadow-lg overflow-hidden">
@@ -100,9 +55,10 @@ export default async function ConversationPage({
       
       {/* Scrollable message area */}
       <div className="flex-1 overflow-y-auto p-4 bg-background/30">
-        <MessageList 
-          messages={conversation.messages} 
-          currentUserId={currentUser.id}
+        <ConversationMessages
+          conversationId={conversationId}
+          initialMessages={messages}
+          currentUserId={session.user.id}
         />
       </div>
       

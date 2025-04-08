@@ -279,6 +279,9 @@ model Workspace {
   taskBoards      TaskBoard[]
   tasks           Task[]
   taskLabels      TaskLabel[]
+  milestones      Milestone[]
+  epics           Epic[]
+  stories         Story[]
 }
 
 model WorkspaceMember {
@@ -323,9 +326,12 @@ model TaskBoard {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  columns   TaskColumn[]
-  tasks     Task[]
+  workspace  Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  columns    TaskColumn[]
+  tasks      Task[]
+  milestones Milestone[]
+  epics      Epic[]
+  stories    Story[]
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
@@ -334,14 +340,18 @@ model TaskBoard {
 model TaskColumn {
   id          String   @id @default(cuid())
   name        String
-  order       Int
-  color       String?  @default("#6366F1") // Default indigo color
+  description String?
+  order       Int      @default(0)
+  color       String?
   taskBoardId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  taskBoard TaskBoard @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
-  tasks     Task[]
+  taskBoard   TaskBoard     @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  milestones  Milestone[]
+  epics       Epic[]
+  stories     Story[]
 
   @@unique([name, taskBoardId])
   @@index([taskBoardId])
@@ -363,6 +373,9 @@ model Task {
   assigneeId   String?
   reporterId   String
   parentTaskId String?       // For subtasks
+  storyId      String?       // Link to a story
+  epicId       String?       // Direct link to epic for tasks not in a story
+  milestoneId  String?       // Direct link to milestone for quick filtering
   postId       String?       // For tasks linked to posts
   position     Int?          // Position within a column for ordering
   createdAt    DateTime      @default(now())
@@ -376,6 +389,7 @@ model Task {
   parentTask  Task?            @relation("TaskToSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
   subtasks    Task[]           @relation("TaskToSubtasks")
   post        Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  story       Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
   comments    TaskComment[]
   attachments TaskAttachment[]
   labels      TaskLabel[]      @relation("TaskToLabel")
@@ -389,6 +403,9 @@ model Task {
   @@index([parentTaskId])
   @@index([postId])
   @@index([issueKey])
+  @@index([storyId])
+  @@index([epicId])
+  @@index([milestoneId])
 }
 
 model TaskComment {
@@ -472,4 +489,93 @@ model TaskActivity {
 
   @@index([taskId])
   @@index([userId])
+}
+
+// New hierarchical models
+model Milestone {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    @default("planned") // planned, in-progress, completed
+  startDate   DateTime?
+  dueDate     DateTime?
+  taskBoardId String
+  workspaceId String
+  columnId    String?   // Add this field to reference a column
+  color       String?   @default("#6366F1")
+  position    Int?      // Position within a column for ordering
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  taskBoard   TaskBoard @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  epics       Epic[]
+
+  @@index([workspaceId])
+  @@index([taskBoardId])
+  @@index([columnId])
+}
+
+model Epic {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    @default("backlog") // backlog, in-progress, completed
+  priority    String    @default("medium") // low, medium, high, urgent
+  startDate   DateTime?
+  dueDate     DateTime?
+  milestoneId String?
+  taskBoardId String
+  workspaceId String
+  columnId    String?   // Add this field to reference a column
+  color       String?   @default("#6366F1")
+  progress    Int       @default(0) // 0-100 percent
+  issueKey    String?
+  position    Int?      // Position within a column for ordering
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  taskBoard   TaskBoard  @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  stories     Story[]
+
+  @@index([workspaceId])
+  @@index([taskBoardId])
+  @@index([milestoneId])
+  @@index([issueKey])
+  @@index([columnId])
+}
+
+model Story {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    @default("backlog") // backlog, in-progress, completed
+  priority    String    @default("medium") // low, medium, high, urgent
+  type        String    @default("user-story") // user-story, technical-story, etc.
+  storyPoints Int?
+  epicId      String?
+  taskBoardId String?
+  workspaceId String
+  columnId    String?   // Add this field to reference a column
+  issueKey    String?
+  color       String?   @default("#3B82F6") // Default blue color
+  position    Int?      // Position within a column for ordering
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  epic        Epic?     @relation(fields: [epicId], references: [id], onDelete: SetNull)
+  taskBoard   TaskBoard? @relation(fields: [taskBoardId], references: [id], onDelete: SetNull)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  tasks       Task[]
+
+  @@index([workspaceId])
+  @@index([taskBoardId])
+  @@index([epicId])
+  @@index([issueKey])
+  @@index([columnId])
 }

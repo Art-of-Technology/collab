@@ -1,9 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,20 +12,18 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
+import { WorkspaceLimitClient } from './WorkspaceLimitClient';
+import { checkWorkspaceLimit } from '@/actions/workspace';
 
 export default async function CreateWorkspacePage() {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
 
-  if (!session?.user) {
+  if (!user) {
     redirect('/login');
   }
 
-  // Check if user has reached their workspace limit (3 for free plan)
-  const ownedWorkspacesCount = await prisma.workspace.count({
-    where: { ownerId: session.user.id }
-  });
-
-  const canCreateWorkspace = ownedWorkspacesCount < 3;
+  // Check if user has reached their workspace limit using server action
+  const { canCreateWorkspace } = await checkWorkspaceLimit();
 
   return (
     <div className="container max-w-3xl py-8">
@@ -48,27 +44,9 @@ export default async function CreateWorkspacePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {canCreateWorkspace ? (
-            <CreateWorkspaceForm />
-          ) : (
-            <div className="bg-amber-50 dark:bg-amber-950/30 p-6 rounded-md border border-amber-200 dark:border-amber-800">
-              <h3 className="font-medium text-amber-800 dark:text-amber-400 text-lg">Workspace limit reached</h3>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">
-                You have reached the maximum number of workspaces (3) allowed on the free plan.
-                Please upgrade your account to create more workspaces or manage your existing ones.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Button variant="default" className="bg-amber-600 hover:bg-amber-700 text-white border-none">
-                  Upgrade Plan
-                </Button>
-                <Link href="/workspaces">
-                  <Button variant="secondary" className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700">
-                    Manage Existing Workspaces
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          )}
+          <WorkspaceLimitClient initialCanCreate={canCreateWorkspace} />
+          
+          {canCreateWorkspace && <CreateWorkspaceForm />}
         </CardContent>
       </Card>
     </div>

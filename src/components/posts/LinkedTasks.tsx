@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardList, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 
 interface Task {
   id: string;
@@ -18,35 +18,23 @@ interface LinkedTasksProps {
   postId: string;
 }
 
+// Function to fetch linked tasks
+const fetchLinkedTasks = async (postId: string): Promise<Task[]> => {
+  const response = await fetch(`/api/posts/${postId}/tasks`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch linked tasks");
+  }
+  return response.json();
+};
+
 export default function LinkedTasks({ postId }: LinkedTasksProps) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use TanStack Query to fetch linked tasks
+  const { data: tasks = [], isLoading, error } = useQuery<Task[]>({
+    queryKey: ['linkedTasks', postId],
+    queryFn: () => fetchLinkedTasks(postId),
+  });
 
-  useEffect(() => {
-    const fetchLinkedTasks = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/posts/${postId}/tasks`);
-        
-        if (!response.ok) {
-          throw new Error("Failed to fetch linked tasks");
-        }
-        
-        const data = await response.json();
-        setTasks(data);
-      } catch (error) {
-        console.error("Error fetching linked tasks:", error);
-        setError("Failed to load linked tasks");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLinkedTasks();
-  }, [postId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Card>
         <CardHeader>
@@ -72,7 +60,7 @@ export default function LinkedTasks({ postId }: LinkedTasksProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 text-sm text-muted-foreground">
-          {error}
+          Error loading linked tasks
         </CardContent>
       </Card>
     );
@@ -124,7 +112,7 @@ export default function LinkedTasks({ postId }: LinkedTasksProps) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y">
-          {tasks.map((task) => (
+          {tasks.map((task: Task) => (
             <Link href={`/tasks/${task.id}`} key={task.id}>
               <div className="p-4 hover:bg-muted/50 transition-colors">
                 <div className="flex justify-between items-start mb-1">

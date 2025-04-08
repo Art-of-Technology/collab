@@ -8,8 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useCreateConversation, useSendMessage } from "@/hooks/queries/useMessage";
 
 interface User {
   id: string;
@@ -27,60 +27,35 @@ interface StartConversationFormProps {
 export default function StartConversationForm({ users = [], recipient }: StartConversationFormProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(recipient || null);
   const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { toast } = useToast();
+
+  // Use TanStack Query mutations
+  const createConversationMutation = useCreateConversation();
+  const sendMessageMutation = useSendMessage();
+
+  // Combined loading state from both mutations
+  const isLoading = createConversationMutation.isPending || sendMessageMutation.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedUser || !message.trim()) return;
-    
-    setIsLoading(true);
-    
+
     try {
-      // First create the conversation
-      const conversationResponse = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: selectedUser.id,
-        }),
-      });
-      
-      if (!conversationResponse.ok) {
-        throw new Error('Failed to create conversation');
-      }
-      
-      const conversation = await conversationResponse.json();
-      
+      // First create the conversation using the mutation
+      const conversationId = await createConversationMutation.mutateAsync(selectedUser.id);
+
       // Then send the first message
-      const messageResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: message.trim(),
-        }),
+      await sendMessageMutation.mutateAsync({
+        conversationId,
+        content: message.trim()
       });
-      
-      if (!messageResponse.ok) {
-        throw new Error('Failed to send message');
-      }
-      
-      router.push(`/messages/${conversation.id}`);
+
+      // Navigate to the conversation
+      router.push(`/messages/${conversationId}`);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Something went wrong",
-        variant: "destructive",
-      });
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+      // Error handling is already done in the mutations
+      console.error("Error creating conversation or sending message:", error);
     }
   };
 
@@ -102,7 +77,7 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
         </Button>
         <h1 className="text-2xl font-bold">New Message</h1>
       </div>
-      
+
       {!selectedUser ? (
         <Card className="border-border/40 bg-card/95 shadow-lg">
           <CardHeader className="border-b border-border/40 p-4">
@@ -147,17 +122,18 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
                   <p className="font-medium">{selectedUser.name}</p>
                   <p className="text-sm text-muted-foreground">{selectedUser.role || "Developer"}</p>
                 </div>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setSelectedUser(null)}
                   className="ml-auto text-muted-foreground hover:text-foreground"
+                  disabled={isLoading}
                 >
                   Change
                 </Button>
               </div>
-              
+
               <Textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -170,19 +146,19 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
               />
             </CardContent>
           </Card>
-          
+
           <div className="flex justify-end">
             <Button
-              type="button" 
-              variant="outline" 
+              type="button"
+              variant="outline"
               onClick={() => setSelectedUser(null)}
               disabled={isLoading}
               className="mr-2 border-border/60"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading || !message.trim()}
               className={cn(
                 "transition-all",

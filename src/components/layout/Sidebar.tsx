@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   HomeIcon,
@@ -17,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface SidebarProps {
   pathname?: string;
@@ -26,26 +26,9 @@ interface SidebarProps {
 
 export default function Sidebar({ pathname = "", isCollapsed = false, toggleSidebar }: SidebarProps) {
   const { data: session } = useSession();
-  const [userData, setUserData] = useState<any>(null);
-
-  // Fetch the current user data for avatar
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (session?.user) {
-        try {
-          const response = await fetch("/api/user/me");
-          if (response.ok) {
-            const data = await response.json();
-            setUserData(data.user);
-          }
-        } catch (error) {
-          console.error("Failed to fetch user data:", error);
-        }
-      }
-    };
-
-    fetchUserData();
-  }, [session]);
+  
+  // Use TanStack Query hook to fetch user data
+  const { data: userData } = useCurrentUser();
 
   const navigation = [
     {

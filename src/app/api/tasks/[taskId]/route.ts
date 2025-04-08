@@ -35,6 +35,42 @@ export async function GET(
             taskBoard: true,
             workspace: true,
             labels: true,
+            story: {
+              select: {
+                id: true,
+                title: true,
+                epic: {
+                  select: {
+                    id: true,
+                    title: true,
+                    milestone: {
+                      select: {
+                        id: true,
+                        title: true,
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            parentTask: {
+              select: {
+                id: true,
+                title: true,
+                issueKey: true,
+              }
+            },
+            subtasks: {
+              select: {
+                id: true,
+                title: true,
+                issueKey: true,
+                status: true,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              }
+            },
             comments: {
               include: {
                 author: true,
@@ -55,6 +91,42 @@ export async function GET(
             taskBoard: true,
             workspace: true,
             labels: true,
+            story: {
+              select: {
+                id: true,
+                title: true,
+                epic: {
+                  select: {
+                    id: true,
+                    title: true,
+                    milestone: {
+                      select: {
+                        id: true,
+                        title: true,
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            parentTask: {
+              select: {
+                id: true,
+                title: true,
+                issueKey: true,
+              }
+            },
+            subtasks: {
+              select: {
+                id: true,
+                title: true,
+                issueKey: true,
+                status: true,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              }
+            },
             comments: {
               include: {
                 author: true,
@@ -89,9 +161,44 @@ export async function GET(
       );
     }
     
+    // Fetch the milestone and epic if they exist
+    let milestone = null;
+    let epic = null;
+    
+    if (task.milestoneId) {
+      // Task has direct milestone association
+      milestone = await prisma.milestone.findUnique({
+        where: { id: task.milestoneId },
+        select: {
+          id: true,
+          title: true,
+        }
+      });
+    } else if (task.story?.epic?.milestone) {
+      // Task has milestone via story -> epic -> milestone
+      milestone = task.story.epic.milestone;
+    }
+    
+    if (task.epicId) {
+      // Task has direct epic association
+      epic = await prisma.epic.findUnique({
+        where: { id: task.epicId },
+        select: {
+          id: true,
+          title: true,
+        }
+      });
+    } else if (task.story?.epic) {
+      // Task has epic via story
+      epic = task.story.epic;
+    }
+    
     // Transform attachments to match the component interface
     const transformedTask = {
       ...task,
+      // Add the resolved milestone and epic
+      milestone: milestone,
+      epic: epic,
       attachments: task.attachments.map(attachment => ({
         id: attachment.id,
         name: attachment.fileName,

@@ -1,13 +1,8 @@
-'use client';
-
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useSession } from 'next-auth/react';
-import { Building2, CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { useWorkspace } from '@/context/WorkspaceContext';
+import React from 'react';
+import { notFound, redirect } from 'next/navigation';
+import { getAuthSession } from '@/lib/auth';
+import { getInvitationByToken } from '@/actions/invitation';
+import InvitationClient from '@/components/workspace/InvitationClient';
 
 interface InvitationPageProps {
   params: {
@@ -15,214 +10,42 @@ interface InvitationPageProps {
   };
 }
 
-export default function WorkspaceInvitationPage({ params }: InvitationPageProps) {
-  const [token, setToken] = useState<string>('');
+export const dynamic = 'force-dynamic';
+
+export default async function WorkspaceInvitationPage({ params }: InvitationPageProps) {
+  const { token } = params;
+  const session = await getAuthSession();
   
-  // Handle the promise params
-  useEffect(() => {
-    async function resolveParams() {
-      if (params) {
-        const resolvedParams = await params;
-        setToken(resolvedParams.token);
-      }
-    }
-    resolveParams();
-  }, [params]);
+  if (!session?.user) {
+    redirect(`/login?callbackUrl=/workspace-invitation/${token}`);
+  }
   
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const { refreshWorkspaces } = useWorkspace();
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAccepting, setIsAccepting] = useState(false);
-  const [invitation, setInvitation] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<boolean>(false);
-  const [hasMoreInvitations, setHasMoreInvitations] = useState<boolean>(false);
-  
-  useEffect(() => {
-    async function fetchInvitation() {
-      if (status === 'loading' || !token) return;
-      
-      try {
-        setIsLoading(true);
-        const response = await fetch(`/api/workspaces/invitations/${token}`);
-        
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to fetch invitation details');
-        }
-        
-        const invitationData = await response.json();
-        setInvitation(invitationData);
-        
-        // Check if user has more invitations
-        const invitationsResponse = await fetch('/api/workspaces/invitations');
-        if (invitationsResponse.ok) {
-          const invitations = await invitationsResponse.json();
-          // Check if there are invitations other than the current one
-          setHasMoreInvitations(invitations.filter((inv: any) => inv.token !== token).length > 0);
-        }
-      } catch (err) {
-        console.error('Error fetching invitation:', err);
-        setError(err instanceof Error ? err.message : 'An error occurred while fetching the invitation');
-      } finally {
-        setIsLoading(false);
-      }
+  try {
+    // Fetch invitation data
+    const invitation = await getInvitationByToken(token);
+    
+    return (
+      <InvitationClient 
+        invitation={invitation} 
+        token={token}
+      />
+    );
+  } catch (error) {
+    console.error("Error loading invitation:", error);
+    
+    // Handle different error cases
+    if ((error as Error).message.includes('Invitation not found')) {
+      notFound();
     }
     
-    fetchInvitation();
-  }, [token, status]);
-  
-  const handleAcceptInvitation = async () => {
-    if (!session?.user) {
-      router.push(`/login?callbackUrl=/workspace-invitation/${token}`);
-      return;
-    }
-    
-    try {
-      setIsAccepting(true);
-      const response = await fetch(`/api/workspaces/invitations/${token}`, {
-        method: 'POST',
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to accept invitation');
-      }
-      
-      setSuccess(true);
-      await refreshWorkspaces();
-      
-      // Redirect after a short delay
-      setTimeout(() => {
-        router.push(`/workspaces/${data.workspaceId}`);
-      }, 2000);
-    } catch (err) {
-      console.error('Error accepting invitation:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred while accepting the invitation');
-    } finally {
-      setIsAccepting(false);
-    }
-  };
-  
-  if (status === 'loading' || isLoading) {
+    // Render error state
     return (
-      <div className="container max-w-lg py-16">
-        <Card className="text-center">
-          <CardHeader>
-            <div className="mx-auto">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            </div>
-            <CardTitle className="mt-4">Loading invitation...</CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="container max-w-lg py-16 text-center">
+        <h1 className="text-2xl font-bold text-destructive mb-4">Error Loading Invitation</h1>
+        <p className="text-muted-foreground mb-6">
+          {(error as Error).message || "Failed to load workspace invitation"}
+        </p>
       </div>
     );
   }
-  
-  if (error) {
-    return (
-      <div className="container max-w-lg py-16">
-        <Card>
-          <CardHeader>
-            <div className="mx-auto">
-              <XCircle className="h-12 w-12 text-destructive" />
-            </div>
-            <CardTitle className="mt-4 text-center">Invalid Invitation</CardTitle>
-            <CardDescription className="text-center">{error}</CardDescription>
-          </CardHeader>
-          <CardFooter className="flex justify-center">
-            <Link href="/workspaces">
-              <Button>Go to Workspaces</Button>
-            </Link>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-  
-  if (success) {
-    return (
-      <div className="container max-w-lg py-16">
-        <Card>
-          <CardHeader>
-            <div className="mx-auto">
-              <CheckCircle className="h-12 w-12 text-green-500" />
-            </div>
-            <CardTitle className="mt-4 text-center">Invitation Accepted!</CardTitle>
-            <CardDescription className="text-center">
-              You have successfully joined {invitation?.workspace?.name}. Redirecting...
-            </CardDescription>
-          </CardHeader>
-          {hasMoreInvitations && (
-            <CardFooter className="flex justify-center pt-2">
-              <Button variant="outline" asChild>
-                <Link href="/workspaces?tab=invitations">
-                  View other invitations
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardFooter>
-          )}
-        </Card>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="container max-w-lg py-16">
-      <Card>
-        <CardHeader>
-          <div className="mx-auto bg-primary/10 p-3 rounded-full">
-            <Building2 className="h-10 w-10 text-primary" />
-          </div>
-          <CardTitle className="mt-4 text-center">Workspace Invitation</CardTitle>
-          {invitation && (
-            <CardDescription className="text-center">
-              You have been invited to join <strong>{invitation.workspace.name}</strong>
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent>
-          {invitation && (
-            <div className="text-center space-y-2">
-              <p>
-                <span className="text-muted-foreground">Invited by:</span>{' '}
-                <span className="font-medium">{invitation.invitedBy.name || invitation.invitedBy.email}</span>
-              </p>
-              <p>
-                <span className="text-muted-foreground">Workspace:</span>{' '}
-                <span className="font-medium">{invitation.workspace.name}</span>
-              </p>
-              {invitation.workspace.description && (
-                <p className="text-muted-foreground text-sm italic">
-                  &quot;{invitation.workspace.description}&quot;
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                This invitation was sent to {invitation.email}
-              </p>
-            </div>
-          )}
-        </CardContent>
-        <CardFooter className="flex justify-center gap-4">
-          <Button variant="outline" asChild>
-            <Link href="/workspaces">Cancel</Link>
-          </Button>
-          <Button onClick={handleAcceptInvitation} disabled={isAccepting}>
-            {isAccepting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Joining...
-              </>
-            ) : (
-              'Accept Invitation'
-            )}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
-  );
 } 
