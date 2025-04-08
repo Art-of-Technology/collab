@@ -19,14 +19,13 @@ export function TaskCommentForm({
   userImage
 }: TaskCommentFormProps) {
   const [content, setContent] = useState("");
-  const [contentHtml, setContentHtml] = useState("");
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
   const addCommentMutation = useAddTaskComment();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!content.trim()) {
       toast({
         title: "Error",
@@ -35,20 +34,19 @@ export function TaskCommentForm({
       });
       return;
     }
-    
+
     try {
-      await addCommentMutation.mutateAsync({ 
-        taskId, 
+      await addCommentMutation.mutateAsync({
+        taskId,
         content
       });
-      
+
       toast({
         title: "Success",
         description: "Comment added successfully",
       });
-      
+
       setContent("");
-      setContentHtml("");
     } catch (error) {
       console.error("Failed to add comment:", error);
       toast({
@@ -59,16 +57,15 @@ export function TaskCommentForm({
     }
   };
 
-  const handleEditorChange = (markdown: string, html: string) => {
+  const handleEditorChange = (markdown: string) => {
     setContent(markdown);
-    setContentHtml(html);
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {
     if (isImproving || !text.trim()) return text;
-    
+
     setIsImproving(true);
-    
+
     try {
       const response = await fetch("/api/ai/improve", {
         method: "POST",
@@ -77,16 +74,16 @@ export function TaskCommentForm({
         },
         body: JSON.stringify({ text })
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to improve text");
       }
-      
+
       const data = await response.json();
-      
+
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
-      
+
       // Return improved text
       return improvedText;
     } catch (error) {
@@ -123,8 +120,8 @@ export function TaskCommentForm({
         </div>
       </div>
       <div className="flex justify-end">
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           size="sm"
           disabled={addCommentMutation.isPending || !content.trim() || isImproving}
         >

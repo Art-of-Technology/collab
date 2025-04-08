@@ -34,15 +34,15 @@ const DEFAULT_LAYER_COUNTS = {
 
 export default function AvatarEditor({ open, onOpenChange, user, onSave }: AvatarEditorProps) {
   const { toast } = useToast();
-  
+
   // Use TanStack Query to fetch layer counts
-  const { data: layerCountsData, isLoading: isLoadingCounts } = useFaceLayerCounts();
+  const { data: layerCountsData } = useFaceLayerCounts();
   const layerCounts = layerCountsData?.layerCounts || DEFAULT_LAYER_COUNTS;
-  
+
   // Use the mutation for saving
   const updateAvatarMutation = useUpdateUserAvatar();
   const isLoading = updateAvatarMutation.isPending;
-  
+
   // Separate state for each avatar part for more reliable updates
   const [useCustomAvatar, setUseCustomAvatar] = useState(user.useCustomAvatar || false);
   const [skinTone, setSkinTone] = useState(user.avatarSkinTone || 1);
@@ -53,7 +53,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
   const [hair, setHair] = useState(user.avatarHair || 1);
   const [eyewear, setEyewear] = useState(user.avatarEyewear || 0);
   const [accessory, setAccessory] = useState(user.avatarAccessory || 0);
-  
+
   // Reset all avatar parts when modal opens
   useEffect(() => {
     if (open) {
@@ -68,7 +68,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
       setAccessory(user.avatarAccessory || 0);
     }
   }, [user, open]);
-  
+
   // Helper to get the current preview user object
   const getPreviewUser = useCallback(() => {
     return {
@@ -84,15 +84,15 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
       avatarAccessory: accessory,
     };
   }, [
-    user, useCustomAvatar, skinTone, eyes, brows, 
+    user, useCustomAvatar, skinTone, eyes, brows,
     mouth, nose, hair, eyewear, accessory
   ]);
-  
+
   // Handle selecting a layer type
   const handleSelectLayer = (type: FaceLayerType, index: number) => {
     // Always enable custom avatar when selecting a layer
     setUseCustomAvatar(true);
-    
+
     // Update the specific part based on type
     switch (type) {
       case 'skintone':
@@ -121,11 +121,11 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
         break;
     }
   };
-  
+
   const toggleCustomAvatar = (enabled: boolean) => {
     setUseCustomAvatar(enabled);
   };
-  
+
   const handleRandomize = () => {
     const randomize = (max: number, allowZero = false) => {
       if (allowZero) {
@@ -134,7 +134,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
       }
       return Math.floor(Math.random() * max) + 1;
     };
-    
+
     setUseCustomAvatar(true);
     setSkinTone(randomize(layerCounts.skintone));
     setEyes(randomize(layerCounts.eyes));
@@ -145,7 +145,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
     setEyewear(randomize(layerCounts.eyewear, true));
     setAccessory(randomize(layerCounts.accessory, true));
   };
-  
+
   const handleSave = async () => {
     try {
       // Create the user object with our current state
@@ -160,14 +160,14 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
         avatarEyewear: eyewear,
         avatarAccessory: accessory,
       };
-      
+
       // Use the custom save function if provided, otherwise use the mutation
       if (onSave) {
         await onSave(getPreviewUser());
       } else {
         await updateAvatarMutation.mutateAsync(updatedUserData);
       }
-      
+
       toast({
         title: "Success",
         description: "Avatar updated successfully",
@@ -182,7 +182,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
       });
     }
   };
-  
+
   const renderLayerOptions = (type: FaceLayerType, count: number, allowNone = false) => {
     // Get the current value for this layer type
     const getCurrentValue = () => {
@@ -198,20 +198,19 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
         default: return 0;
       }
     };
-    
+
     const currentValue = getCurrentValue();
     const options = [];
-    
+
     // Add "None" option for optional layers
     if (allowNone) {
       options.push(
-        <div 
+        <div
           key={`${type}-none`}
-          className={`relative w-20 h-20 border-2 rounded-md overflow-hidden cursor-pointer ${
-            currentValue === 0 
-              ? 'border-primary bg-primary/10' 
+          className={`relative w-20 h-20 border-2 rounded-md overflow-hidden cursor-pointer ${currentValue === 0
+              ? 'border-primary bg-primary/10'
               : 'border-border hover:border-primary/50'
-          }`}
+            }`}
           onClick={() => handleSelectLayer(type, 0)}
         >
           <div className="absolute inset-0 flex items-center justify-center">
@@ -220,21 +219,20 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
         </div>
       );
     }
-    
+
     // Generate actual options
     for (let i = 1; i <= count; i++) {
       options.push(
-        <div 
+        <div
           key={`${type}-${i}`}
-          className={`relative w-20 h-20 border-2 rounded-md overflow-hidden cursor-pointer ${
-            currentValue === i 
-              ? 'border-primary bg-primary/10' 
+          className={`relative w-20 h-20 border-2 rounded-md overflow-hidden cursor-pointer ${currentValue === i
+              ? 'border-primary bg-primary/10'
               : 'border-border hover:border-primary/50'
-          }`}
+            }`}
           onClick={() => handleSelectLayer(type, i)}
         >
           <div className="bg-white">
-            <Image 
+            <Image
               src={`/face-layers/${type}/${i}.png`}
               alt={`${type} ${i}`}
               width={80}
@@ -245,13 +243,13 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
         </div>
       );
     }
-    
+
     return options;
   };
-  
+
   // Create a preview user object for the CustomAvatar component
   const previewUser = getPreviewUser();
-  
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
@@ -261,34 +259,34 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
             Select different facial features to create your custom avatar
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-4 h-full overflow-hidden h-[340px]">
           {/* Preview Column */}
           <div className="flex flex-col items-start h-full overflow-y-auto pr-2">
             <h3 className="text-lg font-medium mb-4">Preview</h3>
             <div className="flex flex-col gap-6 items-center">
-              <CustomAvatar 
-                user={previewUser} 
-                size="xl" 
-                className="border-4 border-primary/20 shadow-lg" 
+              <CustomAvatar
+                user={previewUser}
+                size="xl"
+                className="border-4 border-primary/20 shadow-lg"
                 key={`avatar-preview-${skinTone}-${eyes}-${brows}-${mouth}-${nose}-${hair}-${eyewear}-${accessory}`}
               />
-              
+
               <div className="flex items-center space-x-2">
-                <Switch 
-                  id="use-custom-avatar" 
+                <Switch
+                  id="use-custom-avatar"
                   checked={useCustomAvatar}
                   onCheckedChange={toggleCustomAvatar}
                 />
                 <Label htmlFor="use-custom-avatar">Use custom avatar</Label>
               </div>
-              
+
               <div className="flex flex-col gap-3">
                 <Button onClick={handleRandomize} variant="outline">
                   Randomize
                 </Button>
-                <Button 
-                  onClick={handleSave} 
+                <Button
+                  onClick={handleSave}
                   disabled={isLoading}
                   className="bg-primary hover:bg-primary/90"
                 >
@@ -297,7 +295,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
               </div>
             </div>
           </div>
-          
+
           {/* Options Column */}
           <div className="md:col-span-2 h-full overflow-hidden">
             <Tabs defaultValue="skintone" className="h-full flex flex-col">
@@ -311,7 +309,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                 <TabsTrigger value="eyewear">Eyewear</TabsTrigger>
                 <TabsTrigger value="accessory">Accessory</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="skintone" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -319,7 +317,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="eyes" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -327,7 +325,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="brows" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -335,7 +333,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="nose" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -343,7 +341,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="mouth" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -351,7 +349,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="hair" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -359,7 +357,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="eyewear" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">
@@ -367,7 +365,7 @@ export default function AvatarEditor({ open, onOpenChange, user, onSave }: Avata
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="accessory" className="mt-0 flex-1 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4">

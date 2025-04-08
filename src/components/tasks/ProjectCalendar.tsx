@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,15 +31,13 @@ export function ProjectCalendar({
   epics,
   stories,
   onCreateMilestone,
-  onCreateEpic,
-  onCreateStory,
 }: ProjectCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  
+
   // Format calendar items from the data
   const calendarItems = React.useMemo(() => {
     const items: CalendarItem[] = [];
-    
+
     // Process milestones
     milestones.forEach(milestone => {
       if (milestone.startDate) {
@@ -52,7 +50,7 @@ export function ProjectCalendar({
           color: milestone.color || '#6366F1'
         });
       }
-      
+
       if (milestone.dueDate) {
         items.push({
           id: `milestone-due-${milestone.id}`,
@@ -64,7 +62,7 @@ export function ProjectCalendar({
         });
       }
     });
-    
+
     // Process epics
     epics.forEach(epic => {
       if (epic.startDate) {
@@ -77,7 +75,7 @@ export function ProjectCalendar({
           color: epic.color || '#8B5CF6'
         });
       }
-      
+
       if (epic.dueDate) {
         items.push({
           id: `epic-due-${epic.id}`,
@@ -89,7 +87,7 @@ export function ProjectCalendar({
         });
       }
     });
-    
+
     // Process stories
     stories.forEach(story => {
       if (story.dueDate) {
@@ -103,31 +101,31 @@ export function ProjectCalendar({
         });
       }
     });
-    
+
     return items;
   }, [milestones, epics, stories]);
-  
+
   // Generate calendar days
   const calendarDays = React.useMemo(() => {
     const firstDay = startOfMonth(currentMonth);
     const lastDay = endOfMonth(currentMonth);
     return eachDayOfInterval({ start: firstDay, end: lastDay });
   }, [currentMonth]);
-  
+
   // Navigate between months
   const previousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
   };
-  
+
   const nextMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
-  
+
   // Get items for a specific day
   const getDayItems = (day: Date) => {
     return calendarItems.filter(item => isSameDay(item.date, day));
   };
-  
+
   // Get type badge color
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -141,7 +139,7 @@ export function ProjectCalendar({
         return 'bg-gray-500';
     }
   };
-  
+
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -158,7 +156,7 @@ export function ProjectCalendar({
         return 'bg-gray-500';
     }
   };
-  
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
@@ -168,15 +166,15 @@ export function ProjectCalendar({
             Manage your project&apos;s milestones, epics, and stories
           </p>
         </div>
-        
+
         <div className="flex space-x-2">
           <Button variant="outline" size="sm" onClick={previousMonth}>
             <ChevronLeft className="h-4 w-4 mr-1" />
             Previous
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setCurrentMonth(new Date())}
           >
             <CalendarIcon className="h-4 w-4 mr-1" />
@@ -188,7 +186,7 @@ export function ProjectCalendar({
           </Button>
         </div>
       </div>
-      
+
       <div className="border rounded-md bg-card overflow-hidden">
         {/* Calendar header */}
         <div className="grid grid-cols-7 bg-muted">
@@ -198,20 +196,20 @@ export function ProjectCalendar({
             </div>
           ))}
         </div>
-        
+
         {/* Calendar grid */}
         <div className="grid grid-cols-7 auto-rows-fr">
           {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay() }).map((_, i) => (
             <div key={`empty-start-${i}`} className="p-2 border-t border-r h-32 bg-muted/20" />
           ))}
-          
-          {calendarDays.map((day, dayIndex) => {
+
+          {calendarDays.map((day) => {
             const dayItems = getDayItems(day);
             const isToday = isSameDay(day, new Date());
-            
+
             return (
-              <div 
-                key={day.toString()} 
+              <div
+                key={day.toString()}
                 className={cn(
                   "p-2 border-t border-r min-h-[8rem] relative",
                   !isSameMonth(day, currentMonth) && "bg-muted/20",
@@ -229,15 +227,15 @@ export function ProjectCalendar({
                     </Badge>
                   )}
                 </div>
-                
+
                 <div className="space-y-1 max-h-24 overflow-y-auto">
                   {dayItems.length === 0 ? (
-                    <div 
+                    <div
                       className="flex items-center justify-center h-16 text-xs text-muted-foreground"
                     >
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="h-7 text-xs"
                         onClick={() => {
                           // Set date to this day in createMilestone dialog
@@ -250,15 +248,15 @@ export function ProjectCalendar({
                     </div>
                   ) : (
                     <TooltipProvider>
-                      {dayItems.map((item, i) => (
+                      {dayItems.map((item) => (
                         <Tooltip key={item.id}>
                           <TooltipTrigger asChild>
-                            <div 
+                            <div
                               className={cn(
                                 "text-xs px-1.5 py-0.5 rounded truncate flex items-center",
-                                item.type === 'milestone' ? "bg-indigo-100 dark:bg-indigo-900/30" : 
-                                item.type === 'epic' ? "bg-purple-100 dark:bg-purple-900/30" : 
-                                "bg-blue-100 dark:bg-blue-900/30",
+                                item.type === 'milestone' ? "bg-indigo-100 dark:bg-indigo-900/30" :
+                                  item.type === 'epic' ? "bg-purple-100 dark:bg-purple-900/30" :
+                                    "bg-blue-100 dark:bg-blue-900/30",
                                 "cursor-pointer hover:opacity-80"
                               )}
                             >
@@ -291,13 +289,13 @@ export function ProjectCalendar({
               </div>
             );
           })}
-          
+
           {Array.from({ length: 6 - Math.ceil((calendarDays.length + new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()) / 7) }).map((_, i) => (
             <div key={`empty-end-${i}`} className="p-2 border-t border-r h-32 bg-muted/20" />
           ))}
         </div>
       </div>
-      
+
       <div className="mt-4 p-4 border rounded-md bg-card">
         <h3 className="text-sm font-medium mb-2">Legend</h3>
         <div className="flex flex-wrap gap-2">

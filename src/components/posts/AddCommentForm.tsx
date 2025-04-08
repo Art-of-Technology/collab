@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,6 @@ interface AddCommentFormProps {
 }
 
 export function AddCommentForm({ postId }: AddCommentFormProps) {
-  const router = useRouter();
   const { toast } = useToast();
   const [commentText, setCommentText] = useState("");
   const [commentHtml, setCommentHtml] = useState("");

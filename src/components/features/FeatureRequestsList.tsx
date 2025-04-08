@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
@@ -17,35 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useFeatureRequests, useVoteOnFeature } from "@/hooks/queries/useFeature";
+import { useFeatureRequests } from "@/hooks/queries/useFeature";
 
-type Author = {
-  id: string;
-  name: string | null;
-  image: string | null;
-};
-
-interface FeatureRequest {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  createdAt: string;
-  author: Author;
-  voteScore: number;
-  upvotes: number;
-  downvotes: number;
-  _count: {
-    comments: number;
-  };
-}
-
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  totalPages: number;
-  totalCount: number;
-}
 
 interface FeatureRequestsListProps {
   currentUserId: string;
@@ -56,7 +29,6 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const voteMutation = useVoteOnFeature();
 
   // Get query params
   const status = searchParams.get("status") || "all";
@@ -99,18 +71,18 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
   // Helper function to update URL parameters
   const updateQueryParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    
+
     if (value && value !== "all") {
       params.set(key, value);
     } else {
       params.delete(key);
     }
-    
+
     // Reset to page 1 when changing filters
     if (key !== "page") {
       params.set("page", "1");
     }
-    
+
     router.push(`${pathname}?${params.toString()}`);
   };
 
@@ -127,22 +99,6 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > pagination.totalPages) return;
     updateQueryParams("page", newPage.toString());
-  };
-
-  // Handle voting
-  const handleVote = (featureRequestId: string, value: 1 | -1) => {
-    voteMutation.mutate(
-      { featureRequestId, value },
-      {
-        onError: (error) => {
-          toast({
-            title: "Error",
-            description: "Failed to vote on feature request",
-            variant: "destructive",
-          });
-        }
-      }
-    );
   };
 
   // Display error message if query fails
@@ -252,13 +208,12 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                       </div>
                     </div>
                     <div className="flex flex-col items-center justify-center min-w-[70px] text-center">
-                      <span className={`text-2xl font-bold transition-colors ${
-                        request.voteScore > 0 
-                          ? 'text-green-600' 
-                          : request.voteScore < 0 
-                            ? 'text-red-600' 
-                            : ''
-                      }`}>
+                      <span className={`text-2xl font-bold transition-colors ${request.voteScore > 0
+                        ? 'text-green-600'
+                        : request.voteScore < 0
+                          ? 'text-red-600'
+                          : ''
+                        }`}>
                         {request.voteScore}
                       </span>
                       <span className="text-xs text-muted-foreground">votes</span>

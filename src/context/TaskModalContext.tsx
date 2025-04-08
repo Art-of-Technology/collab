@@ -112,8 +112,8 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
         setIsStoryModalOpen(false);
     }
 
-  // Only run when searchParams change to reflect URL updates
-  }, [searchParams]);
+  // Add missing dependencies to the dependency array
+  }, [searchParams, activeTaskId, activeMilestoneId, activeEpicId, activeStoryId]);
 
   const updateUrl = (paramName: string, paramValue: string | null) => {
     const params = new URLSearchParams(searchParams.toString());

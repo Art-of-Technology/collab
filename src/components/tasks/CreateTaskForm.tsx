@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, memo } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useCreateTask, useWorkspaceBoards, useBoardColumns } from "@/hooks/queries/useTask";
+import { useCreateTask, useBoardColumns } from "@/hooks/queries/useTask";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CalendarIcon, Loader2, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
+import { CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -44,22 +44,15 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import { BoardSelect } from "./selectors/BoardSelect";
-import { useStories } from "@/hooks/queries/useStory";
-import { Epic, useEpics } from "@/hooks/queries/useEpic";
-import { Milestone, useMilestones } from "@/hooks/queries/useMilestone";
-import { useEpicById, useStoryById, useWorkspaceEpics, useWorkspaceStories } from "@/hooks/queries/useEntityDetails";
 import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
 import { StorySelect } from "@/components/tasks/selectors/StorySelect";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { taskKeys } from "@/hooks/queries/useTask";
 import { createTask } from "@/actions/task";
 import { useQueryClient } from "@tanstack/react-query";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
-import { Story } from "@prisma/client";
 
 // Wrap in memo to prevent unnecessary re-renders which cause focus loss
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -85,16 +78,6 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>;
 
-interface Board {
-  id: string;
-  name: string;
-}
-
-interface Column {
-  id: string;
-  name: string;
-}
-
 interface CreateTaskFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -110,7 +93,7 @@ const useBoardTasks = (boardId: string | undefined) => {
   useEffect(() => {
     const fetchTasks = async () => {
       if (!boardId) return;
-      
+
       try {
         setIsLoading(true);
         const response = await fetch(`/api/tasks/boards/${boardId}/tasks`);
@@ -132,14 +115,14 @@ const useBoardTasks = (boardId: string | undefined) => {
 };
 
 // Fix TaskSelect to properly handle null values
-const TaskSelect = ({ 
-  value, 
-  onChange, 
-  tasks, 
-  isLoading 
-}: { 
-  value: string | undefined, 
-  onChange: (value: string | null) => void, 
+const TaskSelect = ({
+  value,
+  onChange,
+  tasks,
+  isLoading
+}: {
+  value: string | undefined,
+  onChange: (value: string | null) => void,
   tasks: Array<{ id: string, title: string, issueKey?: string }>,
   isLoading: boolean
 }) => {
@@ -168,21 +151,20 @@ export default function CreateTaskForm({
   isOpen,
   onClose,
   initialData = {},
-  postId 
+  postId
 }: CreateTaskFormProps) {
   const { currentWorkspace } = useWorkspace();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
   const createTaskMutation = useCreateTask();
   const queryClient = useQueryClient();
   const session = useSession();
-  
+
   // Debug mutations
   useEffect(() => {
     console.log("CreateTaskMutation object:", createTaskMutation);
   }, [createTaskMutation]);
-  
+
   const workspaceId = initialData.workspaceId || currentWorkspace?.id;
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
 
@@ -197,7 +179,7 @@ export default function CreateTaskForm({
       type: initialData.type || "TASK",
       epicId: initialData.epicId || null,
       storyId: initialData.storyId || null,
-      taskBoardId: initialData.taskBoardId || "", 
+      taskBoardId: initialData.taskBoardId || "",
       columnId: initialData.columnId || undefined,
       labels: initialData?.labels || [],
       postId: postId || initialData?.postId || null,
@@ -207,7 +189,7 @@ export default function CreateTaskForm({
       reporterId: initialData?.reporterId || session?.data?.user?.id || null,
     },
   });
-  
+
   // Set current user as default reporter when form is initialized
   useEffect(() => {
     // Only set if session exists and form hasn't been modified yet
@@ -221,6 +203,9 @@ export default function CreateTaskForm({
 
   // Fetch columns for the selected board
   const { data: boardColumns = [], isLoading: isLoadingBoardColumns } = useBoardColumns(selectedBoardId || undefined);
+  
+  // Fetch tasks for the selected board (moved from render prop)
+  const { tasks, isLoading: isLoadingTasks } = useBoardTasks(selectedBoardId);
 
   // Effect to set default column
   useEffect(() => {
@@ -228,24 +213,24 @@ export default function CreateTaskForm({
     if (selectedBoardId && boardColumns.length > 0 && !currentColumnId) {
       form.setValue('columnId', boardColumns[0].id);
     } else if (!selectedBoardId && currentColumnId) {
-        form.setValue('columnId', undefined);
+      form.setValue('columnId', undefined);
     }
   }, [boardColumns, selectedBoardId, form]);
-  
+
   // Clear Epic and Story when Board changes
   useEffect(() => {
-      form.setValue('epicId', null);
-      form.setValue('storyId', null);
+    form.setValue('epicId', null);
+    form.setValue('storyId', null);
   }, [selectedBoardId, form]);
-  
+
   // Clear Story if Epic is selected, Clear Epic if Story is selected
   const selectedEpicId = form.watch('epicId');
   const selectedStoryId = form.watch('storyId');
   useEffect(() => {
-      if (selectedEpicId) form.setValue('storyId', null);
+    if (selectedEpicId) form.setValue('storyId', null);
   }, [selectedEpicId, form]);
   useEffect(() => {
-      if (selectedStoryId) form.setValue('epicId', null);
+    if (selectedStoryId) form.setValue('epicId', null);
   }, [selectedStoryId, form]);
 
   // AI Improve Handler
@@ -273,32 +258,32 @@ export default function CreateTaskForm({
   // Form submission
   const onSubmit = async (values: TaskFormValues) => {
     console.log("onSubmit function called with values:", values);
-    
+
     // Check for required values before proceeding
     if (!values.title) {
       console.error("Title is required");
       toast({ title: "Error", description: "Title is required", variant: "destructive" });
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
       console.log("Setting isSubmitting to true");
       console.log("Form submitted with values:", values);
-      
+
       const boardIdToSubmit = values.taskBoardId || selectedBoardId;
       console.log("boardIdToSubmit:", boardIdToSubmit);
       if (!boardIdToSubmit) {
-          console.log("Board is required, stopping submission");
-          toast({ title: "Error", description: "Board is required.", variant: "destructive" });
-          setIsSubmitting(false);
-          return;
+        console.log("Board is required, stopping submission");
+        toast({ title: "Error", description: "Board is required.", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
       }
       if (!workspaceId) {
-          console.log("Workspace not found, stopping submission");
-          toast({ title: "Error", description: "Workspace not found.", variant: "destructive" });
-          setIsSubmitting(false);
-          return;
+        console.log("Workspace not found, stopping submission");
+        toast({ title: "Error", description: "Workspace not found.", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
       }
       if (!values.columnId) {
         console.log("Column ID is required, stopping submission");
@@ -306,7 +291,7 @@ export default function CreateTaskForm({
         setIsSubmitting(false);
         return;
       }
-      
+
       // Create a clean data object with only the fields needed by the createTask function
       const cleanData = {
         title: values.title,
@@ -324,13 +309,13 @@ export default function CreateTaskForm({
         assigneeId: values.assigneeId === "unassigned" ? undefined : values.assigneeId || undefined,
         reporterId: values.reporterId === "unassigned" ? undefined : values.reporterId || undefined,
       };
-      
+
       console.log("Submitting clean task data:", cleanData);
-      
+
       // Use the createTask function directly
       const result = await createTask(cleanData);
       console.log("Task creation result:", result);
-      
+
       toast({ title: "Success", description: "Task created successfully." });
       queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardIdToSubmit) });
       queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
@@ -338,18 +323,18 @@ export default function CreateTaskForm({
     } catch (error) {
       console.error("Error creating task:", error);
       toast({ title: "Error", description: `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`, variant: "destructive" });
-    } finally { 
-      setIsSubmitting(false); 
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Extract parentTaskId from URL params
   const searchParams = useSearchParams();
   useEffect(() => {
-       const urlParentTaskId = searchParams.get('parentTaskId');
-       if (urlParentTaskId && isOpen && !form.getValues('parentTaskId')) {
-           form.setValue("parentTaskId", urlParentTaskId);
-       }
+    const urlParentTaskId = searchParams.get('parentTaskId');
+    if (urlParentTaskId && isOpen && !form.getValues('parentTaskId')) {
+      form.setValue("parentTaskId", urlParentTaskId);
+    }
   }, [searchParams, isOpen, form]);
 
   return (
@@ -363,7 +348,7 @@ export default function CreateTaskForm({
         </DialogHeader>
         <Form {...form}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-            
+
             <div className="md:col-span-2 space-y-4">
               <FormField
                 control={form.control}
@@ -378,7 +363,7 @@ export default function CreateTaskForm({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="description"
@@ -386,10 +371,10 @@ export default function CreateTaskForm({
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <MarkdownEditor 
+                      <MarkdownEditor
                         initialValue={field.value || ''}
                         onChange={(markdown) => field.onChange(markdown)}
-                        placeholder="Describe the task" 
+                        placeholder="Describe the task"
                         minHeight="200px"
                         onAiImprove={handleAiImproveDescription}
                       />
@@ -401,298 +386,293 @@ export default function CreateTaskForm({
             </div>
 
             <div className="md:col-span-1 space-y-4">
-               <FormField
-                  control={form.control}
-                  name="taskBoardId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Board</FormLabel>
-                      <FormControl>
-                        <BoardSelect
-                          boardValue={field.value || ''} 
-                          onBoardChange={(boardId) => {
-                            form.setValue("taskBoardId", boardId);
-                            form.setValue("columnId", undefined);
-                            form.setValue("epicId", null);
-                            form.setValue("storyId", null);
-                          }}
-                          disabled={isSubmitting}
-                          workspaceId={workspaceId}
-                          showColumns={false}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-               <FormField
-                  control={form.control}
-                  name="columnId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status Column</FormLabel>
-                      <FormControl>
-                        <Select
-                          value={field.value || undefined} 
-                          onValueChange={field.onChange} 
-                          disabled={isSubmitting || !selectedBoardId || isLoadingBoardColumns || boardColumns.length === 0}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={!selectedBoardId ? "Select board first" : "Select status"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {isLoadingBoardColumns && <SelectItem value="loading" disabled>Loading...</SelectItem>}
-                            {selectedBoardId && !isLoadingBoardColumns && boardColumns.length === 0 && <SelectItem value="no-columns" disabled>No columns found</SelectItem>}
-                            {boardColumns.map((column) => (
-                              <SelectItem key={column.id} value={column.id}>
-                                {column.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-               <FormField
-                  control={form.control}
-                  name="assigneeId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Assignee</FormLabel>
-                      <FormControl>
-                        <AssigneeSelect
-                          value={field.value || undefined}
-                          onChange={field.onChange}
-                          disabled={isSubmitting}
-                          workspaceId={workspaceId}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="reporterId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reporter</FormLabel>
-                      <FormControl>
-                        <AssigneeSelect
-                          value={field.value || undefined}
-                          onChange={field.onChange}
-                          disabled={isSubmitting}
-                          workspaceId={workspaceId}
-                          placeholder="Select reporter"
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Default is current user
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {selectedBoardId && (
-                  <FormField
-                    control={form.control}
-                    name="parentTaskId"
-                    render={({ field }) => {
-                      // Use the hook to fetch tasks
-                      const { tasks, isLoading: isLoadingTasks } = useBoardTasks(selectedBoardId);
-                      
-                      return (
-                        <FormItem>
-                          <FormLabel>Parent Task (Optional)</FormLabel>
-                          <FormControl>
-                            <TaskSelect
-                              value={field.value || undefined}
-                              onChange={field.onChange}
-                              tasks={tasks}
-                              isLoading={isLoadingTasks}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
+              <FormField
+                control={form.control}
+                name="taskBoardId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Board</FormLabel>
+                    <FormControl>
+                      <BoardSelect
+                        boardValue={field.value || ''}
+                        onBoardChange={(boardId) => {
+                          form.setValue("taskBoardId", boardId);
+                          form.setValue("columnId", undefined);
+                          form.setValue("epicId", null);
+                          form.setValue("storyId", null);
+                        }}
+                        disabled={isSubmitting}
+                        workspaceId={workspaceId}
+                        showColumns={false}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-
-                <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Priority</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined}>
-                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select priority" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="LOW">Low</SelectItem>
-                            <SelectItem value="MEDIUM">Medium</SelectItem>
-                            <SelectItem value="HIGH">High</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined}>
-                           <FormControl>
-                             <SelectTrigger>
-                               <SelectValue placeholder="Select type" />
-                             </SelectTrigger>
-                           </FormControl>
-                           <SelectContent>
-                             <SelectItem value="TASK">
-                               <div className="flex items-center">
-                                 <CheckSquare className="h-3.5 w-3.5 mr-2 text-blue-600" /> TASK
-                               </div>
-                             </SelectItem>
-                             <SelectItem value="BUG">
-                               <div className="flex items-center">
-                                 <Bug className="h-3.5 w-3.5 mr-2 text-red-600" /> BUG
-                               </div>
-                             </SelectItem>
-                             <SelectItem value="FEATURE">
-                               <div className="flex items-center">
-                                 <Sparkles className="h-3.5 w-3.5 mr-2 text-green-600" /> FEATURE
-                               </div>
-                             </SelectItem>
-                             <SelectItem value="IMPROVEMENT">
-                               <div className="flex items-center">
-                                 <TrendingUp className="h-3.5 w-3.5 mr-2 text-purple-600" /> IMPROVEMENT
-                               </div>
-                             </SelectItem>
-                           </SelectContent>
-                         </Select>
-                         <FormMessage />
-                       </FormItem>
-                    )}
-                  />
+              />
 
               <FormField
-                  control={form.control}
-                  name="epicId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Epic (Optional)</FormLabel>
-                      <FormControl>
-                        <EpicSelect 
-                          value={field.value || undefined}
-                          onChange={(val) => {
-                            field.onChange(val);
-                            // Clear story selection when epic changes
-                            if (val && val !== form.getValues('epicId')) {
-                              form.setValue('storyId', null);
-                            }
-                          }}
-                          workspaceId={workspaceId}
-                          boardId={selectedBoardId}
-                          disabled={isSubmitting || !selectedBoardId || !!selectedStoryId} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                control={form.control}
+                name="columnId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status Column</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value || undefined}
+                        onValueChange={field.onChange}
+                        disabled={isSubmitting || !selectedBoardId || isLoadingBoardColumns || boardColumns.length === 0}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={!selectedBoardId ? "Select board first" : "Select status"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {isLoadingBoardColumns && <SelectItem value="loading" disabled>Loading...</SelectItem>}
+                          {selectedBoardId && !isLoadingBoardColumns && boardColumns.length === 0 && <SelectItem value="no-columns" disabled>No columns found</SelectItem>}
+                          {boardColumns.map((column) => (
+                            <SelectItem key={column.id} value={column.id}>
+                              {column.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
+                control={form.control}
+                name="assigneeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assignee</FormLabel>
+                    <FormControl>
+                      <AssigneeSelect
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        disabled={isSubmitting}
+                        workspaceId={workspaceId}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="reporterId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reporter</FormLabel>
+                    <FormControl>
+                      <AssigneeSelect
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        disabled={isSubmitting}
+                        workspaceId={workspaceId}
+                        placeholder="Select reporter"
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Default is current user
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {selectedBoardId && (
+                <FormField
                   control={form.control}
-                  name="storyId"
+                  name="parentTaskId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Story (Optional)</FormLabel>
+                      <FormLabel>Parent Task (Optional)</FormLabel>
                       <FormControl>
-                        <StorySelect 
+                        <TaskSelect
                           value={field.value || undefined}
                           onChange={field.onChange}
-                          workspaceId={workspaceId}
-                          boardId={selectedBoardId}
-                          epicId={selectedEpicId}
-                          disabled={isSubmitting || !selectedBoardId} 
+                          tasks={tasks}
+                          isLoading={isLoadingTasks}
                         />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
-               <FormField
-                  control={form.control}
-                  name="dueDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Due Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                              )}
-                              disabled={isSubmitting}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value || undefined}
-                            onSelect={field.onChange}
+              )}
+
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Priority</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="TASK">
+                          <div className="flex items-center">
+                            <CheckSquare className="h-3.5 w-3.5 mr-2 text-blue-600" /> TASK
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="BUG">
+                          <div className="flex items-center">
+                            <Bug className="h-3.5 w-3.5 mr-2 text-red-600" /> BUG
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="FEATURE">
+                          <div className="flex items-center">
+                            <Sparkles className="h-3.5 w-3.5 mr-2 text-green-600" /> FEATURE
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="IMPROVEMENT">
+                          <div className="flex items-center">
+                            <TrendingUp className="h-3.5 w-3.5 mr-2 text-purple-600" /> IMPROVEMENT
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="epicId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Epic (Optional)</FormLabel>
+                    <FormControl>
+                      <EpicSelect
+                        value={field.value || undefined}
+                        onChange={(val) => {
+                          field.onChange(val);
+                          // Clear story selection when epic changes
+                          if (val && val !== form.getValues('epicId')) {
+                            form.setValue('storyId', null);
+                          }
+                        }}
+                        workspaceId={workspaceId}
+                        boardId={selectedBoardId}
+                        disabled={isSubmitting || !selectedBoardId || !!selectedStoryId}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="storyId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Story (Optional)</FormLabel>
+                    <FormControl>
+                      <StorySelect
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        boardId={selectedBoardId}
+                        epicId={selectedEpicId}
+                        disabled={isSubmitting || !selectedBoardId}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="dueDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Due Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
                             disabled={isSubmitting}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value || undefined}
+                          onSelect={field.onChange}
+                          disabled={isSubmitting}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            
+
             <DialogFooter className="md:col-span-3 pt-4">
-               <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                    Cancel
-               </Button>
-               <Button 
-                  type="button" 
-                  disabled={isSubmitting}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    console.log("Manual form submission triggered");
-                    const values = form.getValues();
-                    onSubmit(values);
-                  }}
-               >
-                  {isSubmitting ? "Creating..." : "Create Task"}
-               </Button>
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={isSubmitting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log("Manual form submission triggered");
+                  const values = form.getValues();
+                  onSubmit(values);
+                }}
+              >
+                {isSubmitting ? "Creating..." : "Create Task"}
+              </Button>
             </DialogFooter>
           </div>
         </Form>

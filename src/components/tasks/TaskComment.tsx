@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
@@ -68,11 +68,11 @@ export function TaskComment({
     image: null,
     useCustomAvatar: false
   };
-  
+
   // Use TanStack Query to get likes data
   const { data: likesData } = useTaskCommentLikes(taskId, comment.id);
   const toggleLikeMutation = useToggleTaskCommentLike();
-  
+
   // Extract like information
   const isLiked = likesData?.isLiked || false;
   const likes = likesData?.likes || [];

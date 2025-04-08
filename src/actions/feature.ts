@@ -3,7 +3,6 @@
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 // Get all feature requests with pagination, filtering and sorting
 export async function getFeatureRequests({ 
@@ -115,7 +114,7 @@ export async function getFeatureRequests({
     );
 
     // Sort by votes if needed
-    let sortedFeatures = [...featuresWithScores];
+    const sortedFeatures = [...featuresWithScores];
     if (orderBy === 'most_votes') {
       sortedFeatures.sort((a, b) => b.voteScore - a.voteScore);
     } else if (orderBy === 'least_votes') {

@@ -4,12 +4,11 @@ import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Star, BookOpen, User, Hash } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Star, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -22,8 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useWorkspaceMembers } from "@/hooks/queries/useWorkspace"; // Corrected import path
 import { storyStatusOptions, storyPriorityOptions } from "@/constants/task";
 
 // Format date helper
@@ -87,9 +84,8 @@ export function StoryDetailContent({
   const [startDate, setStartDate] = useState<Date | undefined>(story?.startDate || undefined);
   const [dueDate, setDueDate] = useState<Date | undefined>(story?.dueDate || undefined);
   const [points, setPoints] = useState<number | undefined>(story?.points || undefined);
-  
+
   const { toast } = useToast();
-  const router = useRouter();
 
   const handleDescriptionChange = useCallback((md: string) => {
     setDescription(md);
@@ -97,9 +93,9 @@ export function StoryDetailContent({
 
   const handleAiImproveDescription = async (text: string): Promise<string> => {
     if (isImprovingDescription || !text.trim()) return text;
-    
+
     setIsImprovingDescription(true);
-    
+
     try {
       const response = await fetch("/api/ai/improve", {
         method: "POST",
@@ -108,13 +104,13 @@ export function StoryDetailContent({
         },
         body: JSON.stringify({ text })
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to improve text");
       }
-      
+
       const data = await response.json();
-      
+
       // Extract message from the response
       return data.message || data.improvedText || text;
     } catch (error) {
@@ -132,22 +128,22 @@ export function StoryDetailContent({
 
   const saveStoryField = async (field: string, value: any) => {
     if (!story?.id) return false;
-    
+
     // Handle empty string for optional fields, convert to null
     if (field === 'points' && (value === '' || value === undefined)) {
       value = null;
     } else if (field === 'points') {
       value = Number(value); // Ensure points are saved as a number
       if (isNaN(value)) {
-         toast({
-           title: 'Error',
-           description: 'Points must be a number.',
-           variant: 'destructive',
-         });
-         return false;
+        toast({
+          title: 'Error',
+          description: 'Points must be a number.',
+          variant: 'destructive',
+        });
+        return false;
       }
     }
-    
+
     try {
       const response = await fetch(`/api/stories/${story.id}`, { // Assuming PATCH endpoint exists
         method: 'PATCH',
@@ -158,12 +154,12 @@ export function StoryDetailContent({
       });
 
       if (!response.ok) {
-         const errorData = await response.json().catch(() => ({ message: `Failed to update ${field}` }));
-         throw new Error(errorData.message || `Failed to update ${field}`);
+        const errorData = await response.json().catch(() => ({ message: `Failed to update ${field}` }));
+        throw new Error(errorData.message || `Failed to update ${field}`);
       }
 
       const updatedStory = await response.json();
-      
+
       toast({
         title: 'Updated',
         description: `Story ${field} updated successfully`,
@@ -178,7 +174,7 @@ export function StoryDetailContent({
         setPoints(updatedStory.points);
       }
       // Status, Priority, Start/Due Date are handled by Select/Popover
-      
+
       // Refresh the story data
       setTimeout(() => {
         onRefresh();
@@ -252,7 +248,7 @@ export function StoryDetailContent({
       setSavingStatus(false);
     }
   };
-  
+
   // Handle priority change
   const handlePriorityChange = async (priority: string) => {
     setSavingPriority(true);
@@ -284,17 +280,17 @@ export function StoryDetailContent({
       setSavingDueDate(false);
     }
   };
-  
+
   // Handle points change
   const handlePointsChange = async (value: string) => {
     const numValue = value === '' ? undefined : Number(value);
     if (value !== '' && isNaN(numValue as number)) {
-       toast({
-         title: 'Invalid Input',
-         description: 'Points must be a number.',
-         variant: 'destructive',
-       });
-       return;
+      toast({
+        title: 'Invalid Input',
+        description: 'Points must be a number.',
+        variant: 'destructive',
+      });
+      return;
     }
     setPoints(numValue);
   };
@@ -320,11 +316,11 @@ export function StoryDetailContent({
   }, [story]);
 
   if (isLoading) {
-     return (
-       <div className="flex justify-center items-center h-64">
-         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-       </div>
-     );
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   if (error) {
@@ -359,14 +355,14 @@ export function StoryDetailContent({
       'IN_REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
       'DONE': 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100',
     };
-    
+
     return (
       <Badge className={`${statusColors[status || 'BACKLOG'] || 'bg-gray-100 text-gray-800'} px-2 py-1 capitalize`}>
         {currentStatus?.label || status?.replace('_', ' ') || 'Backlog'}
       </Badge>
     );
   };
-  
+
   // Calculate priority badge
   const getPriorityBadge = (priority: string | null) => {
     const currentPriority = storyPriorityOptions.find(opt => opt.value === priority);
@@ -375,7 +371,7 @@ export function StoryDetailContent({
       'MEDIUM': 'bg-yellow-200 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100',
       'HIGH': 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-100',
     };
-    
+
     return (
       <Badge className={`${priorityColors[priority || 'MEDIUM'] || 'bg-gray-100 text-gray-800'} px-2 py-1 capitalize`}>
         {currentPriority?.label || priority || 'Medium'}
@@ -388,13 +384,13 @@ export function StoryDetailContent({
     if (!story.startDate && !story.dueDate) {
       return <span className="text-muted-foreground">No dates set</span>;
     }
-    
+
     const now = new Date();
-    
+
     if (story.startDate && story.dueDate) {
       const start = new Date(story.startDate);
       const end = new Date(story.dueDate);
-      
+
       if (now < start) {
         return <span>Starts in {formatDistanceToNow(start)}</span>;
       } else if (now > end) {
@@ -417,15 +413,17 @@ export function StoryDetailContent({
         return <span>Due in {formatDistanceToNow(end)}</span>;
       }
     }
-    
+
     return null;
   };
 
-  return (  
+  return (
     <div className="pt-6 space-y-8">
-      <div className="space-y-4 bg-gradient-to-r from-background to-muted/30 p-6 rounded-xl border border-border/50 shadow-sm" 
-           style={{ borderColor: story.color ? `${story.color}50` : undefined, 
-                   backgroundColor: story.color ? `${story.color}10` : undefined }}>
+      <div className="space-y-4 bg-gradient-to-r from-background to-muted/30 p-6 rounded-xl border border-border/50 shadow-sm"
+        style={{
+          borderColor: story.color ? `${story.color}50` : undefined,
+          backgroundColor: story.color ? `${story.color}10` : undefined
+        }}>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2 flex-1">
             {editingTitle ? (
@@ -454,9 +452,9 @@ export function StoryDetailContent({
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     onClick={handleCancelTitle}
                     disabled={savingTitle}
                     className="h-8"
@@ -464,8 +462,8 @@ export function StoryDetailContent({
                     <X className="h-4 w-4 mr-1" />
                     Cancel
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={handleSaveTitle}
                     disabled={savingTitle}
                     className="h-8"
@@ -485,7 +483,7 @@ export function StoryDetailContent({
                 </div>
               </div>
             ) : (
-              <div 
+              <div
                 className="group relative cursor-pointer"
                 onClick={() => setEditingTitle(true)}
               >
@@ -506,8 +504,8 @@ export function StoryDetailContent({
           </div>
 
           <div className="flex items-center gap-2">
-             {getStatusBadge(story.status)}
-             {getPriorityBadge(story.priority)}
+            {getStatusBadge(story.status)}
+            {getPriorityBadge(story.priority)}
           </div>
         </div>
       </div>
@@ -550,17 +548,17 @@ export function StoryDetailContent({
                       )}
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleCancelDescription}
                         disabled={savingDescription}
                       >
                         <X className="h-4 w-4 mr-1" />
                         Cancel
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={handleSaveDescription}
                         disabled={savingDescription}
                       >
@@ -579,7 +577,7 @@ export function StoryDetailContent({
                     </div>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
                     onClick={() => setEditingDescription(true)}
                   >
@@ -609,12 +607,12 @@ export function StoryDetailContent({
                 <ul className="space-y-2">
                   {story.tasks.map((task) => (
                     <li key={task.id}>
-                      <Link 
+                      <Link
                         href={`/tasks/${task.id}`} // Assuming task detail page exists
                         className="flex items-center justify-between gap-2 p-2 hover:bg-muted/30 rounded-md transition-colors"
                       >
-                         <span className="text-sm">{task.title}</span>
-                         {/* Add task status/priority badges if needed */}
+                        <span className="text-sm">{task.title}</span>
+                        {/* Add task status/priority badges if needed */}
                       </Link>
                     </li>
                   ))}
@@ -656,53 +654,53 @@ export function StoryDetailContent({
                   )}
                 </div>
               </div>
-              
-              <div>
-                 <p className="text-sm font-medium mb-1">Priority</p>
-                 <div className="relative">
-                   <Select
-                     value={story.priority}
-                     onValueChange={handlePriorityChange}
-                     disabled={savingPriority}
-                   >
-                     <SelectTrigger className="w-full">
-                       <SelectValue>{getPriorityBadge(story.priority)}</SelectValue>
-                     </SelectTrigger>
-                     <SelectContent>
-                       {storyPriorityOptions.map((option) => (
-                         <SelectItem key={option.value} value={option.value}>
-                           {getPriorityBadge(option.value)}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                   {savingPriority && (
-                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                       <Loader2 className="h-4 w-4 animate-spin" />
-                     </div>
-                   )}
-                 </div>
-               </div>
 
-               <div>
-                 <p className="text-sm font-medium mb-1">Points</p>
-                 <div className="relative flex items-center gap-2">
-                   <Input 
-                     type="number"
-                     placeholder="-"
-                     value={points === undefined ? '' : points}
-                     onChange={(e) => handlePointsChange(e.target.value)}
-                     onBlur={handleSavePoints} // Save on blur
-                     onKeyDown={(e) => {
-                       if (e.key === 'Enter') handleSavePoints();
-                     }}
-                     className="w-20 h-9"
-                     disabled={savingPoints}
-                     min="0"
-                   />
-                    {savingPoints && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                 </div>
-               </div>
+              <div>
+                <p className="text-sm font-medium mb-1">Priority</p>
+                <div className="relative">
+                  <Select
+                    value={story.priority}
+                    onValueChange={handlePriorityChange}
+                    disabled={savingPriority}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue>{getPriorityBadge(story.priority)}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {storyPriorityOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {getPriorityBadge(option.value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {savingPriority && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-1">Points</p>
+                <div className="relative flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="-"
+                    value={points === undefined ? '' : points}
+                    onChange={(e) => handlePointsChange(e.target.value)}
+                    onBlur={handleSavePoints} // Save on blur
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSavePoints();
+                    }}
+                    className="w-20 h-9"
+                    disabled={savingPoints}
+                    min="0"
+                  />
+                  {savingPoints && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
 
               <div>
                 <p className="text-sm font-medium mb-1">Timeline</p>
@@ -782,14 +780,14 @@ export function StoryDetailContent({
               {story.epic && (
                 <div>
                   <p className="text-sm font-medium mb-1">Epic</p>
-                  <Link 
+                  <Link
                     href={`/epics/${story.epicId}`}
                     className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md border transition-colors"
                   >
                     <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                       <Star className="h-3 w-3 mr-1" />
-                       Epic
-                     </Badge>
+                      <Star className="h-3 w-3 mr-1" />
+                      Epic
+                    </Badge>
                     <span className="text-sm">{story.epic.title}</span>
                   </Link>
                 </div>
@@ -798,7 +796,7 @@ export function StoryDetailContent({
               {story.taskBoard && (
                 <div>
                   <p className="text-sm font-medium mb-1">Board</p>
-                  <Link 
+                  <Link
                     href={`/tasks?board=${story.taskBoard.id}`}
                     className="flex items-center border rounded-md p-2 hover:bg-muted/20 transition-colors"
                   >

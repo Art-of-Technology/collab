@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  ArrowUpIcon,
-  ArrowDownIcon,
   Hourglass,
   CheckCircle,
   XCircle,
@@ -38,13 +36,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useVoteOnFeature, useUpdateFeatureStatus } from "@/hooks/queries/useFeature";
 
 type Author = {
@@ -117,12 +108,40 @@ export default function FeatureRequestDetail({
       voteOnFeature.mutate(
         { featureRequestId: featureRequest.id, value },
         {
+          onSuccess: () => {
+            // Since we don't have access to the returned data structure,
+            // just update the UI with optimistic updates instead
+            setVoteScore(prev => prev + value); 
+            if (value === 1) {
+              setUpvotes(prev => prev + 1);
+              // If user was previously downvoting, remove that downvote
+              if (currentUserVote === -1) {
+                setDownvotes(prev => Math.max(0, prev - 1));
+              }
+            } else {
+              setDownvotes(prev => prev + 1);
+              // If user was previously upvoting, remove that upvote
+              if (currentUserVote === 1) {
+                setUpvotes(prev => Math.max(0, prev - 1));
+              }
+            }
+            
+            setCurrentUserVote(value);
+            
+            toast({
+              title: "Success",
+              description: "Your vote has been recorded",
+            });
+          },
           onError: () => {
             toast({
               title: "Error",
               description: "Failed to register your vote",
               variant: "destructive",
             });
+          },
+          onSettled: () => {
+            setIsVoting(false);
           }
         }
       );
@@ -133,7 +152,6 @@ export default function FeatureRequestDetail({
         description: "Failed to vote on this feature request",
         variant: "destructive",
       });
-    } finally {
       setIsVoting(false);
     }
   };
@@ -147,12 +165,24 @@ export default function FeatureRequestDetail({
       updateStatus.mutate(
         { featureRequestId: featureRequest.id, status: status as any },
         {
+          onSuccess: () => {
+            // Update the local status state
+            setCurrentStatus(status);
+            
+            toast({
+              title: "Success",
+              description: `Status updated to ${status}`,
+            });
+          },
           onError: () => {
             toast({
               title: "Error",
               description: "Failed to update status",
               variant: "destructive",
             });
+          },
+          onSettled: () => {
+            setIsUpdatingStatus(false);
           }
         }
       );
@@ -167,7 +197,6 @@ export default function FeatureRequestDetail({
         description: (error as Error).message || "Failed to update the status",
         variant: "destructive",
       });
-    } finally {
       setIsUpdatingStatus(false);
     }
   };

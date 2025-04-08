@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import TasksHeader from "@/components/tasks/TasksHeader";
 import KanbanBoard from "@/components/tasks/KanbanBoard";

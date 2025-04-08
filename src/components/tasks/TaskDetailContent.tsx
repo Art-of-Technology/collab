@@ -16,7 +16,6 @@ import { TaskComment } from "@/components/tasks/TaskComment";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
 import { useTasks } from "@/context/TasksContext";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -144,7 +143,6 @@ export interface Task {
 
 interface TaskDetailContentProps {
   task: Task | null;
-  isLoading: boolean;
   error: string | null;
   onRefresh: () => void;
   showHeader?: boolean;
@@ -194,7 +192,6 @@ const getPriorityBadge = (priority: string) => {
 
 export function TaskDetailContent({
   task,
-  isLoading,
   error,
   onRefresh,
   showHeader = true,
@@ -217,7 +214,6 @@ export function TaskDetailContent({
   const [statuses, setStatuses] = useState<string[]>([]);
   const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
   const { toast } = useToast();
-  const router = useRouter();
   const { refreshBoards } = useTasks();
   const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
 

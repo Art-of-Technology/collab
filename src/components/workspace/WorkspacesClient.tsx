@@ -49,9 +49,6 @@ export default function WorkspacesClient({
   const workspaces = workspacesData?.all || initialWorkspaces;
   const pendingInvitations = pendingInvitationsData || initialInvitations;
   
-  // Count owned workspaces
-  const ownedWorkspacesCount = workspaces.filter((w: any) => w.ownerId === userId).length;
-  
   // Handle tab change
   const handleTabChange = (value: string) => {
     setCurrentTab(value);

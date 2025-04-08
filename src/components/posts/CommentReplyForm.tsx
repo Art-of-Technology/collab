@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
@@ -25,7 +24,6 @@ export function CommentReplyForm({
   const [replyText, setReplyText] = useState("");
   const [replyHtml, setReplyHtml] = useState("");
   const [isImproving, setIsImproving] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
   
   // Use TanStack Query hooks

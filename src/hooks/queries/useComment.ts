@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  getComments, 
-  createComment, 
-  updateComment, 
-  deleteComment 
+import {
+  getComments,
+  createComment,
+  updateComment,
+  deleteComment
 } from '@/actions/comment';
 import { postKeys } from './usePost';
 
@@ -30,16 +30,16 @@ export const useComments = (postId: string) => {
 // Create comment mutation
 export const useCreateComment = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: createComment,
     onSuccess: (data, variables) => {
       // Invalidate comments for this post
       queryClient.invalidateQueries({ queryKey: commentKeys.list(variables.postId) });
-      
+
       // Invalidate post details to update comment count
       queryClient.invalidateQueries({ queryKey: postKeys.detail(variables.postId) });
-      
+
       // If this is a reply, invalidate the parent comment
       if (variables.parentId) {
         queryClient.invalidateQueries({ queryKey: commentKeys.detail(variables.parentId) });
@@ -51,14 +51,14 @@ export const useCreateComment = () => {
 // Update comment mutation
 export const useUpdateComment = (commentId: string, postId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: { message: string; html?: string }) => 
+    mutationFn: (data: { message: string; html?: string }) =>
       updateComment(commentId, data),
     onSuccess: () => {
       // Invalidate the specific comment
       queryClient.invalidateQueries({ queryKey: commentKeys.detail(commentId) });
-      
+
       // Invalidate all comments for this post
       queryClient.invalidateQueries({ queryKey: commentKeys.list(postId) });
     },
@@ -68,13 +68,13 @@ export const useUpdateComment = (commentId: string, postId: string) => {
 // Delete comment mutation
 export const useDeleteComment = (postId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: deleteComment,
-    onSuccess: (_, commentId) => {
+    onSuccess: () => {
       // Invalidate all comments for this post
       queryClient.invalidateQueries({ queryKey: commentKeys.list(postId) });
-      
+
       // Invalidate post details to update comment count
       queryClient.invalidateQueries({ queryKey: postKeys.detail(postId) });
     },

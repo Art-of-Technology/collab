@@ -3,17 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreVertical, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Plus, Loader2 } from "lucide-react";
 import { useTasks } from "@/context/TasksContext";
-import { useWorkspace } from "@/context/WorkspaceContext";
 import KanbanFilters, { ItemType, GroupingOption } from "./KanbanFilters";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 import {
@@ -21,7 +12,6 @@ import {
   useUpdateColumn,
   useDeleteColumn,
   useReorderColumns,
-  useCreateTask,
 } from "@/hooks/queries/useTask";
 import { useBoardItems, useReorderBoardItems } from "@/hooks/queries/useBoardItems";
 import GroupedColumn from "./GroupedColumn";
@@ -49,23 +39,12 @@ interface Column {
   tasks?: Task[];
 }
 
-// Define board interface
-interface Board {
-  id: string;
-  name: string;
-  description?: string;
-  columns?: Column[];
-}
-
 export default function KanbanView() {
   const [isColumnDialogOpen, setIsColumnDialogOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
-  const [newTaskColumnId, setNewTaskColumnId] = useState<string | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
   const { toast } = useToast();
   const { selectedBoard, selectedBoardId, refreshBoards } = useTasks();
-  const { currentWorkspace } = useWorkspace();
   const [localBoardState, setLocalBoardState] = useState<any>(null);
   const isDraggingRef = useRef(false);
   const pendingUpdateRef = useRef(false);
@@ -85,7 +64,6 @@ export default function KanbanView() {
   const deleteColumnMutation = useDeleteColumn();
   const reorderColumnsMutation = useReorderColumns(selectedBoardId || "");
   const reorderItemsMutation = useReorderBoardItems();
-  const createTaskMutation = useCreateTask();
 
   // Add the quick task creation dialog and functionality
   const [isQuickTaskOpen, setIsQuickTaskOpen] = useState(false);
@@ -95,7 +73,7 @@ export default function KanbanView() {
   useEffect(() => {
     if (!isDraggingRef.current && !pendingUpdateRef.current) {
       const localBoard = selectedBoard ? { ...selectedBoard } : null;
-      
+
       // If we have board items, inject them into the columns
       if (localBoard && boardData) {
         // Add all items to each column
@@ -109,7 +87,7 @@ export default function KanbanView() {
           });
         }
       }
-      
+
       setLocalBoardState(localBoard);
     }
   }, [selectedBoard, boardData]);
@@ -117,17 +95,17 @@ export default function KanbanView() {
   // Filter tasks based on search term and selected types
   const getFilteredTasks = (tasks: any[] = []) => {
     if (!tasks?.length) return [];
-    
+
     return tasks.filter(task => {
       // Filter by search term
-      const matchesSearch = searchTerm.trim() === "" || 
-                          task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
-      
+      const matchesSearch = searchTerm.trim() === "" ||
+        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
+
       // Filter by selected types
-      const matchesType = selectedTypes.length === 0 || 
-                         (task.type && selectedTypes.includes(task.type));
-      
+      const matchesType = selectedTypes.length === 0 ||
+        (task.type && selectedTypes.includes(task.type));
+
       return matchesSearch && matchesType;
     });
   };
@@ -142,9 +120,9 @@ export default function KanbanView() {
       });
       return;
     }
-    
+
     pendingUpdateRef.current = true;
-    
+
     try {
       if (editingColumnId) {
         // Update existing column
@@ -154,19 +132,19 @@ export default function KanbanView() {
             name: newColumnName
           }
         });
-        
+
         // Optimistically update UI
-        const updatedColumns = localBoardState.columns.map((col: Column) => 
-          col.id === editingColumnId 
-            ? { ...col, name: newColumnName } 
+        const updatedColumns = localBoardState.columns.map((col: Column) =>
+          col.id === editingColumnId
+            ? { ...col, name: newColumnName }
             : col
         );
-        
+
         setLocalBoardState({
           ...localBoardState,
           columns: updatedColumns,
         });
-        
+
         toast({
           title: "Success",
           description: "Column updated successfully",
@@ -176,9 +154,9 @@ export default function KanbanView() {
         const result = await createColumnMutation.mutateAsync({
           name: newColumnName,
           order: localBoardState.columns?.length || 0,
-          color: "#" + Math.floor(Math.random()*16777215).toString(16), // Random color
+          color: "#" + Math.floor(Math.random() * 16777215).toString(16), // Random color
         });
-        
+
         // Optimistically update UI
         const newColumn = {
           id: result.id,
@@ -187,31 +165,31 @@ export default function KanbanView() {
           tasks: [],
           color: result.color,
         };
-        
+
         setLocalBoardState({
           ...localBoardState,
           columns: [...(localBoardState.columns || []), newColumn],
         });
-        
+
         toast({
           title: "Success",
           description: "Column created successfully",
         });
       }
-      
+
       // Close dialog and reset state
       setIsColumnDialogOpen(false);
       setNewColumnName("");
       setEditingColumnId(null);
-      
+
       // Refresh boards data
       refreshBoards();
     } catch (error) {
       console.error("Error creating/updating column:", error);
       toast({
         title: "Error",
-        description: editingColumnId 
-          ? "Failed to update column" 
+        description: editingColumnId
+          ? "Failed to update column"
           : "Failed to create column",
         variant: "destructive",
       });
@@ -250,7 +228,7 @@ export default function KanbanView() {
       const newColumnOrder = Array.from(localBoardState.columns || [])
         .sort((a: any, b: any) => a.order - b.order)
         .map((col: any) => col.id);
-      
+
       // Move the dragged column ID to the new position
       const [removed] = newColumnOrder.splice(source.index, 1);
       newColumnOrder.splice(destination.index, 0, removed);
@@ -260,7 +238,7 @@ export default function KanbanView() {
         const id = newColumnOrder[index];
         const originalColumn = localBoardState.columns?.find((c: any) => c.id === id);
         if (!originalColumn) return column;
-        
+
         return {
           ...originalColumn,
           order: index
@@ -304,8 +282,8 @@ export default function KanbanView() {
       if (!movedItem) return;
 
       // Create new arrays for optimistic update
-      let sourceTasks = [...sourceCol.tasks];
-      let destTasks = source.droppableId === destination.droppableId ? sourceTasks : [...destCol.tasks];
+      const sourceTasks = [...sourceCol.tasks];
+      const destTasks = source.droppableId === destination.droppableId ? sourceTasks : [...destCol.tasks];
 
       // Remove item from source
       sourceTasks.splice(source.index, 1);
@@ -329,16 +307,16 @@ export default function KanbanView() {
 
       // --- Backend Update --- 
       // Get the final ordered list of IDs for the destination column
-      const finalDestCol = newBoardState.columns.find((c:any) => c.id === destination.droppableId);
+      const finalDestCol = newBoardState.columns.find((c: any) => c.id === destination.droppableId);
       const orderedItemIds = finalDestCol ? finalDestCol.tasks.map((t: any) => t.id) : [];
 
       // Call the mutation
       try {
         await reorderItemsMutation.mutateAsync({
-          boardId: selectedBoardId || '', 
+          boardId: selectedBoardId || '',
           columnId: destination.droppableId,
-          orderedItemIds: orderedItemIds, 
-          movedItemId: draggableId, 
+          orderedItemIds: orderedItemIds,
+          movedItemId: draggableId,
         });
       } catch (error) {
         console.error("Error reordering items:", error);
@@ -348,38 +326,7 @@ export default function KanbanView() {
           variant: "destructive",
         });
         // Revert state on error (handled by hook's onError)
-      } 
-    }
-  };
-
-  // Handle column deletion
-  const handleDeleteColumn = async (columnId: string) => {
-    if (!canManageBoard) return;
-
-    // Optimistically update the UI
-    const updatedColumns = (localBoardState.columns || []).filter(
-      (col: Column) => col.id !== columnId
-    );
-    setLocalBoardState({
-      ...localBoardState,
-      columns: updatedColumns,
-    });
-
-    // Make the API call
-    pendingUpdateRef.current = true;
-    try {
-      await deleteColumnMutation.mutateAsync(columnId);
-    } catch (error) {
-      console.error("Error deleting column:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete column",
-        variant: "destructive",
-      });
-      // Revert to the original state if the API call fails
-      setLocalBoardState(selectedBoard);
-    } finally {
-      pendingUpdateRef.current = false;
+      }
     }
   };
 
@@ -398,8 +345,6 @@ export default function KanbanView() {
     reorderColumnsMutation.isPending ||
     reorderItemsMutation.isPending;
 
-  const isCreatingTask = createTaskMutation.isPending;
-
   return (
     <>
       <KanbanFilters
@@ -409,10 +354,10 @@ export default function KanbanView() {
         selectedGrouping={groupBy}
         selectedTypes={selectedTypes}
       />
-      
+
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-md font-medium">Board Columns</h3>
-        
+
         {permissionsLoading ? (
           <Button size="sm" variant="outline" disabled>
             <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -434,12 +379,12 @@ export default function KanbanView() {
           </Button>
         )}
       </div>
-      
+
       {(!localBoardState.columns || localBoardState.columns.length === 0) ? (
         <div className="text-center py-16">
           <h3 className="text-xl font-medium">No columns found</h3>
           <p className="text-muted-foreground">This board doesn&apos;t have any columns yet.</p>
-          
+
           {permissionsLoading ? (
             <Button className="mt-4" disabled>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -477,11 +422,11 @@ export default function KanbanView() {
                   .sort((a: any, b: any) => a.order - b.order)
                   .map((column: any, index: number) => {
                     const filteredTasks = getFilteredTasks(column.tasks);
-                    
+
                     return (
-                      <Draggable 
-                        key={column.id} 
-                        draggableId={column.id} 
+                      <Draggable
+                        key={column.id}
+                        draggableId={column.id}
                         index={index}
                         isDragDisabled={!canManageBoard}
                       >
@@ -544,7 +489,7 @@ export default function KanbanView() {
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleColumnSubmit}
               disabled={isLoading || !newColumnName.trim()}
             >
@@ -566,7 +511,7 @@ export default function KanbanView() {
         key={`quick-task-${quickTaskColumnId}`}
         isOpen={isQuickTaskOpen}
         onClose={() => setIsQuickTaskOpen(false)}
-        initialData={{ 
+        initialData={{
           taskBoardId: selectedBoardId,
           columnId: quickTaskColumnId || undefined
         }}

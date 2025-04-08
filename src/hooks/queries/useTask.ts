@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  getWorkspaceTasks, 
-  getTaskById, 
-  createTask, 
-  updateTask, 
+import {
+  getWorkspaceTasks,
+  getTaskById,
+  createTask,
+  updateTask,
   deleteTask,
   linkPostToTask,
   unlinkPostFromTask,
@@ -72,22 +72,22 @@ export const useTaskById = (taskId: string) => {
 // Create task mutation
 export const useCreateTask = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: createTask,
     onSuccess: (data) => {
       // Invalidate tasks list for this workspace
       queryClient.invalidateQueries({ queryKey: taskKeys.list(data.workspaceId) });
-      
+
       // Invalidate the workspace details
       queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(data.workspaceId) });
-      
+
       // If task is connected to a board and column, invalidate those queries too
       if (data.taskBoardId) {
         queryClient.invalidateQueries({ queryKey: boardKeys.detail(data.taskBoardId) });
         queryClient.invalidateQueries({ queryKey: taskKeys.board(data.taskBoardId) });
       }
-      
+
       if (data.columnId) {
         queryClient.invalidateQueries({ queryKey: boardKeys.columns(data.taskBoardId || '') });
       }
@@ -98,7 +98,7 @@ export const useCreateTask = () => {
 // Update task mutation
 export const useUpdateTask = (taskId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: {
       title?: string;
@@ -111,10 +111,10 @@ export const useUpdateTask = (taskId: string) => {
     onSuccess: (data) => {
       // Invalidate specific task
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
-      
+
       // Invalidate task list for this workspace
       queryClient.invalidateQueries({ queryKey: taskKeys.list(data.workspaceId) });
-      
+
       // If the task is associated with a board, invalidate that board's tasks
       if (data.taskBoardId) {
         queryClient.invalidateQueries({ queryKey: taskKeys.board(data.taskBoardId) });
@@ -126,17 +126,17 @@ export const useUpdateTask = (taskId: string) => {
 // Delete task mutation
 export const useDeleteTask = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: deleteTask,
     onSuccess: (_, taskId) => {
       // Get the task data from cache if available to get the workspaceId
       const taskData = queryClient.getQueryData([...taskKeys.detail(taskId)]);
       const workspaceId = taskData ? (taskData as any).workspaceId : null;
-      
+
       // Invalidate the specific task
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
-      
+
       // If we have the workspaceId, invalidate the task list for that workspace
       if (workspaceId) {
         queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
@@ -148,7 +148,7 @@ export const useDeleteTask = () => {
 // Link post to task mutation
 export const useLinkPostToTask = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: linkPostToTask,
     onSuccess: (_, variables) => {
@@ -161,7 +161,7 @@ export const useLinkPostToTask = () => {
 // Unlink post from task mutation
 export const useUnlinkPostFromTask = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: unlinkPostFromTask,
     onSuccess: (_, variables) => {
@@ -194,7 +194,7 @@ export const useBoardColumns = (boardId: string | null | undefined) => {
 // Create board mutation
 export const useCreateBoard = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: createBoard,
     onSuccess: (data) => {
@@ -207,7 +207,7 @@ export const useCreateBoard = () => {
 // Update board mutation
 export const useUpdateBoard = (boardId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: {
       name?: string;
@@ -217,7 +217,7 @@ export const useUpdateBoard = (boardId: string) => {
     onSuccess: (data) => {
       // Invalidate specific board
       queryClient.invalidateQueries({ queryKey: boardKeys.detail(boardId) });
-      
+
       // Invalidate boards list for this workspace
       queryClient.invalidateQueries({ queryKey: boardKeys.workspace(data.workspaceId) });
     },
@@ -227,7 +227,7 @@ export const useUpdateBoard = (boardId: string) => {
 // Create column mutation
 export const useCreateColumn = (boardId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: {
       name: string;
@@ -246,16 +246,16 @@ export const useCreateColumn = (boardId: string) => {
 // Update column mutation
 export const useUpdateColumn = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: ({ 
-      columnId, 
-      data 
-    }: { 
-      columnId: string; 
-      data: { name?: string; color?: string; } 
+    mutationFn: ({
+      columnId,
+      data
+    }: {
+      columnId: string;
+      data: { name?: string; color?: string; }
     }) => updateColumn(columnId, data),
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       // We need to find the board ID this column belongs to
       // For now let's simply invalidate all columns and board queries
       queryClient.invalidateQueries({ queryKey: boardKeys.all });
@@ -266,10 +266,10 @@ export const useUpdateColumn = () => {
 // Delete column mutation
 export const useDeleteColumn = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: deleteColumn,
-    onSuccess: (_, columnId) => {
+    onSuccess: () => {
       // Since we don't know the board ID, we'll invalidate all board-related queries
       queryClient.invalidateQueries({ queryKey: boardKeys.all });
     },
@@ -279,9 +279,9 @@ export const useDeleteColumn = () => {
 // Reorder columns mutation
 export const useReorderColumns = (boardId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (columns: { id: string; order: number }[]) => 
+    mutationFn: (columns: { id: string; order: number }[]) =>
       reorderColumns(boardId, columns),
     onSuccess: () => {
       // Invalidate columns for this board
@@ -295,14 +295,14 @@ export const useReorderColumns = (boardId: string) => {
 // Move task mutation (from one column to another)
 export const useMoveTask = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: ({ taskId, data }: { taskId: string; data: { columnId: string; position: number } }) => 
+    mutationFn: ({ taskId, data }: { taskId: string; data: { columnId: string; position: number } }) =>
       moveTask(taskId, data),
     onSuccess: (data) => {
       // Get the task data to find the board ID
       const boardId = data.taskBoardId;
-      
+
       if (boardId) {
         // Invalidate board tasks query
         queryClient.invalidateQueries({ queryKey: taskKeys.board(boardId) });

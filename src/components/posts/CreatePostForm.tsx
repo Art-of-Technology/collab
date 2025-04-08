@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,6 @@ import { useCreatePost } from "@/hooks/queries/usePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 
 export default function CreatePostForm() {
-  const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
   const { currentWorkspace } = useWorkspace();

@@ -5,15 +5,9 @@ import { getUserWorkspaces } from '@/actions/workspace';
 import { getPendingInvitations } from '@/actions/invitation';
 import WorkspacesClient from '@/components/workspace/WorkspacesClient';
 
-interface WorkspacesPageProps {
-  searchParams?: {
-    tab?: string;
-  };
-}
-
 export const dynamic = 'force-dynamic';
 
-export default async function WorkspacesPage({ searchParams }: WorkspacesPageProps) {
+export default async function WorkspacesPage() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {

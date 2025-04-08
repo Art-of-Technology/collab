@@ -24,16 +24,6 @@ import { Loader2, ChevronDown, Layout } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useWorkspaceBoards, useBoardColumns } from "@/hooks/queries/useTask";
 
-interface Board {
-  id: string;
-  name: string;
-  description?: string;
-}
-
-interface Column {
-  id: string;
-  name: string;
-}
 
 interface BoardSelectProps {
   boardValue: string;

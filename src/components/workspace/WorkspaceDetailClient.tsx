@@ -14,18 +14,16 @@ import InviteMemberForm from '@/app/(main)/workspaces/[workspaceId]/InviteMember
 import WorkspaceDetailsEditor from '@/app/(main)/workspaces/[workspaceId]/WorkspaceDetailsEditor';
 import CancelInvitationButton from '@/components/workspace/CancelInvitationButton';
 import { useDetailedWorkspaceById } from '@/hooks/queries/useWorkspace';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface WorkspaceDetailClientProps {
   workspaceId: string;
   initialWorkspace: any;
-  userId: string;
+  userId?: string;
 }
 
 export default function WorkspaceDetailClient({ 
   workspaceId, 
   initialWorkspace,
-  userId
 }: WorkspaceDetailClientProps) {
   const [activeTab, setActiveTab] = useState('members');
   

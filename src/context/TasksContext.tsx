@@ -87,16 +87,14 @@ interface TasksProviderProps {
   children: ReactNode;
   initialBoardId?: string;
   initialView?: 'kanban' | 'list' | 'hierarchy';
-  initialViewMode?: ViewMode;
-  initialBoards?: Board[];
   workspaceId?: string;
+  initialBoards?: Board[];
 }
 
 export const TasksProvider = ({ 
   children, 
   initialBoardId,
   initialView = 'kanban',
-  initialViewMode = 'standard',
   initialBoards = [],
   workspaceId
 }: TasksProviderProps) => {
@@ -158,8 +156,8 @@ export const TasksProvider = ({
         isInitialLoad.current = false;
     }
     
-  // Remove 'view' and 'selectedBoardId' from dependencies to prevent loop
-  }, [searchParams]); 
+  // Include view and selectedBoardId as dependencies
+  }, [searchParams, view, selectedBoardId]); 
 
   // Effect to sync state changes TO URL (runs only when state changes *after* initial load)
   useEffect(() => {
@@ -179,7 +177,7 @@ export const TasksProvider = ({
       console.log("State change updating URL with:", paramsToSet);
       updateUrlSearchParams(paramsToSet);
     }
-  }, [view, selectedBoardId, pathname, updateUrlSearchParams]); // Keep dependencies here
+  }, [view, selectedBoardId, pathname, updateUrlSearchParams, router]); // Added router dependency
   
   // Fetch initial list of boards if not provided
   useEffect(() => {
@@ -217,8 +215,8 @@ export const TasksProvider = ({
     };
     fetchInitialBoards();
     return () => { isMounted = false; };
-  // Ensure selectedBoardId is NOT a dependency here to prevent re-running on default set
-  }, [workspaceId, currentWorkspace?.id, initialBoards.length]); 
+  // Added isLoading and selectedBoardId as dependencies
+  }, [workspaceId, currentWorkspace?.id, initialBoards.length, isLoading, selectedBoardId]); 
 
   // Fetch selected board details when selectedBoardId changes
   useEffect(() => {
@@ -259,7 +257,7 @@ export const TasksProvider = ({
     };
     fetchSelectedBoardDetails();
     return () => { isMounted = false; };
-  }, [selectedBoardId, boards]); // Keep 'boards' dependency
+  }, [selectedBoardId, boards, isDetailLoading]); // Added isDetailLoading
 
   // Handlers should ONLY update state, let effects handle URL
   const selectBoard = useCallback((boardId: string) => {
@@ -424,7 +422,7 @@ export const TasksProvider = ({
     boards,
     selectedBoard,
     selectedBoardId,
-    isLoading,
+    combinedIsLoading, // Added combinedIsLoading
     view,
     setViewWithUrlUpdate,
     selectBoard,

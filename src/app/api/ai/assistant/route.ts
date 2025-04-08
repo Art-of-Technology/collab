@@ -549,7 +549,7 @@ async function summarizeTasks(userId: string, args: any) {
 
     // Calculate date range based on timeframe
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date();
     
     if (args.timeframe === 'today') {
       startDate.setHours(0, 0, 0, 0);
@@ -628,7 +628,7 @@ async function getUserActivities(requestUserId: string, args: any) {
     
     // Calculate date range based on timeframe
     const now = new Date();
-    let startDate = new Date();
+    const startDate = new Date();
     
     if (timeframe === 'today') {
       startDate.setHours(0, 0, 0, 0);

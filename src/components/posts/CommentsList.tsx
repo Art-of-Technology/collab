@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { Comment } from "@/components/posts/Comment";
 import { AddCommentForm } from "@/components/posts/AddCommentForm";
 import { organizeCommentsIntoTree } from "@/utils/commentHelpers";
@@ -14,8 +13,6 @@ interface CommentsListProps {
 }
 
 export default function CommentsList({ postId, initialComments = [], currentUserId }: CommentsListProps) {
-  const router = useRouter();
-  
   // Use TanStack Query to fetch comments
   const { data: commentsData, isLoading } = useComments(postId);
   

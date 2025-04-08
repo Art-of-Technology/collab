@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Building2, Users, Calendar, Check, X, Loader2 } from 'lucide-react';
@@ -55,7 +54,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold">Workspace Invitation</h1>
         <p className="text-muted-foreground mt-1">
-          You've been invited to join a workspace
+          You&apos;ve been invited to join a workspace
         </p>
       </div>
       
@@ -97,7 +96,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
             
             {invitation.workspace.description && (
               <div className="mt-4 p-4 bg-muted/40 rounded-md">
-                <p className="italic text-sm">"{invitation.workspace.description}"</p>
+                <p className="italic text-sm">&quot;{invitation.workspace.description}&quot;</p>
               </div>
             )}
           </div>

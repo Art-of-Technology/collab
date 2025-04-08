@@ -14,7 +14,6 @@ interface MilestoneDetailModalProps {
 
 export default function MilestoneDetailModal({ milestoneId, onClose }: MilestoneDetailModalProps) {
   const [milestone, setMilestone] = useState<any | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   
@@ -24,7 +23,6 @@ export default function MilestoneDetailModal({ milestoneId, onClose }: Milestone
   const fetchMilestoneDetails = useCallback(async () => {
     if (!milestoneId) return;
     
-    setLoading(true);
     setError(null);
     
     try {
@@ -42,7 +40,6 @@ export default function MilestoneDetailModal({ milestoneId, onClose }: Milestone
       console.error("Failed to fetch milestone details:", err);
       setError("Failed to load milestone details. Please try again.");
     } finally {
-      setLoading(false);
       setShouldRefresh(false);
     }
   }, [milestoneId]);
@@ -91,7 +88,6 @@ export default function MilestoneDetailModal({ milestoneId, onClose }: Milestone
         <div className="flex-1 overflow-y-auto pr-2 -mr-2">
           <MilestoneDetailContent
             milestone={milestone}
-            isLoading={loading}
             error={error}
             onRefresh={refreshMilestoneDetails}
             onClose={onClose}

@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { format, differenceInDays, addDays, isSameMonth, subDays, parseISO, isValid, isAfter, isBefore, isSameDay } from "date-fns";
-import { cn } from "@/lib/utils";
-import { ArrowLeft, Calendar, Plus, Star } from "lucide-react";
-import { 
-  TimelineHeader, 
-  TimelineSection, 
-  TimelineEmpty, 
-  TimelineControls 
+import { differenceInDays, addDays, isSameMonth, subDays, parseISO, isValid, isAfter, isBefore } from "date-fns";
+import { Calendar, Star } from "lucide-react";
+import {
+  TimelineHeader,
+  TimelineSection,
+  TimelineEmpty,
+  TimelineControls
 } from "@/components/timeline";
 
 interface TimelineItem {
@@ -39,7 +38,7 @@ export function ProjectTimeline({
   onCreateEpic,
   onCreateStory,
 }: ProjectTimelineProps) {
-  const now = new Date();
+  const now = React.useMemo(() => new Date(), []);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(40); // 0 = very zoomed out, 100 = very zoomed in
   const [timelineStart, setTimelineStart] = useState<Date>(subDays(now, 15));
@@ -64,7 +63,7 @@ export function ProjectTimeline({
     milestones.forEach(milestone => {
       const startDate = milestone.startDate ? new Date(milestone.startDate) : null;
       const dueDate = milestone.dueDate ? new Date(milestone.dueDate) : null;
-      
+
       if (startDate || dueDate) {
         items.push({
           id: milestone.id,
@@ -82,7 +81,7 @@ export function ProjectTimeline({
     epics.forEach(epic => {
       const startDate = epic.startDate ? new Date(epic.startDate) : null;
       const dueDate = epic.dueDate ? new Date(epic.dueDate) : null;
-      
+
       if (startDate || dueDate) {
         items.push({
           id: epic.id,
@@ -99,10 +98,10 @@ export function ProjectTimeline({
 
     // Add stories to timeline with validation
     stories.forEach(story => {
-      const startDate = story.startDate ? new Date(story.startDate) : 
-                       story.createdAt ? new Date(story.createdAt) : null;
+      const startDate = story.startDate ? new Date(story.startDate) :
+        story.createdAt ? new Date(story.createdAt) : null;
       const dueDate = story.dueDate ? new Date(story.dueDate) : null;
-      
+
       if (startDate || dueDate) {
         items.push({
           id: story.id,
@@ -126,13 +125,19 @@ export function ProjectTimeline({
       epic: [],
       story: []
     };
-    
+
     timelineItems.forEach(item => {
       grouped[item.type].push(item);
     });
-    
+
     return grouped;
   }, [timelineItems]);
+
+  // Calculate day width based on zoom level
+  const calculateDayWidth = React.useCallback(() => {
+    // Min 30px, max 140px per day
+    return 30 + ((zoomLevel / 100) * 110);
+  }, [zoomLevel]);
 
   // Determine optimal timeline view based on items
   useEffect(() => {
@@ -165,22 +170,22 @@ export function ProjectTimeline({
     });
 
     // Set timeline range with padding and ensure today is visible
-    const start = earliest ? 
-      isBefore(earliest, now) ? 
-        subDays(earliest, 5) : 
+    const start = earliest ?
+      isBefore(earliest, now) ?
+        subDays(earliest, 5) :
         subDays(now, 15) :
       subDays(now, 15);
-    
-    const end = latest ? 
-      isAfter(latest, now) ? 
-        addDays(latest, 5) : 
+
+    const end = latest ?
+      isAfter(latest, now) ?
+        addDays(latest, 5) :
         addDays(now, 15) :
       addDays(now, 30);
-    
+
     setTimelineStart(start);
     setTimelineEnd(end);
     setNeedsScroll(true);
-  }, [timelineItems]);
+  }, [timelineItems, now]);
 
   // Scroll to today when needed
   useEffect(() => {
@@ -192,26 +197,19 @@ export function ProjectTimeline({
           const daysSinceStart = differenceInDays(today, timelineStart);
           const dayWidth = calculateDayWidth();
           const offset = daysSinceStart * dayWidth;
-          
+
           // Scroll to show today in the center
           const containerWidth = scrollContainerRef.current.clientWidth;
           scrollContainerRef.current.scrollLeft = Math.max(0, offset - containerWidth / 2 + 150); // Add 150px for the left column
-          
+
           setNeedsScroll(false);
         }
       }, 100); // Small delay to ensure the DOM is ready
     }
-  }, [needsScroll, timelineStart]);
-
-  // Calculate day width based on zoom level
-  const calculateDayWidth = () => {
-    // Min 30px, max 140px per day
-    return 30 + ((zoomLevel / 100) * 110);
-  };
+  }, [needsScroll, timelineStart, calculateDayWidth]);
 
   const dayWidth = calculateDayWidth();
   const totalDays = differenceInDays(timelineEnd, timelineStart) + 1;
-  const timelineWidth = totalDays * dayWidth;
 
   // Navigation functions
   const shiftLeft = () => {
@@ -333,7 +331,7 @@ export function ProjectTimeline({
   return (
     <div className="space-y-4 animate-in fade-in duration-500">
       {/* Timeline Controls */}
-      <TimelineControls 
+      <TimelineControls
         timelineStart={timelineStart}
         timelineEnd={timelineEnd}
         zoomLevel={zoomLevel}
@@ -347,7 +345,7 @@ export function ProjectTimeline({
 
       <div className="border rounded-md shadow-sm bg-card overflow-hidden">
         {/* Month and Day Headers */}
-        <TimelineHeader 
+        <TimelineHeader
           timelineDays={timelineDays}
           totalDays={totalDays}
           dayWidth={dayWidth}
@@ -359,24 +357,24 @@ export function ProjectTimeline({
         <div
           ref={scrollContainerRef}
           className="overflow-auto relative"
-          style={{ 
-            height: hasItems ? '60vh' : '300px', 
+          style={{
+            height: hasItems ? '60vh' : '300px',
             width: '100%'
           }}
         >
           {/* Vertical line for today */}
-          <div 
-            className="absolute top-0 bottom-0 w-px bg-primary/40 z-10 pointer-events-none" 
-            style={{ 
+          <div
+            className="absolute top-0 bottom-0 w-px bg-primary/40 z-10 pointer-events-none"
+            style={{
               left: `${getTodayPosition()}px`,
               height: '100%'
             }}
           />
-          
+
           {hasItems ? (
             <div className="relative" style={{ minHeight: '100%', position: 'relative' }}>
               {/* Section: Milestones */}
-              <TimelineSection 
+              <TimelineSection
                 title="Milestones"
                 type="milestone"
                 items={groupedItems.milestone}
@@ -389,7 +387,7 @@ export function ProjectTimeline({
               />
 
               {/* Section: Epics */}
-              <TimelineSection 
+              <TimelineSection
                 title="Epics"
                 type="epic"
                 items={groupedItems.epic}
@@ -402,7 +400,7 @@ export function ProjectTimeline({
               />
 
               {/* Section: Stories */}
-              <TimelineSection 
+              <TimelineSection
                 title="Stories"
                 type="story"
                 items={groupedItems.story}
@@ -416,7 +414,7 @@ export function ProjectTimeline({
             </div>
           ) : (
             // Empty state
-            <TimelineEmpty 
+            <TimelineEmpty
               onCreateMilestone={onCreateMilestone}
               onCreateEpic={onCreateEpic}
               onCreateStory={onCreateStory}

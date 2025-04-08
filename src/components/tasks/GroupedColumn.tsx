@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen, CheckSquare } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen } from "lucide-react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import EnhancedTaskCard from "./EnhancedTaskCard";
 import { GroupingOption } from "./KanbanFilters";
@@ -63,18 +63,18 @@ export default function GroupedColumn({
       let icon: React.ReactNode | undefined;
 
       // Handle grouping based on item's entity type if available
-      const itemType = task.entityType || 
-        (task.type === 'MILESTONE' ? 'milestone' : 
-         task.type === 'EPIC' ? 'epic' : 
-         task.type === 'STORY' ? 'story' : 'task');
+      const itemType = task.entityType ||
+        (task.type === 'MILESTONE' ? 'milestone' :
+          task.type === 'EPIC' ? 'epic' :
+            task.type === 'STORY' ? 'story' : 'task');
 
       if (groupBy === 'type') {
         // First check if it's a special entity type
         if (itemType !== 'task') {
           groupId = itemType.toUpperCase();
           groupName = itemType.charAt(0).toUpperCase() + itemType.slice(1) + 's';
-          
-          switch(itemType) {
+
+          switch (itemType) {
             case 'milestone':
               icon = <Calendar className="h-4 w-4 mr-2 text-indigo-500" />;
               break;
@@ -92,7 +92,7 @@ export default function GroupedColumn({
           groupName = type;
           icon = getItemTypeIcon(type);
         }
-      } 
+      }
       else if (groupBy === 'assignee') {
         if (!task.assignee) {
           groupId = 'unassigned';
@@ -166,7 +166,7 @@ export default function GroupedColumn({
               {tasks.length}
             </span>
           </CardTitle>
-          
+
           {onCreateTask && (
             <Button
               variant="ghost"
@@ -179,16 +179,15 @@ export default function GroupedColumn({
           )}
         </div>
       </CardHeader>
-      
+
       <CardContent className="px-2 pb-2 space-y-2 max-h-[60vh] overflow-y-auto">
         <Droppable droppableId={columnId} type="task">
           {(provided, snapshot) => (
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className={`min-h-[200px] rounded-sm transition-colors ${
-                snapshot.isDraggingOver ? "bg-muted/50" : ""
-              }`}
+              className={`min-h-[200px] rounded-sm transition-colors ${snapshot.isDraggingOver ? "bg-muted/50" : ""
+                }`}
             >
               {groups.map((group, groupIndex) => (
                 <div key={group.id} className="mb-2">
@@ -215,9 +214,9 @@ export default function GroupedColumn({
                           </Badge>
                         </div>
                       </div>
-                      
+
                       {!collapsedGroups[group.id] && <Separator className="my-1" />}
-                      
+
                       <CollapsibleContent>
                         {group.items.map((item, taskIndex) => (
                           <Draggable
@@ -230,12 +229,11 @@ export default function GroupedColumn({
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className={`mb-2 transition-shadow ${
-                                  snapshot.isDragging ? "shadow-lg" : ""
-                                }`}
+                                className={`mb-2 transition-shadow ${snapshot.isDragging ? "shadow-lg" : ""
+                                  }`}
                               >
-                                <EnhancedTaskCard 
-                                  id={item.id} 
+                                <EnhancedTaskCard
+                                  id={item.id}
                                   title={item.title}
                                   type={item.type || 'TASK'}
                                   priority={item.priority}
@@ -261,7 +259,7 @@ export default function GroupedColumn({
                       </CollapsibleContent>
                     </Collapsible>
                   )}
-                  
+
                   {groupBy === 'none' && (
                     <>
                       {group.items.map((item, taskIndex) => (
@@ -275,12 +273,11 @@ export default function GroupedColumn({
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`mb-2 transition-shadow ${
-                                snapshot.isDragging ? "shadow-lg" : ""
-                              }`}
+                              className={`mb-2 transition-shadow ${snapshot.isDragging ? "shadow-lg" : ""
+                                }`}
                             >
-                              <EnhancedTaskCard 
-                                id={item.id} 
+                              <EnhancedTaskCard
+                                id={item.id}
                                 title={item.title}
                                 type={item.type || 'TASK'}
                                 priority={item.priority}

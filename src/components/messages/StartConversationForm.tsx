@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useCreateConversation, useSendMessage } from "@/hooks/queries/useMessage";
 
@@ -29,30 +28,29 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
   const [selectedUser, setSelectedUser] = useState<User | null>(recipient || null);
   const [message, setMessage] = useState("");
   const router = useRouter();
-  const { toast } = useToast();
-  
+
   // Use TanStack Query mutations
   const createConversationMutation = useCreateConversation();
   const sendMessageMutation = useSendMessage();
-  
+
   // Combined loading state from both mutations
   const isLoading = createConversationMutation.isPending || sendMessageMutation.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedUser || !message.trim()) return;
-    
+
     try {
       // First create the conversation using the mutation
       const conversationId = await createConversationMutation.mutateAsync(selectedUser.id);
-      
+
       // Then send the first message
       await sendMessageMutation.mutateAsync({
         conversationId,
         content: message.trim()
       });
-      
+
       // Navigate to the conversation
       router.push(`/messages/${conversationId}`);
     } catch (error) {
@@ -79,7 +77,7 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
         </Button>
         <h1 className="text-2xl font-bold">New Message</h1>
       </div>
-      
+
       {!selectedUser ? (
         <Card className="border-border/40 bg-card/95 shadow-lg">
           <CardHeader className="border-b border-border/40 p-4">
@@ -124,10 +122,10 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
                   <p className="font-medium">{selectedUser.name}</p>
                   <p className="text-sm text-muted-foreground">{selectedUser.role || "Developer"}</p>
                 </div>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setSelectedUser(null)}
                   className="ml-auto text-muted-foreground hover:text-foreground"
                   disabled={isLoading}
@@ -135,7 +133,7 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
                   Change
                 </Button>
               </div>
-              
+
               <Textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -148,19 +146,19 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
               />
             </CardContent>
           </Card>
-          
+
           <div className="flex justify-end">
             <Button
-              type="button" 
-              variant="outline" 
+              type="button"
+              variant="outline"
               onClick={() => setSelectedUser(null)}
               disabled={isLoading}
               className="mr-2 border-border/60"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading || !message.trim()}
               className={cn(
                 "transition-all",

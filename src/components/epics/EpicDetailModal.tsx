@@ -14,7 +14,6 @@ interface EpicDetailModalProps {
 
 export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProps) {
   const [epic, setEpic] = useState<any | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   
@@ -24,7 +23,6 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
   const fetchEpicDetails = useCallback(async () => {
     if (!epicId) return;
     
-    setLoading(true);
     setError(null);
     
     try {
@@ -42,7 +40,6 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
       console.error("Failed to fetch epic details:", err);
       setError("Failed to load epic details. Please try again.");
     } finally {
-      setLoading(false);
       setShouldRefresh(false);
     }
   }, [epicId]);
@@ -91,7 +88,6 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
         <div className="flex-1 overflow-y-auto pr-2 -mr-2">
           <EpicDetailContent
             epic={epic}
-            isLoading={loading}
             error={error}
             onRefresh={refreshEpicDetails}
             onClose={onClose}

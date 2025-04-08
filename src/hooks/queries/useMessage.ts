@@ -18,7 +18,6 @@ export function useConversations() {
 }
 
 export function useConversation(conversationId: string) {
-  const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: ['conversation', conversationId],

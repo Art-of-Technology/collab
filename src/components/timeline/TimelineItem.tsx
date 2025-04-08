@@ -16,7 +16,6 @@ interface TimelineItemProps {
     color?: string;
     progress?: number;
   };
-  indexInGroup: number;
   typeStyles: {
     bg: string;
     hover: string;
@@ -31,7 +30,6 @@ interface TimelineItemProps {
 
 export function TimelineItem({
   item,
-  indexInGroup,
   typeStyles,
   timelineStart,
   dayWidth,

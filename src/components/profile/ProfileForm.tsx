@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +36,6 @@ interface ProfileFormProps {
 }
 
 export default function ProfileForm({ user }: ProfileFormProps) {
-  const router = useRouter();
   const { toast } = useToast();
   const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
   const [formData, setFormData] = useState({

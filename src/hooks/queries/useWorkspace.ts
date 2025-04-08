@@ -11,7 +11,6 @@ import {
   removeWorkspaceMember,
   checkWorkspaceLimit,
   getPendingInvitations,
-  getUserWorkspacesById,
   getDetailedWorkspaceById,
   getWorkspaceMembers
 } from '@/actions/workspace';

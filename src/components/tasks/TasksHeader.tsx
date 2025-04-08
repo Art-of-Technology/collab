@@ -18,19 +18,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export default function TasksHeader() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
   const [isEpicDialogOpen, setIsEpicDialogOpen] = useState(false);
   const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
-  const { selectedBoardId, view, setView, milestones, epics } = useTasks();
+  const { selectedBoardId, view, setView} = useTasks();
   const { currentWorkspace } = useWorkspace();
   const { canManageBoard } = useWorkspacePermissions();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   // Fetch task boards for the current workspace
   const { data: taskBoards } = useTaskBoards({ 

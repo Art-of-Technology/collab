@@ -46,6 +46,7 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
       </div>
     );
   } catch (error) {
+    console.error("Error loading task details:", error);
     notFound();
   }
 }

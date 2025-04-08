@@ -20,14 +20,13 @@ export function TaskCommentReplyForm({
   onCancel
 }: TaskCommentReplyFormProps) {
   const [content, setContent] = useState("");
-  const [contentHtml, setContentHtml] = useState("");
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
   const addCommentMutation = useAddTaskComment();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!content.trim()) {
       toast({
         title: "Error",
@@ -36,21 +35,20 @@ export function TaskCommentReplyForm({
       });
       return;
     }
-    
+
     try {
-      await addCommentMutation.mutateAsync({ 
-        taskId, 
-        content, 
-        parentId: parentCommentId 
+      await addCommentMutation.mutateAsync({
+        taskId,
+        content,
+        parentId: parentCommentId
       });
-      
+
       toast({
         title: "Success",
         description: "Reply added successfully",
       });
-      
+
       setContent("");
-      setContentHtml("");
       onCancel();
     } catch (error) {
       console.error("Failed to add reply:", error);
@@ -62,16 +60,15 @@ export function TaskCommentReplyForm({
     }
   };
 
-  const handleEditorChange = (markdown: string, html: string) => {
+  const handleEditorChange = (markdown: string) => {
     setContent(markdown);
-    setContentHtml(html);
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {
     if (isImproving || !text.trim()) return text;
-    
+
     setIsImproving(true);
-    
+
     try {
       const response = await fetch("/api/ai/improve", {
         method: "POST",
@@ -80,16 +77,16 @@ export function TaskCommentReplyForm({
         },
         body: JSON.stringify({ text })
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to improve text");
       }
-      
+
       const data = await response.json();
-      
+
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
-      
+
       // Return improved text
       return improvedText;
     } catch (error) {
@@ -124,8 +121,8 @@ export function TaskCommentReplyForm({
         >
           Cancel
         </Button>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           size="sm"
           disabled={addCommentMutation.isPending || !content.trim() || isImproving}
         >

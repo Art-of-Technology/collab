@@ -51,7 +51,6 @@ export default function EnhancedTaskCard({
   storyTitle,
   color,
   entityType = 'task',
-  dueDate,
   _count,
 }: EnhancedTaskCardProps) {
   const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } = useTaskModal();
