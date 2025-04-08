@@ -29,7 +29,7 @@ async function improveEnglishText(userInput: string) {
         const response = await axios.post(
             endpoint,
             {
-                model: 'gpt-3.5-turbo',
+                model: 'gpt-4-turbo',
                 messages: messages,
                 temperature: 0.7,
             },
