@@ -17,13 +17,14 @@ async function improveEnglishText(userInput: string) {
     const messages = [
         {
             role: 'system',
-            content: 'You are a helpful assistant that improves the clarity, grammar, and natural flow of English text without changing its meaning and keep it under 160 characters, remove unnecessary words and phrases.',
+            content: `You are a helpful assistant that improves the clarity, grammar, and natural flow of English text written by a diverse development team. Do not change the original meaning. If the text is longer than 160 characters, shorten it while preserving the core message. Remove unnecessary words. Then categorise the message as one of the following: "Update", "Blocker", "Idea", or "Question". If the message mentions an issue that prevents progress, classify it as a "Blocker".`,
         },
         {
             role: 'user',
-            content: `Please improve the following text in English:\n"${userInput}"`,
+            content: `Please improve the following message and classify it. Respond in JSON format like { "message": "", "category": "" }:\n"${userInput}"`,
         },
     ];
+    
 
     try {
         const response = await axios.post(
@@ -31,7 +32,7 @@ async function improveEnglishText(userInput: string) {
             {
                 model: 'gpt-4-turbo',
                 messages: messages,
-                temperature: 0.7,
+                temperature: 0.3,
             },
             {
                 headers: {
@@ -40,14 +41,14 @@ async function improveEnglishText(userInput: string) {
                 },
             }
         );
-        
+
         if (!response.data?.choices?.[0]?.message?.content) {
             console.error('Unexpected API response format:', response.data);
             return null;
         }
-        
-        const improvedText = response.data.choices[0].message.content.trim();
-        return improvedText;
+
+        const json = JSON.parse(response.data.choices[0].message.content)
+        return json;
     } catch (error: any) {
         console.error('Error improving text:', error.response?.data || error.message);
         return null;
@@ -98,9 +99,7 @@ export async function POST(req: Request) {
             );
         }
 
-        return NextResponse.json({
-            message: normalizeText(result)
-        });
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error in improve API:', error);
         return NextResponse.json(

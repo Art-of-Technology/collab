@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
+// import CollabInput from "../collab/collab-input";
 
 export default function CreatePostForm() {
   const router = useRouter();
@@ -105,7 +106,11 @@ export default function CreatePostForm() {
       }
       
       const data = await response.json();
+
       
+      console.log("AI response:", data);
+      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
+
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
       
@@ -241,6 +246,7 @@ export default function CreatePostForm() {
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
+            {/* <CollabInput /> */}
             <MarkdownEditor
               content={formData.message}
               onChange={handleEditorChange}
