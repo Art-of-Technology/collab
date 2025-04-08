@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp, Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -24,6 +24,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import React from "react";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
+import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -39,7 +40,30 @@ export interface TaskComment {
     id: string;
     name: string | null;
     image: string | null;
+    useCustomAvatar?: boolean;
+    avatarSkinTone?: number | null;
+    avatarEyes?: number | null;
+    avatarBrows?: number | null;
+    avatarMouth?: number | null;
+    avatarNose?: number | null;
+    avatarHair?: number | null;
+    avatarEyewear?: number | null;
+    avatarAccessory?: number | null;
   };
+  html?: string | null;
+  parentId?: string | null;
+  reactions?: {
+    id: string;
+    type: string;
+    authorId: string;
+    author?: {
+      id: string;
+      name?: string | null;
+      image?: string | null;
+      useCustomAvatar?: boolean;
+    };
+  }[];
+  replies?: TaskComment[];
 }
 
 export interface TaskLabel {
@@ -57,8 +81,8 @@ export interface TaskAttachment {
 export interface Task {
   id: string;
   title: string;
-  description?: string;
-  status: string;
+  description?: string | null;
+  status: string | null;
   priority: string;
   type: string;
   createdAt: Date;
@@ -89,6 +113,33 @@ export interface Task {
   storyPoints?: number;
   issueKey?: string | null;
   workspaceId: string;
+  milestoneId?: string;
+  milestone?: {
+    id: string;
+    title: string;
+  };
+  epicId?: string;
+  epic?: {
+    id: string;
+    title: string;
+  };
+  storyId?: string;
+  story?: {
+    id: string;
+    title: string;
+  };
+  parentTaskId?: string;
+  parentTask?: {
+    id: string;
+    title: string;
+    issueKey?: string;
+  };
+  subtasks?: {
+    id: string;
+    title: string;
+    issueKey?: string;
+    status: string;
+  }[];
 }
 
 interface TaskDetailContentProps {
@@ -98,6 +149,7 @@ interface TaskDetailContentProps {
   onRefresh: () => void;
   showHeader?: boolean;
   onClose?: () => void;
+  boardId?: string;
 }
 
 // Client-side implementation of status badge
@@ -146,7 +198,8 @@ export function TaskDetailContent({
   error,
   onRefresh,
   showHeader = true,
-  onClose
+  onClose,
+  boardId
 }: TaskDetailContentProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
@@ -166,11 +219,22 @@ export function TaskDetailContent({
   const { toast } = useToast();
   const router = useRouter();
   const { refreshBoards } = useTasks();
+  const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
 
   // Update comments state when task changes
   useEffect(() => {
     if (task?.comments) {
-      setComments(task.comments);
+      console.log("Task comments from TaskDetailContent:", task.comments);
+      // Make sure comments have the right structure
+      const structuredComments = task.comments.map(comment => ({
+        ...comment,
+        author: comment.author || {
+          id: "unknown",
+          name: "Unknown User",
+          image: null
+        }
+      }));
+      setComments(structuredComments);
     }
   }, [task?.comments]);
 
@@ -332,9 +396,24 @@ export function TaskDetailContent({
 
   // Handle status change
   const handleStatusChange = async (status: string) => {
+    if (!task) return;
+    
     setSavingStatus(true);
     try {
-      await saveTaskField('status', status);
+      // If task has a column, update the column ID based on the status
+      if (task.column) {
+        // Find the column ID that matches the selected status
+        const statusesToColumn = (statuses || []).map((s, index) => ({ status: s, index }));
+        console.log("Updating column status:", status, statusesToColumn);
+        
+        // Update the status and column together
+        await saveTaskField('status', status);
+      } else {
+        // Just update the status directly
+        await saveTaskField('status', status);
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
     } finally {
       setSavingStatus(false);
     }
@@ -403,16 +482,35 @@ export function TaskDetailContent({
     if (!task) return;
 
     try {
-      // Fetch statuses (columns) for the task's board
-      const columnsResponse = await fetch(`/api/boards/${task.taskBoard?.id}/columns`);
-      if (columnsResponse.ok) {
-        const columnsData = await columnsResponse.json();
-        setStatuses(columnsData.map((col: any) => col.name));
+      // Set default statuses in case there's no board attached
+      const defaultStatuses = ["TO DO", "IN PROGRESS", "REVIEW", "DONE"];
+      
+      // First try task's own board ID, then fall back to boardId prop if available
+      const effectiveBoardId = task.taskBoard?.id || boardId;
+      
+      // Only fetch statuses if we have a valid board ID
+      if (effectiveBoardId) {
+        // Fetch statuses (columns) for the board
+        const columnsResponse = await fetch(`/api/tasks/boards/${effectiveBoardId}/columns`);
+        if (columnsResponse.ok) {
+          const columnsData = await columnsResponse.json();
+          setStatuses(columnsData.map((col: any) => col.name));
+        } else {
+          // Fall back to default statuses if request fails
+          console.warn("Failed to fetch board columns, using default statuses");
+          setStatuses(defaultStatuses);
+        }
+      } else {
+        // If no board ID, use default statuses
+        console.info("No task board ID available, using default statuses");
+        setStatuses(defaultStatuses);
       }
     } catch (error) {
       console.error("Error loading field options:", error);
+      // Set default statuses in case of error
+      setStatuses(["TO DO", "IN PROGRESS", "REVIEW", "DONE"]);
     }
-  }, [task]);
+  }, [task, boardId]);
 
   // Load field options on first render
   useEffect(() => {
@@ -422,11 +520,19 @@ export function TaskDetailContent({
   // Update state when task changes
   useEffect(() => {
     if (task) {
+      console.log("Task details:", {
+        title: task.title,
+        status: task.status,
+        columnName: task.column?.name,
+        priority: task.priority,
+        boardId: task.taskBoard?.id || boardId
+      });
+      
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(task.dueDate);
     }
-  }, [task]);
+  }, [task, boardId]);
 
 
   if (error) {
@@ -704,7 +810,7 @@ export function TaskDetailContent({
                 <p className="text-sm font-medium mb-1">Status</p>
                 <div className="relative">
                   <Select
-                    value={task.column?.name || "TO DO"}
+                    value={task.column?.name || task.status || "TO DO"}
                     onValueChange={handleStatusChange}
                     disabled={savingStatus}
                   >
@@ -829,6 +935,121 @@ export function TaskDetailContent({
                   )}
                 </div>
               </div>
+
+              {/* Relations Section */}
+              <div className="border-t border-border/50 pt-4 mt-2">
+                <h3 className="text-sm font-medium mb-3">Relations</h3>
+
+                {/* Milestone */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Milestone</p>
+                  {task.milestone ? (
+                    <Link href={`/milestones/${task.milestoneId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                        Milestone
+                      </Badge>
+                      <span>{task.milestone.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No milestone linked
+                    </div>
+                  )}
+                </div>
+
+                {/* Epic */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Epic</p>
+                  {task.epic ? (
+                    <Link href={`/epics/${task.epicId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                        Epic
+                      </Badge>
+                      <span>{task.epic.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No epic linked
+                    </div>
+                  )}
+                </div>
+
+                {/* Story */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Story</p>
+                  {task.story ? (
+                    <Link href={`/stories/${task.storyId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        Story
+                      </Badge>
+                      <span>{task.story.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No story linked
+                    </div>
+                  )}
+                </div>
+
+                {/* Parent Task */}
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1 text-muted-foreground">Parent Task</p>
+                  {task.parentTask ? (
+                    <Link href={`/tasks/${task.parentTaskId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                        {task.parentTask.issueKey || 'Task'}
+                      </Badge>
+                      <span>{task.parentTask.title}</span>
+                    </Link>
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-1">
+                      No parent task
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtasks */}
+                {task.subtasks && task.subtasks.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs font-medium mb-1 text-muted-foreground">Subtasks</p>
+                    <ul className="space-y-2">
+                      {task.subtasks.map((subtask) => (
+                        <li key={subtask.id}>
+                          <Link href={`/tasks/${subtask.id}`} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                                {subtask.issueKey || 'Task'}
+                              </Badge>
+                              <span className="truncate">{subtask.title}</span>
+                            </div>
+                            <Badge className={`${
+                              subtask.status === 'DONE' ? 'bg-green-500' : 
+                              subtask.status === 'IN PROGRESS' ? 'bg-blue-500' : 
+                              'bg-gray-500'
+                            } text-white flex-shrink-0 ml-1`}>
+                              {subtask.status}
+                            </Badge>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Create Subtask Button */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-2"
+                  onClick={() => {
+                    // Open task creation modal with parent task ID prefilled
+                    setSubtaskFormOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Create Subtask
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -856,6 +1077,18 @@ export function TaskDetailContent({
           )}
         </div>
       </div>
+
+      {/* Subtask Creation Modal */}
+      {subtaskFormOpen && (
+        <CreateTaskForm
+          isOpen={subtaskFormOpen}
+          onClose={() => setSubtaskFormOpen(false)}
+          initialData={{
+            parentTaskId: task.id,
+            taskBoardId: task.taskBoard?.id || "",
+          }}
+        />
+      )}
     </div>
   );
 } 

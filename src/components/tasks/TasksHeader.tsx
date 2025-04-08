@@ -1,28 +1,71 @@
 "use client";
 
 import { useState } from "react";
-import { Kanban, List, Plus } from "lucide-react";
+import { Kanban, List, Plus, GitBranch, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskBoardSelector from "@/components/tasks/TaskBoardSelector";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { useTasks } from "@/context/TasksContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { CreateMilestoneDialog } from "@/components/milestones/CreateMilestoneDialog";
+import { CreateEpicDialog } from "@/components/epics/CreateEpicDialog";
+import { CreateStoryDialog } from "@/components/stories/CreateStoryDialog";
+import { useTaskBoards } from "@/hooks/queries/useTaskBoard";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export default function TasksHeader() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
-  const { selectedBoardId, view, setView, refreshBoards } = useTasks();
+  const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
+  const [isEpicDialogOpen, setIsEpicDialogOpen] = useState(false);
+  const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
+  const { selectedBoardId, view, setView, milestones, epics } = useTasks();
+  const { currentWorkspace } = useWorkspace();
+  const { canManageBoard } = useWorkspacePermissions();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const handleCreate = () => {
+  // Fetch task boards for the current workspace
+  const { data: taskBoards } = useTaskBoards({ 
+    workspaceId: currentWorkspace?.id,
+    includeStats: true
+  });
+
+  const handleCreateTaskOpen = () => {
     setIsCreateTaskOpen(true);
   };
 
   const handleCreateTaskClose = () => {
     setIsCreateTaskOpen(false);
-    refreshBoards(); // Refresh boards instead of the whole page
   };
 
-  const handleViewChange = (newView: 'kanban' | 'list') => {
+  const handleViewChange = (newView: 'kanban' | 'list' | 'hierarchy') => {
     setView(newView);
   };
+
+  const handleCreateMilestone = () => {
+    setIsMilestoneDialogOpen(true);
+  };
+
+  const handleCreateEpic = () => {
+    setIsEpicDialogOpen(true);
+  };
+
+  const handleCreateStory = () => {
+    setIsStoryDialogOpen(true);
+  };
+
+  const handleOpenChange = (dialogStateSetter: React.Dispatch<React.SetStateAction<boolean>>) => 
+    (isOpen: boolean) => {
+      dialogStateSetter(isOpen);
+    };
 
   return (
     <>
@@ -34,14 +77,33 @@ export default function TasksHeader() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            variant="default" 
-            className="gap-1"
-            onClick={handleCreate}
-          >
-            <Plus size={16} />
-            Create Task
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="default" className="gap-1">
+                <Plus size={16} />
+                Create
+                <ChevronDown size={14} className="ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCreateTaskOpen}>
+                Task
+              </DropdownMenuItem>
+              {canManageBoard && (
+                <>
+                  <DropdownMenuItem onClick={handleCreateMilestone}>
+                    Milestone
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleCreateEpic}>
+                    Epic
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleCreateStory}>
+                    Story
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -62,7 +124,7 @@ export default function TasksHeader() {
             </Button>
             <Button
               variant="ghost"
-              className={`px-3 py-1.5 rounded-r-md border ${
+              className={`px-3 py-1.5 border border-r-0 ${
                 view === "list"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background hover:bg-muted"
@@ -70,6 +132,17 @@ export default function TasksHeader() {
               onClick={() => handleViewChange('list')}
             >
               <List size={16} />
+            </Button>
+            <Button
+              variant="ghost"
+              className={`px-3 py-1.5 rounded-r-md border ${
+                view === "hierarchy"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background hover:bg-muted"
+              }`}
+              onClick={() => handleViewChange('hierarchy')}
+            >
+              <GitBranch size={16} />
             </Button>
           </div>
         </div>
@@ -81,6 +154,34 @@ export default function TasksHeader() {
         onClose={handleCreateTaskClose}
         initialData={{ taskBoardId: selectedBoardId }}
       />
+
+      {isMilestoneDialogOpen && (
+        <CreateMilestoneDialog
+          open={isMilestoneDialogOpen}
+          onOpenChange={handleOpenChange(setIsMilestoneDialogOpen)}
+          onSuccess={() => setIsMilestoneDialogOpen(false)}
+          workspaceId={currentWorkspace?.id || ''}
+          taskBoards={taskBoards || []}
+        />
+      )}
+
+      {isEpicDialogOpen && (
+        <CreateEpicDialog
+          open={isEpicDialogOpen}
+          onOpenChange={handleOpenChange(setIsEpicDialogOpen)}
+          onSuccess={() => setIsEpicDialogOpen(false)}
+          workspaceId={currentWorkspace?.id || ''}
+        />
+      )}
+
+      {isStoryDialogOpen && (
+        <CreateStoryDialog
+          open={isStoryDialogOpen}
+          onOpenChange={handleOpenChange(setIsStoryDialogOpen)}
+          onSuccess={() => setIsStoryDialogOpen(false)}
+          workspaceId={currentWorkspace?.id || ''}
+        />
+      )}
     </>
   );
 } 

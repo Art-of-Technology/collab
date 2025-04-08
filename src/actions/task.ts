@@ -123,7 +123,7 @@ export async function getTaskById(taskId: string) {
     throw new Error('User not found');
   }
 
-  // Get the task
+  // Get the task with nested relations
   const task = await prisma.task.findUnique({
     where: {
       id: taskId
@@ -155,10 +155,61 @@ export async function getTaskById(taskId: string) {
           role: true
         }
       },
-      post: {
-        select: {
-          id: true
+      post: { select: { id: true } },
+      column: { select: { id: true, name: true } },
+      labels: { select: { id: true, name: true, color: true } },
+      attachments: { select: { id: true, fileName: true, fileUrl: true } },
+      subtasks: { select: { id: true, title: true, issueKey: true, status: true } },
+      parentTask: { select: { id: true, title: true, issueKey: true } },
+      comments: {
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              useCustomAvatar: true,
+              avatarSkinTone: true,
+              avatarEyes: true,
+              avatarBrows: true,
+              avatarMouth: true,
+              avatarNose: true,
+              avatarHair: true,
+              avatarEyewear: true,
+              avatarAccessory: true,
+            }
+          },
+          reactions: {
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                  useCustomAvatar: true
+                }
+              }
+            }
+          }
         }
+      },
+      story: { 
+        select: { 
+          id: true, 
+          title: true, 
+          epic: {
+            select: { 
+              id: true, 
+              title: true,
+              milestone: {
+                select: { 
+                  id: true, 
+                  title: true 
+                } 
+              }
+            } 
+          }
+        } 
       }
     }
   });
@@ -193,12 +244,17 @@ export async function createTask(data: {
   description?: string;
   workspaceId: string;
   assigneeId?: string;
+  reporterId?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH';
   status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
   dueDate?: Date;
   linkedPostIds?: string[];
   taskBoardId?: string;
   columnId?: string;
+  epicId?: string | null;
+  storyId?: string | null;
+  type?: string;
+  parentTaskId?: string | null;
 }) {
   const session = await getServerSession(authOptions);
 
@@ -211,12 +267,17 @@ export async function createTask(data: {
     description,
     workspaceId,
     assigneeId,
+    reporterId,
     priority = 'MEDIUM',
     status = 'TODO',
     dueDate,
     linkedPostIds = [],
     taskBoardId,
-    columnId
+    columnId,
+    epicId,
+    storyId,
+    type = 'TASK',
+    parentTaskId
   } = data;
 
   // Validate input
@@ -270,6 +331,24 @@ export async function createTask(data: {
     }
   }
 
+  // If a reporter is provided, verify they are a member of the workspace
+  const reporterToUse = reporterId || user.id;
+  
+  if (reporterId && reporterId !== user.id) {
+    const isMember = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId: reporterId
+      }
+    });
+
+    const isOwner = workspace.ownerId === reporterId;
+
+    if (!isMember && !isOwner) {
+      throw new Error('Reporter is not a member of this workspace');
+    }
+  }
+
   // Generate issue key if board has a prefix
   let issueKey = null;
   if (taskBoardId) {
@@ -300,6 +379,7 @@ export async function createTask(data: {
     data: {
       title: title.trim(),
       description: description?.trim() || null,
+      type,
       workspace: {
         connect: {
           id: workspaceId
@@ -307,7 +387,7 @@ export async function createTask(data: {
       },
       reporter: {
         connect: {
-          id: user.id
+          id: reporterToUse
         }
       },
       ...(assigneeId ? {
@@ -339,6 +419,27 @@ export async function createTask(data: {
         column: {
           connect: {
             id: columnId
+          }
+        }
+      } : {}),
+      ...(storyId ? {
+        story: {
+          connect: {
+            id: storyId
+          }
+        }
+      } : {}),
+      ...(epicId ? {
+        epic: {
+          connect: {
+            id: epicId
+          }
+        }
+      } : {}),
+      ...(parentTaskId ? {
+        parentTask: {
+          connect: {
+            id: parentTaskId
           }
         }
       } : {})
@@ -909,7 +1010,7 @@ export async function updateBoard(boardId: string, data: {
       id: board.workspaceId,
       OR: [
         { ownerId: user.id },
-        { members: { some: { userId: user.id, role: { in: ['admin', 'owner'] } } } }
+        { members: { some: { userId: user.id, role: { in: ['admin', 'owner'] } } } },
       ]
     }
   });

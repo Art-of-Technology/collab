@@ -56,6 +56,19 @@ export function TaskComment({
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
 
+  // For debugging - check if author is missing
+  if (!comment.author) {
+    console.error("Comment is missing author data:", comment);
+  }
+
+  // Provide fallback values for missing authors
+  const author = comment.author || {
+    id: "unknown",
+    name: "Unknown User",
+    image: null,
+    useCustomAvatar: false
+  };
+  
   // Use TanStack Query to get likes data
   const { data: likesData } = useTaskCommentLikes(taskId, comment.id);
   const toggleLikeMutation = useToggleTaskCommentLike();
@@ -78,13 +91,13 @@ export function TaskComment({
   return (
     <div className={`mb-2 ${isReply ? 'reply-comment' : 'top-level-comment'}`}>
       <div className="flex gap-2 hover:bg-muted/50 p-2 rounded-lg">
-        {comment.author.useCustomAvatar ? (
-          <CustomAvatar user={comment.author} size="sm" />
+        {author.useCustomAvatar ? (
+          <CustomAvatar user={author} size="sm" />
         ) : (
           <Avatar className="h-7 w-7">
-            <AvatarImage src={comment.author.image || undefined} alt={comment.author.name || "User"} />
+            <AvatarImage src={author.image || undefined} alt={author.name || "User"} />
             <AvatarFallback>
-              {comment.author.name?.charAt(0).toUpperCase() || "U"}
+              {author.name?.charAt(0).toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
         )}
@@ -92,10 +105,10 @@ export function TaskComment({
           <div className="rounded-lg">
             <div className="flex flex-col">
               <Link
-                href={`/profile/${comment.author.id}`}
+                href={`/profile/${author.id}`}
                 className="font-semibold text-sm hover:underline"
               >
-                {comment.author.name}
+                {author.name}
               </Link>
               {comment.html ? (
                 <div className="prose prose-sm max-w-none dark:prose-invert">
@@ -128,7 +141,7 @@ export function TaskComment({
             <TaskCommentReplyForm
               taskId={taskId}
               parentCommentId={comment.id}
-              parentCommentAuthor={comment.author.name || "User"}
+              parentCommentAuthor={author.name || "User"}
               onCancel={() => setIsReplying(false)}
             />
           )}

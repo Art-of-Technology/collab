@@ -8,6 +8,21 @@ import {
   organizeTaskCommentsIntoTree
 } from "@/utils/taskCommentHelpers";
 
+// Helper function to ensure comments have the required structure
+const ensureCommentStructure = (comments: any[]): TaskCommentWithAuthor[] => {
+  return comments.map(comment => ({
+    ...comment,
+    author: comment.author || {
+      id: "unknown",
+      name: "Unknown User",
+      image: null
+    },
+    reactions: comment.reactions || [],
+    // Recursively fix nested replies structure if they exist
+    replies: comment.replies ? ensureCommentStructure(comment.replies) : undefined
+  }));
+};
+
 interface TaskCommentsListProps {
   taskId: string;
   initialComments?: TaskCommentWithAuthor[];
@@ -24,14 +39,22 @@ export function TaskCommentsList({
   // Get comments using TanStack Query
   const { data, isLoading } = useTaskComments(taskId);
   
-  // Use the comments from the query or fall back to initial comments
-  const comments = data?.comments || initialComments;
+  console.log("Comments from query:", data?.comments);
+  console.log("Initial comments:", initialComments);
+  
+  // Fix comment structure and use the query data or fall back to initial comments
+  const rawComments = data?.comments || initialComments;
+  const comments = useMemo(() => ensureCommentStructure(rawComments), [rawComments]);
   const currentUserId = data?.currentUserId || initialUserId || '';
+  
+  console.log("Structured comments:", comments);
   
   // Use organizeTaskCommentsIntoTree when rendering comments
   const organizedComments = useMemo(() => 
     organizeTaskCommentsIntoTree(comments), [comments]
   );
+  
+  console.log("Organized comments:", organizedComments);
 
   if (isLoading && !initialComments.length) {
     return (

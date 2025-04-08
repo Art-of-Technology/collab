@@ -62,30 +62,28 @@ export function BoardSelect({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Use TanStack Query hooks
+  // Fetch boards using the hook (it internally handles enabling based on wsId)
   const { 
     data: boards = [], 
     isLoading: boardsLoading 
   } = useWorkspaceBoards(wsId);
   
+  // Fetch columns based on boardValue
   const { 
     data: columns = [], 
     isLoading: columnsLoading 
   } = useBoardColumns(boardValue);
   
-  // Set default board if none selected and boards are available
-  useEffect(() => {
-    if (boards.length > 0 && !boardValue) {
-      onBoardChange(boards[0].id);
-    }
-  }, [boards, boardValue, onBoardChange]);
-  
-  // Set default column if none selected and columns are available
+  // useEffect for default column remains (depends on boardValue)
   useEffect(() => {
     if (columns.length > 0 && onColumnChange && !columnValue) {
-      onColumnChange(columns[0].id);
+      // Check if boardValue is valid before setting default column
+      if (boardValue && boards.some(b => b.id === boardValue)) {
+          onColumnChange(columns[0].id);
+      }
     }
-  }, [columns, columnValue, onColumnChange]);
+    // Added boardValue and boards dependencies
+  }, [columns, columnValue, onColumnChange, boardValue, boards]); 
 
   // Handle board change
   const handleBoardSelect = (boardId: string) => {
@@ -108,17 +106,8 @@ export function BoardSelect({
   // Find the selected board
   const selectedBoard = boardValue ? boards.find(b => b.id === boardValue) : null;
   
-  // Determine if we're in a loading state
-  const isLoading = boardsLoading || (showColumns && columnsLoading && boardValue);
-
-  if (isLoading && !boards.length) {
-    return (
-      <div className="flex items-center h-10 px-3 text-sm border rounded-md">
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-        Loading...
-      </div>
-    );
-  }
+  // Combine external disabled state with internal loading state for the button
+  const isButtonDisabled = disabled || boardsLoading;
 
   return (
     <div className={`${className} ${showColumns ? 'space-y-4' : ''}`}>
@@ -129,9 +118,14 @@ export function BoardSelect({
             role="combobox"
             aria-expanded={open}
             className="flex justify-between w-full"
-            disabled={disabled}
+            disabled={isButtonDisabled} // Use combined disabled state
           >
-            {selectedBoard ? (
+            {boardsLoading ? ( // Check boardsLoading directly for button content
+                <div className="flex items-center">
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <span>Loading Boards...</span>
+                </div>
+            ) : selectedBoard ? (
               <div className="flex items-center gap-2">
                 <Layout className="h-4 w-4 text-muted-foreground" />
                 <span>{selectedBoard.name}</span>
@@ -139,7 +133,8 @@ export function BoardSelect({
             ) : (
               <span className="text-muted-foreground">Select board</span>
             )}
-            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            {/* Show chevron only when not loading */}
+            {!boardsLoading && <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />} 
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0 border-none bg-transparent shadow-none" align="start" sideOffset={4} forceMount>

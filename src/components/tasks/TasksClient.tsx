@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import TasksHeader from "@/components/tasks/TasksHeader";
 import KanbanBoard from "@/components/tasks/KanbanBoard";
 import ListView from "@/components/tasks/ListView";
+import ProjectHierarchyBoard from "@/components/tasks/ProjectHierarchyBoard";
 import { TasksProvider } from "@/context/TasksContext";
 
 interface TasksClientProps {
@@ -21,7 +22,7 @@ export default function TasksClient({ initialData }: TasksClientProps) {
   const searchParams = useSearchParams();
   const boardId = searchParams.get("board") || undefined;
   const viewParam = searchParams.get("view") || "kanban";
-  const view = (viewParam === "list" || viewParam === "kanban") ? viewParam : "kanban";
+  const view = (viewParam === "list" || viewParam === "kanban" || viewParam === "hierarchy") ? viewParam : "kanban";
   
   if (initialData.hasNoWorkspace) {
     return (
@@ -56,8 +57,10 @@ export default function TasksClient({ initialData }: TasksClientProps) {
           <div className="space-y-4" key={`view-${view}-board-${boardId}`}>
             {view === "kanban" ? (
               <KanbanBoard key="kanban-view" />
-            ) : (
+            ) : view === "list" ? (
               <ListView key="list-view" />
+            ) : (
+              <ProjectHierarchyBoard key="hierarchy-view" />
             )}
           </div>
         </Suspense>

@@ -18,15 +18,16 @@ interface TaskDetailPageProps {
 
 export default async function TaskDetailPage({ params, searchParams }: TaskDetailPageProps) {
   const session = await getAuthSession();
-  
+  const _params = await params;
+  const _searchParams = await searchParams;
   if (!session?.user) {
     notFound();
   }
   
   try {
     // Get task details using server action
-    const task = await getTaskById(params.taskId);
-    const boardId = searchParams?.boardId || '';
+    const task = await getTaskById(_params.taskId);
+    const boardId = _searchParams?.boardId || '';
     
     return (
       <div className="container py-6 space-y-6">
@@ -40,7 +41,7 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
         </div>
         
         <Suspense fallback={<div>Loading task details...</div>}>
-          <TaskDetailClient task={task} showHeader={true} />
+          <TaskDetailClient task={(task as any)} showHeader={true} boardId={boardId} />
         </Suspense>
       </div>
     );
