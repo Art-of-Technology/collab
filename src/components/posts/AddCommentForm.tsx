@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
 import { useCreateComment } from "@/hooks/queries/useComment";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
@@ -67,7 +66,7 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
     }
   };
 
-  const handleAddComment = async (e: React.FormEvent) => {
+  const handleAddComment = async () => {
     if (!commentText.trim()) return;
 
     try {

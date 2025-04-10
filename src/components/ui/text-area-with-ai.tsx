@@ -5,18 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Send, WandSparkles } from "lucide-react";
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
     Popover,
     PopoverContent,
     PopoverTrigger
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { SparklesText } from "../magicui/sparkles-text";
 
 interface TextAreaWithAIProps {
     value: string;
@@ -106,7 +99,6 @@ export function TextAreaWithAI({
 
     // Calculate character count and percentage for progress indicator
     const charCount = value.length || 0;
-    const charPercentage = maxLength ? Math.min(100, (charCount / maxLength) * 100) : 0;
     const isNearLimit = maxLength && charCount > maxLength * 0.8;
     const isOverLimit = maxLength && charCount > maxLength;
 

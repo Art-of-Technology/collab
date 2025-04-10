@@ -309,7 +309,7 @@ export default function FeatureRequestDetail({
         throw new Error("Failed to update feature request");
       }
 
-      const updatedFeature = await response.json();
+      await response.json();
       
       // Invalidate queries to update both the detail and list views
       queryClient.invalidateQueries({ 
