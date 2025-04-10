@@ -191,6 +191,7 @@ export async function getBoardItems(boardId: string) {
     color: milestone.color,
     dueDate: milestone.dueDate,
     position: milestone.position,
+    issueKey: milestone.issueKey,
     _count: {
       epics: milestone._count.epics,
     },
@@ -208,6 +209,7 @@ export async function getBoardItems(boardId: string) {
     color: epic.color,
     dueDate: epic.dueDate,
     position: epic.position,
+    issueKey: epic.issueKey,
     milestone: epic.milestone,
     milestoneId: epic.milestoneId,
     _count: {
@@ -226,6 +228,7 @@ export async function getBoardItems(boardId: string) {
     columnId: story.columnId,
     color: story.color,
     position: story.position,
+    issueKey: story.issueKey,
     epic: story.epic,
     epicId: story.epicId,
     storyPoints: story.storyPoints,

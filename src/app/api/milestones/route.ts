@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       color,
       columnId,
+      issueKey,
     } = body;
 
     // Required fields
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
         id: true,
         name: true,
         workspaceId: true,
+        issuePrefix: true,
+        nextIssueNumber: true
       }
     });
 
@@ -73,6 +76,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Generate issue key if board has a prefix and no custom issueKey is provided
+    let finalIssueKey = issueKey;
+    if (!finalIssueKey && board.issuePrefix) {
+      // Update the board's next issue number for the milestone
+      const updatedBoard = await prisma.taskBoard.update({
+        where: { id: board.id },
+        data: { nextIssueNumber: { increment: 1 } },
+      });
+      
+      finalIssueKey = `${board.issuePrefix}-${updatedBoard.nextIssueNumber - 1}`;
+    }
+
     // Create the milestone
     const milestone = await prisma.milestone.create({
       data: {
@@ -85,6 +100,7 @@ export async function POST(request: NextRequest) {
         workspaceId,
         columnId,
         color: color || "#6366F1",
+        issueKey: finalIssueKey,
       },
       include: {
         taskBoard: {

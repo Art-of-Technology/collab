@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         data: { nextIssueNumber: { increment: 1 } },
       });
       
-      issueKey = `${board.issuePrefix}-E${updatedBoard.nextIssueNumber - 1}`;
+      issueKey = `${board.issuePrefix}-${updatedBoard.nextIssueNumber - 1}`;
     }
 
     // Create the epic

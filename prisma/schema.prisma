@@ -503,6 +503,7 @@ model Milestone {
   workspaceId String
   columnId    String?   // Add this field to reference a column
   color       String?   @default("#6366F1")
+  issueKey    String?
   position    Int?      // Position within a column for ordering
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -515,6 +516,7 @@ model Milestone {
   @@index([workspaceId])
   @@index([taskBoardId])
   @@index([columnId])
+  @@index([issueKey])
 }
 
 model Epic {
