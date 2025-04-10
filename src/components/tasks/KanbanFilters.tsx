@@ -71,19 +71,6 @@ export default function KanbanFilters({
     onTypeFilter([]);
   };
 
-  // Handle sort changes
-  const handleSortChange = (field: SortOption) => {
-    if (onSortChange) {
-      if (field === selectedSort) {
-        // Toggle direction if same field
-        onSortChange(field, sortDirection === 'asc' ? 'desc' : 'asc');
-      } else {
-        // New field, default to ascending
-        onSortChange(field, 'asc');
-      }
-    }
-  };
-
   // Handle direction change
   const handleDirectionChange = (direction: 'asc' | 'desc') => {
     if (onSortChange && selectedSort) {

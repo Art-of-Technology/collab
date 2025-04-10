@@ -1,7 +1,7 @@
 "use client";
 
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Loader2, CalendarCheck, Star, BookOpen, CheckSquare, Bug, Sparkles, TrendingUp, ArrowUpDown } from "lucide-react";
+import { Loader2, CalendarCheck, Star, BookOpen, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTasks } from "@/context/TasksContext";
@@ -9,6 +9,12 @@ import { useBoardItems } from "@/hooks/queries/useBoardItems";
 import KanbanFilters, { ItemType, GroupingOption, SortOption } from "./KanbanFilters";
 import { useEffect, useState } from "react";
 import TaskDetailModal from "./TaskDetailModal";
+import { lazy, Suspense } from "react";
+
+// Lazy load the detail modals
+const MilestoneDetailModal = lazy(() => import("../milestones/MilestoneDetailModal"));
+const EpicDetailModal = lazy(() => import("../epics/EpicDetailModal"));
+const StoryDetailModal = lazy(() => import("../stories/StoryDetailModal"));
 
 // Task type definition based on what we're using in the component
 interface BoardItem {
@@ -60,24 +66,24 @@ function TaskModal({ isOpen, onClose, taskId, type }: TaskModalProps) {
   // Only render the modal if it's open to improve performance
   if (!isOpen) return null;
 
-  // Import and use the appropriate modal based on entity type
-  switch (type) {
-    case 'milestone':
-      const MilestoneDetailModal = require("../milestones/MilestoneDetailModal").default;
-      return <MilestoneDetailModal milestoneId={taskId} onClose={onClose} />;
-
-    case 'epic':
-      const EpicDetailModal = require("../epics/EpicDetailModal").default;
-      return <EpicDetailModal epicId={taskId} onClose={onClose} />;
-
-    case 'story':
-      const StoryDetailModal = require("../stories/StoryDetailModal").default;
-      return <StoryDetailModal storyId={taskId} onClose={onClose} />;
-
-    case 'task':
-    default:
-      return <TaskDetailModal taskId={taskId} onClose={onClose} />;
-  }
+  // Use the lazy-loaded components with Suspense
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+      {(() => {
+        switch (type) {
+          case 'milestone':
+            return <MilestoneDetailModal milestoneId={taskId} onClose={onClose} />;
+          case 'epic':
+            return <EpicDetailModal epicId={taskId} onClose={onClose} />;
+          case 'story':
+            return <StoryDetailModal storyId={taskId} onClose={onClose} />;
+          case 'task':
+          default:
+            return <TaskDetailModal taskId={taskId} onClose={onClose} />;
+        }
+      })()}
+    </Suspense>
+  );
 }
 
 export default function ListView() {
@@ -190,18 +196,18 @@ export default function ListView() {
       <div className="flex flex-col pt-4">
         <div className="flex-none mb-4 opacity-50 pointer-events-none">
           <KanbanFilters
-            onSearchChange={() => {}}
-            onTypeFilter={() => {}}
-            onGroupingChange={() => {}}
+            onSearchChange={() => { }}
+            onTypeFilter={() => { }}
+            onGroupingChange={() => { }}
             selectedGrouping="none"
             selectedTypes={[]}
-            onSortChange={() => {}}
+            onSortChange={() => { }}
             selectedSort="title"
             sortDirection="asc"
             showSortOptions={true}
           />
         </div>
-        
+
         <div className="border rounded-md shadow-sm bg-card flex items-center justify-center p-12">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
@@ -228,14 +234,14 @@ export default function ListView() {
             showSortOptions={true}
           />
         </div>
-        
+
         <div className="border rounded-md shadow-sm bg-card flex items-center justify-center p-12">
           <div className="text-center p-8">
             <h3 className="text-xl font-medium mb-2">No items found</h3>
             <p className="text-muted-foreground">
-              {selectedTypes.length > 0 || searchTerm 
-               ? "Try adjusting your filters" 
-               : "Create your first item to get started"}
+              {selectedTypes.length > 0 || searchTerm
+                ? "Try adjusting your filters"
+                : "Create your first item to get started"}
             </p>
           </div>
         </div>
@@ -259,7 +265,7 @@ export default function ListView() {
             showSortOptions={true}
           />
         </div>
-        
+
         <div className="border rounded-md shadow-sm bg-card relative">
           <Table>
             <TableHeader className="bg-card/95 backdrop-blur-sm sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
@@ -276,7 +282,7 @@ export default function ListView() {
             </TableHeader>
             <TableBody>
               {filteredItems.map((item) => (
-                <TableRow 
+                <TableRow
                   key={item.id}
                   className="cursor-pointer hover:bg-muted/40 transition-colors border-b last:border-0"
                   onClick={() => handleItemClick(item)}
@@ -375,7 +381,7 @@ export default function ListView() {
           </Table>
         </div>
       </div>
-      
+
       {selectedItem && (
         <TaskModal
           isOpen={isModalOpen}
