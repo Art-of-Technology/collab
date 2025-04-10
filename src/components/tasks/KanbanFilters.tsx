@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Search, X } from "lucide-react";
+import { Search, X, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -24,21 +24,30 @@ import { CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen, Filte
 
 export type ItemType = 'TASK' | 'BUG' | 'FEATURE' | 'IMPROVEMENT' | 'MILESTONE' | 'EPIC' | 'STORY' | null;
 export type GroupingOption = 'none' | 'type' | 'assignee' | 'milestone' | 'epic';
+export type SortOption = 'title' | 'id' | 'status' | 'priority';
 
 interface KanbanFiltersProps {
   onSearchChange: (search: string) => void;
   onTypeFilter: (types: ItemType[]) => void;
   onGroupingChange: (groupBy: GroupingOption) => void;
+  onSortChange?: (field: SortOption, direction: 'asc' | 'desc') => void;
   selectedGrouping: GroupingOption;
   selectedTypes: ItemType[];
+  selectedSort?: SortOption;
+  sortDirection?: 'asc' | 'desc';
+  showSortOptions?: boolean;
 }
 
 export default function KanbanFilters({
   onSearchChange,
   onTypeFilter,
   onGroupingChange,
+  onSortChange,
   selectedGrouping,
   selectedTypes,
+  selectedSort = 'title',
+  sortDirection = 'asc',
+  showSortOptions = false,
 }: KanbanFiltersProps) {
   const [search, setSearch] = useState("");
   
@@ -60,6 +69,13 @@ export default function KanbanFilters({
   // Clear all type filters
   const clearTypeFilters = () => {
     onTypeFilter([]);
+  };
+
+  // Handle direction change
+  const handleDirectionChange = (direction: 'asc' | 'desc') => {
+    if (onSortChange && selectedSort) {
+      onSortChange(selectedSort, direction);
+    }
   };
 
   // Get badge count
@@ -182,6 +198,61 @@ export default function KanbanFilters({
           <SelectItem value="epic">Group by Epic</SelectItem>
         </SelectContent>
       </Select>
+
+      {showSortOptions && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1">
+              <ArrowUpDown className="h-4 w-4 mr-1" />
+              <span>Sort by: {selectedSort}</span>
+              <Badge variant="secondary" className="ml-1 px-1">
+                {sortDirection === 'asc' ? '↑' : '↓'}
+              </Badge>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Sort Options</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={selectedSort === 'title'}
+              onCheckedChange={() => onSortChange && onSortChange('title', sortDirection)}
+            >
+              Title
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={selectedSort === 'id'}
+              onCheckedChange={() => onSortChange && onSortChange('id', sortDirection)}
+            >
+              ID
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={selectedSort === 'status'}
+              onCheckedChange={() => onSortChange && onSortChange('status', sortDirection)}
+            >
+              Status
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={selectedSort === 'priority'}
+              onCheckedChange={() => onSortChange && onSortChange('priority', sortDirection)}
+            >
+              Priority
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={sortDirection === 'asc'}
+              onCheckedChange={() => handleDirectionChange('asc')}
+            >
+              Ascending
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={sortDirection === 'desc'}
+              onCheckedChange={() => handleDirectionChange('desc')}
+            >
+              Descending
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 } 

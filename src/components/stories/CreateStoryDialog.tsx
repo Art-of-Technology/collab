@@ -209,8 +209,7 @@ export function CreateStoryDialog({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
-              
+              />                
               <FormField
                 control={form.control}
                 name="description"

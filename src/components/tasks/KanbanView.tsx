@@ -354,6 +354,7 @@ export default function KanbanView() {
           onGroupingChange={setGroupBy}
           selectedGrouping={groupBy}
           selectedTypes={selectedTypes}
+          showSortOptions={false}
         />
       </div>
 
