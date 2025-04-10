@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -55,6 +55,11 @@ export default function KanbanFilters({
     } else {
       onTypeFilter([...selectedTypes, type]);
     }
+  };
+
+  // Clear all type filters
+  const clearTypeFilters = () => {
+    onTypeFilter([]);
   };
 
   // Get badge count
@@ -143,6 +148,22 @@ export default function KanbanFilters({
             <BookOpen className="h-4 w-4 mr-2 text-blue-500" />
             Stories
           </DropdownMenuCheckboxItem>
+          {selectedTypes.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <div className="p-2">
+                <Button 
+                  onClick={clearTypeFilters}
+                  variant="outline" 
+                  size="sm"
+                  className="w-full flex items-center justify-center gap-1.5 h-8 text-xs font-medium bg-muted/50 hover:bg-muted border-dashed hover:text-primary"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Clear all filters</span>
+                </Button>
+              </div>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

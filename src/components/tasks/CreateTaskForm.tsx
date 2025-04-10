@@ -337,7 +337,7 @@ export default function CreateTaskForm({
       console.log("Dialog onOpenChange triggered", open);
       if (!open) onClose();
     }}>
-      <DialogContent className="sm:max-w-[800px]" onClick={(e) => e.stopPropagation()}>
+      <DialogContent className="max-w-[1200px] w-full" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Create New Task</DialogTitle>
         </DialogHeader>
