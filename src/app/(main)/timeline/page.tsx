@@ -15,14 +15,15 @@ export const dynamic = 'force-dynamic';
 export default async function TimelinePage({
   searchParams,
 }: TimelinePageProps) {
+  const _searchParams = await searchParams;
   const user = await getCurrentUser();
   
   // Verify workspace access and redirect if needed
   const workspaceId = await verifyWorkspaceAccess(user);
   
   // Safely handle searchParams
-  const filterParam = searchParams?.filter;
-  const tagParam = searchParams?.tag;
+  const filterParam = _searchParams?.filter;
+  const tagParam = _searchParams?.tag;
   
   const filter = typeof filterParam === 'string' ? filterParam.toLowerCase() : undefined;
   const tag = typeof tagParam === 'string' ? tagParam : undefined;

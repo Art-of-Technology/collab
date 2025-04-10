@@ -13,7 +13,8 @@ interface WorkspacePageProps {
 export const dynamic = 'force-dynamic';
 
 export default async function WorkspacePage({ params }: WorkspacePageProps) {
-  const { workspaceId } = params;
+  const _params = await params;
+  const { workspaceId } = _params;
   const session = await getAuthSession();
   
   if (!session?.user) {

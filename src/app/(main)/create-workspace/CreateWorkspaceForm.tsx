@@ -8,6 +8,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/context/WorkspaceContext';
 import {
   Form,
   FormControl,
@@ -19,7 +21,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateWorkspace } from '@/hooks/queries/useWorkspace';
+import { useCreateWorkspace, workspaceKeys } from '@/hooks/queries/useWorkspace';
 
 const workspaceFormSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name cannot exceed 50 characters'),
@@ -38,6 +40,8 @@ type WorkspaceFormValues = z.infer<typeof workspaceFormSchema>;
 export function CreateWorkspaceForm() {
   const router = useRouter();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { refreshWorkspaces } = useWorkspace();
   const createWorkspaceMutation = useCreateWorkspace();
   
   const form = useForm<WorkspaceFormValues>({
@@ -67,6 +71,13 @@ export function CreateWorkspaceForm() {
   async function onSubmit(data: WorkspaceFormValues) {
     try {
       const workspace = await createWorkspaceMutation.mutateAsync(data);
+      
+      // Invalidate workspace queries to refresh workspaces in selectors
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.list() });
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
+      
+      // Explicitly refresh workspaces in the context
+      await refreshWorkspaces();
       
       toast({
         title: "Success",

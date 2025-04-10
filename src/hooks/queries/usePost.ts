@@ -1,15 +1,14 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  getPosts, 
-  getPostById, 
-  createPost, 
-  updatePost, 
+import {
+  getPosts,
+  getPostById,
+  createPost,
+  updatePost,
   deletePost,
   getUserPosts
 } from '@/actions/post';
-import { useRouter } from 'next/navigation';
 
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION';
 type PostPriority = 'normal' | 'high' | 'critical';
@@ -49,18 +48,12 @@ export const usePostById = (postId: string) => {
 // Create post mutation
 export const useCreatePost = () => {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  
+
   return useMutation({
     mutationFn: createPost,
-    onSuccess: (data) => {
+    onSuccess: () => {
       // Invalidate posts lists
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
-      
-      // Redirect to the newly created post
-      if (data) {
-        router.push(`/post/${data.id}`);
-      }
     },
   });
 };
@@ -68,7 +61,7 @@ export const useCreatePost = () => {
 // Update post mutation
 export const useUpdatePost = (postId: string) => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: {
       message: string;
@@ -87,16 +80,12 @@ export const useUpdatePost = (postId: string) => {
 // Delete post mutation
 export const useDeletePost = () => {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  
+
   return useMutation({
     mutationFn: deletePost,
     onSuccess: () => {
       // Invalidate posts lists
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
-      
-      // Redirect to the home page
-      router.push('/');
     },
   });
 };

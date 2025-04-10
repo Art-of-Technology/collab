@@ -7,7 +7,6 @@ import TaskBoardSelector from "@/components/tasks/TaskBoardSelector";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 import { CreateMilestoneDialog } from "@/components/milestones/CreateMilestoneDialog";
 import { CreateEpicDialog } from "@/components/epics/CreateEpicDialog";
 import { CreateStoryDialog } from "@/components/stories/CreateStoryDialog";
@@ -24,12 +23,11 @@ export default function TasksHeader() {
   const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
   const [isEpicDialogOpen, setIsEpicDialogOpen] = useState(false);
   const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
-  const { selectedBoardId, view, setView} = useTasks();
+  const { selectedBoardId, view, setView } = useTasks();
   const { currentWorkspace } = useWorkspace();
-  const { canManageBoard } = useWorkspacePermissions();
 
   // Fetch task boards for the current workspace
-  const { data: taskBoards } = useTaskBoards({ 
+  const { data: taskBoards } = useTaskBoards({
     workspaceId: currentWorkspace?.id,
     includeStats: true
   });
@@ -58,7 +56,7 @@ export default function TasksHeader() {
     setIsStoryDialogOpen(true);
   };
 
-  const handleOpenChange = (dialogStateSetter: React.Dispatch<React.SetStateAction<boolean>>) => 
+  const handleOpenChange = (dialogStateSetter: React.Dispatch<React.SetStateAction<boolean>>) =>
     (isOpen: boolean) => {
       dialogStateSetter(isOpen);
     };
@@ -85,19 +83,15 @@ export default function TasksHeader() {
               <DropdownMenuItem onClick={handleCreateTaskOpen}>
                 Task
               </DropdownMenuItem>
-              {canManageBoard && (
-                <>
-                  <DropdownMenuItem onClick={handleCreateMilestone}>
-                    Milestone
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleCreateEpic}>
-                    Epic
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleCreateStory}>
-                    Story
-                  </DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuItem onClick={handleCreateMilestone}>
+                Milestone
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCreateEpic}>
+                Epic
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCreateStory}>
+                Story
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -109,33 +103,30 @@ export default function TasksHeader() {
           <div className="hidden md:flex">
             <Button
               variant="ghost"
-              className={`px-3 py-1.5 rounded-l-md border border-r-0 ${
-                view === "kanban"
+              className={`px-3 py-1.5 rounded-l-md border border-r-0 ${view === "kanban"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background hover:bg-muted"
-              }`}
+                }`}
               onClick={() => handleViewChange('kanban')}
             >
               <Kanban size={16} />
             </Button>
             <Button
               variant="ghost"
-              className={`px-3 py-1.5 border border-r-0 ${
-                view === "list"
+              className={`px-3 py-1.5 border border-r-0 ${view === "list"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background hover:bg-muted"
-              }`}
+                }`}
               onClick={() => handleViewChange('list')}
             >
               <List size={16} />
             </Button>
             <Button
               variant="ghost"
-              className={`px-3 py-1.5 rounded-r-md border ${
-                view === "hierarchy"
+              className={`px-3 py-1.5 rounded-r-md border ${view === "hierarchy"
                   ? "bg-primary text-primary-foreground"
                   : "bg-background hover:bg-muted"
-              }`}
+                }`}
               onClick={() => handleViewChange('hierarchy')}
             >
               <GitBranch size={16} />
