@@ -180,13 +180,13 @@ export default function GroupedColumn({
         </div>
       </CardHeader>
 
-      <CardContent className="px-2 pb-2 space-y-2 max-h-[60vh] overflow-y-auto">
+      <CardContent className="px-2 pb-2 space-y-2">
         <Droppable droppableId={columnId} type="task">
           {(provided, snapshot) => (
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className={`min-h-[200px] rounded-sm transition-colors ${snapshot.isDraggingOver ? "bg-muted/50" : ""
+              className={`min-h-[100px] rounded-sm transition-colors ${snapshot.isDraggingOver ? "bg-muted/50" : ""
                 }`}
             >
               {groups.map((group, groupIndex) => (

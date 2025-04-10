@@ -8,6 +8,8 @@ import axios from "axios";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 
 import {
   Dialog,
@@ -82,6 +84,7 @@ export function CreateEpicDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -175,6 +178,11 @@ export function CreateEpicDialog({
         title: "Success",
         description: "The epic has been created with your selected color."
       });
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(values.taskBoardId) });
+      queryClient.invalidateQueries({ queryKey: boardItemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['epics'] });
       
       // Reset form and close dialog
       form.reset();

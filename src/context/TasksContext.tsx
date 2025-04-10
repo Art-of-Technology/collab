@@ -103,16 +103,16 @@ export const TasksProvider = ({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isInitialLoad = useRef(true);
-  // Add ref to track the last workspace ID we processed
   const lastWorkspaceIdRef = useRef<string | undefined | null>(null);
   
   // State management
   const [boards, setBoards] = useState<Board[]>(initialBoards);
+  const [urlSelectedBoardId, setUrlSelectedBoardId] = useState(initialBoardId || '');
   const [selectedBoardId, setSelectedBoardId] = useState<string>(initialBoardId || '');
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
-  const [isLoading, setIsLoading] = useState(!initialBoards.length && !!workspaceId);
+  const [isBoardsLoading, setIsBoardsLoading] = useState(!initialBoards.length && !!(workspaceId || currentWorkspace?.id));
+  const [isBoardDetailsLoading, setIsBoardDetailsLoading] = useState(false);
   const [view, setView] = useState<'kanban' | 'list' | 'hierarchy'>(initialView);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   // Hierarchy items state management
   const [milestones, setMilestones] = useState<any[]>([]);
@@ -120,321 +120,311 @@ export const TasksProvider = ({
   const [stories, setStories] = useState<any[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
 
-  // Memoized URL updater (Remove searchParams dependency)
-  const updateUrlSearchParams = useCallback((paramsToUpdate: Record<string, string>) => {
-    if (!pathname.includes('/tasks')) return;
-    // Read current params *inside* the function
-    const current = new URLSearchParams(window.location.search); 
-    Object.entries(paramsToUpdate).forEach(([key, value]) => {
-      current.set(key, value);
-    });
-    const search = current.toString();
-    const query = search ? `?${search}` : '';
-    // Use replace to avoid adding duplicate history entries
-    router.replace(`${pathname}${query}`, { scroll: false }); 
-  }, [pathname, router]); // Depends only on pathname and router
+  const activeWorkspaceId = useMemo(() => workspaceId || currentWorkspace?.id, [workspaceId, currentWorkspace?.id]);
 
-  // Effect to sync URL changes TO state (runs on mount and when searchParams change)
+  // URL Synchronization
   useEffect(() => {
-    const viewParam = searchParams.get('view');
+    const viewParam = searchParams.get('view') as 'kanban' | 'list' | 'hierarchy' | null;
     const boardParam = searchParams.get('board');
 
-    if (viewParam && ['kanban', 'list', 'hierarchy'].includes(viewParam)) {
-      const newView = viewParam as 'kanban' | 'list' | 'hierarchy';
-      // Update state only if it differs from URL
-      if (newView !== view) { 
-          console.log("URL changed view to:", newView);
-          setView(newView);
+    if (viewParam && ['kanban', 'list', 'hierarchy'].includes(viewParam) && viewParam !== view) {
+      console.log("URL change -> Setting view state:", viewParam);
+      setView(viewParam);
+    }
+
+    const newUrlBoardId = boardParam || '';
+    if (newUrlBoardId !== urlSelectedBoardId) {
+        console.log("URL change -> Updating URL board ID tracker:", newUrlBoardId);
+        setUrlSelectedBoardId(newUrlBoardId);
+    }
+
+    isInitialLoad.current = false;
+  }, [searchParams, view, urlSelectedBoardId]);
+
+  const updateUrlFromState = useCallback(() => {
+    if (isInitialLoad.current || !pathname.includes('/tasks')) return;
+
+    const current = new URLSearchParams(window.location.search);
+    let changed = false;
+
+    if (current.get('view') !== view) {
+      current.set('view', view);
+      changed = true;
+    }
+
+    if (selectedBoardId) {
+      if (current.get('board') !== selectedBoardId) {
+        current.set('board', selectedBoardId);
+        changed = true;
+      }
+    } else {
+      if (current.has('board')) {
+        current.delete('board');
+        changed = true;
       }
     }
-    
-    if (boardParam && boardParam !== selectedBoardId) {
-       console.log("URL changed board to:", boardParam);
-       setSelectedBoardId(boardParam);
-    }
-    
-    // Mark initial sync as done AFTER the first run
-    if (isInitialLoad.current) {
-        isInitialLoad.current = false;
-    }
-    
-  // Remove 'view' and 'selectedBoardId' from dependencies to prevent loop
-  }, [searchParams]); 
 
-  // Effect to sync state changes TO URL (runs only when state changes *after* initial load)
-  useEffect(() => {
-    if (!isInitialLoad.current && pathname.includes('/tasks')) {
-        const paramsToSet: Record<string, string> = { view };
-        if (selectedBoardId) {
-            paramsToSet.board = selectedBoardId;
-        } else {
-            // If boardId is cleared, remove it from URL too
-            const current = new URLSearchParams(window.location.search);
-            current.delete('board');
-            const search = current.toString();
-            const query = search ? `?${search}` : '';
-            router.replace(`${pathname}${query}`, { scroll: false }); 
-            return; // Skip updateUrlSearchParams as we manually updated
-        }
-      console.log("State change updating URL with:", paramsToSet);
-      updateUrlSearchParams(paramsToSet);
+    if (changed) {
+      const search = current.toString();
+      const query = search ? `?${search}` : '';
+      console.log("State change -> Updating URL:", query);
+      router.replace(`${pathname}${query}`, { scroll: false });
     }
-  // Add router to dependencies
-  }, [view, selectedBoardId, pathname, updateUrlSearchParams, router]); 
-  
-  // Refresh boards handler
-  const refreshBoards = useCallback(async () => {
-    const wsId = workspaceId || currentWorkspace?.id;
-    if (!wsId) return;
-    console.log("Refreshing boards for workspace:", wsId);
+  }, [view, selectedBoardId, pathname, router]);
+
+  useEffect(() => {
+    updateUrlFromState();
+  }, [view, selectedBoardId, updateUrlFromState]);
+
+  // Board Fetching and Selection Logic
+  const determineBoardSelection = useCallback((fetchedBoards: Board[], currentSelectedId: string): string => {
+    if (!fetchedBoards || fetchedBoards.length === 0) {
+      console.log("Determine Selection: No boards fetched, clearing selection.");
+      return '';
+    }
+
+    const currentSelectionValid = fetchedBoards.some(board => board.id === currentSelectedId);
+    if (currentSelectionValid) {
+      console.log("Determine Selection: Current ID valid:", currentSelectedId);
+      return currentSelectedId;
+    }
+
+    const firstBoardId = fetchedBoards[0].id;
+    console.log("Determine Selection: Current ID invalid or missing, defaulting to first board:", firstBoardId);
+    return firstBoardId;
+  }, []);
+
+  const fetchBoardsList = useCallback(async (wsId: string) => {
+    console.log("Fetching boards for workspace:", wsId);
+    setIsBoardsLoading(true);
+    setBoards([]);
+    setSelectedBoard(null);
+    let newBoards: Board[] = [];
     try {
-      setIsLoading(true);
       const response = await fetch(`/api/workspaces/${wsId}/boards`);
-      if (response.ok) {
-        const data = await response.json();
-        setBoards(data);
-        console.log("Refreshed boards:", data);
-        // Re-verify selected board validity, but DON'T default here
-        if (selectedBoardId && !data.some((board: Board) => board.id === selectedBoardId)) {
-            console.log("Selected board no longer valid after refresh, clearing selection.");
-            setSelectedBoardId(''); // Clear invalid board ID
-            setSelectedBoard(null);
-            // If boards exist, the default logic in the fetchInitialBoards effect might trigger
-            // Or, perhaps better, redirect or show a message?
-            // For now, just clearing it is simplest.
-        } else if (selectedBoardId) {
-            // If selected board is still valid, refetch its details
-             const boardResponse = await fetch(`/api/tasks/boards/${selectedBoardId}`);
-             if (boardResponse.ok) {
-                 const boardData = await boardResponse.json();
-                 setSelectedBoard(boardData);
-             }
-        } else if (data.length > 0) {
-            // If no board is selected but we have boards, select the first one
-            console.log("No board selected, defaulting to first board:", data[0].id);
-            setSelectedBoardId(data[0].id);
-        }
-      } else {
-          console.error("Failed to refresh boards list");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch boards: ${response.statusText}`);
       }
+      newBoards = await response.json();
+      console.log("Fetched boards data:", newBoards);
+      setBoards(newBoards);
+
+      const targetBoardId = determineBoardSelection(newBoards, urlSelectedBoardId || selectedBoardId);
+
+      console.log("Setting selected board ID after fetch/determine:", targetBoardId);
+      setSelectedBoardId(targetBoardId);
+
     } catch (error) {
-      console.error('Error refreshing boards:', error);
+      console.error('Error fetching boards list:', error);
+      setBoards([]);
+      setSelectedBoardId('');
     } finally {
-      setIsLoading(false);
+      setIsBoardsLoading(false);
     }
-  }, [workspaceId, currentWorkspace?.id, selectedBoardId]);
-  
-  // Workspace change detection - simpler approach
-  useEffect(() => {
-    const activeWorkspaceId = workspaceId || currentWorkspace?.id;
-    
-    // If workspace ID changed and is valid
-    if (activeWorkspaceId && activeWorkspaceId !== lastWorkspaceIdRef.current) {
-      console.log(`Workspace changed: ${lastWorkspaceIdRef.current} -> ${activeWorkspaceId}`);
-      
-      // Update our reference
-      lastWorkspaceIdRef.current = activeWorkspaceId;
-      
-      // Force a boards refresh by directly calling refreshBoards in the next tick
-      // This avoids dependencies and state updates that might cause loops
-      setTimeout(() => {
-        console.log("Triggering boards refresh for new workspace");
-        refreshBoards();
-      }, 0);
-    }
-  // Add refreshBoards to dependencies
-  }, [workspaceId, currentWorkspace?.id, refreshBoards]); 
+  }, [determineBoardSelection, urlSelectedBoardId, selectedBoardId]);
 
-  // Fetch initial list of boards if not provided
   useEffect(() => {
-    const wsId = workspaceId || currentWorkspace?.id;
-    if (!wsId || initialBoards.length > 0) {
-        // Only set loading false if it wasn't already false
-        if(isLoading) setIsLoading(false); 
+    const currentWsId = activeWorkspaceId;
+    let isMounted = true; // Prevent state updates after unmount
+
+    const performInitialLoadOrWorkspaceChange = async () => {
+      if (!currentWsId) {
+        // Handle case where workspace becomes null/undefined
+        if (lastWorkspaceIdRef.current !== null) { // Only clear if it wasn't already null
+          console.log("No active workspace, clearing context state.");
+          if (isMounted) {
+            setBoards([]);
+            setSelectedBoard(null);
+            setSelectedBoardId('');
+            setMilestones([]);
+            setEpics([]);
+            setStories([]);
+            if (isBoardsLoading) setIsBoardsLoading(false);
+            if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
+          }
+          lastWorkspaceIdRef.current = null;
+        }
+         // Mark initial load done even if no workspace initially
+        if (isInitialLoad.current && isMounted) {
+          isInitialLoad.current = false;
+          // Use rAF to defer URL update slightly after state updates
+          requestAnimationFrame(updateUrlFromState);
+        }
         return;
-    } 
+      }
 
-    let isMounted = true;
-    const fetchInitialBoards = async () => {
-      console.log("Fetching initial boards...");
-      // Set loading true only if starting the fetch
-      if(!isLoading) setIsLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${wsId}/boards`);
-        if (!isMounted) return;
-        if (response.ok) {
-          const data = await response.json();
-          if (!isMounted) return;
-          setBoards(data);
-          if (!selectedBoardId && data.length > 0) {
-             console.log("Setting default board (initial fetch):", data[0].id);
-             setSelectedBoardId(data[0].id);
+      // Proceed if workspace ID is valid
+      const isWorkspaceChange = currentWsId !== lastWorkspaceIdRef.current;
+
+      if (isInitialLoad.current || isWorkspaceChange) {
+        if (isWorkspaceChange) {
+          console.log(`Workspace changed: ${lastWorkspaceIdRef.current} -> ${currentWsId}. Triggering refresh.`);
+          if (isMounted) {
+            setMilestones([]);
+            setEpics([]);
+            setStories([]);
+            setIsBoardsLoading(true); // Reset loading for new workspace fetch
           }
         } else {
-          console.error('Failed to fetch initial boards');
+          console.log("Initial load for workspace:", currentWsId);
         }
-      } catch (error) {
-        console.error('Error fetching initial boards:', error);
-      } finally {
-        if (isMounted) setIsLoading(false);
+
+        lastWorkspaceIdRef.current = currentWsId;
+        await fetchBoardsList(currentWsId); // Wait for the fetch to complete
+
+        // Mark initial load complete *after* the first fetch attempt
+        if (isInitialLoad.current && isMounted) {
+            isInitialLoad.current = false;
+            // Defer initial URL sync slightly
+            requestAnimationFrame(updateUrlFromState);
+        }
+        // Hierarchy refresh is handled by a separate effect
       }
     };
-    fetchInitialBoards();
-    return () => { isMounted = false; };
-  // Keep dependencies minimal to avoid loops
-  }, [workspaceId, currentWorkspace?.id, initialBoards.length]); 
 
-  // Fetch selected board details when selectedBoardId changes
+    performInitialLoadOrWorkspaceChange();
+
+    return () => {
+      isMounted = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId, fetchBoardsList, updateUrlFromState]);
+
   useEffect(() => {
     if (!selectedBoardId) {
-        setSelectedBoard(null); 
-        return; 
+      setSelectedBoard(null);
+      if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
+      return;
     }
+
+    const existingBoardData = boards.find(b => b.id === selectedBoardId && b.columns);
+    if (existingBoardData) {
+       console.log("Using existing detailed board data for:", selectedBoardId);
+       setSelectedBoard(existingBoardData);
+       if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
+       return;
+    }
+
     let isMounted = true;
     const fetchSelectedBoardDetails = async () => {
       console.log(`Fetching details for board: ${selectedBoardId}`);
-      const existingBoardData = boards.find(b => b.id === selectedBoardId);
-      // Only set detail loading if we don't have column data
-      if (!existingBoardData?.columns) {
-          if(!isDetailLoading) setIsDetailLoading(true); 
-      } else {
-          // Already have details, update state and ensure loading is false
-          setSelectedBoard(existingBoardData);
-          if(isDetailLoading) setIsDetailLoading(false);
-          return; // Skip fetch
-      }
-      
+      setIsBoardDetailsLoading(true);
       try {
-        const response = await fetch(`/api/tasks/boards/${selectedBoardId}`); 
+        const response = await fetch(`/api/tasks/boards/${selectedBoardId}`);
         if (!isMounted) return;
         if (response.ok) {
           const data = await response.json();
           setSelectedBoard(data);
         } else {
-          console.error('Failed to fetch selected board details');
+          console.error('Failed to fetch selected board details, status:', response.status);
           setSelectedBoard(null);
         }
       } catch (error) {
         console.error('Error fetching selected board details:', error);
         setSelectedBoard(null);
       } finally {
-        if (isMounted) setIsDetailLoading(false);
+        if (isMounted) setIsBoardDetailsLoading(false);
       }
     };
+
     fetchSelectedBoardDetails();
+
     return () => { isMounted = false; };
-  // Keep dependencies minimal to avoid loops
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBoardId, boards]);
 
-  // Handlers should ONLY update state, let effects handle URL
+  // Handlers
   const selectBoard = useCallback((boardId: string) => {
     if (boardId !== selectedBoardId) {
-        setSelectedBoardId(boardId);
+      console.log("User selected board:", boardId);
+      setSelectedBoardId(boardId);
+      setUrlSelectedBoardId(boardId);
     }
   }, [selectedBoardId]);
 
   const setViewWithUrlUpdate = useCallback((newView: 'kanban' | 'list' | 'hierarchy') => {
-      if (newView !== view) {
-        setView(newView);
-      }
+    if (newView !== view) {
+      console.log("User changed view:", newView);
+      setView(newView);
+    }
   }, [view]);
 
-  // Refresh functions for hierarchy items
+  // Hierarchy Item Fetching
   const refreshMilestones = useCallback(async () => {
-    const wsId = workspaceId || (currentWorkspace ? currentWorkspace.id : null);
-    if (!wsId) return;
-    
+    if (!activeWorkspaceId) return;
+    setIsHierarchyLoading(true);
     try {
-      setIsHierarchyLoading(true);
-      // Use selectedBoardId to limit milestones to the current board
       const boardParam = selectedBoardId ? `&boardId=${selectedBoardId}` : '';
-      const response = await fetch(`/api/milestones?workspaceId=${wsId}${boardParam}&includeStats=true`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setMilestones(data);
-      } else {
-        console.error('Failed to fetch milestones');
-      }
-    } catch (error) {
-      console.error('Error fetching milestones:', error);
-    } finally {
-      setIsHierarchyLoading(false);
-    }
-  }, [currentWorkspace, workspaceId, selectedBoardId]);
+      const response = await fetch(`/api/milestones?workspaceId=${activeWorkspaceId}${boardParam}&includeStats=true`);
+      if (response.ok) setMilestones(await response.json());
+      else console.error('Failed to fetch milestones');
+    } catch (error) { console.error('Error fetching milestones:', error); }
+    finally { setIsHierarchyLoading(false); }
+  }, [activeWorkspaceId, selectedBoardId]);
 
   const refreshEpics = useCallback(async () => {
-    const wsId = workspaceId || (currentWorkspace ? currentWorkspace.id : null);
-    if (!wsId) return;
-    
+    if (!activeWorkspaceId) return;
+    setIsHierarchyLoading(true);
     try {
-      setIsHierarchyLoading(true);
-      // Use selectedBoardId to limit epics to the current board
       const boardParam = selectedBoardId ? `&boardId=${selectedBoardId}` : '';
-      const response = await fetch(`/api/epics?workspaceId=${wsId}${boardParam}&includeStats=true`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setEpics(data);
-      } else {
-        console.error('Failed to fetch epics');
-      }
-    } catch (error) {
-      console.error('Error fetching epics:', error);
-    } finally {
-      setIsHierarchyLoading(false);
-    }
-  }, [currentWorkspace, workspaceId, selectedBoardId]);
+      const response = await fetch(`/api/epics?workspaceId=${activeWorkspaceId}${boardParam}&includeStats=true`);
+      if (response.ok) setEpics(await response.json());
+      else console.error('Failed to fetch epics');
+    } catch (error) { console.error('Error fetching epics:', error); }
+     finally { setIsHierarchyLoading(false); }
+  }, [activeWorkspaceId, selectedBoardId]);
 
   const refreshStories = useCallback(async () => {
-    const wsId = workspaceId || (currentWorkspace ? currentWorkspace.id : null);
-    if (!wsId) return;
-    
+     if (!activeWorkspaceId) return;
+    setIsHierarchyLoading(true);
     try {
-      setIsHierarchyLoading(true);
-      // Use selectedBoardId to limit stories to the current board
       const boardParam = selectedBoardId ? `&boardId=${selectedBoardId}` : '';
-      const response = await fetch(`/api/stories?workspaceId=${wsId}${boardParam}&includeStats=true`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStories(data);
-      } else {
-        console.error('Failed to fetch stories');
-      }
-    } catch (error) {
-      console.error('Error fetching stories:', error);
-    } finally {
-      setIsHierarchyLoading(false);
-    }
-  }, [currentWorkspace, workspaceId, selectedBoardId]);
+      const response = await fetch(`/api/stories?workspaceId=${activeWorkspaceId}${boardParam}&includeStats=true`);
+      if (response.ok) setStories(await response.json());
+      else console.error('Failed to fetch stories');
+    } catch (error) { console.error('Error fetching stories:', error); }
+     finally { setIsHierarchyLoading(false); }
+  }, [activeWorkspaceId, selectedBoardId]);
 
-  // Combined refresh function for all hierarchy items
   const refreshHierarchy = useCallback(async () => {
+    setIsHierarchyLoading(true);
     await Promise.all([
       refreshMilestones(),
       refreshEpics(),
       refreshStories()
     ]);
+    setIsHierarchyLoading(false);
   }, [refreshMilestones, refreshEpics, refreshStories]);
 
-  // Load hierarchy items when workspace changes
   useEffect(() => {
-    const wsId = workspaceId || (currentWorkspace ? currentWorkspace.id : null);
-    if (!wsId) return;
-    
-    refreshHierarchy();
-  }, [workspaceId, currentWorkspace, selectedBoardId, refreshHierarchy]);
+    if (activeWorkspaceId) {
+      console.log("Refreshing hierarchy for workspace/board change:", activeWorkspaceId, selectedBoardId);
+      refreshHierarchy();
+    } else {
+        setMilestones([]);
+        setEpics([]);
+        setStories([]);
+    }
+  }, [activeWorkspaceId, selectedBoardId, refreshHierarchy]);
 
-  // Combine loading states for context consumer
-  const combinedIsLoading = isLoading || isDetailLoading;
+  // Manual refresh boards (e.g., button click)
+  const refreshBoards = useCallback(async () => {
+    const wsId = activeWorkspaceId;
+    if (wsId) {
+      // Re-fetch the list. fetchBoardsList will handle selection logic.
+      await fetchBoardsList(wsId);
+    } else {
+      console.warn("Cannot refresh boards, no active workspace ID.");
+    }
+  }, [activeWorkspaceId, fetchBoardsList]);
+  // Combine loading states
+  const isLoading = isBoardsLoading || isBoardDetailsLoading;
 
-  // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
     boards,
     selectedBoard,
     selectedBoardId,
-    isLoading: combinedIsLoading,
+    isLoading,
     view,
     setView: setViewWithUrlUpdate,
     selectBoard,
@@ -448,23 +438,12 @@ export const TasksProvider = ({
     refreshHierarchy,
     isHierarchyLoading
   }), [
-    boards,
-    selectedBoard,
-    selectedBoardId,
-    combinedIsLoading,
-    view,
-    setViewWithUrlUpdate,
-    selectBoard,
-    refreshBoards,
-    milestones,
-    epics,
-    stories,
-    refreshMilestones,
-    refreshEpics,
-    refreshStories,
-    refreshHierarchy,
-    isHierarchyLoading
+    boards, selectedBoard, selectedBoardId, isLoading, view,
+    setViewWithUrlUpdate, selectBoard, refreshBoards,
+    milestones, epics, stories, refreshMilestones, refreshEpics,
+    refreshStories, refreshHierarchy, isHierarchyLoading
   ]);
+
 
   return (
     <TasksContext.Provider value={contextValue}>

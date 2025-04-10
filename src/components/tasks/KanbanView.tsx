@@ -347,15 +347,17 @@ export default function KanbanView() {
 
   return (
     <>
-      <KanbanFilters
-        onSearchChange={setSearchTerm}
-        onTypeFilter={setSelectedTypes}
-        onGroupingChange={setGroupBy}
-        selectedGrouping={groupBy}
-        selectedTypes={selectedTypes}
-      />
+      <div className="sticky top-16 pt-4 z-40 backdrop-blur-sm mt-0">
+        <KanbanFilters
+          onSearchChange={setSearchTerm}
+          onTypeFilter={setSelectedTypes}
+          onGroupingChange={setGroupBy}
+          selectedGrouping={groupBy}
+          selectedTypes={selectedTypes}
+        />
+      </div>
 
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center my-4">
         <h3 className="text-md font-medium">Board Columns</h3>
 
         {permissionsLoading ? (
@@ -409,14 +411,9 @@ export default function KanbanView() {
           <Droppable droppableId="columns" direction="horizontal" type="column">
             {(provided) => (
               <div
-                className="flex gap-4 overflow-x-auto pb-4 scrollbar-container"
+                className="grid grid-flow-col auto-cols-[300px] gap-4 pb-4"
                 ref={provided.innerRef}
                 {...provided.droppableProps}
-                style={{
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: 'var(--border) transparent',
-                  paddingBottom: '12px', /* Ensure space for the scrollbar */
-                }}
               >
                 {(localBoardState.columns || [])
                   .sort((a: any, b: any) => a.order - b.order)
@@ -434,7 +431,7 @@ export default function KanbanView() {
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            className="flex-shrink-0 w-[300px]"
+                            className="w-full"
                           >
                             <GroupedColumn
                               columnId={column.id}

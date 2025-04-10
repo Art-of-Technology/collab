@@ -8,6 +8,8 @@ import axios from "axios";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { Calendar } from "@/components/ui/calendar";
 import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
@@ -81,6 +83,7 @@ export function CreateMilestoneDialog({
   const [boards, setBoards] = useState<{ id: string; name: string }[]>(taskBoards);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Fetch task boards if not provided
   useEffect(() => {
@@ -189,6 +192,11 @@ export function CreateMilestoneDialog({
         title: "Success",
         description: "The milestone has been created with your selected color."
       });
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(values.taskBoardId) });
+      queryClient.invalidateQueries({ queryKey: boardItemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['milestones'] });
       
       // Reset form and close dialog
       form.reset();

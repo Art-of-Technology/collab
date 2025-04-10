@@ -64,19 +64,34 @@ export async function GET(
       );
     }
 
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        userId: currentUser.id,
-        workspaceId: board.workspaceId,
-      },
+    // First, check if user is the workspace owner
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: board.workspaceId },
+      select: { ownerId: true }
     });
-
-    if (!hasAccess) {
-      return NextResponse.json(
-        { error: "You don't have access to this board" },
-        { status: 403 }
-      );
+    
+    // Grant access if workspace owner or site admin
+    const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
+    const isAdmin = currentUser.role === 'admin';
+    
+    if (!isWorkspaceOwner && !isAdmin) {
+      // If not the owner or admin, check if they're a workspace member
+      const isMember = await prisma.workspaceMember.findFirst({
+        where: {
+          userId: currentUser.id,
+          workspaceId: board.workspaceId,
+        },
+      });
+      
+      if (!isMember) {
+        console.error(`Access denied to board ${board.id} for user ${currentUser.id}`);
+        return NextResponse.json(
+          { error: "You don't have access to this board" },
+          { status: 403 }
+        );
+      }
+    } else {
+      console.log(`Access granted to board ${board.id} for workspace owner ${currentUser.id}`);
     }
 
     // If there are tasks without positions, update them
@@ -159,21 +174,6 @@ export async function PATCH(
       );
     }
 
-    // Check if user has admin rights in the workspace
-    const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
-      where: {
-        userId: currentUser.id,
-        workspaceId: existingBoard.workspaceId,
-      },
-    });
-
-    if (!userWorkspaceMembership) {
-      return NextResponse.json(
-        { error: "You don't have access to this board" },
-        { status: 403 }
-      );
-    }
-
     // Check if the user is the workspace owner
     const workspace = await prisma.workspace.findUnique({
       where: { id: existingBoard.workspaceId },
@@ -181,8 +181,27 @@ export async function PATCH(
     });
 
     const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
-    const isWorkspaceAdmin = userWorkspaceMembership.role === 'admin' || userWorkspaceMembership.role === 'owner';
     const isGlobalAdmin = currentUser.role === 'admin';
+    
+    // If not owner or admin, check workspace membership
+    let isWorkspaceAdmin = false;
+    if (!isWorkspaceOwner && !isGlobalAdmin) {
+      const memberAccess = await prisma.workspaceMember.findFirst({
+        where: {
+          userId: currentUser.id,
+          workspaceId: existingBoard.workspaceId,
+        },
+      });
+      
+      if (!memberAccess) {
+        return NextResponse.json(
+          { error: "You don't have access to this board" },
+          { status: 403 }
+        );
+      }
+      
+      isWorkspaceAdmin = memberAccess.role === 'admin' || memberAccess.role === 'owner';
+    }
 
     // Only allow workspace admins, workspace owners, or global admins to update board settings
     if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {

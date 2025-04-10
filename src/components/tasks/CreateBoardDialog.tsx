@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateBoard } from "@/hooks/queries/useTask";
+import { useCreateBoard, boardKeys } from "@/hooks/queries/useTask";
+import { useTasks } from "@/context/TasksContext";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,6 +32,8 @@ export default function CreateBoardDialog({
 }: CreateBoardDialogProps) {
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
+  const { refreshBoards, selectBoard } = useTasks();
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -59,18 +63,21 @@ export default function CreateBoardDialog({
     }
 
     try {
-      await createBoardMutation.mutateAsync({
+      const result = await createBoardMutation.mutateAsync({
         workspaceId: currentWorkspace.id,
         name: formData.name,
         description: formData.description || undefined,
         issuePrefix: formData.issuePrefix || undefined,
       });
       
-      toast({
-        title: "Board created",
-        description: "Your board has been created successfully",
-      });
-
+      // Manually invalidate all board-related queries
+      queryClient.invalidateQueries({ queryKey: boardKeys.all });
+      queryClient.invalidateQueries({ queryKey: boardKeys.workspace(currentWorkspace.id) });
+      queryClient.invalidateQueries({ queryKey: ["taskBoards"] });
+      
+      // Close dialog first
+      onClose();
+      
       // Reset form
       setFormData({
         name: "",
@@ -78,9 +85,36 @@ export default function CreateBoardDialog({
         issuePrefix: "",
       });
       
-      // Close dialog and refresh boards
-      onClose();
-      onSuccess();
+      // Show success toast
+      toast({
+        title: "Board created",
+        description: "Your board has been created successfully"
+      });
+      
+      // Add a small delay to ensure API caches are updated before refreshing
+      setTimeout(async () => {
+        try {
+          // First refresh the boards list to ensure we have the updated list
+          await refreshBoards();
+          
+          // Then explicitly select the new board to ensure it's active
+          if (result?.id) {
+            selectBoard(result.id);
+          }
+          
+          // Finally call the success callback
+          onSuccess();
+        } catch (err) {
+          console.error("Error refreshing after board creation:", err);
+          // Still call onSuccess even if there's an error to prevent blocking the UI
+          onSuccess();
+          
+          // Force a page reload after a delay if we had issues refreshing
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        }
+      }, 500);
     } catch (error: any) {
       toast({
         title: "Error",
