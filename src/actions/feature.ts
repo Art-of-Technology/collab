@@ -116,9 +116,23 @@ export async function getFeatureRequests({
     // Sort by votes if needed
     const sortedFeatures = [...featuresWithScores];
     if (orderBy === 'most_votes') {
-      sortedFeatures.sort((a, b) => b.voteScore - a.voteScore);
+      sortedFeatures.sort((a, b) => {
+        // If vote scores are different, sort by vote score
+        if (b.voteScore !== a.voteScore) {
+          return b.voteScore - a.voteScore;
+        }
+        // If vote scores are the same, sort by date (newest first)
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
     } else if (orderBy === 'least_votes') {
-      sortedFeatures.sort((a, b) => a.voteScore - b.voteScore);
+      sortedFeatures.sort((a, b) => {
+        // If vote scores are different, sort by vote score
+        if (a.voteScore !== b.voteScore) {
+          return a.voteScore - b.voteScore;
+        }
+        // If vote scores are the same, sort by date (newest first)
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
     }
 
     return {
@@ -248,6 +262,8 @@ export async function createFeatureRequest(formData: FormData) {
 
     const title = formData.get("title") as string;
     const description = formData.get("description") as string;
+    // Get markdown HTML version if available
+    const html = formData.get("html") as string || description;
 
     if (!title || !description) {
       throw new Error("Title and description are required");
@@ -257,6 +273,7 @@ export async function createFeatureRequest(formData: FormData) {
       data: {
         title,
         description,
+        html, // Store HTML version for markdown rendering
         status: "PENDING",
         author: {
           connect: { id: session.user.id }

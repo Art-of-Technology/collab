@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
 import { useCreateComment } from "@/hooks/queries/useComment";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useCurrentUser } from "@/hooks/queries/useUser";
@@ -23,9 +22,10 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
   const { data: currentUser } = useCurrentUser();
   const createCommentMutation = useCreateComment();
 
-  const handleEditorChange = (html: string, markdown: string) => {
-    setCommentHtml(html);
-    setCommentText(markdown);
+  const handleCommentChange = (value: string) => {
+    setCommentText(value);
+    // Note: TextAreaWithAI doesn't provide HTML, so we reset it
+    setCommentHtml("");
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {
@@ -66,9 +66,7 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
     }
   };
 
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleAddComment = async () => {
     if (!commentText.trim()) return;
 
     try {
@@ -109,27 +107,17 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
         </Avatar>
       )}
       <div className="flex-1">
-        <MarkdownEditor
-          onChange={handleEditorChange}
+        <TextAreaWithAI
+          value={commentText}
+          onChange={handleCommentChange}
           placeholder="Add a comment..."
           minHeight="80px"
           maxHeight="250px"
-          compact={true}
-          className="mb-2"
-          content={commentText}
           onAiImprove={handleAiImprove}
+          onSubmit={handleAddComment}
+          loading={createCommentMutation.isPending || isImproving}
+          disabled={createCommentMutation.isPending || isImproving}
         />
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            size="sm"
-            variant="ghost"
-            disabled={!commentText.trim() || createCommentMutation.isPending || isImproving}
-            className="text-primary hover:text-primary/90"
-          >
-            {createCommentMutation.isPending ? "Posting..." : "Post"}
-          </Button>
-        </div>
       </div>
     </form>
   );

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
 import { useCreateComment } from "@/hooks/queries/useComment";
 
 interface CommentReplyFormProps {
@@ -29,9 +29,10 @@ export function CommentReplyForm({
   // Use TanStack Query hooks
   const createCommentMutation = useCreateComment();
 
-  const handleEditorChange = (html: string, markdown: string) => {
-    setReplyHtml(html);
-    setReplyText(markdown);
+  const handleReplyChange = (value: string) => {
+    setReplyText(value);
+    // Note: TextAreaWithAI doesn't provide HTML, so we reset it
+    setReplyHtml("");
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {
@@ -106,17 +107,18 @@ export function CommentReplyForm({
     <div className="mt-2">
       <div className="flex gap-2 items-start">
         <div className="flex-1">
-          <MarkdownEditor
-            onChange={handleEditorChange}
+          <TextAreaWithAI
+            value={replyText}
+            onChange={handleReplyChange}
+            onSubmit={handleReply}
             placeholder={`Reply to ${parentCommentAuthor}...`}
             minHeight="80px"
             maxHeight="200px"
-            compact={true}
-            className="mb-2"
-            content={replyText}
             onAiImprove={handleAiImprove}
+            loading={createCommentMutation.isPending || isImproving}
+            disabled={createCommentMutation.isPending || isImproving}
           />
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 mt-2">
             <Button
               type="button"
               size="sm"
@@ -125,15 +127,6 @@ export function CommentReplyForm({
               className="text-xs h-7"
             >
               Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleReply}
-              disabled={!replyText.trim() || createCommentMutation.isPending || isImproving}
-              className="text-xs h-7"
-            >
-              {createCommentMutation.isPending ? "Posting..." : "Reply"}
             </Button>
           </div>
         </div>

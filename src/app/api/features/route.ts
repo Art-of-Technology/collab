@@ -107,9 +107,23 @@ export async function GET(req: NextRequest) {
       
       // Sort by votes
       if (validatedOrderBy === "most_votes") {
-        formattedFeatureRequests.sort((a: any, b: any) => b.voteScore - a.voteScore);
+        formattedFeatureRequests.sort((a: any, b: any) => {
+          // First sort by vote score
+          if (b.voteScore !== a.voteScore) {
+            return b.voteScore - a.voteScore;
+          }
+          // If vote scores are the same, sort by date (newest first)
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
       } else {
-        formattedFeatureRequests.sort((a: any, b: any) => a.voteScore - b.voteScore);
+        formattedFeatureRequests.sort((a: any, b: any) => {
+          // First sort by vote score
+          if (a.voteScore !== b.voteScore) {
+            return a.voteScore - b.voteScore;
+          }
+          // If vote scores are the same, sort by date (newest first)
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
       }
       
       // Apply pagination after sorting

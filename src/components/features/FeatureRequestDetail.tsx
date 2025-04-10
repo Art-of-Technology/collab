@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +16,9 @@ import {
   MoreVertical,
   AlertTriangle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Pencil,
+  Loader2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -35,8 +37,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useVoteOnFeature, useUpdateFeatureStatus } from "@/hooks/queries/useFeature";
+import { useQueryClient } from "@tanstack/react-query";
+import { featureKeys } from "@/hooks/queries/useFeature";
 
 type Author = {
   id: string;
@@ -76,6 +91,7 @@ export default function FeatureRequestDetail({
 }: FeatureRequestDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const voteOnFeature = useVoteOnFeature();
   const updateStatus = useUpdateFeatureStatus();
   const [isVoting, setIsVoting] = useState(false);
@@ -88,6 +104,14 @@ export default function FeatureRequestDetail({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  
+  // Edit feature request state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(featureRequest.title);
+  const [editDescription, setEditDescription] = useState(featureRequest.description);
+  const [editDescriptionHtml, setEditDescriptionHtml] = useState(featureRequest.html || "");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isImproving, setIsImproving] = useState(false);
   
   const isAuthor = currentUserId === featureRequest.author.id;
 
@@ -214,6 +238,9 @@ export default function FeatureRequestDetail({
         throw new Error("Failed to delete");
       }
 
+      // Invalidate queries to update the list
+      queryClient.invalidateQueries({ queryKey: featureKeys.lists() });
+      
       toast({
         title: "Success",
         description: "Feature request has been deleted",
@@ -230,6 +257,84 @@ export default function FeatureRequestDetail({
       });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // AI Improve handler for edit description
+  const handleAiImproveDescription = useCallback(async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) return text;
+    setIsImproving(true);
+    try {
+      const response = await fetch("/api/ai/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      if (!response.ok) throw new Error("Failed to improve text");
+      const data = await response.json();
+      return data.message || data.improvedText || text;
+    } catch (error) {
+      console.error("Error improving text:", error);
+      toast({ title: "Error", description: "Failed to improve text", variant: "destructive" });
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
+  }, [isImproving, toast]);
+
+  // Handle updating feature request
+  const handleUpdateFeatureRequest = async () => {
+    if (!editTitle.trim() || !editDescription.trim()) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`/api/features/${featureRequest.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDescription,
+          html: editDescriptionHtml,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update feature request");
+      }
+
+      await response.json();
+      
+      // Invalidate queries to update both the detail and list views
+      queryClient.invalidateQueries({ 
+        queryKey: featureKeys.detail(featureRequest.id) 
+      });
+      queryClient.invalidateQueries({ queryKey: featureKeys.lists() });
+      
+      // Update UI
+      setIsEditDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Feature request updated successfully"
+      });
+      
+      // Refresh the page to show updated content
+      router.refresh();
+    } catch (error) {
+      console.error("Error updating feature request:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update feature request",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -331,14 +436,25 @@ export default function FeatureRequestDetail({
                 )}
                 
                 {isAuthor && (
-                  <DropdownMenuItem 
-                    onClick={() => setIsDeleteDialogOpen(true)}
-                    disabled={isDeleting}
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                  >
-                    <AlertTriangle className="mr-2 h-4 w-4" />
-                    {isDeleting ? "Deleting..." : "Delete Request"}
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem 
+                      onClick={() => setIsEditDialogOpen(true)}
+                      disabled={isUpdating}
+                      className="hover:text-primary cursor-pointer"
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      <span>Edit Request</span>
+                    </DropdownMenuItem>
+                    
+                    <DropdownMenuItem 
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                      disabled={isDeleting}
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+                    >
+                      <AlertTriangle className="mr-2 h-4 w-4" />
+                      {isDeleting ? "Deleting..." : "Delete Request"}
+                    </DropdownMenuItem>
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -441,6 +557,69 @@ export default function FeatureRequestDetail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Edit feature request dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Feature Request</DialogTitle>
+            <DialogDescription>
+              Update your feature request details. Be descriptive so others understand your idea.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Brief title for your feature idea"
+                className="col-span-3"
+                required
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <MarkdownEditor
+                initialValue={editDescription}
+                onChange={(markdown, html) => {
+                  setEditDescription(markdown);
+                  setEditDescriptionHtml(html);
+                }}
+                placeholder="Describe your feature idea in detail. What problem does it solve? How should it work?"
+                minHeight="180px"
+                onAiImprove={handleAiImproveDescription}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEditDialogOpen(false)}
+              disabled={isUpdating}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateFeatureRequest}
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Request"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 } 
