@@ -64,7 +64,7 @@
     "framer-motion": "^12.6.0",
     "lucide-react": "^0.483.0",
     "marked": "^15.0.7",
-    "motion": "^12.6.0",
+    "motion": "^12.6.3",
     "next": "15.2.3",
     "next-auth": "^4.24.11",
     "next-cloudinary": "^6.16.0",

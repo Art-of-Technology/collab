@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 const updateFeatureRequestSchema = z.object({
   title: z.string().min(1).max(100).optional(),
   description: z.string().min(1).max(1000).optional(),
+  html: z.string().optional(),
   status: z.enum(["pending", "accepted", "rejected", "completed"]).optional(),
 });
 
@@ -90,7 +91,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
     }
 
-    const { title, description, status } = validated.data;
+    const { title, description, html, status } = validated.data;
 
     // Check if the feature request exists
     const featureRequest = await prisma.featureRequest.findUnique({
@@ -127,9 +128,10 @@ export async function PATCH(
 
     // Prevent updating fields that the user doesn't have permission for
     const updateData: any = {};
-    if ((title || description) && isAuthor) {
+    if ((title || description || html) && isAuthor) {
       if (title) updateData.title = title;
       if (description) updateData.description = description;
+      if (html) updateData.html = html;
     }
     
     if (status && isAdmin) {

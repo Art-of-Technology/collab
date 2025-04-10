@@ -15,17 +15,32 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useCreatePost } from "@/hooks/queries/usePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
+import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
+import { 
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function CreatePostForm() {
   const { toast } = useToast();
   const { data: session } = useSession();
   const { currentWorkspace } = useWorkspace();
   const [isImproving, setIsImproving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   
   // Use TanStack Query hooks
   const { data: currentUser } = useCurrentUser();
@@ -33,7 +48,6 @@ export default function CreatePostForm() {
   
   const [formData, setFormData] = useState({
     message: "",
-    messageHtml: "",
     type: "UPDATE",
     tags: "",
     priority: "normal",
@@ -56,11 +70,10 @@ export default function CreatePostForm() {
     }));
   };
 
-  const handleEditorChange = (html: string, markdown: string) => {
+  const handleMessageChange = (value: string) => {
     setFormData(prev => ({
       ...prev,
-      message: markdown,
-      messageHtml: html
+      message: value
     }));
   };
 
@@ -89,13 +102,17 @@ export default function CreatePostForm() {
       }
       
       const data = await response.json();
-
       
       console.log("AI response:", data);
       handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
+      
+      // Ensure options are open if AI suggests a type change
+      if (data.category && !optionsOpen) {
+        setOptionsOpen(true);
+      }
       
       // Return the improved text to be displayed in the popup
       return improvedText;
@@ -113,9 +130,7 @@ export default function CreatePostForm() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleSubmit = async () => {
     if (!formData.message.trim()) {
       toast({
         title: "Error",
@@ -143,6 +158,7 @@ export default function CreatePostForm() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Process tags into an array
       const tagsArray = formData.tags
@@ -152,7 +168,6 @@ export default function CreatePostForm() {
       // Use TanStack Query mutation
       await createPostMutation.mutateAsync({
         message: formData.message,
-        html: formData.messageHtml,
         type: formData.type as 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION',
         tags: tagsArray,
         priority: formData.priority as 'normal' | 'high' | 'critical',
@@ -162,11 +177,11 @@ export default function CreatePostForm() {
       // Reset form
       setFormData({
         message: "",
-        messageHtml: "",
         type: "UPDATE",
         tags: "",
         priority: "normal",
       });
+      setOptionsOpen(false); // Close options on successful submit
 
       toast({
         title: "Success",
@@ -180,6 +195,8 @@ export default function CreatePostForm() {
         description: error instanceof Error ? error.message : "Failed to create post",
         variant: "destructive"
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -210,96 +227,95 @@ export default function CreatePostForm() {
         </div>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            {/* <CollabInput /> */}
-            <MarkdownEditor
-              content={formData.message}
-              onChange={handleEditorChange}
-              placeholder="What you are up to today?"
+        <Collapsible open={optionsOpen} onOpenChange={setOptionsOpen} className="space-y-0">
+          <div className="space-y-2 mb-1">
+            <TextAreaWithAI
+              value={formData.message}
+              onChange={handleMessageChange}
+              onSubmit={handleSubmit}
+              placeholder="What are you up to today?"
               minHeight="100px"
-              maxHeight="300px"
+              maxHeight="200px"
+              maxLength={160}
               onAiImprove={handleAiImprove}
+              loading={isSubmitting || isImproving}
+              disabled={isSubmitting || isImproving}
             />
-            
-            {160 - (formData.message?.length || 0) < 0 ? (
-              <p className="mt-1 text-right text-xs text-destructive">
-                {(formData.message?.length || 0) - 160} characters over the limit
-              </p>
-            ) : (
-              <p className="mt-1 text-right text-xs text-muted-foreground">
-                {160 - (formData.message?.length || 0)} characters remaining
-              </p>
+          </div>
+          
+          {/* Centered Chevron Trigger */}
+          <div className="flex justify-center items-center h-4">
+            <CollapsibleTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={cn(
+                  "h-6 w-6 rounded-md transition-transform duration-300 data-[state=open]:rotate-180",
+                  "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+
+          <CollapsibleContent 
+            className={cn(
+              "space-y-4 pt-3 overflow-hidden transition-all duration-300",
+              "data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
             )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="postType">Post Type</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value) => handleSelectChange("type", value)}
-              >
-                <SelectTrigger className="w-full bg-background border-border/60">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UPDATE">Update</SelectItem>
-                  <SelectItem value="BLOCKER">Blocker</SelectItem>
-                  <SelectItem value="IDEA">Idea</SelectItem>
-                  <SelectItem value="QUESTION">Question</SelectItem>
-                </SelectContent>
-              </Select>
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="postType">Post Type</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) => handleSelectChange("type", value)}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger className="w-full bg-background border-border/60">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UPDATE">Update</SelectItem>
+                    <SelectItem value="BLOCKER">Blocker</SelectItem>
+                    <SelectItem value="IDEA">Idea</SelectItem>
+                    <SelectItem value="QUESTION">Question</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Select
+                  value={formData.priority}
+                  onValueChange={(value) => handleSelectChange("priority", value)}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger className="w-full bg-background border-border/60">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
-              <Select
-                value={formData.priority}
-                onValueChange={(value) => handleSelectChange("priority", value)}
-              >
-                <SelectTrigger className="w-full bg-background border-border/60">
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="tags">Tags (comma separated)</Label>
+              <Input
+                id="tags"
+                name="tags"
+                placeholder="e.g. react, typescript, nextjs"
+                className="bg-background border-border/60 focus:border-primary focus:ring-primary"
+                value={formData.tags}
+                onChange={handleChange}
+                disabled={isSubmitting}
+              />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tags">Tags (comma separated)</Label>
-            <Input
-              id="tags"
-              name="tags"
-              placeholder="e.g. react, typescript, nextjs"
-              className="bg-background border-border/60 focus:border-primary focus:ring-primary"
-              value={formData.tags}
-              onChange={handleChange}
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              disabled={isImproving}
-              className="bg-primary hover:bg-primary/90 transition-colors"
-            >
-              {isImproving ? (
-                <div className="flex items-center gap-2">
-                  <span className="animate-spin">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  </span>
-                  <span>Improving...</span>
-                </div>
-              ) : (
-                "Post"
-              )}
-            </Button>
-          </div>
-        </form>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

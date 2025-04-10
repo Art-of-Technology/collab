@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFeatureRequests } from "@/hooks/queries/useFeature";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 
 interface FeatureRequestsListProps {
@@ -220,9 +221,12 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                     </div>
                   </div>
 
-                  <p className="mt-4 text-sm text-muted-foreground line-clamp-2 group-hover:text-foreground/90 transition-colors">
-                    {truncateText(request.description, 200)}
-                  </p>
+                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors">
+                    <MarkdownContent 
+                      content={truncateText(request.description, 200)} 
+                      className="prose-sm text-muted-foreground"
+                    />
+                  </div>
 
                   <div className="mt-4 flex justify-between items-center">
                     <div className="flex items-center gap-2">
