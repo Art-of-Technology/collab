@@ -141,41 +141,6 @@ export const TasksProvider = ({
     isInitialLoad.current = false;
   }, [searchParams, view, urlSelectedBoardId]);
 
-  const updateUrlFromState = useCallback(() => {
-    if (isInitialLoad.current || !pathname.includes('/tasks')) return;
-
-    const current = new URLSearchParams(window.location.search);
-    let changed = false;
-
-    if (current.get('view') !== view) {
-      current.set('view', view);
-      changed = true;
-    }
-
-    if (selectedBoardId) {
-      if (current.get('board') !== selectedBoardId) {
-        current.set('board', selectedBoardId);
-        changed = true;
-      }
-    } else {
-      if (current.has('board')) {
-        current.delete('board');
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      const search = current.toString();
-      const query = search ? `?${search}` : '';
-      console.log("State change -> Updating URL:", query);
-      router.replace(`${pathname}${query}`, { scroll: false });
-    }
-  }, [view, selectedBoardId, pathname, router]);
-
-  useEffect(() => {
-    updateUrlFromState();
-  }, [view, selectedBoardId, updateUrlFromState]);
-
   // Board Fetching and Selection Logic
   const determineBoardSelection = useCallback((fetchedBoards: Board[], currentSelectedId: string): string => {
     if (!fetchedBoards || fetchedBoards.length === 0) {
@@ -244,12 +209,6 @@ export const TasksProvider = ({
           }
           lastWorkspaceIdRef.current = null;
         }
-         // Mark initial load done even if no workspace initially
-        if (isInitialLoad.current && isMounted) {
-          isInitialLoad.current = false;
-          // Use rAF to defer URL update slightly after state updates
-          requestAnimationFrame(updateUrlFromState);
-        }
         return;
       }
 
@@ -272,13 +231,6 @@ export const TasksProvider = ({
         lastWorkspaceIdRef.current = currentWsId;
         await fetchBoardsList(currentWsId); // Wait for the fetch to complete
 
-        // Mark initial load complete *after* the first fetch attempt
-        if (isInitialLoad.current && isMounted) {
-            isInitialLoad.current = false;
-            // Defer initial URL sync slightly
-            requestAnimationFrame(updateUrlFromState);
-        }
-        // Hierarchy refresh is handled by a separate effect
       }
     };
 
@@ -288,7 +240,7 @@ export const TasksProvider = ({
       isMounted = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId, fetchBoardsList, updateUrlFromState]);
+  }, [activeWorkspaceId, fetchBoardsList]);
 
   useEffect(() => {
     if (!selectedBoardId) {
@@ -339,8 +291,22 @@ export const TasksProvider = ({
       console.log("User selected board:", boardId);
       setSelectedBoardId(boardId);
       setUrlSelectedBoardId(boardId);
+      
+      // Update the URL with the new board ID while preserving the current view
+      const params = new URLSearchParams(window.location.search);
+      params.set('board', boardId);
+      
+      // Keep the current view
+      if (view && !params.has('view')) {
+        params.set('view', view);
+      }
+      
+      // Update the URL
+      const url = `${pathname}?${params.toString()}`;
+      console.log("URL update on board selection:", url);
+      router.replace(url, { scroll: false });
     }
-  }, [selectedBoardId]);
+  }, [selectedBoardId, view, pathname, router]);
 
   const setViewWithUrlUpdate = useCallback((newView: 'kanban' | 'list' | 'hierarchy') => {
     if (newView !== view) {

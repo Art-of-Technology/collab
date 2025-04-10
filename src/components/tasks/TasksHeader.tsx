@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Kanban, List, Plus, GitBranch, ChevronDown } from "lucide-react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import TaskBoardSelector from "@/components/tasks/TaskBoardSelector";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
@@ -17,14 +18,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 export default function TasksHeader() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
   const [isEpicDialogOpen, setIsEpicDialogOpen] = useState(false);
   const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
-  const { selectedBoardId, view, setView } = useTasks();
+  const { selectedBoardId, view } = useTasks();
   const { currentWorkspace } = useWorkspace();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Fetch task boards for the current workspace
   const { data: taskBoards } = useTaskBoards({
@@ -41,7 +47,23 @@ export default function TasksHeader() {
   };
 
   const handleViewChange = (newView: 'kanban' | 'list' | 'hierarchy') => {
-    setView(newView);
+    // Create a new URL with the current params
+    const params = new URLSearchParams(searchParams.toString());
+    
+    // Set the new view
+    params.set('view', newView);
+    
+    // Ensure we're using the current board ID
+    if (selectedBoardId) {
+      params.set('board', selectedBoardId);
+    }
+    
+    // Create the URL and navigate
+    const url = `${pathname}?${params.toString()}`;
+    console.log("Navigation: Changing view to", newView, "with board", selectedBoardId);
+    
+    // Use router.push with replace option to avoid browser history accumulation
+    router.push(url, { scroll: false });
   };
 
   const handleCreateMilestone = () => {
@@ -100,37 +122,26 @@ export default function TasksHeader() {
       <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <TaskBoardSelector />
-          <div className="hidden md:flex">
-            <Button
-              variant="ghost"
-              className={`px-3 py-1.5 rounded-l-md border border-r-0 ${view === "kanban"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background hover:bg-muted"
-                }`}
-              onClick={() => handleViewChange('kanban')}
-            >
-              <Kanban size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              className={`px-3 py-1.5 border border-r-0 ${view === "list"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background hover:bg-muted"
-                }`}
-              onClick={() => handleViewChange('list')}
-            >
-              <List size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              className={`px-3 py-1.5 rounded-r-md border ${view === "hierarchy"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background hover:bg-muted"
-                }`}
-              onClick={() => handleViewChange('hierarchy')}
-            >
-              <GitBranch size={16} />
-            </Button>
+          
+          <div className="hidden md:flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm">
+            <ViewButton 
+              icon={<Kanban size={16} />} 
+              label="Kanban" 
+              isActive={view === 'kanban'} 
+              onClick={() => handleViewChange('kanban')} 
+            />
+            <ViewButton 
+              icon={<List size={16} />} 
+              label="List" 
+              isActive={view === 'list'} 
+              onClick={() => handleViewChange('list')} 
+            />
+            <ViewButton 
+              icon={<GitBranch size={16} />} 
+              label="Hierarchy" 
+              isActive={view === 'hierarchy'} 
+              onClick={() => handleViewChange('hierarchy')} 
+            />
           </div>
         </div>
       </div>
@@ -170,5 +181,40 @@ export default function TasksHeader() {
         />
       )}
     </>
+  );
+}
+
+interface ViewButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+function ViewButton({ icon, label, isActive, onClick }: ViewButtonProps) {
+  return (
+    <button
+      className={cn(
+        "relative flex items-center gap-2 px-3 py-2 rounded-md transition-all font-medium text-sm",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        isActive ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+      )}
+      onClick={onClick}
+    >
+      {isActive && (
+        <motion.div
+          layoutId="activeViewTab"
+          className="absolute inset-0 bg-primary rounded-md"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+        />
+      )}
+      <span className="relative flex items-center gap-2 z-10">
+        {icon}
+        <span className="hidden sm:inline">{label}</span>
+      </span>
+    </button>
   );
 } 
