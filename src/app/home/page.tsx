@@ -83,7 +83,7 @@ export default function LandingPage() {
                         Empowering Collaboration, <br />One Click at a Time
                     </h1>
                     <p className="text-lg text-gray-600 mb-8">
-                        Collab is a collaborative platform designed to streamline your workflow and enhance team productivity. Whether you're managing projects, brainstorming ideas, or tracking tasks, Collab has you covered.
+                        Collab is a collaborative platform designed to streamline your workflow and enhance team productivity. Whether you’re managing projects, brainstorming ideas, or tracking tasks, Collab has you covered.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link href="/login" className="px-6 py-3 bg-green-800 hover:bg-green-900 text-white rounded-md transition-colors">
@@ -210,7 +210,7 @@ export default function LandingPage() {
                         </div>
                         <div>
                             <h4 className="text-lg font-semibold mb-2">Customisable for Teams</h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm">Whether you're a startup or an enterprise, Collab fits your structure and scale.</p>
+                            <p className="text-gray-600 dark:text-gray-300 text-sm">Whether you’re a startup or an enterprise, Collab fits your structure and scale.</p>
                         </div>
                         <div>
                             <h4 className="text-lg font-semibold mb-2">No Learning Curve</h4>
