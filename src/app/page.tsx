@@ -7,8 +7,8 @@ export default async function Home() {
 
   // If user is not logged in, redirect to login page
   if (!session?.user) {
-    redirect("/login");
-  }
+    redirect("/home");
+  } 
 
   // Check if user has any workspaces
   const userWorkspaces = await prisma.workspace.findMany({
