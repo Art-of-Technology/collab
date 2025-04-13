@@ -885,6 +885,13 @@ async function getUserActivities(requestUserId: string, args: any) {
 // Main API handler
 export async function POST(req: Request) {
   try {
+    if (!process.env.ENABLE_AI_ASSISTANT) {
+      return NextResponse.json(
+        { error: "AI Assistant is disabled" },
+        { status: 503 }
+      );
+    }
+
     const currentUser = await getCurrentUser();
     if (!currentUser?.id) {
       return NextResponse.json(
