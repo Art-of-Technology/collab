@@ -9,7 +9,7 @@ import {
   BellIcon,
   MagnifyingGlassIcon,
   Bars3Icon,
-  SparklesIcon
+  /*SparklesIcon*/
 } from "@heroicons/react/24/outline";
 import { MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -56,7 +56,7 @@ export default function Navbar({
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { isChatOpen, toggleChat, isAssistantOpen, toggleAssistant } = useUiContext();
+  const { isChatOpen, toggleChat, /*isAssistantOpen, toggleAssistant*/ } = useUiContext();
   const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -238,7 +238,7 @@ export default function Navbar({
                   </Button>
 
                   {/* AI Assistant toggle button */}
-                  <Button
+                  {/* <Button
                     variant="ghost"
                     size="icon"
                     className="relative hover:bg-[#1c1c1c] text-gray-400"
@@ -248,7 +248,7 @@ export default function Navbar({
                     {isAssistantOpen && (
                       <span className="absolute bottom-1 right-1 bg-purple-500 rounded-full w-2 h-2" />
                     )}
-                  </Button>
+                  </Button> */}
                 </>
               )}
 
