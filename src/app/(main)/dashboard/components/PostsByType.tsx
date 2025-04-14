@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertTriangle, Lightbulb, HelpCircle, MessageSquare, Heart, Loader2 } from "lucide-react";
 import { useRecentPostsByType } from "@/hooks/queries/useDashboard";
-
+import { CollabText } from "@/components/ui/collab-text";
 interface PostsByTypeProps {
   type: 'BLOCKER' | 'IDEA' | 'QUESTION';
   workspaceId: string;
@@ -17,14 +17,6 @@ interface PostsByTypeProps {
 export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProps) {
   // Use TanStack Query for data fetching with initial data from server
   const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, workspaceId);
-  
-  // Truncate text to a specified length
-  const truncateText = (text: string, maxLength: number) => {
-    // First strip HTML tags
-    const strippedText = text?.replace(/<[^>]*>?/gm, '') || '';
-    if (strippedText.length <= maxLength) return strippedText;
-    return strippedText.substring(0, maxLength) + "...";
-  };
   
   // Type-specific UI elements
   const getTypeDetails = () => {
@@ -96,7 +88,13 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       </div>
       <div className="text-sm mt-2">
         <Link href={`/posts/${post.id}`} className="block hover:underline">
-          <p className="text-sm">{truncateText(post.message, 100)}</p>
+          <p className="text-sm">
+            <CollabText
+              content={post.message}
+              small
+              asSpan
+            />
+          </p>
         </Link>
         <div className="flex gap-4 mt-2">
           <span className="text-xs flex items-center gap-1">
@@ -140,7 +138,13 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           </Link>
         </div>
         <Link href={`/posts/${post.id}`} className="block mt-1 hover:underline">
-          <p className="text-sm">{truncateText(post.message, 100)}</p>
+          <p className="text-sm">
+            <CollabText
+              content={post.message}
+              small
+              asSpan
+            />
+          </p>
         </Link>
         <div className="flex gap-4 mt-2">
           <span className="text-xs text-muted-foreground flex items-center gap-1">

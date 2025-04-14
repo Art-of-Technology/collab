@@ -32,11 +32,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUiContext } from "@/context/UiContext";
 import { useSidebar } from "@/components/providers/SidebarProvider";
+import { useMention } from "@/context/MentionContext";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
+import { formatDistanceToNow } from "date-fns";
+import { CollabText } from "@/components/ui/collab-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -60,9 +70,20 @@ export default function Navbar({
   const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
+  
+  // Use Mention context for notifications
+  const { 
+    notifications, 
+    unreadCount, 
+    markNotificationAsRead, 
+    markAllNotificationsAsRead,
+    loading: notificationsLoading,
+    refetchNotifications
+  } = useMention();
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -80,6 +101,67 @@ export default function Navbar({
     });
     router.push("/");
     router.refresh();
+  };
+  
+  // Handle notification click - mark as read and navigate if needed
+  const handleNotificationClick = async (id: string, url?: string) => {
+    await markNotificationAsRead(id);
+    
+    if (url) {
+      router.push(url);
+    }
+    
+    // Close notifications popover on mobile
+    if (window.innerWidth < 768) {
+      setShowNotifications(false);
+    }
+  };
+  
+  // Format notification time
+  const formatNotificationTime = (dateString: string): string => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      console.error('Error formatting notification time:', error);
+      return 'recently';
+    }
+  };
+  
+  // Generate notification URL based on type
+  const getNotificationUrl = (notification: any): string => {
+    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
+
+    switch (type) {
+      case 'post_mention':
+      case 'post_comment':
+      case 'post_reaction':
+        return postId ? `/posts/${postId}` : '/timeline';
+      case 'comment_mention':
+      case 'comment_reply':
+      case 'comment_reaction':
+        // If commentId exists, try to link to the parent post/feature
+        // This might require fetching the comment details to get the post/feature ID
+        // For now, linking to notifications as a fallback
+        return postId ? `/posts/${postId}` : '/timeline'; // Placeholder, needs better logic
+      case 'taskComment_mention': // Added this case
+        return taskId ? `/tasks/${taskId}` : '/tasks';
+      case 'feature_mention':
+      case 'feature_comment':
+      case 'feature_vote':
+        return featureRequestId ? `/features/${featureRequestId}` : '/features';
+      case 'task_mention':
+      case 'task_assigned':
+      case 'task_status_change':
+        return taskId ? `/tasks/${taskId}` : '/tasks';
+      case 'epic_mention':
+        return epicId ? `/epics/${epicId}` : '/tasks'; // Assuming epic detail page
+      case 'story_mention':
+        return storyId ? `/stories/${storyId}` : '/tasks'; // Assuming story detail page
+      case 'milestone_mention':
+        return milestoneId ? `/milestones/${milestoneId}` : '/tasks'; // Assuming milestone detail page
+      default:
+        return '/timeline';
+    }
   };
 
   // Get user initials for avatar
@@ -220,9 +302,112 @@ export default function Navbar({
             <>
               {hasWorkspaces && (
                 <>
-                  <Button variant="ghost" size="icon" className="relative hover:bg-[#1c1c1c] text-gray-400">
-                    <BellIcon className="h-5 w-5" />
-                  </Button>
+                  {/* Notification bell with popover */}
+                  <Popover open={showNotifications} onOpenChange={setShowNotifications}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="relative hover:bg-[#1c1c1c] text-gray-400"
+                        onClick={() => refetchNotifications()}
+                      >
+                        <BellIcon className="h-5 w-5" />
+                        {unreadCount > 0 && (
+                          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="end" alignOffset={-5} forceMount>
+                      <div className="flex items-center justify-between p-3 border-b border-border/40">
+                        <h3 className="font-medium">Notifications</h3>
+                        {unreadCount > 0 && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-xs h-7 px-2" 
+                            onClick={() => markAllNotificationsAsRead()}
+                          >
+                            Mark all as read
+                          </Button>
+                        )}
+                      </div>
+                      
+                      <ScrollArea className="h-80">
+                        {notificationsLoading ? (
+                          <div className="p-4 text-center text-muted-foreground text-sm">
+                            Loading notifications...
+                          </div>
+                        ) : notifications.length === 0 ? (
+                          <div className="p-4 text-center text-muted-foreground text-sm">
+                            No notifications yet
+                          </div>
+                        ) : (
+                          <div className="flex flex-col">
+                            {notifications.map(notification => {
+                              const url = getNotificationUrl(notification);
+                              const isHtmlContent = /<[^>]+>/.test(notification.content);
+                              console.log(`Notification ID: ${notification.id}, Content contains tag? ${isHtmlContent}, Content:`, notification.content);
+                              return (
+                                <div 
+                                  key={notification.id}
+                                  className={`flex items-start gap-3 p-3 hover:bg-muted/40 cursor-pointer border-b border-border/20 ${!notification.read ? 'bg-primary/5' : ''}`}
+                                  onClick={() => handleNotificationClick(notification.id, url)}
+                                >
+                                  {/* Sender Avatar */}
+                                  {notification.sender.useCustomAvatar ? (
+                                    <CustomAvatar user={notification.sender} size="sm" />
+                                  ) : (
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarImage 
+                                        src={notification.sender.image || undefined} 
+                                        alt={notification.sender.name || "User"} 
+                                      />
+                                      <AvatarFallback>
+                                        {getInitials(notification.sender.name || "U")}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  )}
+                                  
+                                  {/* Notification Content */}
+                                  <div className="flex-1 space-y-1">
+                                    <p className="text-sm">
+                                      <span className="font-medium">{notification.sender.name}</span>
+                                      {' '}
+                                      <span className="text-muted-foreground">
+                                        {isHtmlContent ? (
+                                          <MarkdownContent
+                                            htmlContent={notification.content}
+                                            className="inline text-sm"
+                                            asSpan={true}
+                                          />
+                                        ) : (
+                                          <CollabText
+                                            content={notification.content}
+                                            small
+                                            asSpan
+                                          />
+                                        )}
+                                      </span>
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatNotificationTime(notification.createdAt)}
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Read Indicator */}
+                                  {!notification.read && (
+                                    <div className="h-2 w-2 rounded-full bg-primary mt-1.5" />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
 
                   {/* Chat toggle button */}
                   <Button

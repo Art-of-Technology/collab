@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,6 +22,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { useDeletePost, useUpdatePost } from "@/hooks/queries/usePost";
+import { CollabInput } from "../ui/collab-input";
 
 interface PostDialogsProps {
   postId: string;
@@ -183,14 +183,13 @@ export default function PostDialogs({
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="message">Message</Label>
-                <Textarea
-                  id="message"
-                  name="message"
+                <CollabInput
                   value={editFormData.message}
-                  onChange={handleEditChange}
-                  placeholder="What you are up to today?"
-                  rows={4}
-                  className="resize-none bg-background border-border/60 focus:border-primary focus:ring-primary"
+                  onChange={(value) => setEditFormData({...editFormData, message: value})}
+                  placeholder="What's on your mind?"
+                  minHeight="120px"
+                  maxHeight="200px"
+                  className="bg-background border-border/60 focus:border-primary focus:ring-primary"
                 />
               </div>
 

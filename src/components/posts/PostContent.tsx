@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ChatBubbleLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { formatMentions } from "@/utils/mentions";
 
 type Tag = {
   id: string;
@@ -27,12 +28,18 @@ export default function PostContent({
   commentsCount,
   onToggleExpand,
 }: PostContentProps) {
+  // Format message to display clickable mentions
+  const formattedMessage = formatMentions(message);
+  
   return (
     <div>
       {html ? (
         <MarkdownContent content={html} />
       ) : (
-        <p className="whitespace-pre-wrap">{message}</p>
+        <p 
+          className="whitespace-pre-wrap" 
+          dangerouslySetInnerHTML={{ __html: formattedMessage }}
+        />
       )}
 
       {tags.length > 0 && (

@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
 import { useCreateComment } from "@/hooks/queries/useComment";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useCurrentUser } from "@/hooks/queries/useUser";
+import { CollabInput } from "../ui/collab-input";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 interface AddCommentFormProps {
   postId: string;
@@ -70,11 +72,30 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
     if (!commentText.trim()) return;
 
     try {
-      await createCommentMutation.mutateAsync({
+      const newComment = await createCommentMutation.mutateAsync({
         postId,
         message: commentText,
         html: commentHtml
       });
+
+      // Process mentions if there are any in the comment
+      if (newComment?.id) {
+        const mentionedUserIds = extractMentionUserIds(commentText);
+        
+        if (mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "comment",
+              sourceId: newComment.id,
+              content: `mentioned you in a post comment: "${commentText.length > 100 ? commentText.substring(0, 97) + '...' : commentText}"`
+            });
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the comment submission if mentions fail
+          }
+        }
+      }
 
       setCommentText("");
       setCommentHtml("");
@@ -107,7 +128,7 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
         </Avatar>
       )}
       <div className="flex-1">
-        <TextAreaWithAI
+        <CollabInput
           value={commentText}
           onChange={handleCommentChange}
           placeholder="Add a comment..."

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -31,6 +31,7 @@ import {
   WandSparkles,
   Loader2,
   RefreshCw,
+  AtSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,10 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
+import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { mergeAttributes } from '@tiptap/core'
+import { Node as TiptapNode } from '@tiptap/core'
 
 interface MarkdownEditorProps {
   onChange?: (markdown: string, html: string) => void;
@@ -450,6 +455,89 @@ const CustomCSS = Extension.create({
   },
 });
 
+// Define a Mention extension for TipTap
+const Mention = TiptapNode.create({
+  name: 'mention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      name: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-name'),
+        renderHTML: attributes => {
+          if (!attributes.name) {
+            return {}
+          }
+          
+          return {
+            'data-name': attributes.name,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-mention]',
+        getAttrs: element => {
+          const id = element.getAttribute('data-user-id')
+          const name = element.getAttribute('data-user-name')
+          
+          if (!id || !name) {
+            return false
+          }
+          
+          return { id, name }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-mention': true, class: 'mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '@',
+      ],
+      node.attrs.name,
+    ]
+  },
+  
+  renderText({ node }) {
+    return `@[${node.attrs.name}](${node.attrs.id})`
+  },
+})
+
 export function MarkdownEditor({
   onChange,
   content = "",
@@ -499,6 +587,7 @@ export function MarkdownEditor({
         levels: [1, 2, 3],
       }),
       Color,
+      Mention, // Add Mention extension
     ],
     content: initialContentRef.current,
     editorProps: {
@@ -512,12 +601,11 @@ export function MarkdownEditor({
       }
     },
     onUpdate: ({ editor }) => {
-      // Get HTML and markdown content
+      // Get the full HTML content for rendering
       const html = editor.getHTML();
-      const markdown = editor.storage.markdown?.getMarkdown() || html;
       
-      // Call onChange callback with both formats
-      onChange?.(markdown, html);
+      // Only pass HTML to the onChange handler
+      onChange?.(html, html); // Passing html twice for compatibility, but second arg could be removed if forms are updated
     },
   }, []); // Empty dependency array to ensure editor only initializes once
 
@@ -696,6 +784,216 @@ export function MarkdownEditor({
     setImprovedText(null);
     setShowImprovePopover(false);
   }, [editor, improvedText]);
+
+  // Add mention state
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [caretPosition, setCaretPosition] = useState({ top: 0, left: 0 });
+  const mentionSuggestionRef = useRef<HTMLDivElement>(null);
+  const { currentWorkspace } = useWorkspace();
+  
+  // Track the last time a mention was inserted
+  const lastMentionInsertedRef = useRef<number>(0);
+
+  // Insert a mention at cursor position
+  const insertMention = useCallback((user: User) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the @ symbol --- //
+    let atPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (atPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeAtPos = nodeText.lastIndexOf('@', searchFromIndex);
+
+        while (relativeAtPos !== -1) {
+          const absoluteAtPos = pos + relativeAtPos;
+          // Ensure the found @ is within the search range and before the cursor
+          if (absoluteAtPos >= searchLimit && absoluteAtPos < currentPosition) {
+            // Check if there's a space or start of node right after the @
+            // (to ensure we found the start of the mention query)
+            const textAfterAt = editor.state.doc.textBetween(absoluteAtPos + 1, currentPosition, "");
+            if (!textAfterAt.match(/^\s/) && textAfterAt.indexOf('@') === -1) { // Ensure no space and no other @ between trigger and cursor
+              atPosition = absoluteAtPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeAtPos - 1;
+          relativeAtPos = nodeText.lastIndexOf('@', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowMentionSuggestions(false);
+    lastMentionInsertedRef.current = Date.now();
+
+    // Proceed with deletion and insertion if @ was found
+    if (atPosition !== -1) {
+      // Delete from the found @ position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: atPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the mention node where the @ was
+      editor.chain().insertContentAt(atPosition, {
+        type: 'mention',
+        attrs: {
+          id: user.id,
+          name: user.name,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(atPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no @ was found, insert the mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'mention',
+        attrs: {
+          id: user.id,
+          name: user.name,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+  
+  // Check for @ mentions when typing
+  const checkForMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    // Skip checking if a mention was just inserted within the last 300ms
+    const timeSinceLastMention = Date.now() - lastMentionInsertedRef.current;
+    if (timeSinceLastMention < 300) {
+      return;
+    }
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last @ character
+    const lastAtIndex = content.lastIndexOf('@');
+    
+    if (lastAtIndex >= 0) {
+      // Check if there's a space between the last @ and the word we're typing
+      const textAfterAt = content.substring(lastAtIndex + 1);
+      const hasSpaceAfterAt = textAfterAt.match(/^\s/);
+      
+      if (!hasSpaceAfterAt) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterAt.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for mention suggestions
+          setCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setMentionQuery(textAfterAt);
+          setShowMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowMentionSuggestions(false);
+  }, [editor]);
+  
+  // Handle key events for mentions
+  const handleKeyDown = useCallback((event: React.KeyboardEvent | KeyboardEvent) => {
+    if (!showMentionSuggestions) return;
+    
+    // Let MentionSuggestion handle these keys
+    if (event.key === "ArrowUp" || event.key === "ArrowDown" || 
+        event.key === "Enter" || event.key === "Tab" || event.key === "Escape") {
+      event.preventDefault();
+    }
+  }, [showMentionSuggestions]);
+  
+  // Add mention event handlers
+  useEffect(() => {
+    if (!editor) return;
+    
+    // Listen for keydown events
+    const onKeyDown = (e: KeyboardEvent) => handleKeyDown(e);
+    editor.view.dom.addEventListener('keydown', onKeyDown);
+    
+    // Update the editor
+    editor.on('update', checkForMentionTrigger);
+    
+    return () => {
+      editor.view.dom.removeEventListener('keydown', onKeyDown);
+      editor.off('update', checkForMentionTrigger);
+    };
+  }, [editor, handleKeyDown, checkForMentionTrigger]);
+  
+  // Close mention suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        mentionSuggestionRef.current &&
+        !mentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowMentionSuggestions(false);
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [editor]);
+
+  // Add this CSS to make mentions visually distinct
+  useEffect(() => {
+    // Add CSS for mentions
+    const style = document.createElement('style');
+    style.textContent = `
+      .ProseMirror .mention {
+        background-color: rgba(59, 130, 246, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #3b82f6;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
+      .ProseMirror .mention .mention-symbol {
+        opacity: 0.7;
+        margin-right: 1px;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   if (!editor) {
     return null;
@@ -1035,6 +1333,39 @@ export function MarkdownEditor({
               </Tooltip>
             </>
           )}
+
+          <Separator orientation="vertical" className="mx-1 h-6" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={buttonSize}
+                onClick={() => {
+                  if (editor) {
+                    // Focus the editor first
+                    editor.commands.focus();
+                    
+                    // Insert the @ character
+                    editor.commands.insertContent('@');
+                    
+                    // Reset the last mention insertion time so suggestion shows
+                    lastMentionInsertedRef.current = 0;
+                    
+                    // Allow a small delay for the DOM to update
+                    setTimeout(() => {
+                      checkForMentionTrigger();
+                    }, 50);
+                  }
+                }}
+              >
+                <AtSign size={iconSize} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Mention User</TooltipContent>
+          </Tooltip>
         </TooltipProvider>
       </div>
 
@@ -1105,6 +1436,25 @@ export function MarkdownEditor({
                 </Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Mention suggestions */}
+        {showMentionSuggestions && (
+          <div 
+            style={{ 
+              position: "absolute",
+              top: `${caretPosition.top}px`,
+              left: `${caretPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <MentionSuggestion
+              query={mentionQuery}
+              onSelect={insertMention}
+              workspaceId={currentWorkspace?.id}
+            />
           </div>
         )}
       </div>

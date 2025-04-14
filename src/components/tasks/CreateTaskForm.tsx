@@ -48,8 +48,9 @@ import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
 import { StorySelect } from "@/components/tasks/selectors/StorySelect";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { taskKeys } from "@/hooks/queries/useTask";
-import { createTask } from "@/actions/task";
 import { useQueryClient } from "@tanstack/react-query";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
@@ -154,7 +155,6 @@ export default function CreateTaskForm({
   postId
 }: CreateTaskFormProps) {
   const { currentWorkspace } = useWorkspace();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const createTaskMutation = useCreateTask();
   const queryClient = useQueryClient();
@@ -256,7 +256,6 @@ export default function CreateTaskForm({
 
   // Form submission
   const onSubmit = async (values: TaskFormValues) => {
-
     // Check for required values before proceeding
     if (!values.title) {
       console.error("Title is required");
@@ -264,63 +263,79 @@ export default function CreateTaskForm({
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-
-      const boardIdToSubmit = values.taskBoardId || selectedBoardId;
-      if (!boardIdToSubmit) {
-        console.log("Board is required, stopping submission");
-        toast({ title: "Error", description: "Board is required.", variant: "destructive" });
-        setIsSubmitting(false);
-        return;
-      }
-      if (!workspaceId) {
-        console.log("Workspace not found, stopping submission");
-        toast({ title: "Error", description: "Workspace not found.", variant: "destructive" });
-        setIsSubmitting(false);
-        return;
-      }
-      if (!values.columnId) {
-        console.log("Column ID is required, stopping submission");
-        toast({ title: "Error", description: "Status column is required.", variant: "destructive" });
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Create a clean data object with only the fields needed by the createTask function
-      const cleanData = {
-        title: values.title,
-        description: values.description,
-        workspaceId: workspaceId,
-        taskBoardId: boardIdToSubmit,
-        columnId: values.columnId,
-        epicId: values.epicId || null,
-        storyId: values.storyId || null,
-        priority: (values.priority || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH",
-        dueDate: values.dueDate || undefined,
-        type: values.type || "TASK",
-        postId: values.postId || null,
-        parentTaskId: values.parentTaskId || undefined,
-        assigneeId: values.assigneeId === "unassigned" ? undefined : values.assigneeId || undefined,
-        reporterId: values.reporterId === "unassigned" ? undefined : values.reporterId || undefined,
-      };
-
-      console.log("Submitting clean task data:", cleanData);
-
-      // Use the createTask function directly
-      const result = await createTask(cleanData);
-      console.log("Task creation result:", result);
-
-      toast({ title: "Success", description: "Task created successfully." });
-      queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardIdToSubmit) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
-      onClose();
-    } catch (error) {
-      console.error("Error creating task:", error);
-      toast({ title: "Error", description: `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`, variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
+    const boardIdToSubmit = values.taskBoardId || selectedBoardId;
+    if (!boardIdToSubmit) {
+      console.log("Board is required, stopping submission");
+      toast({ title: "Error", description: "Board is required.", variant: "destructive" });
+      return;
     }
+    if (!workspaceId) {
+      console.log("Workspace not found, stopping submission");
+      toast({ title: "Error", description: "Workspace not found.", variant: "destructive" });
+      return;
+    }
+    if (!values.columnId) {
+      console.log("Column ID is required, stopping submission");
+      toast({ title: "Error", description: "Status column is required.", variant: "destructive" });
+      return;
+    }
+
+    // Extract mentions *before* starting the mutation
+    console.log("Description content being passed to extractMentionUserIds:", values.description);
+    const mentionedUserIds = values.description ? extractMentionUserIds(values.description) : [];
+    console.log("Extracted User IDs:", mentionedUserIds);
+
+    // Create a clean data object for the mutation
+    const cleanData = {
+      title: values.title,
+      description: values.description,
+      workspaceId: workspaceId,
+      taskBoardId: boardIdToSubmit,
+      columnId: values.columnId,
+      epicId: values.epicId || null,
+      storyId: values.storyId || null,
+      priority: (values.priority || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH",
+      dueDate: values.dueDate || undefined,
+      type: values.type || "TASK",
+      postId: values.postId || null,
+      parentTaskId: values.parentTaskId || undefined,
+      assigneeId: values.assigneeId === "unassigned" ? undefined : values.assigneeId || undefined,
+      reporterId: values.reporterId === "unassigned" ? undefined : values.reporterId || undefined,
+    };
+
+    console.log("Submitting task data via mutation:", cleanData);
+
+    // Use the mutation hook
+    createTaskMutation.mutate(cleanData, {
+      onSuccess: async (createdTask) => {
+        console.log("Task created successfully via mutation:", createdTask);
+
+        // Process mentions if there are any in the description
+        if (createdTask?.id && mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "task",
+              sourceId: createdTask.id,
+              content: `mentioned you in a task: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
+            });
+            console.log("Mentions processed successfully for task:", createdTask.id);
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the task creation success flow if mentions fail
+          }
+        }
+
+        toast({ title: "Success", description: "Task created successfully." });
+        queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardIdToSubmit) });
+        queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
+        onClose(); // Close the dialog on success
+      },
+      onError: (error) => {
+        console.error("Error creating task via mutation:", error);
+        toast({ title: "Error", description: `Failed to create task: ${error.message || "Unknown error"}`, variant: "destructive" });
+      },
+    });
   };
 
   // Extract parentTaskId from URL params
@@ -342,8 +357,11 @@ export default function CreateTaskForm({
           <DialogTitle>Create New Task</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-
+          <form
+            id="create-task-form"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4"
+          >
             <div className="md:col-span-2 space-y-4">
               <FormField
                 control={form.control}
@@ -396,7 +414,7 @@ export default function CreateTaskForm({
                           form.setValue("epicId", null);
                           form.setValue("storyId", null);
                         }}
-                        disabled={isSubmitting}
+                        disabled={createTaskMutation.isPending}
                         workspaceId={workspaceId}
                         showColumns={false}
                       />
@@ -416,7 +434,7 @@ export default function CreateTaskForm({
                       <Select
                         value={field.value || undefined}
                         onValueChange={field.onChange}
-                        disabled={isSubmitting || !selectedBoardId || isLoadingBoardColumns || boardColumns.length === 0}
+                        disabled={createTaskMutation.isPending || !selectedBoardId || isLoadingBoardColumns || boardColumns.length === 0}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder={!selectedBoardId ? "Select board first" : "Select status"} />
@@ -447,7 +465,7 @@ export default function CreateTaskForm({
                       <AssigneeSelect
                         value={field.value || undefined}
                         onChange={field.onChange}
-                        disabled={isSubmitting}
+                        disabled={createTaskMutation.isPending}
                         workspaceId={workspaceId}
                       />
                     </FormControl>
@@ -466,7 +484,7 @@ export default function CreateTaskForm({
                       <AssigneeSelect
                         value={field.value || undefined}
                         onChange={field.onChange}
-                        disabled={isSubmitting}
+                        disabled={createTaskMutation.isPending}
                         workspaceId={workspaceId}
                         placeholder="Select reporter"
                       />
@@ -581,7 +599,7 @@ export default function CreateTaskForm({
                         }}
                         workspaceId={workspaceId}
                         boardId={selectedBoardId}
-                        disabled={isSubmitting || !selectedBoardId || !!selectedStoryId}
+                        disabled={createTaskMutation.isPending || !selectedBoardId || !!selectedStoryId}
                       />
                     </FormControl>
                     <FormMessage />
@@ -602,7 +620,7 @@ export default function CreateTaskForm({
                         workspaceId={workspaceId}
                         boardId={selectedBoardId}
                         epicId={selectedEpicId}
-                        disabled={isSubmitting || !selectedBoardId}
+                        disabled={createTaskMutation.isPending || !selectedBoardId}
                       />
                     </FormControl>
                     <FormMessage />
@@ -625,7 +643,7 @@ export default function CreateTaskForm({
                               "w-full pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
-                            disabled={isSubmitting}
+                            disabled={createTaskMutation.isPending}
                           >
                             {field.value ? (
                               format(field.value, "PPP")
@@ -641,7 +659,7 @@ export default function CreateTaskForm({
                           mode="single"
                           selected={field.value || undefined}
                           onSelect={field.onChange}
-                          disabled={isSubmitting}
+                          disabled={createTaskMutation.isPending}
                           initialFocus
                         />
                       </PopoverContent>
@@ -653,23 +671,18 @@ export default function CreateTaskForm({
             </div>
 
             <DialogFooter className="md:col-span-3 pt-4">
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+              <Button type="button" variant="outline" onClick={onClose} disabled={createTaskMutation.isPending}>
                 Cancel
               </Button>
               <Button
-                type="button"
-                disabled={isSubmitting}
-                onClick={(e) => {
-                  e.preventDefault();
-                  console.log("Manual form submission triggered");
-                  const values = form.getValues();
-                  onSubmit(values);
-                }}
+                type="submit"
+                disabled={createTaskMutation.isPending}
+                form="create-task-form"
               >
-                {isSubmitting ? "Creating..." : "Create Task"}
+                {createTaskMutation.isPending ? "Creating..." : "Create Task"}
               </Button>
             </DialogFooter>
-          </div>
+          </form>
         </Form>
       </DialogContent>
     </Dialog>

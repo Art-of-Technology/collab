@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Sparkles, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRecentActivities } from "@/hooks/queries/useDashboard";
+import { CollabText } from "@/components/ui/collab-text";
 
 interface TeamActivityProps {
   workspaceId: string;
@@ -15,14 +16,6 @@ interface TeamActivityProps {
 export function TeamActivity({ workspaceId, initialActivities }: TeamActivityProps) {
   // Use TanStack Query for data fetching with initial data from server
   const { data: activities = initialActivities || [], isLoading, error } = useRecentActivities(workspaceId);
-
-  const truncateText = (text: string, maxLength = 60) => {
-    // Strip HTML tags
-    const strippedText = text?.replace(/<[^>]*>/g, '') || '';
-    
-    if (strippedText.length <= maxLength) return strippedText;
-    return `${strippedText.substring(0, maxLength)}...`;
-  };
 
   if (isLoading && !initialActivities?.length) {
     return (
@@ -96,14 +89,22 @@ export function TeamActivity({ workspaceId, initialActivities }: TeamActivityPro
                       <>
                         Liked <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
                         <Link href={`/posts/${activity.post.id}`} className="text-primary hover:underline group-hover:text-primary/80">
-                          &quot;{truncateText(activity.post.message)}&quot;
+                          <CollabText
+                            content={activity.post.message}
+                            small
+                            asSpan
+                          />
                         </Link>
                       </>
                     ) : activity.type === "comment" && activity.post ? (
                       <>
                         Commented on <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
                         <Link href={`/posts/${activity.post.id}`} className="text-primary hover:underline group-hover:text-primary/80">
-                          &quot;{truncateText(activity.message)}&quot;
+                          <CollabText
+                            content={activity.message}
+                            small
+                            asSpan
+                          />
                         </Link>
                       </>
                     ) : (

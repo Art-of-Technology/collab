@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import { extractMentionUserIds } from "@/utils/mentions";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -185,7 +186,27 @@ export function CreateMilestoneDialog({
         }
       }
       
-      await axios.post("/api/milestones", payload);
+      const response = await axios.post("/api/milestones", payload);
+      const createdMilestone = response.data;
+      
+      // Process mentions in the description
+      if (createdMilestone?.id && values.description) {
+        const mentionedUserIds = extractMentionUserIds(values.description);
+        
+        if (mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "milestone",
+              sourceId: createdMilestone.id,
+              content: `mentioned you in a milestone: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
+            });
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the milestone creation if mentions fail
+          }
+        }
+      }
       
       // Display success message
       toast({

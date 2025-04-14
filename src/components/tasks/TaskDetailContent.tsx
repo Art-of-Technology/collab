@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 import React from "react";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -367,6 +369,25 @@ export function TaskDetailContent({
     try {
       const success = await saveTaskField('description', description);
       if (success) {
+        // Process mentions in the updated description
+        if (task?.id && description) {
+          const mentionedUserIds = extractMentionUserIds(description);
+          
+          if (mentionedUserIds.length > 0) {
+            try {
+              await axios.post("/api/mentions", {
+                userIds: mentionedUserIds,
+                sourceType: "task",
+                sourceId: task.id,
+                content: `mentioned you in a task: "${task.title.length > 100 ? task.title.substring(0, 97) + '...' : task.title}"`
+              });
+            } catch (error) {
+              console.error("Failed to process mentions:", error);
+              // Don't block UI if mentions fail
+            }
+          }
+        }
+        
         setEditingDescription(false);
       }
     } finally {
@@ -766,7 +787,7 @@ export function TaskDetailContent({
                     onClick={() => setEditingDescription(true)}
                   >
                     {task.description ? (
-                      <MarkdownContent content={task.description} />
+                      <MarkdownContent content={task.description} htmlContent={task.description} />
                     ) : (
                       <div className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5">
                         <div className="text-center">

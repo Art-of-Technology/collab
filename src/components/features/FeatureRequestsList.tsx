@@ -224,6 +224,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                   <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors">
                     <MarkdownContent 
                       content={truncateText(request.description, 200)} 
+                      htmlContent={request.description}
                       className="prose-sm text-muted-foreground"
                     />
                   </div>

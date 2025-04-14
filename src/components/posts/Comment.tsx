@@ -7,9 +7,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import type { User } from "@prisma/client";
-import { CommentReplyForm } from "./CommentReplyForm";
+import CommentReplyForm from "./CommentReplyForm";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { CollabText } from "@/components/ui/collab-text";
 import { useCommentReactions, useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
 
 export type CommentWithAuthor = {
@@ -114,12 +115,15 @@ export function Comment({
                 {comment.author.name}
               </Link>
               {comment.html ? (
-                <MarkdownContent 
-                  content={comment.html} 
-                  className="text-sm"
-                />
+                <div className="text-sm">
+                  <MarkdownContent content={comment.html} />
+                </div>
               ) : (
-                <span className="text-sm">{comment.message}</span>
+                <CollabText
+                  content={comment.message}
+                  small
+                  asSpan
+                />
               )}
             </div>
 
@@ -144,9 +148,8 @@ export function Comment({
           {isReplying && (
             <CommentReplyForm
               postId={postId}
-              parentCommentId={comment.id}
-              parentCommentAuthor={comment.author.name || "User"}
-              onReplyAdded={() => {
+              parentId={comment.id}
+              onSuccess={() => {
                 setIsReplying(false);
                 onReplyAdded();
               }}
@@ -154,6 +157,7 @@ export function Comment({
             />
           )}
         </div>
+
         <button
           className={`flex ml-auto items-center hover:text-primary ${hasReacted ? 'text-red-500' : 'text-muted-foreground'}`}
           onClick={handleLike}

@@ -129,7 +129,7 @@ export default function PostItem({
   };
 
   return (
-    <Card className="mb-4 overflow-hidden transition-shadow hover:shadow-lg border-border/50">
+    <Card className="mb-4 transition-shadow hover:shadow-lg border-border/50">
       <CardHeader className="pb-2">
         <PostHeader 
           authorId={post.author.id}

@@ -110,13 +110,11 @@ export function TaskComment({
               >
                 {author.name}
               </Link>
-              {comment.html ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <MarkdownContent content={comment.html} className="text-sm" />
-                </div>
-              ) : (
-                <span className="text-sm">{comment.content}</span>
-              )}
+              <MarkdownContent 
+                content={comment.html || comment.content} 
+                htmlContent={comment.html || ""}
+                className="text-sm mt-0.5" 
+              />
             </div>
 
             <div className="flex gap-4 mt-1 text-xs">

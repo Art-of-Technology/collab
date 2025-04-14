@@ -17,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 export default function CreateFeatureRequestButton() {
   const { toast } = useToast();
@@ -47,7 +49,28 @@ export default function CreateFeatureRequestButton() {
     
     try {
       createFeature.mutate(formData, {
-        onSuccess: () => {
+        onSuccess: async (createdFeature) => {
+          // Process mentions if the feature was created successfully
+          if (createdFeature?.id) {
+            // Extract user IDs from mentions in the description
+            const mentionedUserIds = extractMentionUserIds(description);
+            
+            // Create notifications for mentioned users (if any found)
+            if (mentionedUserIds.length > 0) {
+              try {
+                await axios.post("/api/mentions", {
+                  userIds: mentionedUserIds,
+                  sourceType: "feature",
+                  sourceId: createdFeature.id,
+                  content: `mentioned you in a feature request: "${title.length > 100 ? title.substring(0, 97) + '...' : title}"`
+                });
+              } catch (error) {
+                console.error("Failed to process mentions:", error);
+                // Don't fail the feature request creation if mentions fail
+              }
+            }
+          }
+
           toast({
             title: "Feature request submitted",
             description: "Your feature request has been submitted successfully",
