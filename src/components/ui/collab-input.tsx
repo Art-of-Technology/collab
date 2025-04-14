@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client"
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
@@ -7,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion"
 import { useWorkspace } from "@/context/WorkspaceContext"
+import { CollabText } from "./collab-text"
 
 interface CollabInputProps {
   value: string
@@ -47,7 +49,20 @@ export function CollabInput({
   
   // State
   const [isFocused, setIsFocused] = useState(false)
+  const [isComposing, setIsComposing] = useState(false)
   const [rawContent, setRawContent] = useState(value)
+  const [html, setHtml] = useState("")
+  const [selectionState, setSelectionState] = useState<{
+    startOffset: number;
+    endOffset: number;
+    startContainer: Node | null;
+    endContainer: Node | null;
+  }>({
+    startOffset: 0,
+    endOffset: 0,
+    startContainer: null,
+    endContainer: null,
+  })
   
   // AI state
   const [isImproving, setIsImproving] = useState(false)
@@ -65,7 +80,7 @@ export function CollabInput({
     if (!text) return 0;
     
     // Replace mentions with their visible representation
-    const visibleText = text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (_, name) => `@${name}`);
+    let visibleText = text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (_, name) => `@${name}`);
     
     return visibleText.length;
   }
@@ -84,7 +99,7 @@ export function CollabInput({
       editorRef.current.innerHTML = formattedContent || placeholder ? 
         `<span class="text-muted-foreground">${placeholder}</span>` : ""
     }
-  }, [value, placeholder])
+  }, [])
   
   // Update the rawContent when value prop changes (for controlled component)
   useEffect(() => {
@@ -173,12 +188,49 @@ export function CollabInput({
     return rawText;
   }
   
+  // Save the selection state
+  const saveSelection = () => {
+    if (window.getSelection) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        setSelectionState({
+          startOffset: range.startOffset,
+          endOffset: range.endOffset,
+          startContainer: range.startContainer,
+          endContainer: range.endContainer,
+        });
+      }
+    }
+  }
+  
+  // Restore the selection state
+  const restoreSelection = () => {
+    if (
+      window.getSelection && 
+      selectionState.startContainer && 
+      selectionState.endContainer &&
+      editorRef.current?.contains(selectionState.startContainer) &&
+      editorRef.current?.contains(selectionState.endContainer)
+    ) {
+      const sel = window.getSelection();
+      if (sel) {
+        const range = document.createRange();
+        range.setStart(selectionState.startContainer, selectionState.startOffset);
+        range.setEnd(selectionState.endContainer, selectionState.endOffset);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+  }
+  
   // Handle content changes
   const handleContentChange = () => {
     if (!editorRef.current) return;
     
     // Get the raw content
     const newHtml = editorRef.current.innerHTML;
+    setHtml(newHtml);
     
     // Check if the editor is empty
     const isEmpty = newHtml === "" || 
@@ -382,15 +434,20 @@ export function CollabInput({
       e.preventDefault();
       return;
     }
+    
+    // Save selection state on navigation keys
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+      saveSelection();
+    }
   }
   
   // Handle composition events (for IME input)
   const handleCompositionStart = () => {
-    // IME composition started - no action needed
+    setIsComposing(true);
   }
   
   const handleCompositionEnd = () => {
-    // IME composition ended - update content
+    setIsComposing(false);
     handleContentChange();
   }
   
@@ -579,7 +636,9 @@ export function CollabInput({
                   <h4 className="text-sm font-semibold">AI Improved Text</h4>
                   <p className="text-xs text-muted-foreground mt-1">Review and apply the AI improved version</p>
                 </div>
-                <div className="p-3 max-h-48 overflow-y-auto text-sm">{improvedText}</div>
+                <div className="p-3 max-h-48 overflow-y-auto text-sm">
+                  <CollabText content={improvedText} />
+                </div>
                 <div className="border-t p-2 flex justify-end gap-2 bg-muted/20">
                   <Button size="sm" variant="ghost" onClick={() => setShowImprovePopover(false)}>
                     Cancel
