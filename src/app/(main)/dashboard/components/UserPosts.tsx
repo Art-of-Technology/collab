@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { User, MessageSquare, Heart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserPosts } from "@/hooks/queries/useDashboard";
-
+import { CollabText } from "@/components/ui/collab-text";
 interface UserPostsProps {
   userId: string;
   workspaceId: string;
@@ -17,14 +17,6 @@ interface UserPostsProps {
 export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsProps) {
   // Use TanStack Query for data fetching with initial data from server
   const { data: userPosts = initialUserPosts || [], isLoading } = useUserPosts(userId, workspaceId);
-  
-  // Truncate text to a specified length
-  const truncateText = (text: string, maxLength: number) => {
-    // First strip HTML tags
-    const strippedText = text?.replace(/<[^>]*>?/gm, '') || '';
-    if (strippedText.length <= maxLength) return strippedText;
-    return strippedText.substring(0, maxLength) + "...";
-  };
 
   // Get badge variant based on post type
   const getPostBadgeVariant = (type: string) => {
@@ -41,7 +33,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
         return "default";
     }
   };
-  
+
   if (isLoading && !initialUserPosts?.length) {
     return (
       <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
@@ -65,7 +57,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
       </Card>
     );
   }
-  
+
   return (
     <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
       <CardHeader className="pb-2">
@@ -97,7 +89,13 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
                     </Link>
                   </div>
                   <Link href={`/posts/${post.id}`} className="block mt-1 hover:underline">
-                    <p className="text-sm">{truncateText(post.message, 100)}</p>
+                    <p className="text-sm">
+                      <CollabText
+                        content={post.message}
+                        small
+                        asSpan
+                      />
+                    </p>
                   </Link>
                   <div className="flex gap-4 mt-2">
                     <span className="text-xs text-muted-foreground flex items-center gap-1">

@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { extractMentionUserIds } from "@/utils/mentions";
 
 import {
   Dialog,
@@ -159,7 +160,27 @@ export function CreateStoryDialog({
         }
       }
       
-      await axios.post("/api/stories", payload);
+      const response = await axios.post("/api/stories", payload);
+      const createdStory = response.data;
+      
+      // Process mentions in the description
+      if (createdStory?.id && values.description) {
+        const mentionedUserIds = extractMentionUserIds(values.description);
+        
+        if (mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "story",
+              sourceId: createdStory.id,
+              content: `mentioned you in a story: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
+            });
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the story creation if mentions fail
+          }
+        }
+      }
       
       // Display success message
       toast({

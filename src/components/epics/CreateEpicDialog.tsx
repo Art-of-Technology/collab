@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { extractMentionUserIds } from "@/utils/mentions";
 
 import {
   Dialog,
@@ -171,7 +172,27 @@ export function CreateEpicDialog({
         }
       }
       
-      await axios.post("/api/epics", payload);
+      const response = await axios.post("/api/epics", payload);
+      const createdEpic = response.data;
+      
+      // Process mentions in the description
+      if (createdEpic?.id && values.description) {
+        const mentionedUserIds = extractMentionUserIds(values.description);
+        
+        if (mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "epic",
+              sourceId: createdEpic.id,
+              content: `mentioned you in an epic: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
+            });
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the epic creation if mentions fail
+          }
+        }
+      }
       
       // Display success message
       toast({

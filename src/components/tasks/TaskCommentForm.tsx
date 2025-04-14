@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 interface TaskCommentFormProps {
   taskId: string;
@@ -36,10 +38,29 @@ export function TaskCommentForm({
     }
 
     try {
-      await addCommentMutation.mutateAsync({
+      const newComment = await addCommentMutation.mutateAsync({
         taskId,
         content
       });
+
+      // Process mentions if there are any in the comment
+      if (newComment?.id) {
+        const mentionedUserIds = extractMentionUserIds(content);
+        
+        if (mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "taskComment",
+              sourceId: newComment.id,
+              content: `mentioned you in a task comment: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
+            });
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the comment submission if mentions fail
+          }
+        }
+      }
 
       toast({
         title: "Success",

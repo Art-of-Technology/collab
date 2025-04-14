@@ -8,26 +8,23 @@ import { useComments } from "@/hooks/queries/useComment";
 
 interface CommentsListProps {
   postId: string;
+  comments: any[]; // Add the missing comments property
   initialComments?: any[]; // Optional initial comments for SSR
   currentUserId: string;
 }
 
-export default function CommentsList({ postId, initialComments = [], currentUserId }: CommentsListProps) {
+export default function CommentsList({ postId, comments: passedComments, currentUserId }: CommentsListProps) {
   // Use TanStack Query to fetch comments
   const { data: commentsData, isLoading } = useComments(postId);
   
-  // Use server data first, then fall back to initial data
-  const comments = commentsData ? [
-    ...(commentsData.topLevelComments || []),
-    // For backwards compatibility, include any existing replies
-    ...(initialComments.filter(c => c.parentId !== null) || [])
-  ] : initialComments;
+  // Use server data first, then fall back to initial data, then to passed comments
+  const commentsToUse = commentsData ? commentsData.topLevelComments : passedComments || [];
   
   // Create a map of replies by parent ID
   const repliesMap = commentsData?.repliesByParentId || {};
   
   // Process comments to include replies
-  const processedComments = comments.map(comment => {
+  const processedComments = commentsToUse.map(comment => {
     if (!comment.parentId) {
       // For top-level comments, attach replies from the map
       return {

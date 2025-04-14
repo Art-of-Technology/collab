@@ -48,160 +48,123 @@ export async function GET(req: NextRequest) {
       ? { status: validatedStatus }
       : {};
 
-    // Build the sort order for database queries
-    let orderByClause: any = { createdAt: "desc" };
-    if (validatedOrderBy === "oldest") {
-      orderByClause = { createdAt: "asc" };
+    // For ALL sorting options, we now fetch all matching records first,
+    // then sort them properly, and then apply pagination
+    
+    // Fetch all feature requests that match the filter
+    const allFeatureRequests = await prisma.featureRequest.findMany({
+      where,
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+        votes: {
+          select: {
+            value: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
+          },
+        },
+      },
+    });
+    
+    // Calculate vote score for each request from included votes
+    const formattedFeatureRequests = allFeatureRequests.map((request) => {
+      let voteScore = 0;
+      let upvotes = 0;
+      let downvotes = 0;
+
+      request.votes.forEach(vote => {
+        if (vote.value === 1) {
+          voteScore++;
+          upvotes++;
+        } else if (vote.value === -1) {
+          voteScore--;
+          downvotes++;
+        }
+      });
+
+      const { ...rest } = request;
+
+      return {
+        ...rest,
+        voteScore,
+        upvotes,
+        downvotes,
+      };
+    });
+    
+    // Get total count for pagination
+    const totalCount = formattedFeatureRequests.length;
+    
+    console.log("Before sorting - feature requests count:", formattedFeatureRequests.length);
+    
+    // Log a sample of the data before sorting
+    if (formattedFeatureRequests.length > 0) {
+      console.log("Sample items before sorting:");
+      formattedFeatureRequests.slice(0, 3).forEach(item => {
+        console.log(`ID: ${item.id}, Title: ${item.title}, Vote Score: ${item.voteScore}, Upvotes: ${item.upvotes}, Downvotes: ${item.downvotes}`);
+      });
     }
     
-    // For vote-based sorting, we need to fetch all matching records first
-    // then sort them by votes, and then apply pagination
-    if (validatedOrderBy === "most_votes" || validatedOrderBy === "least_votes") {
-      // Count total matching records for pagination info
-      const totalCount = await prisma.featureRequest.count({ where });
-      
-      // Fetch all feature requests that match the filter
-      const allFeatureRequests = await prisma.featureRequest.findMany({
-        where,
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
-          },
-          _count: {
-            select: {
-              votes: {
-                where: { value: 1 },
-              },
-              comments: true,
-            },
-          },
-        },
+    // Sort the ENTIRE list based on the requested sort order
+    if (validatedOrderBy === "most_votes") {
+      console.log("Sorting by most_votes");
+      formattedFeatureRequests.sort((a, b) => {
+        if (b.voteScore !== a.voteScore) {
+          return b.voteScore - a.voteScore;
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-      
-      // Calculate vote score for each request
-      const formattedFeatureRequests = await Promise.all(
-        allFeatureRequests.map(async (request: any) => {
-          // Get upvotes and downvotes
-          const upvotes = await prisma.featureVote.count({
-            where: { featureRequestId: request.id, value: 1 },
-          });
-          
-          const downvotes = await prisma.featureVote.count({
-            where: { featureRequestId: request.id, value: -1 },
-          });
-          
-          const voteScore = upvotes - downvotes;
-          
-          return {
-            ...request,
-            voteScore,
-            upvotes,
-            downvotes,
-          };
-        })
-      );
-      
-      // Sort by votes
-      if (validatedOrderBy === "most_votes") {
-        formattedFeatureRequests.sort((a: any, b: any) => {
-          // First sort by vote score
-          if (b.voteScore !== a.voteScore) {
-            return b.voteScore - a.voteScore;
-          }
-          // If vote scores are the same, sort by date (newest first)
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
-      } else {
-        formattedFeatureRequests.sort((a: any, b: any) => {
-          // First sort by vote score
-          if (a.voteScore !== b.voteScore) {
-            return a.voteScore - b.voteScore;
-          }
-          // If vote scores are the same, sort by date (newest first)
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
-      }
-      
-      // Apply pagination after sorting
-      const skip = (page - 1) * limit;
-      const paginatedResults = formattedFeatureRequests.slice(skip, skip + limit);
-      
-      return NextResponse.json({
-        featureRequests: paginatedResults,
-        pagination: {
-          page,
-          limit,
-          totalPages: Math.ceil(totalCount / limit),
-          totalCount,
-        },
+    } else if (validatedOrderBy === "least_votes") {
+      formattedFeatureRequests.sort((a, b) => {
+        if (a.voteScore !== b.voteScore) {
+          return a.voteScore - b.voteScore;
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-    } 
-    // For date-based sorting, we can use the database's built-in pagination
-    else {
-      const skip = (page - 1) * limit;
-      const totalCount = await prisma.featureRequest.count({ where });
-      
-      const featureRequests = await prisma.featureRequest.findMany({
-        where,
-        orderBy: orderByClause,
-        skip,
-        take: limit,
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
-          },
-          _count: {
-            select: {
-              votes: {
-                where: { value: 1 },
-              },
-              comments: true,
-            },
-          },
-        },
+    } else if (validatedOrderBy === "oldest") {
+      formattedFeatureRequests.sort((a, b) => {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       });
-      
-      // Calculate vote score and format response
-      const formattedFeatureRequests = await Promise.all(
-        featureRequests.map(async (request: any) => {
-          // Get upvotes and downvotes
-          const upvotes = await prisma.featureVote.count({
-            where: { featureRequestId: request.id, value: 1 },
-          });
-          
-          const downvotes = await prisma.featureVote.count({
-            where: { featureRequestId: request.id, value: -1 },
-          });
-          
-          const voteScore = upvotes - downvotes;
-          
-          return {
-            ...request,
-            voteScore,
-            upvotes,
-            downvotes,
-          };
-        })
-      );
-      
-      return NextResponse.json({
-        featureRequests: formattedFeatureRequests,
-        pagination: {
-          page,
-          limit,
-          totalPages: Math.ceil(totalCount / limit),
-          totalCount,
-        },
+    } else {
+      // Default: "latest"
+      formattedFeatureRequests.sort((a, b) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
     }
+    
+    // AFTER sorting the entire list, apply pagination
+    const skip = (page - 1) * limit;
+    const paginatedResults = formattedFeatureRequests.slice(skip, skip + limit);
+    
+    console.log("After sorting and pagination:");
+    console.log(`Page: ${page}, Limit: ${limit}, Total: ${totalCount}`);
+    
+    // Log the results after sorting
+    if (paginatedResults.length > 0) {
+      console.log("Paginated results (sorted):");
+      paginatedResults.forEach(item => {
+        console.log(`ID: ${item.id}, Title: ${item.title}, Vote Score: ${item.voteScore}, Upvotes: ${item.upvotes}, Downvotes: ${item.downvotes}`);
+      });
+    }
+    
+    return NextResponse.json({
+      featureRequests: paginatedResults,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount,
+      },
+    });
   } catch (error) {
     console.error("Error fetching feature requests:", error);
     return NextResponse.json(

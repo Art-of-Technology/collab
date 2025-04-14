@@ -2,135 +2,85 @@
 
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
 import { useCreateComment } from "@/hooks/queries/useComment";
+import { CollabInput } from "@/components/ui/collab-input";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 interface CommentReplyFormProps {
   postId: string;
-  parentCommentId: string;
-  parentCommentAuthor: string;
-  onReplyAdded: () => void;
-  onCancel: () => void;
+  parentId?: string;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+  autoFocus?: boolean;
 }
 
-export function CommentReplyForm({
+export default function CommentReplyForm({
   postId,
-  parentCommentId,
-  parentCommentAuthor,
-  onReplyAdded,
-  onCancel
+  parentId,
+  onSuccess,
 }: CommentReplyFormProps) {
-  const [replyText, setReplyText] = useState("");
-  const [replyHtml, setReplyHtml] = useState("");
-  const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
+  const [comment, setComment] = useState("");
+  const createComment = useCreateComment();
   
-  // Use TanStack Query hooks
-  const createCommentMutation = useCreateComment();
-
-  const handleReplyChange = (value: string) => {
-    setReplyText(value);
-    // Note: TextAreaWithAI doesn't provide HTML, so we reset it
-    setReplyHtml("");
-  };
-
-  const handleAiImprove = async (text: string): Promise<string> => {
-    if (isImproving || !text.trim()) return text;
+  const handleSubmit = async (text: string) => {
+    if (!text.trim()) return;
     
-    setIsImproving(true);
+    const mentionedUserIds = extractMentionUserIds(text);
     
-    try {
-      const response = await fetch("/api/ai/improve", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
+    createComment.mutate(
+      { postId, message: text, parentId },
+      {
+        onSuccess: async (data) => {
+          setComment("");
+          
+          // Create notifications for mentioned users
+          if (mentionedUserIds.length > 0 && data?.id) {
+            try {
+              await axios.post("/api/mentions", {
+                userIds: mentionedUserIds,
+                sourceType: "comment",
+                sourceId: data.id,
+                content: `mentioned you in a comment`
+              });
+            } catch (error) {
+              console.error("Failed to process mentions:", error);
+            }
+          }
+          
+          toast({
+            title: "Comment added",
+            description: "Your comment has been added to the discussion",
+          });
+          
+          if (onSuccess) onSuccess();
         },
-        body: JSON.stringify({ text })
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to improve text");
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to add your comment",
+            variant: "destructive",
+          });
+        }
       }
-      
-      const data = await response.json();
-      
-      // Extract message from the response
-      const improvedText = data.message || data.improvedText || text;
-      
-      // Return improved text
-      return improvedText;
-    } catch (error) {
-      console.error("Error improving text:", error);
-      toast({
-        title: "Error",
-        description: "Failed to improve text",
-        variant: "destructive"
-      });
-      return text;
-    } finally {
-      setIsImproving(false);
-    }
+    );
   };
-
-  const handleReply = async () => {
-    if (!replyText.trim()) return;
-
-    try {
-      await createCommentMutation.mutateAsync({
-        postId,
-        message: replyText,
-        html: replyHtml,
-        parentId: parentCommentId,
-      });
-
-      setReplyText("");
-      setReplyHtml("");
-      
-      toast({
-        description: "Reply added"
-      });
-
-      // Notify parent that a reply was added
-      onReplyAdded();
-    } catch (error) {
-      console.error("Failed to add reply:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add reply",
-        variant: "destructive"
-      });
-    }
-  };
-
+  
   return (
-    <div className="mt-2">
-      <div className="flex gap-2 items-start">
-        <div className="flex-1">
-          <TextAreaWithAI
-            value={replyText}
-            onChange={handleReplyChange}
-            onSubmit={handleReply}
-            placeholder={`Reply to ${parentCommentAuthor}...`}
-            minHeight="80px"
-            maxHeight="200px"
-            onAiImprove={handleAiImprove}
-            loading={createCommentMutation.isPending || isImproving}
-            disabled={createCommentMutation.isPending || isImproving}
-          />
-          <div className="flex justify-end gap-2 mt-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onCancel}
-              className="text-xs h-7"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-2">
+      <CollabInput
+        value={comment}
+        onChange={setComment}
+        onSubmit={handleSubmit}
+        placeholder="Write a reply..."
+        className="min-h-[80px]"
+        minHeight="80px"
+        maxHeight="180px"
+        maxLength={1000}
+        loading={createComment.isPending}
+        submitLabel="Reply"
+      />
     </div>
   );
 } 

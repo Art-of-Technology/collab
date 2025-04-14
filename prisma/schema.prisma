@@ -56,6 +56,10 @@ model User {
   taskCommentReactions TaskCommentReaction[]
   taskAttachments      TaskAttachment[]
   taskActivities       TaskActivity[]
+  
+  // Notification-related fields
+  sentNotifications    Notification[]          @relation("NotificationSender")
+  notifications        Notification[]          @relation("NotificationReceiver")
 }
 
 model Account {
@@ -96,6 +100,7 @@ model Post {
   tags        Tag[]      @relation("PostToTag")
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   tasks       Task[]     // Tasks associated with this post
+  notifications Notification[]
 
   @@index([workspaceId])
 }
@@ -128,6 +133,7 @@ model Comment {
   post             Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   reactions        Reaction[]
+  notifications    Notification[]
 
   @@index([postId])
   @@index([authorId])
@@ -221,10 +227,11 @@ model FeatureRequest {
   html        String?
   workspaceId String?
   
-  author      User                    @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  comments    FeatureRequestComment[]
-  votes       FeatureVote[]
-  workspace   Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  author       User                    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments     FeatureRequestComment[]
+  votes        FeatureVote[]
+  workspace    Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  notifications Notification[]
 
   @@index([authorId])
   @@index([workspaceId])
@@ -394,6 +401,7 @@ model Task {
   attachments TaskAttachment[]
   labels      TaskLabel[]      @relation("TaskToLabel")
   activity    TaskActivity[]
+  notifications Notification[]
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -512,6 +520,7 @@ model Milestone {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   epics       Epic[]
+  notifications Notification[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -543,6 +552,7 @@ model Epic {
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   stories     Story[]
+  notifications Notification[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -574,10 +584,59 @@ model Story {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   tasks       Task[]
+  notifications Notification[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
   @@index([epicId])
   @@index([issueKey])
   @@index([columnId])
+}
+
+// New Notification model
+model Notification {
+  id          String    @id @default(cuid())
+  type        String    // mention, comment, task, etc.
+  content     String    // Custom message content
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  
+  // Reference to the user who should receive the notification
+  userId      String
+  user        User      @relation("NotificationReceiver", fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Reference to the user who triggered the notification
+  senderId    String
+  sender      User      @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  // Optional relations to the entity that triggered the notification
+  postId      String?
+  post        Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  commentId   String?
+  comment     Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  featureRequestId String?
+  featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
+  
+  taskId      String?
+  task        Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  epicId      String?
+  epic        Epic?     @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  
+  storyId     String?
+  story       Story?    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([postId])
+  @@index([commentId])
+  @@index([taskId])
+  @@index([featureRequestId])
+  @@index([epicId])
+  @@index([storyId])
+  @@index([milestoneId])
 }

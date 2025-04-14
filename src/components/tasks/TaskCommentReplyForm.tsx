@@ -5,6 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
 
 interface TaskCommentReplyFormProps {
   taskId: string;
@@ -37,11 +39,30 @@ export function TaskCommentReplyForm({
     }
 
     try {
-      await addCommentMutation.mutateAsync({
+      const newReply = await addCommentMutation.mutateAsync({
         taskId,
         content,
         parentId: parentCommentId
       });
+
+      // Process mentions if there are any in the reply
+      if (newReply?.id) {
+        const mentionedUserIds = extractMentionUserIds(content);
+        
+        if (mentionedUserIds.length > 0) {
+          try {
+            await axios.post("/api/mentions", {
+              userIds: mentionedUserIds,
+              sourceType: "taskComment",
+              sourceId: newReply.id,
+              content: `mentioned you in a task comment reply: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
+            });
+          } catch (error) {
+            console.error("Failed to process mentions:", error);
+            // Don't fail the reply submission if mentions fail
+          }
+        }
+      }
 
       toast({
         title: "Success",

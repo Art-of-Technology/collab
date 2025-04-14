@@ -5,15 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 // Get all feature requests with pagination, filtering and sorting
-export async function getFeatureRequests({ 
-  page = 1, 
-  limit = 10, 
-  status = 'all', 
-  orderBy = 'most_votes' 
-}: { 
-  page?: number; 
-  limit?: number; 
-  status?: string; 
+export async function getFeatureRequests({
+  page = 1,
+  limit = 10,
+  status = 'all',
+  orderBy = 'most_votes'
+}: {
+  page?: number;
+  limit?: number;
+  status?: string;
   orderBy?: string;
 }) {
   try {
@@ -22,46 +22,15 @@ export async function getFeatureRequests({
       throw new Error("Unauthorized");
     }
 
-    // Calculate pagination
-    const skip = (page - 1) * limit;
-
     // Build where clause for filtering
     const where: any = {};
     if (status && status !== 'all') {
       where.status = status.toUpperCase();
     }
 
-    // Build orderBy clause for sorting
-    let orderByClause: any = {};
-    switch (orderBy) {
-      case 'latest':
-        orderByClause = { createdAt: 'desc' };
-        break;
-      case 'oldest':
-        orderByClause = { createdAt: 'asc' };
-        break;
-      case 'most_votes':
-        // We'll sort after fetching since it requires aggregation
-        orderByClause = { createdAt: 'desc' }; // Default sort
-        break;
-      case 'least_votes':
-        // We'll sort after fetching since it requires aggregation
-        orderByClause = { createdAt: 'desc' }; // Default sort
-        break;
-      default:
-        orderByClause = { createdAt: 'desc' };
-    }
-
-    // Count total matching records for pagination
-    const totalCount = await prisma.featureRequest.count({ where });
-    const totalPages = Math.ceil(totalCount / limit);
-
-    // Fetch feature requests
-    const features = await prisma.featureRequest.findMany({
+    // First, fetch ALL matching feature requests
+    const allFeatures = await prisma.featureRequest.findMany({
       where,
-      orderBy: orderByClause,
-      skip,
-      take: limit,
       include: {
         author: {
           select: {
@@ -71,20 +40,13 @@ export async function getFeatureRequests({
           },
         },
         votes: {
-          where: {
-            userId: session.user.id,
-          },
           select: {
+            userId: true,
             value: true,
           },
         },
         _count: {
           select: {
-            votes: {
-              where: {
-                value: 1,
-              },
-            },
             comments: true,
           },
         },
@@ -92,51 +54,79 @@ export async function getFeatureRequests({
     });
 
     // Process features to include vote scores
-    const featuresWithScores = await Promise.all(
-      features.map(async (feature) => {
-        const downvotesCount = await prisma.featureVote.count({
-          where: {
-            featureRequestId: feature.id,
-            value: -1,
-          },
-        });
+    const featuresWithScores = allFeatures.map((feature) => {
+      const upvotes = feature.votes.filter(vote => vote.value === 1).length;
+      const downvotes = feature.votes.filter(vote => vote.value === -1).length;
+      const voteScore = upvotes - downvotes;
 
-        return {
-          ...feature,
-          createdAt: feature.createdAt.toISOString(),
-          updatedAt: feature.updatedAt.toISOString(),
-          voteScore: feature._count.votes - downvotesCount,
-          upvotes: feature._count.votes,
-          downvotes: downvotesCount,
-          userVote: feature.votes.length > 0 ? feature.votes[0].value : null,
-        };
-      })
-    );
+      // Get user's vote if any
+      const userVote = feature.votes.find(vote => vote.userId === session.user.id)?.value || null;
 
-    // Sort by votes if needed
+      // Create a clean object without the votes array
+      const { ...rest } = feature;
+
+      return {
+        ...rest,
+        createdAt: feature.createdAt.toISOString(),
+        updatedAt: feature.updatedAt.toISOString(),
+        voteScore,
+        upvotes,
+        downvotes,
+        userVote,
+      };
+    });
+
+    // Count total for pagination
+    const totalCount = featuresWithScores.length;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // Sort ALL features by the requested criteria
     const sortedFeatures = [...featuresWithScores];
-    if (orderBy === 'most_votes') {
-      sortedFeatures.sort((a, b) => {
-        // If vote scores are different, sort by vote score
-        if (b.voteScore !== a.voteScore) {
-          return b.voteScore - a.voteScore;
-        }
-        // If vote scores are the same, sort by date (newest first)
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-    } else if (orderBy === 'least_votes') {
-      sortedFeatures.sort((a, b) => {
-        // If vote scores are different, sort by vote score
-        if (a.voteScore !== b.voteScore) {
-          return a.voteScore - b.voteScore;
-        }
-        // If vote scores are the same, sort by date (newest first)
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
+
+    switch (orderBy) {
+      case 'latest':
+        sortedFeatures.sort((a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        break;
+      case 'oldest':
+        sortedFeatures.sort((a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        break;
+      case 'most_votes':
+        sortedFeatures.sort((a, b) => {
+          // If vote scores are different, sort by vote score
+          if (b.voteScore !== a.voteScore) {
+            return b.voteScore - a.voteScore;
+          }
+          // If vote scores are the same, sort by date (newest first)
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        break;
+      case 'least_votes':
+        sortedFeatures.sort((a, b) => {
+          // If vote scores are different, sort by vote score
+          if (a.voteScore !== b.voteScore) {
+            return a.voteScore - b.voteScore;
+          }
+          // If vote scores are the same, sort by date (newest first)
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        break;
+      default:
+        // Default to latest
+        sortedFeatures.sort((a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
     }
 
+    // AFTER sorting, apply pagination
+    const skip = (page - 1) * limit;
+    const paginatedFeatures = sortedFeatures.slice(skip, skip + limit);
+
     return {
-      featureRequests: sortedFeatures,
+      featureRequests: paginatedFeatures,
       pagination: {
         page,
         limit,
