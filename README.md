@@ -11,9 +11,9 @@
 
 <!-- PROJECT LOGO -->
 <br />
-<div align="center">
-  <a href="https://github.com/Art-of-Technology/collab">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
+<div align="center" >
+  <a href="https://github.com/Art-of-Technology/collab" style="background-color: black; padding: 10px; display: inline-block;">
+    <img src="https://teams.weezboo.com/_next/image?url=%2Flogo-v2.png&w=128&q=75"  alt="Logo" width="128">
   </a>
 
   <h3 align="center">Best-README-Template</h3>
@@ -186,12 +186,14 @@ Don't forget to give the project a star! Thanks again!
 #### Code of Conduct
 This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
+### Top Contributors ✨
 
-### Top contributors:
+Thanks goes to these wonderful people:
 
-<a href="https://github.com/Art-of-Technology/collab/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=othneildrew/Best-README-Template" alt="contrib.rocks image" />
-</a>
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
