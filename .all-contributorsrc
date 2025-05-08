@@ -1,0 +1,28 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitType": "docs",
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "johndoe",
+      "name": "johndoe",
+      "avatar_url": "https://avatars.githubusercontent.com/u/29063?v=4",
+      "profile": "https://github.com/johndoe",
+      "contributions": [
+        "code",
+        "doc",
+        "design"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "skipCi": true,
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "projectName": "collab",
+  "projectOwner": "Art-of-Technology"
+}
