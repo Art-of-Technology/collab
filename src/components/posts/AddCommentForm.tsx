@@ -80,7 +80,7 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
 
       // Process mentions if there are any in the comment
       if (newComment?.id) {
-        const mentionedUserIds = extractMentionUserIds(commentText);
+        const mentionedUserIds = extractMentionUserIds(commentHtml);
         
         if (mentionedUserIds.length > 0) {
           try {

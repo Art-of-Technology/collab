@@ -22,18 +22,25 @@ export default function CommentReplyForm({
 }: CommentReplyFormProps) {
   const { toast } = useToast();
   const [comment, setComment] = useState("");
+  const [commentHtml, setCommentHtml] = useState("");
   const createComment = useCreateComment();
   
+  const handleInputChange = (text: string, html: string) => {
+    setComment(text);
+    setCommentHtml(html);
+  };
+  
   const handleSubmit = async (text: string) => {
-    if (!text.trim()) return;
+    if (!comment.trim()) return;
     
-    const mentionedUserIds = extractMentionUserIds(text);
+    const mentionedUserIds = extractMentionUserIds(commentHtml);
     
     createComment.mutate(
-      { postId, message: text, parentId },
+      { postId, message: comment, parentId },
       {
         onSuccess: async (data) => {
           setComment("");
+          setCommentHtml("");
           
           // Create notifications for mentioned users
           if (mentionedUserIds.length > 0 && data?.id) {
@@ -71,7 +78,7 @@ export default function CommentReplyForm({
     <div className="space-y-2">
       <CollabInput
         value={comment}
-        onChange={setComment}
+        onChange={handleInputChange}
         onSubmit={handleSubmit}
         placeholder="Write a reply..."
         className="min-h-[80px]"

@@ -47,6 +47,7 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 import { formatDistanceToNow } from "date-fns";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { NotificationSubscribeButton } from "@/components/notifications/NotificationSubscribeButton";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -406,8 +407,27 @@ export default function Navbar({
                           </div>
                         )}
                       </ScrollArea>
+
+                      {/* Push Notification Subscribe Button */}
+                      <div className="p-3 border-t border-border/40 flex justify-between items-center">
+                        <span className="text-xs text-muted-foreground">
+                          Get browser notifications
+                        </span>
+                        <NotificationSubscribeButton 
+                          variant="outline" 
+                          size="sm"
+                          className="h-7 px-2"
+                        />
+                      </div>
                     </PopoverContent>
                   </Popover>
+
+                  {/* Push Notification Subscribe Button (outside popover) */}
+                  <NotificationSubscribeButton
+                    variant="ghost" 
+                    size="icon"
+                    className="hover:bg-[#1c1c1c] text-gray-400"
+                  />
 
                   {/* Chat toggle button */}
                   <Button

@@ -62,6 +62,7 @@ const MarkdownEditor = memo(BaseMarkdownEditor);
 const taskFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
+  descriptionHtml: z.string().optional(),
   workspaceId: z.string().min(1, "Workspace ID is required"),
   priority: z.string().optional(),
   type: z.string().optional(),
@@ -173,6 +174,7 @@ export default function CreateTaskForm({
     defaultValues: {
       title: initialData.title || "",
       description: initialData.description || "",
+      descriptionHtml: initialData.descriptionHtml || "",
       workspaceId: workspaceId,
       priority: initialData.priority || "MEDIUM",
       type: initialData.type || "TASK",
@@ -280,15 +282,15 @@ export default function CreateTaskForm({
       return;
     }
 
-    // Extract mentions *before* starting the mutation
-    console.log("Description content being passed to extractMentionUserIds:", values.description);
-    const mentionedUserIds = values.description ? extractMentionUserIds(values.description) : [];
+    // Extract mentions from HTML description
+    const mentionedUserIds = extractMentionUserIds(values.descriptionHtml || "");
     console.log("Extracted User IDs:", mentionedUserIds);
 
     // Create a clean data object for the mutation
     const cleanData = {
       title: values.title,
       description: values.description,
+      descriptionHtml: values.descriptionHtml,
       workspaceId: workspaceId,
       taskBoardId: boardIdToSubmit,
       columnId: values.columnId,
@@ -385,10 +387,14 @@ export default function CreateTaskForm({
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <MarkdownEditor
-                        initialValue={field.value || ''}
-                        onChange={(markdown) => field.onChange(markdown)}
-                        placeholder="Describe the task"
-                        minHeight="200px"
+                        placeholder="Add task description..."
+                        minHeight="120px"
+                        maxHeight="250px"
+                        content={field.value || ""}
+                        onChange={(markdown, html) => {
+                          field.onChange(markdown);
+                          form.setValue('descriptionHtml', html);
+                        }}
                         onAiImprove={handleAiImproveDescription}
                       />
                     </FormControl>
@@ -668,6 +674,13 @@ export default function CreateTaskForm({
                   </FormItem>
                 )}
               />
+
+              {/* Hidden fields */}
+              <FormField control={form.control} name="workspaceId" render={() => <FormItem />} />
+              <FormField control={form.control} name="postId" render={() => <FormItem />} />
+              <FormField control={form.control} name="reporterId" render={() => <FormItem />} />
+              {/* Include descriptionHtml as a hidden field */}
+              <FormField control={form.control} name="descriptionHtml" render={() => <FormItem className="hidden" />} />
             </div>
 
             <DialogFooter className="md:col-span-3 pt-4">

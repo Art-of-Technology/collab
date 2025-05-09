@@ -21,6 +21,7 @@ export function TaskCommentForm({
   userImage
 }: TaskCommentFormProps) {
   const [content, setContent] = useState("");
+  const [contentHtml, setContentHtml] = useState("");
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
   const addCommentMutation = useAddTaskComment();
@@ -45,7 +46,7 @@ export function TaskCommentForm({
 
       // Process mentions if there are any in the comment
       if (newComment?.id) {
-        const mentionedUserIds = extractMentionUserIds(content);
+        const mentionedUserIds = extractMentionUserIds(contentHtml);
         
         if (mentionedUserIds.length > 0) {
           try {
@@ -53,7 +54,7 @@ export function TaskCommentForm({
               userIds: mentionedUserIds,
               sourceType: "taskComment",
               sourceId: newComment.id,
-              content: `mentioned you in a task comment: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
+              content: `mentioned you in a task comment: "${contentHtml.length > 100 ? contentHtml.substring(0, 97) + '...' : contentHtml}"`
             });
           } catch (error) {
             console.error("Failed to process mentions:", error);
@@ -68,6 +69,7 @@ export function TaskCommentForm({
       });
 
       setContent("");
+      setContentHtml("");
     } catch (error) {
       console.error("Failed to add comment:", error);
       toast({
@@ -78,8 +80,9 @@ export function TaskCommentForm({
     }
   };
 
-  const handleEditorChange = (markdown: string) => {
+  const handleEditorChange = (markdown: string, html: string) => {
     setContent(markdown);
+    setContentHtml(html);
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {

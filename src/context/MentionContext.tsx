@@ -26,7 +26,7 @@ interface Notification {
 }
 
 interface MentionContextType {
-  searchUsers: (query: string) => Promise<User[]>;
+  searchUsers: (query: string, workspaceId?: string) => Promise<User[]>;
   notifications: Notification[];
   unreadCount: number;
   markNotificationAsRead: (id: string) => Promise<void>;
@@ -46,11 +46,17 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   // Function to search users for mentions
-  const searchUsers = useCallback(async (query: string): Promise<User[]> => {
+  const searchUsers = useCallback(async (query: string, workspaceId?: string): Promise<User[]> => {
     if (!query || query.length < 1) return [];
 
     try {
-      const response = await axios.get(`/api/users/search?q=${encodeURIComponent(query)}`);
+      // Build the API endpoint URL
+      let apiUrl = `/api/users/search?q=${encodeURIComponent(query)}`;
+      if (workspaceId) {
+        apiUrl += `&workspaceId=${encodeURIComponent(workspaceId)}`;
+      }
+
+      const response = await axios.get(apiUrl);
       return response.data;
     } catch (error) {
       console.error('Error searching users:', error);

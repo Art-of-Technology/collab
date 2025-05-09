@@ -54,6 +54,7 @@ const MarkdownEditor = memo(BaseMarkdownEditor);
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
+  descriptionHtml: z.string().optional(),
   status: z.string().default("planned"),
   startDate: z.date().optional().nullable(),
   dueDate: z.date().optional().nullable(),
@@ -114,6 +115,7 @@ export function CreateMilestoneDialog({
     defaultValues: {
       title: "",
       description: "",
+      descriptionHtml: "",
       status: "planned",
       startDate: null,
       dueDate: null,
@@ -191,7 +193,7 @@ export function CreateMilestoneDialog({
       
       // Process mentions in the description
       if (createdMilestone?.id && values.description) {
-        const mentionedUserIds = extractMentionUserIds(values.description);
+        const mentionedUserIds = extractMentionUserIds(values.descriptionHtml || "");
         
         if (mentionedUserIds.length > 0) {
           try {
@@ -270,8 +272,11 @@ export function CreateMilestoneDialog({
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <MarkdownEditor 
-                        initialValue={field.value || ''}
-                        onChange={(markdown) => field.onChange(markdown)}
+                        content={field.value || ''}
+                        onChange={(markdown, html) => {
+                          field.onChange(markdown);
+                          form.setValue('descriptionHtml', html);
+                        }}
                         placeholder="Describe the milestone" 
                         minHeight="150px"
                         onAiImprove={handleAiImproveDescription}

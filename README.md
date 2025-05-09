@@ -20,6 +20,30 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Push Notifications
+
+This project uses [OneSignal](https://onesignal.com) for browser push notifications. To set up push notifications:
+
+1. Create a free OneSignal account at [onesignal.com](https://onesignal.com)
+2. Create a new web push app in the OneSignal dashboard
+3. Follow the setup instructions for a typical web app (not WordPress)
+4. Copy your OneSignal App ID and REST API Key
+5. Add these values to your `.env.local` file:
+
+```bash
+NEXT_PUBLIC_ONESIGNAL_APP_ID=your-onesignal-app-id
+ONESIGNAL_API_KEY=your-onesignal-rest-api-key
+```
+
+The required service worker file `OneSignalSDKWorker.js` is already included in the `public` directory.
+
+### Push Notification Features
+
+- Browser notifications for mentions and important events
+- Each user can subscribe/unsubscribe from notifications 
+- Users are automatically associated with their account when logged in
+- Notification preferences can be managed via the notification button in the navbar
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -82,7 +82,7 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
         
         setLoading(true);
         try {
-          const searchedUsers = await searchUsers(query);
+          const searchedUsers = await searchUsers(query, workspaceId);
           setUsers(searchedUsers);
           // Reset selected index when new results come in
           setSelectedIndex(0);

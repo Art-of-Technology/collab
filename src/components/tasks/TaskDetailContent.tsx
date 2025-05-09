@@ -207,6 +207,7 @@ export function TaskDetailContent({
   const [savingDescription, setSavingDescription] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [description, setDescription] = useState(task?.description || "");
+  const [descriptionHtml, setDescriptionHtml] = useState("");
   const [savingAssignee, setSavingAssignee] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingPriority, setSavingPriority] = useState(false);
@@ -236,8 +237,9 @@ export function TaskDetailContent({
     }
   }, [task?.comments]);
 
-  const handleDescriptionChange = useCallback((md: string) => {
+  const handleDescriptionChange = useCallback((md: string, html: string) => {
     setDescription(md);
+    setDescriptionHtml(html);
   }, []);
 
   const handleAiImproveDescription = async (text: string): Promise<string> => {
@@ -371,7 +373,8 @@ export function TaskDetailContent({
       if (success) {
         // Process mentions in the updated description
         if (task?.id && description) {
-          const mentionedUserIds = extractMentionUserIds(description);
+          // Use descriptionHtml for mention extraction
+          const mentionedUserIds = extractMentionUserIds(descriptionHtml);
           
           if (mentionedUserIds.length > 0) {
             try {
@@ -398,6 +401,7 @@ export function TaskDetailContent({
   // Cancel description editing
   const handleCancelDescription = () => {
     setDescription(task?.description || "");
+    setDescriptionHtml("");
     setEditingDescription(false);
   };
 
@@ -738,7 +742,7 @@ export function TaskDetailContent({
                     <div className="relative">
                       <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
                         <MarkdownEditor
-                          initialValue={description}
+                          content={description}
                           onChange={handleDescriptionChange}
                           placeholder="Add a description..."
                           minHeight="150px"

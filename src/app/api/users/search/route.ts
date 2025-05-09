@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 
+// Define the type for the user search result based on the Prisma select
+type UserSearchResult = {
+  id: string;
+  name: string | null;
+  image: string | null;
+  email: string | null;
+  useCustomAvatar: boolean;
+  avatarAccessory: number | null;
+  avatarBrows: number | null;
+  avatarEyes: number | null;
+  avatarEyewear: number | null;
+  avatarHair: number | null;
+  avatarMouth: number | null;
+  avatarNose: number | null;
+  avatarSkinTone: number | null;
+};
+
 // GET /api/users/search - Search for users to mention by name or email
 export async function GET(req: NextRequest) {
   try {
@@ -19,10 +36,10 @@ export async function GET(req: NextRequest) {
     }
     
     // Get the workspace context if available
-    const workspaceId = url.searchParams.get("workspace");
+    const workspaceId = url.searchParams.get("workspaceId");
     
     // Basic search query to search by name or email
-    let users;
+    let users: UserSearchResult[];
     
     if (workspaceId) {
       // If we have a workspace ID, only search for users within that workspace
@@ -60,34 +77,8 @@ export async function GET(req: NextRequest) {
         take: 10,
       });
     } else {
-      // If no workspace is specified, search all users
-      users = await prisma.user.findMany({
-        where: {
-          OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-          ],
-          AND: [
-            { id: { not: currentUser.id } }  // Exclude the current user
-          ]
-        },
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          email: true,
-          useCustomAvatar: true,
-          avatarAccessory: true, 
-          avatarBrows: true,
-          avatarEyes: true,
-          avatarEyewear: true,
-          avatarHair: true,
-          avatarMouth: true,
-          avatarNose: true,
-          avatarSkinTone: true,
-        },
-        take: 10,
-      });
+      // If no workspaceId is specified, return an empty array as requested
+      users = [];
     }
     
     return NextResponse.json(users);

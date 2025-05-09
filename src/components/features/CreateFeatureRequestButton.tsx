@@ -52,8 +52,8 @@ export default function CreateFeatureRequestButton() {
         onSuccess: async (createdFeature) => {
           // Process mentions if the feature was created successfully
           if (createdFeature?.id) {
-            // Extract user IDs from mentions in the description
-            const mentionedUserIds = extractMentionUserIds(description);
+            // Extract user IDs from mentions in the HTML description
+            const mentionedUserIds = extractMentionUserIds(descriptionHtml);
             
             // Create notifications for mentioned users (if any found)
             if (mentionedUserIds.length > 0) {
