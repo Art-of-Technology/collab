@@ -1,99 +1,87 @@
 "use client";
 
 import { useUiContext } from '@/context/UiContext'
-import { useRef, useEffect, useState } from 'react'
-
-declare global {
-  interface Window {
-    chatbox: any
-    ChatWidget: {
-      initChatWidget: (config: {
-        apiKey: string
-        userId: string
-        userEmail: string
-        theme: string
-        token?: string
-        targetElement: string
-        defaultChannel?: string
-      }) => void
-      configUpdate: (config: any) => void
-    }
-  }
-}
+import { useEffect, useState } from 'react'
 
 const ChatboxWrapper = () => {
   const { isLoggedIn, isChatOpen } = useUiContext()
-  const initialized = useRef(false)
   const [userData, setUserData] = useState<any>(null)
-  const [triggerUpdate, setTriggerUpdate] = useState(0)
+  const [chatToken, setChatToken] = useState<string | null>(null)
 
   // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!isLoggedIn) return
+      if (!isLoggedIn) {
+        setUserData(null) // Clear user data if not logged in
+        setChatToken(null) // Clear chat token if not logged in
+        return
+      }
       
       try {
         const response = await fetch('/api/user/me')
         if (response.ok) {
           const data = await response.json()
           setUserData(data.user)
+        } else {
+          setUserData(null)
+          setChatToken(null) // Clear token if user data fetch fails
+          console.error('Error fetching user data:', await response.text())
         }
       } catch (error) {
         console.error('Error fetching user data:', error)
+        setUserData(null)
+        setChatToken(null) // Clear token on error
       }
     }
 
     fetchUserData()
   }, [isLoggedIn])
 
-  // Handle widget initialization
+  // Fetch chat token when user data is available
   useEffect(() => {
-    const initChatWidget = async () => {
-      if (initialized.current) return
+    const fetchChatToken = async () => {
+      if (!isLoggedIn || !userData) {
+        setChatToken(null) // Ensure token is cleared if no user or not logged in
+        return
+      }
 
-      await window.ChatWidget.initChatWidget({
-        apiKey: '2ca5bd89c3f4d9b08b8c82db135c8a592df9dd85477b275b3c15de10e46b3e06',
-        userId: 'anonymous',
-        userEmail: 'anonymous@example.com',
-        theme: 'team-dark',
-        targetElement: 'chat-widget-container',
-        defaultChannel: 'cm7debezu0003ke0la2emlo1c'
-      })
+      // Assuming userData.id is the unique identifier for externalUserId.
+      // Adjust userData.id, userData.name, userData.email if your structure is different.
+      if (!userData.id || !userData.name || !userData.email) {
+        console.warn('User data is incomplete for chat token generation.', userData)
+        setChatToken(null)
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/chat-token', { // YOU WILL NEED TO CREATE THIS BACKEND ENDPOINT
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            externalUserId: userData.id,
+            name: userData.name,
+            email: userData.email,
+            // avatar: userData.avatarUrl // Optional: if you have user avatars
+          }),
+        })
 
-      initialized.current = true
-      // Trigger a re-render to ensure the update effect runs with the initialized state
-      setTriggerUpdate((prev) => prev + 1)
-    }
-
-   if (window.ChatWidget) {
-      initChatWidget()
-    } else {
-      const intervalId = setInterval(() => {
-        if (window.ChatWidget) {
-          clearInterval(intervalId)
-          initChatWidget()
+        if (response.ok) {
+          const data = await response.json()
+          setChatToken(data.token)
+        } else {
+          console.error('Error fetching chat token:', await response.text())
+          setChatToken(null)
         }
-      }, 100)
-      return () => clearInterval(intervalId)
-    }
-  }, []) // Keep this empty to only run once on mount
-
-  // Update widget config when user data changes
-  useEffect(() => {
-    if (!initialized.current || !window.ChatWidget) {
-      return
+      } catch (error) {
+        console.error('Error fetching chat token:', error)
+        setChatToken(null)
+      }
     }
 
-    const username = userData?.name || 'anonymous'
-    
-    window.ChatWidget.configUpdate({
-      apiKey: '2ca5bd89c3f4d9b08b8c82db135c8a592df9dd85477b275b3c15de10e46b3e06',
-      userId: username,
-      theme: 'team-dark', // Always use team-dark theme as requested
-      targetElement: 'chat-widget-container',
-      defaultChannel: 'cm7debezu0003ke0la2emlo1c'
-    })
-  }, [userData, triggerUpdate])
+    fetchChatToken()
+  }, [isLoggedIn, userData]) // Re-fetch token if login status or user data changes
 
   return (
     <aside 
@@ -101,7 +89,25 @@ const ChatboxWrapper = () => {
       ${isChatOpen ? 'w-[360px]' : 'w-0'} 
       `}
     >
-      <div className="w-full h-full" id="chat-widget-container" />
+      {/* Replaced div with iframe logic */}
+      {isChatOpen && isLoggedIn && chatToken ? (
+        <iframe
+          src={`https://api.chatproject.io/widget?token=${chatToken}`}
+          width="100%" // Fills the aside container
+          height="100%" // Fills the aside container
+          style={{ border: 'none' }}
+          title="Chat Widget"
+          // sandbox="allow-scripts allow-same-origin allow-popups allow-forms" // Consider sandbox attributes for security
+        ></iframe>
+      ) : isChatOpen && isLoggedIn && !chatToken && userData ? (
+        <div className="flex items-center justify-center h-full text-white p-4">
+          Loading chat...
+        </div>
+      ) : isChatOpen && !isLoggedIn ? (
+        <div className="flex items-center justify-center h-full text-white p-4">
+          Please log in to use the chat.
+        </div>
+      ) : null}
     </aside>
   )
 }
