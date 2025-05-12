@@ -171,7 +171,7 @@ Thanks goes to these wonderful people:
 
 ## License
 
-Distributed under the Unlicense License. See `LICENSE.txt` for more information.
+Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file for details.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
