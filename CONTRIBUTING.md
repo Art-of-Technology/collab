@@ -35,21 +35,6 @@ If you then still feel the need to ask a question and need clarification, we rec
 
 We will then take care of the issue as soon as possible.
 
-<!--
-You might want to create a separate issue tag for questions and include it in this description. People should then tag their issues accordingly.
-
-Depending on how large the project is, you may want to outsource the questioning, e.g. to Stack Overflow or Gitter. You may add additional contact and information possibilities:
-- IRC
-- Slack
-- Gitter
-- Stack Overflow tag
-- Blog
-- FAQ
-- Roadmap
-- E-Mail List
-- Forum
--->
-
 ## I Want To Contribute
 
 > ### Legal Notice <!-- omit in toc -->
@@ -119,3 +104,7 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/Art-of
 - **Explain why this enhancement would be useful** to most Collab users. You may also want to point out the other projects that solved it better and which could serve as inspiration.
 
 
+<!-- MARKDOWN LINKS & IMAGES -->
+[contact-email]: utku@weezboo.com
+[security-email]: utku@weezboo.com
+[documentation-url]: https://github.com/Art-of-Technology/collab/wiki

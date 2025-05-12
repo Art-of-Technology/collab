@@ -5,8 +5,6 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![Unlicense License][license-shield]][license-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
-
 
 <!-- PROJECT LOGO -->
 <br />
@@ -14,160 +12,133 @@
   <a href="https://github.com/Art-of-Technology/collab" style="background-color: black; padding: 10px; display: inline-block;">
     <img src="https://teams.weezboo.com/_next/image?url=%2Flogo-v2.png&w=128&q=75"  alt="Logo" width="128">
   </a>
-
-  <h3 align="center">Best-README-Template</h3>
+  <h3 align="center">About Collab</h3>
 
   <p align="center">
-    An awesome README template to jumpstart your projects!
-    <br />
-    <a href="https://github.com/Art-of-Technology/collab"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/Art-of-Technology/collab">View Demo</a>
-    &middot;
-    <a href="https://github.com/Art-of-Technology/collab/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
-    &middot;
-    <a href="https://github.com/Art-of-Technology/collab/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
+    <strong>An internal communication and work-tracking platform for software teams, providing a simple and effective way to share updates, manage tasks, and collaborate in real time.
+    </strong>
   </p>
 </div>
-
-
 
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
   <ol>
     <li>
-      <a href="#about-the-project">About The Project</a>
+      <a href="#overview">Overview</a>
       <ul>
+        <li><a href="#screenshots">Screenshots</a></li>
+        <li><a href="#key-features">Key Features</a></li>
         <li><a href="#built-with">Built With</a></li>
       </ul>
     </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
+    <li><a href="#installation">Installation</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#api">API</a></li>
+    <li><a href="#contributing">Contributing</a>
       <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
+        <li><a href="#code-of-conduct">Code of Conduct</a></li>
+        <li><a href="#top-contributors">Top Contributors</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
 </details>
 
+## Overview
 
+Collab is designed to streamline internal communication and work tracking by offering a timeline-based feed for status updates, built-in task and board management, threaded discussions, and integrations with popular developer tools. With its intuitive interface, teams can quickly share progress, identify blockers and coordinate efforts without the complexity of traditional project management systems.
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+#### Screenshots
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
-There are many great README templates available on GitHub; however, I didn't find one that really suited my needs so I created this enhanced one. I want to create a README template so amazing that it'll be the last one you ever need -- I think this is it.
-
-Here's why:
-* Your time should be focused on creating something amazing. A project that solves a problem and helps others
-* You shouldn't be doing the same tasks over and over like creating a README from scratch
-* You should implement DRY principles to the rest of your life :smile:
-
-Of course, no one template will serve all projects since your needs may be different. So I'll be adding more in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue. Thanks to all the people have contributed to expanding this template!
-
-Use the `BLANK_README.md` to get started.
+![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+View)
+![Timeline](https://via.placeholder.com/800x400?text=Timeline+View)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+#### Key Features
 
+- Real-time timeline for status updates, challenges, and ideas
+- Kanban-style task boards with drag-and-drop support
+- Milestones, epics, and story tracking for project planning
+- Threaded comments, reactions, and notifications
+- Feature requests with voting and prioritization
+- AI-assisted content improvement and summarization
+- OAuth authentication (Google, Email) via NextAuth.js
+- File uploads and customizable user avatars
+- Workspace and team management with role-based access
+- RESTful API for integration with external tools
 
-### Built With
+#### Built With
 
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
-
-* [![Next][Next.js]][Next-url]
-* [![React][React.js]][React-url]
-* [![Vue][Vue.js]][Vue-url]
-* [![Angular][Angular.io]][Angular-url]
-* [![Svelte][Svelte.dev]][Svelte-url]
-* [![Laravel][Laravel.com]][Laravel-url]
-* [![Bootstrap][Bootstrap.com]][Bootstrap-url]
-* [![JQuery][JQuery.com]][JQuery-url]
+- Next.js (App Router) and React
+- TypeScript for static typing
+- Prisma ORM with PostgreSQL
+- Tailwind CSS for styling
+- NextAuth.js for authentication
+- React Query for data fetching and caching
+- Zod for schema validation
+- Tiptap editor for rich text content
+- Radix UI and Headless UI components
+- Cloudinary for media handling
+- VSCode, Node.js, npm
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+## Installation
 
-
-<!-- GETTING STARTED -->
-## Getting Started
-
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
-### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
-
-### Installation
-
-_Below is an example of how you can instruct your audience on installing and setting up your app. This template doesn't rely on any external dependencies or services._
-
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```sh
-   git clone https://github.com/github_username/repo_name.git
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-org/collab.git
+   cd collab
    ```
-3. Install NPM packages
-   ```sh
+2. Install dependencies:
+   ```bash
    npm install
    ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
+3. Set up environment variables:
+   ```bash
+   cp .env .env.local
+   # Edit .env.local and add:
+   # DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPENAI_KEY
    ```
-5. Change git remote url to avoid accidental pushes to base project
-   ```sh
-   git remote set-url origin github_username/repo_name
-   git remote -v # confirm the changes
+4. Generate Prisma client and run migrations:
+   ```bash
+   npx prisma generate
+   npx prisma migrate dev --name init
+   ```
+5. (Optional) Initialize a default workspace:
+   ```bash
+   npm run prisma:init-workspace
+   ```
+6. Start the development server:
+   ```bash
+   npm run dev
    ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+- Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
+- Sign up or log in using Google or email.
+- Create or join a workspace to start sharing updates.
+- Use the timeline to post status updates, tasks, and feature requests.
+- Organize work using boards, milestones, and stories.
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+## API
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+Collab exposes a RESTful API under the `/api` namespace. Example endpoints:
 
+- GET `/api/posts` – Retrieve all posts.
+- POST `/api/posts` – Create a new post.
+  ```bash
+  curl -X POST http://localhost:3000/api/posts \
+    -H "Content-Type: application/json" \
+    -d '{"title":"Project Update","content":"Completed user authentication."}'
+  ```
+- GET `/api/tasks/boards/{boardId}/tasks` – List tasks in a board.
+- GET `/api/users/me` – Fetch current user profile.
 
-
-<!-- ROADMAP -->
-## Roadmap
-
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
-
-See the [open issues](https://github.com/Art-of-Technology/collab/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- CONTRIBUTING -->
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
@@ -175,79 +146,49 @@ Contributions are what make the open source community such an amazing place to l
 If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
 Don't forget to give the project a star! Thanks again!
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
+1. Fork the repository.
+2. Create a new branch: `git checkout -b feature/YourFeature`.
+3. Install dependencies and ensure all tests and linters pass.
+4. Commit your changes and push to your fork.
+5. Open a pull request with a clear description of your changes.
 
 #### Code of Conduct
 This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
+#### Top Contributors ✨
 
-### Top Contributors ✨
+Thanks goes to these wonderful people:
 
-Thanks goes to these wonderful people: ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="http://www.scrivt.com"><img src="https://avatars.githubusercontent.com/u/36661336?v=4?s=100" width="100px;" alt="Erkan DOGAN"/><br /><sub><b>Erkan DOGAN</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=erkandogan" title="Code">💻</a> <a href="#design-erkandogan" title="Design">🎨</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="http://www.scrivt.com"><img src="https://avatars.githubusercontent.com/u/36661336?v=4?s=100" width="100px;" alt="Erkan DOGAN"/><br /><sub><b>Erkan DOGAN</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=erkandogan" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Documentation">📖</a> <a href="#design-erkandogan" title="Design">🎨</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/redoh"><img src="https://avatars.githubusercontent.com/u/38852479?v=4?s=100" width="100px;" alt="Neo"/><br /><sub><b>Neo</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Documentation">📖</a> <a href="#design-redoh" title="Design">🎨</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/utku-weezboo"><img src="https://avatars.githubusercontent.com/u/173268231?v=4?s=100" width="100px;" alt="utku-weezboo"/><br /><sub><b>utku-weezboo</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=utku-weezboo" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=utku-weezboo" title="Documentation">📖</a> <a href="#design-utku-weezboo" title="Design">🎨</a></td>
     </tr>
   </tbody>
 </table>
 
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-<!-- LICENSE -->
 ## License
 
 Distributed under the Unlicense License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-<!-- CONTACT -->
 ## Contact
 
-Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+[contact-email]
 
-Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
-
-Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
-
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
+[https://github.com/Art-of-Technology/collab](https://github.com/Art-of-Technology/collab)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[contact-email]: utku@weezboo.com
+[security-email]: utku@weezboo.com
+[documentation-url]: https://github.com/Art-of-Technology/collab/wiki
 [contributors-shield]: https://img.shields.io/github/contributors/Art-of-Technology/collab.svg?style=for-the-badge
 [contributors-url]: https://github.com/Art-of-Technology/collab/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/Art-of-Technology/collab.svg?style=for-the-badge
@@ -258,24 +199,3 @@ Use this space to list resources you find helpful and would like to give credit 
 [issues-url]: https://github.com/Art-of-Technology/collab/issues
 [license-shield]: https://img.shields.io/github/license/Art-of-Technology/collab.svg?style=for-the-badge
 [license-url]: https://github.com/Art-of-Technology/collab/blob/master/LICENSE.txt
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/othneildrew
-[product-screenshot]: images/screenshot.png
-[Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
-[Next-url]: https://nextjs.org/
-[React.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
-[React-url]: https://reactjs.org/
-[Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
-[Vue-url]: https://vuejs.org/
-[Angular.io]: https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white
-[Angular-url]: https://angular.io/
-[Svelte.dev]: https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
-[Svelte-url]: https://svelte.dev/
-[Laravel.com]: https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white
-[Laravel-url]: https://laravel.com
-[Bootstrap.com]: https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white
-[Bootstrap-url]: https://getbootstrap.com
-[JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
-[JQuery-url]: https://jquery.com 
-
-
