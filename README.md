@@ -52,8 +52,28 @@ Collab is designed to streamline internal communication and work tracking by off
 
 #### Screenshots
 
-![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+View)
-![Timeline](https://via.placeholder.com/800x400?text=Timeline+View)
+<div style="display: flex; gap: 20px; justify-content: start; align-items: flex-start;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <a href="/public/screenshots/Screenshot-3.png" target="_blank">
+      <img src="/public/screenshots/Screenshot-3.png" alt="Timeline" style="width: 150px; border-radius: 8px;" />
+    </a>
+    <span style="margin-top: 8px; font-size: 14px;">Timeline</span>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <a href="/public/screenshots/Screenshot-2.png" target="_blank">
+      <img src="/public/screenshots/Screenshot-2.png" alt="Dashboard" style="width: 150px; border-radius: 8px;" />
+    </a>
+    <span style="margin-top: 8px; font-size: 14px;">Dashboard</span>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <a href="/public/screenshots/Screenshot-1.png" target="_blank">
+      <img src="/public/screenshots/Screenshot-1.png" alt="Task" style="width: 150px; border-radius: 8px;" />
+    </a>
+    <span style="margin-top: 8px; font-size: 14px;">Task</span>
+  </div>
+</div>
+
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -198,4 +218,4 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 [issues-shield]: https://img.shields.io/github/issues/Art-of-Technology/collab.svg?style=for-the-badge
 [issues-url]: https://github.com/Art-of-Technology/collab/issues
 [license-shield]: https://img.shields.io/github/license/Art-of-Technology/collab.svg?style=for-the-badge
-[license-url]: https://github.com/Art-of-Technology/collab/blob/master/LICENSE.txt
+[license-url]: https://github.com/Art-of-Technology/collab/blob/main/LICENSE.txt
