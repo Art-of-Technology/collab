@@ -16,7 +16,7 @@ const ChatboxWrapper = () => {
         setChatToken(null) // Clear chat token if not logged in
         return
       }
-      
+
       try {
         const response = await fetch('/api/user/me')
         if (response.ok) {
@@ -52,7 +52,7 @@ const ChatboxWrapper = () => {
         setChatToken(null)
         return;
       }
-      
+
       try {
         const response = await fetch('/api/chat-token', { // YOU WILL NEED TO CREATE THIS BACKEND ENDPOINT
           method: 'POST',
@@ -81,24 +81,27 @@ const ChatboxWrapper = () => {
     }
 
     fetchChatToken()
-  }, [isLoggedIn, userData]) // Re-fetch token if login status or user data changes
+  }, [isLoggedIn, userData])
 
   return (
-    <aside 
+    <aside
       className={`fixed right-0 top-16 bottom-0 z-50 bg-[#1c1c1c] border-l border-[#2a2929] transition-all duration-150 ease-in-out overflow-hidden shadow-lg
       ${isChatOpen ? 'w-[360px]' : 'w-0'} 
       `}
     >
-      {/* Replaced div with iframe logic */}
-      {isChatOpen && isLoggedIn && chatToken ? (
-        <iframe
-          src={`https://api.chatproject.io/widget?token=${chatToken}`}
-          width="100%" // Fills the aside container
-          height="100%" // Fills the aside container
-          style={{ border: 'none' }}
-          title="Chat Widget"
-          // sandbox="allow-scripts allow-same-origin allow-popups allow-forms" // Consider sandbox attributes for security
-        ></iframe>
+      {/* Keep the iframe mounted but control its visibility based on state */}
+      {isLoggedIn && chatToken ? (
+        <div
+          className="w-full h-full"
+        >
+          <iframe
+            src={`https://api.chatproject.io/widget?token=${chatToken}`}
+            width="100%"
+            height="100%"
+            style={{ border: 'none' }}
+            title="Chat Widget"
+          ></iframe>
+        </div>
       ) : isChatOpen && isLoggedIn && !chatToken && userData ? (
         <div className="flex items-center justify-center h-full text-white p-4">
           Loading chat...
