@@ -1,0 +1,62 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authConfig } from "@/lib/auth";
+
+export async function POST(
+  req: Request,
+  { params }: { params: { taskId: string } }
+) {
+  const session = await getServerSession(authConfig);
+  if (!session?.user?.id) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
+  const { taskId } = params;
+  const userId = session.user.id;
+
+  if (!taskId) {
+    return new NextResponse("Task ID is required", { status: 400 });
+  }
+
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+    });
+
+    if (!task) {
+      return new NextResponse("Task not found", { status: 404 });
+    }
+
+    // Check if user is part of the workspace
+    const workspaceMember = await prisma.workspaceMember.findUnique({
+      where: {
+        userId_workspaceId: {
+          userId,
+          workspaceId: task.workspaceId,
+        },
+      },
+    });
+
+    if (!workspaceMember && task.reporterId !== userId && task.assigneeId !== userId) {
+        const workspace = await prisma.workspace.findUnique({ where: { id: task.workspaceId } });
+        if (workspace?.ownerId !== userId) {
+            return new NextResponse("Forbidden: You are not authorized to perform this action on this task's workspace.", { status: 403 });
+        }
+    }
+
+    const activity = await prisma.taskActivity.create({
+      data: {
+        taskId,
+        userId,
+        action: "TASK_PLAY_PAUSED",
+        details: JSON.stringify({ timestamp: new Date() }),
+      },
+    });
+
+    return NextResponse.json(activity, { status: 201 });
+  } catch (error) {
+    console.error("[TASK_PAUSE_POST]", error);
+    return new NextResponse("Internal Server Error", { status: 500 });
+  }
+} 

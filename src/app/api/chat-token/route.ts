@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 // It's highly recommended to store your API key in environment variables
 // const CHAT_PROJECT_API_KEY = process.env.CHAT_PROJECT_API_KEY;
 // For this example, using the key directly as provided.
-const CHAT_PROJECT_API_KEY = '2ca5bd89c3f4d9b08b8c82db135c8a592df9dd85477b275b3c15de10e46b3e06';
+const CHAT_PROJECT_API_KEY = process.env.CHAT_PROJECT_API_KEY;
 const CHAT_PROJECT_TOKEN_URL = 'https://api.chatproject.io/api/auth/generate-widget-token';
 
 export async function POST(request: Request) {
@@ -35,10 +35,12 @@ export async function POST(request: Request) {
       name: string;
       email: string;
       avatar?: string;
+      themeId: string;
     } = {
       externalUserId,
       name,
       email,
+      themeId: 'team-dark',
     };
 
     if (avatar) {
