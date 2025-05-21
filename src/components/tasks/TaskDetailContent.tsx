@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp, Plus } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp, Plus, Play, Pause, StopCircle, History, Clock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -26,6 +26,7 @@ import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { useSession } from "next-auth/react";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -152,6 +153,40 @@ interface TaskDetailContentProps {
   boardId?: string;
 }
 
+// New interface for TaskActivity
+export interface TaskActivity {
+  id: string;
+  action: string;
+  details: string | null; // JSON string
+  createdAt: Date;
+  user: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    useCustomAvatar?: boolean;
+    avatarSkinTone?: number | null;
+    avatarEyes?: number | null;
+    avatarBrows?: number | null;
+    avatarMouth?: number | null;
+    avatarNose?: number | null;
+    avatarHair?: number | null;
+    avatarEyewear?: number | null;
+    avatarAccessory?: number | null;
+  };
+}
+
+// New interface for PlayTime
+export interface PlayTime {
+  totalPlayTimeMs: number;
+  formattedTime: string;
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+type PlayState = "stopped" | "playing" | "paused";
+
 // Client-side implementation of status badge
 const getStatusBadge = (status: string) => {
   const statusColors: Record<string, string> = {
@@ -200,6 +235,8 @@ export function TaskDetailContent({
   onClose,
   boardId
 }: TaskDetailContentProps) {
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [savingTitle, setSavingTitle] = useState(false);
@@ -218,6 +255,20 @@ export function TaskDetailContent({
   const { toast } = useToast();
   const { refreshBoards } = useTasks();
   const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
+
+  // New state variables for play/pause feature
+  const [taskActivities, setTaskActivities] = useState<TaskActivity[]>([]);
+  const [totalPlayTime, setTotalPlayTime] = useState<PlayTime | null>(null);
+  const [isTimerLoading, setIsTimerLoading] = useState(false);
+  const [currentPlayState, setCurrentPlayState] = useState<PlayState>("stopped");
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
+  const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
+
+  const canControlTimer = useMemo(() => {
+    if (!task || !currentUserId) return false;
+    return task.reporter?.id === currentUserId || task.assignee?.id === currentUserId;
+  }, [task, currentUserId]);
 
   // Update comments state when task changes
   useEffect(() => {
@@ -240,11 +291,152 @@ export function TaskDetailContent({
     setDescription(md);
   }, []);
 
+  const fetchTaskActivities = useCallback(async () => {
+    if (!task?.id) return;
+    setIsLoadingActivities(true);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/activities`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch task activities");
+      }
+      const data: TaskActivity[] = await response.json();
+      setTaskActivities(data);
+    } catch (err) {
+      console.error("Error fetching task activities:", err);
+      toast({
+        title: "Error",
+        description: "Could not load task activities.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingActivities(false);
+    }
+  }, [task?.id, toast]);
+
+  const fetchTotalPlayTime = useCallback(async () => {
+    if (!task?.id) return;
+    setIsLoadingPlayTime(true);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/playtime`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch total play time");
+      }
+      const data: PlayTime = await response.json();
+      setTotalPlayTime(data);
+    } catch (err) {
+      console.error("Error fetching total play time:", err);
+      // Do not toast for this, as it might be too noisy if it fails often initially
+    } finally {
+      setIsLoadingPlayTime(false);
+    }
+  }, [task?.id]);
+
+  // Determine current play state from activities
+  useEffect(() => {
+    if (taskActivities.length > 0) {
+      const lastRelevantActivity = [...taskActivities] // Create a new array to avoid mutating state directly
+        .filter(act => ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"].includes(act.action))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+      if (lastRelevantActivity) {
+        if (lastRelevantActivity.action === "TASK_PLAY_STARTED") {
+          setCurrentPlayState("playing");
+        } else if (lastRelevantActivity.action === "TASK_PLAY_PAUSED") {
+          setCurrentPlayState("paused");
+        } else {
+          setCurrentPlayState("stopped");
+        }
+      } else {
+        setCurrentPlayState("stopped");
+      }
+    } else {
+      setCurrentPlayState("stopped"); // Default to stopped if no activities
+    }
+  }, [taskActivities]);
+
+  // Helper function to format milliseconds into a readable string (e.g., 1d 2h 3m 4s)
+  const formatLiveTime = (ms: number): string => {
+    if (ms < 0) ms = 0;
+    const totalSecondsValue = Math.floor(ms / 1000);
+    const d = Math.floor(totalSecondsValue / (3600 * 24));
+    const h = Math.floor((totalSecondsValue % (3600 * 24)) / 3600);
+    const m = Math.floor((totalSecondsValue % 3600) / 60);
+    const s = totalSecondsValue % 60;
+    
+    // Consistent with API: Xh Ym Zs, or Dd Xh Ym Zs
+    if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
+    return `${h}h ${m}m ${s}s`;
+  };
+
+  // Effect for live timer when task is playing
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (currentPlayState === "playing" && totalPlayTime) {
+      const initialMs = totalPlayTime.totalPlayTimeMs;
+      const anchorTime = Date.now(); // Time when this play session (or data fetch) was anchored
+
+      const tick = () => {
+        const elapsedSinceAnchor = Date.now() - anchorTime;
+        const currentTotalMs = initialMs + elapsedSinceAnchor;
+        setLiveTimeDisplay(formatLiveTime(currentTotalMs));
+      };
+
+      tick(); // Initial immediate update
+      intervalId = setInterval(tick, 1000);
+    } else {
+      setLiveTimeDisplay(null); // Clear live display if not playing or no base time
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [currentPlayState, totalPlayTime]); // Rerun when play state or fetched total time changes
+
+  // Fetch activities and playtime when task ID changes or onRefresh is called
+  useEffect(() => {
+    if (task?.id) {
+      fetchTaskActivities();
+      fetchTotalPlayTime();
+    }
+  }, [task?.id, fetchTaskActivities, fetchTotalPlayTime, onRefresh]); // Added onRefresh to dependencies
+
+  const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
+    if (!task?.id) return;
+    setIsTimerLoading(true);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/${action}`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: `Failed to ${action} task` }));
+        throw new Error(errorData.message || `Failed to ${action} task`);
+      }
+      toast({
+        title: `Task ${action === 'play' ? 'Timer Started' : action === 'pause' ? 'Timer Paused' : 'Timer Stopped'}`,
+        description: `Task timer has been ${action === 'play' ? 'started' : action}.`,
+      });
+      // Refresh activities and playtime, then call external onRefresh
+      await fetchTaskActivities();
+      await fetchTotalPlayTime();
+      onRefresh(); // Call the passed onRefresh to update parent components if needed
+    } catch (err: any) {
+      console.error(`Error ${action} task:`, err);
+      toast({
+        title: "Error",
+        description: err.message || `Could not ${action} task.`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsTimerLoading(false);
+    }
+  };
+
   const handleAiImproveDescription = async (text: string): Promise<string> => {
     if (isImprovingDescription || !text.trim()) return text;
-    
+
     setIsImprovingDescription(true);
-    
+
     try {
       const response = await fetch("/api/ai/improve", {
         method: "POST",
@@ -253,16 +445,16 @@ export function TaskDetailContent({
         },
         body: JSON.stringify({ text })
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to improve text");
       }
-      
+
       const data = await response.json();
-      
+
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
-      
+
       // Return improved text
       return improvedText;
     } catch (error) {
@@ -293,7 +485,7 @@ export function TaskDetailContent({
       }
 
       const updatedTask = await response.json();
-      
+
       toast({
         title: 'Updated',
         description: `Task ${field} updated successfully`,
@@ -316,7 +508,7 @@ export function TaskDetailContent({
       } else if (field === 'dueDate') {
         setDueDate(updatedTask.dueDate);
       }
-      
+
       // Refresh in background without causing UI flicker
       setTimeout(() => {
         onRefresh();
@@ -372,7 +564,7 @@ export function TaskDetailContent({
         // Process mentions in the updated description
         if (task?.id && description) {
           const mentionedUserIds = extractMentionUserIds(description);
-          
+
           if (mentionedUserIds.length > 0) {
             try {
               await axios.post("/api/mentions", {
@@ -387,7 +579,7 @@ export function TaskDetailContent({
             }
           }
         }
-        
+
         setEditingDescription(false);
       }
     } finally {
@@ -414,7 +606,7 @@ export function TaskDetailContent({
   // Handle status change
   const handleStatusChange = async (status: string) => {
     if (!task) return;
-    
+
     setSavingStatus(true);
     try {
       // If task has a column, update the column ID based on the status
@@ -422,7 +614,7 @@ export function TaskDetailContent({
         // Find the column ID that matches the selected status
         const statusesToColumn = (statuses || []).map((s, index) => ({ status: s, index }));
         console.log("Updating column status:", status, statusesToColumn);
-        
+
         // Update the status and column together
         await saveTaskField('status', status);
       } else {
@@ -501,10 +693,10 @@ export function TaskDetailContent({
     try {
       // Set default statuses in case there's no board attached
       const defaultStatuses = ["TO DO", "IN PROGRESS", "REVIEW", "DONE"];
-      
+
       // First try task's own board ID, then fall back to boardId prop if available
       const effectiveBoardId = task.taskBoard?.id || boardId;
-      
+
       // Only fetch statuses if we have a valid board ID
       if (effectiveBoardId) {
         // Fetch statuses (columns) for the board
@@ -544,13 +736,14 @@ export function TaskDetailContent({
         priority: task.priority,
         boardId: task.taskBoard?.id || boardId
       });
-      
+
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(task.dueDate);
+      // Fetch activities and playtime when task initially loads as well
+      // This is now handled by the other useEffect listening to task.id and onRefresh
     }
   }, [task, boardId]);
-
 
   if (error) {
     return (
@@ -573,6 +766,28 @@ export function TaskDetailContent({
       </div>
     );
   }
+
+  const renderActivityItem = (activity: TaskActivity) => {
+    let actionText = activity.action.replace("TASK_", "").replace(/_/g, " ").toLowerCase();
+    if (actionText.startsWith("play ")) actionText = actionText.substring(5);
+    else if (actionText === "commented on") actionText = "commented on"; // Keep specific phrases
+    else actionText = actionText.replace("play", "timer"); // Generalize "play" to "timer"
+
+    const activityTime = formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true });
+
+    return (
+      <div key={activity.id} className="flex items-start space-x-3 py-3 border-b border-border/30 last:border-b-0">
+        <CustomAvatar user={activity.user} size="sm" />
+        <div className="text-sm">
+          <p>
+            <span className="font-semibold">{activity.user.name || "Unknown User"}</span>
+            <span className="text-muted-foreground"> {actionText} this task</span>
+          </p>
+          <p className="text-xs text-muted-foreground/80">{activityTime}</p>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="pt-6 space-y-8">
@@ -606,9 +821,9 @@ export function TaskDetailContent({
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={handleCancelTitle}
                       disabled={savingTitle}
                       className="h-8"
@@ -616,8 +831,8 @@ export function TaskDetailContent({
                       <X className="h-4 w-4 mr-1" />
                       Cancel
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={handleSaveTitle}
                       disabled={savingTitle}
                       className="h-8"
@@ -637,7 +852,7 @@ export function TaskDetailContent({
                   </div>
                 </div>
               ) : (
-                <div 
+                <div
                   className="group relative cursor-pointer"
                   onClick={() => setEditingTitle(true)}
                 >
@@ -676,6 +891,79 @@ export function TaskDetailContent({
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Play/Pause/Stop Controls & Total Playtime */}
+              <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm">
+                {currentPlayState === "stopped" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("play")}
+                    disabled={isTimerLoading || !task?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={canControlTimer ? "Start Timer" : "Only assignee or reporter can start timer"}
+                  >
+                    {isTimerLoading && currentPlayState === "stopped" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                )}
+                {currentPlayState === "playing" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("pause")}
+                    disabled={isTimerLoading || !task?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={canControlTimer ? "Pause Timer" : "Only assignee or reporter can pause timer"}
+                  >
+                    {isTimerLoading && currentPlayState === "playing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                  </Button>
+                )}
+                {currentPlayState === "paused" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("play")}
+                    disabled={isTimerLoading || !task?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={canControlTimer ? "Resume Timer" : "Only assignee or reporter can resume timer"}
+                  >
+                    {isTimerLoading && currentPlayState === "paused" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                )}
+                {(currentPlayState === "playing" || currentPlayState === "paused") && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("stop")}
+                    disabled={isTimerLoading || !task?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={canControlTimer ? "Stop Timer" : "Only assignee or reporter can stop timer"}
+                  >
+                    {isTimerLoading && (currentPlayState === "playing" || currentPlayState === "paused") ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                  </Button>
+                )}
+
+                <div className="border-l h-5 border-border/70 mx-1"></div>
+
+                {isLoadingPlayTime ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : currentPlayState === "playing" && liveTimeDisplay !== null ? (
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay}`}>
+                     <Clock className="h-3.5 w-3.5 text-green-500"/> 
+                     <span className="text-green-500 font-semibold">{liveTimeDisplay}</span>
+                  </div>
+                ) : totalPlayTime ? (
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
+                     <Clock className="h-3.5 w-3.5"/> 
+                     <span>{totalPlayTime.formattedTime}</span>
+                  </div>
+                ) : (
+                   <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
+                     <Clock className="h-3.5 w-3.5"/> 
+                     <span>0h 0m 0s</span>
+                  </div>
+                )}
+              </div>
+
               <div className="relative">
                 <Select
                   value={task.type}
@@ -708,7 +996,7 @@ export function TaskDetailContent({
                   </div>
                 )}
               </div>
-              
+
               <ShareButton taskId={task.id} issueKey={task.issueKey || ""} />
             </div>
           </div>
@@ -753,17 +1041,17 @@ export function TaskDetailContent({
                       )}
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleCancelDescription}
                         disabled={savingDescription}
                       >
                         <X className="h-4 w-4 mr-1" />
                         Cancel
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={handleSaveDescription}
                         disabled={savingDescription}
                       >
@@ -782,7 +1070,7 @@ export function TaskDetailContent({
                     </div>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
                     onClick={() => setEditingDescription(true)}
                   >
@@ -807,12 +1095,35 @@ export function TaskDetailContent({
               <CardTitle className="text-md">Comments</CardTitle>
             </CardHeader>
             <CardContent className="relative z-0 p-4">
-              <TaskCommentsList 
+              <TaskCommentsList
                 taskId={task.id}
                 initialComments={comments}
                 currentUserId={task.reporter?.id || ""}
                 userImage={task.reporter?.image}
               />
+            </CardContent>
+          </Card>
+          {/* Task Activities Section */}
+          <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
+            <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center gap-2">
+              <History className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-md">Activity</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoadingActivities ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
+                  Loading activities...
+                </div>
+              ) : taskActivities.length > 0 ? (
+                <div className="divide-y divide-border/30 px-4">
+                  {taskActivities.map(renderActivityItem)}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-muted-foreground italic">
+                  No activities recorded for this task yet.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1039,11 +1350,10 @@ export function TaskDetailContent({
                               </Badge>
                               <span className="truncate">{subtask.title}</span>
                             </div>
-                            <Badge className={`${
-                              subtask.status === 'DONE' ? 'bg-green-500' : 
-                              subtask.status === 'IN PROGRESS' ? 'bg-blue-500' : 
-                              'bg-gray-500'
-                            } text-white flex-shrink-0 ml-1`}>
+                            <Badge className={`${subtask.status === 'DONE' ? 'bg-green-500' :
+                                subtask.status === 'IN PROGRESS' ? 'bg-blue-500' :
+                                  'bg-gray-500'
+                              } text-white flex-shrink-0 ml-1`}>
                               {subtask.status}
                             </Badge>
                           </Link>
@@ -1054,9 +1364,9 @@ export function TaskDetailContent({
                 )}
 
                 {/* Create Subtask Button */}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="w-full mt-2"
                   onClick={() => {
                     // Open task creation modal with parent task ID prefilled
