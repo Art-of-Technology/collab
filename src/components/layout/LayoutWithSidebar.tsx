@@ -8,6 +8,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import AssistantWrapper from "@/components/layout/AssistantWrapper";
 import ChatboxWrapper from "./ChatboxWrapper";
+import { AppDock } from "@/components/dock";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -79,7 +80,7 @@ export default function LayoutWithSidebar({
 
         {/* Main content area - responsive padding */}
         <main
-          className={`flex-1 pt-16 pb-8 px-2 md:px-4 overflow-y-auto bg-[#191919] transition-all duration-300 ease-in-out ${isCollapsed ? 'ml-0 md:ml-16' : 'ml-0 md:ml-64'
+          className={`flex-1 pt-16 pb-[90px] px-2 md:px-4 overflow-y-auto bg-[#191919] transition-all duration-300 ease-in-out ${isCollapsed ? 'ml-0 md:ml-16' : 'ml-0 md:ml-64'
             }`}
         >
           <div className="mx-auto w-full p-4 md:p-12">
@@ -89,6 +90,8 @@ export default function LayoutWithSidebar({
         <ChatboxWrapper />
         {/* AI Assistant */}
         <AssistantWrapper />
+        {/* App Dock */}
+        <AppDock />
       </div>
     </div>
   );

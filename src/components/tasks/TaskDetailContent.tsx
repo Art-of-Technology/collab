@@ -403,23 +403,45 @@ export function TaskDetailContent({
 
   const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
     if (!task?.id) return;
+    
     setIsTimerLoading(true);
     try {
-      const response = await fetch(`/api/tasks/${task.id}/${action}`, {
+      // Use the new activity-based endpoints
+      const eventTypeMap = {
+        play: "TASK_START",
+        pause: "TASK_PAUSE", 
+        stop: "TASK_STOP"
+      };
+
+      const response = await fetch("/api/activities/start", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventType: eventTypeMap[action],
+          taskId: task.id,
+          description: `${action === 'play' ? 'Started' : action === 'pause' ? 'Paused' : 'Stopped'} work on ${task.title}`,
+          metadata: { taskTitle: task.title, issueKey: task.issueKey },
+        }),
       });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: `Failed to ${action} task` }));
         throw new Error(errorData.message || `Failed to ${action} task`);
       }
+
       toast({
         title: `Task ${action === 'play' ? 'Timer Started' : action === 'pause' ? 'Timer Paused' : 'Timer Stopped'}`,
-        description: `Task timer has been ${action === 'play' ? 'started' : action}.`,
+        description: `Task timer has been ${action === 'play' ? 'started/resumed' : action === 'pause' ? 'paused' : 'stopped'}.`,
       });
-      // Refresh activities and playtime, then call external onRefresh
-      await fetchTaskActivities();
-      await fetchTotalPlayTime();
-      onRefresh(); // Call the passed onRefresh to update parent components if needed
+
+      // Fetch local data directly. These will update relevant states and UI parts.
+      await fetchTaskActivities(); 
+      await fetchTotalPlayTime();  
+
+      // Refresh the boards context for other parts of the application
+      refreshBoards(); 
+      // No longer calling onRefresh() here to prevent parent-induced re-fetch of the whole task object
+
     } catch (err: any) {
       console.error(`Error ${action} task:`, err);
       toast({
@@ -1384,24 +1406,24 @@ export function TaskDetailContent({
             <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
               <CardHeader className="py-3 bg-muted/30 border-b">
                 <CardTitle className="text-md">Attachments</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <ul className="space-y-2">
-                  {task.attachments.map((attachment) => (
-                    <li key={attachment.id}>
-                      <Link
-                        href={attachment.url}
-                        target="_blank"
-                        className="text-sm text-primary hover:underline flex items-center gap-1"
-                      >
-                        {attachment.name || "File"}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
+                </CardHeader>
+                <CardContent className="p-4">
+                  <ul className="space-y-2">
+                    {task.attachments.map((attachment) => (
+                      <li key={attachment.id}>
+                        <Link
+                          href={attachment.url}
+                          target="_blank"
+                          className="text-sm text-primary hover:underline flex items-center gap-1"
+                        >
+                          {attachment.name || "File"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
         </div>
       </div>
 

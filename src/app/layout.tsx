@@ -10,6 +10,7 @@ import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
 import { MentionProvider } from '@/context/MentionContext';
 import { QueryProvider } from '@/providers/QueryProvider';
+import { DockProvider } from '@/context/DockContext';
 import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
@@ -68,15 +69,17 @@ export default async function RootLayout({
                 <MentionProvider>
                   <UiProvider>
                     <CustomThemeProvider>
-                      <main className="flex flex-col">
-                        {children}
-                      </main>
-                      <Toaster />
-                      <Script
-                        src="https://api.chatproject.io/chat-widget.js"
-                        id="chat-widget-script"
-                        strategy="lazyOnload"
-                      />
+                      <DockProvider>
+                        <main className="flex flex-col">
+                          {children}
+                        </main>
+                        <Toaster />
+                        <Script
+                          src="https://api.chatproject.io/chat-widget.js"
+                          id="chat-widget-script"
+                          strategy="lazyOnload"
+                        />
+                      </DockProvider>
                     </CustomThemeProvider>
                   </UiProvider>
                 </MentionProvider>

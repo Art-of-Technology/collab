@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
-import { authConfig } from "@/lib/auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { ActivityService } from "@/lib/activity-service";
+import { EventType } from "@prisma/client";
 
 export async function POST(
   req: Request,
   { params }: { params: { taskId: string } }
 ) {
-  const session = await getServerSession(authConfig);
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
@@ -47,16 +49,16 @@ export async function POST(
         }
     }
 
-    const activity = await prisma.taskActivity.create({
-      data: {
-        taskId,
-        userId,
-        action: "TASK_PLAY_STARTED",
-        details: JSON.stringify({ timestamp: new Date() }),
-      },
+    // Use the new activity service to start task
+    const userEvent = await ActivityService.startActivity({
+      userId,
+      eventType: EventType.TASK_START,
+      taskId,
+      description: `Started working on ${task.title}`,
+      metadata: { taskTitle: task.title, issueKey: task.issueKey },
     });
 
-    return NextResponse.json(activity, { status: 201 });
+    return NextResponse.json(userEvent, { status: 201 });
   } catch (error) {
     console.error("[TASK_PLAY_POST]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
