@@ -29,7 +29,20 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
       const response = await fetch(`/api/tasks/${taskId}`);
       
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        console.error("Task fetch error:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        
+        if (response.status === 403) {
+          throw new Error("You don't have access to this task. You may need to switch to the correct workspace.");
+        } else if (response.status === 404) {
+          throw new Error("Task not found.");
+        } else {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
       }
       
       const data = await response.json();
@@ -38,7 +51,8 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
       setIsOpen(true);
     } catch (err) {
       console.error("Failed to fetch task details:", err);
-      setError("Failed to load task details. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : "Failed to load task details. Please try again.";
+      setError(errorMessage);
     } finally {
       setShouldRefresh(false);
     }

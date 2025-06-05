@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
+import { useActivity } from "@/context/ActivityContext";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -27,6 +28,7 @@ import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
 import { useSession } from "next-auth/react";
+import { TaskHelpersSection } from "@/components/tasks/TaskHelpersSection";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -254,6 +256,7 @@ export function TaskDetailContent({
   const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
   const { toast } = useToast();
   const { refreshBoards } = useTasks();
+  const { handleTaskAction } = useActivity();
   const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
 
   // New state variables for play/pause feature
@@ -267,7 +270,9 @@ export function TaskDetailContent({
 
   const canControlTimer = useMemo(() => {
     if (!task || !currentUserId) return false;
-    return task.reporter?.id === currentUserId || task.assignee?.id === currentUserId;
+    // Allow assignee, reporter, or any user to control their own timer
+    // Individual timer control is now per-user based
+    return true;
   }, [task, currentUserId]);
 
   // Update comments state when task changes
@@ -331,14 +336,25 @@ export function TaskDetailContent({
     }
   }, [task?.id]);
 
-  // Determine current play state from activities
+  // Determine current play state from activities (filtered by current user)
   useEffect(() => {
-    if (taskActivities.length > 0) {
-      const lastRelevantActivity = [...taskActivities] // Create a new array to avoid mutating state directly
-        .filter(act => ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"].includes(act.action))
+    if (taskActivities.length > 0 && currentUserId) {
+      console.log(`[TaskTimer] Processing ${taskActivities.length} activities for user ${currentUserId}`);
+      
+      const userActivities = [...taskActivities] // Create a new array to avoid mutating state directly
+        .filter(act => 
+          ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"].includes(act.action) &&
+          act.user.id === currentUserId // Explicitly filter by current user
+        );
+      
+      console.log(`[TaskTimer] Found ${userActivities.length} relevant activities for current user`);
+      
+      const lastRelevantActivity = userActivities
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
       if (lastRelevantActivity) {
+        console.log(`[TaskTimer] Last relevant activity:`, lastRelevantActivity.action, 'at', lastRelevantActivity.createdAt);
+        
         if (lastRelevantActivity.action === "TASK_PLAY_STARTED") {
           setCurrentPlayState("playing");
         } else if (lastRelevantActivity.action === "TASK_PLAY_PAUSED") {
@@ -347,12 +363,14 @@ export function TaskDetailContent({
           setCurrentPlayState("stopped");
         }
       } else {
+        console.log(`[TaskTimer] No relevant activities found for current user`);
         setCurrentPlayState("stopped");
       }
     } else {
-      setCurrentPlayState("stopped"); // Default to stopped if no activities
+      console.log(`[TaskTimer] No activities (${taskActivities.length}) or no current user (${currentUserId})`);
+      setCurrentPlayState("stopped"); // Default to stopped if no activities or no current user
     }
-  }, [taskActivities]);
+  }, [taskActivities, currentUserId]);
 
   // Helper function to format milliseconds into a readable string (e.g., 1d 2h 3m 4s)
   const formatLiveTime = (ms: number): string => {
@@ -372,7 +390,7 @@ export function TaskDetailContent({
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
 
-    if (currentPlayState === "playing" && totalPlayTime) {
+    if (currentPlayState === "playing" && totalPlayTime && typeof totalPlayTime.totalPlayTimeMs === 'number') {
       const initialMs = totalPlayTime.totalPlayTimeMs;
       const anchorTime = Date.now(); // Time when this play session (or data fetch) was anchored
 
@@ -403,30 +421,23 @@ export function TaskDetailContent({
 
   const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
     if (!task?.id) return;
+    
     setIsTimerLoading(true);
     try {
-      const response = await fetch(`/api/tasks/${task.id}/${action}`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: `Failed to ${action} task` }));
-        throw new Error(errorData.message || `Failed to ${action} task`);
-      }
-      toast({
-        title: `Task ${action === 'play' ? 'Timer Started' : action === 'pause' ? 'Timer Paused' : 'Timer Stopped'}`,
-        description: `Task timer has been ${action === 'play' ? 'started' : action}.`,
-      });
-      // Refresh activities and playtime, then call external onRefresh
-      await fetchTaskActivities();
-      await fetchTotalPlayTime();
-      onRefresh(); // Call the passed onRefresh to update parent components if needed
+      // Use the ActivityContext for proper state management
+      await handleTaskAction(action, task.id);
+
+      // Fetch local data directly. These will update relevant states and UI parts.
+      await fetchTaskActivities(); 
+      await fetchTotalPlayTime();  
+
+      // Refresh the boards context for other parts of the application (including dock widget)
+      refreshBoards(); 
+      // No longer calling onRefresh() here to prevent parent-induced re-fetch of the whole task object
+
     } catch (err: any) {
       console.error(`Error ${action} task:`, err);
-      toast({
-        title: "Error",
-        description: err.message || `Could not ${action} task.`,
-        variant: "destructive",
-      });
+      // Error handling is already done in the ActivityContext
     } finally {
       setIsTimerLoading(false);
     }
@@ -900,7 +911,7 @@ export function TaskDetailContent({
                     onClick={() => handlePlayPauseStop("play")}
                     disabled={isTimerLoading || !task?.id || !canControlTimer}
                     className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={canControlTimer ? "Start Timer" : "Only assignee or reporter can start timer"}
+                    title="Start Timer"
                   >
                     {isTimerLoading && currentPlayState === "stopped" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                   </Button>
@@ -912,7 +923,7 @@ export function TaskDetailContent({
                     onClick={() => handlePlayPauseStop("pause")}
                     disabled={isTimerLoading || !task?.id || !canControlTimer}
                     className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={canControlTimer ? "Pause Timer" : "Only assignee or reporter can pause timer"}
+                    title="Pause Timer"
                   >
                     {isTimerLoading && currentPlayState === "playing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
                   </Button>
@@ -924,7 +935,7 @@ export function TaskDetailContent({
                     onClick={() => handlePlayPauseStop("play")}
                     disabled={isTimerLoading || !task?.id || !canControlTimer}
                     className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={canControlTimer ? "Resume Timer" : "Only assignee or reporter can resume timer"}
+                    title="Resume Timer"
                   >
                     {isTimerLoading && currentPlayState === "paused" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                   </Button>
@@ -936,7 +947,7 @@ export function TaskDetailContent({
                     onClick={() => handlePlayPauseStop("stop")}
                     disabled={isTimerLoading || !task?.id || !canControlTimer}
                     className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={canControlTimer ? "Stop Timer" : "Only assignee or reporter can stop timer"}
+                    title="Stop Timer"
                   >
                     {isTimerLoading && (currentPlayState === "playing" || currentPlayState === "paused") ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
                   </Button>
@@ -1103,6 +1114,15 @@ export function TaskDetailContent({
               />
             </CardContent>
           </Card>
+
+          {/* Task Helpers Section */}
+          <TaskHelpersSection
+            taskId={task.id}
+            assigneeId={task.assignee?.id}
+            reporterId={task.reporter?.id || ""}
+            currentUserId={currentUserId}
+            onRefresh={onRefresh}
+          />
           {/* Task Activities Section */}
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center gap-2">
@@ -1138,7 +1158,7 @@ export function TaskDetailContent({
                 <p className="text-sm font-medium mb-1">Status</p>
                 <div className="relative">
                   <Select
-                    value={task.column?.name || task.status || "TO DO"}
+                    value={task.column?.name || "TO DO"}
                     onValueChange={handleStatusChange}
                     disabled={savingStatus}
                   >
@@ -1384,24 +1404,24 @@ export function TaskDetailContent({
             <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
               <CardHeader className="py-3 bg-muted/30 border-b">
                 <CardTitle className="text-md">Attachments</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <ul className="space-y-2">
-                  {task.attachments.map((attachment) => (
-                    <li key={attachment.id}>
-                      <Link
-                        href={attachment.url}
-                        target="_blank"
-                        className="text-sm text-primary hover:underline flex items-center gap-1"
-                      >
-                        {attachment.name || "File"}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
+                </CardHeader>
+                <CardContent className="p-4">
+                  <ul className="space-y-2">
+                    {task.attachments.map((attachment) => (
+                      <li key={attachment.id}>
+                        <Link
+                          href={attachment.url}
+                          target="_blank"
+                          className="text-sm text-primary hover:underline flex items-center gap-1"
+                        >
+                          {attachment.name || "File"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
         </div>
       </div>
 

@@ -7,13 +7,14 @@ export async function GET(
   { params }: { params: { postId: string } }
 ) {
   try {
+    const _params = await params;
     const currentUser = await getCurrentUser();
 
     if (!currentUser) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { postId } = params;
+    const { postId } = _params;
 
     // Fetch the post to check if it exists and belongs to the user's workspace
     const post = await prisma.post.findUnique({

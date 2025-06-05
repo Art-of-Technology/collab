@@ -40,7 +40,25 @@ export async function PATCH(
       );
     }
 
-    // Check if user has admin rights in the workspace
+    // Check if user has access to the workspace (either as owner or member)
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        id: column.taskBoard.workspaceId,
+        OR: [
+          { ownerId: currentUser.id }, // User is the owner
+          { members: { some: { userId: currentUser.id } } } // User is a member
+        ]
+      }
+    });
+
+    if (!workspace) {
+      return NextResponse.json(
+        { error: "You don't have access to this column" },
+        { status: 403 }
+      );
+    }
+
+    // Get workspace membership for permission check
     const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
         userId: currentUser.id,
@@ -48,21 +66,8 @@ export async function PATCH(
       },
     });
 
-    if (!userWorkspaceMembership) {
-      return NextResponse.json(
-        { error: "You don't have access to this column" },
-        { status: 403 }
-      );
-    }
-
-    // Check if the user is the workspace owner
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: column.taskBoard.workspaceId },
-      select: { ownerId: true },
-    });
-
-    const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
-    const isWorkspaceAdmin = userWorkspaceMembership.role === 'admin' || userWorkspaceMembership.role === 'owner';
+    const isWorkspaceOwner = workspace.ownerId === currentUser.id;
+    const isWorkspaceAdmin = userWorkspaceMembership?.role === 'admin' || userWorkspaceMembership?.role === 'owner';
     const isGlobalAdmin = currentUser.role === 'admin';
 
     // Only allow workspace admins, workspace owners, or global admins to edit columns
@@ -132,7 +137,25 @@ export async function DELETE(
       );
     }
 
-    // Check if user has admin rights in the workspace
+    // Check if user has access to the workspace (either as owner or member)
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        id: column.taskBoard.workspaceId,
+        OR: [
+          { ownerId: currentUser.id }, // User is the owner
+          { members: { some: { userId: currentUser.id } } } // User is a member
+        ]
+      }
+    });
+
+    if (!workspace) {
+      return NextResponse.json(
+        { error: "You don't have access to this column" },
+        { status: 403 }
+      );
+    }
+
+    // Get workspace membership for permission check
     const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
         userId: currentUser.id,
@@ -140,21 +163,8 @@ export async function DELETE(
       },
     });
 
-    if (!userWorkspaceMembership) {
-      return NextResponse.json(
-        { error: "You don't have access to this column" },
-        { status: 403 }
-      );
-    }
-
-    // Check if the user is the workspace owner
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: column.taskBoard.workspaceId },
-      select: { ownerId: true },
-    });
-
-    const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
-    const isWorkspaceAdmin = userWorkspaceMembership.role === 'admin' || userWorkspaceMembership.role === 'owner';
+    const isWorkspaceOwner = workspace.ownerId === currentUser.id;
+    const isWorkspaceAdmin = userWorkspaceMembership?.role === 'admin' || userWorkspaceMembership?.role === 'owner';
     const isGlobalAdmin = currentUser.role === 'admin';
 
     // Only allow workspace admins, workspace owners, or global admins to delete columns

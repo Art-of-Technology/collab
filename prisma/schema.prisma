@@ -56,10 +56,20 @@ model User {
   taskCommentReactions TaskCommentReaction[]
   taskAttachments      TaskAttachment[]
   taskActivities       TaskActivity[]
+  taskAssignees        TaskAssignee[]          @relation("TaskAssignee")
+  approvedTaskHelpers  TaskAssignee[]          @relation("TaskAssigneeApprover")
   
   // Notification-related fields
   sentNotifications    Notification[]          @relation("NotificationSender")
   notifications        Notification[]          @relation("NotificationReceiver")
+  
+  // Activity tracking fields
+  userEvents           UserEvent[]
+  userStatus           UserStatus?
+  
+  // Notes-related fields
+  notes                Note[]
+  noteTags             NoteTag[]
 }
 
 model Account {
@@ -289,6 +299,8 @@ model Workspace {
   milestones      Milestone[]
   epics           Epic[]
   stories         Story[]
+  notes           Note[]
+  noteTags        NoteTag[]
 }
 
 model WorkspaceMember {
@@ -402,6 +414,13 @@ model Task {
   labels      TaskLabel[]      @relation("TaskToLabel")
   activity    TaskActivity[]
   notifications Notification[]
+  
+  // Activity tracking relations
+  userEvents   UserEvent[]
+  userStatuses UserStatus[]
+  
+  // Multiple assignees/helpers support
+  assignees    TaskAssignee[]
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -431,6 +450,7 @@ model TaskComment {
   parent    TaskComment?          @relation("TaskCommentToTaskComment", fields: [parentId], references: [id], onDelete: Cascade)
   replies   TaskComment[]         @relation("TaskCommentToTaskComment")
   reactions TaskCommentReaction[]
+  notifications Notification[]
 
   @@index([taskId])
   @@index([authorId])
@@ -616,6 +636,9 @@ model Notification {
   commentId   String?
   comment     Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
   
+  taskCommentId String?
+  taskComment   TaskComment? @relation(fields: [taskCommentId], references: [id], onDelete: Cascade)
+  
   featureRequestId String?
   featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
   
@@ -634,9 +657,159 @@ model Notification {
   @@index([userId])
   @@index([postId])
   @@index([commentId])
+  @@index([taskCommentId])
   @@index([taskId])
   @@index([featureRequestId])
   @@index([epicId])
   @@index([storyId])
   @@index([milestoneId])
+}
+
+// Advanced Activity Tracking Models
+enum EventType {
+  TASK_START
+  TASK_PAUSE
+  TASK_STOP
+  TASK_COMPLETE
+  LUNCH_START
+  LUNCH_END
+  BREAK_START
+  BREAK_END
+  MEETING_START
+  MEETING_END
+  TRAVEL_START
+  TRAVEL_END
+  REVIEW_START
+  REVIEW_END
+  RESEARCH_START
+  RESEARCH_END
+  OFFLINE
+  AVAILABLE
+}
+
+enum UserStatusType {
+  WORKING
+  LUNCH
+  BREAK
+  MEETING
+  TRAVEL
+  REVIEW
+  RESEARCH
+  OFFLINE
+  AVAILABLE
+}
+
+model UserEvent {
+  id          String    @id @default(cuid())
+  userId      String
+  eventType   EventType
+  taskId      String?
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  duration    Int?      // Duration in milliseconds
+  description String?   // Additional context or notes
+  metadata    Json?     // Flexible JSON field for additional data
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([eventType])
+  @@index([startedAt])
+}
+
+model UserStatus {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  currentStatus   UserStatusType @default(AVAILABLE)
+  currentTaskId   String?
+  statusStartedAt DateTime       @default(now())
+  statusText      String?        // Custom status message
+  isAvailable     Boolean        @default(true)
+  autoEndAt       DateTime?      // For scheduled end times (like lunch break)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentTask     Task?          @relation(fields: [currentTaskId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([currentStatus])
+}
+
+// Notes system
+model Note {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    // Markdown content
+  isPublic    Boolean   @default(false)
+  isFavorite  Boolean   @default(false)
+  authorId    String
+  workspaceId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  tags        NoteTag[] @relation("NoteToTag")
+
+  @@index([authorId])
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@index([isFavorite])
+}
+
+model NoteTag {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#6366F1")
+  authorId    String
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  notes       Note[]    @relation("NoteToTag")
+
+  @@unique([name, authorId, workspaceId])
+  @@index([authorId])
+  @@index([workspaceId])
+}
+
+// New model for multiple assignees/helpers
+model TaskAssignee {
+  id               String              @id @default(cuid())
+  taskId           String
+  userId           String
+  role             TaskAssigneeRole    @default(ASSIGNEE)
+  status           TaskAssigneeStatus  @default(PENDING)
+  assignedAt       DateTime            @default(now())
+  approvedAt       DateTime?
+  approvedBy       String?             // User ID who approved the help request
+  totalTimeWorked  Int                 @default(0) // Total time worked in milliseconds
+  lastWorkedAt     DateTime?
+  
+  task             Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user             User                @relation("TaskAssignee", fields: [userId], references: [id], onDelete: Cascade)
+  approver         User?               @relation("TaskAssigneeApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([role])
+  @@index([status])
+}
+
+enum TaskAssigneeRole {
+  ASSIGNEE  // Original assignee
+  HELPER    // Helper who requested to help
+}
+
+enum TaskAssigneeStatus {
+  PENDING   // Helper request pending approval
+  APPROVED  // Helper request approved
+  REJECTED  // Helper request rejected
 }

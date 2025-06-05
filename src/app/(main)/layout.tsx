@@ -5,6 +5,7 @@ import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SidebarProvider from "@/components/providers/SidebarProvider";
 import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
+import { AppDock } from "@/components/dock";
 
 export default async function MainLayout({
   children,
@@ -71,11 +72,14 @@ export default async function MainLayout({
       />
       
       {/* Main content area - full width */}
-      <main className="pt-20 pb-8 px-4 overflow-y-auto bg-[#191919]">
+      <main className="pt-20 pb-[90px] px-4 overflow-y-auto bg-[#191919]">
         <div className="mx-auto w-full p-12">
           {children}
         </div>
       </main>
+      
+      {/* App Dock - Only show for admin users */}
+      {session.user.role === 'admin' && <AppDock />}
     </div>
   );
 } 
