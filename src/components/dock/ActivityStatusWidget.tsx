@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { 
   Play, 
   Pause, 
@@ -13,7 +14,7 @@ import {
   Search, 
   Moon, 
   CheckCircle,
-  ChevronDown,
+  ChevronUp,
   Activity,
   Timer,
   X
@@ -28,28 +29,22 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAssignedTasks } from "@/hooks/useAssignedTasks";
+import { useAssignedTasks, TaskOption } from "@/hooks/useAssignedTasks";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useActivity } from "@/context/ActivityContext";
 import { cn } from "@/lib/utils";
 
 interface ActivityStatusWidgetProps {
   className?: string;
-}
-
-interface UserStatus {
-  id: string;
-  currentStatus: string;
-  currentTaskId?: string;
-  statusStartedAt: string;
-  statusText?: string;
-  isAvailable: boolean;
-  autoEndAt?: string;
-  currentTask?: {
-    id: string;
-    title: string;
-    issueKey?: string;
-    priority: string;
-  };
 }
 
 const STATUS_CONFIGS = {
@@ -128,36 +123,19 @@ const QUICK_ACTIVITIES = [
 ];
 
 export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
-  const { boards, loading: tasksLoading, refetch } = useAssignedTasks();
+  const { data: session } = useSession();
+  const { currentWorkspace } = useWorkspace();
+  const { boards, loading: tasksLoading, refetch } = useAssignedTasks(currentWorkspace?.id);
+  const { userStatus, isLoading, startActivity, endActivity, handleTaskAction } = useActivity();
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
-  const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [statusLoading, setStatusLoading] = useState(false);
   const [liveTime, setLiveTime] = useState<string | null>(null);
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchTasks, setSearchTasks] = useState<TaskOption[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showHelperModal, setShowHelperModal] = useState(false);
+  const [selectedTaskForHelper, setSelectedTaskForHelper] = useState<TaskOption | null>(null);
   const { toast } = useToast();
-
-  // Fetch current user status
-  const fetchUserStatus = useCallback(async () => {
-    try {
-      setStatusLoading(true);
-      const response = await fetch("/api/activities/status");
-      if (response.ok) {
-        const data = await response.json();
-        setUserStatus(data.status);
-        
-        // Set selected task if user is currently working on one
-        if (data.status?.currentTaskId && data.status?.currentTaskId !== selectedTaskId) {
-          setSelectedTaskId(data.status.currentTaskId);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching user status:", error);
-    } finally {
-      setStatusLoading(false);
-    }
-  }, [selectedTaskId]);
 
   // Live timer effect
   useEffect(() => {
@@ -182,13 +160,6 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     };
   }, [userStatus?.statusStartedAt]);
 
-  // Fetch status on mount and every 30 seconds
-  useEffect(() => {
-    fetchUserStatus();
-    const interval = setInterval(fetchUserStatus, 30000);
-    return () => clearInterval(interval);
-  }, [fetchUserStatus]);
-
   // Sync selectedTaskId with userStatus.currentTaskId
   useEffect(() => {
     if (userStatus?.currentStatus === "WORKING" && userStatus.currentTaskId) {
@@ -209,150 +180,105 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     return `${m}m ${s}s`;
   };
 
-  const startActivity = async (eventType: string, taskId?: string, duration?: number) => {
-    setIsLoading(true);
-    try {
-      // First, ensure any previous activity is stopped if switching activities
-      const isTaskActivity = eventType.startsWith("TASK_");
-      const isCurrentlyWorking = userStatus?.currentStatus === "WORKING";
-      const hasCurrentActivity = userStatus?.currentStatus && userStatus.currentStatus !== "AVAILABLE";
-      const isSwitchingTasks = isTaskActivity && isCurrentlyWorking && taskId !== userStatus?.currentTaskId;
-      const isSwitchingToNonTask = !isTaskActivity && isCurrentlyWorking;
-      const isSwitchingActivities = hasCurrentActivity && !isCurrentlyWorking;
-
-      // Stop previous activity when switching
-      if (isSwitchingTasks || isSwitchingToNonTask) {
-        // Stop previous task work
-        try {
-          await fetch("/api/activities/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              eventType: "TASK_STOP",
-              taskId: userStatus?.currentTaskId,
-              description: `Stopped work on previous task`,
-            }),
-          });
-        } catch (error) {
-          console.warn("Failed to stop previous task:", error);
-        }
-      } else if (isSwitchingActivities) {
-        // End any current non-task activity
-        try {
-          await fetch("/api/activities/end", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              description: "Switching to new activity",
-            }),
-          });
-        } catch (error) {
-          console.warn("Failed to end previous activity:", error);
-        }
-      }
-
-      const autoEndAt = duration 
-        ? new Date(Date.now() + duration * 60 * 1000).toISOString()
-        : undefined;
-
-      // Get task details for better description
-      const task = taskId ? getTaskById(taskId) : null;
-      const taskDescription = task ? `${task.issueKey} - ${task.title}` : undefined;
-
-      const response = await fetch("/api/activities/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventType,
-          taskId,
-          description: taskDescription || QUICK_ACTIVITIES.find(a => a.eventType === eventType)?.label || `Started ${eventType.toLowerCase().replace('_', ' ')}`,
-          autoEndAt,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Update selected task if starting task work
-        if (isTaskActivity && taskId) {
-          setSelectedTaskId(taskId);
-        }
-        
-        // Clear search and close dropdown
-        setTaskSearchQuery("");
-        setIsDropdownOpen(false);
-
-        toast({
-          title: "Status Updated",
-          description: data.message,
-        });
-        await Promise.all([fetchUserStatus(), refetch()]);
-      } else {
-        const errorData = await response.json().catch(() => ({ message: "Failed to update status" }));
-        throw new Error(errorData.message || "Failed to update status");
-      }
-    } catch (error) {
-      console.error("Error starting activity:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update status",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+  const handleTaskClick = (task: TaskOption) => {
+    const isAssignedToMe = task.assignee?.id === session?.user?.id;
+    
+    if (isAssignedToMe) {
+      // User is assigned to this task, start normally
+      handleQuickStartTask(task.id);
+    } else {
+      // User is not assigned, show helper modal
+      setSelectedTaskForHelper(task);
+      setShowHelperModal(true);
     }
   };
 
-  const endActivity = async () => {
-    setIsLoading(true);
+  const handleQuickStartTask = async (taskId: string) => {
     try {
-      const response = await fetch("/api/activities/end", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: "Set to available",
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Clear task selection if we were working on a task
-        if (userStatus?.currentStatus === "WORKING") {
-          setSelectedTaskId("");
-        }
-        
-        toast({
-          title: "Status Updated",
-          description: data.message || "You are now available",
-        });
-        await Promise.all([fetchUserStatus(), refetch()]);
-      } else {
-        const errorData = await response.json().catch(() => ({ message: "Failed to end activity" }));
-        throw new Error(errorData.message || "Failed to end activity");
-      }
+      await startActivity("TASK_START", taskId);
+      setTaskSearchQuery("");
+      setIsDropdownOpen(false);
+      refetch();
     } catch (error) {
-      console.error("Error ending activity:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update status",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      // Error handling is done in the context
     }
   };
 
-  const handleTaskAction = async (action: "play" | "pause" | "stop") => {
-    if (!selectedTaskId) return;
+  const handleHelperConfirm = async () => {
+    if (!selectedTaskForHelper) return;
 
-    const eventTypeMap = {
-      play: "TASK_START",
-      pause: "TASK_PAUSE", 
-      stop: "TASK_STOP"
-    };
+    try {
+      // First, send help request
+      const helpResponse = await fetch(`/api/tasks/${selectedTaskForHelper.id}/request-help`, {
+        method: 'POST',
+      });
 
-    await startActivity(eventTypeMap[action], selectedTaskId);
+      if (!helpResponse.ok) {
+        const error = await helpResponse.json();
+        throw new Error(error.message || 'Failed to request help');
+      }
+
+      const helpData = await helpResponse.json();
+
+      // Then, start working on the task as a helper
+      await startActivity("TASK_START", selectedTaskForHelper.id);
+
+      if (helpData.status === "approved") {
+        toast({
+          title: "Started as Helper",
+          description: "You are already approved! Timer started and your time will be tracked separately.",
+        });
+      } else {
+        toast({
+          title: "Started as Helper",
+          description: "Help request sent and timer started. Your time will be tracked separately.",
+        });
+      }
+
+      setShowHelperModal(false);
+      setSelectedTaskForHelper(null);
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start as helper",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleHelperCancel = () => {
+    setShowHelperModal(false);
+    setSelectedTaskForHelper(null);
+  };
+
+  const handleQuickActivity = async (eventType: string, duration?: number) => {
+    try {
+      await startActivity(eventType, undefined, duration);
+      setIsDropdownOpen(false);
+    } catch (error) {
+      // Error handling is done in the context
+    }
+  };
+
+  const handleEndActivity = async () => {
+    try {
+      await endActivity();
+      setSelectedTaskId("");
+    } catch (error) {
+      // Error handling is done in the context
+    }
+  };
+
+  const handleTaskControlAction = async (action: "play" | "pause" | "stop") => {
+    const taskId = userStatus?.currentTaskId;
+    if (!taskId) return;
+
+    try {
+      await handleTaskAction(action, taskId);
+    } catch (error) {
+      // Error handling is done in the context
+    }
   };
 
   const getSelectedTask = () => {
@@ -375,65 +301,94 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const currentConfig = STATUS_CONFIGS[userStatus?.currentStatus as keyof typeof STATUS_CONFIGS] || STATUS_CONFIGS.AVAILABLE;
   const StatusIcon = currentConfig.icon;
 
+  // Search all tasks in workspace when query changes
+  useEffect(() => {
+    if (!taskSearchQuery.trim() || !currentWorkspace?.id) {
+      setSearchTasks([]);
+      return;
+    }
+
+    const searchAllTasks = async () => {
+      if (!currentWorkspace?.id) {
+        console.warn('No current workspace available for search');
+        setSearchTasks([]);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/search-tasks?q=${encodeURIComponent(taskSearchQuery)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setSearchTasks(data.tasks || []);
+        } else {
+          console.error('Search failed:', response.status, response.statusText);
+          setSearchTasks([]);
+        }
+      } catch (error) {
+        console.error('Error searching tasks:', error);
+        setSearchTasks([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchAllTasks, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [taskSearchQuery, currentWorkspace?.id]);
+
   // Filter tasks based on search query
   const getFilteredTasks = () => {
     if (!taskSearchQuery.trim()) {
       return boards.flatMap(board => board.tasks);
     }
     
-    const query = taskSearchQuery.toLowerCase();
-    return boards.flatMap(board => 
-      board.tasks.filter(task => 
-        task.title.toLowerCase().includes(query) ||
-        task.issueKey?.toLowerCase().includes(query) ||
-        board.name.toLowerCase().includes(query)
-      )
-    );
+    return searchTasks;
   };
 
   const getActionButtons = () => {
-    if (userStatus?.currentStatus === "WORKING" && selectedTask) {
-      // Get current play state from task or determine from status
-      const currentState = selectedTask.currentPlayState || "stopped";
+    if (userStatus?.currentStatus === "WORKING" && userStatus.currentTaskId) {
+      // Get current play state from user status
+      const currentState = userStatus.currentTaskPlayState || "stopped";
 
       if (currentState === "stopped") {
         return (
           <button
-            onClick={() => handleTaskAction("play")}
+            onClick={() => handleTaskControlAction("play")}
             disabled={isLoading}
-            className="h-10 w-10 rounded-full bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-green-400/30 hover:border-green-300/50 shadow-lg hover:shadow-green-500/25"
+            className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-green-400/30 hover:border-green-300/50 shadow-lg hover:shadow-green-500/25"
           >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 ml-0.5" />}
+            {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Play className="h-3 w-3 md:h-4 md:w-4 ml-0.5" />}
           </button>
         );
       }
 
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           {currentState === "playing" && (
             <button
-              onClick={() => handleTaskAction("pause")}
+              onClick={() => handleTaskControlAction("pause")}
               disabled={isLoading}
-              className="h-10 w-10 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-amber-400/30 hover:border-amber-300/50 shadow-lg hover:shadow-amber-500/25"
+              className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-amber-400/30 hover:border-amber-300/50 shadow-lg hover:shadow-amber-500/25"
             >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+              {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Pause className="h-3 w-3 md:h-4 md:w-4" />}
             </button>
           )}
           {currentState === "paused" && (
             <button
-              onClick={() => handleTaskAction("play")}
+              onClick={() => handleTaskControlAction("play")}
               disabled={isLoading}
-              className="h-10 w-10 rounded-full bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-green-400/30 hover:border-green-300/50 shadow-lg hover:shadow-green-500/25"
+              className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-green-400/30 hover:border-green-300/50 shadow-lg hover:shadow-green-500/25"
             >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 ml-0.5" />}
+              {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Play className="h-3 w-3 md:h-4 md:w-4 ml-0.5" />}
             </button>
           )}
           <button
-            onClick={() => handleTaskAction("stop")}
+            onClick={() => handleTaskControlAction("stop")}
             disabled={isLoading}
-            className="h-8 w-8 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-400/70 hover:text-red-400 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/20 hover:border-red-400/40 shadow-lg hover:shadow-red-500/20"
+            className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-400/70 hover:text-red-400 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/20 hover:border-red-400/40 shadow-lg hover:shadow-red-500/20"
           >
-            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <StopCircle className="h-3.5 w-3.5" />}
+            {isLoading ? <Loader2 className="h-3 w-3 md:h-3.5 md:w-3.5 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-3.5 md:w-3.5" />}
           </button>
         </div>
       );
@@ -443,11 +398,11 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     if (userStatus?.currentStatus !== "AVAILABLE") {
       return (
         <button
-          onClick={endActivity}
+          onClick={handleEndActivity}
           disabled={isLoading}
-          className="h-10 w-10 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/30 hover:border-red-300/50 shadow-lg hover:shadow-red-500/25"
+          className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/30 hover:border-red-300/50 shadow-lg hover:shadow-red-500/25"
         >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+          {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-4 md:w-4" />}
         </button>
       );
     }
@@ -455,42 +410,43 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     return null;
   };
 
-  if (statusLoading && !userStatus) {
+  if (isLoading && !userStatus) {
     return (
-      <div className={cn("flex items-center gap-3", className)}>
-        <div className="h-5 w-5 rounded-full bg-gray-500 animate-pulse" />
-        <span className="text-sm text-white/70">Loading status...</span>
+      <div className={cn("flex items-center gap-2 md:gap-3", className)}>
+        <div className="h-4 w-4 md:h-5 md:w-5 rounded-full bg-gray-500 animate-pulse" />
+        <span className="text-xs md:text-sm text-white/70">Loading status...</span>
       </div>
     );
   }
 
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      {/* Status Indicator */}
-      <div className="relative">
-        <div className={cn("h-4 w-4 rounded-full", currentConfig.color)} />
-        <StatusIcon className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-white bg-gray-800 rounded-full p-0.5" />
-      </div>
+    <>
+      <div className={cn("flex items-center gap-2 md:gap-3", className)}>
+        {/* Status Indicator */}
+        <div className="relative">
+          <div className={cn("h-3 w-3 md:h-4 md:w-4 rounded-full", currentConfig.color)} />
+          <StatusIcon className="absolute -bottom-0.5 -right-0.5 h-2 w-2 md:h-2.5 md:w-2.5 text-white bg-gray-800 rounded-full p-0.5" />
+        </div>
 
       {/* Main Content */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
         {/* Status Display */}
-        <div className="min-w-[160px]">
+        <div className="min-w-[120px] md:min-w-[160px]">
           {userStatus?.currentStatus === "WORKING" && userStatus.currentTask ? (
             <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2">
                 <span className="font-mono text-xs text-white/60">{userStatus.currentTask.issueKey}</span>
-                <span className="text-sm text-white truncate font-medium max-w-[120px]">
+                <span className="text-xs md:text-sm text-white truncate font-medium max-w-[80px] md:max-w-[120px]">
                   {userStatus.currentTask.title}
                 </span>
-                {selectedTask?.currentPlayState === "playing" && (
-                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                {userStatus.currentTaskPlayState === "playing" && (
+                  <div className="h-1.5 w-1.5 md:h-2 md:w-2 bg-green-500 rounded-full animate-pulse" />
                 )}
-                {selectedTask?.currentPlayState === "paused" && (
-                  <div className="h-2 w-2 bg-amber-500 rounded-full" />
+                {userStatus.currentTaskPlayState === "paused" && (
+                  <div className="h-1.5 w-1.5 md:h-2 md:w-2 bg-amber-500 rounded-full" />
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2">
                 <span className={cn("text-xs", currentConfig.textColor)}>
                   {liveTime || "0m 0s"}
                 </span>
@@ -500,19 +456,19 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
             </div>
           ) : (
             <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className={cn("text-sm font-medium", currentConfig.textColor)}>
+              <div className="flex items-center gap-1 md:gap-2">
+                <span className={cn("text-xs md:text-sm font-medium", currentConfig.textColor)}>
                   {currentConfig.label}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2">
                 <span className="text-xs text-white/70">
                   {liveTime || "Just started"}
                 </span>
                 {userStatus?.statusText && (
                   <>
                     <span className="text-xs text-white/50">•</span>
-                    <span className="text-xs text-white/60 truncate max-w-[100px]">
+                    <span className="text-xs text-white/60 truncate max-w-[60px] md:max-w-[100px]">
                       {userStatus.statusText}
                     </span>
                   </>
@@ -523,7 +479,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           {getActionButtons()}
           
           {/* Status Switcher */}
@@ -532,10 +488,10 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white p-0 backdrop-blur-sm border border-white/10 hover:border-white/20 shadow-lg hover:shadow-white/10 transition-all duration-200 hover:scale-110"
+                className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white p-0 backdrop-blur-sm border border-white/10 hover:border-white/20 shadow-lg hover:shadow-white/10 transition-all duration-200 hover:scale-110"
                 disabled={isLoading}
               >
-                <ChevronDown className="h-4 w-4" />
+                <ChevronUp className="h-3 w-3 md:h-4 md:w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
@@ -575,11 +531,13 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                     {getFilteredTasks().length > 0 ? (
                       getFilteredTasks().map((task) => {
                         const board = boards.find(b => b.tasks.some(t => t.id === task.id));
+                        const isAssignedToMe = task.assignee?.id === session?.user?.id;
+                        
                         return (
                           <DropdownMenuItem
                             key={task.id}
                             onClick={() => {
-                              startActivity("TASK_START", task.id);
+                              handleTaskClick(task);
                             }}
                             disabled={isLoading}
                             className="pl-6"
@@ -595,12 +553,22 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                                 {task.currentPlayState === "paused" && (
                                   <div className="h-2 w-2 bg-amber-500 rounded-full flex-shrink-0" />
                                 )}
+                                {!isAssignedToMe && (
+                                  <div className="h-2 w-2 bg-orange-400 rounded-full flex-shrink-0" title="Not assigned to you" />
+                                )}
                               </div>
-                              {board && (
-                                <div className="text-xs text-muted-foreground pl-5">
-                                  {board.name}
-                                </div>
-                              )}
+                              <div className="flex items-center justify-between pl-5">
+                                {board && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {board.name}
+                                  </div>
+                                )}
+                                {task.assignee && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Assigned to: {task.assignee.name}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </DropdownMenuItem>
                         );
@@ -624,7 +592,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                 return (
                   <DropdownMenuItem
                     key={activity.type}
-                    onClick={() => startActivity(activity.eventType, undefined, activity.duration || undefined)}
+                    onClick={() => handleQuickActivity(activity.eventType, activity.duration || undefined)}
                     disabled={isLoading}
                   >
                     <div className="flex items-center gap-2">
@@ -642,7 +610,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={endActivity}
+                onClick={handleEndActivity}
                 disabled={isLoading || userStatus?.currentStatus === "AVAILABLE"}
               >
                 <div className="flex items-center gap-2">
@@ -654,6 +622,61 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           </DropdownMenu>
         </div>
       </div>
-    </div>
+      </div>
+
+      {/* Helper Confirmation Modal */}
+      <Dialog open={showHelperModal} onOpenChange={setShowHelperModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Work as Helper</DialogTitle>
+            <DialogDescription>
+              You are not assigned to this task. You will be added as a helper and your time will be tracked separately.
+              {selectedTaskForHelper?.assignee && (
+                <span className="block mt-2 text-sm">
+                  This task is assigned to <strong>{selectedTaskForHelper.assignee.name}</strong>.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTaskForHelper && (
+            <div className="py-4">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{selectedTaskForHelper.title}</p>
+                  {selectedTaskForHelper.issueKey && (
+                    <p className="text-xs text-muted-foreground font-mono">{selectedTaskForHelper.issueKey}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handleHelperCancel}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHelperConfirm}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                "Yes, Start as Helper"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 } 

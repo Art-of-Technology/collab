@@ -78,8 +78,8 @@ export default async function MainLayout({
         </div>
       </main>
       
-      {/* App Dock */}
-      <AppDock />
+      {/* App Dock - Only show for admin users */}
+      {session.user.role === 'admin' && <AppDock />}
     </div>
   );
 } 

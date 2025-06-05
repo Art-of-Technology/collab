@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { content } = await req.json();
+    const { content, workspaceId } = await req.json();
 
     if (!content || !content.trim()) {
       return new NextResponse("Content is required", { status: 400 });
@@ -23,9 +23,10 @@ export async function POST(req: Request) {
     // Create a real timeline post using the Post model
     const post = await prisma.post.create({
       data: {
-        type: "timeline",
+        type: "UPDATE", // Use UPDATE instead of timeline
         message: content.trim(),
         authorId: session.user.id,
+        workspaceId: workspaceId,
         isAutomated: false,
         priority: "normal",
       },

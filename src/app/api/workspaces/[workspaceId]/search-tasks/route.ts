@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -13,24 +13,18 @@ export async function GET(
   }
 
   const _params = await params;
-  const { userId } = _params;
-  const currentUserId = session.user.id;
-
-  // Users can only fetch their own tasks or be an admin
-  if (currentUserId !== userId) {
-    return new NextResponse("Forbidden", { status: 403 });
-  }
+  const { workspaceId } = _params;
+  const userId = session.user.id;
 
   const { searchParams } = new URL(req.url);
-  const workspaceId = searchParams.get('workspaceId');
+  const query = searchParams.get('q') || '';
 
   if (!workspaceId) {
     return new NextResponse("Workspace ID is required", { status: 400 });
   }
 
   try {
-    // Verify workspace access before fetching tasks
-    // Check if user is owner or member of the workspace
+    // Verify workspace access before searching tasks
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
@@ -47,40 +41,22 @@ export async function GET(
     });
 
     if (!workspace) {
-      console.error(`User ${userId} attempted to fetch assigned tasks from workspace ${workspaceId} but has no access`);
-      
-      // Debug: Check what workspaces the user has access to
-      const userWorkspaces = await prisma.workspace.findMany({
-        where: {
-          OR: [
-            { ownerId: userId },
-            { members: { some: { userId: userId } } }
-          ]
-        },
-        select: { id: true, name: true }
-      });
-      
-      console.error(`User ${userId} has access to workspaces:`, userWorkspaces);
+      console.error(`User ${userId} attempted to search tasks from workspace ${workspaceId} but has no access`);
       return new NextResponse("No access to this workspace", { status: 403 });
     }
 
-    console.log(`User ${userId} fetching assigned tasks from workspace ${workspaceId} (${workspace.name})`);
-
-    // Get latest 3 assigned tasks for the user in this workspace
-    const assignedTasks = await prisma.task.findMany({
+    // Search tasks in the workspace
+    const tasks = await prisma.task.findMany({
       where: {
-        assigneeId: userId,
         workspaceId: workspaceId,
+        OR: [
+          { title: { contains: query, mode: 'insensitive' } },
+          { issueKey: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } }
+        ]
       },
-      take: 3,
+      take: 20, // Limit results
       include: {
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          }
-        },
         taskBoard: {
           select: {
             id: true,
@@ -90,6 +66,13 @@ export async function GET(
         column: {
           select: {
             name: true,
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
           }
         },
         activity: {
@@ -116,7 +99,7 @@ export async function GET(
       ]
     });
 
-    const formattedTasks = assignedTasks.map(task => {
+    const formattedTasks = tasks.map(task => {
       // Determine current play state from last activity for this user
       let currentPlayState = "stopped";
       
@@ -139,14 +122,14 @@ export async function GET(
         status: task.column?.name || task.status || "TO DO",
         boardId: task.taskBoard?.id || "",
         boardName: task.taskBoard?.name || "No Board",
-        currentPlayState,
-        assignee: task.assignee
+        assignee: task.assignee,
+        currentPlayState
       };
     });
 
     return NextResponse.json({ tasks: formattedTasks });
   } catch (error) {
-    console.error("[USER_ASSIGNED_TASKS_GET]", error);
+    console.error("[WORKSPACE_SEARCH_TASKS_GET]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 } 

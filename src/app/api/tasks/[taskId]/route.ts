@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/tasks/[taskId] - Get task details
 export async function GET(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -19,7 +19,8 @@ export async function GET(
       );
     }
 
-    const { taskId } = params;
+    const resolvedParams = await params;
+    const { taskId } = resolvedParams;
     
     // Check if taskId is an issue key (e.g., WZB-1)
     const isIssueKey = /^[A-Z]+-\d+$/.test(taskId);
@@ -146,17 +147,54 @@ export async function GET(
       );
     }
     
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    // Check if user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        userId: currentUser.id,
-        workspaceId: task.workspaceId,
+        id: task.workspaceId,
+        OR: [
+          { ownerId: currentUser.id }, // User is the owner
+          { members: { some: { userId: currentUser.id } } } // User is a member
+        ]
       },
+      select: {
+        id: true,
+        name: true,
+        ownerId: true
+      }
     });
 
-    if (!hasAccess) {
+    if (!workspaceAccess) {
+      // Enhanced error logging for debugging
+      console.error(`Access denied: User ${currentUser.id} attempted to access task ${taskId} in workspace ${task.workspaceId}`);
+      
+      // Check what workspaces user has access to (both owned and member)
+      const ownedWorkspaces = await prisma.workspace.findMany({
+        where: { ownerId: currentUser.id },
+        select: { id: true, name: true }
+      });
+      
+      const memberWorkspaces = await prisma.workspaceMember.findMany({
+        where: { userId: currentUser.id },
+        include: { workspace: { select: { id: true, name: true } } }
+      });
+      
+      const allUserWorkspaces = [
+        ...ownedWorkspaces.map(w => ({ id: w.id, name: w.name, role: 'OWNER' })),
+        ...memberWorkspaces.map(w => ({ id: w.workspace.id, name: w.workspace.name, role: 'MEMBER' }))
+      ];
+      
+      console.error(`User accessible workspaces:`, allUserWorkspaces);
+      console.error(`Task workspace: ${task.workspaceId}, Task workspace name: ${task.workspace?.name}`);
+      
       return NextResponse.json(
-        { error: "You don't have access to this task" },
+        { 
+          error: "You don't have access to this task",
+          debug: {
+            taskWorkspace: task.workspaceId,
+            taskWorkspaceName: task.workspace?.name,
+            userWorkspaces: allUserWorkspaces
+          }
+        },
         { status: 403 }
       );
     }

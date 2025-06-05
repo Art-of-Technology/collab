@@ -56,6 +56,8 @@ model User {
   taskCommentReactions TaskCommentReaction[]
   taskAttachments      TaskAttachment[]
   taskActivities       TaskActivity[]
+  taskAssignees        TaskAssignee[]          @relation("TaskAssignee")
+  approvedTaskHelpers  TaskAssignee[]          @relation("TaskAssigneeApprover")
   
   // Notification-related fields
   sentNotifications    Notification[]          @relation("NotificationSender")
@@ -416,6 +418,9 @@ model Task {
   // Activity tracking relations
   userEvents   UserEvent[]
   userStatuses UserStatus[]
+  
+  // Multiple assignees/helpers support
+  assignees    TaskAssignee[]
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -772,4 +777,39 @@ model NoteTag {
   @@unique([name, authorId, workspaceId])
   @@index([authorId])
   @@index([workspaceId])
+}
+
+// New model for multiple assignees/helpers
+model TaskAssignee {
+  id               String              @id @default(cuid())
+  taskId           String
+  userId           String
+  role             TaskAssigneeRole    @default(ASSIGNEE)
+  status           TaskAssigneeStatus  @default(PENDING)
+  assignedAt       DateTime            @default(now())
+  approvedAt       DateTime?
+  approvedBy       String?             // User ID who approved the help request
+  totalTimeWorked  Int                 @default(0) // Total time worked in milliseconds
+  lastWorkedAt     DateTime?
+  
+  task             Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user             User                @relation("TaskAssignee", fields: [userId], references: [id], onDelete: Cascade)
+  approver         User?               @relation("TaskAssigneeApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([role])
+  @@index([status])
+}
+
+enum TaskAssigneeRole {
+  ASSIGNEE  // Original assignee
+  HELPER    // Helper who requested to help
+}
+
+enum TaskAssigneeStatus {
+  PENDING   // Helper request pending approval
+  APPROVED  // Helper request approved
+  REJECTED  // Helper request rejected
 }

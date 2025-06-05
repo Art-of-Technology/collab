@@ -5,14 +5,15 @@ import { authConfig } from "@/lib/auth";
 
 export async function GET(
   req: Request,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   const session = await getServerSession(authConfig);
   if (!session?.user?.id) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const { taskId } = params;
+  const _params = await params;
+  const { taskId } = _params;
   const userId = session.user.id;
 
   if (!taskId) {
@@ -46,8 +47,12 @@ export async function GET(
       return new NextResponse("Forbidden: You are not authorized to view activities for this task.", { status: 403 });
     }
 
+    // Show all activities for all users (Activity Feed should show everyone's activities)
     const activities = await prisma.taskActivity.findMany({
-      where: { taskId },
+      where: { 
+        taskId
+        // Removed userId filter - show all activities
+      },
       orderBy: { createdAt: "desc" },
       include: {
         user: {

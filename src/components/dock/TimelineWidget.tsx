@@ -5,6 +5,7 @@ import { Send, Loader2, MessageSquarePlus } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface TimelineWidgetProps {
   className?: string;
@@ -14,9 +15,10 @@ export function TimelineWidget({ className }: TimelineWidgetProps) {
   const [content, setContent] = useState<string>("");
   const [isPosting, setIsPosting] = useState(false);
   const { toast } = useToast();
+  const { currentWorkspace } = useWorkspace();
 
   const handlePost = async () => {
-    if (!content.trim() || isPosting) return;
+    if (!content.trim() || isPosting || !currentWorkspace?.id) return;
 
     setIsPosting(true);
     try {
@@ -26,7 +28,8 @@ export function TimelineWidget({ className }: TimelineWidgetProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: content.trim()
+          content: content.trim(),
+          workspaceId: currentWorkspace.id
         }),
       });
 

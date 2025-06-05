@@ -6,15 +6,15 @@ import { ActivityService } from "@/lib/activity-service";
 
 export async function GET(
   req: Request,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
-
-  const { taskId } = params;
-  const userId = session.user.id; // User ID for authorization, though playtime is for the task itself
+  const _params = await params;
+  const { taskId } = _params;
+  const userId = session.user.id; // User ID for authorization and personal time tracking
 
   if (!taskId) {
     return new NextResponse("Task ID is required", { status: 400 });
@@ -47,8 +47,8 @@ export async function GET(
         return new NextResponse("Forbidden: You are not authorized to access this task's playtime.", { status: 403 });
     }
 
-    // Use the new activity service to get task time spent
-    const timeSpent = await ActivityService.getTaskTimeSpent(taskId);
+    // Use the new activity service to get task time spent by the current user
+    const timeSpent = await ActivityService.getTaskTimeSpent(taskId, userId);
 
     return NextResponse.json(timeSpent);
 

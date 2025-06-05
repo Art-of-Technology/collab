@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 // PATCH /api/tasks/[taskId]/edit - Edit task details
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -13,8 +13,8 @@ export async function PATCH(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const taskId = params.taskId;
+    const _params = await params;
+    const taskId = _params.taskId;
     const { 
       title, 
       description, 
@@ -39,15 +39,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    // Check if user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        userId: user.id,
-        workspaceId: task.workspaceId,
-      },
+        id: task.workspaceId,
+        OR: [
+          { ownerId: user.id }, // User is the owner
+          { members: { some: { userId: user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!hasAccess) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 

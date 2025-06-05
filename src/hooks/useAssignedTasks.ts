@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 
 export interface TaskOption {
@@ -10,6 +10,11 @@ export interface TaskOption {
   boardId: string;
   boardName: string;
   currentPlayState?: 'stopped' | 'playing' | 'paused';
+  assignee?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
 }
 
 export interface TaskBoard {
@@ -18,61 +23,57 @@ export interface TaskBoard {
   tasks: TaskOption[];
 }
 
-export function useAssignedTasks() {
+export function useAssignedTasks(workspaceId?: string) {
   const { data: session } = useSession();
-  const [tasks, setTasks] = useState<TaskOption[]>([]);
-  const [boards, setBoards] = useState<TaskBoard[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchAssignedTasks = useCallback(async () => {
-    if (!session?.user?.id) return;
+  const {
+    data: boards = [],
+    isLoading: loading,
+    error,
+    refetch
+  } = useQuery<TaskBoard[]>({
+    queryKey: ['assignedTasks', session?.user?.id, workspaceId],
+    queryFn: async () => {
+      if (!session?.user?.id || !workspaceId) {
+        return [];
+      }
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Fetch user's assigned tasks
-      const response = await fetch(`/api/users/${session.user.id}/assigned-tasks`);
+      const response = await fetch(`/api/users/${session.user.id}/assigned-tasks?workspaceId=${workspaceId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch assigned tasks');
       }
-
-      const data = await response.json();
-      setTasks(data.tasks || []);
-
-      // Group tasks by board
-      const boardMap = new Map<string, TaskBoard>();
       
-      data.tasks?.forEach((task: TaskOption) => {
-        if (!boardMap.has(task.boardId)) {
-          boardMap.set(task.boardId, {
-            id: task.boardId,
-            name: task.boardName,
-            tasks: []
-          });
+      const data = await response.json();
+      
+      // Group tasks by board
+      const tasksByBoard = new Map<string, TaskOption[]>();
+      
+      data.tasks.forEach((task: TaskOption) => {
+        const boardKey = task.boardId || 'no-board';
+        if (!tasksByBoard.has(boardKey)) {
+          tasksByBoard.set(boardKey, []);
         }
-        boardMap.get(task.boardId)?.tasks.push(task);
+        tasksByBoard.get(boardKey)!.push(task);
       });
-
-      setBoards(Array.from(boardMap.values()));
-    } catch (err) {
-      console.error('Error fetching assigned tasks:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
-    } finally {
-      setLoading(false);
-    }
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    fetchAssignedTasks();
-  }, [fetchAssignedTasks]);
+      
+      // Convert to board format
+      const boards: TaskBoard[] = Array.from(tasksByBoard.entries()).map(([boardId, tasks]) => ({
+        id: boardId,
+        name: tasks[0]?.boardName || 'No Board',
+        tasks
+      }));
+      
+      return boards;
+    },
+    enabled: !!session?.user?.id && !!workspaceId,
+    staleTime: 30000, // Consider data stale after 30 seconds
+    refetchInterval: 60000, // Refetch every minute
+  });
 
   return {
-    tasks,
     boards,
     loading,
     error,
-    refetch: fetchAssignedTasks
+    refetch
   };
 } 

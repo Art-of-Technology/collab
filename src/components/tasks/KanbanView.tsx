@@ -110,6 +110,53 @@ export default function KanbanView() {
     });
   };
 
+  // Handle inline column editing
+  const handleColumnEdit = async (columnId: string, name: string) => {
+    try {
+      await updateColumnMutation.mutateAsync({
+        columnId,
+        data: { name }
+      });
+
+      // Optimistically update UI
+      const updatedColumns = localBoardState.columns.map((col: Column) =>
+        col.id === columnId ? { ...col, name } : col
+      );
+
+      setLocalBoardState({
+        ...localBoardState,
+        columns: updatedColumns,
+      });
+
+      // Refresh boards data
+      refreshBoards();
+    } catch (error) {
+      console.error("Error updating column:", error);
+      throw error; // Re-throw so the component can handle the error
+    }
+  };
+
+  // Handle column deletion
+  const handleColumnDelete = async (columnId: string) => {
+    try {
+      await deleteColumnMutation.mutateAsync(columnId);
+
+      // Optimistically update UI
+      const updatedColumns = localBoardState.columns.filter((col: Column) => col.id !== columnId);
+
+      setLocalBoardState({
+        ...localBoardState,
+        columns: updatedColumns,
+      });
+
+      // Refresh boards data
+      refreshBoards();
+    } catch (error) {
+      console.error("Error deleting column:", error);
+      throw error; // Re-throw so the component can handle the error
+    }
+  };
+
   // Handle column creation or editing
   const handleColumnSubmit = async () => {
     if (!newColumnName.trim()) {
@@ -443,6 +490,8 @@ export default function KanbanView() {
                               canManageBoard={canManageBoard}
                               dragHandleProps={provided.dragHandleProps}
                               onCreateTask={handleCreateTask}
+                              onColumnEdit={canManageBoard ? handleColumnEdit : undefined}
+                              onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
                             />
                           </div>
                         )}

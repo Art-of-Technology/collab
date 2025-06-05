@@ -41,12 +41,16 @@ export async function getTaskComments(taskId: string) {
       throw new Error('User not found');
     }
     
-    // Check if user has access to the task's workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    // Check if user has access to the task's workspace (either as owner or member)
+    const hasAccess = await prisma.workspace.findFirst({
       where: {
-        userId: user.id,
-        workspaceId: task.workspaceId,
+        id: task.workspaceId,
+        OR: [
+          { ownerId: user.id }, // User is the owner
+          { members: { some: { userId: user.id } } } // User is a member
+        ]
       },
+      select: { id: true }
     });
     
     if (!hasAccess) {
@@ -144,12 +148,16 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
       throw new Error('User not found');
     }
     
-    // Check if user has access to the task's workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    // Check if user has access to the task's workspace (either as owner or member)
+    const hasAccess = await prisma.workspace.findFirst({
       where: {
-        userId: user.id,
-        workspaceId: task.workspaceId,
+        id: task.workspaceId,
+        OR: [
+          { ownerId: user.id }, // User is the owner
+          { members: { some: { userId: user.id } } } // User is a member
+        ]
       },
+      select: { id: true }
     });
     
     if (!hasAccess) {
@@ -254,11 +262,15 @@ export async function toggleTaskCommentLike(taskId: string, commentId: string) {
       throw new Error('Task not found');
     }
 
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    const hasAccess = await prisma.workspace.findFirst({
       where: {
-        userId: user.id,
-        workspaceId: task.workspaceId,
+        id: task.workspaceId,
+        OR: [
+          { ownerId: user.id }, // User is the owner
+          { members: { some: { userId: user.id } } } // User is a member
+        ]
       },
+      select: { id: true }
     });
 
     if (!hasAccess) {

@@ -28,10 +28,54 @@ export class ActivityService {
     const { userId, eventType, taskId, description, metadata, autoEndAt } = options;
 
     return await prisma.$transaction(async (tx) => {
-      // 1. End any ongoing user events
+      // 1. Check if user is currently working on a task and auto-stop it when switching activities
+      const currentStatus = await tx.userStatus.findUnique({
+        where: { userId },
+        select: { currentTaskId: true, currentStatus: true }
+      });
+
+      // If user is currently working on a task, stop it when:
+      // - Starting a different task (taskId !== currentTaskId)
+      // - Starting any non-task activity (lunch, meeting, break, etc.)
+      if (currentStatus?.currentTaskId && currentStatus.currentStatus === 'WORKING') {
+        const shouldStopCurrentTask = 
+          // Starting a different task
+          (eventType === EventType.TASK_START && taskId !== currentStatus.currentTaskId) ||
+          // Starting any non-task activity
+          (eventType !== EventType.TASK_START && eventType !== EventType.TASK_PAUSE && eventType !== EventType.TASK_STOP);
+
+        if (shouldStopCurrentTask) {
+          const activityName = eventType === EventType.TASK_START ? 'another task' : eventType.toLowerCase().replace('_start', '');
+          
+          console.log(`Stopping current task ${currentStatus.currentTaskId} before starting ${activityName}`);
+          
+          // Create TASK_STOP record for the current task
+          await tx.taskActivity.create({
+            data: {
+              taskId: currentStatus.currentTaskId,
+              userId,
+              action: 'TASK_PLAY_STOPPED',
+              details: JSON.stringify({
+                eventType: 'TASK_STOP',
+                description: `Automatically stopped when switching to ${activityName}`,
+                metadata: { 
+                  autoStopped: true, 
+                  newActivity: eventType,
+                  newTaskId: taskId || null 
+                },
+              }),
+            },
+          });
+
+          // Update helper time tracking for the previous task
+          await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
+        }
+      }
+
+      // 2. End any ongoing user events
       await this.endOngoingUserEvents(userId, tx);
 
-      // 2. Create new user event
+      // 3. Create new user event
       const userEvent = await tx.userEvent.create({
         data: {
           userId,
@@ -43,7 +87,7 @@ export class ActivityService {
         },
       });
 
-      // 3. Update or create user status
+      // 4. Update or create user status
       const statusData = this.mapEventTypeToStatus(eventType, taskId);
       
       await tx.userStatus.upsert({
@@ -67,7 +111,7 @@ export class ActivityService {
         },
       });
 
-      // 4. If this is a task activity, also create a TaskActivity entry for backwards compatibility
+      // 5. If this is a task activity, also create a TaskActivity entry for backwards compatibility
       if (taskId && this.isTaskRelatedEvent(eventType)) {
         await tx.taskActivity.create({
           data: {
@@ -81,6 +125,13 @@ export class ActivityService {
             }),
           },
         });
+
+        // 6. Update helper time tracking if this is a helper working on the task
+        if (eventType === EventType.TASK_START) {
+          await this.updateHelperTimeTracking(taskId, userId, 'start', tx);
+        } else if (eventType === EventType.TASK_STOP || eventType === EventType.TASK_PAUSE) {
+          await this.updateHelperTimeTracking(taskId, userId, 'stop', tx);
+        }
       }
 
       return userEvent;
@@ -92,6 +143,31 @@ export class ActivityService {
    */
   static async endCurrentActivity(userId: string, description?: string) {
     return await prisma.$transaction(async (tx) => {
+      // Check if user is currently working on a task
+      const currentStatus = await tx.userStatus.findUnique({
+        where: { userId },
+        select: { currentTaskId: true, currentStatus: true }
+      });
+
+      // If user is currently working on a task, create a TASK_STOP record
+      if (currentStatus?.currentTaskId && currentStatus.currentStatus === 'WORKING') {
+        await tx.taskActivity.create({
+          data: {
+            taskId: currentStatus.currentTaskId,
+            userId,
+            action: 'TASK_PLAY_STOPPED',
+            details: JSON.stringify({
+              eventType: 'TASK_STOP',
+              description: description || 'Stopped work and set to available',
+              metadata: { source: 'end-activity' },
+            }),
+          },
+        });
+
+        // Update helper time tracking for the current task
+        await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
+      }
+
       // End ongoing user events
       await this.endOngoingUserEvents(userId, tx);
 
@@ -131,7 +207,7 @@ export class ActivityService {
    * Get user's current status
    */
   static async getCurrentStatus(userId: string) {
-    return await prisma.userStatus.findUnique({
+    const status = await prisma.userStatus.findUnique({
       where: { userId },
       include: {
         currentTask: {
@@ -144,6 +220,42 @@ export class ActivityService {
         },
       },
     });
+
+    if (!status) return null;
+
+    // If user is working on a task, determine the current play state
+    let currentTaskPlayState: "stopped" | "playing" | "paused" = "stopped";
+    
+    if (status.currentTaskId && status.currentStatus === 'WORKING') {
+      // Get the latest task activity for this user and task
+      const latestTaskActivity = await prisma.taskActivity.findFirst({
+        where: {
+          taskId: status.currentTaskId,
+          userId,
+          action: { in: ['TASK_PLAY_STARTED', 'TASK_PLAY_PAUSED', 'TASK_PLAY_STOPPED'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (latestTaskActivity) {
+        switch (latestTaskActivity.action) {
+          case 'TASK_PLAY_STARTED':
+            currentTaskPlayState = "playing";
+            break;
+          case 'TASK_PLAY_PAUSED':
+            currentTaskPlayState = "paused";
+            break;
+          case 'TASK_PLAY_STOPPED':
+            currentTaskPlayState = "stopped";
+            break;
+        }
+      }
+    }
+
+    return {
+      ...status,
+      currentTaskPlayState,
+    };
   }
 
   /**
@@ -183,12 +295,13 @@ export class ActivityService {
   }
 
   /**
-   * Get total time spent on tasks
+   * Get total time spent on tasks by a specific user
    */
-  static async getTaskTimeSpent(taskId: string): Promise<ActivitySummary> {
+  static async getTaskTimeSpent(taskId: string, userId?: string): Promise<ActivitySummary> {
     const events = await prisma.userEvent.findMany({
       where: {
         taskId,
+        ...(userId && { userId }), // Filter by user if provided
         eventType: { in: [EventType.TASK_START, EventType.TASK_PAUSE, EventType.TASK_STOP] },
       },
       orderBy: { startedAt: "asc" },
@@ -209,8 +322,8 @@ export class ActivityService {
       }
     }
 
-    // If there's an ongoing session, add time until now
-    if (currentStart) {
+    // If there's an ongoing session, add time until now (only if filtering by user)
+    if (currentStart && userId) {
       totalMs += Date.now() - currentStart.getTime();
     }
 
@@ -353,7 +466,7 @@ export class ActivityService {
   private static mapEventTypeToStatus(eventType: EventType, taskId?: string) {
     const mapping: Record<EventType, { status: UserStatusType; isAvailable: boolean }> = {
       [EventType.TASK_START]: { status: UserStatusType.WORKING, isAvailable: false },
-      [EventType.TASK_PAUSE]: { status: UserStatusType.AVAILABLE, isAvailable: true },
+      [EventType.TASK_PAUSE]: { status: UserStatusType.WORKING, isAvailable: false },
       [EventType.TASK_STOP]: { status: UserStatusType.AVAILABLE, isAvailable: true },
       [EventType.TASK_COMPLETE]: { status: UserStatusType.AVAILABLE, isAvailable: true },
       [EventType.LUNCH_START]: { status: UserStatusType.LUNCH, isAvailable: false },
@@ -380,16 +493,17 @@ export class ActivityService {
   }
 
   private static isTaskRelatedEvent(eventType: EventType): boolean {
-    return [
+    const taskEvents: EventType[] = [
       EventType.TASK_START,
       EventType.TASK_PAUSE,
       EventType.TASK_STOP,
       EventType.TASK_COMPLETE,
-    ].includes(eventType);
+    ];
+    return taskEvents.includes(eventType);
   }
 
   private static mapEventTypeToTaskAction(eventType: EventType): string {
-    const mapping: Record<EventType, string> = {
+    const mapping: Partial<Record<EventType, string>> = {
       [EventType.TASK_START]: "TASK_PLAY_STARTED",
       [EventType.TASK_PAUSE]: "TASK_PLAY_PAUSED",
       [EventType.TASK_STOP]: "TASK_PLAY_STOPPED",
@@ -436,7 +550,7 @@ export class ActivityService {
   }
 
   private static isStartEvent(eventType: EventType): boolean {
-    return [
+    const startEvents: EventType[] = [
       EventType.TASK_START,
       EventType.LUNCH_START,
       EventType.BREAK_START,
@@ -444,11 +558,13 @@ export class ActivityService {
       EventType.TRAVEL_START,
       EventType.REVIEW_START,
       EventType.RESEARCH_START,
-    ].includes(eventType);
+    ];
+    return startEvents.includes(eventType);
   }
 
   private static isEndEvent(eventType: EventType, currentType: string): boolean {
-    if (currentType.startsWith("task:") && [EventType.TASK_PAUSE, EventType.TASK_STOP, EventType.TASK_COMPLETE].includes(eventType)) {
+    const taskEndEvents: EventType[] = [EventType.TASK_PAUSE, EventType.TASK_STOP, EventType.TASK_COMPLETE];
+    if (currentType.startsWith("task:") && taskEndEvents.includes(eventType)) {
       return true;
     }
     
@@ -464,5 +580,60 @@ export class ActivityService {
     return Object.entries(endEvents).some(([category, endEvent]) => 
       currentType === category && eventType === endEvent
     );
+  }
+
+  /**
+   * Update helper time tracking for TaskAssignee records
+   */
+  private static async updateHelperTimeTracking(
+    taskId: string,
+    userId: string,
+    action: 'start' | 'stop',
+    tx: any
+  ) {
+    // Check if this user is a helper (not the main assignee)
+    const task = await tx.task.findUnique({
+      where: { id: taskId },
+      select: { assigneeId: true }
+    });
+
+    // If this is the main assignee, don't track in TaskAssignee table
+    if (task?.assigneeId === userId) {
+      return;
+    }
+
+    // Find or create TaskAssignee record for this helper
+    const taskAssignee = await tx.taskAssignee.findUnique({
+      where: {
+        taskId_userId: {
+          taskId,
+          userId
+        }
+      }
+    });
+
+    if (!taskAssignee) {
+      return; // No helper record exists
+    }
+
+    if (action === 'start') {
+      // Update lastWorkedAt when starting work
+      await tx.taskAssignee.update({
+        where: { id: taskAssignee.id },
+        data: {
+          lastWorkedAt: new Date()
+        }
+      });
+    } else if (action === 'stop' && taskAssignee.lastWorkedAt) {
+      // Calculate time worked and add to total
+      const workDuration = Date.now() - taskAssignee.lastWorkedAt.getTime();
+      await tx.taskAssignee.update({
+        where: { id: taskAssignee.id },
+        data: {
+          totalTimeWorked: taskAssignee.totalTimeWorked + workDuration,
+          lastWorkedAt: new Date() // Keep track of last work time
+        }
+      });
+    }
   }
 } 
