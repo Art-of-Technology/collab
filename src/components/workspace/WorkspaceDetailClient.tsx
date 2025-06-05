@@ -13,6 +13,7 @@ import { CustomAvatar } from '@/components/ui/custom-avatar';
 import InviteMemberForm from '@/app/(main)/workspaces/[workspaceId]/InviteMemberForm';
 import WorkspaceDetailsEditor from '@/app/(main)/workspaces/[workspaceId]/WorkspaceDetailsEditor';
 import CancelInvitationButton from '@/components/workspace/CancelInvitationButton';
+import { WorkspaceFeatureSettings } from './WorkspaceFeatureSettings';
 import { useDetailedWorkspaceById } from '@/hooks/queries/useWorkspace';
 
 interface WorkspaceDetailClientProps {
@@ -267,6 +268,7 @@ export default function WorkspaceDetailClient({
         {canManage && (
           <TabsContent value="settings">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <WorkspaceFeatureSettings />
               <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
                 <CardHeader>
                   <CardTitle>Workspace Information</CardTitle>

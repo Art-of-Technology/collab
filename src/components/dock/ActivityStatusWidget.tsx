@@ -18,7 +18,8 @@ import {
   ChevronUp,
   Activity,
   Timer,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAssignedTasks, TaskOption } from "@/hooks/useAssignedTasks";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useActivity } from "@/context/ActivityContext";
+import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { cn } from "@/lib/utils";
 
 interface ActivityStatusWidgetProps {
@@ -115,9 +117,9 @@ const STATUS_CONFIGS = {
 };
 
 const QUICK_ACTIVITIES = [
-  { type: "LUNCH_START", label: "Going to Lunch", duration: 60, eventType: "LUNCH_START" },
-  { type: "BREAK_START", label: "Taking a Break", duration: 15, eventType: "BREAK_START" },
-  { type: "MEETING_START", label: "In a Meeting", duration: 30, eventType: "MEETING_START" },
+  { type: "LUNCH_START", label: "Going to Lunch", duration: null, eventType: "LUNCH_START" },
+  { type: "BREAK_START", label: "Taking a Break", duration: null, eventType: "BREAK_START" },
+  { type: "MEETING_START", label: "In a Meeting", duration: null, eventType: "MEETING_START" },
   { type: "RESEARCH_START", label: "Researching", duration: null, eventType: "RESEARCH_START" },
   { type: "TRAVEL_START", label: "Traveling", duration: null, eventType: "TRAVEL_START" },
   { type: "OFFLINE", label: "Going Offline", duration: null, eventType: "OFFLINE" },
@@ -126,10 +128,12 @@ const QUICK_ACTIVITIES = [
 export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const { data: session } = useSession();
   const { currentWorkspace } = useWorkspace();
+  const { settings } = useWorkspaceSettings();
   const { boards, loading: tasksLoading, refetch } = useAssignedTasks(currentWorkspace?.id);
   const { userStatus, isLoading, startActivity, endActivity, handleTaskAction } = useActivity();
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [liveTime, setLiveTime] = useState<string | null>(null);
+  const [taskTotalTime, setTaskTotalTime] = useState<string>("0h 0m 0s");
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchTasks, setSearchTasks] = useState<TaskOption[]>([]);
@@ -143,15 +147,39 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     let intervalId: NodeJS.Timeout | null = null;
 
     if (userStatus?.statusStartedAt) {
-      const tick = () => {
-        const start = new Date(userStatus.statusStartedAt);
-        const now = new Date();
-        const diff = now.getTime() - start.getTime();
-        setLiveTime(formatDuration(diff));
-      };
+      const isTaskWorking = userStatus.currentStatus === "WORKING" && userStatus.currentTaskId && settings?.timeTrackingEnabled;
+      const isTaskPlaying = isTaskWorking && userStatus.currentTaskPlayState === "playing";
+      
+      if (isTaskPlaying) {
+        // For playing tasks, count up from total time
+        const tick = async () => {
+          const start = new Date(userStatus.statusStartedAt);
+          const now = new Date();
+          const sessionElapsed = now.getTime() - start.getTime();
+          
+          // Parse total time to milliseconds
+          const totalTimeMs = parseDurationToMs(taskTotalTime);
+          const currentTotalMs = totalTimeMs + sessionElapsed;
+          setLiveTime(formatDuration(currentTotalMs));
+        };
 
-      tick(); // Initial update
-      intervalId = setInterval(tick, 1000);
+        tick(); // Initial update
+        intervalId = setInterval(tick, 1000);
+      } else if (!isTaskWorking) {
+        // For non-task activities, count session time from zero
+        const tick = () => {
+          const start = new Date(userStatus.statusStartedAt);
+          const now = new Date();
+          const diff = now.getTime() - start.getTime();
+          setLiveTime(formatDuration(diff));
+        };
+
+        tick(); // Initial update
+        intervalId = setInterval(tick, 1000);
+      } else {
+        // For paused/stopped tasks, show static total time
+        setLiveTime(null);
+      }
     } else {
       setLiveTime(null);
     }
@@ -159,7 +187,22 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [userStatus?.statusStartedAt]);
+  }, [userStatus?.statusStartedAt, userStatus?.currentStatus, userStatus?.currentTaskId, userStatus?.currentTaskPlayState, settings?.timeTrackingEnabled, taskTotalTime]);
+
+  // Helper function to parse duration string to milliseconds
+  const parseDurationToMs = (duration: string): number => {
+    const regex = /(?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s\s*)?/;
+    const match = duration.match(regex);
+    if (!match) return 0;
+
+    const [, days = "0", hours = "0", minutes = "0", seconds = "0"] = match;
+    return (
+      parseInt(days) * 24 * 60 * 60 * 1000 +
+      parseInt(hours) * 60 * 60 * 1000 +
+      parseInt(minutes) * 60 * 1000 +
+      parseInt(seconds) * 1000
+    );
+  };
 
   // Sync selectedTaskId with userStatus.currentTaskId
   useEffect(() => {
@@ -170,6 +213,15 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     }
   }, [userStatus?.currentTaskId, userStatus?.currentStatus]);
 
+  // Fetch total time when current task changes
+  useEffect(() => {
+    if (userStatus?.currentTaskId && settings?.timeTrackingEnabled) {
+      fetchTaskTotalTime(userStatus.currentTaskId);
+    } else {
+      setTaskTotalTime("0h 0m 0s");
+    }
+  }, [userStatus?.currentTaskId, settings?.timeTrackingEnabled]);
+
   const formatDuration = (ms: number): string => {
     if (ms < 0) ms = 0;
     const totalSeconds = Math.floor(ms / 1000);
@@ -179,6 +231,21 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
 
     if (h > 0) return `${h}h ${m}m ${s}s`;
     return `${m}m ${s}s`;
+  };
+
+  // Fetch total play time for a task
+  const fetchTaskTotalTime = async (taskId: string) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/playtime`);
+      if (response.ok) {
+        const data = await response.json();
+        setTaskTotalTime(data.formattedTime || "0h 0m 0s");
+        return data.totalPlayTimeMs || 0;
+      }
+    } catch (error) {
+      console.error("Error fetching task total time:", error);
+    }
+    return 0;
   };
 
   const handleTaskClick = (task: TaskOption) => {
@@ -277,6 +344,8 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
 
     try {
       await handleTaskAction(action, taskId);
+      // Refresh the total play time after the action
+      await fetchTaskTotalTime(taskId);
     } catch (error) {
       // Error handling is done in the context
     }
@@ -332,6 +401,11 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
 
   const getActionButtons = () => {
     if (userStatus?.currentStatus === "WORKING" && userStatus.currentTaskId) {
+      // Only show time tracking controls if enabled in workspace settings
+      if (!settings?.timeTrackingEnabled) {
+        return null;
+      }
+      
       // Get current play state from user status
       const currentState = userStatus.currentTaskPlayState || "stopped";
 
@@ -386,7 +460,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           disabled={isLoading}
           className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/30 hover:border-red-300/50 shadow-lg hover:shadow-red-500/25"
         >
-          {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-4 md:w-4" />}
+          {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Trash2 className="h-3 w-3 md:h-4 md:w-4" />}
         </button>
       );
     }
@@ -413,10 +487,10 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
         </div>
 
       {/* Main Content */}
-      <div className="flex items-center gap-2 md:gap-3">
+      <div className="flex items-center gap-1 md:gap-2">
         {/* Status Display */}
-        <div className="min-w-[120px] md:min-w-[160px]">
-          {userStatus?.currentStatus === "WORKING" && userStatus.currentTask ? (
+        <div className={settings?.timeTrackingEnabled ? "min-w-[120px] md:min-w-[160px]" : "min-w-[80px] md:min-w-[100px]"}>
+          {userStatus?.currentStatus === "WORKING" && userStatus.currentTask && settings?.timeTrackingEnabled ? (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1 md:gap-2">
                 <span className="font-mono text-xs text-white/60">{userStatus.currentTask.issueKey}</span>
@@ -431,8 +505,10 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                 )}
               </div>
               <div className="flex items-center gap-1 md:gap-2">
-                <span className={cn("text-xs", currentConfig.textColor)}>
-                  {liveTime || "0m 0s"}
+                <span className={cn("text-xs", 
+                  userStatus?.currentTaskPlayState === "playing" ? "text-green-400 font-semibold" : currentConfig.textColor
+                )}>
+                  {userStatus?.currentTaskPlayState === "playing" && liveTime ? liveTime : taskTotalTime}
                 </span>
                 <span className="text-xs text-white/50">•</span>
                 <span className="text-xs text-white/60">{currentConfig.label}</span>
@@ -441,21 +517,40 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           ) : (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1 md:gap-2">
-                <span className={cn("text-xs md:text-sm font-medium", currentConfig.textColor)}>
-                  {currentConfig.label}
-                </span>
+                {settings?.timeTrackingEnabled ? (
+                  <span className={cn("text-xs md:text-sm font-medium", currentConfig.textColor)}>
+                    {currentConfig.label}
+                  </span>
+                ) : (
+                  <span className="text-xs text-white/60">
+                    Status:
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1 md:gap-2">
-                <span className="text-xs text-white/70">
-                  {liveTime || "Just started"}
-                </span>
-                {userStatus?.statusText && (
+                {settings?.timeTrackingEnabled ? (
                   <>
-                    <span className="text-xs text-white/50">•</span>
-                    <span className="text-xs text-white/60 truncate max-w-[60px] md:max-w-[100px]">
-                      {userStatus.statusText}
-                    </span>
+                    {/* Only show live time for non-WORKING statuses or when time tracking is disabled */}
+                    {(userStatus?.currentStatus !== "WORKING" || !settings?.timeTrackingEnabled) && (
+                      <span className="text-xs text-white/70">
+                        {liveTime || "Just started"}
+                      </span>
+                    )}
+                    {userStatus?.statusText && (
+                      <>
+                        {(userStatus?.currentStatus !== "WORKING" || !settings?.timeTrackingEnabled) && (
+                          <span className="text-xs text-white/50">•</span>
+                        )}
+                        <span className="text-xs text-white/60 truncate max-w-[60px] md:max-w-[100px]">
+                          {userStatus.statusText}
+                        </span>
+                      </>
+                    )}
                   </>
+                ) : (
+                  <span className={cn("text-xs md:text-sm font-medium", currentConfig.textColor)}>
+                    {currentConfig.label}
+                  </span>
                 )}
               </div>
             </div>
@@ -482,8 +577,8 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               <DropdownMenuLabel>Switch Status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              {/* Task Selection */}
-              {!tasksLoading && boards.length > 0 && (
+              {/* Task Selection - Only show if time tracking is enabled */}
+              {!tasksLoading && boards.length > 0 && settings?.timeTrackingEnabled && (
                 <>
                   <DropdownMenuLabel className="text-xs">Work on Task</DropdownMenuLabel>
                   
@@ -568,7 +663,9 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               )}
 
               {/* Quick Activities */}
-              <DropdownMenuLabel className="text-xs">Other Activities</DropdownMenuLabel>
+              {settings?.timeTrackingEnabled && (
+                <DropdownMenuLabel className="text-xs">Other Activities</DropdownMenuLabel>
+              )}
               {QUICK_ACTIVITIES.map((activity) => {
                 const config = STATUS_CONFIGS[activity.type.replace("_START", "") as keyof typeof STATUS_CONFIGS];
                 const Icon = config?.icon || Timer;

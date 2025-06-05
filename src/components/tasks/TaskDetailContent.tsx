@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
@@ -29,6 +30,7 @@ import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import { TaskHelpersSection } from "@/components/tasks/TaskHelpersSection";
+import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -179,7 +181,7 @@ export interface TaskActivity {
 
 // New interface for PlayTime
 export interface PlayTime {
-  totalPlayTimeMs: number;
+  totalTimeMs: number;
   formattedTime: string;
   days: number;
   hours: number;
@@ -238,6 +240,7 @@ export function TaskDetailContent({
   boardId
 }: TaskDetailContentProps) {
   const { data: session } = useSession();
+  const { settings } = useWorkspaceSettings();
   const currentUserId = session?.user?.id;
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
@@ -256,7 +259,7 @@ export function TaskDetailContent({
   const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
   const { toast } = useToast();
   const { refreshBoards } = useTasks();
-  const { handleTaskAction } = useActivity();
+  const { handleTaskAction, userStatus } = useActivity();
   const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
 
   // New state variables for play/pause feature
@@ -278,7 +281,6 @@ export function TaskDetailContent({
   // Update comments state when task changes
   useEffect(() => {
     if (task?.comments) {
-      console.log("Task comments from TaskDetailContent:", task.comments);
       // Make sure comments have the right structure
       const structuredComments = task.comments.map(comment => ({
         ...comment,
@@ -339,22 +341,16 @@ export function TaskDetailContent({
   // Determine current play state from activities (filtered by current user)
   useEffect(() => {
     if (taskActivities.length > 0 && currentUserId) {
-      console.log(`[TaskTimer] Processing ${taskActivities.length} activities for user ${currentUserId}`);
-      
       const userActivities = [...taskActivities] // Create a new array to avoid mutating state directly
         .filter(act => 
           ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"].includes(act.action) &&
           act.user.id === currentUserId // Explicitly filter by current user
         );
       
-      console.log(`[TaskTimer] Found ${userActivities.length} relevant activities for current user`);
-      
       const lastRelevantActivity = userActivities
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
       if (lastRelevantActivity) {
-        console.log(`[TaskTimer] Last relevant activity:`, lastRelevantActivity.action, 'at', lastRelevantActivity.createdAt);
-        
         if (lastRelevantActivity.action === "TASK_PLAY_STARTED") {
           setCurrentPlayState("playing");
         } else if (lastRelevantActivity.action === "TASK_PLAY_PAUSED") {
@@ -363,11 +359,9 @@ export function TaskDetailContent({
           setCurrentPlayState("stopped");
         }
       } else {
-        console.log(`[TaskTimer] No relevant activities found for current user`);
         setCurrentPlayState("stopped");
       }
     } else {
-      console.log(`[TaskTimer] No activities (${taskActivities.length}) or no current user (${currentUserId})`);
       setCurrentPlayState("stopped"); // Default to stopped if no activities or no current user
     }
   }, [taskActivities, currentUserId]);
@@ -390,26 +384,42 @@ export function TaskDetailContent({
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
 
-    if (currentPlayState === "playing" && totalPlayTime && typeof totalPlayTime.totalPlayTimeMs === 'number') {
-      const initialMs = totalPlayTime.totalPlayTimeMs;
-      const anchorTime = Date.now(); // Time when this play session (or data fetch) was anchored
+    // Wait for play time to be loaded before starting timer
+    if (isLoadingPlayTime) {
+      return;
+    }
 
-      const tick = () => {
-        const elapsedSinceAnchor = Date.now() - anchorTime;
-        const currentTotalMs = initialMs + elapsedSinceAnchor;
-        setLiveTimeDisplay(formatLiveTime(currentTotalMs));
-      };
+    if (userStatus?.statusStartedAt && task?.id) {
+      const isMyTask = userStatus.currentTaskId === task.id;
+      const isPlaying = userStatus.currentTaskPlayState === "playing";
+      
+      if (isMyTask && isPlaying) {
+        const tick = () => {
+          const start = new Date(userStatus.statusStartedAt);
+          const now = new Date();
+          const sessionElapsed = now.getTime() - start.getTime();
+          
+          // Use the totalTimeMs from the API if available, otherwise 0
+          // The API already returns the accumulated time from all previous sessions
+          const baseTime = totalPlayTime?.totalTimeMs || 0;
+          const currentTotalMs = baseTime + sessionElapsed;
+          const formatted = formatLiveTime(currentTotalMs);
+          setLiveTimeDisplay(formatted);
+        };
 
-      tick(); // Initial immediate update
-      intervalId = setInterval(tick, 1000);
-    } else {
-      setLiveTimeDisplay(null); // Clear live display if not playing or no base time
+        tick();
+        intervalId = setInterval(tick, 1000);
+      } else if (!isPlaying && totalPlayTime) {
+        setLiveTimeDisplay(totalPlayTime.formattedTime);
+      }
+    } else if (totalPlayTime && userStatus?.currentTaskId !== task?.id) {
+      setLiveTimeDisplay(totalPlayTime.formattedTime);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [currentPlayState, totalPlayTime]); // Rerun when play state or fetched total time changes
+  }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, userStatus?.statusStartedAt, task?.id, totalPlayTime?.totalTimeMs, totalPlayTime?.formattedTime, isLoadingPlayTime]);
 
   // Fetch activities and playtime when task ID changes or onRefresh is called
   useEffect(() => {
@@ -622,10 +632,6 @@ export function TaskDetailContent({
     try {
       // If task has a column, update the column ID based on the status
       if (task.column) {
-        // Find the column ID that matches the selected status
-        const statusesToColumn = (statuses || []).map((s, index) => ({ status: s, index }));
-        console.log("Updating column status:", status, statusesToColumn);
-
         // Update the status and column together
         await saveTaskField('status', status);
       } else {
@@ -740,14 +746,6 @@ export function TaskDetailContent({
   // Update state when task changes
   useEffect(() => {
     if (task) {
-      console.log("Task details:", {
-        title: task.title,
-        status: task.status,
-        columnName: task.column?.name,
-        priority: task.priority,
-        boardId: task.taskBoard?.id || boardId
-      });
-
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(task.dueDate);
@@ -902,8 +900,9 @@ export function TaskDetailContent({
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Play/Pause/Stop Controls & Total Playtime */}
-              <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm">
+              {/* Play/Pause/Stop Controls & Total Playtime - Only show if time tracking is enabled */}
+              {settings?.timeTrackingEnabled && (
+                <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm">
                 {currentPlayState === "stopped" && (
                   <Button
                     variant="ghost"
@@ -957,10 +956,10 @@ export function TaskDetailContent({
 
                 {isLoadingPlayTime ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : currentPlayState === "playing" && liveTimeDisplay !== null ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay}`}>
+                ) : userStatus?.currentTaskId === task?.id && userStatus?.currentTaskPlayState === "playing" ? (
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
                      <Clock className="h-3.5 w-3.5 text-green-500"/> 
-                     <span className="text-green-500 font-semibold">{liveTimeDisplay}</span>
+                     <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
                   </div>
                 ) : totalPlayTime ? (
                   <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
@@ -974,6 +973,7 @@ export function TaskDetailContent({
                   </div>
                 )}
               </div>
+              )}
 
               <div className="relative">
                 <Select

@@ -6,12 +6,25 @@ import { Dock, DockWidget } from '@/components/magicui/dock';
 import { ActivityStatusWidget } from './ActivityStatusWidget';
 import { TimelineWidget } from './TimelineWidget';
 import { QuickNotesWidget } from './QuickNotesWidget';
+import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 
 interface AppDockProps {
   className?: string;
 }
 
 export function AppDock({ className }: AppDockProps) {
+  const { settings, isLoading } = useWorkspaceSettings();
+
+  // Don't render anything while loading settings
+  if (isLoading) {
+    return null;
+  }
+
+  // Don't render dock if disabled in workspace settings
+  if (!settings?.dockEnabled) {
+    return null;
+  }
+
   return (
     <Dock 
       expandable 
@@ -35,6 +48,7 @@ export function AppDock({ className }: AppDockProps) {
         icon={<MessageSquarePlus className="h-5 w-5" />}
         content={<TimelineWidget />}
       />
+
     </Dock>
   );
 } 
