@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Play, Pause, StopCircle, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAssignedTasks, TaskOption } from "@/hooks/useAssignedTasks";
 

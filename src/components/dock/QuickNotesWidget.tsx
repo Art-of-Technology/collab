@@ -38,7 +38,7 @@ export function QuickNotesWidget({ className }: QuickNotesWidgetProps) {
         throw new Error(errorData.error || 'Failed to create note');
       }
 
-      const result = await response.json();
+      await response.json();
       
       toast({
         title: 'Note Created',

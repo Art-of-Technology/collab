@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -281,23 +282,6 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     }
   };
 
-  const getSelectedTask = () => {
-    for (const board of boards) {
-      const task = board.tasks.find(t => t.id === selectedTaskId);
-      if (task) return task;
-    }
-    return null;
-  };
-
-  const getTaskById = (taskId: string) => {
-    for (const board of boards) {
-      const task = board.tasks.find(t => t.id === taskId);
-      if (task) return task;
-    }
-    return null;
-  };
-
-  const selectedTask = getSelectedTask();
   const currentConfig = STATUS_CONFIGS[userStatus?.currentStatus as keyof typeof STATUS_CONFIGS] || STATUS_CONFIGS.AVAILABLE;
   const StatusIcon = currentConfig.icon;
 

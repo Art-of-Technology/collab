@@ -38,7 +38,7 @@ export function TimelineWidget({ className }: TimelineWidgetProps) {
         throw new Error(errorData.message || 'Failed to post to timeline');
       }
 
-      const result = await response.json();
+      await response.json();
       
       toast({
         title: 'Posted to Timeline',

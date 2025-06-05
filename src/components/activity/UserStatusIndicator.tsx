@@ -320,7 +320,7 @@ export function UserStatusIndicator({
 
           {status.statusText && (
             <div className="p-2 bg-muted/20 rounded text-sm text-muted-foreground">
-              "{status.statusText}"
+              &quot;{status.statusText}&quot;
             </div>
           )}
 
