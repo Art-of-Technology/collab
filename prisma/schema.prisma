@@ -287,6 +287,10 @@ model Workspace {
   updatedAt   DateTime              @updatedAt
   ownerId     String
   
+  // Feature settings
+  timeTrackingEnabled Boolean         @default(true)
+  dockEnabled         Boolean         @default(true)
+  
   owner           User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members         WorkspaceMember[]
   invitations     WorkspaceInvitation[]
