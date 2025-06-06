@@ -27,14 +27,12 @@ interface TaskCommentsListProps {
   taskId: string;
   initialComments?: TaskCommentWithAuthor[];
   currentUserId?: string;
-  userImage?: string | null;
 }
 
 export function TaskCommentsList({ 
   taskId, 
   initialComments = [],
-  currentUserId: initialUserId,
-  userImage
+  currentUserId: initialUserId
 }: TaskCommentsListProps) {
   // Get comments using TanStack Query
   const { data, isLoading } = useTaskComments(taskId);
@@ -84,9 +82,7 @@ export function TaskCommentsList({
 
       <div className="pt-4 mt-4 border-t border-border/30">
         <TaskCommentForm 
-          taskId={taskId} 
-          currentUserId={currentUserId}
-          userImage={userImage}
+          taskId={taskId}
         />
       </div>
     </div>

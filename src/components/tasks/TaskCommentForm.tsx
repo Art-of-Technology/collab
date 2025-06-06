@@ -6,24 +6,25 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { useCurrentUser } from "@/hooks/queries/useUser";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
 
 interface TaskCommentFormProps {
   taskId: string;
-  currentUserId: string;
-  userImage?: string | null;
 }
 
 export function TaskCommentForm({
-  taskId,
-  currentUserId,
-  userImage
+  taskId
 }: TaskCommentFormProps) {
   const [content, setContent] = useState("");
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
   const addCommentMutation = useAddTaskComment();
+  
+  // Get current user data with custom avatar fields
+  const { data: currentUser } = useCurrentUser();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,15 +121,29 @@ export function TaskCommentForm({
     }
   };
 
+  // Show loading if user data is not available yet
+  if (!currentUser) {
+    return (
+      <div className="flex gap-3">
+        <div className="h-7 w-7 bg-muted/50 rounded-full animate-pulse" />
+        <div className="flex-1 h-20 bg-muted/50 rounded-md animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex gap-3">
-        <Avatar className="h-7 w-7">
-          <AvatarImage src={userImage || undefined} alt="Your avatar" />
-          <AvatarFallback>
-            {currentUserId.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        {currentUser.useCustomAvatar ? (
+          <CustomAvatar user={currentUser} size="sm" />
+        ) : (
+          <Avatar className="h-7 w-7">
+            <AvatarImage src={currentUser.image || undefined} alt="Your avatar" />
+            <AvatarFallback>
+              {currentUser.name?.charAt(0).toUpperCase() || "U"}
+            </AvatarFallback>
+          </Avatar>
+        )}
         <div className="flex-1">
           <MarkdownEditor
             onChange={handleEditorChange}
