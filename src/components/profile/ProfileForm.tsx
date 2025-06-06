@@ -9,8 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import AvatarEditor from "@/components/profile/AvatarEditor";
-import { useUpdateUserProfile, useUpdateUserAvatar } from "@/hooks/queries/useUser";
+import { useUpdateUserProfile } from "@/hooks/queries/useUser";
 
 interface ProfileFormProps {
   user: {
@@ -37,7 +36,6 @@ interface ProfileFormProps {
 
 export default function ProfileForm({ user }: ProfileFormProps) {
   const { toast } = useToast();
-  const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: user.name || "",
     team: user.team || "",
@@ -48,7 +46,6 @@ export default function ProfileForm({ user }: ProfileFormProps) {
 
   // Use TanStack Query mutations
   const updateProfileMutation = useUpdateUserProfile();
-  const updateAvatarMutation = useUpdateUserAvatar();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -85,27 +82,6 @@ export default function ProfileForm({ user }: ProfileFormProps) {
       console.error(error);
     }
   };
-  
-  const handleSaveAvatar = async (avatarData: any) => {
-    try {
-      await updateAvatarMutation.mutateAsync({
-        avatarSkinTone: avatarData.avatarSkinTone,
-        avatarEyes: avatarData.avatarEyes,
-        avatarBrows: avatarData.avatarBrows,
-        avatarMouth: avatarData.avatarMouth,
-        avatarNose: avatarData.avatarNose,
-        avatarHair: avatarData.avatarHair,
-        avatarEyewear: avatarData.avatarEyewear,
-        avatarAccessory: avatarData.avatarAccessory,
-        useCustomAvatar: avatarData.useCustomAvatar,
-      });
-      
-      return Promise.resolve();
-    } catch (error) {
-      console.error(error);
-      return Promise.reject(error);
-    }
-  };
 
   return (
     <Card className="border-border/40 bg-card/95 shadow-lg">
@@ -118,7 +94,7 @@ export default function ProfileForm({ user }: ProfileFormProps) {
       <CardContent>
         {/* Avatar Section */}
         <div className="flex flex-col items-center mb-8 sm:flex-row sm:items-start sm:space-x-6">
-          <div className="relative group mb-4 sm:mb-0">
+          <div className="mb-4 sm:mb-0">
             {user.useCustomAvatar ? (
               <CustomAvatar user={user} size="xl" className="border-4 border-primary/20 shadow-lg" />
             ) : (
@@ -129,24 +105,10 @@ export default function ProfileForm({ user }: ProfileFormProps) {
                 </AvatarFallback>
               </Avatar>
             )}
-            <div 
-              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full flex items-center justify-center cursor-pointer"
-              onClick={() => setIsAvatarEditorOpen(true)}
-            >
-              <span className="text-white font-medium text-xs sm:text-sm">Change Avatar</span>
-            </div>
           </div>
           <div className="text-center sm:text-left">
             <h3 className="text-lg font-medium">{user.name || "Your Name"}</h3>
             <p className="text-muted-foreground">{user.role || "Developer"}</p>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="mt-2"
-              onClick={() => setIsAvatarEditorOpen(true)}
-            >
-              Customize Avatar
-            </Button>
           </div>
         </div>
 
@@ -244,16 +206,6 @@ export default function ProfileForm({ user }: ProfileFormProps) {
             </Button>
           </CardFooter>
         </form>
-        
-        {/* Avatar Editor Modal */}
-        {isAvatarEditorOpen && (
-          <AvatarEditor 
-            user={user}
-            open={isAvatarEditorOpen}
-            onOpenChange={setIsAvatarEditorOpen}
-            onSave={handleSaveAvatar}
-          />
-        )}
       </CardContent>
     </Card>
   );
