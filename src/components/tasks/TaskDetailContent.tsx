@@ -1109,8 +1109,7 @@ export function TaskDetailContent({
               <TaskCommentsList
                 taskId={task.id}
                 initialComments={comments}
-                currentUserId={task.reporter?.id || ""}
-                userImage={task.reporter?.image}
+                currentUserId={currentUserId || ""}
               />
             </CardContent>
           </Card>
