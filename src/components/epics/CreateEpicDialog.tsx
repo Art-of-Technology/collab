@@ -74,6 +74,7 @@ interface CreateEpicDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   workspaceId: string;
+  boardId?: string;
 }
 
 export function CreateEpicDialog({
@@ -81,6 +82,7 @@ export function CreateEpicDialog({
   onOpenChange,
   onSuccess,
   workspaceId,
+  boardId,
 }: CreateEpicDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
@@ -99,7 +101,7 @@ export function CreateEpicDialog({
       color: "#8B5CF6", // Default purple color
       milestoneId: null,
       workspaceId: workspaceId,
-      taskBoardId: "", // Start with no board selected
+      taskBoardId: boardId || "", // Preselect board if provided
       columnId: null,
     },
   });
@@ -168,7 +170,7 @@ export function CreateEpicDialog({
       if (values.columnId) {
         const selectedColumn = columns.find(column => column.id === values.columnId);
         if (selectedColumn) {
-          payload.status = selectedColumn.name.toLowerCase().replace(/\s+/g, '-');
+          payload.status = selectedColumn.name;
         }
       }
       

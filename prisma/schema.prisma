@@ -413,6 +413,7 @@ model Task {
   subtasks    Task[]           @relation("TaskToSubtasks")
   post        Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
   story       Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  epic        Epic?            @relation(fields: [epicId], references: [id], onDelete: SetNull)
   comments    TaskComment[]
   attachments TaskAttachment[]
   labels      TaskLabel[]      @relation("TaskToLabel")
@@ -576,6 +577,7 @@ model Epic {
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   stories     Story[]
+  tasks       Task[]
   notifications Notification[]
 
   @@index([workspaceId])

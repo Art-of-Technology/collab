@@ -31,6 +31,7 @@ import axios from "axios";
 import { useSession } from "next-auth/react";
 import { TaskHelpersSection } from "@/components/tasks/TaskHelpersSection";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
+import { useUpdateTask, useBoardColumns } from "@/hooks/queries/useTask";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -255,7 +256,6 @@ export function TaskDetailContent({
   const [savingType, setSavingType] = useState(false);
   const [savingDueDate, setSavingDueDate] = useState(false);
   const [dueDate, setDueDate] = useState<Date | undefined>(task?.dueDate);
-  const [statuses, setStatuses] = useState<string[]>([]);
   const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
   const { toast } = useToast();
   const { refreshBoards } = useTasks();
@@ -270,6 +270,17 @@ export function TaskDetailContent({
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
   const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
   const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
+
+  // Use TanStack Query mutation
+  const updateTaskMutation = useUpdateTask(task?.id || "");
+  
+  // Get board columns for status dropdown - use the current board being viewed
+  const { data: boardColumns = [], isLoading: isLoadingColumns } = useBoardColumns(boardId);
+  
+  // Derive statuses from board columns or use defaults
+  const statuses = boardColumns.length > 0 
+    ? boardColumns.map((col: any) => col.name)
+    : ["TO DO", "IN PROGRESS", "REVIEW", "DONE"];
 
   const canControlTimer = useMemo(() => {
     if (!task || !currentUserId) return false;
@@ -493,48 +504,21 @@ export function TaskDetailContent({
 
   const saveTaskField = async (field: string, value: any) => {
     try {
-      const response = await fetch(`/api/tasks/${task?.id}/edit`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ [field]: value }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update ${field}`);
-      }
-
-      const updatedTask = await response.json();
+      await updateTaskMutation.mutateAsync({ [field]: value });
 
       toast({
         title: 'Updated',
         description: `Task ${field} updated successfully`,
       });
 
-      // Don't trigger a full refresh which causes modal to disappear
-      // Just update the necessary state
+      // Update local state to prevent UI flicker
       if (field === 'title') {
-        setTitle(updatedTask.title);
+        setTitle(value);
       } else if (field === 'description') {
-        setDescription(updatedTask.description || "");
-      } else if (field === 'assigneeId') {
-        // The assignee is already updated in the UI by AssigneeSelect
-      } else if (field === 'status') {
-        // The status is already updated in the UI by the Select
-      } else if (field === 'priority') {
-        // The priority is already updated in the UI by the Select
-      } else if (field === 'type') {
-        // The type is already updated in the UI by the Select
+        setDescription(value || "");
       } else if (field === 'dueDate') {
-        setDueDate(updatedTask.dueDate);
+        setDueDate(value);
       }
-
-      // Refresh in background without causing UI flicker
-      setTimeout(() => {
-        onRefresh();
-        refreshBoards();
-      }, 100);
 
       return true;
     } catch (error) {
@@ -618,7 +602,18 @@ export function TaskDetailContent({
   const handleAssigneeChange = async (userId: string) => {
     setSavingAssignee(true);
     try {
-      await saveTaskField('assigneeId', userId === 'unassigned' ? null : userId);
+      await updateTaskMutation.mutateAsync({ assigneeId: userId === 'unassigned' ? null : userId });
+      toast({
+        title: 'Updated',
+        description: 'Task assignee updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating assignee:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update assignee',
+        variant: 'destructive',
+      });
     } finally {
       setSavingAssignee(false);
     }
@@ -626,20 +621,20 @@ export function TaskDetailContent({
 
   // Handle status change
   const handleStatusChange = async (status: string) => {
-    if (!task) return;
-
     setSavingStatus(true);
     try {
-      // If task has a column, update the column ID based on the status
-      if (task.column) {
-        // Update the status and column together
-        await saveTaskField('status', status);
-      } else {
-        // Just update the status directly
-        await saveTaskField('status', status);
-      }
+      await updateTaskMutation.mutateAsync({ status });
+      toast({
+        title: 'Updated',
+        description: 'Task status updated successfully',
+      });
     } catch (error) {
-      console.error("Error updating status:", error);
+      console.error('Error updating status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update status',
+        variant: 'destructive',
+      });
     } finally {
       setSavingStatus(false);
     }
@@ -649,7 +644,18 @@ export function TaskDetailContent({
   const handlePriorityChange = async (priority: string) => {
     setSavingPriority(true);
     try {
-      await saveTaskField('priority', priority);
+      await updateTaskMutation.mutateAsync({ priority });
+      toast({
+        title: 'Updated',
+        description: 'Task priority updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update priority',
+        variant: 'destructive',
+      });
     } finally {
       setSavingPriority(false);
     }
@@ -659,7 +665,18 @@ export function TaskDetailContent({
   const handleTypeChange = async (type: string) => {
     setSavingType(true);
     try {
-      await saveTaskField('type', type);
+      await updateTaskMutation.mutateAsync({ type });
+      toast({
+        title: 'Updated',
+        description: 'Task type updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating type:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update type',
+        variant: 'destructive',
+      });
     } finally {
       setSavingType(false);
     }
@@ -670,7 +687,18 @@ export function TaskDetailContent({
     setDueDate(date);
     setSavingDueDate(true);
     try {
-      await saveTaskField('dueDate', date);
+      await updateTaskMutation.mutateAsync({ dueDate: date });
+      toast({
+        title: 'Updated',
+        description: 'Task due date updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating due date:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update due date',
+        variant: 'destructive',
+      });
     } finally {
       setSavingDueDate(false);
     }
@@ -703,45 +731,7 @@ export function TaskDetailContent({
     );
   };
 
-  // Load statuses and users when task details are viewed
-  const loadFieldOptions = useCallback(async () => {
-    if (!task) return;
 
-    try {
-      // Set default statuses in case there's no board attached
-      const defaultStatuses = ["TO DO", "IN PROGRESS", "REVIEW", "DONE"];
-
-      // First try task's own board ID, then fall back to boardId prop if available
-      const effectiveBoardId = task.taskBoard?.id || boardId;
-
-      // Only fetch statuses if we have a valid board ID
-      if (effectiveBoardId) {
-        // Fetch statuses (columns) for the board
-        const columnsResponse = await fetch(`/api/tasks/boards/${effectiveBoardId}/columns`);
-        if (columnsResponse.ok) {
-          const columnsData = await columnsResponse.json();
-          setStatuses(columnsData.map((col: any) => col.name));
-        } else {
-          // Fall back to default statuses if request fails
-          console.warn("Failed to fetch board columns, using default statuses");
-          setStatuses(defaultStatuses);
-        }
-      } else {
-        // If no board ID, use default statuses
-        console.info("No task board ID available, using default statuses");
-        setStatuses(defaultStatuses);
-      }
-    } catch (error) {
-      console.error("Error loading field options:", error);
-      // Set default statuses in case of error
-      setStatuses(["TO DO", "IN PROGRESS", "REVIEW", "DONE"]);
-    }
-  }, [task, boardId]);
-
-  // Load field options on first render
-  useEffect(() => {
-    loadFieldOptions();
-  }, [loadFieldOptions]);
 
   // Update state when task changes
   useEffect(() => {
@@ -1157,7 +1147,7 @@ export function TaskDetailContent({
                 <p className="text-sm font-medium mb-1">Status</p>
                 <div className="relative">
                   <Select
-                    value={task.column?.name || "TO DO"}
+                    value={task.status || task.column?.name || "TO DO"}
                     onValueChange={handleStatusChange}
                     disabled={savingStatus}
                   >

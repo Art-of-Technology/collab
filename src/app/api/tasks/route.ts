@@ -113,11 +113,32 @@ export async function POST(request: NextRequest) {
         workspaceId,
         assigneeId,
         parentTaskId,
-        storyId,
-        epicId,
-        milestoneId,
         postId,
         reporterId: session.user.id,
+        // Use relation syntax for storyId
+        ...(storyId ? {
+          story: {
+            connect: {
+              id: storyId
+            }
+          }
+        } : {}),
+        // Use relation syntax for epicId
+        ...(epicId ? {
+          epic: {
+            connect: {
+              id: epicId
+            }
+          }
+        } : {}),
+        // Use relation syntax for milestoneId
+        ...(milestoneId ? {
+          milestone: {
+            connect: {
+              id: milestoneId
+            }
+          }
+        } : {}),
         // Create activity record for task creation
         activity: {
           create: {
@@ -151,6 +172,12 @@ export async function POST(request: NextRequest) {
         taskBoard: true,
         labels: true,
         story: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        epic: {
           select: {
             id: true,
             title: true,

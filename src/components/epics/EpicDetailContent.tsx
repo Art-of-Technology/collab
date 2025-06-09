@@ -21,6 +21,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useBoardColumns } from "@/hooks/queries/useTask";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -56,13 +58,15 @@ interface EpicDetailContentProps {
     error: string | null;
     onRefresh: () => void;
     onClose?: () => void;
+    boardId?: string;
 }
 
 export function EpicDetailContent({
     epic,
     error,
     onRefresh,
-    onClose
+    onClose,
+    boardId
 }: EpicDetailContentProps) {
     const [editingTitle, setEditingTitle] = useState(false);
     const [title, setTitle] = useState(epic?.title || "");
@@ -77,8 +81,16 @@ export function EpicDetailContent({
     const [savingDueDate, setSavingDueDate] = useState(false);
     const [startDate, setStartDate] = useState<Date | undefined>(epic?.startDate || undefined);
     const [dueDate, setDueDate] = useState<Date | undefined>(epic?.dueDate || undefined);
-    const [statuses] = useState<string[]>(["Planned", "In Progress", "Completed", "Cancelled"]);
     const { toast } = useToast();
+    const queryClient = useQueryClient();
+
+    // Get board columns for status dropdown - use the current board being viewed
+    const { data: boardColumns = [] } = useBoardColumns(boardId);
+    
+    // Derive statuses from board columns or use defaults
+    const statuses = boardColumns.length > 0 
+        ? boardColumns.map((col: any) => col.name)
+        : ["Planned", "In Progress", "Completed", "Cancelled"];
 
     const handleDescriptionChange = useCallback((md: string) => {
         setDescription(md);
@@ -159,6 +171,11 @@ export function EpicDetailContent({
             setTimeout(() => {
                 onRefresh();
             }, 100);
+
+            // Invalidate TanStack Query cache for board items if status changed (to update kanban columns)
+            if (field === 'status' && boardId) {
+                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: boardId }] });
+            }
 
             return true;
         } catch (error) {
@@ -299,7 +316,12 @@ export function EpicDetailContent({
 
         const statusColors: Record<string, string> = {
             'planned': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+            'to do': 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
+            'todo': 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
             'in progress': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+            'review': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+            'in review': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+            'done': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
             'completed': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
             'cancelled': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
         };
@@ -532,7 +554,7 @@ export function EpicDetailContent({
                                         onClick={() => setEditingDescription(true)}
                                     >
                                         {epic.description ? (
-                                            <MarkdownContent content={epic.description} />
+                                            <MarkdownContent content={epic.description} htmlContent={epic.description} />
                                         ) : (
                                             <div className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5">
                                                 <div className="text-center">
@@ -594,7 +616,7 @@ export function EpicDetailContent({
                                         </SelectTrigger>
                                         <SelectContent>
                                             {statuses.map((status) => (
-                                                <SelectItem key={status.toLowerCase()} value={status.toLowerCase()}>
+                                                <SelectItem key={status} value={status}>
                                                     {getStatusBadge(status)}
                                                 </SelectItem>
                                             ))}

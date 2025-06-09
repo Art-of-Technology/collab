@@ -53,15 +53,22 @@ export async function GET(
       return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
-    // Verify user belongs to the workspace
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user belongs to the workspace (either as owner or member)
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        workspaceId: milestone.workspaceId,
-        userId: session.user.id,
+        id: milestone.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is workspace owner
+          { 
+            members: {
+              some: { userId: session.user.id } // User is workspace member
+            }
+          }
+        ]
       },
     });
 
-    if (!workspaceMember) {
+    if (!workspace) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -110,22 +117,57 @@ export async function PATCH(
       return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
-    // Verify user is part of the workspace
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user is part of the workspace (either as owner or member)
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        workspaceId: existingMilestone.workspaceId,
-        userId: session.user.id,
+        id: existingMilestone.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is workspace owner
+          { 
+            members: {
+              some: { userId: session.user.id } // User is workspace member
+            }
+          }
+        ]
       },
     });
 
-    if (!workspaceMember) {
+    if (!workspace) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Update the milestone
+    // Get the current milestone to access its board
+    const currentMilestone = await prisma.milestone.findUnique({
+      where: { id: milestoneId },
+      include: { taskBoard: true, column: true }
+    });
+
+    // Find the column ID if status is being updated
+    let columnId = dataToUpdate.columnId;
+    
+    if (dataToUpdate.status && currentMilestone && dataToUpdate.status !== currentMilestone.column?.name) {
+      // Find the column with the given name in the milestone's board
+      const column = await prisma.taskColumn.findFirst({
+        where: {
+          name: dataToUpdate.status,
+          taskBoardId: currentMilestone.taskBoardId,
+        },
+      });
+      
+      if (column) {
+        columnId = column.id;
+      }
+    }
+
+    // Update the milestone with the columnId if found
+    const finalDataToUpdate = {
+      ...dataToUpdate,
+      ...(columnId && { columnId })
+    };
+
     const updatedMilestone = await prisma.milestone.update({
       where: { id: milestoneId },
-      data: dataToUpdate,
+      data: finalDataToUpdate,
       include: {
         taskBoard: { select: { id: true, name: true } },
         epics: { 
@@ -169,15 +211,22 @@ export async function DELETE(
       return new NextResponse(null, { status: 204 }); 
     }
 
-    // Verify user is part of the workspace 
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user is part of the workspace (either as owner or member)
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        workspaceId: existingMilestone.workspaceId,
-        userId: session.user.id,
+        id: existingMilestone.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is workspace owner
+          { 
+            members: {
+              some: { userId: session.user.id } // User is workspace member
+            }
+          }
+        ]
       },
     });
 
-    if (!workspaceMember) {
+    if (!workspace) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

@@ -28,7 +28,8 @@ export function ProjectHierarchyView() {
     refreshHierarchy,
     isHierarchyLoading,
     boards: taskBoards,
-    isLoading: isTaskBoardsLoading 
+    isLoading: isTaskBoardsLoading,
+    selectedBoardId
   } = useTasks();
   
   // Event handlers
@@ -92,6 +93,7 @@ export function ProjectHierarchyView() {
           onSuccess={handleMilestoneCreated}
           workspaceId={workspaceId}
           taskBoards={taskBoards || []}
+          boardId={selectedBoardId}
         />
       )}
       
@@ -101,6 +103,7 @@ export function ProjectHierarchyView() {
           onOpenChange={setIsEpicDialogOpen}
           onSuccess={handleEpicCreated}
           workspaceId={workspaceId}
+          boardId={selectedBoardId}
         />
       )}
       
@@ -110,6 +113,7 @@ export function ProjectHierarchyView() {
           onOpenChange={setIsStoryDialogOpen}
           onSuccess={handleStoryCreated}
           workspaceId={workspaceId}
+          boardId={selectedBoardId}
         />
       )}
     </div>

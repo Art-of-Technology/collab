@@ -124,8 +124,15 @@ export async function GET(
       );
     }
 
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
+    // Check if user has access to the workspace (either as owner or member)
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: board.workspaceId },
+      select: { ownerId: true },
+    });
+
+    const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
+    
+    const hasAccess = isWorkspaceOwner || await prisma.workspaceMember.findFirst({
       where: {
         userId: currentUser.id,
         workspaceId: board.workspaceId,

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +32,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { useTasks } from "@/context/TasksContext";
+import { useUpdateTask } from "@/hooks/queries/useTask";
 
 // Wrap in memo to prevent unnecessary re-renders which cause focus loss
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -42,7 +41,7 @@ const MarkdownEditor = memo(BaseMarkdownEditor);
 const taskEditSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  priority: z.string().optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   status: z.string().optional(),
   dueDate: z.date().optional().nullable(),
   assigneeId: z.string().optional().nullable(),
@@ -58,12 +57,12 @@ interface TaskEditFormProps {
 
 export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [statuses, setStatuses] = useState<string[]>([]);
   const [users, setUsers] = useState<{id: string; name: string}[]>([]);
   const { toast } = useToast();
-  const router = useRouter();
-  const { refreshBoards } = useTasks();
+  
+  // Use TanStack Query mutation
+  const updateTaskMutation = useUpdateTask(taskId);
   
   // Create stable refs for editor state
   const [descriptionMarkdown, setDescriptionMarkdown] = useState("");
@@ -193,31 +192,13 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
   };
   
   const onSubmit = async (values: TaskEditFormValues) => {
-    setIsSaving(true);
-    
     try {
-      const response = await fetch(`/api/tasks/${taskId}/edit`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to update task");
-      }
+      await updateTaskMutation.mutateAsync(values);
       
       toast({
         title: "Task updated",
         description: "The task has been updated successfully",
       });
-      
-      // Refresh the task board data
-      await refreshBoards();
-      
-      // Refresh the page to reflect changes in all views
-      router.refresh();
       
       // Close the modal
       onClose();
@@ -228,8 +209,6 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
         description: "Failed to update task. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSaving(false);
     }
   };
   
@@ -426,9 +405,9 @@ export default function TaskEditForm({ taskId, isOpen, onClose }: TaskEditFormPr
           </Button>
           <Button 
             type="submit" 
-            disabled={isSaving}
+            disabled={updateTaskMutation.isPending}
           >
-            {isSaving ? (
+            {updateTaskMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Saving...

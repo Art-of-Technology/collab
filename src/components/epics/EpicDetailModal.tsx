@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink, X } from "lucide-react";
 import Link from "next/link";
 import { EpicDetailContent } from "@/components/epics/EpicDetailContent";
+import { useTasks } from "@/context/TasksContext";
 
 interface EpicDetailModalProps {
   epicId: string | null;
@@ -16,6 +17,9 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
   const [epic, setEpic] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  
+  // Get current board ID from TasksContext
+  const { selectedBoardId } = useTasks();
   
   // For tracking when to refresh epic details 
   const [shouldRefresh, setShouldRefresh] = useState<boolean>(false);
@@ -91,6 +95,7 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
             error={error}
             onRefresh={refreshEpicDetails}
             onClose={onClose}
+            boardId={selectedBoardId}
           />
         </div>
       </DialogContent>

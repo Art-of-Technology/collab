@@ -28,15 +28,15 @@ const storyPatchSchema = z.object({
 // GET /api/stories/{storyId} - Fetch a single story by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { storyId: string } }
+  { params }: Promise<{ params: { storyId: string } }>
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const { storyId } = params;
+    const _params = await params;
+    const { storyId } = _params;
 
     if (!storyId) {
       return NextResponse.json({ error: "Story ID is required" }, { status: 400 });
@@ -63,15 +63,18 @@ export async function GET(
       return NextResponse.json({ error: "Story not found" }, { status: 404 });
     }
 
-    // Additional check: Ensure the story belongs to a workspace the user is part of
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Additional check: Ensure the story belongs to a workspace the user has access to
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        workspaceId: story.workspaceId,
-        userId: session.user.id,
-      },
+        id: story.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is the owner
+          { members: { some: { userId: session.user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!workspaceMember) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -87,7 +90,7 @@ export async function GET(
 // PATCH /api/stories/{storyId} - Update a story
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { storyId: string } }
+  { params }: Promise<{ params: { storyId: string } }>
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -95,7 +98,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { storyId } = params;
+    const _params = await params;
+    const { storyId } = _params;
     if (!storyId) {
       return NextResponse.json({ error: "Story ID is required" }, { status: 400 });
     }
@@ -120,15 +124,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Story not found" }, { status: 404 });
     }
 
-    // Verify user is part of the workspace
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        workspaceId: existingStory.workspaceId,
-        userId: session.user.id,
-      },
+        id: existingStory.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is the owner
+          { members: { some: { userId: session.user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!workspaceMember) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     
@@ -150,10 +157,39 @@ export async function PATCH(
     }
     // --- End Additional Validation ---
 
+    // Get the current story to access its board
+    const currentStory = await prisma.story.findUnique({
+      where: { id: storyId },
+      include: { taskBoard: true, column: true }
+    });
+
+    // Find the column ID if status is being updated
+    let columnId = dataToUpdate.columnId;
+    
+    if (dataToUpdate.status && currentStory && dataToUpdate.status !== currentStory.column?.name) {
+      // Find the column with the given name in the story's board
+      const column = await prisma.taskColumn.findFirst({
+        where: {
+          name: dataToUpdate.status,
+          taskBoardId: currentStory.taskBoardId || undefined,
+        },
+      });
+      
+      if (column) {
+        columnId = column.id;
+      }
+    }
+
+    // Update the story with the columnId if found
+    const finalDataToUpdate = {
+      ...dataToUpdate,
+      ...(columnId && { columnId })
+    };
+
     // Update the story
     const updatedStory = await prisma.story.update({
       where: { id: storyId },
-      data: dataToUpdate,
+      data: finalDataToUpdate,
       include: { // Include relations needed by the frontend after update
         epic: { select: { id: true, title: true } },
         taskBoard: { select: { id: true, name: true } },
@@ -173,7 +209,7 @@ export async function PATCH(
 // DELETE /api/stories/{storyId} - Delete a story (Optional)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { storyId: string } }
+  { params }: Promise<{ params: { storyId: string } }>
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -181,7 +217,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { storyId } = params;
+    const _params = await params;
+    const { storyId } = _params;
     if (!storyId) {
       return NextResponse.json({ error: "Story ID is required" }, { status: 400 });
     }
@@ -197,16 +234,18 @@ export async function DELETE(
       return new NextResponse(null, { status: 204 }); 
     }
 
-    // Verify user is part of the workspace (or maybe has specific delete permissions?)
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        workspaceId: existingStory.workspaceId,
-        userId: session.user.id,
-        // role: 'ADMIN' // Example: Only allow admins to delete?
-      },
+        id: existingStory.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is the owner
+          { members: { some: { userId: session.user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!workspaceMember) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

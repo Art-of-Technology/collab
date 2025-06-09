@@ -329,7 +329,10 @@ export default function CreateTaskForm({
         toast({ title: "Success", description: "Task created successfully." });
         queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardIdToSubmit) });
         queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
-        onClose(); // Close the dialog on success
+        
+        // Reset form and close dialog on success
+        form.reset();
+        onClose();
       },
       onError: (error) => {
         console.error("Error creating task via mutation:", error);
@@ -347,10 +350,39 @@ export default function CreateTaskForm({
     }
   }, [searchParams, isOpen, form]);
 
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      // Reset form with fresh initial data when dialog opens
+      const defaultValues = {
+        title: initialData.title || "",
+        description: initialData.description || "",
+        workspaceId: workspaceId,
+        priority: initialData.priority || "MEDIUM",
+        type: initialData.type || "TASK",
+        epicId: initialData.epicId || null,
+        storyId: initialData.storyId || null,
+        taskBoardId: initialData.taskBoardId || "",
+        columnId: initialData.columnId || undefined,
+        labels: initialData?.labels || [],
+        postId: postId || initialData?.postId || null,
+        dueDate: initialData?.dueDate || null,
+        parentTaskId: initialData?.parentTaskId || null,
+        assigneeId: initialData?.assigneeId || null,
+        reporterId: initialData?.reporterId || session?.data?.user?.id || null,
+      };
+      form.reset(defaultValues);
+    }
+  }, [isOpen, initialData, workspaceId, postId, session?.data?.user?.id, form]);
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       console.log("Dialog onOpenChange triggered", open);
-      if (!open) onClose();
+      if (!open) {
+        // Reset form when dialog closes
+        form.reset();
+        onClose();
+      }
     }}>
       <DialogContent className="max-w-[1200px] w-full" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
@@ -671,7 +703,15 @@ export default function CreateTaskForm({
             </div>
 
             <DialogFooter className="md:col-span-3 pt-4">
-              <Button type="button" variant="outline" onClick={onClose} disabled={createTaskMutation.isPending}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  form.reset();
+                  onClose();
+                }} 
+                disabled={createTaskMutation.isPending}
+              >
                 Cancel
               </Button>
               <Button

@@ -10,14 +10,14 @@ interface TaskDetailClientProps {
 }
 
 export default function TaskDetailClient({ task, showHeader = true, boardId }: TaskDetailClientProps) {
-  const { data: currentTask, error } = useTaskById(task.id);
+  const { data: currentTask, error, refetch } = useTaskById(task.id);
 
-  // Use the TanStack query data or fall back to the initial data
+  // Prioritize current query data over initial props to reflect real-time updates
   const taskData = currentTask || task;
 
   const onRefresh = () => {
-    // This function can be implemented to refresh the task data
-    console.log("Refreshing task data");
+    // Manually refetch the task data when refresh is called
+    refetch();
   };
 
   return (

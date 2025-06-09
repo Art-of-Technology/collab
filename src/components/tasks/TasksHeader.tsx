@@ -160,6 +160,7 @@ export default function TasksHeader() {
           onSuccess={() => setIsMilestoneDialogOpen(false)}
           workspaceId={currentWorkspace?.id || ''}
           taskBoards={taskBoards || []}
+          boardId={selectedBoardId}
         />
       )}
 
@@ -169,6 +170,7 @@ export default function TasksHeader() {
           onOpenChange={handleOpenChange(setIsEpicDialogOpen)}
           onSuccess={() => setIsEpicDialogOpen(false)}
           workspaceId={currentWorkspace?.id || ''}
+          boardId={selectedBoardId}
         />
       )}
 
@@ -178,6 +180,7 @@ export default function TasksHeader() {
           onOpenChange={handleOpenChange(setIsStoryDialogOpen)}
           onSuccess={() => setIsStoryDialogOpen(false)}
           workspaceId={currentWorkspace?.id || ''}
+          boardId={selectedBoardId}
         />
       )}
     </>
