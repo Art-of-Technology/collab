@@ -64,6 +64,7 @@ interface CreateStoryDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   workspaceId: string;
+  boardId?: string;
 }
 
 // Wrap in memo
@@ -74,6 +75,7 @@ export function CreateStoryDialog({
   onOpenChange,
   onSuccess,
   workspaceId,
+  boardId,
 }: CreateStoryDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
@@ -91,7 +93,7 @@ export function CreateStoryDialog({
       dueDate: null,
       epicId: null,
       workspaceId: workspaceId,
-      taskBoardId: "",
+      taskBoardId: boardId || "",
       columnId: null,
       color: "#3B82F6",
     },

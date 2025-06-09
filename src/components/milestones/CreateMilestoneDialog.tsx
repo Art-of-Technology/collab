@@ -71,6 +71,7 @@ interface CreateMilestoneDialogProps {
   onSuccess: () => void;
   workspaceId: string;
   taskBoards?: { id: string; name: string }[];
+  boardId?: string;
 }
 
 export function CreateMilestoneDialog({
@@ -79,6 +80,7 @@ export function CreateMilestoneDialog({
   onSuccess,
   workspaceId,
   taskBoards = [],
+  boardId,
 }: CreateMilestoneDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [boards, setBoards] = useState<{ id: string; name: string }[]>(taskBoards);
@@ -119,7 +121,7 @@ export function CreateMilestoneDialog({
       dueDate: null,
       color: "#6366F1", // Default indigo color
       workspaceId: workspaceId,
-      taskBoardId: boards.length > 0 ? boards[0].id : "",
+      taskBoardId: boardId || (boards.length > 0 ? boards[0].id : ""),
       columnId: null,
     },
   });
