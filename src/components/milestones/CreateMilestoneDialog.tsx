@@ -182,7 +182,7 @@ export function CreateMilestoneDialog({
       if (values.columnId) {
         const selectedColumn = columns.find(column => column.id === values.columnId);
         if (selectedColumn) {
-          payload.status = selectedColumn.name.toLowerCase().replace(/\s+/g, '-');
+          payload.status = selectedColumn.name;
         }
       }
       

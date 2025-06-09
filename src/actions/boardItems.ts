@@ -310,7 +310,6 @@ export async function reorderItemsInColumn(data: {
   if (!workspace) throw new Error('Access denied');
   
   const columnName = board.columns[0]?.name;
-  const newStatus = columnName ? columnName.toLowerCase().replace(/\s+/g, '-') : undefined;
 
   // 1. Fetch the types of all items involved
   const itemsWithTypes = await Promise.all([
@@ -344,11 +343,9 @@ export async function reorderItemsInColumn(data: {
     };
 
     // Add status update if it's the moved item and the type supports status
-    if (itemId === movedItemId && newStatus) {
-      if (itemType === 'milestone' || itemType === 'epic' || itemType === 'story') {
-        dataToUpdate.status = newStatus;
-      }
-      // Potentially add task status update logic here if needed
+    if (itemId === movedItemId && columnName) {
+      // All entity types now use the column name directly, same as tasks
+      dataToUpdate.status = columnName;
     }
 
     switch (itemType) {
@@ -359,8 +356,15 @@ export async function reorderItemsInColumn(data: {
       case 'story':
         return prisma.story.update({ where: { id: itemId }, data: dataToUpdate });
       case 'task':
-        // Task update doesn't include status for now
-        const taskData: { position: number; columnId: string; } = { position: index, columnId: columnId };
+        // Task update now includes status when moving between columns
+        const taskData: { position: number; columnId: string; status?: string } = { 
+          position: index, 
+          columnId: columnId 
+        };
+        // Add status if this is the moved item
+        if (itemId === movedItemId && dataToUpdate.status) {
+          taskData.status = dataToUpdate.status;
+        }
         return prisma.task.update({ where: { id: itemId }, data: taskData });
       default:
         // This should ideally not happen if all items were found

@@ -78,6 +78,7 @@ export async function PATCH(
         title: title !== undefined ? title : undefined,
         description: description !== undefined ? description : undefined,
         priority: priority !== undefined ? priority : undefined,
+        status: status !== undefined ? status : undefined,
         type: type !== undefined ? type : undefined,
         columnId: columnId,
         dueDate: dueDate !== undefined ? dueDate : undefined,

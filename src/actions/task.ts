@@ -489,7 +489,8 @@ export async function updateTask(taskId: string, data: {
   description?: string;
   assigneeId?: string | null;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH';
-  status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
+  status?: string;
+  type?: string;
   dueDate?: Date | null;
 }) {
   const session = await getServerSession(authOptions);
@@ -498,7 +499,7 @@ export async function updateTask(taskId: string, data: {
     throw new Error('Unauthorized');
   }
 
-  const { title, description, assigneeId, priority, status, dueDate } = data;
+  const { title, description, assigneeId, priority, status, type, dueDate } = data;
 
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -511,13 +512,15 @@ export async function updateTask(taskId: string, data: {
     throw new Error('User not found');
   }
 
-  // Get the task
+  // Get the task with its current column and board info
   const task = await prisma.task.findUnique({
     where: {
       id: taskId
     },
     include: {
-      workspace: true
+      workspace: true,
+      column: true,
+      taskBoard: true,
     }
   });
 
@@ -556,6 +559,23 @@ export async function updateTask(taskId: string, data: {
     }
   }
 
+  // Find the column ID if status is being updated
+  let columnId = task.columnId;
+  
+  if (status && status !== task.column?.name) {
+    // Find the column with the given name in the task's board
+    const column = await prisma.taskColumn.findFirst({
+      where: {
+        name: status,
+        taskBoardId: task.taskBoardId || undefined,
+      },
+    });
+    
+    if (column) {
+      columnId = column.id;
+    }
+  }
+
   // Update the task
   const updatedTask = await prisma.task.update({
     where: {
@@ -567,6 +587,8 @@ export async function updateTask(taskId: string, data: {
       assigneeId: assigneeId === null ? null : (assigneeId || undefined),
       priority,
       status,
+      type: type !== undefined ? type : undefined,
+      columnId: columnId,
       dueDate: dueDate === null ? null : (dueDate || undefined)
     },
     include: {
@@ -598,6 +620,18 @@ export async function updateTask(taskId: string, data: {
       post: {
         select: {
           id: true
+        }
+      },
+      column: {
+        select: {
+          id: true,
+          name: true,
+        }
+      },
+      taskBoard: {
+        select: {
+          id: true,
+          name: true,
         }
       }
     }

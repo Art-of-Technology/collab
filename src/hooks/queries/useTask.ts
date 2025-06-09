@@ -21,6 +21,7 @@ import {
   getBoardTasks
 } from '@/actions/task';
 import { workspaceKeys } from './useWorkspace';
+import { boardItemsKeys } from './useBoardItems';
 
 // Define task query keys
 export const taskKeys = {
@@ -105,7 +106,8 @@ export const useUpdateTask = (taskId: string) => {
       description?: string;
       assigneeId?: string | null;
       priority?: 'LOW' | 'MEDIUM' | 'HIGH';
-      status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
+      status?: string;
+      type?: string;
       dueDate?: Date | null;
     }) => updateTask(taskId, data),
     onSuccess: (data) => {
@@ -115,10 +117,14 @@ export const useUpdateTask = (taskId: string) => {
       // Invalidate task list for this workspace
       queryClient.invalidateQueries({ queryKey: taskKeys.list(data.workspaceId) });
 
-      // If the task is associated with a board, invalidate that board's tasks
+      // If the task is associated with a board, invalidate board-related queries
       if (data.taskBoardId) {
         queryClient.invalidateQueries({ queryKey: taskKeys.board(data.taskBoardId) });
+        queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(data.taskBoardId) });
       }
+      
+      // Invalidate assigned tasks to update status/column changes in task lists
+      queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
     },
   });
 };

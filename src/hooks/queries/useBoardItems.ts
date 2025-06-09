@@ -1,7 +1,9 @@
+/* eslint-disable */
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getBoardItems, reorderItemsInColumn } from '@/actions/boardItems';
+import { taskKeys } from './useTask';
 
 // Define board items query keys
 export const boardItemsKeys = {
@@ -137,8 +139,32 @@ export const useReorderBoardItems = () => {
       }
     },
     // Always refetch after error or success:
-    onSettled: (data, error, variables) => {
+    onSettled: async (data, error, variables) => {
+      // Invalidate board items query
       queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(variables.boardId) });
+      
+      // Invalidate task-related queries to update statuses dynamically across the UI
+      queryClient.invalidateQueries({ queryKey: taskKeys.board(variables.boardId) });
+      
+      // Get the board data to find the workspace ID for broader invalidations
+      try {
+        const boardData = await queryClient.getQueryData(['boards', 'detail', variables.boardId]);
+        const workspaceId = boardData ? (boardData as any).workspaceId : null;
+        
+        if (workspaceId) {
+          // Invalidate workspace task list
+          queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
+          
+          // Invalidate assigned tasks for all users in this workspace
+          queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
+        }
+      } catch (e) {
+        // If we can't get workspace ID, still invalidate assigned tasks
+        queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
+      }
+      
+      // Also invalidate specific task details if the moved item was a task
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(variables.movedItemId) });
     },
   });
 }; 

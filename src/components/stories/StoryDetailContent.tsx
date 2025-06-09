@@ -21,7 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { storyStatusOptions, storyPriorityOptions } from "@/constants/task";
+import { storyPriorityOptions } from "@/constants/task";
+import { useBoardColumns } from "@/hooks/queries/useTask";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Format date helper
 const formatDate = (date: Date | string | null | undefined) => {
@@ -60,6 +62,7 @@ interface StoryDetailContentProps {
   error: string | null;
   onRefresh: () => void;
   onClose?: () => void;
+  boardId?: string;
 }
 
 export function StoryDetailContent({
@@ -67,7 +70,8 @@ export function StoryDetailContent({
   isLoading,
   error,
   onRefresh,
-  onClose
+  onClose,
+  boardId
 }: StoryDetailContentProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(story?.title || "");
@@ -86,6 +90,21 @@ export function StoryDetailContent({
   const [points, setPoints] = useState<number | undefined>(story?.points || undefined);
 
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Get board columns for status dropdown - use the current board being viewed
+  const { data: boardColumns = [] } = useBoardColumns(boardId);
+  
+  // Derive statuses from board columns or use defaults
+  const statuses = boardColumns.length > 0 
+    ? boardColumns.map((col: any) => ({ value: col.name, label: col.name }))
+    : [
+        { value: "BACKLOG", label: "Backlog" },
+        { value: "TODO", label: "To Do" },
+        { value: "IN_PROGRESS", label: "In Progress" },
+        { value: "IN_REVIEW", label: "In Review" },
+        { value: "DONE", label: "Done" }
+      ];
 
   const handleDescriptionChange = useCallback((md: string) => {
     setDescription(md);
@@ -179,6 +198,11 @@ export function StoryDetailContent({
       setTimeout(() => {
         onRefresh();
       }, 100);
+
+      // Invalidate TanStack Query cache for board items if status changed (to update kanban columns)
+      if (field === 'status' && boardId) {
+        queryClient.invalidateQueries({ queryKey: ['boardItems', { board: boardId }] });
+      }
 
       return true;
     } catch (error: any) {
@@ -347,18 +371,27 @@ export function StoryDetailContent({
 
   // Calculate story status badge
   const getStatusBadge = (status: string | null) => {
-    const currentStatus = storyStatusOptions.find(opt => opt.value === status);
+    const currentStatus = statuses.find(opt => opt.value === status);
     const statusColors: Record<string, string> = {
       'BACKLOG': 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
       'TODO': 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-100',
+      'TO DO': 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-100',
       'IN_PROGRESS': 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
+      'IN PROGRESS': 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
       'IN_REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
+      'IN REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
+      'REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
       'DONE': 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100',
+      'COMPLETED': 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100',
     };
 
+    // Use normalized key for color lookup
+    const normalizedStatus = (status || '').toUpperCase();
+    const color = statusColors[normalizedStatus] || 'bg-gray-100 text-gray-800';
+
     return (
-      <Badge className={`${statusColors[status || 'BACKLOG'] || 'bg-gray-100 text-gray-800'} px-2 py-1 capitalize`}>
-        {currentStatus?.label || status?.replace('_', ' ') || 'Backlog'}
+      <Badge className={`${color} px-2 py-1`}>
+        {currentStatus?.label || status || 'Backlog'}
       </Badge>
     );
   };
@@ -582,7 +615,7 @@ export function StoryDetailContent({
                     onClick={() => setEditingDescription(true)}
                   >
                     {story.description ? (
-                      <MarkdownContent content={story.description} />
+                      <MarkdownContent content={story.description} htmlContent={story.description} />
                     ) : (
                       <div className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5">
                         <div className="text-center">
@@ -640,7 +673,7 @@ export function StoryDetailContent({
                       <SelectValue>{getStatusBadge(story.status)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {storyStatusOptions.map((option) => (
+                      {statuses.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {getStatusBadge(option.value)}
                         </SelectItem>

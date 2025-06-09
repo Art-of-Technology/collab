@@ -25,15 +25,15 @@ const epicPatchSchema = z.object({
 // GET /api/epics/{epicId} - Fetch a single epic by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { epicId: string } }
+  { params }: Promise<{ params: { epicId: string } }>
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const { epicId } = params;
+    const _params = await params;
+    const { epicId } = _params;
     if (!epicId) {
       return NextResponse.json({ error: "Epic ID is required" }, { status: 400 });
     }
@@ -54,15 +54,18 @@ export async function GET(
       return NextResponse.json({ error: "Epic not found" }, { status: 404 });
     }
 
-    // Verify user belongs to the workspace
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        workspaceId: epic.workspaceId,
-        userId: session.user.id,
-      },
+        id: epic.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is the owner
+          { members: { some: { userId: session.user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!workspaceMember) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -77,7 +80,7 @@ export async function GET(
 // PATCH /api/epics/{epicId} - Update an epic
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { epicId: string } }
+  { params }: Promise<{ params: { epicId: string } }>
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -85,7 +88,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { epicId } = params;
+    const _params = await params;
+    const { epicId } = _params;
     if (!epicId) {
       return NextResponse.json({ error: "Epic ID is required" }, { status: 400 });
     }
@@ -110,15 +114,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Epic not found" }, { status: 404 });
     }
 
-    // Verify user is part of the workspace
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        workspaceId: existingEpic.workspaceId,
-        userId: session.user.id,
-      },
+        id: existingEpic.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is the owner
+          { members: { some: { userId: session.user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!workspaceMember) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -132,10 +139,38 @@ export async function PATCH(
     }
     // --- End Additional Validation ---
 
-    // Update the epic
+    // Get the current epic to access its board
+    const currentEpic = await prisma.epic.findUnique({
+      where: { id: epicId },
+      include: { taskBoard: true, column: true }
+    });
+
+    // Find the column ID if status is being updated
+    let columnId = dataToUpdate.columnId;
+    
+    if (dataToUpdate.status && currentEpic && dataToUpdate.status !== currentEpic.column?.name) {
+      // Find the column with the given name in the epic's board
+      const column = await prisma.taskColumn.findFirst({
+        where: {
+          name: dataToUpdate.status,
+          taskBoardId: currentEpic.taskBoardId,
+        },
+      });
+      
+      if (column) {
+        columnId = column.id;
+      }
+    }
+
+    // Update the epic with the columnId if found
+    const finalDataToUpdate = {
+      ...dataToUpdate,
+      ...(columnId && { columnId })
+    };
+
     const updatedEpic = await prisma.epic.update({
       where: { id: epicId },
-      data: dataToUpdate,
+      data: finalDataToUpdate,
       include: {
         milestone: { select: { id: true, title: true } },
         taskBoard: { select: { id: true, name: true } },
@@ -157,7 +192,7 @@ export async function PATCH(
 // DELETE /api/epics/{epicId} - Delete an epic (Optional)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { epicId: string } }
+  { params }: Promise<{ params: { epicId: string } }>
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -165,7 +200,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { epicId } = params;
+    const _params = await params;
+    const { epicId } = _params;
     if (!epicId) {
       return NextResponse.json({ error: "Epic ID is required" }, { status: 400 });
     }
@@ -180,15 +216,18 @@ export async function DELETE(
       return new NextResponse(null, { status: 204 }); 
     }
 
-    // Verify user is part of the workspace
-    const workspaceMember = await prisma.workspaceMember.findFirst({
+    // Verify user has access to the workspace (either as owner or member)
+    const workspaceAccess = await prisma.workspace.findFirst({
       where: {
-        workspaceId: existingEpic.workspaceId,
-        userId: session.user.id,
-      },
+        id: existingEpic.workspaceId,
+        OR: [
+          { ownerId: session.user.id }, // User is the owner
+          { members: { some: { userId: session.user.id } } } // User is a member
+        ]
+      }
     });
 
-    if (!workspaceMember) {
+    if (!workspaceAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

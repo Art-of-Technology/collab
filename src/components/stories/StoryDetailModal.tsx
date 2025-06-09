@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink, X } from "lucide-react";
 import Link from "next/link";
 import { StoryDetailContent } from "@/components/stories/StoryDetailContent";
+import { useTasks } from "@/context/TasksContext";
 
 interface StoryDetailModalProps {
   storyId: string | null;
@@ -17,6 +18,9 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  
+  // Get current board ID from TasksContext
+  const { selectedBoardId } = useTasks();
   
   // For tracking when to refresh story details 
   const [shouldRefresh, setShouldRefresh] = useState<boolean>(false);
@@ -95,6 +99,7 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
             error={error}
             onRefresh={refreshStoryDetails}
             onClose={onClose}
+            boardId={selectedBoardId}
           />
         </div>
       </DialogContent>
