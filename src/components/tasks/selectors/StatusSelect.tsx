@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge";
 
 interface StatusSelectProps {
   value: string | null | undefined;
-  onValueChange: (status: string) => void;
+  onValueChange: (status: string, columnId?: string) => void;
   boardId: string | null | undefined;
   disabled?: boolean;
   placeholder?: string;
@@ -54,7 +54,8 @@ export function StatusSelect({
 
   // Handle status change
   const handleStatusSelect = (status: string) => {
-    onValueChange(status);
+    const column = columns.find(col => col.name === status);
+    onValueChange(status, column?.id);
     setOpen(false);
     setSearchQuery("");
   };
@@ -77,7 +78,10 @@ export function StatusSelect({
     return (
       <Select
         value={value || undefined}
-        onValueChange={onValueChange}
+        onValueChange={(status) => {
+          const column = columns.find(col => col.name === status);
+          onValueChange(status, column?.id);
+        }}
         disabled={isDisabled}
       >
         <SelectTrigger className={`w-full ${className}`}>

@@ -4,19 +4,20 @@ import { useState, useEffect } from "react";
 import { MilestoneDetailContent } from "@/components/milestones/MilestoneDetailContent";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function MilestonePage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
-  const router = useRouter();
   const [milestone, setMilestone] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [milestoneId, setMilestoneId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   // Resolve params first
   useEffect(() => {
     const resolveParams = async () => {
       const resolvedParams = await params;
       setMilestoneId(resolvedParams.id);
+      setWorkspaceId(resolvedParams.workspaceId);
     };
     resolveParams();
   }, [params]);
@@ -60,21 +61,17 @@ export default function MilestonePage({ params }: { params: Promise<{ workspaceI
     }
   };
 
-  const goBack = () => {
-    router.back();
-  };
+  const boardId = milestone?.taskBoardId || '';
+  const backUrl = workspaceId ? `/${workspaceId}/tasks${boardId ? `?board=${boardId}` : ''}` : '#';
 
   return (
     <div className="container py-6 max-w-7xl">
       <div className="mb-6">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={goBack} 
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Board
+        <Button variant="ghost" size="sm" asChild className="flex items-center justify-start w-max gap-1 text-muted-foreground hover:text-foreground">
+          <Link href={backUrl}>
+            <ChevronLeft className="h-4 w-4" />
+            Back to Board
+          </Link>
         </Button>
       </div>
       

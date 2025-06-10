@@ -167,6 +167,7 @@ export default function CreateTaskForm({
 
   const workspaceId = initialData.workspaceId || currentWorkspace?.id;
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [selectedColumnId, setSelectedColumnId] = useState<string | undefined>(undefined);
 
   // Form initialization
   const form = useForm<TaskFormValues>({
@@ -209,11 +210,13 @@ export default function CreateTaskForm({
 
   // Effect to set default column
   useEffect(() => {
-    const currentColumnId = form.getValues('columnId');
-    if (selectedBoardId && boardColumns.length > 0 && !currentColumnId) {
-      form.setValue('columnId', boardColumns[0].id);
-    } else if (!selectedBoardId && currentColumnId) {
+    const currentColumnStatus = form.getValues('columnId');
+    if (selectedBoardId && boardColumns.length > 0 && !currentColumnStatus) {
+      form.setValue('columnId', boardColumns[0].name);
+      setSelectedColumnId(boardColumns[0].id);
+    } else if (!selectedBoardId && currentColumnStatus) {
       form.setValue('columnId', undefined);
+      setSelectedColumnId(undefined);
     }
   }, [boardColumns, selectedBoardId, form]);
 
@@ -273,7 +276,7 @@ export default function CreateTaskForm({
       toast({ title: "Error", description: "Workspace not found.", variant: "destructive" });
       return;
     }
-    if (!values.columnId) {
+    if (!values.columnId || !selectedColumnId) {
       toast({ title: "Error", description: "Status column is required.", variant: "destructive" });
       return;
     }
@@ -285,7 +288,8 @@ export default function CreateTaskForm({
       description: values.description,
       workspaceId: workspaceId,
       taskBoardId: boardIdToSubmit,
-      columnId: values.columnId,
+      columnId: selectedColumnId,
+      status: values.columnId, // This now contains the status name
       epicId: values.epicId || null,
       storyId: values.storyId || null,
       priority: (values.priority || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH",
@@ -431,6 +435,7 @@ export default function CreateTaskForm({
                         onBoardChange={(boardId) => {
                           form.setValue("taskBoardId", boardId);
                           form.setValue("columnId", undefined);
+                          setSelectedColumnId(undefined);
                           form.setValue("epicId", null);
                           form.setValue("storyId", null);
                         }}
@@ -453,7 +458,10 @@ export default function CreateTaskForm({
                     <FormControl>
                       <StatusSelect
                         value={field.value || undefined}
-                        onValueChange={field.onChange}
+                        onValueChange={(status, columnId) => {
+                          field.onChange(status);
+                          setSelectedColumnId(columnId);
+                        }}
                         boardId={selectedBoardId || ""}
                         disabled={createTaskMutation.isPending}
                       />

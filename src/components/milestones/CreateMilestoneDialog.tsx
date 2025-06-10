@@ -79,6 +79,7 @@ export function CreateMilestoneDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [boards, setBoards] = useState<{ id: string; name: string }[]>(taskBoards);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [selectedColumnId, setSelectedColumnId] = useState<string | undefined>(undefined);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -128,8 +129,10 @@ export function CreateMilestoneDialog({
 
   // Update columnId when columns are loaded
   useEffect(() => {
-    if (columns.length > 0 && !form.getValues('columnId')) {
-      form.setValue('columnId', columns[0].id);
+    const currentColumnStatus = form.getValues('columnId');
+    if (columns.length > 0 && !currentColumnStatus) {
+      form.setValue('columnId', columns[0].name);
+      setSelectedColumnId(columns[0].id);
     }
   }, [columns, form]);
 
@@ -171,13 +174,9 @@ export function CreateMilestoneDialog({
         dueDate: values.dueDate ? format(values.dueDate, "yyyy-MM-dd") : null,
       };
       
-      // Map the columnId to status for creating milestone
-      if (values.columnId) {
-        const selectedColumn = columns.find(column => column.id === values.columnId);
-        if (selectedColumn) {
-          payload.status = selectedColumn.name;
-        }
-      }
+      // Set the status and columnId for creating milestone
+      payload.status = values.columnId || 'planned'; // This now contains the status name
+      payload.columnId = selectedColumnId;
       
       const response = await axios.post("/api/milestones", payload);
       const createdMilestone = response.data;
@@ -289,6 +288,7 @@ export function CreateMilestoneDialog({
                         onBoardChange={(boardId) => {
                           form.setValue("taskBoardId", boardId);
                           form.setValue("columnId", null);
+                          setSelectedColumnId(undefined);
                         }}
                         disabled={isSubmitting}
                         workspaceId={workspaceId}
@@ -309,7 +309,10 @@ export function CreateMilestoneDialog({
                     <FormControl>
                       <StatusSelect
                         value={field.value || undefined}
-                        onValueChange={field.onChange}
+                        onValueChange={(status, columnId) => {
+                          field.onChange(status);
+                          setSelectedColumnId(columnId);
+                        }}
                         boardId={selectedBoardId || ""}
                         disabled={isSubmitting}
                       />

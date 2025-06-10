@@ -246,7 +246,7 @@ export async function createTask(data: {
   assigneeId?: string;
   reporterId?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH';
-  status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
+  status?: string;
   dueDate?: Date;
   linkedPostIds?: string[];
   taskBoardId?: string;
@@ -269,7 +269,7 @@ export async function createTask(data: {
     assigneeId,
     reporterId,
     priority = 'MEDIUM',
-    status = 'TODO',
+    status,
     dueDate,
     linkedPostIds = [],
     taskBoardId,
@@ -374,6 +374,22 @@ export async function createTask(data: {
     }
   }
 
+  // Default status if none provided
+  let finalStatus = status;
+  if (!finalStatus && columnId) {
+    // If only columnId is provided, get the column name for the status field
+    const column = await prisma.taskColumn.findUnique({
+      where: { id: columnId },
+      select: { name: true }
+    });
+    if (column) {
+      finalStatus = column.name;
+    }
+  }
+  if (!finalStatus) {
+    finalStatus = 'To Do';
+  }
+
   // Create the task
   const task = await prisma.task.create({
     data: {
@@ -398,7 +414,7 @@ export async function createTask(data: {
         }
       } : {}),
       priority,
-      status,
+      status: finalStatus,
       dueDate: dueDate || null,
       issueKey,
       ...(linkedPostIds.length > 0 ? {

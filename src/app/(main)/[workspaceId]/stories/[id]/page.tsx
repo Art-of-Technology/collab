@@ -4,20 +4,21 @@ import { useState, useEffect } from "react";
 import { StoryDetailContent } from "@/components/stories/StoryDetailContent";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function StoryPage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
-  const router = useRouter();
   const [story, setStory] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   // Resolve params first
   useEffect(() => {
     const resolveParams = async () => {
       const resolvedParams = await params;
       setStoryId(resolvedParams.id);
+      setWorkspaceId(resolvedParams.workspaceId);
     };
     resolveParams();
   }, [params]);
@@ -66,21 +67,17 @@ export default function StoryPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  const goBack = () => {
-    router.back();
-  };
+  const boardId = story?.taskBoardId || '';
+  const backUrl = workspaceId ? `/${workspaceId}/tasks${boardId ? `?board=${boardId}` : ''}` : '#';
 
   return (
     <div className="container py-6 max-w-7xl">
       <div className="mb-6">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={goBack} 
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Board
+        <Button variant="ghost" size="sm" asChild className="flex items-center justify-start w-max gap-1 text-muted-foreground hover:text-foreground">
+          <Link href={backUrl}>
+            <ChevronLeft className="h-4 w-4" />
+            Back to Board
+          </Link>
         </Button>
       </div>
       
