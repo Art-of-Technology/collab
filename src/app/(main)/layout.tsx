@@ -1,7 +1,6 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
-import { AppDock } from "@/components/dock";
 
 export default async function MainLayout({
   children,
