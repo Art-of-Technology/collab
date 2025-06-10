@@ -356,7 +356,7 @@ export default function CreateTaskForm({
         epicId: initialData.epicId || null,
         storyId: initialData.storyId || null,
         taskBoardId: initialData.taskBoardId || "",
-        columnId: initialData.columnId || undefined,
+        columnId: undefined, // Will be set below based on whether initialData.columnId is ID or name
         labels: initialData?.labels || [],
         postId: postId || initialData?.postId || null,
         dueDate: initialData?.dueDate || null,
@@ -367,6 +367,25 @@ export default function CreateTaskForm({
       form.reset(defaultValues);
     }
   }, [isOpen, initialData, workspaceId, postId, session?.data?.user?.id, form]);
+
+  // Handle initial column selection when initialData.columnId is provided
+  useEffect(() => {
+    if (isOpen && initialData.columnId && boardColumns.length > 0) {
+      // Check if initialData.columnId is an actual column ID or column name
+      const columnById = boardColumns.find(col => col.id === initialData.columnId);
+      const columnByName = boardColumns.find(col => col.name === initialData.columnId);
+      
+      if (columnById) {
+        // initialData.columnId is a column ID, set the status name and store the ID
+        form.setValue('columnId', columnById.name);
+        setSelectedColumnId(columnById.id);
+      } else if (columnByName) {
+        // initialData.columnId is already a column name, just set it
+        form.setValue('columnId', columnByName.name);
+        setSelectedColumnId(columnByName.id);
+      }
+    }
+  }, [isOpen, initialData.columnId, boardColumns, form]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {

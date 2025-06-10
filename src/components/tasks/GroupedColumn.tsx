@@ -376,6 +376,7 @@ export default function GroupedColumn({
                                   type={item.type || 'TASK'}
                                   priority={item.priority}
                                   assignee={item.assignee}
+                                  reporter={item.reporter}
                                   commentCount={item._count?.comments || 0}
                                   attachmentCount={item._count?.attachments || 0}
                                   issueKey={item.issueKey}
@@ -420,6 +421,7 @@ export default function GroupedColumn({
                                 type={item.type || 'TASK'}
                                 priority={item.priority}
                                 assignee={item.assignee}
+                                reporter={item.reporter}
                                 commentCount={item._count?.comments || 0}
                                 attachmentCount={item._count?.attachments || 0}
                                 issueKey={item.issueKey}
