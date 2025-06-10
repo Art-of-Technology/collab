@@ -7,6 +7,7 @@ import { ExternalLink, X } from "lucide-react";
 import Link from "next/link";
 import { StoryDetailContent } from "@/components/stories/StoryDetailContent";
 import { useTasks } from "@/context/TasksContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface StoryDetailModalProps {
   storyId: string | null;
@@ -21,6 +22,7 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
   
   // Get current board ID from TasksContext
   const { selectedBoardId } = useTasks();
+  const { currentWorkspace } = useWorkspace();
   
   // For tracking when to refresh story details 
   const [shouldRefresh, setShouldRefresh] = useState<boolean>(false);
@@ -81,7 +83,7 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
           <DialogTitle className="sr-only">Story Details</DialogTitle>
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>
-              <Link href={`/stories/${storyId}`} target="_blank" className="flex items-center gap-1">
+              <Link href={currentWorkspace ? `/${currentWorkspace.id}/stories/${storyId}` : "#"} target="_blank" className="flex items-center gap-1">
                 <ExternalLink className="h-4 w-4" />
                 <span>View Full</span>
               </Link>

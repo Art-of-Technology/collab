@@ -48,6 +48,7 @@ import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
 import { MilestoneSelect } from "@/components/tasks/selectors/MilestoneSelect";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import { StatusSelect } from "../tasks/selectors/StatusSelect";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -110,7 +111,7 @@ export function CreateEpicDialog({
   const selectedBoardId = form.watch('taskBoardId');
 
   // Fetch columns for the selected board
-  const { data: columns = [], isLoading: columnsLoading } = useBoardColumns(selectedBoardId);
+  const { data: columns = [] } = useBoardColumns(selectedBoardId);
 
   // Effect to set default column when board/columns change
   useEffect(() => {
@@ -118,13 +119,13 @@ export function CreateEpicDialog({
     if (selectedBoardId && columns.length > 0 && !currentColumnId) {
       form.setValue('columnId', columns[0].id);
     } else if (!selectedBoardId && currentColumnId) { // Clear column if board is cleared
-        form.setValue('columnId', null);
+      form.setValue('columnId', null);
     }
   }, [columns, selectedBoardId, form]);
-  
+
   // Clear Milestone when Board changes
   useEffect(() => {
-      form.setValue('milestoneId', null);
+    form.setValue('milestoneId', null);
   }, [selectedBoardId, form]);
 
   // AI Improve Handler
@@ -157,7 +158,7 @@ export function CreateEpicDialog({
   const onSubmit = async (values: FormValues) => {
     try {
       setIsSubmitting(true);
-      
+
       // Format dates for API
       const payload = {
         ...values,
@@ -165,7 +166,7 @@ export function CreateEpicDialog({
         dueDate: values.dueDate ? format(values.dueDate, "yyyy-MM-dd") : null,
         milestoneId: values.milestoneId === "none" ? null : values.milestoneId,
       };
-      
+
       // Map the columnId to status for creating epic
       if (values.columnId) {
         const selectedColumn = columns.find(column => column.id === values.columnId);
@@ -173,14 +174,14 @@ export function CreateEpicDialog({
           payload.status = selectedColumn.name;
         }
       }
-      
+
       const response = await axios.post("/api/epics", payload);
       const createdEpic = response.data;
-      
+
       // Process mentions in the description
       if (createdEpic?.id && values.description) {
         const mentionedUserIds = extractMentionUserIds(values.description);
-        
+
         if (mentionedUserIds.length > 0) {
           try {
             await axios.post("/api/mentions", {
@@ -195,26 +196,26 @@ export function CreateEpicDialog({
           }
         }
       }
-      
+
       // Display success message
       toast({
         title: "Success",
         description: "The epic has been created with your selected color."
       });
-      
+
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(values.taskBoardId) });
       queryClient.invalidateQueries({ queryKey: boardItemsKeys.all });
       queryClient.invalidateQueries({ queryKey: ['epics'] });
-      
+
       // Reset form and close dialog
       form.reset();
       onSuccess();
-      
+
     } catch (error) {
       console.error("Error creating epic:", error);
       toast({
-        title: "Error", 
+        title: "Error",
         description: "There was an error creating the epic. Please try again.",
         variant: "destructive"
       });
@@ -232,7 +233,7 @@ export function CreateEpicDialog({
             Add a new epic to group related stories and track implementation of features.
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
             <div className="md:col-span-2 space-y-4">
@@ -249,7 +250,7 @@ export function CreateEpicDialog({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="description"
@@ -257,10 +258,10 @@ export function CreateEpicDialog({
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <MarkdownEditor 
+                      <MarkdownEditor
                         initialValue={field.value || ''}
                         onChange={(markdown) => field.onChange(markdown)}
-                        placeholder="Describe the epic" 
+                        placeholder="Describe the epic"
                         minHeight="150px"
                         onAiImprove={handleAiImproveDescription}
                       />
@@ -295,7 +296,7 @@ export function CreateEpicDialog({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="columnId"
@@ -303,30 +304,18 @@ export function CreateEpicDialog({
                   <FormItem>
                     <FormLabel>Status Column</FormLabel>
                     <FormControl>
-                      <Select
+                      <StatusSelect
                         value={field.value || undefined}
                         onValueChange={field.onChange}
-                        disabled={isSubmitting || !selectedBoardId || columnsLoading}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={!selectedBoardId ? "Select board first" : "Select status"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {columnsLoading && <SelectItem value="loading" disabled>Loading...</SelectItem>}
-                          {selectedBoardId && !columnsLoading && columns.length === 0 && <SelectItem value="no-columns" disabled>No columns found</SelectItem>}
-                          {columns.map((column) => (
-                            <SelectItem key={column.id} value={column.id}>
-                              {column.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        boardId={selectedBoardId || ""}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="milestoneId"
@@ -334,7 +323,7 @@ export function CreateEpicDialog({
                   <FormItem>
                     <FormLabel>Milestone (Optional)</FormLabel>
                     <FormControl>
-                      <MilestoneSelect 
+                      <MilestoneSelect
                         value={field.value}
                         onChange={field.onChange}
                         workspaceId={workspaceId}
@@ -346,7 +335,7 @@ export function CreateEpicDialog({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="priority"
@@ -370,7 +359,7 @@ export function CreateEpicDialog({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="color"
@@ -379,14 +368,14 @@ export function CreateEpicDialog({
                     <FormLabel>Color</FormLabel>
                     <FormControl>
                       <div className="flex items-center space-x-2">
-                        <div 
-                          className="w-6 h-6 rounded-full border" 
+                        <div
+                          className="w-6 h-6 rounded-full border"
                           style={{ backgroundColor: field.value || '#6366F1' }}
                         />
-                        <Input 
-                          type="color" 
-                          {...field} 
-                          className="w-full h-9" 
+                        <Input
+                          type="color"
+                          {...field}
+                          className="w-full h-9"
                         />
                       </div>
                     </FormControl>
@@ -394,7 +383,7 @@ export function CreateEpicDialog({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="startDate"
@@ -433,7 +422,7 @@ export function CreateEpicDialog({
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="dueDate"

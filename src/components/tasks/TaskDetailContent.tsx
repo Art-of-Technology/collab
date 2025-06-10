@@ -31,7 +31,9 @@ import axios from "axios";
 import { useSession } from "next-auth/react";
 import { TaskHelpersSection } from "@/components/tasks/TaskHelpersSection";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
-import { useUpdateTask, useBoardColumns } from "@/hooks/queries/useTask";
+import { useUpdateTask } from "@/hooks/queries/useTask";
+import { StatusSelect } from "./selectors/StatusSelect";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -119,6 +121,7 @@ export interface Task {
   dueDate?: Date;
   storyPoints?: number;
   issueKey?: string | null;
+  columnId?: string;
   workspaceId: string;
   milestoneId?: string;
   milestone?: {
@@ -192,23 +195,6 @@ export interface PlayTime {
 
 type PlayState = "stopped" | "playing" | "paused";
 
-// Client-side implementation of status badge
-const getStatusBadge = (status: string) => {
-  const statusColors: Record<string, string> = {
-    "TO DO": "bg-slate-500",
-    "IN PROGRESS": "bg-blue-500",
-    "DONE": "bg-green-500",
-    "CANCELLED": "bg-red-500",
-    "BLOCKED": "bg-yellow-500"
-  };
-
-  return (
-    <Badge className={`${statusColors[status] || "bg-slate-500"} text-white`}>
-      {status}
-    </Badge>
-  );
-};
-
 // Client-side implementation of priority badge
 const getPriorityBadge = (priority: string) => {
   const priorityColors: Record<string, string> = {
@@ -238,8 +224,9 @@ export function TaskDetailContent({
   onRefresh,
   showHeader = true,
   onClose,
-  boardId
+  boardId,
 }: TaskDetailContentProps) {
+  const { currentWorkspace } = useWorkspace();
   const { data: session } = useSession();
   const { settings } = useWorkspaceSettings();
   const currentUserId = session?.user?.id;
@@ -273,15 +260,6 @@ export function TaskDetailContent({
 
   // Use TanStack Query mutation
   const updateTaskMutation = useUpdateTask(task?.id || "");
-  
-  // Get board columns for status dropdown - use the current board being viewed
-  const { data: boardColumns = [], isLoading: isLoadingColumns } = useBoardColumns(boardId);
-  
-  // Derive statuses from board columns or use defaults
-  const statuses = boardColumns.length > 0 
-    ? boardColumns.map((col: any) => col.name)
-    : ["TO DO", "IN PROGRESS", "REVIEW", "DONE"];
-
   const canControlTimer = useMemo(() => {
     if (!task || !currentUserId) return false;
     // Allow assignee, reporter, or any user to control their own timer
@@ -353,11 +331,11 @@ export function TaskDetailContent({
   useEffect(() => {
     if (taskActivities.length > 0 && currentUserId) {
       const userActivities = [...taskActivities] // Create a new array to avoid mutating state directly
-        .filter(act => 
+        .filter(act =>
           ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"].includes(act.action) &&
           act.user.id === currentUserId // Explicitly filter by current user
         );
-      
+
       const lastRelevantActivity = userActivities
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
@@ -385,7 +363,7 @@ export function TaskDetailContent({
     const h = Math.floor((totalSecondsValue % (3600 * 24)) / 3600);
     const m = Math.floor((totalSecondsValue % 3600) / 60);
     const s = totalSecondsValue % 60;
-    
+
     // Consistent with API: Xh Ym Zs, or Dd Xh Ym Zs
     if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
     return `${h}h ${m}m ${s}s`;
@@ -403,13 +381,13 @@ export function TaskDetailContent({
     if (userStatus?.statusStartedAt && task?.id) {
       const isMyTask = userStatus.currentTaskId === task.id;
       const isPlaying = userStatus.currentTaskPlayState === "playing";
-      
+
       if (isMyTask && isPlaying) {
         const tick = () => {
           const start = new Date(userStatus.statusStartedAt);
           const now = new Date();
           const sessionElapsed = now.getTime() - start.getTime();
-          
+
           // Use the totalTimeMs from the API if available, otherwise 0
           // The API already returns the accumulated time from all previous sessions
           const baseTime = totalPlayTime?.totalTimeMs || 0;
@@ -442,18 +420,18 @@ export function TaskDetailContent({
 
   const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
     if (!task?.id) return;
-    
+
     setIsTimerLoading(true);
     try {
       // Use the ActivityContext for proper state management
       await handleTaskAction(action, task.id);
 
       // Fetch local data directly. These will update relevant states and UI parts.
-      await fetchTaskActivities(); 
-      await fetchTotalPlayTime();  
+      await fetchTaskActivities();
+      await fetchTotalPlayTime();
 
       // Refresh the boards context for other parts of the application (including dock widget)
-      refreshBoards(); 
+      refreshBoards();
       // No longer calling onRefresh() here to prevent parent-induced re-fetch of the whole task object
 
     } catch (err: any) {
@@ -644,7 +622,7 @@ export function TaskDetailContent({
   const handlePriorityChange = async (priority: string) => {
     setSavingPriority(true);
     try {
-      await updateTaskMutation.mutateAsync({ priority });
+      await updateTaskMutation.mutateAsync({ priority: priority as "LOW" | "MEDIUM" | "HIGH" });
       toast({
         title: 'Updated',
         description: 'Task priority updated successfully',
@@ -739,10 +717,8 @@ export function TaskDetailContent({
       setTitle(task.title);
       setDescription(task.description || "");
       setDueDate(task.dueDate);
-      // Fetch activities and playtime when task initially loads as well
-      // This is now handled by the other useEffect listening to task.id and onRefresh
     }
-  }, [task, boardId]);
+  }, [task]);
 
   if (error) {
     return (
@@ -893,78 +869,78 @@ export function TaskDetailContent({
               {/* Play/Pause/Stop Controls & Total Playtime - Only show if time tracking is enabled */}
               {settings?.timeTrackingEnabled && (
                 <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm">
-                {currentPlayState === "stopped" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("play")}
-                    disabled={isTimerLoading || !task?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Start Timer"
-                  >
-                    {isTimerLoading && currentPlayState === "stopped" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                )}
-                {currentPlayState === "playing" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("pause")}
-                    disabled={isTimerLoading || !task?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Pause Timer"
-                  >
-                    {isTimerLoading && currentPlayState === "playing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
-                  </Button>
-                )}
-                {currentPlayState === "paused" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("play")}
-                    disabled={isTimerLoading || !task?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Resume Timer"
-                  >
-                    {isTimerLoading && currentPlayState === "paused" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                )}
-                {(currentPlayState === "playing" || currentPlayState === "paused") && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("stop")}
-                    disabled={isTimerLoading || !task?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Stop Timer"
-                  >
-                    {isTimerLoading && (currentPlayState === "playing" || currentPlayState === "paused") ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
-                  </Button>
-                )}
+                  {currentPlayState === "stopped" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("play")}
+                      disabled={isTimerLoading || !task?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Start Timer"
+                    >
+                      {isTimerLoading && currentPlayState === "stopped" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  {currentPlayState === "playing" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("pause")}
+                      disabled={isTimerLoading || !task?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Pause Timer"
+                    >
+                      {isTimerLoading && currentPlayState === "playing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  {currentPlayState === "paused" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("play")}
+                      disabled={isTimerLoading || !task?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Resume Timer"
+                    >
+                      {isTimerLoading && currentPlayState === "paused" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  {(currentPlayState === "playing" || currentPlayState === "paused") && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("stop")}
+                      disabled={isTimerLoading || !task?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Stop Timer"
+                    >
+                      {isTimerLoading && (currentPlayState === "playing" || currentPlayState === "paused") ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                    </Button>
+                  )}
 
-                <div className="border-l h-5 border-border/70 mx-1"></div>
+                  <div className="border-l h-5 border-border/70 mx-1"></div>
 
-                {isLoadingPlayTime ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : userStatus?.currentTaskId === task?.id && userStatus?.currentTaskPlayState === "playing" ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
-                     <Clock className="h-3.5 w-3.5 text-green-500"/> 
-                     <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
-                  </div>
-                ) : totalPlayTime ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
-                     <Clock className="h-3.5 w-3.5"/> 
-                     <span>{totalPlayTime.formattedTime}</span>
-                  </div>
-                ) : (
-                   <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
-                     <Clock className="h-3.5 w-3.5"/> 
-                     <span>0h 0m 0s</span>
-                  </div>
-                )}
-              </div>
+                  {isLoadingPlayTime ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : userStatus?.currentTaskId === task?.id && userStatus?.currentTaskPlayState === "playing" ? (
+                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
+                      <Clock className="h-3.5 w-3.5 text-green-500" />
+                      <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
+                    </div>
+                  ) : totalPlayTime ? (
+                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>{totalPlayTime.formattedTime}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>0h 0m 0s</span>
+                    </div>
+                  )}
+                </div>
               )}
-
+              {/* Task Type Select */}
               <div className="relative">
                 <Select
                   value={task.type}
@@ -997,7 +973,7 @@ export function TaskDetailContent({
                   </div>
                 )}
               </div>
-
+              {/* Share Button */}
               <ShareButton taskId={task.id} issueKey={task.issueKey || ""} />
             </div>
           </div>
@@ -1146,22 +1122,12 @@ export function TaskDetailContent({
               <div>
                 <p className="text-sm font-medium mb-1">Status</p>
                 <div className="relative">
-                  <Select
-                    value={task.status || task.column?.name || "TO DO"}
+                  <StatusSelect
+                    value={task.status || task.column?.name}
                     onValueChange={handleStatusChange}
+                    boardId={boardId || task.taskBoard?.id || ""}
                     disabled={savingStatus}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {getStatusBadge(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                   {savingStatus && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1281,7 +1247,7 @@ export function TaskDetailContent({
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1 text-muted-foreground">Milestone</p>
                   {task.milestone ? (
-                    <Link href={`/milestones/${task.milestoneId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${task.milestoneId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
                       <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
                         Milestone
                       </Badge>
@@ -1298,7 +1264,7 @@ export function TaskDetailContent({
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1 text-muted-foreground">Epic</p>
                   {task.epic ? (
-                    <Link href={`/epics/${task.epicId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/epics/${task.epicId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
                       <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
                         Epic
                       </Badge>
@@ -1315,7 +1281,7 @@ export function TaskDetailContent({
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1 text-muted-foreground">Story</p>
                   {task.story ? (
-                    <Link href={`/stories/${task.storyId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/stories/${task.storyId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                         Story
                       </Badge>
@@ -1332,7 +1298,7 @@ export function TaskDetailContent({
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1 text-muted-foreground">Parent Task</p>
                   {task.parentTask ? (
-                    <Link href={`/tasks/${task.parentTaskId}`} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.parentTaskId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
                       <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
                         {task.parentTask.issueKey || 'Task'}
                       </Badge>
@@ -1352,7 +1318,7 @@ export function TaskDetailContent({
                     <ul className="space-y-2">
                       {task.subtasks.map((subtask) => (
                         <li key={subtask.id}>
-                          <Link href={`/tasks/${subtask.id}`} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
+                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${subtask.id}` : "#"} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
                                 {subtask.issueKey || 'Task'}
@@ -1360,8 +1326,8 @@ export function TaskDetailContent({
                               <span className="truncate">{subtask.title}</span>
                             </div>
                             <Badge className={`${subtask.status === 'DONE' ? 'bg-green-500' :
-                                subtask.status === 'IN PROGRESS' ? 'bg-blue-500' :
-                                  'bg-gray-500'
+                              subtask.status === 'IN PROGRESS' ? 'bg-blue-500' :
+                                'bg-gray-500'
                               } text-white flex-shrink-0 ml-1`}>
                               {subtask.status}
                             </Badge>
@@ -1393,24 +1359,24 @@ export function TaskDetailContent({
             <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
               <CardHeader className="py-3 bg-muted/30 border-b">
                 <CardTitle className="text-md">Attachments</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <ul className="space-y-2">
-                    {task.attachments.map((attachment) => (
-                      <li key={attachment.id}>
-                        <Link
-                          href={attachment.url}
-                          target="_blank"
-                          className="text-sm text-primary hover:underline flex items-center gap-1"
-                        >
-                          {attachment.name || "File"}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
+              </CardHeader>
+              <CardContent className="p-4">
+                <ul className="space-y-2">
+                  {task.attachments.map((attachment) => (
+                    <li key={attachment.id}>
+                      <Link
+                        href={attachment.url}
+                        target="_blank"
+                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                      >
+                        {attachment.name || "File"}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

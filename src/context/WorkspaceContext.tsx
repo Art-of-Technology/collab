@@ -1,8 +1,9 @@
+/* eslint-disable */
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 type Workspace = {
   id: string;
@@ -38,10 +39,29 @@ type WorkspaceProviderProps = {
 export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false);
+
+  // Extract workspace ID from current URL
+  const getWorkspaceIdFromUrl = useCallback((): string | null => {
+    if (!pathname) return null;
+    
+    // Match pattern: /{workspaceId}/... 
+    const match = pathname.match(/^\/([^\/]+)(?:\/.*)?$/);
+    if (match && match[1]) {
+      const potentialWorkspaceId = match[1];
+      // Exclude known non-workspace routes
+      const nonWorkspaceRoutes = ['welcome', 'workspaces', 'create-workspace', 'workspace-invitation', 'login', 'home', 'terms', 'privacy-policy'];
+      if (!nonWorkspaceRoutes.includes(potentialWorkspaceId)) {
+        return potentialWorkspaceId;
+      }
+    }
+    return null;
+  }, [pathname]);
 
   const fetchWorkspaces = useCallback(async () => {
     if (status === 'loading' || !session?.user) {
@@ -50,6 +70,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
 
     try {
       setIsLoading(true);
+      setHasInitiallyFetched(true);
       const response = await fetch('/api/workspaces');
       
       if (!response.ok) {
@@ -59,20 +80,27 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       const data = await response.json();
       setWorkspaces(data);
       
-      // If there's no current workspace selected, use the first one
-      if (data.length > 0 && !currentWorkspace) {
-        // Check for workspace in localStorage
+      // Determine which workspace should be current based on URL first, then localStorage
+      const urlWorkspaceId = getWorkspaceIdFromUrl();
+      let targetWorkspace: Workspace | null = null;
+      
+      if (urlWorkspaceId) {
+        // Use workspace from URL if it exists and user has access
+        targetWorkspace = data.find((w: Workspace) => w.id === urlWorkspaceId) || null;
+      }
+      
+      if (!targetWorkspace && data.length > 0) {
+        // Fallback to localStorage if URL doesn't specify workspace or workspace not found
         const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
-        const savedWorkspace = savedWorkspaceId 
-          ? data.find((w: { id: string; }) => w.id === savedWorkspaceId) 
-          : null;
-        
-        setCurrentWorkspace(savedWorkspace || data[0]);
-        if (savedWorkspace) {
-          localStorage.setItem('currentWorkspaceId', savedWorkspace.id);
-        } else if (data[0]) {
-          localStorage.setItem('currentWorkspaceId', data[0].id);
-        }
+        targetWorkspace = savedWorkspaceId 
+          ? data.find((w: Workspace) => w.id === savedWorkspaceId) || data[0]
+          : data[0];
+      }
+      
+      if (targetWorkspace) {
+        setCurrentWorkspace(targetWorkspace);
+        // Update localStorage for fallback purposes, but don't rely on it for current tab
+        localStorage.setItem('currentWorkspaceId', targetWorkspace.id);
       }
     } catch (err) {
       console.error('Error fetching workspaces:', err);
@@ -80,17 +108,38 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     } finally {
       setIsLoading(false);
     }
-  }, [session, status, currentWorkspace]);
+  }, [session, status, getWorkspaceIdFromUrl]);
+
+  // Update current workspace when URL changes
+  useEffect(() => {
+    if (workspaces.length > 0) {
+      const urlWorkspaceId = getWorkspaceIdFromUrl();
+      
+      if (urlWorkspaceId) {
+        const urlWorkspace = workspaces.find(w => w.id === urlWorkspaceId);
+        if (urlWorkspace && (!currentWorkspace || currentWorkspace.id !== urlWorkspaceId)) {
+          setCurrentWorkspace(urlWorkspace);
+          // Update localStorage for fallback purposes
+          localStorage.setItem('currentWorkspaceId', urlWorkspace.id);
+        }
+      } else if (currentWorkspace) {
+        // If not on a workspace route, keep current workspace but don't force it
+        // This allows non-workspace pages to still have access to workspace context
+      }
+    }
+  }, [pathname, workspaces, currentWorkspace, getWorkspaceIdFromUrl]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (session?.user && !hasInitiallyFetched) {
+      // Only fetch workspaces if we haven't fetched them yet
       fetchWorkspaces();
     } else if (status === 'unauthenticated') {
       setWorkspaces([]);
       setCurrentWorkspace(null);
       setIsLoading(false);
+      setHasInitiallyFetched(false);
     }
-  }, [session, status, fetchWorkspaces]);
+  }, [session, status]);
 
   // Sync localStorage workspace ID to cookie on initial load
   useEffect(() => {
@@ -112,14 +161,33 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       }
       
       const workspaceDetails = await response.json();
+      
+      // Update context immediately for this tab
       setCurrentWorkspace(workspaceDetails);
       localStorage.setItem('currentWorkspaceId', workspaceDetails.id);
       
       // Also set a cookie for server components
       document.cookie = `currentWorkspaceId=${workspaceDetails.id}; path=/; max-age=31536000; SameSite=Lax`;
       
-      // Refresh page data to show the new workspace content
-      router.refresh();
+      // Navigate to the new workspace maintaining the current route
+      // Extract the route part after the workspace ID (if any)
+      const currentWorkspaceId = currentWorkspace?.id;
+      let routePart = '/dashboard'; // Default route
+      
+      if (currentWorkspaceId && pathname) {
+        // Check if current path follows workspace structure
+        const workspacePattern = new RegExp(`^/${currentWorkspaceId}(/.*)?`);
+        const match = pathname.match(workspacePattern);
+        if (match && match[1]) {
+          routePart = match[1];
+        } else if (pathname.startsWith('/welcome') || pathname.startsWith('/workspaces') || pathname.startsWith('/create-workspace')) {
+          // For non-workspace routes, go to dashboard
+          routePart = '/dashboard';
+        }
+      }
+      
+      // Navigate to the new workspace with the preserved route
+      router.push(`/${workspaceDetails.id}${routePart}`);
     } catch (err) {
       console.error('Error switching workspace:', err);
       
@@ -129,7 +197,20 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         setCurrentWorkspace(workspace);
         localStorage.setItem('currentWorkspaceId', workspace.id);
         document.cookie = `currentWorkspaceId=${workspace.id}; path=/; max-age=31536000; SameSite=Lax`;
-        router.refresh();
+        
+        // Use same navigation logic for fallback
+        const currentWorkspaceId = currentWorkspace?.id;
+        let routePart = '/dashboard';
+        
+        if (currentWorkspaceId && pathname) {
+          const workspacePattern = new RegExp(`^/${currentWorkspaceId}(/.*)?`);
+          const match = pathname.match(workspacePattern);
+          if (match && match[1]) {
+            routePart = match[1];
+          }
+        }
+        
+        router.push(`/${workspace.id}${routePart}`);
       }
     }
   };

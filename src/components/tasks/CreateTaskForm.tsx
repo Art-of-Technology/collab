@@ -54,6 +54,7 @@ import axios from "axios";
 
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import { StatusSelect } from "./selectors/StatusSelect";
 
 // Wrap in memo to prevent unnecessary re-renders which cause focus loss
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -201,7 +202,7 @@ export default function CreateTaskForm({
   const selectedBoardId = form.watch('taskBoardId');
 
   // Fetch columns for the selected board
-  const { data: boardColumns = [], isLoading: isLoadingBoardColumns } = useBoardColumns(selectedBoardId || undefined);
+  const { data: boardColumns = [] } = useBoardColumns(selectedBoardId || undefined);
   
   // Fetch tasks for the selected board (moved from render prop)
   const { tasks, isLoading: isLoadingTasks } = useBoardTasks(selectedBoardId);
@@ -265,26 +266,19 @@ export default function CreateTaskForm({
 
     const boardIdToSubmit = values.taskBoardId || selectedBoardId;
     if (!boardIdToSubmit) {
-      console.log("Board is required, stopping submission");
       toast({ title: "Error", description: "Board is required.", variant: "destructive" });
       return;
     }
     if (!workspaceId) {
-      console.log("Workspace not found, stopping submission");
       toast({ title: "Error", description: "Workspace not found.", variant: "destructive" });
       return;
     }
     if (!values.columnId) {
-      console.log("Column ID is required, stopping submission");
       toast({ title: "Error", description: "Status column is required.", variant: "destructive" });
       return;
     }
 
-    // Extract mentions *before* starting the mutation
-    console.log("Description content being passed to extractMentionUserIds:", values.description);
     const mentionedUserIds = values.description ? extractMentionUserIds(values.description) : [];
-    console.log("Extracted User IDs:", mentionedUserIds);
-
     // Create a clean data object for the mutation
     const cleanData = {
       title: values.title,
@@ -303,13 +297,9 @@ export default function CreateTaskForm({
       reporterId: values.reporterId === "unassigned" ? undefined : values.reporterId || undefined,
     };
 
-    console.log("Submitting task data via mutation:", cleanData);
-
     // Use the mutation hook
     createTaskMutation.mutate(cleanData, {
       onSuccess: async (createdTask) => {
-        console.log("Task created successfully via mutation:", createdTask);
-
         // Process mentions if there are any in the description
         if (createdTask?.id && mentionedUserIds.length > 0) {
           try {
@@ -319,7 +309,6 @@ export default function CreateTaskForm({
               sourceId: createdTask.id,
               content: `mentioned you in a task: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
             });
-            console.log("Mentions processed successfully for task:", createdTask.id);
           } catch (error) {
             console.error("Failed to process mentions:", error);
             // Don't fail the task creation success flow if mentions fail
@@ -377,7 +366,6 @@ export default function CreateTaskForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-      console.log("Dialog onOpenChange triggered", open);
       if (!open) {
         // Reset form when dialog closes
         form.reset();
@@ -463,24 +451,12 @@ export default function CreateTaskForm({
                   <FormItem>
                     <FormLabel>Status Column</FormLabel>
                     <FormControl>
-                      <Select
+                      <StatusSelect
                         value={field.value || undefined}
                         onValueChange={field.onChange}
-                        disabled={createTaskMutation.isPending || !selectedBoardId || isLoadingBoardColumns || boardColumns.length === 0}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={!selectedBoardId ? "Select board first" : "Select status"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {isLoadingBoardColumns && <SelectItem value="loading" disabled>Loading...</SelectItem>}
-                          {selectedBoardId && !isLoadingBoardColumns && boardColumns.length === 0 && <SelectItem value="no-columns" disabled>No columns found</SelectItem>}
-                          {boardColumns.map((column) => (
-                            <SelectItem key={column.id} value={column.id}>
-                              {column.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        boardId={selectedBoardId || ""}
+                        disabled={createTaskMutation.isPending}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

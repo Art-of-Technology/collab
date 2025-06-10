@@ -48,23 +48,8 @@ export async function GET(
 
     if (!workspace) {
       console.error(`User ${userId} attempted to fetch assigned tasks from workspace ${workspaceId} but has no access`);
-      
-      // Debug: Check what workspaces the user has access to
-      const userWorkspaces = await prisma.workspace.findMany({
-        where: {
-          OR: [
-            { ownerId: userId },
-            { members: { some: { userId: userId } } }
-          ]
-        },
-        select: { id: true, name: true }
-      });
-      
-      console.error(`User ${userId} has access to workspaces:`, userWorkspaces);
       return new NextResponse("No access to this workspace", { status: 403 });
     }
-
-    console.log(`User ${userId} fetching assigned tasks from workspace ${workspaceId} (${workspace.name})`);
 
     // Get latest 3 assigned tasks for the user in this workspace
     const assignedTasks = await prisma.task.findMany({

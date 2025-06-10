@@ -47,6 +47,7 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 import { formatDistanceToNow } from "date-fns";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -74,6 +75,7 @@ export default function Navbar({
   
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
+  const { currentWorkspace } = useWorkspace();
   
   // Use Mention context for notifications
   const { 
@@ -87,8 +89,8 @@ export default function Navbar({
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    if (searchQuery.trim() && currentWorkspace?.id) {
+      router.push(`/${currentWorkspace.id}/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setMobileSearchOpen(false);
     }
   };
@@ -130,37 +132,42 @@ export default function Navbar({
   // Generate notification URL based on type
   const getNotificationUrl = (notification: any): string => {
     const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
+    const workspaceId = currentWorkspace?.id;
+
+    if (!workspaceId) {
+      return '/welcome'; // Fallback if no workspace
+    }
 
     switch (type) {
       case 'post_mention':
       case 'post_comment':
       case 'post_reaction':
-        return postId ? `/posts/${postId}` : '/timeline';
+        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
       case 'comment_mention':
       case 'comment_reply':
       case 'comment_reaction':
         // If commentId exists, try to link to the parent post/feature
         // This might require fetching the comment details to get the post/feature ID
         // For now, linking to notifications as a fallback
-        return postId ? `/posts/${postId}` : '/timeline'; // Placeholder, needs better logic
+        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`; // Placeholder, needs better logic
       case 'taskComment_mention': // Added this case
-        return taskId ? `/tasks/${taskId}` : '/tasks';
+        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'feature_mention':
       case 'feature_comment':
       case 'feature_vote':
-        return featureRequestId ? `/features/${featureRequestId}` : '/features';
+        return featureRequestId ? `/${workspaceId}/features/${featureRequestId}` : `/${workspaceId}/features`;
       case 'task_mention':
       case 'task_assigned':
       case 'task_status_change':
-        return taskId ? `/tasks/${taskId}` : '/tasks';
+        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'epic_mention':
-        return epicId ? `/epics/${epicId}` : '/tasks'; // Assuming epic detail page
+        return epicId ? `/${workspaceId}/epics/${epicId}` : `/${workspaceId}/tasks`; // Assuming epic detail page
       case 'story_mention':
-        return storyId ? `/stories/${storyId}` : '/tasks'; // Assuming story detail page
+        return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`; // Assuming story detail page
       case 'milestone_mention':
-        return milestoneId ? `/milestones/${milestoneId}` : '/tasks'; // Assuming milestone detail page
+        return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`; // Assuming milestone detail page
       default:
-        return '/timeline';
+        return `/${workspaceId}/timeline`;
     }
   };
 
@@ -348,7 +355,6 @@ export default function Navbar({
                             {notifications.map(notification => {
                               const url = getNotificationUrl(notification);
                               const isHtmlContent = /<[^>]+>/.test(notification.content);
-                              console.log(`Notification ID: ${notification.id}, Content contains tag? ${isHtmlContent}, Content:`, notification.content);
                               return (
                                 <div 
                                   key={notification.id}

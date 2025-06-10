@@ -18,9 +18,7 @@ export function MilestoneSelect({ value, onChange, disabled, workspaceId, boardI
   const { currentWorkspace } = useWorkspace();
   const wsId = workspaceId || currentWorkspace?.id;
   
-  const { data: milestones = [], isLoading } = useWorkspaceMilestones(wsId, boardId, {
-      enabled: !!wsId 
-  });
+  const { data: milestones = [], isLoading } = useWorkspaceMilestones(wsId, boardId);
 
   const isDisabled = disabled || !boardId || isLoading;
 

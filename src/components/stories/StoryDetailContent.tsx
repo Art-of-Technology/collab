@@ -22,8 +22,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { storyPriorityOptions } from "@/constants/task";
-import { useBoardColumns } from "@/hooks/queries/useTask";
 import { useQueryClient } from "@tanstack/react-query";
+import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 // Format date helper
 const formatDate = (date: Date | string | null | undefined) => {
@@ -73,6 +74,7 @@ export function StoryDetailContent({
   onClose,
   boardId
 }: StoryDetailContentProps) {
+  const { currentWorkspace } = useWorkspace();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(story?.title || "");
   const [savingTitle, setSavingTitle] = useState(false);
@@ -92,19 +94,7 @@ export function StoryDetailContent({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get board columns for status dropdown - use the current board being viewed
-  const { data: boardColumns = [] } = useBoardColumns(boardId);
-  
-  // Derive statuses from board columns or use defaults
-  const statuses = boardColumns.length > 0 
-    ? boardColumns.map((col: any) => ({ value: col.name, label: col.name }))
-    : [
-        { value: "BACKLOG", label: "Backlog" },
-        { value: "TODO", label: "To Do" },
-        { value: "IN_PROGRESS", label: "In Progress" },
-        { value: "IN_REVIEW", label: "In Review" },
-        { value: "DONE", label: "Done" }
-      ];
+  const effectiveBoardId = story?.taskBoard?.id || boardId;
 
   const handleDescriptionChange = useCallback((md: string) => {
     setDescription(md);
@@ -200,8 +190,8 @@ export function StoryDetailContent({
       }, 100);
 
       // Invalidate TanStack Query cache for board items if status changed (to update kanban columns)
-      if (field === 'status' && boardId) {
-        queryClient.invalidateQueries({ queryKey: ['boardItems', { board: boardId }] });
+      if (field === 'status' && effectiveBoardId) {
+        queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
       }
 
       return true;
@@ -368,33 +358,6 @@ export function StoryDetailContent({
       </div>
     );
   }
-
-  // Calculate story status badge
-  const getStatusBadge = (status: string | null) => {
-    const currentStatus = statuses.find(opt => opt.value === status);
-    const statusColors: Record<string, string> = {
-      'BACKLOG': 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
-      'TODO': 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-100',
-      'TO DO': 'bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-100',
-      'IN_PROGRESS': 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
-      'IN PROGRESS': 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
-      'IN_REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
-      'IN REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
-      'REVIEW': 'bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
-      'DONE': 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100',
-      'COMPLETED': 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100',
-    };
-
-    // Use normalized key for color lookup
-    const normalizedStatus = (status || '').toUpperCase();
-    const color = statusColors[normalizedStatus] || 'bg-gray-100 text-gray-800';
-
-    return (
-      <Badge className={`${color} px-2 py-1`}>
-        {currentStatus?.label || status || 'Backlog'}
-      </Badge>
-    );
-  };
 
   // Calculate priority badge
   const getPriorityBadge = (priority: string | null) => {
@@ -641,7 +604,7 @@ export function StoryDetailContent({
                   {story.tasks.map((task) => (
                     <li key={task.id}>
                       <Link
-                        href={`/tasks/${task.id}`} // Assuming task detail page exists
+                        href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.id}` : "#"}
                         className="flex items-center justify-between gap-2 p-2 hover:bg-muted/30 rounded-md transition-colors"
                       >
                         <span className="text-sm">{task.title}</span>
@@ -664,22 +627,12 @@ export function StoryDetailContent({
               <div>
                 <p className="text-sm font-medium mb-1">Status</p>
                 <div className="relative">
-                  <Select
-                    value={story.status}
+                  <StatusSelect
+                    value={story.status || "TO DO"}
                     onValueChange={handleStatusChange}
+                    boardId={effectiveBoardId || ""}
                     disabled={savingStatus}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>{getStatusBadge(story.status)}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statuses.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {getStatusBadge(option.value)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                   {savingStatus && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -814,7 +767,7 @@ export function StoryDetailContent({
                 <div>
                   <p className="text-sm font-medium mb-1">Epic</p>
                   <Link
-                    href={`/epics/${story.epicId}`}
+                    href={currentWorkspace ? `/${currentWorkspace.id}/epics/${story.epicId}` : "#"}
                     className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md border transition-colors"
                   >
                     <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
@@ -830,7 +783,7 @@ export function StoryDetailContent({
                 <div>
                   <p className="text-sm font-medium mb-1">Board</p>
                   <Link
-                    href={`/tasks?board=${story.taskBoard.id}`}
+                    href={currentWorkspace ? `/${currentWorkspace.id}/tasks?board=${story.taskBoard.id}` : "#"}
                     className="flex items-center border rounded-md p-2 hover:bg-muted/20 transition-colors"
                   >
                     {story.taskBoard.name}

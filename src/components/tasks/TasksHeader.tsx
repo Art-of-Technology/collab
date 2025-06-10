@@ -60,8 +60,6 @@ export default function TasksHeader() {
     
     // Create the URL and navigate
     const url = `${pathname}?${params.toString()}`;
-    console.log("Navigation: Changing view to", newView, "with board", selectedBoardId);
-    
     // Use router.push with replace option to avoid browser history accumulation
     router.push(url, { scroll: false });
   };

@@ -37,22 +37,15 @@ export function TaskCommentsList({
   // Get comments using TanStack Query
   const { data, isLoading } = useTaskComments(taskId);
   
-  console.log("Comments from query:", data?.comments);
-  console.log("Initial comments:", initialComments);
-  
   // Fix comment structure and use the query data or fall back to initial comments
   const rawComments = data?.comments || initialComments;
   const comments = useMemo(() => ensureCommentStructure(rawComments), [rawComments]);
   const currentUserId = data?.currentUserId || initialUserId || '';
   
-  console.log("Structured comments:", comments);
-  
   // Use organizeTaskCommentsIntoTree when rendering comments
   const organizedComments = useMemo(() => 
     organizeTaskCommentsIntoTree(comments), [comments]
   );
-  
-  console.log("Organized comments:", organizedComments);
 
   if (isLoading && !initialComments.length) {
     return (

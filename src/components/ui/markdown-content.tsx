@@ -61,27 +61,20 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
   
   // Click handler for event delegation
   const handleClick = (event: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
-    console.log("MarkdownContent handleClick triggered");
     const target = event.target as HTMLElement;
     // Find the closest ancestor (or self) that is a mention block
     const mentionElement = target.closest('.mention-block');
     
     if (mentionElement) {
-      console.log("Mention element found:", mentionElement);
       const userId = mentionElement.getAttribute('data-user-id');
       if (userId) {
-        console.log("User ID found, navigating:", userId);
         // Prevent default link behavior if it was accidentally an 'a' tag somehow
         event.preventDefault();
         // *** Stop the event from bubbling up to parent handlers ***
         event.stopPropagation(); 
         // *** End Stop Propagation ***
         router.push(`/profile/${userId}`);
-      } else {
-        console.log("Mention element found, but no user ID attribute.");
       }
-    } else {
-      console.log("Clicked target was not a mention block or descendant.");
     }
   };
   
