@@ -13,7 +13,7 @@ export default function LoginForm() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/timeline" });
+      await signIn("google", { callbackUrl: "/" });
     } catch (error) {
       console.error("Login error:", error);
       toast.error("Failed to sign in with Google");

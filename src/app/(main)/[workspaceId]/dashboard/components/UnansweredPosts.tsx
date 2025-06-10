@@ -7,6 +7,7 @@ import { HelpCircle, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUnansweredPosts } from "@/hooks/queries/useDashboard";
 import { Badge } from "@/components/ui/badge";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface Tag {
   id: string;
@@ -33,6 +34,7 @@ interface UnansweredPostsProps {
 }
 
 export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsProps) {
+  const { currentWorkspace } = useWorkspace();
   // Use TanStack Query for data fetching with initial data from server
   const { data: unansweredPosts = initialPosts || [], isLoading } = useUnansweredPosts(workspaceId);
 
@@ -76,7 +78,7 @@ export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsPr
         {unansweredPosts.length > 0 ? (
           <div className="space-y-3">
             {unansweredPosts.map((post) => (
-              <Link href={`/posts/${post.id}`} key={post.id} className="block">
+              <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} key={post.id} className="block">
                 <div className="border rounded-md p-3 hover:bg-accent/50 transition-colors">
                   <div className="flex justify-between items-start mb-1">
                     <div className="flex items-center gap-2">

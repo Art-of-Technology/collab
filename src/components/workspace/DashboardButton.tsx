@@ -18,8 +18,8 @@ export default function DashboardButton({ workspaceId }: DashboardButtonProps) {
     // Set workspace context
     switchWorkspace(workspaceId);
     
-    // Navigate to dashboard
-    router.push('/dashboard');
+    // Navigate to workspace-specific dashboard
+    router.push(`/${workspaceId}/dashboard`);
   };
 
   return (

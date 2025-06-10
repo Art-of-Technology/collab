@@ -10,6 +10,23 @@ import {
     getWorkspaceStories
 } from '@/actions/boardItems';
 
+// Story interface definition - simplified to match API return
+export interface Story {
+  id: string;
+  title: string;
+  description?: string | null;
+  status?: string;
+  priority?: string;
+  type?: string;
+  storyPoints?: number | null;
+  epicId?: string | null;
+  workspaceId: string;
+  taskBoardId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: any; // Allow additional properties
+}
+
 // Query keys
 export const entityKeys = {
   all: ['entities'] as const,
@@ -20,10 +37,10 @@ export const entityKeys = {
   detail: (id: string) => [...entityKeys.details(), id] as const,
 };
 
-// Type helper for query results (adjust based on actual return types)
+// Type helper for query results
 type MilestoneList = { id: string; title: string; taskBoardId: string | null }[];
 type EpicList = { id: string; title: string; taskBoardId: string | null }[];
-type StoryList = { id: string; title: string; taskBoardId: string | null; epicId: string | null }[];
+type StoryList = any[]; // Use any to avoid type conflicts with API
 
 // Hook to get Milestone details by ID
 export const useMilestoneById = (id: string | undefined | null) => {

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { checkUserHasWorkspaces, getPendingInvitations } from "@/actions/invitation";
 import WelcomeClient from "@/components/welcome/WelcomeClient";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,9 +16,24 @@ export default async function WelcomePage() {
   // Check if user has any workspaces using server action
   const hasWorkspaces = await checkUserHasWorkspaces().catch(() => false);
 
-  // If user has workspaces, redirect to dashboard
+  // If user has workspaces, redirect to their first workspace dashboard
   if (hasWorkspaces) {
-    redirect("/dashboard");
+    // Get the user's first workspace
+    const userWorkspaces = await prisma.workspace.findMany({
+      where: {
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id } } }
+        ]
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+      take: 1
+    });
+
+    if (userWorkspaces.length > 0) {
+      redirect(`/${userWorkspaces[0].id}/dashboard`);
+    }
   }
 
   // Get pending invitations for the user using server action

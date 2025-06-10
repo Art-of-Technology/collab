@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PostList from "@/components/posts/PostList";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface UserResult {
   id: string;
@@ -50,6 +51,7 @@ export default function SearchResults({
 }: SearchResultsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { currentWorkspace } = useWorkspace();
   
   // Use the query hook with initialData for immediate rendering
   const { data, isLoading } = useSearch(searchQuery, activeTab);
@@ -202,7 +204,7 @@ export default function SearchResults({
                 {tags.slice(0, 12).map((tag: TagResult) => (
                   <Link 
                     key={tag.id} 
-                    href={`/timeline?tag=${encodeURIComponent(tag.name)}`}
+                    href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${encodeURIComponent(tag.name)}` : '#'}
                     className="no-underline"
                   >
                     <Badge variant="outline" className="text-sm px-3 py-1 hover:bg-secondary transition-colors whitespace-nowrap">
@@ -290,7 +292,7 @@ export default function SearchResults({
                   {tags.map((tag: TagResult) => (
                     <Link 
                       key={tag.id} 
-                      href={`/timeline?tag=${encodeURIComponent(tag.name)}`}
+                      href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${encodeURIComponent(tag.name)}` : '#'}
                       className="no-underline"
                     >
                       <Badge variant="outline" className="text-sm px-3 py-1 hover:bg-secondary transition-colors whitespace-nowrap">

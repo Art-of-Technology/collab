@@ -6,7 +6,7 @@ import { ProjectCalendar } from "@/components/tasks/ProjectCalendar";
 import { ProjectTimeline } from "@/components/tasks/ProjectTimeline";
 import { Milestone } from "@/hooks/queries/useMilestone";
 import { Epic } from "@/hooks/queries/useEpic";
-import { Story } from "@/hooks/queries/useStory";
+import { Story } from "@/hooks/queries/useEntityDetails";
 
 interface ProjectHierarchyTabsProps {
   milestones: Milestone[];

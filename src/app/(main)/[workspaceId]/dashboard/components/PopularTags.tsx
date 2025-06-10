@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tag, Loader2 } from "lucide-react";
 import { usePopularTags } from "@/hooks/queries/useDashboard";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface TagType {
   id: string;
@@ -20,6 +21,7 @@ interface PopularTagsProps {
 }
 
 export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
+  const { currentWorkspace } = useWorkspace();
   // Use TanStack Query for data fetching with initial data from server
   const { data: popularTags = initialTags || [], isLoading } = usePopularTags(workspaceId);
   
@@ -55,7 +57,7 @@ export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
         <div className="flex flex-wrap gap-2">
           {popularTags.length > 0 ? (
             popularTags.map((tag: TagType) => (
-              <Link href={`/timeline?tag=${tag.name.toLowerCase()}`} key={tag.id}>
+              <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                 <Badge
                   variant="outline"
                   className="text-sm py-2 px-3 hover:bg-primary/10 cursor-pointer transition-colors"

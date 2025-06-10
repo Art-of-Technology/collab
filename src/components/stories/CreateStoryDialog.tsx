@@ -80,6 +80,7 @@ export function CreateStoryDialog({
 }: CreateStoryDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [selectedColumnId, setSelectedColumnId] = useState<string | undefined>(undefined);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -108,11 +109,13 @@ export function CreateStoryDialog({
 
   // Effect to set default column
   useEffect(() => {
-    const currentColumnId = form.getValues('columnId');
-    if (selectedBoardId && columns.length > 0 && !currentColumnId) {
-      form.setValue('columnId', columns[0].id);
-    } else if (!selectedBoardId && currentColumnId) {
+    const currentColumnStatus = form.getValues('columnId');
+    if (selectedBoardId && columns.length > 0 && !currentColumnStatus) {
+      form.setValue('columnId', columns[0].name);
+      setSelectedColumnId(columns[0].id);
+    } else if (!selectedBoardId && currentColumnStatus) {
         form.setValue('columnId', null);
+        setSelectedColumnId(undefined);
     }
   }, [columns, selectedBoardId, form]);
   
@@ -155,13 +158,9 @@ export function CreateStoryDialog({
         epicId: values.epicId === "none" ? null : values.epicId,
       };
       
-      // Map the columnId to status for creating story
-      if (values.columnId) {
-        const selectedColumn = columns.find(column => column.id === values.columnId);
-        if (selectedColumn) {
-          payload.status = selectedColumn.name;
-        }
-      }
+      // Set the status and columnId for creating story
+      payload.status = values.columnId || 'backlog'; // This now contains the status name
+      payload.columnId = selectedColumnId;
       
       const response = await axios.post("/api/stories", payload);
       const createdStory = response.data;
@@ -268,6 +267,7 @@ export function CreateStoryDialog({
                         onBoardChange={(boardId) => {
                           form.setValue("taskBoardId", boardId);
                           form.setValue("columnId", null);
+                          setSelectedColumnId(undefined);
                           form.setValue("epicId", null);
                         }}
                         disabled={isSubmitting}
@@ -289,7 +289,10 @@ export function CreateStoryDialog({
                     <FormControl>
                       <StatusSelect
                         value={field.value || undefined}
-                        onValueChange={field.onChange}
+                        onValueChange={(status, columnId) => {
+                          field.onChange(status);
+                          setSelectedColumnId(columnId);
+                        }}
                         boardId={selectedBoardId || ""}
                         disabled={isSubmitting}
                       />

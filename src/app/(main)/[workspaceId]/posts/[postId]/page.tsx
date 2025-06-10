@@ -8,6 +8,7 @@ import PostDetailClient from "@/components/posts/PostDetailClient";
 interface PostPageProps {
   params: {
     postId: string;
+    workspaceId: string;
   };
 }
 
@@ -51,14 +52,17 @@ export default async function PostPage({ params }: PostPageProps) {
       />
     );
   } catch (error) {
+    const _params = await params;
+    const { workspaceId } = _params;
+    
     // If server action fails (unauthorized, not found), redirect appropriately
     // Check for specific error messages to determine where to redirect
     if (error instanceof Error && error.message.includes("access")) {
-      // User doesn't have access to this post, redirect to timeline
-      return redirect('/timeline');
+      // User doesn't have access to this post, redirect to workspace timeline
+      return redirect(`/${workspaceId}/timeline`);
     }
     
-    // Generic error handling, redirect to dashboard
-    return redirect('/dashboard');
+    // Generic error handling, redirect to workspace dashboard
+    return redirect(`/${workspaceId}/dashboard`);
   }
 } 

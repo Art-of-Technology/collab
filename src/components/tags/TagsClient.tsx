@@ -4,6 +4,7 @@ import { useTags } from "@/hooks/queries/useTag";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface TagsClientProps {
   initialData: {
@@ -14,6 +15,8 @@ interface TagsClientProps {
 }
 
 export default function TagsClient({ initialData }: TagsClientProps) {
+  const { currentWorkspace } = useWorkspace();
+  
   // Use the query hook with initialData for immediate rendering
   const { data, isLoading } = useTags();
   
@@ -52,7 +55,7 @@ export default function TagsClient({ initialData }: TagsClientProps) {
                 {groupedTags[letter].map((tag: any) => (
                   <Link 
                     key={tag.id} 
-                    href={`/timeline?tag=${encodeURIComponent(tag.name)}`}
+                    href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${encodeURIComponent(tag.name)}` : '#'}
                     className="no-underline"
                   >
                     <Badge variant="outline" className="text-sm px-3 py-1 hover:bg-secondary transition-colors whitespace-nowrap">

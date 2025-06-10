@@ -10,6 +10,7 @@ import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface UserProfileClientProps {
   userId: string;
@@ -21,6 +22,7 @@ export default function UserProfileClient({
   initialData 
 }: UserProfileClientProps) {
   const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
   const { data, isLoading, error } = useUserProfile(userId);
   
   // Handle redirect to self profile
@@ -45,7 +47,7 @@ export default function UserProfileClient({
     <div className="max-w-3xl mx-auto px-4 py-6 overflow-x-hidden">
       <div className="flex items-center gap-2 mb-6">
         <Button asChild variant="ghost" size="icon">
-          <Link href="/timeline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}>
             <ArrowLeftIcon className="h-5 w-5" />
           </Link>
         </Button>

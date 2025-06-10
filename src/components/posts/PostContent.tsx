@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChatBubbleLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { formatMentions } from "@/utils/mentions";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 type Tag = {
   id: string;
@@ -28,13 +29,15 @@ export default function PostContent({
   commentsCount,
   onToggleExpand,
 }: PostContentProps) {
+  const { currentWorkspace } = useWorkspace();
+  
   // Format message to display clickable mentions
   const formattedMessage = formatMentions(message);
   
   return (
     <div>
       {html ? (
-        <MarkdownContent content={html} />
+        <MarkdownContent content={html} htmlContent={html} />
       ) : (
         <p 
           className="whitespace-pre-wrap" 
@@ -47,7 +50,7 @@ export default function PostContent({
           {tags.map((tag) => (
             <Link
               key={tag.id}
-              href={`/timeline?tag=${encodeURIComponent(tag.name)}`}
+              href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${encodeURIComponent(tag.name)}` : `#`}
               className="no-underline"
             >
               <Badge key={tag.id} variant="secondary" className="text-xs hover:bg-secondary/80 transition-colors">
