@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MessageSquare, Paperclip, CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen } from "lucide-react";
 import { useTaskModal } from "@/context/TaskModalContext";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
@@ -14,6 +15,12 @@ export interface EnhancedTaskCardProps {
   type: string;
   priority?: string;
   assignee?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    useCustomAvatar?: boolean;
+  } | null;
+  reporter?: {
     id: string;
     name: string | null;
     image: string | null;
@@ -40,6 +47,7 @@ export default function EnhancedTaskCard({
   type,
   priority = 'medium',
   assignee = null,
+  reporter = null,
   commentCount = 0,
   attachmentCount = 0,
   issueKey = null,
@@ -70,7 +78,7 @@ export default function EnhancedTaskCard({
   };
 
   // Determine the item type based on entityType or legacy props
-  const itemType = entityType || 
+  const itemType = entityType ||
     (isMilestone ? 'milestone' : isEpic ? 'epic' : isStory ? 'story' : 'task');
 
   // Get card styles based on item type
@@ -107,7 +115,7 @@ export default function EnhancedTaskCard({
   const getTypeIcon = (type: string) => {
     // Ensure consistent uppercase formatting for types
     const normalizedType = type?.toUpperCase() || "TASK";
-    
+
     switch (normalizedType) {
       case "TASK":
         return <CheckSquare className="h-3.5 w-3.5 mr-1 text-blue-500" />;
@@ -131,7 +139,7 @@ export default function EnhancedTaskCard({
   const getTypeBadge = (type: string) => {
     // Ensure consistent uppercase formatting for types
     const normalizedType = type?.toUpperCase() || "TASK";
-    
+
     const typeColors: Record<string, string> = {
       "TASK": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
       "BUG": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
@@ -141,7 +149,7 @@ export default function EnhancedTaskCard({
       "EPIC": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
       "STORY": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
     };
-    
+
     return (
       <Badge className={`${typeColors[normalizedType] || "bg-gray-100 text-gray-800"} px-1.5 py-0.5 flex items-center text-xs`}>
         {getTypeIcon(normalizedType)}
@@ -153,8 +161,8 @@ export default function EnhancedTaskCard({
   // Get counts for different entity types
   const getEntityCounts = () => {
     if (!_count) return null;
-    
-    switch(itemType) {
+
+    switch (itemType) {
       case 'milestone':
         return _count.epics > 0 ? (
           <div className="flex items-center text-xs">
@@ -183,7 +191,7 @@ export default function EnhancedTaskCard({
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    
+
     // Route to appropriate entity detail page based on type
     if (itemType === 'task') {
       openTaskModal(id);
@@ -198,11 +206,40 @@ export default function EnhancedTaskCard({
 
   const cardStyles = getCardStyles();
 
+  // Helper component for rendering avatar with tooltip
+  const AvatarWithTooltip = ({
+    user,
+    label
+  }: {
+    user: { id: string; name: string | null; image: string | null; useCustomAvatar?: boolean },
+    label: string
+  }) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]">
+            {user.useCustomAvatar ? (
+              <CustomAvatar user={user} size="sm" />
+            ) : (
+              <Avatar className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]">
+                <AvatarImage src={user.image || undefined} alt={user.name || ""} />
+                <AvatarFallback>{user.name?.substring(0, 2) || "U"}</AvatarFallback>
+              </Avatar>
+            )}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{label}: {user.name || "Unknown"}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
   return (
     <div onClick={handleClick}>
-      <Card 
+      <Card
         className="overflow-hidden transition-all cursor-pointer border-l-4"
-        style={{ 
+        style={{
           borderLeftColor: cardStyles.borderColor,
           backgroundColor: cardStyles.backgroundColor
         }}
@@ -215,7 +252,7 @@ export default function EnhancedTaskCard({
                 <div className={`h-2 w-2 rounded-full ${getPriorityColor(priority)}`} />
               )}
             </div>
-            
+
             <div className="space-y-1">
               {issueKey && (
                 <div className="text-xs font-medium text-muted-foreground">
@@ -223,7 +260,7 @@ export default function EnhancedTaskCard({
                 </div>
               )}
               <h3 className="text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors">{title}</h3>
-              
+
               {/* Show hierarchy relationship badges */}
               <div className="flex flex-wrap gap-1 pt-1">
                 {milestoneTitle && itemType !== 'milestone' && (
@@ -246,38 +283,36 @@ export default function EnhancedTaskCard({
                 )}
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between pt-2">
-              {itemType === 'task' && assignee ? (
-                assignee.useCustomAvatar ? (
-                  <div className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]">
-                    <CustomAvatar user={assignee} size="sm" />
-                  </div>
-                ) : (
-                  <Avatar className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]">
-                    <AvatarImage src={assignee.image || undefined} alt={assignee.name || ""} />
-                    <AvatarFallback>{assignee.name?.substring(0, 2) || "U"}</AvatarFallback>
-                  </Avatar>
-                )
-              ) : (
-                <div className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]" />
-              )}
-              
+              <div className="flex items-center gap-2">
+                {itemType === 'task' && assignee && (
+                  <AvatarWithTooltip user={assignee} label="Assignee" />
+                )}
+                {!assignee && itemType === 'task' && (
+                  <div className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]" />
+                )}
+              </div>
+
               <div className="flex items-center gap-2 text-muted-foreground">
                 {getEntityCounts()}
-                
+
                 {itemType === 'task' && commentCount > 0 && (
                   <div className="flex items-center text-xs">
                     <MessageSquare className="h-3 w-3 mr-1" />
                     {commentCount}
                   </div>
                 )}
-                
+
                 {itemType === 'task' && attachmentCount > 0 && (
                   <div className="flex items-center text-xs">
                     <Paperclip className="h-3 w-3 mr-1" />
                     {attachmentCount}
                   </div>
+                )}
+
+                {itemType === 'task' && reporter && (
+                  <AvatarWithTooltip user={reporter} label="Reporter" />
                 )}
               </div>
             </div>

@@ -90,8 +90,8 @@ export default function LayoutWithSidebar({
         <ChatboxWrapper />
         {/* AI Assistant */}
         <AssistantWrapper />
-        {/* App Dock - Only show for admin users and when enabled */}
-        {session?.user?.role === 'admin' && <AppDock />}
+        {/* App Dock - Only show when enabled */}
+        <AppDock />
       </div>
     </div>
   );
