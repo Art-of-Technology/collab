@@ -40,6 +40,7 @@ import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
 import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import { StatusSelect } from "../tasks/selectors/StatusSelect";
 
 // Form schema
 const formSchema = z.object({
@@ -103,7 +104,7 @@ export function CreateStoryDialog({
   const selectedBoardId = form.watch('taskBoardId');
 
   // Fetch columns for the selected board
-  const { data: columns = [], isLoading: columnsLoading } = useBoardColumns(selectedBoardId);
+  const { data: columns = []} = useBoardColumns(selectedBoardId);
 
   // Effect to set default column
   useEffect(() => {
@@ -286,24 +287,12 @@ export function CreateStoryDialog({
                   <FormItem>
                     <FormLabel>Status Column</FormLabel>
                     <FormControl>
-                      <Select
+                      <StatusSelect
                         value={field.value || undefined}
                         onValueChange={field.onChange}
-                        disabled={isSubmitting || !selectedBoardId || columnsLoading}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={!selectedBoardId ? "Select board first" : "Select status"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {columnsLoading && <SelectItem value="loading" disabled>Loading...</SelectItem>}
-                          {selectedBoardId && !columnsLoading && columns.length === 0 && <SelectItem value="no-columns" disabled>No columns found</SelectItem>}
-                          {columns.map((column) => (
-                            <SelectItem key={column.id} value={column.id}>
-                              {column.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        boardId={selectedBoardId || ""}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

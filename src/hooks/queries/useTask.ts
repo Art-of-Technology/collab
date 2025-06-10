@@ -38,7 +38,7 @@ export const boardKeys = {
   all: ['boards'] as const,
   lists: () => [...boardKeys.all, 'list'] as const,
   workspace: (workspaceId: string) => [...boardKeys.lists(), { workspace: workspaceId }] as const,
-  columns: (boardId: string) => [...boardKeys.all, 'columns', boardId] as const,
+  columns: (boardId: string) => [...boardKeys.all, 'columns', { board: boardId }] as const,
   detail: (boardId: string) => [...boardKeys.all, 'detail', boardId] as const,
 };
 

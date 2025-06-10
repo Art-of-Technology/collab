@@ -7,6 +7,7 @@ import PostItem from "@/components/posts/PostItem";
 import { PrismaPost } from "./types";
 import CreateTaskButton from "./CreateTaskButton";
 import LinkedTasks from "./LinkedTasks";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface PostPageContentProps {
   post: PrismaPost;
@@ -14,11 +15,13 @@ interface PostPageContentProps {
 }
 
 export default function PostPageContent({ post, currentUserId }: PostPageContentProps) {
+  const { currentWorkspace } = useWorkspace();
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/timeline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : "/welcome"}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             See All Posts
           </Link>

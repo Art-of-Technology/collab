@@ -18,6 +18,8 @@ export default async function Home() {
         { members: { some: { userId: session.user.id } } }
       ]
     },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
     take: 1
   });
 
@@ -26,6 +28,6 @@ export default async function Home() {
     redirect("/welcome");
   }
 
-  // Otherwise, redirect to dashboard
-  redirect("/dashboard");
+  // Otherwise, redirect to the first workspace's dashboard
+  redirect(`/${userWorkspaces[0].id}/dashboard`);
 }

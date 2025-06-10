@@ -6,19 +6,29 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default function MilestonePage({ params }: { params: { id: string } }) {
+export default function MilestonePage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
   const router = useRouter();
   const [milestone, setMilestone] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [milestoneId, setMilestoneId] = useState<string | null>(null);
+
+  // Resolve params first
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolvedParams = await params;
+      setMilestoneId(resolvedParams.id);
+    };
+    resolveParams();
+  }, [params]);
 
   useEffect(() => {
+    if (!milestoneId) return;
+
     const fetchMilestone = async () => {
-      setIsLoading(true);
       setError(null);
       
       try {
-        const response = await fetch(`/api/milestones/${params.id}`);
+        const response = await fetch(`/api/milestones/${milestoneId}`);
         
         if (!response.ok) {
           throw new Error(`Error: ${response.status}`);
@@ -29,20 +39,15 @@ export default function MilestonePage({ params }: { params: { id: string } }) {
       } catch (err) {
         console.error("Failed to fetch milestone:", err);
         setError("Failed to load milestone details. Please try again.");
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    if (params.id) {
-      fetchMilestone();
-    }
-  }, [params.id]);
+    fetchMilestone();
+  }, [milestoneId]);
 
   const handleRefresh = () => {
-    if (params.id) {
-      setIsLoading(true);
-      fetch(`/api/milestones/${params.id}`)
+    if (milestoneId) {
+      fetch(`/api/milestones/${milestoneId}`)
         .then(response => {
           if (!response.ok) throw new Error("Failed to refresh");
           return response.json();
@@ -51,8 +56,7 @@ export default function MilestonePage({ params }: { params: { id: string } }) {
         .catch(err => {
           console.error("Error refreshing milestone:", err);
           // Don't set error state on refresh failure to keep showing content
-        })
-        .finally(() => setIsLoading(false));
+        });
     }
   };
 
@@ -76,7 +80,6 @@ export default function MilestonePage({ params }: { params: { id: string } }) {
       
       <MilestoneDetailContent
         milestone={milestone}
-        isLoading={isLoading}
         error={error}
         onRefresh={handleRefresh}
       />

@@ -46,9 +46,6 @@ export class ActivityService {
 
         if (shouldStopCurrentTask) {
           const activityName = eventType === EventType.TASK_START ? 'another task' : eventType.toLowerCase().replace('_start', '');
-          
-          console.log(`Stopping current task ${currentStatus.currentTaskId} before starting ${activityName}`);
-          
           // Create TASK_STOP record for the current task
           await tx.taskActivity.create({
             data: {
@@ -298,8 +295,6 @@ export class ActivityService {
    * Get total time spent on tasks by a specific user
    */
   static async getTaskTimeSpent(taskId: string, userId?: string): Promise<ActivitySummary> {
-    console.log(`[ActivityService.getTaskTimeSpent] Getting time for task ${taskId}, user ${userId}`);
-    
     const events = await prisma.userEvent.findMany({
       where: {
         taskId,
@@ -308,74 +303,22 @@ export class ActivityService {
       },
       orderBy: { startedAt: "asc" },
     });
-
-    console.log(`[ActivityService.getTaskTimeSpent] Found ${events.length} events for task`);
-    events.forEach((event, index) => {
-      console.log(`  Event ${index}: ${event.eventType} at ${event.startedAt.toISOString()}`);
-    });
-
     let totalMs = 0;
     let currentStart: Date | null = null;
 
     for (const event of events) {
       if (event.eventType === EventType.TASK_START) {
         currentStart = event.startedAt;
-        console.log(`  Started at: ${currentStart.toISOString()}`);
       } else if (
         (event.eventType === EventType.TASK_PAUSE || event.eventType === EventType.TASK_STOP) &&
         currentStart
       ) {
         const duration = event.startedAt.getTime() - currentStart.getTime();
         totalMs += duration;
-        console.log(`  Stopped/Paused at: ${event.startedAt.toISOString()}, duration: ${duration}ms`);
         currentStart = null;
       }
     }
-
-    console.log(`[ActivityService.getTaskTimeSpent] Total accumulated time: ${totalMs}ms`);
-
-    // Check if there's an ongoing session for this specific user and task
-    if (userId) {
-      const userStatus = await prisma.userStatus.findUnique({
-        where: { userId },
-        select: { 
-          currentTaskId: true, 
-          currentStatus: true, 
-          statusStartedAt: true 
-        }
-      });
-
-      // Check the latest task activity to determine if the task is currently playing
-      const latestTaskActivity = await prisma.taskActivity.findFirst({
-        where: {
-          taskId,
-          userId,
-          action: { in: ['TASK_PLAY_STARTED', 'TASK_PLAY_PAUSED', 'TASK_PLAY_STOPPED'] },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      console.log(`[ActivityService.getTaskTimeSpent] User status:`, {
-        currentTaskId: userStatus?.currentTaskId,
-        currentStatus: userStatus?.currentStatus,
-        statusStartedAt: userStatus?.statusStartedAt?.toISOString(),
-        latestTaskAction: latestTaskActivity?.action
-      });
-
-      // If user is working on this task and it's playing (not paused or stopped)
-      if (userStatus?.currentTaskId === taskId && 
-          userStatus.currentStatus === 'WORKING' &&
-          latestTaskActivity?.action === 'TASK_PLAY_STARTED' &&
-          userStatus.statusStartedAt) {
-        // Don't add the ongoing time here - let the frontend handle it
-        // This ensures we don't double-count the time
-        console.log(`[ActivityService] Task ${taskId} is currently playing for user ${userId}, not adding ongoing time to base`);
-      }
-    }
-
-    const result = this.formatDuration(totalMs);
-    console.log(`[ActivityService.getTaskTimeSpent] Returning:`, result);
-    return result;
+    return this.formatDuration(totalMs);
   }
 
   /**

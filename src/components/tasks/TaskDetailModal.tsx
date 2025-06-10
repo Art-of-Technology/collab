@@ -8,6 +8,7 @@ import Link from "next/link";
 import { TaskDetailContent } from "@/components/tasks/TaskDetailContent";
 import { useTaskById } from "@/hooks/queries/useTask";
 import { useTasks } from "@/context/TasksContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface TaskDetailModalProps {
   taskId: string | null;
@@ -16,12 +17,10 @@ interface TaskDetailModalProps {
 
 export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProps) {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  
-  // Get current board ID from TasksContext
-  const { selectedBoardId } = useTasks();
-  
   // Use TanStack Query to automatically handle cache invalidation
   const { data: task, error, refetch } = useTaskById(taskId || "");
+  const { selectedBoardId } = useTasks();
+  const { currentWorkspace } = useWorkspace();
 
   // Open modal when task data is loaded
   useEffect(() => {
@@ -46,7 +45,7 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
           <DialogTitle className="sr-only">Task Details</DialogTitle>
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>
-              <Link href={`/tasks/${taskId}`} target="_blank" className="flex items-center gap-1">
+              <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${taskId}` : "#"} target="_blank" className="flex items-center gap-1">
                 <ExternalLink className="h-4 w-4" />
                 <span>View Full</span>
               </Link>
@@ -63,7 +62,7 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
             error={error ? "Error loading task details" : null}
             onRefresh={refreshTaskDetails}
             onClose={onClose}
-            boardId={selectedBoardId}
+            boardId={(task as any)?.taskBoardId || selectedBoardId}
           />
         </div>
       </DialogContent>

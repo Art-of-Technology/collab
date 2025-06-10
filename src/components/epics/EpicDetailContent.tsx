@@ -21,8 +21,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useBoardColumns } from "@/hooks/queries/useTask";
 import { useQueryClient } from "@tanstack/react-query";
+import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -83,14 +84,9 @@ export function EpicDetailContent({
     const [dueDate, setDueDate] = useState<Date | undefined>(epic?.dueDate || undefined);
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { currentWorkspace } = useWorkspace();
 
-    // Get board columns for status dropdown - use the current board being viewed
-    const { data: boardColumns = [] } = useBoardColumns(boardId);
-    
-    // Derive statuses from board columns or use defaults
-    const statuses = boardColumns.length > 0 
-        ? boardColumns.map((col: any) => col.name)
-        : ["Planned", "In Progress", "Completed", "Cancelled"];
+    const effectiveBoardId = epic?.taskBoard?.id || boardId;
 
     const handleDescriptionChange = useCallback((md: string) => {
         setDescription(md);
@@ -173,8 +169,8 @@ export function EpicDetailContent({
             }, 100);
 
             // Invalidate TanStack Query cache for board items if status changed (to update kanban columns)
-            if (field === 'status' && boardId) {
-                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: boardId }] });
+            if (field === 'status' && effectiveBoardId) {
+                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
             }
 
             return true;
@@ -309,30 +305,6 @@ export function EpicDetailContent({
             </div>
         );
     }
-
-    // Calculate epic status
-    const getStatusBadge = (status: string | null) => {
-        const normalizedStatus = status?.toLowerCase() || 'planned';
-
-        const statusColors: Record<string, string> = {
-            'planned': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-            'to do': 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
-            'todo': 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
-            'in progress': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-            'review': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-            'in review': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-            'done': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-            'completed': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-            'cancelled': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-        };
-
-        return (
-            <Badge className={`${statusColors[normalizedStatus] || 'bg-gray-100 text-gray-800'} px-2 py-1`}>
-                {status || 'Planned'}
-            </Badge>
-        );
-    };
-
     // Calculate priority badge
     const getPriorityBadge = (priority: string) => {
         const normalizedPriority = priority?.toLowerCase() || 'medium';
@@ -476,7 +448,7 @@ export function EpicDetailContent({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {getStatusBadge(epic.status)}
+                        {getStatusBadge(epic.status || "PLANNED")}
                         {getPriorityBadge(epic.priority)}
                     </div>
                 </div>
@@ -580,7 +552,7 @@ export function EpicDetailContent({
                                     {epic.stories.map((story) => (
                                         <li key={story.id}>
                                             <Link
-                                                href={`/stories/${story.id}`}
+                                                href={currentWorkspace ? `/${currentWorkspace.id}/stories/${story.id}` : "#"}
                                                 className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md transition-colors"
                                             >
                                                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -606,22 +578,12 @@ export function EpicDetailContent({
                             <div>
                                 <p className="text-sm font-medium mb-1">Status</p>
                                 <div className="relative">
-                                    <Select
-                                        value={epic.status || "planned"}
+                                    <StatusSelect
+                                        value={epic.status || "PLANNED"}
                                         onValueChange={handleStatusChange}
+                                        boardId={effectiveBoardId || ""}
                                         disabled={savingStatus}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {statuses.map((status) => (
-                                                <SelectItem key={status} value={status}>
-                                                    {getStatusBadge(status)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    />
                                     {savingStatus && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -735,7 +697,7 @@ export function EpicDetailContent({
                                 <div>
                                     <p className="text-sm font-medium mb-1">Milestone</p>
                                     <Link
-                                        href={`/milestones/${epic.milestoneId}`}
+                                        href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${epic.milestoneId}` : "#"}
                                         className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md border transition-colors"
                                     >
                                         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
@@ -751,7 +713,7 @@ export function EpicDetailContent({
                                 <div>
                                     <p className="text-sm font-medium mb-1">Board</p>
                                     <Link
-                                        href={`/tasks?board=${epic.taskBoard.id}`}
+                                        href={currentWorkspace ? `/${currentWorkspace.id}/tasks?board=${epic.taskBoard.id}` : "#"}
                                         className="flex items-center border rounded-md p-2 hover:bg-muted/20 transition-colors"
                                     >
                                         {epic.taskBoard.name}

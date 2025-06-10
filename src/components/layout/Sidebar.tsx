@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface SidebarProps {
   pathname?: string;
@@ -27,72 +28,82 @@ interface SidebarProps {
 
 export default function Sidebar({ pathname = "", isCollapsed = false, toggleSidebar }: SidebarProps) {
   const { data: session } = useSession();
+  const { currentWorkspace, isLoading } = useWorkspace();
   
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
 
-  const navigation = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: Squares2X2Icon,
-      current: pathname === "/dashboard",
-    },
-    {
-      name: "Timeline",
-      href: "/timeline",
-      icon: HomeIcon,
-      current: pathname === "/timeline",
-    },
-    {
-      name: "Tasks",
-      href: "/tasks",
-      icon: RectangleStackIcon,
-      current: pathname === "/tasks",
-    },
-    {
-      name: "Notes",
-      href: "/notes",
-      icon: DocumentTextIcon,
-      current: pathname === "/notes",
-    },
-    {
-      name: "My Posts",
-      href: "/my-posts",
-      icon: UserGroupIcon,
-      current: pathname === "/my-posts",
-    },
-    {
-      name: "Bookmarks",
-      href: "/bookmarks",
-      icon: PlusIcon,
-      current: pathname === "/bookmarks",
-    },
-    {
-      name: "Profile",
-      href: "/profile",
-      icon: UserIcon,
-      current: pathname === "/profile",
-    },
-    {
-      name: "Messages",
-      href: "/messages",
-      icon: EnvelopeIcon,
-      current: pathname === "/messages" || pathname.startsWith("/messages/"),
-    },
-    {
-      name: "Tags",
-      href: "/tags",
-      icon: HashtagIcon,
-      current: pathname === "/tags",
-    },
-    {
-      name: "Feature Requests",
-      href: "/features",
-      icon: LightBulbIcon,
-      current: pathname === "/features",
-    },
-  ];
+  // Generate navigation based on current workspace
+  const getNavigation = () => {
+    // Always provide navigation structure to prevent layout shifts
+    // Use currentWorkspace.id if available, or 'loading' as placeholder
+    const workspaceId = currentWorkspace?.id || 'loading';
+    
+    return [
+      {
+        name: "Dashboard",
+        href: `/${workspaceId}/dashboard`,
+        icon: Squares2X2Icon,
+        current: pathname === `/${workspaceId}/dashboard`,
+      },
+      {
+        name: "Timeline",
+        href: `/${workspaceId}/timeline`,
+        icon: HomeIcon,
+        current: pathname === `/${workspaceId}/timeline`,
+      },
+      {
+        name: "Tasks",
+        href: `/${workspaceId}/tasks`,
+        icon: RectangleStackIcon,
+        current: pathname === `/${workspaceId}/tasks`,
+      },
+      {
+        name: "Notes",
+        href: `/${workspaceId}/notes`,
+        icon: DocumentTextIcon,
+        current: pathname === `/${workspaceId}/notes`,
+      },
+      {
+        name: "My Posts",
+        href: `/${workspaceId}/my-posts`,
+        icon: UserGroupIcon,
+        current: pathname === `/${workspaceId}/my-posts`,
+      },
+      {
+        name: "Bookmarks",
+        href: `/${workspaceId}/bookmarks`,
+        icon: PlusIcon,
+        current: pathname === `/${workspaceId}/bookmarks`,
+      },
+      {
+        name: "Profile",
+        href: `/${workspaceId}/profile`,
+        icon: UserIcon,
+        current: pathname === `/${workspaceId}/profile`,
+      },
+      {
+        name: "Messages",
+        href: `/${workspaceId}/messages`,
+        icon: EnvelopeIcon,
+        current: pathname === `/${workspaceId}/messages` || pathname.startsWith(`/${workspaceId}/messages/`),
+      },
+      {
+        name: "Tags",
+        href: `/${workspaceId}/tags`,
+        icon: HashtagIcon,
+        current: pathname === `/${workspaceId}/tags`,
+      },
+      {
+        name: "Feature Requests",
+        href: `/${workspaceId}/features`,
+        icon: LightBulbIcon,
+        current: pathname === `/${workspaceId}/features`,
+      },
+    ];
+  };
+
+  const navigation = getNavigation();
 
   // Render the avatar based on user data
   const renderAvatar = () => {
@@ -116,6 +127,17 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     );
   };
 
+  // Show loading state or "no workspace" only for non-workspace routes or true loading states
+  const shouldShowEmptyState = !currentWorkspace?.id && !isLoading && !pathname.match(/^\/[^\/]+\//);
+  
+  if (shouldShowEmptyState) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400">
+        <p>No workspace selected</p>
+      </div>
+    );
+  }
+
   if (isCollapsed) {
     return (
       <div>
@@ -127,8 +149,9 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                 variant={item.current ? "secondary" : "ghost"}
                 className={`w-full justify-center p-3 transition-colors ${
                   item.current ? "bg-[#1c1c1c] text-white" : "text-gray-400 hover:text-gray-200 hover:bg-[#1c1c1c]"
-                }`}
+                } ${(!currentWorkspace?.id && isLoading) ? "opacity-50 pointer-events-none" : ""}`}
                 asChild
+                disabled={!currentWorkspace?.id && isLoading}
               >
                 <Link
                   href={item.href}
@@ -170,8 +193,9 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
               variant={item.current ? "secondary" : "ghost"}
               className={`w-full justify-start transition-colors ${
                 item.current ? "bg-[#1c1c1c] text-white" : "text-gray-400 hover:text-gray-200 hover:bg-[#1c1c1c]"
-              }`}
+              } ${(!currentWorkspace?.id && isLoading) ? "opacity-50 pointer-events-none" : ""}`}
               asChild
+              disabled={!currentWorkspace?.id && isLoading}
             >
               <Link
                 href={item.href}
@@ -196,8 +220,13 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         </div>
 
         <div className="border-t border-[#2a2929] pt-4">
-          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" size="sm" asChild>
-            <Link href="/timeline">
+          <Button 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+            size="sm" 
+            asChild
+            disabled={!currentWorkspace?.id}
+          >
+            <Link href={`/${currentWorkspace?.id || 'loading'}/timeline`}>
               <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
               New Post
             </Link>

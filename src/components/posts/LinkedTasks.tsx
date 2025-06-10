@@ -5,6 +5,7 @@ import { ClipboardList, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface Task {
   id: string;
@@ -28,6 +29,8 @@ const fetchLinkedTasks = async (postId: string): Promise<Task[]> => {
 };
 
 export default function LinkedTasks({ postId }: LinkedTasksProps) {
+  const { currentWorkspace } = useWorkspace();
+  
   // Use TanStack Query to fetch linked tasks
   const { data: tasks = [], isLoading, error } = useQuery<Task[]>({
     queryKey: ['linkedTasks', postId],
@@ -113,7 +116,10 @@ export default function LinkedTasks({ postId }: LinkedTasksProps) {
       <CardContent className="p-0">
         <div className="divide-y">
           {tasks.map((task: Task) => (
-            <Link href={`/tasks/${task.id}`} key={task.id}>
+            <Link 
+              href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.id}` : "#"} 
+              key={task.id}
+            >
               <div className="p-4 hover:bg-muted/50 transition-colors">
                 <div className="flex justify-between items-start mb-1">
                   <h4 className="font-medium text-sm">{task.title}</h4>

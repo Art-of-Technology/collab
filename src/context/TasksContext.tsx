@@ -91,8 +91,8 @@ interface TasksProviderProps {
   workspaceId?: string;
 }
 
-export const TasksProvider = ({ 
-  children, 
+export const TasksProvider = ({
+  children,
   initialBoardId,
   initialView = 'kanban',
   initialBoards = [],
@@ -104,7 +104,11 @@ export const TasksProvider = ({
   const searchParams = useSearchParams();
   const isInitialLoad = useRef(true);
   const lastWorkspaceIdRef = useRef<string | undefined | null>(null);
-  
+  const currentFetchController = useRef<AbortController | null>(null);
+  const workspaceChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hierarchyRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastHierarchyRefreshKey = useRef<string>('');
+
   // State management
   const [boards, setBoards] = useState<Board[]>(initialBoards);
   const [urlSelectedBoardId, setUrlSelectedBoardId] = useState(initialBoardId || '');
@@ -120,7 +124,10 @@ export const TasksProvider = ({
   const [stories, setStories] = useState<any[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
 
-  const activeWorkspaceId = useMemo(() => workspaceId || currentWorkspace?.id, [workspaceId, currentWorkspace?.id]);
+  // Use WorkspaceContext as single source of truth for workspace ID
+  const activeWorkspaceId = useMemo(() => {
+    return currentWorkspace?.id || workspaceId;
+  }, [currentWorkspace?.id, workspaceId]);
 
   // URL Synchronization
   useEffect(() => {
@@ -128,14 +135,12 @@ export const TasksProvider = ({
     const boardParam = searchParams.get('board');
 
     if (viewParam && ['kanban', 'list', 'hierarchy'].includes(viewParam) && viewParam !== view) {
-      console.log("URL change -> Setting view state:", viewParam);
       setView(viewParam);
     }
 
     const newUrlBoardId = boardParam || '';
     if (newUrlBoardId !== urlSelectedBoardId) {
-        console.log("URL change -> Updating URL board ID tracker:", newUrlBoardId);
-        setUrlSelectedBoardId(newUrlBoardId);
+      setUrlSelectedBoardId(newUrlBoardId);
     }
 
     isInitialLoad.current = false;
@@ -144,102 +149,149 @@ export const TasksProvider = ({
   // Board Fetching and Selection Logic
   const determineBoardSelection = useCallback((fetchedBoards: Board[], currentSelectedId: string): string => {
     if (!fetchedBoards || fetchedBoards.length === 0) {
-      console.log("Determine Selection: No boards fetched, clearing selection.");
       return '';
     }
 
     const currentSelectionValid = fetchedBoards.some(board => board.id === currentSelectedId);
     if (currentSelectionValid) {
-      console.log("Determine Selection: Current ID valid:", currentSelectedId);
       return currentSelectedId;
     }
 
     const firstBoardId = fetchedBoards[0].id;
-    console.log("Determine Selection: Current ID invalid or missing, defaulting to first board:", firstBoardId);
     return firstBoardId;
   }, []);
 
   const fetchBoardsList = useCallback(async (wsId: string) => {
-    console.log("Fetching boards for workspace:", wsId);
+    // Cancel previous fetch if it exists
+    if (currentFetchController.current) {
+      currentFetchController.current.abort();
+    }
+    
+    // Create new AbortController for this request
+    const controller = new AbortController();
+    currentFetchController.current = controller;
+    
+    // Prevent race conditions by checking if workspace is still the same when request completes
+    const requestWorkspaceId = wsId;
+    
     setIsBoardsLoading(true);
     setBoards([]);
     setSelectedBoard(null);
     let newBoards: Board[] = [];
     try {
-      const response = await fetch(`/api/workspaces/${wsId}/boards`);
+      const response = await fetch(`/api/workspaces/${wsId}/boards`, {
+        signal: controller.signal
+      });
+      
+      // Check if workspace changed while we were fetching
+      if (activeWorkspaceId !== requestWorkspaceId) {
+        return;
+      }
+      
       if (!response.ok) {
         throw new Error(`Failed to fetch boards: ${response.statusText}`);
       }
       newBoards = await response.json();
-      console.log("Fetched boards data:", newBoards);
+      
+      // Double-check workspace hasn't changed
+      if (activeWorkspaceId !== requestWorkspaceId) {
+        return;
+      }
       setBoards(newBoards);
-
       const targetBoardId = determineBoardSelection(newBoards, urlSelectedBoardId || selectedBoardId);
-
-      console.log("Setting selected board ID after fetch/determine:", targetBoardId);
       setSelectedBoardId(targetBoardId);
 
     } catch (error) {
-      console.error('Error fetching boards list:', error);
-      setBoards([]);
-      setSelectedBoardId('');
+      // Don't log errors for aborted requests
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+      // Only clear if we're still on the same workspace
+      if (activeWorkspaceId === requestWorkspaceId) {
+        setBoards([]);
+        setSelectedBoardId('');
+      }
     } finally {
-      setIsBoardsLoading(false);
+      // Only update loading state if we're still on the same workspace and this is the current controller
+      if (activeWorkspaceId === requestWorkspaceId && currentFetchController.current === controller) {
+        setIsBoardsLoading(false);
+      }
     }
-  }, [determineBoardSelection, urlSelectedBoardId, selectedBoardId]);
+  }, [determineBoardSelection, urlSelectedBoardId, selectedBoardId, activeWorkspaceId]);
 
   useEffect(() => {
     const currentWsId = activeWorkspaceId;
-    let isMounted = true; // Prevent state updates after unmount
+    
+    // Clear any existing timeout
+    if (workspaceChangeTimeoutRef.current) {
+      clearTimeout(workspaceChangeTimeoutRef.current);
+    }
+    
+    // Debounce rapid workspace changes  
+    workspaceChangeTimeoutRef.current = setTimeout(() => {
+      let isMounted = true; // Prevent state updates after unmount
 
-    const performInitialLoadOrWorkspaceChange = async () => {
-      if (!currentWsId) {
-        // Handle case where workspace becomes null/undefined
-        if (lastWorkspaceIdRef.current !== null) { // Only clear if it wasn't already null
-          console.log("No active workspace, clearing context state.");
-          if (isMounted) {
-            setBoards([]);
-            setSelectedBoard(null);
-            setSelectedBoardId('');
-            setMilestones([]);
-            setEpics([]);
-            setStories([]);
-            if (isBoardsLoading) setIsBoardsLoading(false);
-            if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
-          }
-          lastWorkspaceIdRef.current = null;
-        }
-        return;
-      }
-
-      // Proceed if workspace ID is valid
-      const isWorkspaceChange = currentWsId !== lastWorkspaceIdRef.current;
-
-      if (isInitialLoad.current || isWorkspaceChange) {
-        if (isWorkspaceChange) {
-          console.log(`Workspace changed: ${lastWorkspaceIdRef.current} -> ${currentWsId}. Triggering refresh.`);
-          if (isMounted) {
-            setMilestones([]);
-            setEpics([]);
-            setStories([]);
-            setIsBoardsLoading(true); // Reset loading for new workspace fetch
-          }
-        } else {
-          console.log("Initial load for workspace:", currentWsId);
+      const performInitialLoadOrWorkspaceChange = async () => {
+        // Double-check that the workspace ID is still the same after debounce
+        if (currentWsId !== activeWorkspaceId) {
+          return;
         }
 
-        lastWorkspaceIdRef.current = currentWsId;
-        await fetchBoardsList(currentWsId); // Wait for the fetch to complete
+        if (!currentWsId) {
+          // Handle case where workspace becomes null/undefined
+          if (lastWorkspaceIdRef.current !== null) { // Only clear if it wasn't already null
+            if (isMounted) {
+              setBoards([]);
+              setSelectedBoard(null);
+              setSelectedBoardId('');
+              setMilestones([]);
+              setEpics([]);
+              setStories([]);
+              if (isBoardsLoading) setIsBoardsLoading(false);
+              if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
+            }
+            lastWorkspaceIdRef.current = null;
+          }
+          return;
+        }
 
-      }
-    };
+        // Proceed if workspace ID is valid
+        const isWorkspaceChange = currentWsId !== lastWorkspaceIdRef.current;
 
-    performInitialLoadOrWorkspaceChange();
+        if (isInitialLoad.current || isWorkspaceChange) {
+          if (isWorkspaceChange) {
+            if (isMounted) {
+              // Clear all workspace-specific data immediately
+              setBoards([]);
+              setSelectedBoard(null);
+              setSelectedBoardId('');
+              setUrlSelectedBoardId('');
+              setMilestones([]);
+              setEpics([]);
+              setStories([]);
+              setIsBoardsLoading(true); // Reset loading for new workspace fetch
+            }
+          }
 
+          lastWorkspaceIdRef.current = currentWsId;
+          await fetchBoardsList(currentWsId); // Wait for the fetch to complete
+
+        }
+      };
+
+      performInitialLoadOrWorkspaceChange();
+
+      return () => {
+        isMounted = false;
+      };
+    }, 150); // Increased to 150ms debounce to better handle rapid changes
+    
     return () => {
-      isMounted = false;
+      if (workspaceChangeTimeoutRef.current) {
+        clearTimeout(workspaceChangeTimeoutRef.current);
+      }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId, fetchBoardsList]);
 
   useEffect(() => {
@@ -251,15 +303,13 @@ export const TasksProvider = ({
 
     const existingBoardData = boards.find(b => b.id === selectedBoardId && b.columns);
     if (existingBoardData) {
-       console.log("Using existing detailed board data for:", selectedBoardId);
-       setSelectedBoard(existingBoardData);
-       if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
-       return;
+      setSelectedBoard(existingBoardData);
+      if (isBoardDetailsLoading) setIsBoardDetailsLoading(false);
+      return;
     }
 
     let isMounted = true;
     const fetchSelectedBoardDetails = async () => {
-      console.log(`Fetching details for board: ${selectedBoardId}`);
       setIsBoardDetailsLoading(true);
       try {
         const response = await fetch(`/api/tasks/boards/${selectedBoardId}`);
@@ -282,35 +332,32 @@ export const TasksProvider = ({
     fetchSelectedBoardDetails();
 
     return () => { isMounted = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBoardId, boards]);
 
   // Handlers
   const selectBoard = useCallback((boardId: string) => {
     if (boardId !== selectedBoardId) {
-      console.log("User selected board:", boardId);
       setSelectedBoardId(boardId);
       setUrlSelectedBoardId(boardId);
-      
+
       // Update the URL with the new board ID while preserving the current view
       const params = new URLSearchParams(window.location.search);
       params.set('board', boardId);
-      
+
       // Keep the current view
       if (view && !params.has('view')) {
         params.set('view', view);
       }
-      
+
       // Update the URL
       const url = `${pathname}?${params.toString()}`;
-      console.log("URL update on board selection:", url);
       router.replace(url, { scroll: false });
     }
   }, [selectedBoardId, view, pathname, router]);
 
   const setViewWithUrlUpdate = useCallback((newView: 'kanban' | 'list' | 'hierarchy') => {
     if (newView !== view) {
-      console.log("User changed view:", newView);
       setView(newView);
     }
   }, [view]);
@@ -337,11 +384,11 @@ export const TasksProvider = ({
       if (response.ok) setEpics(await response.json());
       else console.error('Failed to fetch epics');
     } catch (error) { console.error('Error fetching epics:', error); }
-     finally { setIsHierarchyLoading(false); }
+    finally { setIsHierarchyLoading(false); }
   }, [activeWorkspaceId, selectedBoardId]);
 
   const refreshStories = useCallback(async () => {
-     if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId) return;
     setIsHierarchyLoading(true);
     try {
       const boardParam = selectedBoardId ? `&boardId=${selectedBoardId}` : '';
@@ -349,7 +396,7 @@ export const TasksProvider = ({
       if (response.ok) setStories(await response.json());
       else console.error('Failed to fetch stories');
     } catch (error) { console.error('Error fetching stories:', error); }
-     finally { setIsHierarchyLoading(false); }
+    finally { setIsHierarchyLoading(false); }
   }, [activeWorkspaceId, selectedBoardId]);
 
   const refreshHierarchy = useCallback(async () => {
@@ -363,14 +410,38 @@ export const TasksProvider = ({
   }, [refreshMilestones, refreshEpics, refreshStories]);
 
   useEffect(() => {
-    if (activeWorkspaceId) {
-      console.log("Refreshing hierarchy for workspace/board change:", activeWorkspaceId, selectedBoardId);
-      refreshHierarchy();
-    } else {
-        setMilestones([]);
-        setEpics([]);
-        setStories([]);
+    // Clear any existing timeout
+    if (hierarchyRefreshTimeoutRef.current) {
+      clearTimeout(hierarchyRefreshTimeoutRef.current);
     }
+    
+    // Create a unique key for this workspace/board combination
+    const refreshKey = `${activeWorkspaceId || 'null'}-${selectedBoardId || 'none'}`;
+    
+    // Skip if this is the same combination we just refreshed
+    if (refreshKey === lastHierarchyRefreshKey.current) {
+      return;
+    }
+    
+    if (activeWorkspaceId) {
+      // Debounce hierarchy refresh to prevent multiple rapid calls
+      hierarchyRefreshTimeoutRef.current = setTimeout(() => {
+        lastHierarchyRefreshKey.current = refreshKey;
+        refreshHierarchy();
+      }, 200); // 200ms debounce for hierarchy refresh
+    } else {
+      // Clear immediately if no workspace
+      setMilestones([]);
+      setEpics([]);
+      setStories([]);
+      lastHierarchyRefreshKey.current = refreshKey;
+    }
+    
+    return () => {
+      if (hierarchyRefreshTimeoutRef.current) {
+        clearTimeout(hierarchyRefreshTimeoutRef.current);
+      }
+    };
   }, [activeWorkspaceId, selectedBoardId, refreshHierarchy]);
 
   // Manual refresh boards (e.g., button click)

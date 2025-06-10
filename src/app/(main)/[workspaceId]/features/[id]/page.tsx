@@ -9,9 +9,10 @@ import FeatureRequestComments from "@/components/features/FeatureRequestComments
 import { getFeatureRequestById } from "@/actions/feature";
 
 interface FeatureRequestPageProps {
-  params: {
+  params: Promise<{
+    workspaceId: string;
     id: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({ params }: FeatureRequestPageProps) {
@@ -45,7 +46,7 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     redirect("/sign-in");
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   try {
     const featureRequest = await getFeatureRequestById(id);

@@ -8,6 +8,7 @@ import Script from "next/script";
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
+import { WorkspaceLoadingWrapper } from '@/components/layout/WorkspaceLoadingWrapper';
 import { MentionProvider } from '@/context/MentionContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { DockProvider } from '@/context/DockContext';
@@ -68,23 +69,25 @@ export default async function RootLayout({
             <QueryProvider>
               <ActivityProvider>
                 <WorkspaceProvider>
-                  <MentionProvider>
-                    <UiProvider>
-                      <CustomThemeProvider>
-                        <DockProvider>
-                          <main className="flex flex-col">
-                            {children}
-                          </main>
-                          <Toaster />
-                        <Script
-                          src="https://api.chatproject.io/chat-widget.js"
-                          id="chat-widget-script"
-                          strategy="lazyOnload"
-                        />
-                      </DockProvider>
-                    </CustomThemeProvider>
-                  </UiProvider>
-                </MentionProvider>
+                  <WorkspaceLoadingWrapper>
+                    <MentionProvider>
+                      <UiProvider>
+                        <CustomThemeProvider>
+                          <DockProvider>
+                            <main className="flex flex-col">
+                              {children}
+                            </main>
+                            <Toaster />
+                          <Script
+                            src="https://api.chatproject.io/chat-widget.js"
+                            id="chat-widget-script"
+                            strategy="lazyOnload"
+                          />
+                        </DockProvider>
+                      </CustomThemeProvider>
+                    </UiProvider>
+                  </MentionProvider>
+                </WorkspaceLoadingWrapper>
               </WorkspaceProvider>
               </ActivityProvider>
             </QueryProvider>

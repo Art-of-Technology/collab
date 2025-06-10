@@ -32,13 +32,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -46,6 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { extractMentionUserIds } from "@/utils/mentions";
+import { StatusSelect } from "../tasks/selectors/StatusSelect";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -130,10 +124,7 @@ export function CreateMilestoneDialog({
   const selectedBoardId = form.watch('taskBoardId');
   
   // Get columns for the selected board
-  const { 
-    data: columns = [], 
-    isLoading: columnsLoading 
-  } = useBoardColumns(selectedBoardId);
+  const { data: columns = [] } = useBoardColumns(selectedBoardId);
 
   // Update columnId when columns are loaded
   useEffect(() => {
@@ -316,22 +307,12 @@ export function CreateMilestoneDialog({
                   <FormItem>
                     <FormLabel>Status Column</FormLabel>
                     <FormControl>
-                      <Select
+                      <StatusSelect
                         value={field.value || undefined}
                         onValueChange={field.onChange}
-                        disabled={isSubmitting || !selectedBoardId || columnsLoading}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {columns.map((column) => (
-                            <SelectItem key={column.id} value={column.id}>
-                              {column.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        boardId={selectedBoardId || ""}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

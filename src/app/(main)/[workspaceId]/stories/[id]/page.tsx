@@ -1,55 +1,65 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { EpicDetailContent } from "@/components/epics/EpicDetailContent";
+import { StoryDetailContent } from "@/components/stories/StoryDetailContent";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default function EpicPage({ params }: { params: { id: string } }) {
+export default function StoryPage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
   const router = useRouter();
-  const [epic, setEpic] = useState<any | null>(null);
+  const [story, setStory] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [storyId, setStoryId] = useState<string | null>(null);
+
+  // Resolve params first
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolvedParams = await params;
+      setStoryId(resolvedParams.id);
+    };
+    resolveParams();
+  }, [params]);
 
   useEffect(() => {
-    const fetchEpic = async () => {
+    if (!storyId) return;
+
+    const fetchStory = async () => {
       setIsLoading(true);
       setError(null);
       
       try {
-        const response = await fetch(`/api/epics/${params.id}`);
+        const response = await fetch(`/api/stories/${storyId}`);
         
         if (!response.ok) {
           throw new Error(`Error: ${response.status}`);
         }
         
         const data = await response.json();
-        setEpic(data);
+        setStory(data);
       } catch (err) {
-        console.error("Failed to fetch epic:", err);
-        setError("Failed to load epic details. Please try again.");
+        console.error("Failed to fetch story:", err);
+        setError("Failed to load story details. Please try again.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (params.id) {
-      fetchEpic();
-    }
-  }, [params.id]);
+    fetchStory();
+  }, [storyId]);
 
   const handleRefresh = () => {
-    if (params.id) {
+    if (storyId) {
       setIsLoading(true);
-      fetch(`/api/epics/${params.id}`)
+      fetch(`/api/stories/${storyId}`)
         .then(response => {
           if (!response.ok) throw new Error("Failed to refresh");
           return response.json();
         })
-        .then(data => setEpic(data))
+        .then(data => setStory(data))
         .catch(err => {
-          console.error("Error refreshing epic:", err);
+          console.error("Error refreshing story:", err);
           // Don't set error state on refresh failure to keep showing content
         })
         .finally(() => setIsLoading(false));
@@ -74,8 +84,8 @@ export default function EpicPage({ params }: { params: { id: string } }) {
         </Button>
       </div>
       
-      <EpicDetailContent
-        epic={epic}
+      <StoryDetailContent
+        story={story}
         isLoading={isLoading}
         error={error}
         onRefresh={handleRefresh}

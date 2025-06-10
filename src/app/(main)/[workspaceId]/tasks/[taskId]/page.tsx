@@ -9,6 +9,7 @@ import TaskDetailClient from "@/components/tasks/TaskDetailClient";
 
 interface TaskDetailPageProps {
   params: {
+    workspaceId: string;
     taskId: string;
   };
   searchParams?: {
@@ -27,13 +28,14 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
   try {
     // Get task details using server action
     const task = await getTaskById(_params.taskId);
-    const boardId = _searchParams?.boardId || '';
+    // Use boardId from searchParams or fallback to task's board ID
+    const boardId = _searchParams?.boardId || task.taskBoardId || '';
     
     return (
       <div className="container py-6 space-y-6">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" size="sm" asChild className="gap-1">
-            <Link href={`/tasks?board=${boardId}`}>
+            <Link href={`/${_params.workspaceId}/tasks?board=${boardId}`}>
               <ArrowLeft className="h-4 w-4" />
               Back to Board
             </Link>

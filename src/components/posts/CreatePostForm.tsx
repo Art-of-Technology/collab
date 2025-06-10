@@ -98,8 +98,6 @@ export default function CreatePostForm() {
       }
       
       const data = await response.json();
-      
-      console.log("AI response:", data);
       handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
       // Extract message from the response
