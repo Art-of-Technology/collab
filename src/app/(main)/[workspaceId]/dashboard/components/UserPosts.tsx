@@ -8,6 +8,8 @@ import { User, MessageSquare, Heart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserPosts } from "@/hooks/queries/useDashboard";
 import { CollabText } from "@/components/ui/collab-text";
+import { useWorkspace } from "@/context/WorkspaceContext";
+
 interface UserPostsProps {
   userId: string;
   workspaceId: string;
@@ -15,6 +17,7 @@ interface UserPostsProps {
 }
 
 export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsProps) {
+  const { currentWorkspace } = useWorkspace();
   // Use TanStack Query for data fetching with initial data from server
   const { data: userPosts = initialUserPosts || [], isLoading } = useUserPosts(userId, workspaceId);
 
@@ -44,7 +47,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
           </CardTitle>
           <CardDescription>
             Posts you&apos;ve created recently
-            <Link href="/my-posts" className="ml-2 text-primary hover:underline">
+            <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-2 text-primary hover:underline">
               View all
             </Link>
           </CardDescription>
@@ -67,7 +70,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
         </CardTitle>
         <CardDescription>
           Posts you&apos;ve created recently
-          <Link href="/my-posts" className="ml-2 text-primary hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-2 text-primary hover:underline">
             View all
           </Link>
         </CardDescription>
@@ -82,13 +85,13 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
                     </span>
-                    <Link href={`/timeline?filter=${post.type.toLowerCase()}s`}>
+                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?filter=${post.type.toLowerCase()}s` : '#'}>
                       <Badge variant={getPostBadgeVariant(post.type)} className="text-xs cursor-pointer hover:bg-muted">
                         {post.type}
                       </Badge>
                     </Link>
                   </div>
-                  <Link href={`/posts/${post.id}`} className="block mt-1 hover:underline">
+                  <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-1 hover:underline">
                     <p className="text-sm">
                       <CollabText
                         content={post.message}
@@ -114,7 +117,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
             <div className="py-4 text-center text-muted-foreground">
               <p>You haven&apos;t created any posts yet</p>
               <Button className="mt-2">
-                <Link href="/posts/create">Create your first post</Link>
+                <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}>Create your first post</Link>
               </Button>
             </div>
           )}

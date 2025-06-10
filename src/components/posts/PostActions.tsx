@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
 import { useIsPostBookmarked, useAddBookmark, useRemoveBookmark } from "@/hooks/queries/useBookmark";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface PostActionsProps {
   postId: string;
@@ -42,6 +43,7 @@ export default function PostActions({
   onToggleExpand,
 }: PostActionsProps) {
   const { toast } = useToast();
+  const { currentWorkspace } = useWorkspace();
   const [liked, setLiked] = useState(initialLiked);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -55,9 +57,9 @@ export default function PostActions({
   const addReactionMutation = useAddReaction();
   const removeReactionMutation = useRemoveReaction();
 
-  const postUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/posts/${postId}` 
-    : `/posts/${postId}`;
+  const postUrl = typeof window !== 'undefined' && currentWorkspace
+    ? `${window.location.origin}/${currentWorkspace.id}/posts/${postId}` 
+    : `#`;
 
   const handleLike = async () => {
     try {

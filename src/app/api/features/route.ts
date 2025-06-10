@@ -103,20 +103,8 @@ export async function GET(req: NextRequest) {
     
     // Get total count for pagination
     const totalCount = formattedFeatureRequests.length;
-    
-    console.log("Before sorting - feature requests count:", formattedFeatureRequests.length);
-    
-    // Log a sample of the data before sorting
-    if (formattedFeatureRequests.length > 0) {
-      console.log("Sample items before sorting:");
-      formattedFeatureRequests.slice(0, 3).forEach(item => {
-        console.log(`ID: ${item.id}, Title: ${item.title}, Vote Score: ${item.voteScore}, Upvotes: ${item.upvotes}, Downvotes: ${item.downvotes}`);
-      });
-    }
-    
     // Sort the ENTIRE list based on the requested sort order
     if (validatedOrderBy === "most_votes") {
-      console.log("Sorting by most_votes");
       formattedFeatureRequests.sort((a, b) => {
         if (b.voteScore !== a.voteScore) {
           return b.voteScore - a.voteScore;
@@ -144,17 +132,6 @@ export async function GET(req: NextRequest) {
     // AFTER sorting the entire list, apply pagination
     const skip = (page - 1) * limit;
     const paginatedResults = formattedFeatureRequests.slice(skip, skip + limit);
-    
-    console.log("After sorting and pagination:");
-    console.log(`Page: ${page}, Limit: ${limit}, Total: ${totalCount}`);
-    
-    // Log the results after sorting
-    if (paginatedResults.length > 0) {
-      console.log("Paginated results (sorted):");
-      paginatedResults.forEach(item => {
-        console.log(`ID: ${item.id}, Title: ${item.title}, Vote Score: ${item.voteScore}, Upvotes: ${item.upvotes}, Downvotes: ${item.downvotes}`);
-      });
-    }
     
     return NextResponse.json({
       featureRequests: paginatedResults,

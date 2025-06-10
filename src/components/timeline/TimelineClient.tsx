@@ -49,7 +49,7 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
               #{tag}
             </Badge>
             <Link 
-              href="/timeline" 
+              href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'} 
               className="ml-2 text-muted-foreground hover:text-foreground"
               aria-label="Clear tag filter"
             >

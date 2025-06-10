@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertTriangle, Lightbulb, HelpCircle, MessageSquare, Heart, Loader2 } from "lucide-react";
 import { useRecentPostsByType } from "@/hooks/queries/useDashboard";
 import { CollabText } from "@/components/ui/collab-text";
+import { useWorkspace } from "@/context/WorkspaceContext";
+
 interface PostsByTypeProps {
   type: 'BLOCKER' | 'IDEA' | 'QUESTION';
   workspaceId: string;
@@ -15,18 +17,21 @@ interface PostsByTypeProps {
 }
 
 export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProps) {
+  const { currentWorkspace } = useWorkspace();
   // Use TanStack Query for data fetching with initial data from server
   const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, workspaceId);
   
   // Type-specific UI elements
   const getTypeDetails = () => {
+    const baseUrl = currentWorkspace ? `/${currentWorkspace.id}` : '';
+    
     switch (type) {
       case 'BLOCKER':
         return {
           icon: <AlertTriangle className="h-5 w-5 text-destructive" />,
           title: 'Active Blockers',
           description: 'Issues that need attention from the team',
-          linkHref: '/timeline?filter=blockers',
+          linkHref: `${baseUrl}/timeline?filter=blockers`,
           cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
           badge: null
         };
@@ -35,7 +40,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           icon: <Lightbulb className="h-5 w-5 text-yellow-500" />,
           title: 'Recent Ideas',
           description: 'Creative suggestions from the team',
-          linkHref: '/timeline?filter=ideas',
+          linkHref: `${baseUrl}/timeline?filter=ideas`,
           cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
           badge: <Badge variant="secondary" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-secondary/80">
                   <Lightbulb className="h-3 w-3" />
@@ -47,7 +52,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           icon: <HelpCircle className="h-5 w-5 text-blue-500" />,
           title: 'Recent Questions',
           description: 'Questions that need answers from the team',
-          linkHref: '/timeline?filter=questions',
+          linkHref: `${baseUrl}/timeline?filter=questions`,
           cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
           badge: <Badge variant="outline" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-muted">
                   <HelpCircle className="h-3 w-3" />
@@ -59,7 +64,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           icon: null,
           title: 'Posts',
           description: 'Recent posts',
-          linkHref: '/timeline',
+          linkHref: `${baseUrl}/timeline`,
           cardClass: '',
           badge: null
         };
@@ -87,7 +92,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
         </div>
       </div>
       <div className="text-sm mt-2">
-        <Link href={`/posts/${post.id}`} className="block hover:underline">
+        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block hover:underline">
           <p className="text-sm">
             <CollabText
               content={post.message}
@@ -104,7 +109,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           {post.tags?.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {post.tags.map((tag: any) => (
-                <Link href={`/timeline?tag=${tag.name.toLowerCase()}`} key={tag.id}>
+                <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                   <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer">
                     {tag.name}
                   </Badge>
@@ -127,7 +132,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       </Avatar>
       <div className="flex-1">
         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-          <Link href={`/profile/${post.author.id}`} className="font-semibold text-sm hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${post.author.id}` : '#'} className="font-semibold text-sm hover:underline">
             {post.author.name}
           </Link>
           <span className="text-xs text-muted-foreground">
@@ -137,7 +142,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             {badge}
           </Link>
         </div>
-        <Link href={`/posts/${post.id}`} className="block mt-1 hover:underline">
+        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-1 hover:underline">
           <p className="text-sm">
             <CollabText
               content={post.message}
@@ -158,7 +163,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           {post.tags?.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {post.tags.map((tag: any) => (
-                <Link href={`/timeline?tag=${tag.name.toLowerCase()}`} key={tag.id}>
+                <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                   <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer">
                     {tag.name}
                   </Badge>

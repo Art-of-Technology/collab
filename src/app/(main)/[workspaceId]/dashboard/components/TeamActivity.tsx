@@ -7,6 +7,7 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRecentActivities } from "@/hooks/queries/useDashboard";
 import { CollabText } from "@/components/ui/collab-text";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface TeamActivityProps {
   workspaceId: string;
@@ -14,6 +15,7 @@ interface TeamActivityProps {
 }
 
 export function TeamActivity({ workspaceId, initialActivities }: TeamActivityProps) {
+  const { currentWorkspace } = useWorkspace();
   // Use TanStack Query for data fetching with initial data from server
   const { data: activities = initialActivities || [], isLoading, error } = useRecentActivities(workspaceId);
 
@@ -87,8 +89,8 @@ export function TeamActivity({ workspaceId, initialActivities }: TeamActivityPro
                   <p className="text-sm mt-1">
                     {activity.type === "like" && activity.post ? (
                       <>
-                        Liked <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
-                        <Link href={`/posts/${activity.post.id}`} className="text-primary hover:underline group-hover:text-primary/80">
+                        Liked <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${activity.post.author.id}` : '#'} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
+                        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${activity.post.id}` : '#'} className="text-primary hover:underline group-hover:text-primary/80">
                           <CollabText
                             content={activity.post.message}
                             small
@@ -98,8 +100,8 @@ export function TeamActivity({ workspaceId, initialActivities }: TeamActivityPro
                       </>
                     ) : activity.type === "comment" && activity.post ? (
                       <>
-                        Commented on <Link href={`/profile/${activity.post.author.id}`} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
-                        <Link href={`/posts/${activity.post.id}`} className="text-primary hover:underline group-hover:text-primary/80">
+                        Commented on <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${activity.post.author.id}` : '#'} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
+                        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${activity.post.id}` : '#'} className="text-primary hover:underline group-hover:text-primary/80">
                           <CollabText
                             content={activity.message}
                             small

@@ -208,7 +208,7 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
     });
     
     // Revalidate the task page
-    revalidatePath(`/tasks/${taskId}`);
+    revalidatePath(`/${task.workspaceId}/tasks/${taskId}`);
     
     return comment;
   } catch (error) {
