@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from 'react'
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,8 @@ export default function PostDialogs({
   const router = useRouter();
   const { toast } = useToast();
   const [editFormData, setEditFormData] = useState(initialEditData);
+  const [isImproving, setIsImproving] = useState(false);
+  const [inputKey, setInputKey] = useState(0);
   
   // Use TanStack Query mutations
   const deletePostMutation = useDeletePost();
@@ -57,6 +59,32 @@ export default function PostDialogs({
   // Derive loading states from mutations
   const isDeleting = deletePostMutation.isPending;
   const isSubmitting = updatePostMutation.isPending;
+
+  // Reset form data when dialog opens
+  useEffect(() => {
+    if (isEditDialogOpen) {
+      const newFormData = {
+        message: initialEditData.message || '',
+        type: initialEditData.type || 'UPDATE',
+        priority: initialEditData.priority || 'normal',
+        tags: initialEditData.tags || ''
+      };
+      setEditFormData(newFormData);
+      
+      // Small delay to ensure CollabInput is mounted and ready
+      setTimeout(() => {
+        setEditFormData(prev => ({ ...prev }));
+      }, 100);
+      
+      // Force remount by changing key
+      setInputKey(prev => prev + 1);
+    }
+  }, [isEditDialogOpen, initialEditData]);
+
+  // Track editFormData changes
+  useEffect(() => {
+    // This effect is for debugging - can be removed in production
+  }, [editFormData]);
 
   const handleEditChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -73,6 +101,64 @@ export default function PostDialogs({
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleMessageChange = (value: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      message: value
+    }));
+  };
+
+  // AI Improve Handler
+  const handleAiImprove = async (text: string): Promise<string> => {
+    if (isImproving || !text.trim()) {
+      return text;
+    }
+    
+    setIsImproving(true);
+    toast({
+      title: "Improving text...",
+      description: "Please wait while AI improves your text"
+    });
+    
+    try {
+      const response = await fetch("/api/ai/shorten", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+      
+      const data = await response.json();
+      
+      // Auto-update type if AI suggests a category change
+      if (data.category) {
+        handleEditSelectChange("type", data.category.toUpperCase());
+      }
+
+      // Extract message from the response
+      const improvedText = data.message || data.improvedText || text;
+      
+      // Return the improved text to be displayed in the popup
+      return improvedText;
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to improve text. Please try again.",
+        variant: "destructive"
+      });
+      console.error(error);
+      // Return original text if there was an error
+      return text;
+    } finally {
+      setIsImproving(false);
+    }
   };
 
   const handleDeletePost = async () => {
@@ -184,11 +270,18 @@ export default function PostDialogs({
               <div className="space-y-2">
                 <Label htmlFor="message">Message</Label>
                 <CollabInput
+                  key={`edit-post-${postId}-${inputKey}`}
                   value={editFormData.message}
-                  onChange={(value) => setEditFormData({...editFormData, message: value})}
+                  onChange={handleMessageChange}
                   placeholder="What's on your mind?"
                   minHeight="120px"
                   maxHeight="200px"
+                  maxLength={160}
+                  onAiImprove={handleAiImprove}
+                  loading={isSubmitting || isImproving}
+                  disabled={isSubmitting || isImproving}
+                  showAiButton={true}
+                  showSubmitButton={false}
                   className="bg-background border-border/60 focus:border-primary focus:ring-primary"
                 />
               </div>
@@ -248,14 +341,14 @@ export default function PostDialogs({
                 type="button"
                 variant="outline"
                 onClick={() => setIsEditDialogOpen(false)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isImproving}
                 className="hover-effect"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !editFormData.message.trim()}
+                disabled={isSubmitting || isImproving || !editFormData.message.trim()}
                 className="bg-primary hover:bg-primary/90"
               >
                 {isSubmitting ? "Saving..." : "Save Changes"}
