@@ -93,11 +93,16 @@ export function CollabInput({
   
   // Initialize the editor with the initial value
   useEffect(() => {
-    if (editorRef.current && value) {
-      // Format mentions in the HTML
-      const formattedContent = formatContentWithMentions(value)
-      editorRef.current.innerHTML = formattedContent || placeholder ? 
-        `<span class="text-muted-foreground">${placeholder}</span>` : ""
+    if (editorRef.current) {
+      if (value) {
+        // Format mentions in the HTML
+        const formattedContent = formatContentWithMentions(value)
+        editorRef.current.innerHTML = formattedContent
+      } else {
+        // Show placeholder only if no value
+        editorRef.current.innerHTML = placeholder ? 
+          `<span class="text-muted-foreground">${placeholder}</span>` : ""
+      }
     }
   }, [])
   
@@ -105,12 +110,20 @@ export function CollabInput({
   useEffect(() => {
     if (value !== rawContent) {
       setRawContent(value)
-      // Update the editor content only if it doesn't have focus
-      // to avoid cursor jumping while typing
-      if (editorRef.current && !isFocused) {
+      // Update the editor content - allow updates even when focused for initial value setting
+      if (editorRef.current) {
         const formattedContent = formatContentWithMentions(value)
-        editorRef.current.innerHTML = formattedContent || placeholder ?
-          `<span class="text-muted-foreground">${placeholder}</span>` : ""
+        // Only update if the content is actually different to avoid cursor jumping
+        const currentContent = extractRawContentFromHtml(editorRef.current.innerHTML)
+        if (currentContent !== value) {
+          if (formattedContent) {
+            editorRef.current.innerHTML = formattedContent
+          } else if (placeholder && !isFocused) {
+            editorRef.current.innerHTML = `<span class="text-muted-foreground">${placeholder}</span>`
+          } else {
+            editorRef.current.innerHTML = ""
+          }
+        }
       }
     }
   }, [value, rawContent, isFocused, placeholder])
@@ -264,7 +277,7 @@ export function CollabInput({
   const handleFocus = () => {
     setIsFocused(true);
     
-    // Remove placeholder if present
+    // Remove placeholder if present (only clear if it's actually the placeholder)
     if (editorRef.current && editorRef.current.innerHTML === `<span class="text-muted-foreground">${placeholder}</span>`) {
       editorRef.current.innerHTML = "";
     }
