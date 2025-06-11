@@ -12,6 +12,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { Calendar } from "@/components/ui/calendar";
 import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
+import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
+import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
 import {
   Dialog,
@@ -52,6 +54,8 @@ const formSchema = z.object({
   startDate: z.date().optional().nullable(),
   dueDate: z.date().optional().nullable(),
   color: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
+  reporterId: z.string().nullable().optional(),
   workspaceId: z.string().min(1, "Workspace ID is required"),
   taskBoardId: z.string().min(1, "Task board is required"),
   columnId: z.string().optional().nullable(),
@@ -115,6 +119,8 @@ export function CreateMilestoneDialog({
       startDate: null,
       dueDate: null,
       color: "#6366F1", // Default indigo color
+      assigneeId: null,
+      reporterId: null,
       workspaceId: workspaceId,
       taskBoardId: boardId || (boards.length > 0 ? boards[0].id : ""),
       columnId: null,
@@ -172,6 +178,8 @@ export function CreateMilestoneDialog({
         ...values,
         startDate: values.startDate ? format(values.startDate, "yyyy-MM-dd") : null,
         dueDate: values.dueDate ? format(values.dueDate, "yyyy-MM-dd") : null,
+        assigneeId: values.assigneeId === "unassigned" ? null : values.assigneeId,
+        reporterId: values.reporterId === "none" ? null : values.reporterId,
       };
       
       // Set the status and columnId for creating milestone
@@ -340,6 +348,44 @@ export function CreateMilestoneDialog({
                           className="w-full h-9" 
                         />
                       </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="assigneeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assignee (Optional)</FormLabel>
+                    <FormControl>
+                      <AssigneeSelect
+                        value={field.value}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="reporterId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reporter (Optional)</FormLabel>
+                    <FormControl>
+                      <ReporterSelect
+                        value={field.value}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

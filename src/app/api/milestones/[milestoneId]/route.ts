@@ -18,6 +18,8 @@ const milestonePatchSchema = z.object({
     if (typeof arg == "string" || arg instanceof Date) return new Date(arg);
   }, z.date().nullable().optional()),
   color: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
+  reporterId: z.string().nullable().optional(),
 }).strict();
 
 // GET /api/milestones/{milestoneId} - Fetch a single milestone by ID
@@ -44,6 +46,40 @@ export async function GET(
         epics: { // Include related epics
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
         },
         // Include other relations as needed
       },
@@ -136,6 +172,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Validate assignee if provided
+    if (dataToUpdate.assigneeId) {
+      const assignee = await prisma.user.findUnique({
+        where: { id: dataToUpdate.assigneeId },
+        select: { id: true }
+      });
+      if (!assignee) {
+        return NextResponse.json({ error: "Assignee not found" }, { status: 404 });
+      }
+    }
+
+    // Validate reporter if provided
+    if (dataToUpdate.reporterId) {
+      const reporter = await prisma.user.findUnique({
+        where: { id: dataToUpdate.reporterId },
+        select: { id: true }
+      });
+      if (!reporter) {
+        return NextResponse.json({ error: "Reporter not found" }, { status: 404 });
+      }
+    }
+
     // Get the current milestone to access its board
     const currentMilestone = await prisma.milestone.findUnique({
       where: { id: milestoneId },
@@ -173,6 +231,40 @@ export async function PATCH(
         epics: { 
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
         },
       }
     });

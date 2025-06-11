@@ -20,12 +20,14 @@ const epicPatchSchema = z.object({
     if (typeof arg == "string" || arg instanceof Date) return new Date(arg);
   }, z.date().nullable().optional()),
   color: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
+  reporterId: z.string().nullable().optional(),
 }).strict();
 
 // GET /api/epics/{epicId} - Fetch a single epic by ID
 export async function GET(
   request: NextRequest,
-  { params }: Promise<{ params: { epicId: string } }>
+  { params }: { params: Promise<{ epicId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -46,6 +48,40 @@ export async function GET(
         stories: { // Include related stories
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
         },
       },
     });
@@ -80,7 +116,7 @@ export async function GET(
 // PATCH /api/epics/{epicId} - Update an epic
 export async function PATCH(
   request: NextRequest,
-  { params }: Promise<{ params: { epicId: string } }>
+  { params }: { params: Promise<{ epicId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -101,7 +137,7 @@ export async function PATCH(
     if (!validation.success) {
       return NextResponse.json({ error: "Invalid input", details: validation.error.errors }, { status: 400 });
     }
-    
+
     const dataToUpdate = validation.data;
 
     // Fetch the epic first to check ownership
@@ -133,9 +169,31 @@ export async function PATCH(
     // If milestoneId is being changed, verify the new milestone exists in the same workspace
     if (dataToUpdate.milestoneId) {
       const milestone = await prisma.milestone.findFirst({
-          where: { id: dataToUpdate.milestoneId, workspaceId: existingEpic.workspaceId }
+        where: { id: dataToUpdate.milestoneId, workspaceId: existingEpic.workspaceId }
       });
       if (!milestone) return NextResponse.json({ error: "Target Milestone not found in workspace" }, { status: 400 });
+    }
+
+    // Validate assignee if provided
+    if (dataToUpdate.assigneeId) {
+      const assignee = await prisma.user.findUnique({
+        where: { id: dataToUpdate.assigneeId },
+        select: { id: true }
+      });
+      if (!assignee) {
+        return NextResponse.json({ error: "Assignee not found" }, { status: 404 });
+      }
+    }
+
+    // Validate reporter if provided
+    if (dataToUpdate.reporterId) {
+      const reporter = await prisma.user.findUnique({
+        where: { id: dataToUpdate.reporterId },
+        select: { id: true }
+      });
+      if (!reporter) {
+        return NextResponse.json({ error: "Reporter not found" }, { status: 404 });
+      }
     }
     // --- End Additional Validation ---
 
@@ -147,7 +205,7 @@ export async function PATCH(
 
     // Find the column ID if status is being updated
     let columnId = dataToUpdate.columnId;
-    
+
     if (dataToUpdate.status && currentEpic && dataToUpdate.status !== currentEpic.column?.name) {
       // Find the column with the given name in the epic's board
       const column = await prisma.taskColumn.findFirst({
@@ -156,7 +214,7 @@ export async function PATCH(
           taskBoardId: currentEpic.taskBoardId,
         },
       });
-      
+
       if (column) {
         columnId = column.id;
       }
@@ -174,9 +232,43 @@ export async function PATCH(
       include: {
         milestone: { select: { id: true, title: true } },
         taskBoard: { select: { id: true, name: true } },
-        stories: { 
+        stories: {
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
         },
       }
     });
@@ -192,7 +284,7 @@ export async function PATCH(
 // DELETE /api/epics/{epicId} - Delete an epic (Optional)
 export async function DELETE(
   request: NextRequest,
-  { params }: Promise<{ params: { epicId: string } }>
+  { params }: { params: Promise<{ epicId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -213,7 +305,7 @@ export async function DELETE(
     });
 
     if (!existingEpic) {
-      return new NextResponse(null, { status: 204 }); 
+      return new NextResponse(null, { status: 204 });
     }
 
     // Verify user has access to the workspace (either as owner or member)

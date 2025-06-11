@@ -14,6 +14,7 @@ const storyPatchSchema = z.object({
   points: z.number().nullable().optional(),
   epicId: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
+  reporterId: z.string().nullable().optional(),
   taskBoardId: z.string().optional(),
   columnId: z.string().optional(),
   startDate: z.preprocess((arg) => {
@@ -54,6 +55,40 @@ export async function GET(
         tasks: { // Include related tasks
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' } // Or desired order
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
         },
         // Include other relations as needed
       },
@@ -148,12 +183,26 @@ export async function PATCH(
       if (!epic) return NextResponse.json({ error: "Target Epic not found in workspace" }, { status: 400 });
     }
 
-    // If assigneeId is being changed, verify the user exists and is part of the workspace
+    // Validate assignee if provided
     if (dataToUpdate.assigneeId) {
-      const assigneeMember = await prisma.workspaceMember.findFirst({
-          where: { userId: dataToUpdate.assigneeId, workspaceId: existingStory.workspaceId }
+      const assignee = await prisma.user.findUnique({
+        where: { id: dataToUpdate.assigneeId },
+        select: { id: true }
       });
-       if (!assigneeMember) return NextResponse.json({ error: "Assignee not found in workspace" }, { status: 400 });
+      if (!assignee) {
+        return NextResponse.json({ error: "Assignee not found" }, { status: 404 });
+      }
+    }
+
+    // Validate reporter if provided
+    if (dataToUpdate.reporterId) {
+      const reporter = await prisma.user.findUnique({
+        where: { id: dataToUpdate.reporterId },
+        select: { id: true }
+      });
+      if (!reporter) {
+        return NextResponse.json({ error: "Reporter not found" }, { status: 404 });
+      }
     }
     // --- End Additional Validation ---
 
@@ -194,6 +243,40 @@ export async function PATCH(
         epic: { select: { id: true, title: true } },
         taskBoard: { select: { id: true, name: true } },
         tasks: { select: { id: true, title: true, status: true, priority: true }, orderBy: { createdAt: 'asc' } },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
       }
     });
 

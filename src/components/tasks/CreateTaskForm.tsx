@@ -55,6 +55,7 @@ import axios from "axios";
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { StatusSelect } from "./selectors/StatusSelect";
+import { ReporterSelect } from "./selectors/ReporterSelect";
 
 // Wrap in memo to prevent unnecessary re-renders which cause focus loss
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -516,7 +517,7 @@ export default function CreateTaskForm({
                   <FormItem>
                     <FormLabel>Reporter</FormLabel>
                     <FormControl>
-                      <AssigneeSelect
+                      <ReporterSelect
                         value={field.value || undefined}
                         onChange={field.onChange}
                         disabled={createTaskMutation.isPending}

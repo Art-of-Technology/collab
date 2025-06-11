@@ -39,6 +39,8 @@ import {
 import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
 import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
+import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
+import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
 
@@ -51,6 +53,8 @@ const formSchema = z.object({
   points: z.number().int().min(0).optional().nullable(),
   dueDate: z.date().optional().nullable(),
   epicId: z.string().nullable().optional(),
+  assigneeId: z.string().nullable().optional(),
+  reporterId: z.string().nullable().optional(),
   taskBoardId: z.string().min(1, "Task board is required"),
   workspaceId: z.string().min(1, "Workspace ID is required"),
   columnId: z.string().optional().nullable(),
@@ -94,6 +98,8 @@ export function CreateStoryDialog({
       points: null,
       dueDate: null,
       epicId: null,
+      assigneeId: null,
+      reporterId: null,
       workspaceId: workspaceId,
       taskBoardId: boardId || "",
       columnId: null,
@@ -156,6 +162,8 @@ export function CreateStoryDialog({
         ...values,
         dueDate: values.dueDate ? format(values.dueDate, "yyyy-MM-dd") : null,
         epicId: values.epicId === "none" ? null : values.epicId,
+        assigneeId: values.assigneeId === "unassigned" ? null : values.assigneeId,
+        reporterId: values.reporterId === "none" ? null : values.reporterId,
       };
       
       // Set the status and columnId for creating story
@@ -341,6 +349,44 @@ export function CreateStoryDialog({
                         <SelectItem value="critical">Critical</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="assigneeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assignee (Optional)</FormLabel>
+                    <FormControl>
+                      <AssigneeSelect
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="reporterId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reporter (Optional)</FormLabel>
+                    <FormControl>
+                      <ReporterSelect
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

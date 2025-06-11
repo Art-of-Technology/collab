@@ -59,6 +59,14 @@ model User {
   taskAssignees        TaskAssignee[]          @relation("TaskAssignee")
   approvedTaskHelpers  TaskAssignee[]          @relation("TaskAssigneeApprover")
   
+  // Epic, Milestone, Story related fields
+  assignedEpics        Epic[]                  @relation("AssignedEpics")
+  reportedEpics        Epic[]                  @relation("ReportedEpics")
+  assignedMilestones   Milestone[]             @relation("AssignedMilestones")
+  reportedMilestones   Milestone[]             @relation("ReportedMilestones")
+  assignedStories      Story[]                 @relation("AssignedStories")
+  reportedStories      Story[]                 @relation("ReportedStories")
+  
   // Notification-related fields
   sentNotifications    Notification[]          @relation("NotificationSender")
   notifications        Notification[]          @relation("NotificationReceiver")
@@ -394,7 +402,7 @@ model Task {
   taskBoardId  String?
   workspaceId  String
   assigneeId   String?
-  reporterId   String
+  reporterId   String?
   parentTaskId String?       // For subtasks
   storyId      String?       // Link to a story
   epicId       String?       // Direct link to epic for tasks not in a story
@@ -408,7 +416,7 @@ model Task {
   taskBoard   TaskBoard?       @relation(fields: [taskBoardId], references: [id], onDelete: SetNull)
   workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignee    User?            @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter    User             @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
+  reporter    User?            @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
   parentTask  Task?            @relation("TaskToSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
   subtasks    Task[]           @relation("TaskToSubtasks")
   post        Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
@@ -538,12 +546,16 @@ model Milestone {
   color       String?   @default("#6366F1")
   issueKey    String?
   position    Int?      // Position within a column for ordering
+  assigneeId  String?
+  reporterId  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
   taskBoard   TaskBoard @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  assignee    User?     @relation("AssignedMilestones", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter    User?     @relation("ReportedMilestones", fields: [reporterId], references: [id], onDelete: SetNull)
   epics       Epic[]
   notifications Notification[]
 
@@ -551,6 +563,8 @@ model Milestone {
   @@index([taskBoardId])
   @@index([columnId])
   @@index([issueKey])
+  @@index([assigneeId])
+  @@index([reporterId])
 }
 
 model Epic {
@@ -569,6 +583,8 @@ model Epic {
   progress    Int       @default(0) // 0-100 percent
   issueKey    String?
   position    Int?      // Position within a column for ordering
+  assigneeId  String?
+  reporterId  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
@@ -576,6 +592,8 @@ model Epic {
   taskBoard   TaskBoard  @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  assignee    User?     @relation("AssignedEpics", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter    User?     @relation("ReportedEpics", fields: [reporterId], references: [id], onDelete: SetNull)
   stories     Story[]
   tasks       Task[]
   notifications Notification[]
@@ -585,6 +603,8 @@ model Epic {
   @@index([milestoneId])
   @@index([issueKey])
   @@index([columnId])
+  @@index([assigneeId])
+  @@index([reporterId])
 }
 
 model Story {
@@ -602,6 +622,8 @@ model Story {
   issueKey    String?
   color       String?   @default("#3B82F6") // Default blue color
   position    Int?      // Position within a column for ordering
+  assigneeId  String?
+  reporterId  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
@@ -609,6 +631,8 @@ model Story {
   taskBoard   TaskBoard? @relation(fields: [taskBoardId], references: [id], onDelete: SetNull)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   column      TaskColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  assignee    User?     @relation("AssignedStories", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter    User?     @relation("ReportedStories", fields: [reporterId], references: [id], onDelete: SetNull)
   tasks       Task[]
   notifications Notification[]
 
@@ -617,6 +641,8 @@ model Story {
   @@index([epicId])
   @@index([issueKey])
   @@index([columnId])
+  @@index([assigneeId])
+  @@index([reporterId])
 }
 
 // New Notification model

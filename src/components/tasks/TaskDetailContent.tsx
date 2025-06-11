@@ -25,6 +25,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import React from "react";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
+import { ReporterSelect } from "./selectors/ReporterSelect";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
@@ -238,6 +239,7 @@ export function TaskDetailContent({
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [description, setDescription] = useState(task?.description || "");
   const [savingAssignee, setSavingAssignee] = useState(false);
+  const [savingReporter, setSavingReporter] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingPriority, setSavingPriority] = useState(false);
   const [savingType, setSavingType] = useState(false);
@@ -594,6 +596,27 @@ export function TaskDetailContent({
       });
     } finally {
       setSavingAssignee(false);
+    }
+  };
+
+  // Handle reporter change
+  const handleReporterChange = async (userId: string) => {
+    setSavingReporter(true);
+    try {
+      await updateTaskMutation.mutateAsync({ reporterId: userId === 'none' ? null : userId });
+      toast({
+        title: 'Updated',
+        description: 'Task reporter updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating reporter:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update reporter',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingReporter(false);
     }
   };
 
@@ -1181,26 +1204,17 @@ export function TaskDetailContent({
 
               <div>
                 <p className="text-sm font-medium mb-1">Reporter</p>
-                <div className="flex items-center h-9 px-3 text-sm border rounded-md">
-                  {task.reporter ? (
-                    <div className="flex items-center gap-2">
-                      {task.reporter.useCustomAvatar ? (
-                        <CustomAvatar user={task.reporter} size="sm" />
-                      ) : (
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage
-                            src={task.reporter.image || ""}
-                            alt={task.reporter.name || ""}
-                          />
-                          <AvatarFallback className="text-[10px]">
-                            {task.reporter.name?.charAt(0) || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                      <span>{task.reporter.name || "Unknown"}</span>
+                <div className="relative">
+                  <ReporterSelect
+                    value={task.reporter?.id}
+                    onChange={handleReporterChange}
+                    workspaceId={task.workspaceId}
+                    disabled={savingReporter}
+                  />
+                  {savingReporter && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     </div>
-                  ) : (
-                    <span className="text-muted-foreground">No reporter</span>
                   )}
                 </div>
               </div>
