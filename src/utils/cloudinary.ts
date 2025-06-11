@@ -21,6 +21,19 @@ function generateUniqueFilename(originalFilename: string): string {
 }
 
 /**
+ * Generate a unique filename for user profile images
+ * @param userId - The user ID
+ * @param source - The source of the image (google, etc.)
+ * @returns A unique filename for profile images
+ */
+function generateProfileImageFilename(userId: string, source: string = 'profile'): string {
+  const timestamp = Date.now();
+  const randomString = Math.random().toString(36).substring(2, 8);
+  
+  return `profile_${source}_${userId}_${timestamp}_${randomString}`;
+}
+
+/**
  * Upload an image to Cloudinary
  * @param file - The file to upload
  * @returns The URL of the uploaded image
@@ -53,6 +66,44 @@ export async function uploadImage(file: File): Promise<string> {
     return data.url;
   } catch (error) {
     console.error('Error uploading image:', error);
+    throw error;
+  }
+}
+
+/**
+ * Upload a profile image from URL to Cloudinary
+ * @param imageUrl - The URL of the image to upload
+ * @param userId - The user ID for filename generation
+ * @param source - The source of the image (google, etc.)
+ * @returns The Cloudinary URL of the uploaded image
+ */
+export async function uploadProfileImageFromUrl(imageUrl: string, userId: string, source: string = 'google'): Promise<string> {
+  try {
+    // Generate unique filename for profile image
+    const uniqueFilename = generateProfileImageFilename(userId, source);
+    
+    // Upload to Cloudinary via API route
+    const response = await fetch('/api/upload/profile-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        imageUrl,
+        filename: uniqueFilename,
+        userId
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload profile image');
+    }
+    
+    const data = await response.json();
+    return data.url;
+  } catch (error) {
+    console.error('Error uploading profile image from URL:', error);
     throw error;
   }
 }
