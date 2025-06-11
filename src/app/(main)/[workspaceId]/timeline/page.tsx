@@ -46,7 +46,6 @@ export default async function TimelinePage({
     workspaceId,
     limit: 20
   });
-  console.log(initialPosts);
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 overflow-x-hidden">
       <div className="mb-6">
