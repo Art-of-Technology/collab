@@ -2,7 +2,6 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MessageSquare, Paperclip, CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen } from "lucide-react";
 import { useTaskModal } from "@/context/TaskModalContext";
@@ -207,33 +206,66 @@ export default function EnhancedTaskCard({
   const cardStyles = getCardStyles();
 
   // Helper component for rendering avatar with tooltip
-  const AvatarWithTooltip = ({
+  const AvatarWithTooltip = React.memo(({
     user,
     label
   }: {
     user: { id: string; name: string | null; image: string | null; useCustomAvatar?: boolean },
     label: string
-  }) => (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]">
-            {user.useCustomAvatar ? (
-              <CustomAvatar user={user} size="sm" />
-            ) : (
-              <Avatar className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]">
-                <AvatarImage src={user.image || undefined} alt={user.name || ""} />
-                <AvatarFallback>{user.name?.substring(0, 2) || "U"}</AvatarFallback>
-              </Avatar>
-            )}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{label}: {user.name || "Unknown"}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+  }) => {
+    // Use a stable key to prevent re-mounting
+    const avatarKey = `${user.id}-${user.image}-${user.useCustomAvatar}`;
+    
+    if (user.useCustomAvatar) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]">
+                <CustomAvatar user={user} size="sm" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{label}: {user.name || "Unknown"}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div 
+              key={avatarKey}
+              className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem] rounded-full overflow-hidden bg-muted flex-shrink-0"
+              style={{
+                backgroundImage: user.image ? `url(${user.image})` : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
+              }}
+            >
+              {!user.image && (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {user.name?.substring(0, 2)?.toUpperCase() || "U"}
+                  </span>
+                </div>
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{label}: {user.name || "Unknown"}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  });
+
+  // Add display name for debugging
+  AvatarWithTooltip.displayName = 'AvatarWithTooltip';
 
   return (
     <div onClick={handleClick}>
