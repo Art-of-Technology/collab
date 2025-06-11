@@ -151,7 +151,7 @@ export default function SearchResults({
               <div className="grid md:grid-cols-2 gap-4">
                 {users.slice(0, 4).map((user: UserResult) => (
                   <Card key={user.id} className="overflow-hidden hover:shadow-md transition-shadow border-border/40 bg-card/95">
-                    <Link href={`/profile/${user.id}`} className="block p-4">
+                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${user.id}` : `#`} className="block p-4">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10 border-2 border-primary/10">
                           <AvatarImage src={user.image ? user.image : ""} />
@@ -246,7 +246,7 @@ export default function SearchResults({
             <div className="grid md:grid-cols-2 gap-4">
               {users.map((user: UserResult) => (
                 <Card key={user.id} className="overflow-hidden hover:shadow-md transition-shadow border-border/40 bg-card/95">
-                  <Link href={`/profile/${user.id}`} className="block p-4">
+                  <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${user.id}` : `#`} className="block p-4">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10 border-2 border-primary/10">
                         <AvatarImage src={user.image ? user.image : ""} />

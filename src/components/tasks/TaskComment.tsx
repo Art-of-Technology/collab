@@ -11,6 +11,7 @@ import { TaskCommentReplyForm } from "./TaskCommentReplyForm";
 import Link from "next/link";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useTaskCommentLikes, useToggleTaskCommentLike } from "@/hooks/queries/useTaskComment";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export type TaskCommentAuthor = {
   id: string;
@@ -55,6 +56,7 @@ export function TaskComment({
 }: TaskCommentProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
+  const { currentWorkspace } = useWorkspace();
 
   // For debugging - check if author is missing
   if (!comment.author) {
@@ -105,14 +107,14 @@ export function TaskComment({
           <div className="rounded-lg">
             <div className="flex flex-col">
               <Link
-                href={`/profile/${author.id}`}
+                href={currentWorkspace ? `/${currentWorkspace.id}/profile/${author.id}` : `#`}
                 className="font-semibold text-sm hover:underline"
               >
                 {author.name}
               </Link>
               <MarkdownContent 
                 content={comment.html || comment.content} 
-                htmlContent={comment.html || ""}
+                htmlContent={comment.html || comment.content}
                 className="text-sm mt-0.5" 
               />
             </div>

@@ -464,10 +464,10 @@ export default function Navbar({
                     {hasWorkspaces && (
                       <>
                         <DropdownMenuItem asChild>
-                          <Link href="/profile">Your Profile</Link>
+                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : "/profile"}>Your Profile</Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link href="/my-posts">My Posts</Link>
+                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/my-posts` : "/my-posts"}>My Posts</Link>
                         </DropdownMenuItem>
                       </>
                     )}

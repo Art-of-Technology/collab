@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { usePostReactions } from "@/hooks/queries/useReaction";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 type ReactionWithAuthor = {
   id: string;
@@ -34,6 +35,7 @@ interface LikesModalProps {
 export default function LikesModal({ postId, isOpen, onOpenChange, initialLikes = [] }: LikesModalProps) {
   // Use TanStack Query to fetch reactions
   const { data, isLoading } = usePostReactions(postId);
+  const { currentWorkspace } = useWorkspace();
   
   // Only show likes (filter out other reaction types)
   const likesWithAuthor = data?.reactions
@@ -70,7 +72,7 @@ export default function LikesModal({ postId, isOpen, onOpenChange, initialLikes 
                   </Avatar>
                   <div className="flex-1">
                     <Link
-                      href={`/profile/${reaction.author.id}`}
+                      href={currentWorkspace ? `/${currentWorkspace.id}/profile/${reaction.author.id}` : `#`}
                       className="font-medium hover:underline"
                     >
                       {reaction.author.name}

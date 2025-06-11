@@ -28,7 +28,7 @@ export default function UserProfileClient({
   // Handle redirect to self profile
   useEffect(() => {
     if (error instanceof Error && error.message === 'self_profile') {
-      router.push('/profile');
+      router.push(currentWorkspace ? `/${currentWorkspace.id}/profile` : '#');
     }
   }, [error, router]);
   

@@ -6,12 +6,13 @@ import UserProfileClient from "@/components/profile/UserProfileClient";
 interface UserProfilePageProps {
   params: {
     userId: string;
+    workspaceId: string;
   };
 }
 
 export default async function UserProfilePage({ params }: UserProfilePageProps) {
   const _params = await params;
-  const { userId } = _params;
+  const { userId, workspaceId } = _params;
   const session = await getAuthSession();
   
   if (!session?.user) {
@@ -27,7 +28,7 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
   } catch (error) {
     // If this is the current user's profile, redirect to /profile
     if (error instanceof Error && error.message === 'self_profile') {
-      redirect("/profile");
+      redirect(`/${workspaceId}/profile`);
     }
     
     // If user not found
@@ -35,7 +36,7 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
       notFound();
     }
     
-    // For any other error, redirect to timeline
-    redirect("/timeline");
+    // For any other error, redirect to workspace timeline
+    redirect(`/${workspaceId}/timeline`);
   }
 } 

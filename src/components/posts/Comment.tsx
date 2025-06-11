@@ -12,6 +12,7 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { CollabText } from "@/components/ui/collab-text";
 import { useCommentReactions, useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export type CommentWithAuthor = {
   id: string;
@@ -50,6 +51,7 @@ export function Comment({
 }: CommentProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
+  const { currentWorkspace } = useWorkspace();
   
   // Use TanStack Query hooks for reactions
   const { data: reactionsData } = useCommentReactions(comment.id);
@@ -109,14 +111,14 @@ export function Comment({
           <div className="rounded-lg">
             <div className="flex flex-col">
               <Link
-                href={`/profile/${comment.author.id}`}
+                href={currentWorkspace ? `/${currentWorkspace.id}/profile/${comment.author.id}` : `#`}
                 className="font-semibold text-sm hover:underline"
               >
                 {comment.author.name}
               </Link>
               {comment.html ? (
                 <div className="text-sm">
-                  <MarkdownContent content={comment.html} />
+                  <MarkdownContent content={comment.html} htmlContent={comment.html} />
                 </div>
               ) : (
                 <CollabText

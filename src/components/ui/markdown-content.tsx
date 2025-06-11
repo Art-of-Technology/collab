@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface MarkdownContentProps {
   content?: string;     // Keep for potential fallback/compatibility
@@ -13,6 +14,7 @@ interface MarkdownContentProps {
 
 export function MarkdownContent({ content, htmlContent, className, asSpan = false }: MarkdownContentProps) {
   const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
 
   // Determine the container element type
   const Container = asSpan ? 'span' : 'div';
@@ -67,13 +69,13 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
     
     if (mentionElement) {
       const userId = mentionElement.getAttribute('data-user-id');
-      if (userId) {
+      if (userId && currentWorkspace) {
         // Prevent default link behavior if it was accidentally an 'a' tag somehow
         event.preventDefault();
         // *** Stop the event from bubbling up to parent handlers ***
         event.stopPropagation(); 
         // *** End Stop Propagation ***
-        router.push(`/profile/${userId}`);
+        router.push(`/${currentWorkspace.id}/profile/${userId}`);
       }
     }
   };
