@@ -8,6 +8,19 @@ cloudinary.config({
 });
 
 /**
+ * Generate a unique filename to prevent overwrites and caching issues
+ * @param originalFilename - The original file name
+ * @returns A unique filename with timestamp and random string
+ */
+function generateUniqueFilename(originalFilename: string): string {
+  const timestamp = Date.now();
+  const randomString = Math.random().toString(36).substring(2, 8);
+  const fileExtension = originalFilename.split('.').pop() || 'png';
+  
+  return `image_${timestamp}_${randomString}.${fileExtension}`;
+}
+
+/**
  * Upload an image to Cloudinary
  * @param file - The file to upload
  * @returns The URL of the uploaded image
@@ -17,6 +30,9 @@ export async function uploadImage(file: File): Promise<string> {
     // Convert file to base64 for uploading
     const base64Data = await fileToBase64(file);
     
+    // Generate unique filename to prevent overwrites
+    const uniqueFilename = generateUniqueFilename(file.name);
+    
     // Upload to Cloudinary via API route to protect API key and secret
     const response = await fetch('/api/upload/image', {
       method: 'POST',
@@ -25,7 +41,7 @@ export async function uploadImage(file: File): Promise<string> {
       },
       body: JSON.stringify({ 
         image: base64Data,
-        filename: file.name
+        filename: uniqueFilename
       }),
     });
     
