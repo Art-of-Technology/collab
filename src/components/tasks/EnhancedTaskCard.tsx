@@ -2,7 +2,6 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MessageSquare, Paperclip, CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen } from "lucide-react";
 import { useTaskModal } from "@/context/TaskModalContext";
@@ -264,6 +263,9 @@ export default function EnhancedTaskCard({
       </TooltipProvider>
     );
   });
+
+  // Add display name for debugging
+  AvatarWithTooltip.displayName = 'AvatarWithTooltip';
 
   return (
     <div onClick={handleClick}>

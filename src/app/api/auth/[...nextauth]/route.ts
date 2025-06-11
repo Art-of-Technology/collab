@@ -65,7 +65,7 @@ export const authOptions: AuthOptions = {
     }
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       // Handle profile image processing for existing users signing in with Google
       if (account?.provider === 'google' && user.id && user.image) {
         try {
