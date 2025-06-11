@@ -27,10 +27,12 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
   // For tracking when to refresh story details 
   const [shouldRefresh, setShouldRefresh] = useState<boolean>(false);
 
-  const fetchStoryDetails = useCallback(async () => {
+  const fetchStoryDetails = useCallback(async (showLoading = true) => {
     if (!storyId) return;
     
-    setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     
     try {
@@ -43,12 +45,16 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
       const data = await response.json();
       setStory(data);
       // Only open modal after data is successfully loaded
-      setIsOpen(true);
+      if (showLoading) {
+        setIsOpen(true);
+      }
     } catch (err) {
       console.error("Failed to fetch story details:", err);
       setError("Failed to load story details. Please try again.");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
       setShouldRefresh(false);
     }
   }, [storyId]);
@@ -65,7 +71,7 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
   // Listen for story updates
   useEffect(() => {
     if (shouldRefresh) {
-      fetchStoryDetails();
+      fetchStoryDetails(false); // Don't show loading when refreshing
     }
   }, [shouldRefresh, fetchStoryDetails]);
   

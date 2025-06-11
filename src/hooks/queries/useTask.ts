@@ -105,6 +105,7 @@ export const useUpdateTask = (taskId: string) => {
       title?: string;
       description?: string;
       assigneeId?: string | null;
+      reporterId?: string | null;
       priority?: 'LOW' | 'MEDIUM' | 'HIGH';
       status?: string;
       type?: string;

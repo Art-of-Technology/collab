@@ -112,6 +112,40 @@ export async function getBoardItems(boardId: string) {
           name: true,
         }
       },
+      assignee: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          useCustomAvatar: true,
+          avatarAccessory: true,
+          avatarBrows: true,
+          avatarEyes: true,
+          avatarEyewear: true,
+          avatarHair: true,
+          avatarMouth: true,
+          avatarNose: true,
+          avatarSkinTone: true,
+        }
+      },
+      reporter: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          useCustomAvatar: true,
+          avatarAccessory: true,
+          avatarBrows: true,
+          avatarEyes: true,
+          avatarEyewear: true,
+          avatarHair: true,
+          avatarMouth: true,
+          avatarNose: true,
+          avatarSkinTone: true,
+        }
+      },
       _count: {
         select: {
           epics: true
@@ -138,6 +172,40 @@ export async function getBoardItems(boardId: string) {
         select: {
           id: true,
           title: true,
+        }
+      },
+      assignee: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          useCustomAvatar: true,
+          avatarAccessory: true,
+          avatarBrows: true,
+          avatarEyes: true,
+          avatarEyewear: true,
+          avatarHair: true,
+          avatarMouth: true,
+          avatarNose: true,
+          avatarSkinTone: true,
+        }
+      },
+      reporter: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          useCustomAvatar: true,
+          avatarAccessory: true,
+          avatarBrows: true,
+          avatarEyes: true,
+          avatarEyewear: true,
+          avatarHair: true,
+          avatarMouth: true,
+          avatarNose: true,
+          avatarSkinTone: true,
         }
       },
       _count: {
@@ -168,6 +236,40 @@ export async function getBoardItems(boardId: string) {
           title: true,
         }
       },
+      assignee: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          useCustomAvatar: true,
+          avatarAccessory: true,
+          avatarBrows: true,
+          avatarEyes: true,
+          avatarEyewear: true,
+          avatarHair: true,
+          avatarMouth: true,
+          avatarNose: true,
+          avatarSkinTone: true,
+        }
+      },
+      reporter: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
+          useCustomAvatar: true,
+          avatarAccessory: true,
+          avatarBrows: true,
+          avatarEyes: true,
+          avatarEyewear: true,
+          avatarHair: true,
+          avatarMouth: true,
+          avatarNose: true,
+          avatarSkinTone: true,
+        }
+      },
       _count: {
         select: {
           tasks: true
@@ -192,6 +294,8 @@ export async function getBoardItems(boardId: string) {
     dueDate: milestone.dueDate,
     position: milestone.position,
     issueKey: milestone.issueKey,
+    assignee: milestone.assignee,
+    reporter: milestone.reporter,
     _count: {
       epics: milestone._count.epics,
     },
@@ -212,6 +316,8 @@ export async function getBoardItems(boardId: string) {
     issueKey: epic.issueKey,
     milestone: epic.milestone,
     milestoneId: epic.milestoneId,
+    assignee: epic.assignee,
+    reporter: epic.reporter,
     _count: {
       stories: epic._count.stories,
     },
@@ -232,6 +338,8 @@ export async function getBoardItems(boardId: string) {
     epic: story.epic,
     epicId: story.epicId,
     storyPoints: story.storyPoints,
+    assignee: story.assignee,
+    reporter: story.reporter,
     _count: {
       tasks: story._count.tasks,
     },

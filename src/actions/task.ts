@@ -504,6 +504,7 @@ export async function updateTask(taskId: string, data: {
   title?: string;
   description?: string;
   assigneeId?: string | null;
+  reporterId?: string | null;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH';
   status?: string;
   type?: string;
@@ -515,7 +516,7 @@ export async function updateTask(taskId: string, data: {
     throw new Error('Unauthorized');
   }
 
-  const { title, description, assigneeId, priority, status, type, dueDate } = data;
+  const { title, description, assigneeId, reporterId, priority, status, type, dueDate } = data;
 
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -575,6 +576,22 @@ export async function updateTask(taskId: string, data: {
     }
   }
 
+  // If reporterId is provided, verify they are a member of the workspace
+  if (reporterId) {
+    const isMember = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: task.workspaceId,
+        userId: reporterId
+      }
+    });
+
+    const isOwner = workspace.ownerId === reporterId;
+
+    if (!isMember && !isOwner) {
+      throw new Error('Reporter is not a member of this workspace');
+    }
+  }
+
   // Find the column ID if status is being updated
   let columnId = task.columnId;
   
@@ -601,6 +618,7 @@ export async function updateTask(taskId: string, data: {
       title: title !== undefined ? title.trim() : undefined,
       description: description !== undefined ? (description?.trim() || null) : undefined,
       assigneeId: assigneeId === null ? null : (assigneeId || undefined),
+      reporterId: reporterId === null ? null : (reporterId || undefined),
       priority,
       status,
       type: type !== undefined ? type : undefined,

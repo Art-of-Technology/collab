@@ -18,12 +18,28 @@ export interface EnhancedTaskCardProps {
     name: string | null;
     image: string | null;
     useCustomAvatar?: boolean;
+    avatarAccessory?: number;
+    avatarBrows?: number;
+    avatarEyes?: number;
+    avatarEyewear?: number;
+    avatarHair?: number;
+    avatarMouth?: number;
+    avatarNose?: number;
+    avatarSkinTone?: number;
   } | null;
   reporter?: {
     id: string;
     name: string | null;
     image: string | null;
     useCustomAvatar?: boolean;
+    avatarAccessory?: number;
+    avatarBrows?: number;
+    avatarEyes?: number;
+    avatarEyewear?: number;
+    avatarHair?: number;
+    avatarMouth?: number;
+    avatarNose?: number;
+    avatarSkinTone?: number;
   } | null;
   commentCount?: number;
   attachmentCount?: number;
@@ -210,7 +226,20 @@ export default function EnhancedTaskCard({
     user,
     label
   }: {
-    user: { id: string; name: string | null; image: string | null; useCustomAvatar?: boolean },
+    user: { 
+      id: string; 
+      name: string | null; 
+      image: string | null; 
+      useCustomAvatar?: boolean;
+      avatarAccessory?: number;
+      avatarBrows?: number;
+      avatarEyes?: number;
+      avatarEyewear?: number;
+      avatarHair?: number;
+      avatarMouth?: number;
+      avatarNose?: number;
+      avatarSkinTone?: number;
+    },
     label: string
   }) => {
     // Use a stable key to prevent re-mounting
@@ -318,10 +347,10 @@ export default function EnhancedTaskCard({
 
             <div className="flex items-center justify-between pt-2">
               <div className="flex items-center gap-2">
-                {itemType === 'task' && assignee && (
+                {assignee && (
                   <AvatarWithTooltip user={assignee} label="Assignee" />
                 )}
-                {!assignee && itemType === 'task' && (
+                {!assignee && (
                   <div className="h-6 w-6 min-h-[1.5rem] min-w-[1.5rem]" />
                 )}
               </div>
@@ -343,7 +372,7 @@ export default function EnhancedTaskCard({
                   </div>
                 )}
 
-                {itemType === 'task' && reporter && (
+                {reporter && (
                   <AvatarWithTooltip user={reporter} label="Reporter" />
                 )}
               </div>

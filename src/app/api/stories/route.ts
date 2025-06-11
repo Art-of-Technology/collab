@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
       workspaceId,
       color,
       columnId,
+      assigneeId,
+      reporterId,
     } = body;
 
     // Required fields
@@ -36,6 +38,34 @@ export async function POST(request: NextRequest) {
         { error: "Title and workspace ID are required" },
         { status: 400 }
       );
+    }
+
+    // Validate assignee if provided
+    if (assigneeId) {
+      const assignee = await prisma.user.findUnique({
+        where: { id: assigneeId },
+        select: { id: true }
+      });
+      if (!assignee) {
+        return NextResponse.json(
+          { error: "Assignee not found" },
+          { status: 404 }
+        );
+      }
+    }
+
+    // Validate reporter if provided
+    if (reporterId) {
+      const reporter = await prisma.user.findUnique({
+        where: { id: reporterId },
+        select: { id: true }
+      });
+      if (!reporter) {
+        return NextResponse.json(
+          { error: "Reporter not found" },
+          { status: 404 }
+        );
+      }
     }
 
     // Check if epic exists if epicId is provided
@@ -139,6 +169,8 @@ export async function POST(request: NextRequest) {
         columnId,
         issueKey: body.issueKey,
         color: color || "#3B82F6", // Use the provided color or default blue
+        assigneeId,
+        reporterId,
       } as any, // Type assertion to bypass TypeScript error
       include: {
         epic: {
@@ -158,6 +190,40 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             color: true,
+          },
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
           },
         },
       },
@@ -242,6 +308,40 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             color: true,
+          },
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
+          },
+        },
+        reporter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarAccessory: true,
+            avatarBrows: true,
+            avatarEyes: true,
+            avatarEyewear: true,
+            avatarHair: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarSkinTone: true,
           },
         },
         _count: {

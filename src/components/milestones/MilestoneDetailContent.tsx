@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useQueryClient } from "@tanstack/react-query";
 import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
+import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
+import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
 // Format date helper
@@ -36,6 +38,36 @@ export interface Milestone {
         id: string;
         name: string;
     };
+    assignee?: {
+        id: string;
+        name: string;
+        email: string;
+        image?: string;
+        useCustomAvatar?: boolean;
+        avatarAccessory?: number;
+        avatarBrows?: number;
+        avatarEyes?: number;
+        avatarEyewear?: number;
+        avatarHair?: number;
+        avatarMouth?: number;
+        avatarNose?: number;
+        avatarSkinTone?: number;
+    } | null;
+    reporter?: {
+        id: string;
+        name: string;
+        email: string;
+        image?: string;
+        useCustomAvatar?: boolean;
+        avatarAccessory?: number;
+        avatarBrows?: number;
+        avatarEyes?: number;
+        avatarEyewear?: number;
+        avatarHair?: number;
+        avatarMouth?: number;
+        avatarNose?: number;
+        avatarSkinTone?: number;
+    } | null;
 }
 
 interface MilestoneDetailContentProps {
@@ -63,6 +95,8 @@ export function MilestoneDetailContent({
     const [savingStatus, setSavingStatus] = useState(false);
     const [savingStartDate, setSavingStartDate] = useState(false);
     const [savingDueDate, setSavingDueDate] = useState(false);
+    const [savingAssignee, setSavingAssignee] = useState(false);
+    const [savingReporter, setSavingReporter] = useState(false);
     const [startDate, setStartDate] = useState<Date | undefined>(milestone?.startDate || undefined);
     const [dueDate, setDueDate] = useState<Date | undefined>(milestone?.dueDate || undefined);
     const { toast } = useToast();
@@ -150,8 +184,8 @@ export function MilestoneDetailContent({
                 onRefresh();
             }, 100);
 
-            // Invalidate TanStack Query cache for board items if status changed (to update kanban columns)
-            if (field === 'status' && effectiveBoardId) {
+            // Invalidate TanStack Query cache for board items if status, assignee, or reporter changed
+            if ((field === 'status' || field === 'assigneeId' || field === 'reporterId') && effectiveBoardId) {
                 queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
             }
 
@@ -243,6 +277,26 @@ export function MilestoneDetailContent({
             await saveMilestoneField('dueDate', date);
         } finally {
             setSavingDueDate(false);
+        }
+    };
+
+    // Handle assignee change
+    const handleAssigneeChange = async (assigneeId: string | undefined) => {
+        setSavingAssignee(true);
+        try {
+            await saveMilestoneField('assigneeId', assigneeId === "unassigned" ? null : assigneeId);
+        } finally {
+            setSavingAssignee(false);
+        }
+    };
+
+    // Handle reporter change
+    const handleReporterChange = async (reporterId: string | undefined) => {
+        setSavingReporter(true);
+        try {
+            await saveMilestoneField('reporterId', reporterId === "none" ? null : reporterId);
+        } finally {
+            setSavingReporter(false);
         }
     };
 
@@ -539,6 +593,40 @@ export function MilestoneDetailContent({
                                         disabled={savingStatus}
                                     />
                                     {savingStatus && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-sm font-medium mb-1">Assignee</p>
+                                <div className="relative">
+                                    <AssigneeSelect
+                                        value={milestone.assignee?.id || undefined}
+                                        onChange={handleAssigneeChange}
+                                        workspaceId={milestone.workspaceId}
+                                        disabled={savingAssignee}
+                                    />
+                                    {savingAssignee && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-sm font-medium mb-1">Reporter</p>
+                                <div className="relative">
+                                    <ReporterSelect
+                                        value={milestone.reporter?.id || undefined}
+                                        onChange={handleReporterChange}
+                                        workspaceId={milestone.workspaceId}
+                                        disabled={savingReporter}
+                                    />
+                                    {savingReporter && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         </div>
