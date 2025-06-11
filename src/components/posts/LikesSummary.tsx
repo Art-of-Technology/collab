@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePostReactions } from "@/hooks/queries/useReaction";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 type ReactionWithAuthor = {
   id: string;
@@ -25,6 +26,7 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
   // Use TanStack Query for reactions, but only if we need to fetch them
   const shouldFetch = initialLikes.length === 0 && likesCount > 0;
   const { data, isLoading } = usePostReactions(postId);
+  const { currentWorkspace } = useWorkspace();
   
   // Use initial likes if provided, otherwise use the data from the query
   const likesWithAuthor = initialLikes.length > 0 
@@ -44,7 +46,7 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
       return (
         <span>
           Liked by{" "}
-          <Link href={`/profile/${likesWithAuthor[0].author.id}`} className="font-semibold hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${likesWithAuthor[0].author.id}` : `#`} className="font-semibold hover:underline">
             {likesWithAuthor[0].author.name}
           </Link>
         </span>
@@ -53,11 +55,11 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
       return (
         <span>
           Liked by{" "}
-          <Link href={`/profile/${likesWithAuthor[0].author.id}`} className="font-semibold hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${likesWithAuthor[0].author.id}` : `#`} className="font-semibold hover:underline">
             {likesWithAuthor[0].author.name}
           </Link>{" "}
           and{" "}
-          <Link href={`/profile/${likesWithAuthor[1].author.id}`} className="font-semibold hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${likesWithAuthor[1].author.id}` : `#`} className="font-semibold hover:underline">
             {likesWithAuthor[1].author.name}
           </Link>
         </span>
@@ -66,7 +68,7 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
       return (
         <span>
           Liked by{" "}
-          <Link href={`/profile/${likesWithAuthor[0].author.id}`} className="font-semibold hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${likesWithAuthor[0].author.id}` : `#`} className="font-semibold hover:underline">
             {likesWithAuthor[0].author.name}
           </Link>{" "}
           and{" "}

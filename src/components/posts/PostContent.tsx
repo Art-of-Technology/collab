@@ -45,9 +45,9 @@ export default function PostContent({
         />
       )}
 
-      {tags.length > 0 && (
+      {(tags || []).length > 0 && (
         <div className="flex flex-wrap gap-1 mt-3">
-          {tags.map((tag) => (
+          {(tags || []).map((tag) => (
             <Link
               key={tag.id}
               href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${encodeURIComponent(tag.name)}` : `#`}

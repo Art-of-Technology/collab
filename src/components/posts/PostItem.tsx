@@ -58,7 +58,7 @@ export default function PostItem({
 }: PostItemProps) {
   // Basic state
   const [likesCount, setLikesCount] = useState(
-    post.reactions.filter((reaction: { type: string; }) => reaction.type === "LIKE").length
+    (post.reactions || []).filter((reaction: { type: string; }) => reaction.type === "LIKE").length
   );
   const [likesWithAuthor, setLikesWithAuthor] = useState<ReactionWithAuthor[]>([]);
   
@@ -68,15 +68,15 @@ export default function PostItem({
   const [isLikesDialogOpen, setIsLikesDialogOpen] = useState(false);
   
   // Computed values
-  const commentsCount = post.comments.length;
+  const commentsCount = (post.comments || []).length;
   const isAuthor = post.authorId === currentUserId;
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), { addSuffix: true });
   
   // Get initial liked and bookmarked state
-  const initialLiked = post.reactions.some(
+  const initialLiked = (post.reactions || []).some(
     (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "LIKE"
   );
-  const initialBookmarked = post.reactions.some(
+  const initialBookmarked = (post.reactions || []).some(
     (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "BOOKMARK"
   );
 
@@ -85,7 +85,7 @@ export default function PostItem({
     message: post.message,
     type: post.type,
     priority: post.priority,
-    tags: post.tags.map((tag: { name: any; }) => tag.name).join(", ")
+    tags: (post.tags || []).map((tag: { name: any; }) => tag.name).join(", ")
   };
 
   // Get badge variants
@@ -151,7 +151,7 @@ export default function PostItem({
         <PostContent 
           message={post.message}
           html={post.html}
-          tags={post.tags}
+          tags={post.tags || []}
           likesCount={likesCount}
           commentsCount={commentsCount}
           onToggleExpand={() => toggleExpand(post.id)}

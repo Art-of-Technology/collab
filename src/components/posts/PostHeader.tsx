@@ -13,6 +13,7 @@ import {
 import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { BadgeVariant } from "./types";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface PostHeaderProps {
   authorId: string;
@@ -48,6 +49,7 @@ export default function PostHeader({
 }: PostHeaderProps) {
   // Check if we have the full author object with custom avatar data
   const hasCustomAvatar = author && author.useCustomAvatar;
+  const { currentWorkspace } = useWorkspace();
   
   return (
     <div className="flex flex-row items-start space-y-0 pb-2 bg-card/50">
@@ -65,7 +67,7 @@ export default function PostHeader({
         <div className="flex justify-between items-center mb-1">
           <div>
             <Link
-              href={`/profile/${authorId}`}
+              href={currentWorkspace ? `/${currentWorkspace.id}/profile/${authorId}` : `#`}
               className="font-semibold hover:underline hover:text-primary transition-colors"
             >
               {authorName}
