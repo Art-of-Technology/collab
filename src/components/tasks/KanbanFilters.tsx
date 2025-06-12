@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Search, X, ArrowUpDown } from "lucide-react";
+import { Search, X, ArrowUpDown, Circle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -31,14 +31,18 @@ interface KanbanFiltersProps {
   onSearchChange: (search: string) => void;
   onTypeFilter: (types: ItemType[]) => void;
   onLabelFilter: (labels: string[]) => void;
+  onStatusFilter?: (statuses: string[]) => void;
   onGroupingChange: (groupBy: GroupingOption) => void;
   onSortChange?: (field: SortOption, direction: 'asc' | 'desc') => void;
   selectedGrouping: GroupingOption;
   selectedTypes: ItemType[];
   selectedLabels: string[];
+  selectedStatuses?: string[];
   selectedSort?: SortOption;
   sortDirection?: 'asc' | 'desc';
   showSortOptions?: boolean;
+  showStatusFilter?: boolean;
+  availableStatuses?: string[];
   workspaceId: string;
 }
 
@@ -46,14 +50,18 @@ export default function KanbanFilters({
   onSearchChange,
   onTypeFilter,
   onLabelFilter,
+  onStatusFilter,
   onGroupingChange,
   onSortChange,
   selectedGrouping,
   selectedTypes,
   selectedLabels,
+  selectedStatuses,
   selectedSort = 'title',
   sortDirection = 'asc',
   showSortOptions = false,
+  showStatusFilter = false,
+  availableStatuses,
   workspaceId,
 }: KanbanFiltersProps) {
   const [search, setSearch] = useState("");
@@ -83,6 +91,25 @@ export default function KanbanFilters({
     onLabelFilter([]);
   };
 
+  // Toggle status selection
+  const toggleStatus = (status: string) => {
+    if (!onStatusFilter) return;
+    
+    const currentStatuses = selectedStatuses || [];
+    if (currentStatuses.includes(status)) {
+      onStatusFilter(currentStatuses.filter(s => s !== status));
+    } else {
+      onStatusFilter([...currentStatuses, status]);
+    }
+  };
+
+  // Clear all status filters
+  const clearStatusFilters = () => {
+    if (onStatusFilter) {
+      onStatusFilter([]);
+    }
+  };
+
   // Handle direction change
   const handleDirectionChange = (direction: 'asc' | 'desc') => {
     if (onSortChange && selectedSort) {
@@ -102,6 +129,11 @@ export default function KanbanFilters({
   // Get label filter count
   const getLabelFilterCount = () => {
     return selectedLabels.length;
+  };
+
+  // Get status filter count
+  const getStatusFilterCount = () => {
+    return selectedStatuses?.length || 0;
   };
 
   return (
@@ -251,6 +283,60 @@ export default function KanbanFilters({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {showStatusFilter && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1">
+              <Circle className="h-4 w-4" />
+              <span>Status</span>
+              {getStatusFilterCount() > 0 && (
+                <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                  {getStatusFilterCount()}
+                </Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {availableStatuses && availableStatuses.length > 0 ? (
+              availableStatuses.map((status) => (
+                <DropdownMenuCheckboxItem
+                  key={status}
+                  checked={selectedStatuses?.includes(status) || false}
+                  onCheckedChange={() => toggleStatus(status)}
+                >
+                  <Badge variant="outline" className="-ml-4 border-none">
+                    {status}
+                  </Badge>
+                </DropdownMenuCheckboxItem>
+              ))
+            ) : (
+              <div className="p-2 text-sm text-muted-foreground">
+                No statuses available
+              </div>
+            )}
+
+            {(selectedStatuses?.length || 0) > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="p-2">
+                  <Button 
+                    onClick={clearStatusFilters}
+                    variant="outline" 
+                    size="sm"
+                    className="w-full flex items-center justify-center gap-1.5 h-8 text-xs font-medium bg-muted/50 hover:bg-muted border-dashed hover:text-primary"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span>Clear statuses</span>
+                  </Button>
+                </div>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <Select
         value={selectedGrouping}
