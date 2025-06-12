@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 
-type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION';
+type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED';
 type PostPriority = 'normal' | 'high' | 'critical';
 
 /**
@@ -33,7 +33,7 @@ export async function getPosts({
   const query: any = {};
   
   // Filter by type if provided
-  if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
+  if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
     query.type = type;
   }
   
@@ -249,7 +249,7 @@ export async function createPost(data: {
     throw new Error('Message is required');
   }
   
-  if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
+  if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
     throw new Error('Invalid post type');
   }
   
@@ -286,28 +286,53 @@ export async function createPost(data: {
     throw new Error('Workspace not found or access denied');
   }
   
-  // Create the post
-  const post = await prisma.post.create({
-    data: {
-      message: message.trim(),
-      html: html || null,
-      type,
-      priority,
-      author: {
-        connect: {
-          id: user.id,
+  // Create the post and record the action
+  const post = await prisma.$transaction(async (tx) => {
+    // Create the post
+    const newPost = await tx.post.create({
+      data: {
+        message: message.trim(),
+        html: html || null,
+        type,
+        priority,
+        author: {
+          connect: {
+            id: user.id,
+          },
+        },
+        workspace: {
+          connect: {
+            id: workspaceId,
+          },
         },
       },
-      workspace: {
-        connect: {
-          id: workspaceId,
+      include: {
+        author: true,
+        workspace: true,
+      },
+    });
+
+    // Record the creation action using normal Prisma client
+    await tx.postAction.create({
+      data: {
+        postId: newPost.id,
+        userId: user.id,
+        action: 'CREATED',
+        newValue: JSON.stringify({ 
+          message: newPost.message, 
+          type: newPost.type, 
+          priority: newPost.priority,
+          workspaceId: workspaceId 
+        }),
+        metadata: { 
+          postId: newPost.id,
+          workspaceId: workspaceId,
+          createdAt: newPost.createdAt 
         },
       },
-    },
-    include: {
-      author: true,
-      workspace: true,
-    },
+    });
+
+    return newPost;
   });
   
   // Process tags if provided
@@ -374,7 +399,7 @@ export async function updatePost(postId: string, data: {
     throw new Error('Message is required');
   }
   
-  if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
+  if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
     throw new Error('Invalid post type');
   }
   
@@ -410,29 +435,75 @@ export async function updatePost(postId: string, data: {
   const tagsArray = Array.isArray(tags) ? tags : [];
   const workspaceId = existingPost.workspaceId as string;
   
-  // First, disconnect all existing tags
-  await prisma.post.update({
-    where: { id: postId },
-    data: {
-      tags: {
-        set: [] // Remove all tag connections
+  // Update the post and track changes
+  const updatedPost = await prisma.$transaction(async (tx) => {
+    // First, disconnect all existing tags
+    await tx.post.update({
+      where: { id: postId },
+      data: {
+        tags: {
+          set: [] // Remove all tag connections
+        }
       }
+    });
+    
+    // Detect what changed
+    const changes = [];
+    const oldValues: any = {};
+    const newValues: any = {};
+    
+    if (existingPost.message.trim() !== message.trim()) {
+      changes.push('EDITED');
+      oldValues.message = existingPost.message;
+      newValues.message = message.trim();
     }
-  });
-  
-  // Update the post
-  const updatedPost = await prisma.post.update({
-    where: { id: postId },
-    data: {
-      message: message.trim(),
-      type,
-      priority,
-    },
-    include: {
-      author: true,
-      workspace: true,
-      tags: true,
-    },
+    
+    if (existingPost.type !== type) {
+      changes.push('TYPE_CHANGED');
+      oldValues.type = existingPost.type;
+      newValues.type = type;
+    }
+    
+    if (existingPost.priority !== priority) {
+      changes.push('PRIORITY_CHANGED');
+      oldValues.priority = existingPost.priority;
+      newValues.priority = priority;
+    }
+
+    // Update the post
+    const post = await tx.post.update({
+      where: { id: postId },
+      data: {
+        message: message.trim(),
+        type,
+        priority,
+      },
+      include: {
+        author: true,
+        workspace: true,
+        tags: true,
+      },
+    });
+
+    // Record actions for each change using normal Prisma client
+    for (const change of changes) {
+      await tx.postAction.create({
+        data: {
+          postId: postId,
+          userId: user.id,
+          action: change as any, // Cast to handle enum
+          oldValue: JSON.stringify(oldValues),
+          newValue: JSON.stringify(newValues),
+          metadata: { 
+            changeType: change,
+            updatedAt: new Date(),
+            postId: postId 
+          },
+        },
+      });
+    }
+
+    return post;
   });
   
   // Process new tags
@@ -511,9 +582,32 @@ export async function deletePost(postId: string) {
     throw new Error('Unauthorized to delete this post');
   }
   
-  // Delete the post - Prisma cascade will handle related records
-  await prisma.post.delete({
-    where: { id: postId },
+  // Record deletion action and delete the post
+  await prisma.$transaction(async (tx) => {
+    // Record the deletion action before deleting using normal Prisma client
+    await tx.postAction.create({
+      data: {
+        postId: postId,
+        userId: user.id,
+        action: 'DELETED',
+        oldValue: JSON.stringify({ 
+          message: existingPost.message, 
+          type: existingPost.type, 
+          priority: existingPost.priority,
+          workspaceId: existingPost.workspaceId 
+        }),
+        metadata: { 
+          deletedAt: new Date(),
+          deletedBy: user.id,
+          postId: postId 
+        },
+      },
+    });
+
+    // Delete the post - Prisma cascade will handle related records
+    await tx.post.delete({
+      where: { id: postId },
+    });
   });
   
   return true;
@@ -569,4 +663,195 @@ export async function getUserPosts(userId: string, workspaceId: string) {
   });
   
   return userPosts;
+}
+
+/**
+ * Convert a blocker post to resolved status
+ * Only post author, workspace owner, or admin can resolve
+ */
+export async function resolveBlockerPost(postId: string) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  // Get the current user
+  const user = await prisma.user.findUnique({
+    where: {
+      email: session.user.email
+    }
+  });
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  // Get the post with workspace information
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    include: {
+      workspace: {
+        select: {
+          id: true,
+          ownerId: true,
+          members: {
+            where: { userId: user.id },
+            select: { role: true }
+          }
+        }
+      }
+    }
+  });
+
+  if (!post) {
+    throw new Error('Post not found');
+  }
+  
+  // Check if the post is a blocker
+  if (post.type !== 'BLOCKER') {
+    throw new Error('Only blocker posts can be resolved');
+  }
+  
+  // Check permissions: post author, workspace owner, or admin
+  const isAuthor = post.authorId === user.id;
+  const isWorkspaceOwner = post.workspace?.ownerId === user.id;
+  const isAdmin = user.role === 'admin';
+  const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
+  
+  if (!isAuthor && !isWorkspaceOwner && !isAdmin) {
+    throw new Error('You do not have permission to resolve this blocker');
+  }
+  
+  if (!isWorkspaceMember && !isWorkspaceOwner && !isAdmin) {
+    throw new Error('You do not have access to this workspace');
+  }
+  
+  // Update the post to resolved and record the action
+  const now = new Date();
+  
+  const updatedPost = await prisma.$transaction(async (tx) => {
+    // Update the post using normal Prisma client
+    const post = await tx.post.update({
+      where: { id: postId },
+      data: {
+        type: 'RESOLVED',
+        resolvedAt: now,
+        resolvedById: user.id,
+      },
+      include: {
+        author: true,
+        workspace: true,
+        tags: true,
+        comments: {
+          include: {
+            author: true,
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+        reactions: true,
+      },
+    });
+
+    // Record the action using normal Prisma client
+    await tx.postAction.create({
+      data: {
+        postId: postId,
+        userId: user.id,
+        action: 'RESOLVED',
+        oldValue: JSON.stringify({ type: 'BLOCKER' }),
+        newValue: JSON.stringify({ type: 'RESOLVED', resolvedAt: now }),
+        metadata: {
+          resolvedAt: now,
+          resolvedById: user.id,
+        },
+      },
+    });
+
+    return post;
+  });
+  
+  return updatedPost;
+}
+
+/**
+ * Get post action history
+ */
+export async function getPostActions(postId: string) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  // Get the current user
+  const user = await prisma.user.findUnique({
+    where: {
+      email: session.user.email
+    }
+  });
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  // Verify user has access to the post
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    include: {
+      workspace: {
+        select: {
+          id: true,
+          ownerId: true,
+          members: {
+            where: { userId: user.id },
+            select: { id: true }
+          }
+        }
+      }
+    }
+  });
+
+  if (!post) {
+    throw new Error('Post not found');
+  }
+  
+  // Check access permissions
+  const isAuthor = post.authorId === user.id;
+  const isWorkspaceOwner = post.workspace?.ownerId === user.id;
+  const isAdmin = user.role === 'admin';
+  const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
+  
+  if (!isAuthor && !isWorkspaceOwner && !isAdmin && !isWorkspaceMember) {
+    throw new Error('You do not have access to this post');
+  }
+  
+  // Get action history using normal Prisma client
+  const actions = await prisma.postAction.findMany({
+    where: {
+      postId: postId,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+  });
+  
+  // Transform to match expected format
+  return actions.map(action => ({
+    ...action,
+    user_id: action.user.id,
+    user_name: action.user.name,
+    user_image: action.user.image,
+  }));
 } 

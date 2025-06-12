@@ -5,10 +5,13 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AlertTriangle, Lightbulb, HelpCircle, MessageSquare, Heart, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, Lightbulb, HelpCircle, MessageSquare, Heart, Loader2, CheckCircle } from "lucide-react";
 import { useRecentPostsByType } from "@/hooks/queries/useDashboard";
 import { CollabText } from "@/components/ui/collab-text";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useResolvePost } from "@/hooks/queries/useResolvePost";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface PostsByTypeProps {
   type: 'BLOCKER' | 'IDEA' | 'QUESTION';
@@ -18,8 +21,26 @@ interface PostsByTypeProps {
 
 export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProps) {
   const { currentWorkspace } = useWorkspace();
+  const { data: currentUser } = useCurrentUser();
+  const resolvePostMutation = useResolvePost();
+  
   // Use TanStack Query for data fetching with initial data from server
   const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, workspaceId);
+  
+  // Check if user can resolve blocker posts
+  const canResolveBlocker = (post: any) => {
+    if (post.type !== 'BLOCKER') return false;
+    
+    const isAuthor = post.authorId === currentUser?.id;
+    const isWorkspaceOwner = currentUser?.id === currentWorkspace?.ownerId;
+    const isAdmin = currentUser?.role === 'admin';
+    
+    return isAuthor || isWorkspaceOwner || isAdmin;
+  };
+  
+  const handleResolve = (postId: string) => {
+    resolvePostMutation.mutate(postId);
+  };
   
   // Type-specific UI elements
   const getTypeDetails = () => {
@@ -87,8 +108,20 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             {post.author.name} • {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
           </h5>
         </div>
-        <div className="text-xs">
+        <div className="flex items-center gap-2 text-xs">
           {post.priority === "high" && <Badge variant="outline" className="bg-red-500/10">High Priority</Badge>}
+          {canResolveBlocker(post) && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleResolve(post.id)}
+              disabled={resolvePostMutation.isPending}
+              className="h-6 px-2 text-xs bg-green-50 border-green-200 text-green-800 hover:bg-green-100 hover:border-green-300 hover:text-green-900"
+            >
+              <CheckCircle className="h-3 w-3 mr-1" />
+              {resolvePostMutation.isPending ? 'Resolving...' : 'Mark Resolved'}
+            </Button>
+          )}
         </div>
       </div>
       <div className="text-sm mt-2">

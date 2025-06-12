@@ -4,15 +4,7 @@ import { useState } from "react";
 import PostItem from "@/components/posts/PostItem";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import type { Post, User, Tag, Comment, Reaction } from "@prisma/client";
-
-// Define the type that matches Prisma's response structure
-type PrismaPost = Post & {
-  author: User;
-  tags: Tag[];
-  comments: (Comment & { author: User })[];
-  reactions: Reaction[];
-};
+import { PrismaPost } from "./types";
 
 interface PostListProps {
   posts: PrismaPost[];
