@@ -3,8 +3,22 @@ import type { Post, User, Tag, Comment, Reaction } from "@prisma/client";
 // Post with all relations from Prisma
 export type PrismaPost = Post & {
   html?: string | null;
+  resolvedAt?: Date | null;
+  resolvedById?: string | null;
   author: User;
+  resolvedBy?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
   tags: Tag[];
+  workspace?: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    ownerId: string;
+  } | null;
   comments: (Comment & {
     author: User;
     html?: string | null;
@@ -12,9 +26,27 @@ export type PrismaPost = Post & {
     replies?: any[];
   })[];
   reactions: Reaction[];
+  actions?: PostAction[];
   _count?: {
     comments: number;
     reactions: number;
+  };
+};
+
+// PostAction type
+export type PostAction = {
+  id: string;
+  postId: string;
+  userId: string;
+  action: string; // Will be enum when Prisma client is regenerated
+  oldValue: string | null;
+  newValue: string | null;
+  metadata: any;
+  createdAt: Date;
+  user: {
+    id: string;
+    name: string | null;
+    image: string | null;
   };
 };
 

@@ -10,10 +10,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, CheckCircleIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { BadgeVariant } from "./types";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useResolvePost } from "@/hooks/queries/useResolvePost";
+import { useCurrentUser } from "@/hooks/queries/useUser";
+import { useState } from "react";
+import PostHistoryModal from "./PostHistoryModal";
 
 interface PostHeaderProps {
   authorId: string;
@@ -31,6 +35,8 @@ interface PostHeaderProps {
   onEditClick: () => void;
   onDeleteClick: () => void;
   author?: any; // Add the full author object
+  postId: string; // Add postId for resolve functionality
+  workspaceOwnerId?: string; // Add workspace owner ID
 }
 
 export default function PostHeader({
@@ -46,10 +52,30 @@ export default function PostHeader({
   onEditClick,
   onDeleteClick,
   author,
+  postId,
+  workspaceOwnerId,
 }: PostHeaderProps) {
   // Check if we have the full author object with custom avatar data
   const hasCustomAvatar = author && author.useCustomAvatar;
   const { currentWorkspace } = useWorkspace();
+  const { data: currentUser } = useCurrentUser();
+  const resolvePostMutation = useResolvePost();
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  
+  // Check if user can resolve blocker posts
+  const canResolve = postType === 'BLOCKER' && (
+    isAuthor || 
+    currentUser?.id === workspaceOwnerId || 
+    currentUser?.role === 'admin'
+  );
+  
+  const handleResolve = () => {
+    resolvePostMutation.mutate(postId);
+  };
+  
+  const handleOpenHistory = () => {
+    setIsHistoryModalOpen(true);
+  };
   
   return (
     <div className="flex flex-row items-start space-y-0 pb-2 bg-card/50">
@@ -88,7 +114,7 @@ export default function PostHeader({
               )}
             </div>
             
-            {isAuthor && (
+            {(isAuthor || canResolve) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8 hover-effect">
@@ -97,23 +123,48 @@ export default function PostHeader({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="shadow-lg">
-                  <DropdownMenuItem onClick={onEditClick} className="hover-effect">
-                    <PencilSquareIcon className="h-4 w-4 mr-2" />
-                    Edit
+                  {canResolve && (
+                    <DropdownMenuItem 
+                      onClick={handleResolve} 
+                      className="text-green-600 focus:text-green-600 hover-effect"
+                      disabled={resolvePostMutation.isPending}
+                    >
+                      <CheckCircleIcon className="h-4 w-4 mr-2" />
+                      {resolvePostMutation.isPending ? 'Resolving...' : 'Mark as Resolved'}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={handleOpenHistory} className="hover-effect">
+                    <ClockIcon className="h-4 w-4 mr-2" />
+                    Post History
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={onDeleteClick}
-                    className="text-destructive focus:text-destructive hover-effect"
-                  >
-                    <TrashIcon className="h-4 w-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
+                  {isAuthor && (
+                    <>
+                      <DropdownMenuItem onClick={onEditClick} className="hover-effect">
+                        <PencilSquareIcon className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={onDeleteClick}
+                        className="text-destructive focus:text-destructive hover-effect"
+                      >
+                        <TrashIcon className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </div>
         </div>
       </div>
+      
+      {/* Post History Modal */}
+      <PostHistoryModal
+        postId={postId}
+        isOpen={isHistoryModalOpen}
+        onOpenChange={setIsHistoryModalOpen}
+      />
     </div>
   );
 } 

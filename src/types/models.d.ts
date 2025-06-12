@@ -32,7 +32,7 @@ interface User {
 interface Post {
   id: string;
   message: string;
-  type: string; // 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION'
+  type: string; // 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED'
   priority: string; // 'normal' | 'high' | 'critical'
   authorId: string;
   createdAt: Date;

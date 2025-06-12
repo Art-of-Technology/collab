@@ -331,6 +331,7 @@ export default function CreatePostForm() {
                     <SelectItem value="BLOCKER">Blocker</SelectItem>
                     <SelectItem value="IDEA">Idea</SelectItem>
                     <SelectItem value="QUESTION">Question</SelectItem>
+                    <SelectItem value="RESOLVED">Resolved</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

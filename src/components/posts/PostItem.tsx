@@ -29,6 +29,8 @@ const getTypeVariant = (type: string): BadgeVariant => {
   switch (type) {
     case "BLOCKER":
       return "destructive";
+    case "RESOLVED":
+      return "default"; // Green styling for resolved
     case "IDEA":
       return "secondary";
     case "QUESTION":
@@ -144,6 +146,8 @@ export default function PostItem({
           onEditClick={() => setIsEditDialogOpen(true)}
           onDeleteClick={() => setIsDeleteDialogOpen(true)}
           author={post.author}
+          postId={post.id}
+          workspaceOwnerId={post.workspace?.ownerId}
         />
       </CardHeader>
       

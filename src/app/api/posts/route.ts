@@ -5,23 +5,23 @@ import { getCurrentUser } from "@/lib/session";
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
-    
+
     const body = await req.json();
     const { message, html, type, tags, priority, workspaceId } = body;
-    
+
     // Validation
     if (!message || !message.trim()) {
       return new NextResponse("Message is required", { status: 400 });
     }
-    
-    if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
+
+    if (!["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
       return new NextResponse("Invalid post type", { status: 400 });
     }
-    
+
     if (!["normal", "high", "critical"].includes(priority)) {
       return new NextResponse("Invalid priority", { status: 400 });
     }
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     if (!workspaceId) {
       return new NextResponse("Workspace is required", { status: 400 });
     }
-    
+
     // Verify user has access to the workspace
     const workspace = await prisma.workspace.findFirst({
       where: {
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     if (!workspace) {
       return new NextResponse("Workspace not found or access denied", { status: 403 });
     }
-    
+
     // Create post with tags
     const post = await prisma.post.create({
       data: {
@@ -60,15 +60,15 @@ export async function POST(req: Request) {
         },
         tags: {
           connectOrCreate: tags.map((tag: string) => ({
-            where: { 
+            where: {
               name_workspaceId: {
                 name: tag,
                 workspaceId
               }
             },
-            create: { 
+            create: {
               name: tag,
-              workspaceId 
+              workspaceId
             }
           }))
         }
@@ -79,25 +79,13 @@ export async function POST(req: Request) {
         workspace: true
       }
     });
-    
+
     return NextResponse.json(post);
-    
+
   } catch (error) {
     console.error("Post creation error:", error);
     return new NextResponse("Internal error", { status: 500 });
   }
-}
-
-// Define interface for query parameters
-interface PostQueryFilters {
-  type?: string;
-  authorId?: string;
-  workspaceId?: string;
-  tags?: {
-    some: {
-      name: string;
-    }
-  };
 }
 
 export async function GET(req: Request) {
@@ -117,15 +105,15 @@ export async function GET(req: Request) {
     const authorId = searchParams.get("authorId");
     const workspaceId = searchParams.get("workspaceId");
     const limit = Number(searchParams.get("limit") || "20");
-    
+
     // Build the query
-    const query: PostQueryFilters = {};
-    
+    const query: any = {};
+
     // Filter by type if provided
-    if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION"].includes(type)) {
-      query.type = type;
+    if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
+      query.type = type as any; // Cast to handle enum typing
     }
-    
+
     // Filter by author if provided
     if (authorId) {
       query.authorId = authorId;
@@ -145,28 +133,28 @@ export async function GET(req: Request) {
         },
         select: { id: true }
       });
-      
+
       if (accessibleWorkspaces.length === 0) {
         return NextResponse.json([]);
       }
-      
+
       // Include workspaceId IN filter
       query.workspaceId = {
         in: accessibleWorkspaces.map(w => w.id)
-      } as any; // Type workaround for the query filter
+      };
     }
-    
+
     // Filter by tag if provided
-    const tagFilter = tag 
+    const tagFilter = tag
       ? {
-          tags: {
-            some: {
-              name: tag,
-            },
+        tags: {
+          some: {
+            name: tag,
           },
-        } 
+        },
+      }
       : {};
-    
+
     // Get the posts
     const posts = await prisma.post.findMany({
       where: {

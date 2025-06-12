@@ -22,7 +22,7 @@ export async function getRecentPostsByType(params: {
   return prisma.post.findMany({
     take: limit,
     where: {
-      type,
+      type: type as any,
       workspaceId
     },
     orderBy: {
