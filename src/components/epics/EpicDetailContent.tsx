@@ -25,6 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
 import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
 // Format date helper
@@ -44,6 +45,7 @@ export interface Epic {
     createdAt: Date;
     updatedAt: Date;
     workspaceId: string;
+    labels?: Array<{ id: string; name: string; color: string; }>;
     milestoneId?: string | null;
     milestone?: {
         id: string;
@@ -114,6 +116,7 @@ export function EpicDetailContent({
     const [savingDueDate, setSavingDueDate] = useState(false);
     const [savingAssignee, setSavingAssignee] = useState(false);
     const [savingReporter, setSavingReporter] = useState(false);
+    const [savingLabels, setSavingLabels] = useState(false);
     const [startDate, setStartDate] = useState<Date | undefined>(epic?.startDate || undefined);
     const [dueDate, setDueDate] = useState<Date | undefined>(epic?.dueDate || undefined);
     const { toast } = useToast();
@@ -204,6 +207,11 @@ export function EpicDetailContent({
 
             // Invalidate TanStack Query cache for board items if status, assignee, or reporter changed
             if ((field === 'status' || field === 'assigneeId' || field === 'reporterId') && effectiveBoardId) {
+                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
+            }
+
+            // Also invalidate board items when labels are updated
+            if (field === 'labels' && effectiveBoardId) {
                 queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
             }
 
@@ -325,6 +333,16 @@ export function EpicDetailContent({
             await saveEpicField('reporterId', reporterId === "none" ? null : reporterId);
         } finally {
             setSavingReporter(false);
+        }
+    };
+
+    // Handle labels change
+    const handleLabelsChange = async (labelIds: string[]) => {
+        setSavingLabels(true);
+        try {
+            await saveEpicField('labels', labelIds);
+        } finally {
+            setSavingLabels(false);
         }
     };
 
@@ -699,6 +717,23 @@ export function EpicDetailContent({
                                         disabled={savingReporter}
                                     />
                                     {savingReporter && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-sm font-medium mb-1">Labels</p>
+                                <div className="relative">
+                                    <LabelSelector
+                                        value={epic.labels?.map(label => label.id) || []}
+                                        onChange={handleLabelsChange}
+                                        workspaceId={epic.workspaceId}
+                                        disabled={savingLabels}
+                                    />
+                                    {savingLabels && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         </div>

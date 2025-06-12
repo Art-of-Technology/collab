@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import React from "react";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import { ReporterSelect } from "./selectors/ReporterSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
@@ -244,6 +245,7 @@ export function TaskDetailContent({
   const [savingPriority, setSavingPriority] = useState(false);
   const [savingType, setSavingType] = useState(false);
   const [savingDueDate, setSavingDueDate] = useState(false);
+  const [savingLabels, setSavingLabels] = useState(false);
   const [dueDate, setDueDate] = useState<Date | undefined>(task?.dueDate);
   const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
   const { toast } = useToast();
@@ -702,6 +704,27 @@ export function TaskDetailContent({
       });
     } finally {
       setSavingDueDate(false);
+    }
+  };
+
+  // Handle labels change
+  const handleLabelsChange = async (labelIds: string[]) => {
+    setSavingLabels(true);
+    try {
+      await updateTaskMutation.mutateAsync({ labels: labelIds });
+      toast({
+        title: 'Updated',
+        description: 'Task labels updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating labels:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update labels',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingLabels(false);
     }
   };
 
@@ -1246,6 +1269,23 @@ export function TaskDetailContent({
                     </PopoverContent>
                   </Popover>
                   {savingDueDate && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-1">Labels</p>
+                <div className="relative">
+                  <LabelSelector
+                    value={task.labels.map(label => label.id)}
+                    onChange={handleLabelsChange}
+                    workspaceId={task.workspaceId}
+                    disabled={savingLabels}
+                  />
+                  {savingLabels && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                       <Loader2 className="h-4 w-4 animate-spin" />
                     </div>

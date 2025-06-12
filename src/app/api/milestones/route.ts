@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       color,
       columnId,
       issueKey,
+      labels,
     } = body;
 
     // Required fields
@@ -105,6 +106,12 @@ export async function POST(request: NextRequest) {
         columnId,
         color: color || "#6366F1",
         issueKey: finalIssueKey,
+        // Connect labels if provided
+        labels: labels && labels.length > 0
+          ? {
+              connect: labels.map((labelId: string) => ({ id: labelId })),
+            }
+          : undefined,
       },
       include: {
         taskBoard: {
@@ -149,6 +156,13 @@ export async function POST(request: NextRequest) {
             avatarHair: true,
             avatarEyewear: true,
             avatarAccessory: true,
+          },
+        },
+        labels: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
           },
         },
         _count: {
@@ -218,6 +232,13 @@ export async function GET(request: NextRequest) {
           },
         },
         column: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        labels: {
           select: {
             id: true,
             name: true,

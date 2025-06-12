@@ -56,6 +56,7 @@ import axios from "axios";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { StatusSelect } from "./selectors/StatusSelect";
 import { ReporterSelect } from "./selectors/ReporterSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 
 // Wrap in memo to prevent unnecessary re-renders which cause focus loss
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -657,6 +658,26 @@ export default function CreateTaskForm({
                         boardId={selectedBoardId}
                         epicId={selectedEpicId}
                         disabled={createTaskMutation.isPending || !selectedBoardId}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="labels"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Labels</FormLabel>
+                    <FormControl>
+                      <LabelSelector
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={createTaskMutation.isPending}
+                        placeholder="Select or create labels..."
                       />
                     </FormControl>
                     <FormMessage />

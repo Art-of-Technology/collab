@@ -509,6 +509,7 @@ export async function updateTask(taskId: string, data: {
   status?: string;
   type?: string;
   dueDate?: Date | null;
+  labels?: string[];
 }) {
   const session = await getServerSession(authOptions);
 
@@ -516,7 +517,7 @@ export async function updateTask(taskId: string, data: {
     throw new Error('Unauthorized');
   }
 
-  const { title, description, assigneeId, reporterId, priority, status, type, dueDate } = data;
+  const { title, description, assigneeId, reporterId, priority, status, type, dueDate, labels } = data;
 
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -623,7 +624,10 @@ export async function updateTask(taskId: string, data: {
       status,
       type: type !== undefined ? type : undefined,
       columnId: columnId,
-      dueDate: dueDate === null ? null : (dueDate || undefined)
+      dueDate: dueDate === null ? null : (dueDate || undefined),
+      labels: labels !== undefined ? {
+        set: labels.map(labelId => ({ id: labelId }))
+      } : undefined
     },
     include: {
       assignee: {

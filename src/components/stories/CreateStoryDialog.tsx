@@ -43,6 +43,7 @@ import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 
 // Form schema
 const formSchema = z.object({
@@ -59,6 +60,7 @@ const formSchema = z.object({
   workspaceId: z.string().min(1, "Workspace ID is required"),
   columnId: z.string().optional().nullable(),
   color: z.string().optional(),
+  labels: z.array(z.string()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -104,6 +106,7 @@ export function CreateStoryDialog({
       taskBoardId: boardId || "",
       columnId: null,
       color: "#3B82F6",
+      labels: [],
     },
   });
 
@@ -385,6 +388,26 @@ export function CreateStoryDialog({
                         onChange={field.onChange}
                         workspaceId={workspaceId}
                         disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="labels"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Labels</FormLabel>
+                    <FormControl>
+                      <LabelSelector
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                        placeholder="Select or create labels..."
                       />
                     </FormControl>
                     <FormMessage />

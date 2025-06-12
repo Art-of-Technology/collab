@@ -11,6 +11,7 @@ const milestonePatchSchema = z.object({
   status: z.string().optional(),
   taskBoardId: z.string().optional(),
   columnId: z.string().optional(),
+  labels: z.array(z.string()).optional(),
   startDate: z.preprocess((arg) => {
     if (typeof arg == "string" || arg instanceof Date) return new Date(arg);
   }, z.date().nullable().optional()),
@@ -47,6 +48,7 @@ export async function GET(
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' }
         },
+        labels: { select: { id: true, name: true, color: true } },
         assignee: {
           select: {
             id: true,
@@ -217,10 +219,18 @@ export async function PATCH(
       }
     }
 
+    // Prepare labels update if provided
+    const { labels, ...otherData } = dataToUpdate;
+    
     // Update the milestone with the columnId if found
     const finalDataToUpdate = {
-      ...dataToUpdate,
-      ...(columnId && { columnId })
+      ...otherData,
+      ...(columnId && { columnId }),
+      ...(labels !== undefined && {
+        labels: {
+          set: labels.map((labelId: string) => ({ id: labelId }))
+        }
+      })
     };
 
     const updatedMilestone = await prisma.milestone.update({
@@ -232,6 +242,7 @@ export async function PATCH(
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' }
         },
+        labels: { select: { id: true, name: true, color: true } },
         assignee: {
           select: {
             id: true,

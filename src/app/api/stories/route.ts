@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       columnId,
       assigneeId,
       reporterId,
+      labels,
     } = body;
 
     // Required fields
@@ -171,6 +172,12 @@ export async function POST(request: NextRequest) {
         color: color || "#3B82F6", // Use the provided color or default blue
         assigneeId,
         reporterId,
+        // Connect labels if provided
+        labels: labels && labels.length > 0
+          ? {
+              connect: labels.map((labelId: string) => ({ id: labelId })),
+            }
+          : undefined,
       } as any, // Type assertion to bypass TypeScript error
       include: {
         epic: {
@@ -224,6 +231,13 @@ export async function POST(request: NextRequest) {
             avatarMouth: true,
             avatarNose: true,
             avatarSkinTone: true,
+          },
+        },
+        labels: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
           },
         },
       },
@@ -342,6 +356,13 @@ export async function GET(request: NextRequest) {
             avatarMouth: true,
             avatarNose: true,
             avatarSkinTone: true,
+          },
+        },
+        labels: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
           },
         },
         _count: {

@@ -7,6 +7,7 @@ import { Plus, Loader2 } from "lucide-react";
 import { useTasks } from "@/context/TasksContext";
 import KanbanFilters, { ItemType, GroupingOption } from "./KanbanFilters";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   useCreateColumn,
   useUpdateColumn,
@@ -45,6 +46,7 @@ export default function KanbanView() {
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const { toast } = useToast();
   const { selectedBoard, selectedBoardId, refreshBoards } = useTasks();
+  const { currentWorkspace } = useWorkspace();
   const [localBoardState, setLocalBoardState] = useState<any>(null);
   const isDraggingRef = useRef(false);
   const pendingUpdateRef = useRef(false);
@@ -53,6 +55,7 @@ export default function KanbanView() {
   // Filter and grouping state
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [groupBy, setGroupBy] = useState<GroupingOption>("none");
 
   // Fetch board items - including tasks, milestones, epics, and stories
@@ -92,7 +95,7 @@ export default function KanbanView() {
     }
   }, [selectedBoard, boardData]);
 
-  // Filter tasks based on search term and selected types
+  // Filter tasks based on search term, selected types, and selected labels
   const getFilteredTasks = (tasks: any[] = []) => {
     if (!tasks?.length) return [];
 
@@ -106,7 +109,11 @@ export default function KanbanView() {
       const matchesType = selectedTypes.length === 0 ||
         (task.type && selectedTypes.includes(task.type));
 
-      return matchesSearch && matchesType;
+      // Filter by selected labels
+      const matchesLabels = selectedLabels.length === 0 ||
+        (task.labels && task.labels.some((label: any) => selectedLabels.includes(label.id)));
+
+      return matchesSearch && matchesType && matchesLabels;
     });
   };
 
@@ -398,9 +405,12 @@ export default function KanbanView() {
         <KanbanFilters
           onSearchChange={setSearchTerm}
           onTypeFilter={setSelectedTypes}
+          onLabelFilter={setSelectedLabels}
           onGroupingChange={setGroupBy}
           selectedGrouping={groupBy}
           selectedTypes={selectedTypes}
+          selectedLabels={selectedLabels}
+          workspaceId={currentWorkspace?.id || ""}
           showSortOptions={false}
         />
       </div>
