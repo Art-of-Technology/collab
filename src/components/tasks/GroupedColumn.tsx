@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen, Edit2, Check, X, Trash2 } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen, Edit2, Check, X, Trash2, Tag } from "lucide-react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import EnhancedTaskCard from "./EnhancedTaskCard";
 import { GroupingOption } from "./KanbanFilters";
@@ -206,6 +206,40 @@ export default function GroupedColumn({
           groupId = task.epic.id;
           groupName = task.epic.title;
           icon = <Star className="h-4 w-4 mr-2 text-purple-500" />;
+        }
+      }
+      else if (groupBy === 'labels') {
+        if (!task.labels || task.labels.length === 0) {
+          groupId = 'no-labels';
+          groupName = 'No Labels';
+          icon = <Tag className="h-4 w-4 mr-2 text-muted-foreground" />;
+        } else {
+          // For items with multiple labels, we need to add them to multiple groups
+          // We'll handle this differently - for now, use the first label or create separate entries
+          task.labels.forEach((label: any) => {
+            const labelGroupId = `label-${label.id}`;
+            const labelGroupName = label.name;
+            const labelIcon = (
+              <div 
+                className="h-3 w-3 rounded-full mr-2 flex-shrink-0" 
+                style={{ backgroundColor: label.color }}
+              />
+            );
+
+            if (!groups[labelGroupId]) {
+              groups[labelGroupId] = {
+                id: labelGroupId,
+                name: labelGroupName,
+                icon: labelIcon,
+                items: []
+              };
+            }
+
+            groups[labelGroupId].items.push(task);
+          });
+          
+          // Skip the normal group assignment since we handled it above
+          return;
         }
       }
       else {

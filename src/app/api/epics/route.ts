@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       color,
       columnId,
+      labels,
     } = body;
 
     // Required fields
@@ -108,6 +109,12 @@ export async function POST(request: NextRequest) {
         columnId,
         issueKey,
         color: color || "#6366F1",
+        // Connect labels if provided
+        labels: labels && labels.length > 0
+          ? {
+              connect: labels.map((labelId: string) => ({ id: labelId })),
+            }
+          : undefined,
       },
       include: {
         milestone: {
@@ -159,6 +166,13 @@ export async function POST(request: NextRequest) {
             avatarHair: true,
             avatarEyewear: true,
             avatarAccessory: true,
+          },
+        },
+        labels: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
           },
         },
       },
@@ -234,6 +248,13 @@ export async function GET(request: NextRequest) {
           },
         },
         column: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        labels: {
           select: {
             id: true,
             name: true,

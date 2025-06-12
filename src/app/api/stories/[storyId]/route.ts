@@ -17,6 +17,7 @@ const storyPatchSchema = z.object({
   reporterId: z.string().nullable().optional(),
   taskBoardId: z.string().optional(),
   columnId: z.string().optional(),
+  labels: z.array(z.string()).optional(),
   startDate: z.preprocess((arg) => {
     if (typeof arg == "string" || arg instanceof Date) return new Date(arg);
   }, z.date().nullable().optional()),
@@ -29,7 +30,7 @@ const storyPatchSchema = z.object({
 // GET /api/stories/{storyId} - Fetch a single story by ID
 export async function GET(
   request: NextRequest,
-  { params }: Promise<{ params: { storyId: string } }>
+  { params }: { params: Promise<{ storyId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -56,6 +57,7 @@ export async function GET(
           select: { id: true, title: true, status: true, priority: true },
           orderBy: { createdAt: 'asc' } // Or desired order
         },
+        labels: { select: { id: true, name: true, color: true } },
         assignee: {
           select: {
             id: true,
@@ -125,7 +127,7 @@ export async function GET(
 // PATCH /api/stories/{storyId} - Update a story
 export async function PATCH(
   request: NextRequest,
-  { params }: Promise<{ params: { storyId: string } }>
+  { params }: { params: Promise<{ storyId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -229,10 +231,18 @@ export async function PATCH(
       }
     }
 
+    // Prepare labels update if provided
+    const { labels, ...otherData } = dataToUpdate;
+    
     // Update the story with the columnId if found
     const finalDataToUpdate = {
-      ...dataToUpdate,
-      ...(columnId && { columnId })
+      ...otherData,
+      ...(columnId && { columnId }),
+      ...(labels !== undefined && {
+        labels: {
+          set: labels.map((labelId: string) => ({ id: labelId }))
+        }
+      })
     };
 
     // Update the story
@@ -243,6 +253,7 @@ export async function PATCH(
         epic: { select: { id: true, title: true } },
         taskBoard: { select: { id: true, name: true } },
         tasks: { select: { id: true, title: true, status: true, priority: true }, orderBy: { createdAt: 'asc' } },
+        labels: { select: { id: true, name: true, color: true } },
         assignee: {
           select: {
             id: true,
@@ -292,7 +303,7 @@ export async function PATCH(
 // DELETE /api/stories/{storyId} - Delete a story (Optional)
 export async function DELETE(
   request: NextRequest,
-  { params }: Promise<{ params: { storyId: string } }>
+  { params }: { params: Promise<{ storyId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

@@ -89,6 +89,13 @@ export async function getBoardItems(boardId: string) {
           role: true
         }
       },
+      labels: {
+        select: {
+          id: true,
+          name: true,
+          color: true
+        }
+      },
       _count: {
         select: {
           comments: true,
@@ -144,6 +151,13 @@ export async function getBoardItems(boardId: string) {
           avatarMouth: true,
           avatarNose: true,
           avatarSkinTone: true,
+        }
+      },
+      labels: {
+        select: {
+          id: true,
+          name: true,
+          color: true
         }
       },
       _count: {
@@ -208,6 +222,13 @@ export async function getBoardItems(boardId: string) {
           avatarSkinTone: true,
         }
       },
+      labels: {
+        select: {
+          id: true,
+          name: true,
+          color: true
+        }
+      },
       _count: {
         select: {
           stories: true
@@ -270,6 +291,13 @@ export async function getBoardItems(boardId: string) {
           avatarSkinTone: true,
         }
       },
+      labels: {
+        select: {
+          id: true,
+          name: true,
+          color: true
+        }
+      },
       _count: {
         select: {
           tasks: true
@@ -296,6 +324,7 @@ export async function getBoardItems(boardId: string) {
     issueKey: milestone.issueKey,
     assignee: milestone.assignee,
     reporter: milestone.reporter,
+    labels: milestone.labels,
     _count: {
       epics: milestone._count.epics,
     },
@@ -318,6 +347,7 @@ export async function getBoardItems(boardId: string) {
     milestoneId: epic.milestoneId,
     assignee: epic.assignee,
     reporter: epic.reporter,
+    labels: epic.labels,
     _count: {
       stories: epic._count.stories,
     },
@@ -340,6 +370,7 @@ export async function getBoardItems(boardId: string) {
     storyPoints: story.storyPoints,
     assignee: story.assignee,
     reporter: story.reporter,
+    labels: story.labels,
     _count: {
       tasks: story._count.tasks,
     },

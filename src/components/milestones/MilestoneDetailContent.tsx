@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
 import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
 // Format date helper
@@ -33,6 +34,7 @@ export interface Milestone {
     createdAt: Date;
     updatedAt: Date;
     workspaceId: string;
+    labels?: Array<{ id: string; name: string; color: string; }>;
     epics?: Array<{ id: string; title: string; }>;
     taskBoard?: {
         id: string;
@@ -97,6 +99,7 @@ export function MilestoneDetailContent({
     const [savingDueDate, setSavingDueDate] = useState(false);
     const [savingAssignee, setSavingAssignee] = useState(false);
     const [savingReporter, setSavingReporter] = useState(false);
+    const [savingLabels, setSavingLabels] = useState(false);
     const [startDate, setStartDate] = useState<Date | undefined>(milestone?.startDate || undefined);
     const [dueDate, setDueDate] = useState<Date | undefined>(milestone?.dueDate || undefined);
     const { toast } = useToast();
@@ -186,6 +189,11 @@ export function MilestoneDetailContent({
 
             // Invalidate TanStack Query cache for board items if status, assignee, or reporter changed
             if ((field === 'status' || field === 'assigneeId' || field === 'reporterId') && effectiveBoardId) {
+                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
+            }
+
+            // Also invalidate board items when labels are updated
+            if (field === 'labels' && effectiveBoardId) {
                 queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
             }
 
@@ -297,6 +305,16 @@ export function MilestoneDetailContent({
             await saveMilestoneField('reporterId', reporterId === "none" ? null : reporterId);
         } finally {
             setSavingReporter(false);
+        }
+    };
+
+    // Handle labels change
+    const handleLabelsChange = async (labelIds: string[]) => {
+        setSavingLabels(true);
+        try {
+            await saveMilestoneField('labels', labelIds);
+        } finally {
+            setSavingLabels(false);
         }
     };
 
@@ -627,6 +645,23 @@ export function MilestoneDetailContent({
                                         disabled={savingReporter}
                                     />
                                     {savingReporter && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-sm font-medium mb-1">Labels</p>
+                                <div className="relative">
+                                    <LabelSelector
+                                        value={milestone.labels?.map(label => label.id) || []}
+                                        onChange={handleLabelsChange}
+                                        workspaceId={milestone.workspaceId}
+                                        disabled={savingLabels}
+                                    />
+                                    {savingLabels && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         </div>

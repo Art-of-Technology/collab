@@ -498,14 +498,17 @@ model TaskAttachment {
 }
 
 model TaskLabel {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
-  color       String    @default("#6366F1")
+  color       String      @default("#6366F1")
   workspaceId String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  tasks       Task[]    @relation("TaskToLabel")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks       Task[]      @relation("TaskToLabel")
+  milestones  Milestone[] @relation("MilestoneToLabel")
+  epics       Epic[]      @relation("EpicToLabel")
+  stories     Story[]     @relation("StoryToLabel")
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
@@ -549,6 +552,7 @@ model Milestone {
   taskBoard     TaskBoard      @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   notifications Notification[]
+  labels        TaskLabel[]    @relation("MilestoneToLabel")
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -587,6 +591,7 @@ model Epic {
   notifications Notification[]
   stories       Story[]
   tasks         Task[]
+  labels        TaskLabel[]    @relation("EpicToLabel")
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -624,6 +629,7 @@ model Story {
   taskBoard     TaskBoard?     @relation(fields: [taskBoardId], references: [id])
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks         Task[]
+  labels        TaskLabel[]    @relation("StoryToLabel")
 
   @@index([workspaceId])
   @@index([taskBoardId])

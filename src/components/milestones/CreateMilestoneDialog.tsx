@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { extractMentionUserIds } from "@/utils/mentions";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -59,6 +60,7 @@ const formSchema = z.object({
   workspaceId: z.string().min(1, "Workspace ID is required"),
   taskBoardId: z.string().min(1, "Task board is required"),
   columnId: z.string().optional().nullable(),
+  labels: z.array(z.string()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -124,6 +126,7 @@ export function CreateMilestoneDialog({
       workspaceId: workspaceId,
       taskBoardId: boardId || (boards.length > 0 ? boards[0].id : ""),
       columnId: null,
+      labels: [],
     },
   });
   
@@ -385,6 +388,26 @@ export function CreateMilestoneDialog({
                         onChange={field.onChange}
                         workspaceId={workspaceId}
                         disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="labels"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Labels</FormLabel>
+                    <FormControl>
+                      <LabelSelector
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                        placeholder="Select or create labels..."
                       />
                     </FormControl>
                     <FormMessage />

@@ -20,34 +20,41 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen, Filter } from "lucide-react";
+import { CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen, Filter, Tag } from "lucide-react";
+import { LabelSelector } from "@/components/ui/label-selector";
 
 export type ItemType = 'TASK' | 'BUG' | 'FEATURE' | 'IMPROVEMENT' | 'MILESTONE' | 'EPIC' | 'STORY' | null;
-export type GroupingOption = 'none' | 'type' | 'assignee' | 'milestone' | 'epic';
+export type GroupingOption = 'none' | 'type' | 'assignee' | 'milestone' | 'epic' | 'labels';
 export type SortOption = 'title' | 'id' | 'status' | 'priority';
 
 interface KanbanFiltersProps {
   onSearchChange: (search: string) => void;
   onTypeFilter: (types: ItemType[]) => void;
+  onLabelFilter: (labels: string[]) => void;
   onGroupingChange: (groupBy: GroupingOption) => void;
   onSortChange?: (field: SortOption, direction: 'asc' | 'desc') => void;
   selectedGrouping: GroupingOption;
   selectedTypes: ItemType[];
+  selectedLabels: string[];
   selectedSort?: SortOption;
   sortDirection?: 'asc' | 'desc';
   showSortOptions?: boolean;
+  workspaceId: string;
 }
 
 export default function KanbanFilters({
   onSearchChange,
   onTypeFilter,
+  onLabelFilter,
   onGroupingChange,
   onSortChange,
   selectedGrouping,
   selectedTypes,
+  selectedLabels,
   selectedSort = 'title',
   sortDirection = 'asc',
   showSortOptions = false,
+  workspaceId,
 }: KanbanFiltersProps) {
   const [search, setSearch] = useState("");
   
@@ -71,6 +78,11 @@ export default function KanbanFilters({
     onTypeFilter([]);
   };
 
+  // Clear all label filters
+  const clearLabelFilters = () => {
+    onLabelFilter([]);
+  };
+
   // Handle direction change
   const handleDirectionChange = (direction: 'asc' | 'desc') => {
     if (onSortChange && selectedSort) {
@@ -78,13 +90,18 @@ export default function KanbanFilters({
     }
   };
 
-  // Get badge count
-  const getFilterCount = () => {
+  // Get type filter count
+  const getTypeFilterCount = () => {
     let count = 0;
     if (selectedTypes.length > 0) count++;
     if (search) count++;
     if (selectedGrouping !== 'none') count++;
     return count;
+  };
+
+  // Get label filter count
+  const getLabelFilterCount = () => {
+    return selectedLabels.length;
   };
 
   return (
@@ -99,14 +116,15 @@ export default function KanbanFilters({
         />
       </div>
 
+      {/* Type Filter Dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1">
             <Filter className="h-4 w-4" />
-            <span>Filter</span>
-            {getFilterCount() > 0 && (
+            <span>Type</span>
+            {getTypeFilterCount() > 0 && (
               <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
-                {getFilterCount()}
+                {getTypeFilterCount()}
               </Badge>
             )}
           </Button>
@@ -164,6 +182,7 @@ export default function KanbanFilters({
             <BookOpen className="h-4 w-4 mr-2 text-blue-500" />
             Stories
           </DropdownMenuCheckboxItem>
+
           {selectedTypes.length > 0 && (
             <>
               <DropdownMenuSeparator />
@@ -175,7 +194,57 @@ export default function KanbanFilters({
                   className="w-full flex items-center justify-center gap-1.5 h-8 text-xs font-medium bg-muted/50 hover:bg-muted border-dashed hover:text-primary"
                 >
                   <X className="h-3.5 w-3.5" />
-                  <span>Clear all filters</span>
+                  <span>Clear types</span>
+                </Button>
+              </div>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Label Filter Dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1">
+            <Tag className="h-4 w-4" />
+            <span>Labels</span>
+            {getLabelFilterCount() > 0 && (
+              <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                {getLabelFilterCount()}
+              </Badge>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel>
+            <div className="flex items-center gap-2">
+              <Tag className="h-4 w-4" />
+              Filter by Labels
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <div className="p-2">
+            <LabelSelector
+              value={selectedLabels}
+              onChange={onLabelFilter}
+              workspaceId={workspaceId}
+              disabled={false}
+              placeholder="Select labels to filter..."
+            />
+          </div>
+
+          {selectedLabels.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <div className="p-2">
+                <Button 
+                  onClick={clearLabelFilters}
+                  variant="outline" 
+                  size="sm"
+                  className="w-full flex items-center justify-center gap-1.5 h-8 text-xs font-medium bg-muted/50 hover:bg-muted border-dashed hover:text-primary"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Clear labels</span>
                 </Button>
               </div>
             </>
@@ -196,6 +265,7 @@ export default function KanbanFilters({
           <SelectItem value="assignee">Group by Assignee</SelectItem>
           <SelectItem value="milestone">Group by Milestone</SelectItem>
           <SelectItem value="epic">Group by Epic</SelectItem>
+          <SelectItem value="labels">Group by Labels</SelectItem>
         </SelectContent>
       </Select>
 

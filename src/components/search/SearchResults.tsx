@@ -73,7 +73,7 @@ export default function SearchResults({
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', value);
     // Update the URL with the new tab
-    router.push(`/search?${params.toString()}`);
+    router.push(`/${currentWorkspace?.id}/search?${params.toString()}`);
   };
   
   if (isLoading && !initialData) {

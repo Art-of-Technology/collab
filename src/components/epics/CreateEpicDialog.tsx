@@ -51,6 +51,7 @@ import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
 import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
+import { LabelSelector } from "@/components/ui/label-selector";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -70,6 +71,7 @@ const formSchema = z.object({
   workspaceId: z.string().min(1, "Workspace ID is required"),
   taskBoardId: z.string().min(1, "Task board is required"),
   columnId: z.string().optional().nullable(),
+  labels: z.array(z.string()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -111,6 +113,7 @@ export function CreateEpicDialog({
       workspaceId: workspaceId,
       taskBoardId: boardId || "", // Preselect board if provided
       columnId: null,
+      labels: [],
     },
   });
 
@@ -404,6 +407,26 @@ export function CreateEpicDialog({
                         <SelectItem value="critical">Critical</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="labels"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Labels</FormLabel>
+                    <FormControl>
+                      <LabelSelector
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        workspaceId={workspaceId}
+                        disabled={isSubmitting}
+                        placeholder="Select or create labels..."
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

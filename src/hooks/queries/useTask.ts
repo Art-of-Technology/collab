@@ -110,6 +110,7 @@ export const useUpdateTask = (taskId: string) => {
       status?: string;
       type?: string;
       dueDate?: Date | null;
+      labels?: string[];
     }) => updateTask(taskId, data),
     onSuccess: (data) => {
       // Invalidate specific task
