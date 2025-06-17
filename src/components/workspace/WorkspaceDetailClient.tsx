@@ -294,8 +294,10 @@ export default function WorkspaceDetailClient({
                             </p>
                           </div>
                         </div>
-                        <Button disabled variant="outline" size="sm" asChild>
-                          <span>Coming Soon</span>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/workspaces/${workspaceId}/settings/permissions`}>
+                            Manage
+                          </Link>
                         </Button>
                       </div>
                     )}
