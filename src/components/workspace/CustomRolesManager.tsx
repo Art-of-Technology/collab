@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Shield, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Shield, Loader2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -53,7 +53,7 @@ const PERMISSION_CATEGORIES = {
     'Posts': [
         'CREATE_POST', 'EDIT_SELF_POST', 'EDIT_ANY_POST', 'DELETE_SELF_POST', 'DELETE_ANY_POST',
         'COMMENT_ON_POST', 'EDIT_SELF_COMMENT', 'EDIT_ANY_COMMENT', 'DELETE_SELF_COMMENT', 'DELETE_ANY_COMMENT',
-        'REACT_TO_POST', 'REACT_TO_COMMENT', 'MENTION_USERS', 'VIEW_POSTS', 'BOOKMARK_POST'
+        'REACT_TO_POST', 'REACT_TO_COMMENT', 'MENTION_USERS', 'VIEW_POSTS', 'BOOKMARK_POST', 'PIN_POST', 'RESOLVE_BLOCKER'
     ],
     'Tasks': [
         'CREATE_TASK', 'EDIT_SELF_TASK', 'EDIT_ANY_TASK', 'DELETE_SELF_TASK', 'DELETE_ANY_TASK',
@@ -186,10 +186,18 @@ export default function CustomRolesManager({ workspaceId }: CustomRolesManagerPr
     };
 
     const selectAllInCategory = (permissions: string[]) => {
+        // Only select implemented permissions
+        const implementedPermissions = [
+            'PIN_POST',
+            'RESOLVE_BLOCKER',
+            'MANAGE_WORKSPACE_PERMISSIONS'
+        ];
+        const implementedInCategory = permissions.filter(p => implementedPermissions.includes(p));
+        
         setFormData(prev => ({
             ...prev,
             permissions: [
-                ...new Set([...prev.permissions, ...permissions])
+                ...new Set([...prev.permissions, ...implementedInCategory])
             ]
         }));
     };
@@ -366,21 +374,40 @@ export default function CustomRolesManager({ workspaceId }: CustomRolesManagerPr
                                                     </div>
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    {permissions.map((permission) => (
-                                                        <div key={permission} className="flex items-center space-x-2">
-                                                            <Checkbox
-                                                                id={permission}
-                                                                checked={formData.permissions.includes(permission)}
-                                                                onCheckedChange={() => togglePermission(permission)}
-                                                            />
-                                                            <Label
-                                                                htmlFor={permission}
-                                                                className="text-sm font-normal cursor-pointer"
-                                                            >
-                                                                {getPermissionDisplayName(permission as Permission)}
-                                                            </Label>
-                                                        </div>
-                                                    ))}
+                                                    {permissions.map((permission) => {
+                                                        // List of permissions that are fully implemented and can be toggled
+                                                        const implementedPermissions = [
+                                                            'PIN_POST',
+                                                            'RESOLVE_BLOCKER',
+                                                            'MANAGE_WORKSPACE_PERMISSIONS'
+                                                        ];
+                                                        const isPermissionImplemented = implementedPermissions.includes(permission);
+                                                        
+                                                        return (
+                                                            <div key={permission} className={`flex items-center space-x-2 ${!isPermissionImplemented ? 'opacity-50' : ''}`}>
+                                                                <Checkbox
+                                                                    id={permission}
+                                                                    checked={formData.permissions.includes(permission)}
+                                                                    disabled={!isPermissionImplemented}
+                                                                    onCheckedChange={() => togglePermission(permission)}
+                                                                />
+                                                                <div className="flex flex-col flex-1">
+                                                                    <Label
+                                                                        htmlFor={permission}
+                                                                        className="text-sm font-normal cursor-pointer"
+                                                                    >
+                                                                        {getPermissionDisplayName(permission as Permission)}
+                                                                    </Label>
+                                                                    {!isPermissionImplemented && (
+                                                                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                                                            <Clock className="h-3 w-3" />
+                                                                            Coming soon
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         ))}

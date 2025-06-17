@@ -60,7 +60,7 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-8">
+    <div className="container mx-auto p-0">
       <div className="mb-6">
         <Link href={`/workspaces/${workspaceId}`}>
           <Button variant="ghost" className="pl-0">
@@ -157,7 +157,7 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
 
 function PermissionsPageSkeleton() {
   return (
-    <div className="container mx-auto py-6 space-y-8">
+    <div className="container mx-auto p-0">
       <div className="border-b pb-4">
         <Skeleton className="h-8 w-64 mb-2" />
         <Skeleton className="h-4 w-96" />

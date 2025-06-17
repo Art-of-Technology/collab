@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle } from 'lucide-react';
+import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle, Clock } from 'lucide-react';
 import { WorkspaceRole, Permission, getRoleDisplayName, getPermissionDisplayName } from '@/lib/permissions';
 
 interface PermissionItem {
@@ -51,6 +51,8 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       Permission.REACT_TO_COMMENT,
       Permission.MENTION_USERS,
       Permission.BOOKMARK_POST,
+      Permission.PIN_POST,
+      Permission.RESOLVE_BLOCKER,
     ]
   },
   {
@@ -399,8 +401,18 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                     {group.permissions.map((permission) => {
                       const isEnabled = getPermissionStatus(selectedRole, permission);
                       const isUpdatingThis = isPermissionUpdating(selectedRole, permission);
+                      
+                      // List of permissions that are fully implemented and can be toggled
+                      const implementedPermissions = [
+                        Permission.PIN_POST,
+                        Permission.RESOLVE_BLOCKER,
+                        Permission.MANAGE_WORKSPACE_PERMISSIONS
+                      ];
+                      const isPermissionImplemented = implementedPermissions.includes(permission);
+                      
                       const isDisabled =
                         isUpdatingThis ||
+                        (!isPermissionImplemented) ||
                         (permission === Permission.MANAGE_WORKSPACE_PERMISSIONS &&
                           selectedRole === currentUserRole &&
                           isEnabled);
@@ -411,7 +423,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                           className={`flex items-center justify-between p-4 rounded-lg border transition-all duration-200 ${isEnabled
                               ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800'
                               : 'bg-card hover:bg-accent/30'
-                            }`}
+                            } ${!isPermissionImplemented ? 'opacity-50' : ''}`}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
@@ -421,6 +433,11 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                               {isEnabled && (
                                 <div className="h-2 w-2 rounded-full bg-green-500"></div>
                               )}
+                              {!isPermissionImplemented && (
+                                <div className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs rounded-md">
+                                  Coming Soon
+                                </div>
+                              )}
                             </div>
                             {permission === Permission.MANAGE_WORKSPACE_PERMISSIONS &&
                               selectedRole === currentUserRole && (
@@ -429,6 +446,12 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                                   Cannot disable own access
                                 </div>
                               )}
+                            {!isPermissionImplemented && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                <Clock className="h-3 w-3" />
+                                This permission is not yet integrated
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-3">
                             {isUpdatingThis && (

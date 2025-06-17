@@ -10,7 +10,7 @@ export default function FilterTabs() {
   const currentFilter = searchParams.get("filter") || "all";
 
   const filters = [
-    { key: "all", label: "All Updates" },
+    { key: "all", label: "All" },
     { key: "updates", label: "Updates" },
     { key: "blockers", label: "Blockers" },
     { key: "ideas", label: "Ideas" },

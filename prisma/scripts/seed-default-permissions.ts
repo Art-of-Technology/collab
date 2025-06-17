@@ -84,6 +84,8 @@ const rolePermissions: Record<string, Permission[]> = {
     Permission.COMMENT_ON_TASK,
     Permission.MANAGE_NOTIFICATIONS,
     Permission.VIEW_REPORTS,
+    Permission.PIN_POST,
+    Permission.RESOLVE_BLOCKER,
   ],
   ADMIN: [
     Permission.CREATE_POST,
@@ -162,6 +164,8 @@ const rolePermissions: Record<string, Permission[]> = {
     Permission.COMMENT_ON_TASK,
     Permission.MANAGE_NOTIFICATIONS,
     Permission.VIEW_REPORTS,
+    Permission.PIN_POST,
+    Permission.RESOLVE_BLOCKER,
   ],
   MODERATOR: [
     Permission.CREATE_POST,
@@ -217,6 +221,7 @@ const rolePermissions: Record<string, Permission[]> = {
     Permission.DELETE_SELF_MESSAGE,
     Permission.COMMENT_ON_TASK,
     Permission.VIEW_REPORTS,
+    Permission.RESOLVE_BLOCKER,
   ],
   DEVELOPER: [
     Permission.CREATE_POST,
@@ -317,6 +322,8 @@ const rolePermissions: Record<string, Permission[]> = {
     Permission.DELETE_SELF_MESSAGE,
     Permission.COMMENT_ON_TASK,
     Permission.VIEW_REPORTS,
+    Permission.PIN_POST,
+    Permission.RESOLVE_BLOCKER,
   ],
   DESIGNER: [
     Permission.CREATE_POST,
@@ -477,6 +484,7 @@ const rolePermissions: Record<string, Permission[]> = {
     Permission.DELETE_SELF_MESSAGE,
     Permission.MANAGE_NOTIFICATIONS,
     Permission.VIEW_REPORTS,
+    Permission.PIN_POST,
   ],
   MARKETING: [
     Permission.CREATE_POST,
