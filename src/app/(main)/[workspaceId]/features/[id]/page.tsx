@@ -46,10 +46,10 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     redirect("/sign-in");
   }
 
-  const { id } = await params;
+  const { id, workspaceId } = await params;
 
   try {
-    const featureRequest = await getFeatureRequestById(id);
+    const featureRequest = await getFeatureRequestById(id, workspaceId);
 
     if (!featureRequest) {
       notFound();

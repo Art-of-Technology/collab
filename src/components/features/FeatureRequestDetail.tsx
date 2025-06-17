@@ -52,6 +52,8 @@ import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useVoteOnFeature, useUpdateFeatureStatus } from "@/hooks/queries/useFeature";
 import { useQueryClient } from "@tanstack/react-query";
 import { featureKeys } from "@/hooks/queries/useFeature";
+import { useCanEditFeatureRequests } from "@/hooks/use-permissions";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 type Author = {
   id: string;
@@ -94,6 +96,9 @@ export default function FeatureRequestDetail({
   const queryClient = useQueryClient();
   const voteOnFeature = useVoteOnFeature();
   const updateStatus = useUpdateFeatureStatus();
+  const { currentWorkspace } = useWorkspace();
+  const { hasPermission: canEditFeatureRequests } = useCanEditFeatureRequests(currentWorkspace?.id);
+  
   const [isVoting, setIsVoting] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(featureRequest.status);
   const [voteScore, setVoteScore] = useState(featureRequest.voteScore);
@@ -114,6 +119,8 @@ export default function FeatureRequestDetail({
   const [isImproving, setIsImproving] = useState(false);
   
   const isAuthor = currentUserId === featureRequest.author.id;
+  // Use permission system instead of hardcoded admin check
+  const canManageFeatures = canEditFeatureRequests || isAdmin;
 
   const handleVote = (value: 1 | -1) => {
     if (!currentUserId) {
@@ -387,7 +394,7 @@ export default function FeatureRequestDetail({
           </div>
         </div>
         
-        {(isAdmin || isAuthor) && (
+        {(canManageFeatures || isAuthor) && (
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -396,7 +403,7 @@ export default function FeatureRequestDetail({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                {isAdmin && (
+                {canManageFeatures && (
                   <>
                     <DropdownMenuItem 
                       onClick={() => handleStatusChange("pending")}
@@ -526,7 +533,8 @@ export default function FeatureRequestDetail({
               <h3 className="text-lg font-medium">Description</h3>
               {featureRequest.html ? (
                 <MarkdownContent 
-                  content={featureRequest.html} 
+                  content={featureRequest.description}
+                  htmlContent={featureRequest.html} 
                   className="mt-2"
                 />
               ) : (

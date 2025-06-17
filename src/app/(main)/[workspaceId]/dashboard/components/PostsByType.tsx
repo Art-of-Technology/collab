@@ -12,6 +12,8 @@ import { CollabText } from "@/components/ui/collab-text";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useResolvePost } from "@/hooks/queries/useResolvePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
+import { usePermissions } from "@/hooks/use-permissions";
+import { Permission } from "@/lib/permissions";
 
 interface PostsByTypeProps {
   type: 'BLOCKER' | 'IDEA' | 'QUESTION';
@@ -23,29 +25,31 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
   const { currentWorkspace } = useWorkspace();
   const { data: currentUser } = useCurrentUser();
   const resolvePostMutation = useResolvePost();
-  
+  const { checkPermission, isSystemAdmin } = usePermissions(workspaceId);
+
   // Use TanStack Query for data fetching with initial data from server
   const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, workspaceId);
-  
+
   // Check if user can resolve blocker posts
   const canResolveBlocker = (post: any) => {
     if (post.type !== 'BLOCKER') return false;
-    
+
     const isAuthor = post.authorId === currentUser?.id;
     const isWorkspaceOwner = currentUser?.id === currentWorkspace?.ownerId;
-    const isAdmin = currentUser?.role === 'admin';
-    
-    return isAuthor || isWorkspaceOwner || isAdmin;
+    const canResolvePost = checkPermission(Permission.RESOLVE_BLOCKER).hasPermission;
+    const isAdminUser = isSystemAdmin();
+
+    return isAuthor || isWorkspaceOwner || canResolvePost || isAdminUser;
   };
-  
+
   const handleResolve = (postId: string) => {
     resolvePostMutation.mutate(postId);
   };
-  
+
   // Type-specific UI elements
   const getTypeDetails = () => {
     const baseUrl = currentWorkspace ? `/${currentWorkspace.id}` : '';
-    
+
     switch (type) {
       case 'BLOCKER':
         return {
@@ -64,9 +68,9 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           linkHref: `${baseUrl}/timeline?filter=ideas`,
           cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
           badge: <Badge variant="secondary" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-secondary/80">
-                  <Lightbulb className="h-3 w-3" />
-                  IDEA
-                </Badge>
+            <Lightbulb className="h-3 w-3" />
+            IDEA
+          </Badge>
         };
       case 'QUESTION':
         return {
@@ -76,9 +80,9 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           linkHref: `${baseUrl}/timeline?filter=questions`,
           cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
           badge: <Badge variant="outline" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-muted">
-                  <HelpCircle className="h-3 w-3" />
-                  QUESTION
-                </Badge>
+            <HelpCircle className="h-3 w-3" />
+            QUESTION
+          </Badge>
         };
       default:
         return {
@@ -91,9 +95,9 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
         };
     }
   };
-  
+
   const { icon, title, description, linkHref, cardClass, badge } = getTypeDetails();
-  
+
   const renderBlockerPost = (post: any) => (
     <div key={post.id} className="relative w-full rounded-lg border p-3 border-destructive/30 text-destructive bg-destructive/5 mb-3 hover:bg-destructive/10 transition-colors">
       <div className="flex justify-between items-start">
@@ -154,7 +158,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       </div>
     </div>
   );
-  
+
   const renderStandardPost = (post: any) => (
     <div key={post.id} className="flex items-start gap-3 py-3 border-b border-border/30 last:border-0 group hover:bg-muted/50 rounded-lg p-2 transition-colors">
       <Avatar className="h-8 w-8 border border-border/40">
@@ -208,7 +212,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       </div>
     </div>
   );
-  
+
   if (isLoading && !initialPosts?.length) {
     return (
       <Card className={cardClass}>
@@ -232,7 +236,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       </Card>
     );
   }
-  
+
   return (
     <Card className={cardClass}>
       <CardHeader className="pb-2">
@@ -250,7 +254,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       <CardContent>
         <div className="space-y-3">
           {posts.length > 0 ? (
-            type === 'BLOCKER' 
+            type === 'BLOCKER'
               ? posts.map(renderBlockerPost)
               : posts.map(renderStandardPost)
           ) : (

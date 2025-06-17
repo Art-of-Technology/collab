@@ -16,7 +16,6 @@ model User {
   hashedPassword         String?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
-  role                   String                  @default("developer")
   team                   String?
   currentFocus           String?
   expertise              String[]
@@ -30,6 +29,7 @@ model User {
   avatarNose             Int?                    @default(1)
   avatarSkinTone         Int?                    @default(1)
   useCustomAvatar        Boolean                 @default(false)
+  role                   UserRole                @default(DEVELOPER)
   accounts               Account[]
   bookmarks              Bookmark[]
   comments               Comment[]
@@ -49,8 +49,8 @@ model User {
   sentNotifications      Notification[]          @relation("NotificationSender")
   notifications          Notification[]          @relation("NotificationReceiver")
   posts                  Post[]
-  postActions            PostAction[]            @relation("PostActions")
   resolvedPosts          Post[]                  @relation("PostResolvedBy")
+  postActions            PostAction[]            @relation("PostActions")
   reactions              Reaction[]
   assignedStories        Story[]                 @relation("AssignedStories")
   reportedStories        Story[]                 @relation("ReportedStories")
@@ -90,17 +90,17 @@ model Account {
 
 model Post {
   id            String         @id @default(cuid())
-  type          PostType
   message       String
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   authorId      String
   isAutomated   Boolean        @default(false)
-  priority      PostPriority   @default(normal)
   html          String?
   workspaceId   String?
-  resolvedAt    DateTime?      // Track when the post was resolved
-  resolvedById  String?        // Track who resolved the post
+  type          PostType
+  priority      PostPriority   @default(normal)
+  resolvedAt    DateTime?
+  resolvedById  String?
   bookmarks     Bookmark[]
   comments      Comment[]
   mentions      Mention[]
@@ -108,10 +108,10 @@ model Post {
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   resolvedBy    User?          @relation("PostResolvedBy", fields: [resolvedById], references: [id])
   workspace     Workspace?     @relation(fields: [workspaceId], references: [id])
+  actions       PostAction[]
   reactions     Reaction[]
   tasks         Task[]
   tags          Tag[]          @relation("PostToTag")
-  actions       PostAction[]   // Track all actions on this post
 
   @@index([workspaceId])
   @@index([resolvedAt])
@@ -119,18 +119,17 @@ model Post {
 }
 
 model PostAction {
-  id          String           @id @default(cuid())
-  postId      String
-  userId      String
-  action      PostActionType
-  oldValue    String?          // Store old value for changes (JSON)
-  newValue    String?          // Store new value for changes (JSON)
-  metadata    Json?            // Additional metadata
-  createdAt   DateTime         @default(now())
-  
-  post        Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user        User             @relation("PostActions", fields: [userId], references: [id], onDelete: Cascade)
-  
+  id        String         @id @default(cuid())
+  postId    String
+  userId    String
+  action    PostActionType
+  oldValue  String?
+  newValue  String?
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  post      Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User           @relation("PostActions", fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([postId])
   @@index([userId])
   @@index([action])
@@ -307,12 +306,14 @@ model Workspace {
   ownerId             String
   dockEnabled         Boolean               @default(true)
   timeTrackingEnabled Boolean               @default(true)
+  customRoles         CustomRole[]
   epics               Epic[]
   featureRequests     FeatureRequest[]
   milestones          Milestone[]
   notes               Note[]
   noteTags            NoteTag[]
   posts               Post[]
+  rolePermissions     RolePermission[]
   stories             Story[]
   tags                Tag[]
   tasks               Task[]
@@ -324,14 +325,14 @@ model Workspace {
 }
 
 model WorkspaceMember {
-  id          String    @id @default(cuid())
+  id          String        @id @default(cuid())
   userId      String
   workspaceId String
-  role        String    @default("member")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  role        String        @default("MEMBER")
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, workspaceId])
 }
@@ -357,10 +358,10 @@ model TaskBoard {
   description     String?
   workspaceId     String
   isDefault       Boolean      @default(false)
-  issuePrefix     String?
-  nextIssueNumber Int          @default(1)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  issuePrefix     String?
+  nextIssueNumber Int          @default(1)
   epics           Epic[]
   milestones      Milestone[]
   stories         Story[]
@@ -375,12 +376,12 @@ model TaskBoard {
 model TaskColumn {
   id          String      @id @default(cuid())
   name        String
-  description String?
   order       Int         @default(0)
   color       String?
   taskBoardId String
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  description String?
   epics       Epic[]
   milestones  Milestone[]
   stories     Story[]
@@ -398,7 +399,6 @@ model Task {
   status        String?
   priority      String           @default("medium")
   type          String           @default("task")
-  issueKey      String?
   storyPoints   Int?
   dueDate       DateTime?
   columnId      String?
@@ -407,13 +407,14 @@ model Task {
   assigneeId    String?
   reporterId    String?
   parentTaskId  String?
-  storyId       String?
-  epicId        String?
-  milestoneId   String?
   postId        String?
-  position      Int?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  issueKey      String?
+  position      Int?
+  epicId        String?
+  milestoneId   String?
+  storyId       String?
   notifications Notification[]
   assignee      User?            @relation("AssignedTasks", fields: [assigneeId], references: [id])
   column        TaskColumn?      @relation(fields: [columnId], references: [id])
@@ -449,12 +450,12 @@ model Task {
 model TaskComment {
   id            String                @id @default(cuid())
   content       String
-  html          String?
   taskId        String
   authorId      String
-  parentId      String?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
+  html          String?
+  parentId      String?
   notifications Notification[]
   author        User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
   parent        TaskComment?          @relation("TaskCommentToTaskComment", fields: [parentId], references: [id], onDelete: Cascade)
@@ -505,10 +506,10 @@ model TaskLabel {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  tasks       Task[]      @relation("TaskToLabel")
-  milestones  Milestone[] @relation("MilestoneToLabel")
   epics       Epic[]      @relation("EpicToLabel")
+  milestones  Milestone[] @relation("MilestoneToLabel")
   stories     Story[]     @relation("StoryToLabel")
+  tasks       Task[]      @relation("TaskToLabel")
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
@@ -537,12 +538,12 @@ model Milestone {
   dueDate       DateTime?
   taskBoardId   String
   workspaceId   String
-  columnId      String?
   color         String?        @default("#6366F1")
-  issueKey      String?
-  position      Int?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  columnId      String?
+  position      Int?
+  issueKey      String?
   assigneeId    String?
   reporterId    String?
   epics         Epic[]
@@ -573,13 +574,13 @@ model Epic {
   milestoneId   String?
   taskBoardId   String
   workspaceId   String
-  columnId      String?
   color         String?        @default("#6366F1")
   progress      Int            @default(0)
   issueKey      String?
-  position      Int?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  columnId      String?
+  position      Int?
   assigneeId    String?
   reporterId    String?
   assignee      User?          @relation("AssignedEpics", fields: [assigneeId], references: [id])
@@ -613,12 +614,12 @@ model Story {
   epicId        String?
   taskBoardId   String?
   workspaceId   String
-  columnId      String?
   issueKey      String?
-  color         String?        @default("#3B82F6")
-  position      Int?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  color         String?        @default("#3B82F6")
+  columnId      String?
+  position      Int?
   assigneeId    String?
   reporterId    String?
   notifications Notification[]
@@ -650,12 +651,12 @@ model Notification {
   senderId         String
   postId           String?
   commentId        String?
-  taskCommentId    String?
   featureRequestId String?
   taskId           String?
   epicId           String?
   storyId          String?
   milestoneId      String?
+  taskCommentId    String?
   comment          Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
   epic             Epic?           @relation(fields: [epicId], references: [id], onDelete: Cascade)
   featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
@@ -775,6 +776,32 @@ model TaskAssignee {
   @@index([status])
 }
 
+model CustomRole {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  color       String?   @default("#6366F1")
+  workspaceId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+}
+
+model RolePermission {
+  id          String     @id @default(cuid())
+  workspaceId String
+  role        String
+  permission  Permission
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, role, permission])
+}
+
 enum EventType {
   TASK_START
   TASK_PAUSE
@@ -841,4 +868,124 @@ enum PostActionType {
   RESOLVED
   REOPENED
   DELETED
+}
+
+enum UserRole {
+  SYSTEM_ADMIN
+  DEVELOPER
+  PROJECT_MANAGER
+  HR
+  LEGAL
+  FINANCE
+  MARKETING
+  SALES
+  CUSTOMER_SUPPORT
+  QA_TESTER
+  DESIGNER
+  CONTENT_CREATOR
+  ANALYST
+  CONSULTANT
+  INTERN
+  GUEST
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  DEVELOPER
+  PROJECT_MANAGER
+  DESIGNER
+  QA_TESTER
+  CONTENT_CREATOR
+  ANALYST
+  HR
+  MARKETING
+  SALES
+  CUSTOMER_SUPPORT
+  MEMBER
+  VIEWER
+  GUEST
+}
+
+enum Permission {
+  CREATE_POST
+  EDIT_SELF_POST
+  EDIT_ANY_POST
+  DELETE_SELF_POST
+  DELETE_ANY_POST
+  COMMENT_ON_POST
+  EDIT_SELF_COMMENT
+  EDIT_ANY_COMMENT
+  DELETE_SELF_COMMENT
+  DELETE_ANY_COMMENT
+  REACT_TO_POST
+  REACT_TO_COMMENT
+  MENTION_USERS
+  VIEW_POSTS
+  BOOKMARK_POST
+  CREATE_TASK
+  EDIT_SELF_TASK
+  EDIT_ANY_TASK
+  DELETE_SELF_TASK
+  DELETE_ANY_TASK
+  ASSIGN_TASK
+  CHANGE_TASK_STATUS
+  COMMENT_ON_TASK
+  VIEW_TASKS
+  CREATE_BOARD
+  EDIT_BOARD
+  DELETE_BOARD
+  MANAGE_BOARD_SETTINGS
+  VIEW_BOARDS
+  CREATE_MILESTONE
+  EDIT_SELF_MILESTONE
+  EDIT_ANY_MILESTONE
+  DELETE_SELF_MILESTONE
+  DELETE_ANY_MILESTONE
+  VIEW_MILESTONES
+  CREATE_EPIC
+  EDIT_SELF_EPIC
+  EDIT_ANY_EPIC
+  DELETE_SELF_EPIC
+  DELETE_ANY_EPIC
+  VIEW_EPICS
+  CREATE_STORY
+  EDIT_SELF_STORY
+  EDIT_ANY_STORY
+  DELETE_SELF_STORY
+  DELETE_ANY_STORY
+  VIEW_STORIES
+  CREATE_FEATURE_REQUEST
+  EDIT_SELF_FEATURE_REQUEST
+  EDIT_ANY_FEATURE_REQUEST
+  DELETE_SELF_FEATURE_REQUEST
+  DELETE_ANY_FEATURE_REQUEST
+  VOTE_ON_FEATURE
+  COMMENT_ON_FEATURE
+  VIEW_FEATURES
+  SEND_MESSAGE
+  VIEW_MESSAGES
+  DELETE_SELF_MESSAGE
+  DELETE_ANY_MESSAGE
+  CREATE_NOTE
+  EDIT_SELF_NOTE
+  EDIT_ANY_NOTE
+  DELETE_SELF_NOTE
+  DELETE_ANY_NOTE
+  VIEW_NOTES
+  MANAGE_WORKSPACE_SETTINGS
+  MANAGE_WORKSPACE_MEMBERS
+  MANAGE_WORKSPACE_PERMISSIONS
+  VIEW_WORKSPACE_ANALYTICS
+  INVITE_MEMBERS
+  REMOVE_MEMBERS
+  CHANGE_MEMBER_ROLES
+  VIEW_MEMBER_LIST
+  MANAGE_INTEGRATIONS
+  EXPORT_DATA
+  IMPORT_DATA
+  VIEW_AUDIT_LOGS
+  MANAGE_NOTIFICATIONS
+  VIEW_REPORTS
 }

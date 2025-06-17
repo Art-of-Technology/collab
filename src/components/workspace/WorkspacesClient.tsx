@@ -154,7 +154,7 @@ export default function WorkspacesClient({
                   <CardFooter className="flex justify-between">
                     <DashboardButton workspaceId={workspace.id} />
 
-                    {(workspace.ownerId === userId || session?.user?.role === 'admin') ? (
+                    {(workspace.ownerId === userId || session?.user?.role === 'SYSTEM_ADMIN') ? (
                       <Link href={`/workspaces/${workspace.id}`}>
                         <Button variant="secondary">
                           <Settings className="mr-2 h-4 w-4" />

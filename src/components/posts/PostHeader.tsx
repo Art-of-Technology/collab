@@ -17,6 +17,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useResolvePost } from "@/hooks/queries/useResolvePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useState } from "react";
+import { usePermissions } from "@/hooks/use-permissions";
 import PostHistoryModal from "./PostHistoryModal";
 
 interface PostHeaderProps {
@@ -61,12 +62,14 @@ export default function PostHeader({
   const { data: currentUser } = useCurrentUser();
   const resolvePostMutation = useResolvePost();
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const { checkPermission, isSystemAdmin } = usePermissions(currentWorkspace?.id);
   
   // Check if user can resolve blocker posts
   const canResolve = postType === 'BLOCKER' && (
     isAuthor || 
     currentUser?.id === workspaceOwnerId || 
-    currentUser?.role === 'admin'
+    checkPermission('RESOLVE_POST').hasPermission ||
+    isSystemAdmin()
   );
   
   const handleResolve = () => {

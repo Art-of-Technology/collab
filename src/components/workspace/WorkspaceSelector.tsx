@@ -7,6 +7,7 @@ import { PlusCircle, ChevronDown, Building2, Settings, UserPlus } from 'lucide-r
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { Button } from '@/components/ui/button';
 import { useSession } from 'next-auth/react';
+import { useCanManageWorkspace } from '@/hooks/use-permissions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,9 +32,9 @@ const WorkspaceSelector = () => {
   const { data: session } = useSession();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const isAdmin = session?.user?.role === 'admin';
   const isWorkspaceOwner = (currentWorkspace as WorkspaceWithOwner)?.ownerId === session?.user?.id;
-  const canManageWorkspace = isAdmin || isWorkspaceOwner;
+  const { hasPermission: canManageWorkspace } = useCanManageWorkspace(currentWorkspace?.id);
+  const finalCanManage = canManageWorkspace || isWorkspaceOwner;
 
   if (isLoading || !currentWorkspace) {
     return (
@@ -108,7 +109,7 @@ const WorkspaceSelector = () => {
           </DropdownMenuItem>
         </Link>
 
-        {canManageWorkspace ? (
+        {finalCanManage ? (
           <Link href={`/workspaces/${currentWorkspace.id}`}>
             <DropdownMenuItem onClick={() => setDropdownOpen(false)} className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
