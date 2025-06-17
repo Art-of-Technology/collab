@@ -4,7 +4,7 @@ export interface PostAction {
   id: string;
   postId: string;
   userId: string;
-  action: 'CREATED' | 'EDITED' | 'TYPE_CHANGED' | 'PRIORITY_CHANGED' | 'RESOLVED' | 'REOPENED' | 'DELETED';
+  actionType: 'CREATED' | 'EDITED' | 'TYPE_CHANGED' | 'PRIORITY_CHANGED' | 'RESOLVED' | 'REOPENED' | 'DELETED' | 'PINNED' | 'UNPINNED';
   oldValue: string | null;
   newValue: string | null;
   metadata: any;

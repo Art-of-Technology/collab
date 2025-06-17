@@ -21,7 +21,7 @@ interface PostHistoryProps {
   postId: string;
 }
 
-const getActionIcon = (action: PostAction['action']) => {
+const getActionIcon = (action: PostAction['actionType']) => {
   switch (action) {
     case 'CREATED':
       return <PlusCircle className="h-4 w-4 text-green-500" />;
@@ -45,7 +45,7 @@ const getActionIcon = (action: PostAction['action']) => {
 const getActionText = (action: PostAction) => {
   const userName = action.user_name || 'Unknown User';
   
-  switch (action.action) {
+  switch (action.actionType) {
     case 'CREATED':
       return `${userName} created this post`;
     case 'EDITED':
@@ -69,8 +69,8 @@ const getActionText = (action: PostAction) => {
   }
 };
 
-const getActionBadgeVariant = (action: PostAction['action']) => {
-  switch (action) {
+const getActionBadgeVariant = (actionType: PostAction['actionType']) => {
+  switch (actionType) {
     case 'CREATED':
       return 'default';
     case 'EDITED':
@@ -168,12 +168,12 @@ export default function PostHistory({ postId }: PostHistoryProps) {
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    {getActionIcon(action.action)}
+                    {getActionIcon(action.actionType)}
                     <span className="text-sm font-medium">
                       {getActionText(action)}
                     </span>
-                    <Badge variant={getActionBadgeVariant(action.action)} className="text-xs">
-                      {action.action.replace('_', ' ')}
+                    <Badge variant={getActionBadgeVariant(action.actionType)} className="text-xs">
+                      {action.actionType.replace('_', ' ')}
                     </Badge>
                   </div>
                   
@@ -182,7 +182,7 @@ export default function PostHistory({ postId }: PostHistoryProps) {
                   </div>
                   
                   {/* Show change details for edits */}
-                  {action.action === 'EDITED' && action.oldValue && action.newValue && (
+                  {action.actionType === 'EDITED' && action.oldValue && action.newValue && (
                     <div className="mt-2 p-2 bg-muted rounded-md text-xs">
                       <div className="font-medium mb-1">Changes:</div>
                       <div className="text-muted-foreground">

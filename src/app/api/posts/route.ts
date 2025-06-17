@@ -161,9 +161,10 @@ export async function GET(req: Request) {
         ...query,
         ...tagFilter,
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [
+        { isPinned: "desc" }, // Pinned posts first
+        { createdAt: "desc" }, // Then by creation date
+      ],
       include: {
         author: {
           select: {

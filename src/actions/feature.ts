@@ -141,7 +141,7 @@ export async function getFeatureRequests({
 }
 
 // Get a single feature request by ID
-export async function getFeatureRequestById(id: string) {
+export async function getFeatureRequestById(id: string, workspaceId?: string) {
   try {
     const session = await getAuthSession();
     if (!session?.user) {
@@ -216,11 +216,24 @@ export async function getFeatureRequestById(id: string) {
       updatedAt: comment.updatedAt.toISOString(),
     }));
 
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true },
-    });
+    // Check user permissions
+    let isAdmin = false;
+    if (workspaceId) {
+      const { checkUserPermission } = await import('@/lib/permissions');
+      const hasPermission = await checkUserPermission(
+        session.user.id,
+        workspaceId,
+        'EDIT_FEATURE_REQUEST' as any
+      );
+      isAdmin = hasPermission.hasPermission;
+    } else {
+      // Fallback to system admin check if no workspace context
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { role: true },
+      });
+      isAdmin = user?.role === 'SYSTEM_ADMIN';
+    }
 
     // Format the feature request data
     const formattedFeatureRequest = {
@@ -231,7 +244,7 @@ export async function getFeatureRequestById(id: string) {
       upvotes: featureRequest._count.votes,
       downvotes: downvotesCount,
       userVote,
-      isAdmin: user?.role === "admin",
+      isAdmin,
       comments: formattedComments
     };
 
@@ -411,14 +424,14 @@ export async function updateFeatureStatus({
       throw new Error("Unauthorized");
     }
 
-    // Check if user is admin
+    // Check if user is admin or has permission
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     });
 
-    if (user?.role !== "admin") {
-      throw new Error("Unauthorized: Only admins can update feature status");
+    if (user?.role !== 'SYSTEM_ADMIN') {
+      throw new Error("Unauthorized: Only system admins can update feature status");
     }
 
     await prisma.featureRequest.update({

@@ -25,9 +25,10 @@ export async function getRecentPostsByType(params: {
       type: type as any,
       workspaceId
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [
+      { isPinned: "desc" }, // Pinned posts first
+      { createdAt: "desc" }, // Then by creation date
+    ],
     include: {
       author: true,
       tags: true,
@@ -62,9 +63,10 @@ export async function getUserPosts(params: {
       authorId: userId,
       workspaceId
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [
+      { isPinned: "desc" }, // Pinned posts first
+      { createdAt: "desc" }, // Then by creation date
+    ],
     include: {
       tags: true,
       _count: {
@@ -140,9 +142,10 @@ export async function getUnansweredPosts(params: {
       },
       workspaceId
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [
+      { isPinned: "desc" }, // Pinned posts first
+      { createdAt: "desc" }, // Then by creation date
+    ],
     include: {
       author: true,
       tags: true,

@@ -17,15 +17,23 @@ export async function GET(
 
     const workspaceId = _params.workspaceId;
 
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        userId: user.id,
-        workspaceId,
-      },
-    });
+    // Check if user has access to the workspace (member or owner)
+    const [isMember, isOwner] = await Promise.all([
+      prisma.workspaceMember.findFirst({
+        where: {
+          userId: user.id,
+          workspaceId,
+        },
+      }),
+      prisma.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          ownerId: user.id,
+        },
+      })
+    ]);
 
-    if (!hasAccess) {
+    if (!isMember && !isOwner) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 

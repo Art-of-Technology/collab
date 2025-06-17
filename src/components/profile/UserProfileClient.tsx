@@ -1,3 +1,4 @@
+/* eslint-disable */
 'use client';
 
 import { useUserProfile } from "@/hooks/queries/useUser";

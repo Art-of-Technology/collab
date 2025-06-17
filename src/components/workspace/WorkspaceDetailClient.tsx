@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Building2, User, Users, Mail, Bell, UserPlus, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Building2, User, Users, Mail, Bell, UserPlus, Trash2, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import WorkspaceDetailsEditor from '@/app/(main)/workspaces/[workspaceId]/Worksp
 import CancelInvitationButton from '@/components/workspace/CancelInvitationButton';
 import { WorkspaceFeatureSettings } from './WorkspaceFeatureSettings';
 import { useDetailedWorkspaceById } from '@/hooks/queries/useWorkspace';
+import { useCanManageWorkspacePermissions } from '@/hooks/use-permissions';
 
 interface WorkspaceDetailClientProps {
   workspaceId: string;
@@ -22,23 +23,26 @@ interface WorkspaceDetailClientProps {
   userId?: string;
 }
 
-export default function WorkspaceDetailClient({ 
-  workspaceId, 
+export default function WorkspaceDetailClient({
+  workspaceId,
   initialWorkspace,
 }: WorkspaceDetailClientProps) {
   const [activeTab, setActiveTab] = useState('members');
-  
+
   // Fetch workspace data with TanStack Query
-  const { 
-    data: workspace, 
+  const {
+    data: workspace,
     isLoading,
     isError,
     error
   } = useDetailedWorkspaceById(workspaceId);
-  
+
+  // Check if user can manage workspace permissions
+  const canManagePermissions = useCanManageWorkspacePermissions(workspaceId);
+
   // Use the fetched data or fallback to initial data
   const workspaceData = workspace || initialWorkspace;
-  
+
   if (isLoading && !initialWorkspace) {
     return (
       <div className="container max-w-7xl py-8">
@@ -48,7 +52,7 @@ export default function WorkspaceDetailClient({
       </div>
     );
   }
-  
+
   if (isError) {
     return (
       <div className="container max-w-7xl py-8">
@@ -64,13 +68,13 @@ export default function WorkspaceDetailClient({
       </div>
     );
   }
-  
+
   // Use the permissions returned from the server action
   const { isOwner, canManage } = workspaceData;
-  
+
   // Calculate total members count (members + owner)
   const totalMembers = workspaceData.members.length + 1;
-  
+
   return (
     <div className="container max-w-7xl py-8">
       <div className="mb-6">
@@ -81,14 +85,14 @@ export default function WorkspaceDetailClient({
           </Button>
         </Link>
       </div>
-      
+
       <div className="flex flex-col md:flex-row justify-between gap-6 mb-8">
         <div className="flex items-center gap-4">
           {workspaceData.logoUrl ? (
-            <Image 
-              src={workspaceData.logoUrl} 
-              alt={workspaceData.name} 
-              className="h-16 w-16 rounded-md" 
+            <Image
+              src={workspaceData.logoUrl}
+              alt={workspaceData.name}
+              className="h-16 w-16 rounded-md"
               width={64}
               height={64}
             />
@@ -97,7 +101,7 @@ export default function WorkspaceDetailClient({
               <Building2 className="h-8 w-8 text-primary" />
             </div>
           )}
-          
+
           <div>
             <h1 className="text-3xl font-bold">{workspaceData.name}</h1>
             <div className="flex items-center gap-2 mt-1">
@@ -112,7 +116,7 @@ export default function WorkspaceDetailClient({
             <p className="text-muted-foreground mt-1">{workspaceData.description}</p>
           </div>
         </div>
-        
+
         <div className="flex items-start gap-3">
           <Button variant="outline" className="flex gap-2">
             <Users className="h-4 w-4" />
@@ -120,14 +124,14 @@ export default function WorkspaceDetailClient({
           </Button>
         </div>
       </div>
-      
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="invitations">Invitations</TabsTrigger>
           {canManage && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
-        
+
         <TabsContent value="members">
           <Card>
             <CardHeader>
@@ -142,9 +146,9 @@ export default function WorkspaceDetailClient({
                 <div className="p-4 border border-border/40 rounded-md flex justify-between items-center hover:bg-muted/50 transition-colors">
                   <div className="flex items-center gap-3">
                     {workspaceData.owner.useCustomAvatar ? (
-                      <CustomAvatar 
-                        user={workspaceData.owner} 
-                        size="lg" 
+                      <CustomAvatar
+                        user={workspaceData.owner}
+                        size="lg"
                         className="h-12 w-12 border border-primary/20 shadow-sm"
                       />
                     ) : (
@@ -168,15 +172,15 @@ export default function WorkspaceDetailClient({
                   </div>
                   <Badge className="bg-primary hover:bg-primary/90">Owner</Badge>
                 </div>
-                
+
                 {/* Members */}
                 {workspaceData.members.map((member: any) => (
                   <div key={member.id} className="p-4 border border-border/40 rounded-md flex justify-between items-center hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
                       {member.user.useCustomAvatar ? (
-                        <CustomAvatar 
-                          user={member.user} 
-                          size="lg" 
+                        <CustomAvatar
+                          user={member.user}
+                          size="lg"
                           className="h-12 w-12 border border-border/40 shadow-sm"
                         />
                       ) : (
@@ -205,7 +209,7 @@ export default function WorkspaceDetailClient({
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="invitations">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
@@ -232,8 +236,8 @@ export default function WorkspaceDetailClient({
                         </div>
                         {canManage && (
                           <div className="mt-3">
-                            <CancelInvitationButton 
-                              invitationId={invitation.id} 
+                            <CancelInvitationButton
+                              invitationId={invitation.id}
                               workspaceId={workspaceId}
                             />
                           </div>
@@ -248,7 +252,7 @@ export default function WorkspaceDetailClient({
                 )}
               </CardContent>
             </Card>
-            
+
             {canManage && (
               <Card>
                 <CardHeader>
@@ -264,11 +268,74 @@ export default function WorkspaceDetailClient({
             )}
           </div>
         </TabsContent>
-        
+
         {canManage && (
           <TabsContent value="settings">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <WorkspaceFeatureSettings />
+              <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
+                <CardHeader>
+                  <CardTitle>Workspace Preferences</CardTitle>
+                  <CardDescription>
+                    Configure workspace settings and visibility
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {canManagePermissions && (
+                      <div className="flex items-center justify-between border border-border/40 p-3 rounded-md hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-green-500/10 rounded-full">
+                            <Shield className="h-4 w-4 text-green-500" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium">Permissions & Roles</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Manage role permissions and member access levels
+                            </p>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/workspaces/${workspaceId}/settings/permissions`}>
+                            Manage
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border border-border/40 p-3 rounded-md hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-500/10 rounded-full">
+                          <Users className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Privacy Settings</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Control who can view and access this workspace
+                          </p>
+                        </div>
+                      </div>
+                      <Button disabled variant="outline" size="sm">
+                        Coming Soon
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between border border-border/40 p-3 rounded-md hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-primary/10 rounded-full">
+                          <Bell className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Notification Settings</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Manage workspace notification preferences
+                          </p>
+                        </div>
+                      </div>
+                      <Button disabled variant="outline" size="sm">
+                        Coming Soon
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
               <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
                 <CardHeader>
                   <CardTitle>Workspace Information</CardTitle>
@@ -306,53 +373,8 @@ export default function WorkspaceDetailClient({
                   </div>
                 </CardContent>
               </Card>
-
+              <WorkspaceFeatureSettings />
               <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-                <CardHeader>
-                  <CardTitle>Workspace Preferences</CardTitle>
-                  <CardDescription>
-                    Configure workspace settings and visibility
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border border-border/40 p-3 rounded-md hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-blue-500/10 rounded-full">
-                          <Users className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">Privacy Settings</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Control who can view and access this workspace
-                          </p>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Configure
-                      </Button>
-                    </div>
-                    <div className="flex items-center justify-between border border-border/40 p-3 rounded-md hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-primary/10 rounded-full">
-                          <Bell className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">Notification Settings</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Manage workspace notification preferences
-                          </p>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Configure
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="col-span-1 md:col-span-2 bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
                 <CardHeader>
                   <CardTitle>Danger Zone</CardTitle>
                   <CardDescription>
@@ -377,7 +399,7 @@ export default function WorkspaceDetailClient({
                         Transfer
                       </Button>
                     </div>
-                    
+
                     <div className="flex justify-between items-center p-4 border border-destructive/20 rounded-md bg-destructive/5 hover:bg-destructive/10 transition-colors">
                       <div className="flex items-center gap-2">
                         <div className="p-2 bg-destructive/10 rounded-full">
