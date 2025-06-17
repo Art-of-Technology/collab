@@ -121,6 +121,7 @@ export enum Permission {
   VIEW_AUDIT_LOGS = 'VIEW_AUDIT_LOGS',
   MANAGE_NOTIFICATIONS = 'MANAGE_NOTIFICATIONS',
   VIEW_REPORTS = 'VIEW_REPORTS',
+  PIN_POST = 'PIN_POST',
 }
 
 export interface UserWithRole extends User {
@@ -521,6 +522,7 @@ export function getPermissionDisplayName(permission: Permission): string {
     [Permission.MANAGE_NOTIFICATIONS]: 'Manage Notifications',
     [Permission.VIEW_REPORTS]: 'View Reports',
     [Permission.RESOLVE_BLOCKER]: 'Resolve Blockers',
+    [Permission.PIN_POST]: 'Pin Posts',
   };
   
   return permissionNames[permission] || permission.replace(/_/g, ' ');

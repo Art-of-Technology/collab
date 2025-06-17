@@ -148,6 +148,7 @@ export default function PostItem({
           author={post.author}
           postId={post.id}
           workspaceOwnerId={post.workspace?.ownerId}
+          isPinned={post.isPinned}
         />
       </CardHeader>
       

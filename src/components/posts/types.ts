@@ -38,7 +38,7 @@ export type PostAction = {
   id: string;
   postId: string;
   userId: string;
-  action: string; // Will be enum when Prisma client is regenerated
+  actionType: string; // Will be enum when Prisma client is regenerated
   oldValue: string | null;
   newValue: string | null;
   metadata: any;

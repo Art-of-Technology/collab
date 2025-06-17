@@ -50,6 +50,7 @@ model User {
   notifications          Notification[]          @relation("NotificationReceiver")
   posts                  Post[]
   resolvedPosts          Post[]                  @relation("PostResolvedBy")
+  pinnedPosts            Post[]                  @relation("PostPinnedBy")
   postActions            PostAction[]            @relation("PostActions")
   reactions              Reaction[]
   assignedStories        Story[]                 @relation("AssignedStories")
@@ -101,12 +102,16 @@ model Post {
   priority      PostPriority   @default(normal)
   resolvedAt    DateTime?
   resolvedById  String?
+  isPinned      Boolean        @default(false)
+  pinnedAt      DateTime?
+  pinnedBy      String?
   bookmarks     Bookmark[]
   comments      Comment[]
   mentions      Mention[]
   notifications Notification[]
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   resolvedBy    User?          @relation("PostResolvedBy", fields: [resolvedById], references: [id])
+  pinnedByUser  User?          @relation("PostPinnedBy", fields: [pinnedBy], references: [id])
   workspace     Workspace?     @relation(fields: [workspaceId], references: [id])
   actions       PostAction[]
   reactions     Reaction[]
@@ -116,23 +121,26 @@ model Post {
   @@index([workspaceId])
   @@index([resolvedAt])
   @@index([resolvedById])
+  @@index([isPinned])
+  @@index([workspaceId, isPinned])
+  @@index([pinnedBy])
 }
 
 model PostAction {
-  id        String         @id @default(cuid())
-  postId    String
-  userId    String
-  action    PostActionType
-  oldValue  String?
-  newValue  String?
-  metadata  Json?
-  createdAt DateTime       @default(now())
-  post      Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User           @relation("PostActions", fields: [userId], references: [id], onDelete: Cascade)
+  id         String         @id @default(cuid())
+  postId     String
+  userId     String
+  actionType PostActionType
+  oldValue   String?
+  newValue   String?
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+  post       Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user       User           @relation("PostActions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([userId])
-  @@index([action])
+  @@index([actionType])
   @@index([createdAt])
 }
 
@@ -868,6 +876,8 @@ enum PostActionType {
   RESOLVED
   REOPENED
   DELETED
+  PINNED
+  UNPINNED
 }
 
 enum UserRole {
@@ -988,4 +998,6 @@ enum Permission {
   VIEW_AUDIT_LOGS
   MANAGE_NOTIFICATIONS
   VIEW_REPORTS
+  PIN_POST
+  RESOLVE_BLOCKER
 }

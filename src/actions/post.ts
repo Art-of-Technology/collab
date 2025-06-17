@@ -84,9 +84,10 @@ export async function getPosts({
       ...query,
       ...tagFilter,
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [
+      { isPinned: "desc" }, // Pinned posts first
+      { createdAt: "desc" }, // Then by creation date
+    ],
     include: {
       author: {
         select: {
@@ -317,7 +318,7 @@ export async function createPost(data: {
       data: {
         postId: newPost.id,
         userId: user.id,
-        action: 'CREATED',
+        actionType: 'CREATED',
         newValue: JSON.stringify({ 
           message: newPost.message, 
           type: newPost.type, 
@@ -491,7 +492,7 @@ export async function updatePost(postId: string, data: {
         data: {
           postId: postId,
           userId: user.id,
-          action: change as any, // Cast to handle enum
+          actionType: change as any, // Cast to handle enum
           oldValue: JSON.stringify(oldValues),
           newValue: JSON.stringify(newValues),
           metadata: { 
@@ -589,7 +590,7 @@ export async function deletePost(postId: string) {
       data: {
         postId: postId,
         userId: user.id,
-        action: 'DELETED',
+        actionType: 'DELETED',
         oldValue: JSON.stringify({ 
           message: existingPost.message, 
           type: existingPost.type, 
@@ -644,9 +645,10 @@ export async function getUserPosts(userId: string, workspaceId: string) {
       authorId: userId,
       workspaceId: workspaceId
     },
-    orderBy: {
-      createdAt: "desc"
-    },
+    orderBy: [
+      { isPinned: "desc" }, // Pinned posts first
+      { createdAt: "desc" }, // Then by creation date
+    ],
     include: {
       author: true,
       tags: true,
@@ -713,18 +715,24 @@ export async function resolveBlockerPost(postId: string) {
     throw new Error('Only blocker posts can be resolved');
   }
   
-  // Check permissions: post author, workspace owner, or admin
-  const isAuthor = post.authorId === user.id;
-  const isWorkspaceOwner = post.workspace?.ownerId === user.id;
-  const isAdmin = user.role === 'admin';
-  const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
+  // Check permissions using the permission system
+  const { checkUserPermission, Permission } = await import('@/lib/permissions');
   
-  if (!isAuthor && !isWorkspaceOwner && !isAdmin) {
-    throw new Error('You do not have permission to resolve this blocker');
+  if (!post.workspaceId) {
+    throw new Error('Cannot resolve posts without a workspace');
   }
   
-  if (!isWorkspaceMember && !isWorkspaceOwner && !isAdmin) {
-    throw new Error('You do not have access to this workspace');
+  const hasResolvePermission = await checkUserPermission(
+    user.id,
+    post.workspaceId,
+    Permission.RESOLVE_BLOCKER
+  );
+  
+  // Allow if user has permission or is the post author
+  const canResolve = hasResolvePermission.hasPermission || post.authorId === user.id;
+  
+  if (!canResolve) {
+    throw new Error('You do not have permission to resolve this blocker');
   }
   
   // Update the post to resolved and record the action
@@ -760,7 +768,7 @@ export async function resolveBlockerPost(postId: string) {
       data: {
         postId: postId,
         userId: user.id,
-        action: 'RESOLVED',
+        actionType: 'RESOLVED',
         oldValue: JSON.stringify({ type: 'BLOCKER' }),
         newValue: JSON.stringify({ type: 'RESOLVED', resolvedAt: now }),
         metadata: {
@@ -818,14 +826,21 @@ export async function getPostActions(postId: string) {
     throw new Error('Post not found');
   }
   
-  // Check access permissions
-  const isAuthor = post.authorId === user.id;
-  const isWorkspaceOwner = post.workspace?.ownerId === user.id;
-  const isAdmin = user.role === 'admin';
-  const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
-  
-  if (!isAuthor && !isWorkspaceOwner && !isAdmin && !isWorkspaceMember) {
-    throw new Error('You do not have access to this post');
+  // Check if user has access to the workspace
+  if (!post.workspaceId) {
+    // If no workspace, only author can view
+    if (post.authorId !== user.id) {
+      throw new Error('You do not have access to this post');
+    }
+  } else {
+    // Check if user is a member of the workspace
+    const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
+    const isWorkspaceOwner = post.workspace?.ownerId === user.id;
+    const isAuthor = post.authorId === user.id;
+    
+    if (!isAuthor && !isWorkspaceOwner && !isWorkspaceMember) {
+      throw new Error('You do not have access to this post');
+    }
   }
   
   // Get action history using normal Prisma client
