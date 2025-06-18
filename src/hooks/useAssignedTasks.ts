@@ -9,6 +9,7 @@ export interface TaskOption {
   status: string;
   boardId: string;
   boardName: string;
+  createdAt: Date;
   currentPlayState?: 'stopped' | 'playing' | 'paused';
   assignee?: {
     id: string;

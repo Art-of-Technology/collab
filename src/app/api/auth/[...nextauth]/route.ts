@@ -1,11 +1,11 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import { processUserProfileImage } from "@/utils/user-image-handler";
+import { CustomPrismaAdapter } from "@/lib/custom-prisma-adapter";
 
 export const authOptions: AuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: CustomPrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
@@ -116,7 +116,8 @@ export const authOptions: AuthOptions = {
       
       if (!existingUser) return token;
       
-      token.role = existingUser.role;
+      // Convert UserRole enum to string for NextAuth compatibility
+      token.role = existingUser.role.toString();
       
       return token;
     }

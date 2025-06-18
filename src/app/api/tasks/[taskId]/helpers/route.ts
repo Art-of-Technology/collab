@@ -33,7 +33,7 @@ export async function GET(
     }
 
     // Fetch all task assignees (including helpers)
-    const helpers = await prisma.taskAssignee.findMany({
+    const taskAssignees = await prisma.taskAssignee.findMany({
       where: {
         taskId: taskId
       },
@@ -52,7 +52,44 @@ export async function GET(
       ]
     });
 
-    return NextResponse.json({ helpers });
+    // Calculate actual time worked for each helper from user events
+    const helpersWithActualTime = await Promise.all(
+      taskAssignees.map(async (assignee) => {
+        // Get all time-tracking events for this user on this task
+        const events = await prisma.userEvent.findMany({
+          where: {
+            taskId: taskId,
+            userId: assignee.userId,
+            eventType: { in: ['TASK_START', 'TASK_PAUSE', 'TASK_STOP'] },
+          },
+          orderBy: { startedAt: 'asc' },
+        });
+
+        // Calculate total time from events
+        let totalMs = 0;
+        let currentStart: Date | null = null;
+
+        for (const event of events) {
+          if (event.eventType === 'TASK_START') {
+            currentStart = event.startedAt;
+          } else if (
+            (event.eventType === 'TASK_PAUSE' || event.eventType === 'TASK_STOP') &&
+            currentStart
+          ) {
+            const duration = event.startedAt.getTime() - currentStart.getTime();
+            totalMs += duration;
+            currentStart = null;
+          }
+        }
+
+        return {
+          ...assignee,
+          totalTimeWorked: totalMs, // Use calculated time instead of cached value
+        };
+      })
+    );
+
+    return NextResponse.json({ helpers: helpersWithActualTime });
   } catch (error) {
     console.error("[TASK_HELPERS_GET]", error);
     return new NextResponse("Internal Server Error", { status: 500 });

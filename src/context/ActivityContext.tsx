@@ -4,6 +4,7 @@ import React, { createContext, useContext, ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
+import { invalidateTaskSessions } from '@/hooks/queries/useTaskSessions';
 
 interface UserStatus {
   id: string;
@@ -104,11 +105,16 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { taskId }) => {
       // Invalidate user status and task queries
       queryClient.invalidateQueries({ queryKey: ['userStatus'] });
       queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
       queryClient.invalidateQueries({ queryKey: ['searchTasks'] });
+      
+      // If this was a task-related activity, invalidate session caches
+      if (taskId) {
+        invalidateTaskSessions(queryClient, taskId);
+      }
     },
     onError: (error) => {
       toast({
@@ -135,11 +141,17 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate user status and task queries
       queryClient.invalidateQueries({ queryKey: ['userStatus'] });
       queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
       queryClient.invalidateQueries({ queryKey: ['searchTasks'] });
+      
+      // If the ended activity was task-related, invalidate session caches
+      // The API response should include the taskId if it was a task activity
+      if (data?.taskId) {
+        invalidateTaskSessions(queryClient, data.taskId);
+      }
     },
     onError: (error) => {
       toast({
@@ -177,7 +189,7 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
 
       return response.json();
     },
-    onSuccess: (_, { action }) => {
+    onSuccess: (_, { action, taskId }) => {
       toast({
         title: `Task ${action === 'play' ? 'Started' : action === 'pause' ? 'Paused' : 'Stopped'}`,
         description: `Task timer has been ${action === 'play' ? 'started' : action === 'pause' ? 'paused' : 'stopped'}.`,
@@ -189,6 +201,9 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
       queryClient.invalidateQueries({ queryKey: ['searchTasks'] });
       queryClient.invalidateQueries({ queryKey: ['taskActivities'] });
       queryClient.invalidateQueries({ queryKey: ['taskPlaytime'] });
+      
+      // Invalidate session caches for this specific task
+      invalidateTaskSessions(queryClient, taskId);
     },
     onError: (error) => {
       toast({

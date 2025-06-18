@@ -5,15 +5,13 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { format, formatDistanceToNow } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp, Plus, Play, Pause, StopCircle, History, Clock } from "lucide-react";
+import { formatDistanceToNow, format } from "date-fns";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { TaskCommentsList } from "@/components/tasks/TaskCommentsList";
 import { ShareButton } from "@/components/tasks/ShareButton";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { TaskComment } from "@/components/tasks/TaskComment";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
@@ -31,194 +29,23 @@ import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
 import { useSession } from "next-auth/react";
-import { TaskHelpersSection } from "@/components/tasks/TaskHelpersSection";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { useUpdateTask } from "@/hooks/queries/useTask";
 import { StatusSelect } from "./selectors/StatusSelect";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
+import { TaskTabs } from "@/components/tasks/TaskTabs";
 
-// Format date helper
-const formatDate = (date: Date | string) => {
-  return format(new Date(date), 'MMM d, yyyy');
-};
-
-// Task interfaces
-export interface TaskComment {
-  id: string;
-  content: string;
-  createdAt: Date;
-  author: {
-    id: string;
-    name: string | null;
-    image: string | null;
-    useCustomAvatar?: boolean;
-    avatarSkinTone?: number | null;
-    avatarEyes?: number | null;
-    avatarBrows?: number | null;
-    avatarMouth?: number | null;
-    avatarNose?: number | null;
-    avatarHair?: number | null;
-    avatarEyewear?: number | null;
-    avatarAccessory?: number | null;
-  };
-  html?: string | null;
-  parentId?: string | null;
-  reactions?: {
-    id: string;
-    type: string;
-    authorId: string;
-    author?: {
-      id: string;
-      name?: string | null;
-      image?: string | null;
-      useCustomAvatar?: boolean;
-    };
-  }[];
-  replies?: TaskComment[];
-}
-
-export interface TaskLabel {
-  id: string;
-  name: string;
-  color: string;
-}
-
-export interface TaskAttachment {
-  id: string;
-  name?: string;
-  url: string;
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  description?: string | null;
-  status: string | null;
-  priority: string;
-  type: string;
-  createdAt: Date;
-  comments: TaskComment[];
-  labels: TaskLabel[];
-  assignee?: {
-    id: string;
-    name: string | null;
-    image: string | null;
-    useCustomAvatar?: boolean;
-  } | null;
-  reporter?: {
-    id: string;
-    name: string | null;
-    image: string | null;
-    useCustomAvatar?: boolean;
-  } | null;
-  column?: {
-    id: string;
-    name: string;
-  };
-  taskBoard?: {
-    id: string;
-    name: string;
-  };
-  attachments: TaskAttachment[];
-  dueDate?: Date;
-  storyPoints?: number;
-  issueKey?: string | null;
-  columnId?: string;
-  workspaceId: string;
-  milestoneId?: string;
-  milestone?: {
-    id: string;
-    title: string;
-  };
-  epicId?: string;
-  epic?: {
-    id: string;
-    title: string;
-  };
-  storyId?: string;
-  story?: {
-    id: string;
-    title: string;
-  };
-  parentTaskId?: string;
-  parentTask?: {
-    id: string;
-    title: string;
-    issueKey?: string;
-  };
-  subtasks?: {
-    id: string;
-    title: string;
-    issueKey?: string;
-    status: string;
-  }[];
-}
-
-interface TaskDetailContentProps {
-  task: Task | null;
-  error: string | null;
-  onRefresh: () => void;
-  showHeader?: boolean;
-  onClose?: () => void;
-  boardId?: string;
-}
-
-// New interface for TaskActivity
-export interface TaskActivity {
-  id: string;
-  action: string;
-  details: string | null; // JSON string
-  createdAt: Date;
-  user: {
-    id: string;
-    name: string | null;
-    image: string | null;
-    useCustomAvatar?: boolean;
-    avatarSkinTone?: number | null;
-    avatarEyes?: number | null;
-    avatarBrows?: number | null;
-    avatarMouth?: number | null;
-    avatarNose?: number | null;
-    avatarHair?: number | null;
-    avatarEyewear?: number | null;
-    avatarAccessory?: number | null;
-  };
-}
-
-// New interface for PlayTime
-export interface PlayTime {
-  totalTimeMs: number;
-  formattedTime: string;
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-}
-
-type PlayState = "stopped" | "playing" | "paused";
-
-// Client-side implementation of priority badge
-const getPriorityBadge = (priority: string) => {
-  const priorityColors: Record<string, string> = {
-    "LOW": "bg-blue-100 text-blue-800",
-    "MEDIUM": "bg-yellow-100 text-yellow-800",
-    "HIGH": "bg-orange-100 text-orange-800",
-    "CRITICAL": "bg-red-100 text-red-800"
-  };
-
-  const priorityIcons: Record<string, string> = {
-    "LOW": "↓",
-    "MEDIUM": "→",
-    "HIGH": "↑",
-    "CRITICAL": "‼️"
-  };
-
-  return (
-    <Badge className={priorityColors[priority] || "bg-slate-100 text-slate-800"}>
-      {priorityIcons[priority]} {priority}
-    </Badge>
-  );
-};
+// Import types and utilities
+import type {
+  Task,
+  TaskComment as TaskCommentType,
+  TaskActivity,
+  PlayTime,
+  PlayState,
+  TaskDetailContentProps
+} from "@/types/task";
+import { formatDate, formatLiveTime, getPriorityBadge, getTypeBadge } from "@/utils/taskHelpers";
 
 export function TaskDetailContent({
   task,
@@ -247,20 +74,24 @@ export function TaskDetailContent({
   const [savingDueDate, setSavingDueDate] = useState(false);
   const [savingLabels, setSavingLabels] = useState(false);
   const [dueDate, setDueDate] = useState<Date | undefined>(task?.dueDate);
-  const [comments, setComments] = useState<TaskComment[]>(task?.comments || []);
+  const [comments, setComments] = useState<TaskCommentType[]>(task?.comments || []);
   const { toast } = useToast();
   const { refreshBoards } = useTasks();
   const { handleTaskAction, userStatus } = useActivity();
   const [subtaskFormOpen, setSubtaskFormOpen] = useState(false);
 
   // New state variables for play/pause feature
-  const [taskActivities, setTaskActivities] = useState<TaskActivity[]>([]);
   const [totalPlayTime, setTotalPlayTime] = useState<PlayTime | null>(null);
   const [isTimerLoading, setIsTimerLoading] = useState(false);
-  const [currentPlayState, setCurrentPlayState] = useState<PlayState>("stopped");
-  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
   const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
   const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
+  const [showTimeAdjustmentModal, setShowTimeAdjustmentModal] = useState(false);
+  const [timeAdjustmentData, setTimeAdjustmentData] = useState<{
+    taskId: string;
+    taskTitle: string;
+    sessionDurationMs: number;
+    totalDurationMs: number;
+  } | null>(null);
 
   // Use TanStack Query mutation
   const updateTaskMutation = useUpdateTask(task?.id || "");
@@ -270,6 +101,16 @@ export function TaskDetailContent({
     // Individual timer control is now per-user based
     return true;
   }, [task, currentUserId]);
+
+  // Get current play state from user activity status
+  const currentPlayState: PlayState = useMemo(() => {
+    if (!userStatus || !task?.id) return "stopped";
+    
+    const isMyTask = userStatus.currentTaskId === task.id;
+    if (!isMyTask) return "stopped";
+    
+    return userStatus.currentTaskPlayState || "stopped";
+  }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, task?.id]);
 
   // Update comments state when task changes
   useEffect(() => {
@@ -291,27 +132,7 @@ export function TaskDetailContent({
     setDescription(md);
   }, []);
 
-  const fetchTaskActivities = useCallback(async () => {
-    if (!task?.id) return;
-    setIsLoadingActivities(true);
-    try {
-      const response = await fetch(`/api/tasks/${task.id}/activities`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch task activities");
-      }
-      const data: TaskActivity[] = await response.json();
-      setTaskActivities(data);
-    } catch (err) {
-      console.error("Error fetching task activities:", err);
-      toast({
-        title: "Error",
-        description: "Could not load task activities.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingActivities(false);
-    }
-  }, [task?.id, toast]);
+
 
   const fetchTotalPlayTime = useCallback(async () => {
     if (!task?.id) return;
@@ -331,47 +152,9 @@ export function TaskDetailContent({
     }
   }, [task?.id]);
 
-  // Determine current play state from activities (filtered by current user)
-  useEffect(() => {
-    if (taskActivities.length > 0 && currentUserId) {
-      const userActivities = [...taskActivities] // Create a new array to avoid mutating state directly
-        .filter(act =>
-          ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"].includes(act.action) &&
-          act.user.id === currentUserId // Explicitly filter by current user
-        );
 
-      const lastRelevantActivity = userActivities
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
-      if (lastRelevantActivity) {
-        if (lastRelevantActivity.action === "TASK_PLAY_STARTED") {
-          setCurrentPlayState("playing");
-        } else if (lastRelevantActivity.action === "TASK_PLAY_PAUSED") {
-          setCurrentPlayState("paused");
-        } else {
-          setCurrentPlayState("stopped");
-        }
-      } else {
-        setCurrentPlayState("stopped");
-      }
-    } else {
-      setCurrentPlayState("stopped"); // Default to stopped if no activities or no current user
-    }
-  }, [taskActivities, currentUserId]);
 
-  // Helper function to format milliseconds into a readable string (e.g., 1d 2h 3m 4s)
-  const formatLiveTime = (ms: number): string => {
-    if (ms < 0) ms = 0;
-    const totalSecondsValue = Math.floor(ms / 1000);
-    const d = Math.floor(totalSecondsValue / (3600 * 24));
-    const h = Math.floor((totalSecondsValue % (3600 * 24)) / 3600);
-    const m = Math.floor((totalSecondsValue % 3600) / 60);
-    const s = totalSecondsValue % 60;
-
-    // Consistent with API: Xh Ym Zs, or Dd Xh Ym Zs
-    if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
-    return `${h}h ${m}m ${s}s`;
-  };
 
   // Effect for live timer when task is playing
   useEffect(() => {
@@ -414,16 +197,37 @@ export function TaskDetailContent({
     };
   }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, userStatus?.statusStartedAt, task?.id, totalPlayTime?.totalTimeMs, totalPlayTime?.formattedTime, isLoadingPlayTime]);
 
-  // Fetch activities and playtime when task ID changes or onRefresh is called
+  // Fetch playtime when task ID changes or onRefresh is called
   useEffect(() => {
     if (task?.id) {
-      fetchTaskActivities();
       fetchTotalPlayTime();
     }
-  }, [task?.id, fetchTaskActivities, fetchTotalPlayTime, onRefresh]); // Added onRefresh to dependencies
+  }, [task?.id, fetchTotalPlayTime, onRefresh]); // Added onRefresh to dependencies
 
   const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
     if (!task?.id) return;
+
+    // Check for long session before stopping
+    if (action === "stop" && userStatus?.statusStartedAt && userStatus?.currentTaskId === task.id) {
+      const sessionStart = new Date(userStatus.statusStartedAt);
+      const sessionDurationMs = Date.now() - sessionStart.getTime();
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+      if (sessionDurationMs > twentyFourHoursMs) {
+        // Get total time before stopping
+        const currentTotalMs = totalPlayTime?.totalTimeMs || 0;
+        const finalTotalMs = currentTotalMs + sessionDurationMs;
+
+        setTimeAdjustmentData({
+          taskId: task.id,
+          taskTitle: task.title,
+          sessionDurationMs,
+          totalDurationMs: finalTotalMs,
+        });
+        setShowTimeAdjustmentModal(true);
+        return; // Don't proceed with stop until user decides
+      }
+    }
 
     setIsTimerLoading(true);
     try {
@@ -431,7 +235,6 @@ export function TaskDetailContent({
       await handleTaskAction(action, task.id);
 
       // Fetch local data directly. These will update relevant states and UI parts.
-      await fetchTaskActivities();
       await fetchTotalPlayTime();
 
       // Refresh the boards context for other parts of the application (including dock widget)
@@ -444,6 +247,30 @@ export function TaskDetailContent({
     } finally {
       setIsTimerLoading(false);
     }
+  };
+
+  const handleTimeAdjustmentCancel = () => {
+    // Don't stop the task, just close the modal
+    setShowTimeAdjustmentModal(false);
+    setTimeAdjustmentData(null);
+  };
+
+  const handleTimeAdjusted = async () => {
+    // Stop the task after adjustment
+    if (task?.id) {
+      setIsTimerLoading(true);
+      try {
+        await handleTaskAction("stop", task.id);
+        await fetchTotalPlayTime();
+        refreshBoards();
+      } catch (err: any) {
+        console.error("Error stopping task after adjustment:", err);
+      } finally {
+        setIsTimerLoading(false);
+      }
+    }
+    setShowTimeAdjustmentModal(false);
+    setTimeAdjustmentData(null);
   };
 
   const handleAiImproveDescription = async (text: string): Promise<string> => {
@@ -728,32 +555,7 @@ export function TaskDetailContent({
     }
   };
 
-  // Get type badge
-  const getTypeBadge = (type: string) => {
-    // Ensure consistent uppercase formatting for types
-    const normalizedType = type?.toUpperCase() || "TASK";
 
-    const typeColors: Record<string, string> = {
-      "TASK": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-      "BUG": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      "FEATURE": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      "IMPROVEMENT": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-    };
-
-    const typeIcons: Record<string, React.ReactNode> = {
-      "TASK": <CheckSquare className="h-3.5 w-3.5 mr-1" />,
-      "BUG": <Bug className="h-3.5 w-3.5 mr-1" />,
-      "FEATURE": <Sparkles className="h-3.5 w-3.5 mr-1" />,
-      "IMPROVEMENT": <TrendingUp className="h-3.5 w-3.5 mr-1" />,
-    };
-
-    return (
-      <Badge className={`${typeColors[normalizedType] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"} px-2 py-1 flex items-center`}>
-        {typeIcons[normalizedType] || <CheckSquare className="h-3.5 w-3.5 mr-1" />}
-        <span>{normalizedType}</span>
-      </Badge>
-    );
-  };
 
 
 
@@ -795,17 +597,140 @@ export function TaskDetailContent({
     else actionText = actionText.replace("play", "timer"); // Generalize "play" to "timer"
 
     const activityTime = formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true });
+    
+    // Check if this is a time-related activity that can be edited
+    const isTimeActivity = ["TASK_PLAY_STARTED", "TASK_PLAY_STOPPED", "TIME_ADJUSTED"].includes(activity.action);
+    const canEdit = isTimeActivity && activity.user.id === currentUserId;
+
+    // Parse activity details for time adjustments
+    let activityDetails = null;
+    try {
+      if (activity.details) {
+        activityDetails = JSON.parse(activity.details);
+      }
+    } catch (error) {
+      // Ignore JSON parse errors
+    }
+
+    // Handle time adjustment display
+    if (activity.action === "TIME_ADJUSTED" && activityDetails) {
+      actionText = `adjusted time from ${activityDetails.originalFormatted} to ${activityDetails.newFormatted}`;
+      if (activityDetails.reason) {
+        actionText += ` (${activityDetails.reason})`;
+      }
+    }
+
+    // Handle session edit display
+    if (activity.action === "SESSION_EDITED" && activityDetails) {
+      actionText = "edited a work session for";
+    }
 
     return (
-      <div key={activity.id} className="flex items-start space-x-3 py-3 border-b border-border/30 last:border-b-0">
+      <div key={activity.id} className="group flex items-start space-x-3 py-3 border-b border-border/30 last:border-b-0 hover:bg-muted/20 px-2 rounded">
         <CustomAvatar user={activity.user} size="sm" />
-        <div className="text-sm">
+        <div className="text-sm flex-1">
           <p>
             <span className="font-semibold">{activity.user.name || "Unknown User"}</span>
             <span className="text-muted-foreground"> {actionText} this task</span>
           </p>
           <p className="text-xs text-muted-foreground/80">{activityTime}</p>
+          
+          {/* Show detailed changes for session edits */}
+          {activity.action === "SESSION_EDITED" && activityDetails?.oldValue && activityDetails?.newValue && (
+            <div className="mt-2 p-3 bg-muted/50 rounded-md text-xs border border-border/30">
+              <div className="font-medium mb-2 text-foreground">Session Changes:</div>
+              {(() => {
+                try {
+                  const oldData = JSON.parse(activityDetails.oldValue);
+                  const newData = JSON.parse(activityDetails.newValue);
+                  const changes = activityDetails.changes;
+                  
+                  return (
+                    <div className="space-y-2">
+                      {changes?.startTimeChanged && (
+                        <div>
+                          <div className="text-muted-foreground font-medium">Start Time:</div>
+                          <div className="text-muted-foreground line-through">
+                            {format(new Date(oldData.startTime), "MMM d, yyyy HH:mm")}
+                          </div>
+                          <div className="text-foreground">
+                            {format(new Date(newData.startTime), "MMM d, yyyy HH:mm")}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {changes?.endTimeChanged && (
+                        <div>
+                          <div className="text-muted-foreground font-medium">End Time:</div>
+                          <div className="text-muted-foreground line-through">
+                            {format(new Date(oldData.endTime), "MMM d, yyyy HH:mm")}
+                          </div>
+                          <div className="text-foreground">
+                            {format(new Date(newData.endTime), "MMM d, yyyy HH:mm")}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <div className="text-muted-foreground font-medium">Duration:</div>
+                        <div className="text-muted-foreground line-through">
+                          {oldData.duration}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-foreground">{newData.duration}</span>
+                          {changes?.durationChange && (
+                            <Badge 
+                              variant={changes.durationChange.isIncrease ? "default" : "secondary"}
+                              className="text-xs"
+                            >
+                              {changes.durationChange.formatted}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {activityDetails.reason && (
+                        <div className="pt-1 border-t border-border/30">
+                          <div className="text-muted-foreground font-medium">Reason:</div>
+                          <div className="text-foreground italic">
+                            &quot;{activityDetails.reason}&quot;
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                } catch (e) {
+                  return (
+                    <div className="text-muted-foreground">
+                      Unable to display change details
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+          )}
         </div>
+        {canEdit && activity.action !== "TIME_ADJUSTED" && activity.action !== "SESSION_EDITED" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={() => {
+              if (totalPlayTime) {
+                setTimeAdjustmentData({
+                  taskId: task!.id,
+                  taskTitle: task!.title,
+                  sessionDurationMs: 0, // Not applicable for history editing
+                  totalDurationMs: totalPlayTime.totalTimeMs,
+                });
+                setShowTimeAdjustmentModal(true);
+              }
+            }}
+            title="Adjust time"
+          >
+            <PenLine className="h-3 w-3" />
+          </Button>
+        )}
       </div>
     );
   };
@@ -924,7 +849,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Start Timer"
                     >
-                      {isTimerLoading && currentPlayState === "stopped" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     </Button>
                   )}
                   {currentPlayState === "playing" && (
@@ -936,7 +861,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Pause Timer"
                     >
-                      {isTimerLoading && currentPlayState === "playing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
                     </Button>
                   )}
                   {currentPlayState === "paused" && (
@@ -948,7 +873,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Resume Timer"
                     >
-                      {isTimerLoading && currentPlayState === "paused" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     </Button>
                   )}
                   {(currentPlayState === "playing" || currentPlayState === "paused") && (
@@ -960,7 +885,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Stop Timer"
                     >
-                      {isTimerLoading && (currentPlayState === "playing" || currentPlayState === "paused") ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
                     </Button>
                   )}
 
@@ -1113,50 +1038,18 @@ export function TaskDetailContent({
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
-            <CardHeader className="py-3 bg-muted/30 border-b">
-              <CardTitle className="text-md">Comments</CardTitle>
-            </CardHeader>
-            <CardContent className="relative z-0 p-4">
-              <TaskCommentsList
-                taskId={task.id}
-                initialComments={comments}
-                currentUserId={currentUserId || ""}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Task Helpers Section */}
-          <TaskHelpersSection
+          {/* Task Tabs Section */}
+          <TaskTabs
             taskId={task.id}
+            initialComments={comments}
+            currentUserId={currentUserId || ""}
             assigneeId={task.assignee?.id}
             reporterId={task.reporter?.id || ""}
-            currentUserId={currentUserId}
-            onRefresh={onRefresh}
+            onRefresh={() => {
+              fetchTotalPlayTime();
+              onRefresh();
+            }}
           />
-          {/* Task Activities Section */}
-          <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
-            <CardHeader className="py-3 bg-muted/30 border-b flex flex-row items-center gap-2">
-              <History className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-md">Activity</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isLoadingActivities ? (
-                <div className="p-6 text-center text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
-                  Loading activities...
-                </div>
-              ) : taskActivities.length > 0 ? (
-                <div className="divide-y divide-border/30 px-4">
-                  {taskActivities.map(renderActivityItem)}
-                </div>
-              ) : (
-                <div className="p-6 text-center text-muted-foreground italic">
-                  No activities recorded for this task yet.
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         <div className="space-y-6">
@@ -1443,6 +1336,19 @@ export function TaskDetailContent({
             parentTaskId: task.id,
             taskBoardId: task.taskBoard?.id || "",
           }}
+        />
+      )}
+
+      {/* Time Adjustment Modal */}
+      {timeAdjustmentData && (
+        <TimeAdjustmentModal
+          isOpen={showTimeAdjustmentModal}
+          onClose={handleTimeAdjustmentCancel}
+          originalDuration={formatLiveTime(timeAdjustmentData.totalDurationMs)}
+          originalDurationMs={timeAdjustmentData.totalDurationMs}
+          taskTitle={timeAdjustmentData.taskTitle}
+          taskId={timeAdjustmentData.taskId}
+          onTimeAdjusted={handleTimeAdjusted}
         />
       )}
     </div>
