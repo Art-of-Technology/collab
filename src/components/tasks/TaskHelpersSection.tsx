@@ -243,8 +243,29 @@ export function TaskHelpersSection({ taskId, assigneeId, reporterId, currentUser
               </div>
             )}
 
-            {/* Request Help Button */}
-            {!isAlreadyAssigned && !hasExistingRequest && (
+            {/* Empty State and Actions */}
+            {!hasHelpRequests && (
+              <div className="text-center py-6">
+                <Users className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-sm text-muted-foreground font-medium mb-1">No helpers assigned</p>
+                <p className="text-xs text-muted-foreground mb-4">This task doesn't have any helpers working on it yet.</p>
+                
+                {/* Action based on user status */}
+                {!isAlreadyAssigned && !hasExistingRequest && (
+                  <Button variant="outline" onClick={requestHelp} disabled={requestingHelp} size="sm">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    {requestingHelp ? "Requesting..." : "Request to Help"}
+                  </Button>
+                )}
+                
+                {hasExistingRequest && !isAlreadyAssigned && (
+                  <p className="text-xs text-muted-foreground">You have already requested to help with this task.</p>
+                )}
+              </div>
+            )}
+
+            {/* Request Help Button for when there are existing helpers */}
+            {hasHelpRequests && !isAlreadyAssigned && !hasExistingRequest && (
               <div className="pt-2 border-t">
                 <Button variant="outline" onClick={requestHelp} disabled={requestingHelp} className="w-full">
                   <UserPlus className="h-4 w-4 mr-2" />
@@ -253,27 +274,10 @@ export function TaskHelpersSection({ taskId, assigneeId, reporterId, currentUser
               </div>
             )}
 
-            {/* Status Messages */}
-            {hasExistingRequest && !isAlreadyAssigned && (
+            {/* Status Message for existing request when there are helpers */}
+            {hasHelpRequests && hasExistingRequest && !isAlreadyAssigned && (
               <div className="pt-2 border-t">
                 <p className="text-sm text-muted-foreground text-center">You have already requested to help with this task.</p>
-              </div>
-            )}
-
-            {/* No Helpers Message */}
-            {!hasHelpRequests && !canApproveHelpers && !hasExistingRequest && !isAlreadyAssigned && (
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-sm text-muted-foreground font-medium mb-1">No helpers assigned</p>
-                <p className="text-xs text-muted-foreground">This task doesn't have any helpers working on it yet.</p>
-              </div>
-            )}
-
-            {/* No Helpers but can request */}
-            {!hasHelpRequests && !isAlreadyAssigned && !hasExistingRequest && (
-              <div className="text-center py-6">
-                <Users className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground mb-3">No helpers are currently working on this task.</p>
               </div>
             )}
           </>

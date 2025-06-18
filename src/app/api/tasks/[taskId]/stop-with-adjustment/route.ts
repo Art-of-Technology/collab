@@ -21,6 +21,13 @@ export async function POST(
   }
 
   try {
+    const body = await req.json();
+    const { adjustedDurationMs, originalDurationMs, adjustmentReason } = body;
+
+    if (!adjustedDurationMs || !originalDurationMs || !adjustmentReason) {
+      return new NextResponse("Missing required fields", { status: 400 });
+    }
+
     // Verify the task exists and user has permission
     const task = await prisma.task.findUnique({
       where: { id: taskId },
@@ -77,14 +84,27 @@ export async function POST(
       return new NextResponse("Session already stopped", { status: 400 });
     }
 
-    // Create the stop event
+    // Calculate the adjusted end time based on the start time and adjusted duration
+    const adjustedEndTime = new Date(currentStartEvent.startedAt.getTime() + adjustedDurationMs);
+    const originalEndTime = new Date(currentStartEvent.startedAt.getTime() + originalDurationMs);
+
+    // Create the stop event with adjustment metadata
     const stopEvent = await prisma.userEvent.create({
       data: {
         userId,
         taskId,
         eventType: 'TASK_STOP',
-        startedAt: new Date(),
-        description: 'Session stopped normally',
+        startedAt: adjustedEndTime,
+        description: `Session stopped with adjustment: ${adjustmentReason}`,
+        metadata: {
+          editedAt: new Date().toISOString(),
+          editReason: adjustmentReason,
+          originalEndTime: originalEndTime.toISOString(),
+          adjustedEndTime: adjustedEndTime.toISOString(),
+          originalDurationMs,
+          adjustedDurationMs,
+          adjustmentType: 'long_session_protection',
+        },
       },
     });
 
@@ -108,15 +128,18 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: "Session stopped successfully",
+      message: "Session stopped and adjusted successfully",
       stopEvent: {
         id: stopEvent.id,
         startedAt: stopEvent.startedAt,
+        adjustedDurationMs,
+        originalDurationMs,
+        adjustmentReason,
       },
     });
 
   } catch (error) {
-    console.error("[TASK_STOP]", error);
+    console.error("[STOP_WITH_ADJUSTMENT]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 } 

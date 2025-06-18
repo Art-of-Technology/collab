@@ -21,7 +21,8 @@ import {
   Timer,
   X,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Settings
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useActivity } from "@/context/ActivityContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { cn } from "@/lib/utils";
-import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
+import { SessionAdjustmentModal } from "@/components/tasks/SessionAdjustmentModal";
 
 interface ActivityStatusWidgetProps {
   className?: string;
@@ -388,18 +389,15 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     if (action === "stop" && userStatus?.statusStartedAt) {
       const sessionStart = new Date(userStatus.statusStartedAt);
       const sessionDurationMs = Date.now() - sessionStart.getTime();
-      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      const twentyFourHoursMs = 1000 * 60 * 60 * 24;
 
       if (sessionDurationMs > twentyFourHoursMs) {
-        // Get total time before stopping
-        const totalTimeMs = parseDurationToMs(taskTotalTime);
-        const finalTotalMs = totalTimeMs + sessionDurationMs;
-
+        // Show session adjustment modal instead of time adjustment modal
         setTimeAdjustmentData({
           taskId,
           taskTitle: userStatus.currentTask?.title || "Task",
           sessionDurationMs,
-          totalDurationMs: finalTotalMs,
+          totalDurationMs: sessionDurationMs, // For session adjustment, we only care about this session
         });
         setShowTimeAdjustmentModal(true);
         return; // Don't proceed with stop until user decides
@@ -519,13 +517,33 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Play className="h-3 w-3 md:h-4 md:w-4 ml-0.5" />}
             </button>
           )}
-          <button
-            onClick={() => handleTaskControlAction("stop")}
-            disabled={isLoading}
-            className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-400/70 hover:text-red-400 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/20 hover:border-red-400/40 shadow-lg hover:shadow-red-500/20"
-          >
-            {isLoading ? <Loader2 className="h-3 w-3 md:h-3.5 md:w-3.5 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-3.5 md:w-3.5" />}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => handleTaskControlAction("stop")}
+              disabled={isLoading}
+              className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/30 hover:border-red-300/50 shadow-lg hover:shadow-red-500/25"
+            >
+              {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-4 md:w-4" />}
+            </button>
+            <button
+              onClick={() => {
+                if (userStatus?.currentTaskId) {
+                  setTimeAdjustmentData({
+                    taskId: userStatus.currentTaskId,
+                    taskTitle: userStatus.currentTask?.title || "Task",
+                    sessionDurationMs: userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0,
+                    totalDurationMs: userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0,
+                  });
+                  setShowTimeAdjustmentModal(true);
+                }
+              }}
+              disabled={isLoading}
+              className="absolute -bottom-[10px] -right-[6px] h-4 w-4 rounded-full bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 hover:text-gray-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-gray-400/30 hover:border-gray-300/50"
+              title="Stop with time adjustment"
+            >
+              <Settings className="h-2 w-2" />
+            </button>
+          </div>
         </div>
       );
     }
@@ -892,16 +910,14 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Time Adjustment Modal */}
+      {/* Session Adjustment Modal */}
       {timeAdjustmentData && (
-        <TimeAdjustmentModal
+        <SessionAdjustmentModal
           isOpen={showTimeAdjustmentModal}
           onClose={handleTimeAdjustmentCancel}
-          originalDuration={formatDuration(timeAdjustmentData.totalDurationMs)}
-          originalDurationMs={timeAdjustmentData.totalDurationMs}
-          taskTitle={timeAdjustmentData.taskTitle}
+          sessionDurationMs={timeAdjustmentData.sessionDurationMs}
           taskId={timeAdjustmentData.taskId}
-          onTimeAdjusted={handleTimeAdjusted}
+          onSessionAdjusted={handleTimeAdjusted}
         />
       )}
     </>
