@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { 
   Play, 
   Pause, 
@@ -19,7 +20,9 @@ import {
   Activity,
   Timer,
   X,
-  Trash2
+  Trash2,
+  ExternalLink,
+  Settings
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +48,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useActivity } from "@/context/ActivityContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { cn } from "@/lib/utils";
+import { SessionAdjustmentModal } from "@/components/tasks/SessionAdjustmentModal";
 
 interface ActivityStatusWidgetProps {
   className?: string;
@@ -131,6 +135,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const { settings } = useWorkspaceSettings();
   const { boards, loading: tasksLoading, refetch } = useAssignedTasks(currentWorkspace?.id);
   const { userStatus, isLoading, startActivity, endActivity, handleTaskAction } = useActivity();
+  const router = useRouter();
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [liveTime, setLiveTime] = useState<string | null>(null);
   const [taskTotalTime, setTaskTotalTime] = useState<string>("0h 0m 0s");
@@ -140,6 +145,13 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [showHelperModal, setShowHelperModal] = useState(false);
   const [selectedTaskForHelper, setSelectedTaskForHelper] = useState<TaskOption | null>(null);
+  const [showTimeAdjustmentModal, setShowTimeAdjustmentModal] = useState(false);
+  const [timeAdjustmentData, setTimeAdjustmentData] = useState<{
+    taskId: string;
+    taskTitle: string;
+    sessionDurationMs: number;
+    totalDurationMs: number;
+  } | null>(null);
   const { toast } = useToast();
 
   // Live timer effect
@@ -248,6 +260,13 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     return 0;
   };
 
+  const handleTaskNavigation = (taskId: string) => {
+    if (currentWorkspace?.id) {
+      router.push(`/${currentWorkspace.id}/tasks/${taskId}`);
+      setIsDropdownOpen(false);
+    }
+  };
+
   const handleTaskClick = (task: TaskOption) => {
     const isAssignedToMe = task.assignee?.id === session?.user?.id;
     
@@ -320,6 +339,30 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     setSelectedTaskForHelper(null);
   };
 
+  const handleTimeAdjustmentConfirm = () => {
+    // Continue with stopping the task without adjustment
+    if (userStatus?.currentTaskId) {
+      handleTaskAction("stop", userStatus.currentTaskId);
+    }
+    setShowTimeAdjustmentModal(false);
+    setTimeAdjustmentData(null);
+  };
+
+  const handleTimeAdjustmentCancel = () => {
+    // Don't stop the task, just close the modal
+    setShowTimeAdjustmentModal(false);
+    setTimeAdjustmentData(null);
+  };
+
+  const handleTimeAdjusted = () => {
+    // Stop the task after adjustment
+    if (userStatus?.currentTaskId) {
+      handleTaskAction("stop", userStatus.currentTaskId);
+    }
+    setShowTimeAdjustmentModal(false);
+    setTimeAdjustmentData(null);
+  };
+
   const handleQuickActivity = async (eventType: string, duration?: number) => {
     try {
       await startActivity(eventType, undefined, duration);
@@ -341,6 +384,25 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const handleTaskControlAction = async (action: "play" | "pause" | "stop") => {
     const taskId = userStatus?.currentTaskId;
     if (!taskId) return;
+
+    // Check for long session before stopping
+    if (action === "stop" && userStatus?.statusStartedAt) {
+      const sessionStart = new Date(userStatus.statusStartedAt);
+      const sessionDurationMs = Date.now() - sessionStart.getTime();
+      const twentyFourHoursMs = 1000 * 60 * 60 * 24;
+
+      if (sessionDurationMs > twentyFourHoursMs) {
+        // Show session adjustment modal instead of time adjustment modal
+        setTimeAdjustmentData({
+          taskId,
+          taskTitle: userStatus.currentTask?.title || "Task",
+          sessionDurationMs,
+          totalDurationMs: sessionDurationMs, // For session adjustment, we only care about this session
+        });
+        setShowTimeAdjustmentModal(true);
+        return; // Don't proceed with stop until user decides
+      }
+    }
 
     try {
       await handleTaskAction(action, taskId);
@@ -393,7 +455,21 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   // Filter tasks based on search query
   const getFilteredTasks = () => {
     if (!taskSearchQuery.trim()) {
-      return boards.flatMap(board => board.tasks);
+      // Show most recently created tasks assigned to me, fallback to all tasks if none assigned
+      const allTasks = boards.flatMap(board => board.tasks);
+      const myTasks = allTasks.filter(task => task.assignee?.id === session?.user?.id);
+      
+      if (myTasks.length > 0) {
+        // Sort by most recently created and take top 3
+        return myTasks
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 3);
+      }
+      
+      // If no tasks assigned to me, show 3 most recent tasks for search purposes
+      return allTasks
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 3);
     }
     
     return searchTasks;
@@ -441,13 +517,33 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Play className="h-3 w-3 md:h-4 md:w-4 ml-0.5" />}
             </button>
           )}
-          <button
-            onClick={() => handleTaskControlAction("stop")}
-            disabled={isLoading}
-            className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-400/70 hover:text-red-400 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/20 hover:border-red-400/40 shadow-lg hover:shadow-red-500/20"
-          >
-            {isLoading ? <Loader2 className="h-3 w-3 md:h-3.5 md:w-3.5 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-3.5 md:w-3.5" />}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => handleTaskControlAction("stop")}
+              disabled={isLoading}
+              className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/30 hover:border-red-300/50 shadow-lg hover:shadow-red-500/25"
+            >
+              {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-4 md:w-4" />}
+            </button>
+            <button
+              onClick={() => {
+                if (userStatus?.currentTaskId) {
+                  setTimeAdjustmentData({
+                    taskId: userStatus.currentTaskId,
+                    taskTitle: userStatus.currentTask?.title || "Task",
+                    sessionDurationMs: userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0,
+                    totalDurationMs: userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0,
+                  });
+                  setShowTimeAdjustmentModal(true);
+                }
+              }}
+              disabled={isLoading}
+              className="absolute -bottom-[10px] -right-[6px] h-4 w-4 rounded-full bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 hover:text-gray-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-gray-400/30 hover:border-gray-300/50"
+              title="Stop with time adjustment"
+            >
+              <Settings className="h-2 w-2" />
+            </button>
+          </div>
         </div>
       );
     }
@@ -493,7 +589,13 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           {userStatus?.currentStatus === "WORKING" && userStatus.currentTask && settings?.timeTrackingEnabled ? (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1 md:gap-2">
-                <span className="font-mono text-xs text-white/60">{userStatus.currentTask.issueKey}</span>
+                <button
+                  onClick={() => handleTaskNavigation(userStatus.currentTask!.id)}
+                  className="font-mono text-xs text-white/60 hover:text-white/90 hover:underline transition-colors cursor-pointer"
+                  title="Click to view full task"
+                >
+                  {userStatus.currentTask.issueKey}
+                </button>
                 <span className="text-xs md:text-sm text-white truncate font-medium max-w-[80px] md:max-w-[120px]">
                   {userStatus.currentTask.title}
                 </span>
@@ -577,8 +679,8 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               <DropdownMenuLabel>Switch Status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              {/* Task Selection - Only show if time tracking is enabled */}
-              {!tasksLoading && boards.length > 0 && settings?.timeTrackingEnabled && (
+              {/* Task Selection - Always show if time tracking is enabled */}
+              {settings?.timeTrackingEnabled && (
                 <>
                   <DropdownMenuLabel className="text-xs">Work on Task</DropdownMenuLabel>
                   
@@ -591,6 +693,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                         value={taskSearchQuery}
                         onChange={(e) => setTaskSearchQuery(e.target.value)}
                         className="pl-8 h-8 text-sm"
+                        disabled={tasksLoading}
                       />
                       {taskSearchQuery && (
                         <Button
@@ -605,59 +708,107 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                     </div>
                   </div>
 
+                  {/* Loading State */}
+                  {(tasksLoading || isSearching) && (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        {tasksLoading ? "Loading tasks..." : "Searching..."}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Filtered Tasks */}
-                  <div className="max-h-48 overflow-y-auto">
-                    {getFilteredTasks().length > 0 ? (
-                      getFilteredTasks().map((task) => {
-                        const board = boards.find(b => b.tasks.some(t => t.id === task.id));
-                        const isAssignedToMe = task.assignee?.id === session?.user?.id;
-                        
-                        return (
-                          <DropdownMenuItem
-                            key={task.id}
-                            onClick={() => {
-                              handleTaskClick(task);
-                            }}
-                            disabled={isLoading}
-                            className="pl-6"
-                          >
-                            <div className="flex flex-col gap-1 w-full">
-                              <div className="flex items-center gap-2">
-                                <Activity className="h-3 w-3 flex-shrink-0" />
-                                <span className="font-mono text-xs opacity-70 flex-shrink-0">{task.issueKey}</span>
-                                <span className="truncate flex-1 font-medium">{task.title}</span>
-                                {task.currentPlayState === "playing" && (
-                                  <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
-                                )}
-                                {task.currentPlayState === "paused" && (
-                                  <div className="h-2 w-2 bg-amber-500 rounded-full flex-shrink-0" />
-                                )}
-                                {!isAssignedToMe && (
-                                  <div className="h-2 w-2 bg-orange-400 rounded-full flex-shrink-0" title="Not assigned to you" />
-                                )}
-                              </div>
-                              <div className="flex items-center justify-between pl-5">
-                                {board && (
-                                  <div className="text-xs text-muted-foreground">
-                                    {board.name}
-                                  </div>
-                                )}
-                                {task.assignee && (
-                                  <div className="text-xs text-muted-foreground">
-                                    Assigned to: {task.assignee.name}
-                                  </div>
-                                )}
+                  {!tasksLoading && !isSearching && (
+                    <div className="max-h-48 overflow-y-auto">
+                      {getFilteredTasks().length > 0 ? (
+                        <>
+                          {!taskSearchQuery && (
+                            <div className="px-2 py-1">
+                              <div className="text-xs text-muted-foreground">
+                                {getFilteredTasks().some(task => task.assignee?.id === session?.user?.id) 
+                                  ? "Recent tasks assigned to you:" 
+                                  : "Available tasks:"
+                                }
                               </div>
                             </div>
-                          </DropdownMenuItem>
-                        );
-                      })
-                    ) : (
-                      <div className="px-6 py-2 text-sm text-muted-foreground">
-                        {taskSearchQuery ? "No tasks found" : "No tasks available"}
-                      </div>
-                    )}
-                  </div>
+                          )}
+                          {getFilteredTasks().map((task) => {
+                            const board = boards.find(b => b.tasks.some(t => t.id === task.id));
+                            const isAssignedToMe = task.assignee?.id === session?.user?.id;
+                            
+                            return (
+                              <div key={task.id} className="group">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    handleTaskClick(task);
+                                  }}
+                                  disabled={isLoading}
+                                  className="pl-6 pr-2"
+                                >
+                                  <div className="flex items-center gap-2 w-full">
+                                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <Activity className="h-3 w-3 flex-shrink-0" />
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleTaskNavigation(task.id);
+                                          }}
+                                          className="font-mono text-xs opacity-70 flex-shrink-0 hover:opacity-100 hover:underline transition-opacity"
+                                          title="Click to view full task"
+                                        >
+                                          {task.issueKey}
+                                        </button>
+                                        <span className="truncate flex-1 font-medium">{task.title}</span>
+                                        {task.currentPlayState === "playing" && (
+                                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                                        )}
+                                        {task.currentPlayState === "paused" && (
+                                          <div className="h-2 w-2 bg-amber-500 rounded-full flex-shrink-0" />
+                                        )}
+                                        {!isAssignedToMe && (
+                                          <div className="h-2 w-2 bg-orange-400 rounded-full flex-shrink-0" title="Not assigned to you" />
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-between pl-5">
+                                        {board && (
+                                          <div className="text-xs text-muted-foreground">
+                                            {board.name}
+                                          </div>
+                                        )}
+                                        {task.assignee && (
+                                          <div className="text-xs text-muted-foreground">
+                                            Assigned to: {task.assignee.name}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTaskNavigation(task.id);
+                                      }}
+                                      title="Open full task view"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </DropdownMenuItem>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div className="px-6 py-2 text-sm text-muted-foreground">
+                          {taskSearchQuery ? "No tasks found" : "No tasks available"}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <DropdownMenuSeparator />
                 </>
               )}
@@ -758,6 +909,17 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Session Adjustment Modal */}
+      {timeAdjustmentData && (
+        <SessionAdjustmentModal
+          isOpen={showTimeAdjustmentModal}
+          onClose={handleTimeAdjustmentCancel}
+          sessionDurationMs={timeAdjustmentData.sessionDurationMs}
+          taskId={timeAdjustmentData.taskId}
+          onSessionAdjusted={handleTimeAdjusted}
+        />
+      )}
     </>
   );
 } 

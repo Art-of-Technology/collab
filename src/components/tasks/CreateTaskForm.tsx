@@ -397,16 +397,17 @@ export default function CreateTaskForm({
         onClose();
       }
     }}>
-      <DialogContent className="max-w-[1200px] w-full" onClick={(e) => e.stopPropagation()}>
-        <DialogHeader>
+      <DialogContent className="max-w-[1200px] w-full h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Create New Task</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form
-            id="create-task-form"
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4"
-          >
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <form
+              id="create-task-form"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 pb-4"
+            >
             <div className="md:col-span-2 space-y-4">
               <FormField
                 control={form.control}
@@ -727,27 +728,28 @@ export default function CreateTaskForm({
               />
             </div>
 
-            <DialogFooter className="md:col-span-3 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  form.reset();
-                  onClose();
-                }} 
-                disabled={createTaskMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={createTaskMutation.isPending}
-                form="create-task-form"
-              >
-                {createTaskMutation.isPending ? "Creating..." : "Create Task"}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter className="md:col-span-3 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    form.reset();
+                    onClose();
+                  }} 
+                  disabled={createTaskMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createTaskMutation.isPending}
+                  form="create-task-form"
+                >
+                  {createTaskMutation.isPending ? "Creating..." : "Create Task"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
         </Form>
       </DialogContent>
     </Dialog>

@@ -51,13 +51,12 @@ export async function GET(
       return new NextResponse("No access to this workspace", { status: 403 });
     }
 
-    // Get latest 3 assigned tasks for the user in this workspace
+    // Get latest assigned tasks for the user in this workspace (sorted by creation date)
     const assignedTasks = await prisma.task.findMany({
       where: {
         assigneeId: userId,
         workspaceId: workspaceId,
       },
-      take: 3,
       include: {
         assignee: {
           select: {
@@ -95,10 +94,9 @@ export async function GET(
           }
         }
       },
-      orderBy: [
-        { taskBoard: { name: "asc" } },
-        { title: "asc" }
-      ]
+      orderBy: {
+        createdAt: "desc"
+      }
     });
 
     const formattedTasks = assignedTasks.map(task => {
@@ -124,6 +122,7 @@ export async function GET(
         status: task.column?.name || task.status || "TO DO",
         boardId: task.taskBoard?.id || "",
         boardName: task.taskBoard?.name || "No Board",
+        createdAt: task.createdAt,
         currentPlayState,
         assignee: task.assignee
       };

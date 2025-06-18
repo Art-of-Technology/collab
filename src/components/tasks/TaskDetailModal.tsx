@@ -43,8 +43,8 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="sticky top-0 z-10 bg-background pb-2">
+      <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 flex-shrink-0">
           <DialogTitle className="sr-only">Task Details</DialogTitle>
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>
@@ -59,7 +59,7 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
           </div>
         </DialogHeader>
         
-        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+        <div className="flex-1 overflow-y-auto pr-2 -mr-2 min-h-0">
           <TaskDetailContent
             task={task as any || null}
             error={isError && error ? error.message : null}

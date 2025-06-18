@@ -1,10 +1,10 @@
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcrypt";
 import { type DefaultSession, AuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GithubProvider from "next-auth/providers/github";
 import { prisma } from "./prisma";
 import { getServerSession } from "next-auth/next";
+import { CustomPrismaAdapter } from "./custom-prisma-adapter";
 
 // Extend the next-auth session types
 declare module "next-auth" {
@@ -23,7 +23,7 @@ export const authConfig: AuthOptions = {
   pages: {
     signIn: "/login",
   },
-  adapter: PrismaAdapter(prisma),
+  adapter: CustomPrismaAdapter(prisma),
   session: {
     strategy: "jwt",
   },
@@ -67,7 +67,7 @@ export const authConfig: AuthOptions = {
           email: user.email,
           name: user.name,
           image: user.image,
-          role: user.role,
+          role: user.role.toString(), // Convert UserRole enum to string
           team: user.team,
           currentFocus: user.currentFocus,
           expertise: user.expertise,
@@ -93,7 +93,7 @@ export const authConfig: AuthOptions = {
     async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        token.role = user.role; // user.role is already a string from authorize function
         token.team = user.team;
         token.currentFocus = user.currentFocus;
         token.expertise = user.expertise;
@@ -104,7 +104,7 @@ export const authConfig: AuthOptions = {
         });
         if (dbUser) {
           token.id = dbUser.id;
-          token.role = dbUser.role;
+          token.role = dbUser.role.toString(); // Convert UserRole enum to string
           token.team = dbUser.team;
           token.currentFocus = dbUser.currentFocus;
           token.expertise = dbUser.expertise;
