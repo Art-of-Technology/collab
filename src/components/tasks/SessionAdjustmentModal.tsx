@@ -1,19 +1,32 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle } from "lucide-react";
+import { CalendarIcon, AlertTriangle, Clock, Info } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface SessionAdjustmentModalProps {
   isOpen: boolean;
@@ -21,6 +34,7 @@ interface SessionAdjustmentModalProps {
   sessionDurationMs: number;
   taskId: string;
   onSessionAdjusted: () => void;
+  mode?: 'auto' | 'manual'; // auto = triggered by 24h+ session, manual = user clicked adjust button
 }
 
 export function SessionAdjustmentModal({
@@ -29,26 +43,74 @@ export function SessionAdjustmentModal({
   sessionDurationMs,
   taskId,
   onSessionAdjusted,
+  mode = 'auto'
 }: SessionAdjustmentModalProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   
-  const [days, setDays] = useState(0);
-  const [hours, setHours] = useState(8); // Default to 8 hours
-  const [minutes, setMinutes] = useState(0);
-  const [adjustmentReason, setAdjustmentReason] = useState("Long session detected - adjusted to actual work time");
-  
-  // Quick adjustment presets for common work session lengths
+  const [adjustForm, setAdjustForm] = useState({
+    startDate: null as Date | null,
+    startHour: "",
+    startMinute: "",
+    endDate: null as Date | null,
+    endHour: "",
+    endMinute: "",
+    reason: "",
+  });
+
+  // Generate hour and minute options
+  const hourOptions = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minuteOptions = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+  // Quick adjustment presets
   const quickAdjustments = [
-    { label: "1 hour", days: 0, hours: 1, minutes: 0 },
-    { label: "2 hours", days: 0, hours: 2, minutes: 0 },
-    { label: "4 hours", days: 0, hours: 4, minutes: 0 },
-    { label: "8 hours", days: 0, hours: 8, minutes: 0 },
-    { label: "Full day (8h)", days: 0, hours: 8, minutes: 0 },
+    { label: "1 hour", hours: 1, minutes: 0 },
+    { label: "2 hours", hours: 2, minutes: 0 },
+    { label: "4 hours", hours: 4, minutes: 0 },
+    { label: "8 hours", hours: 8, minutes: 0 },
   ];
 
-  const calculateNewDurationMs = () => {
-    return (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000);
+  // Initialize form when modal opens
+  useEffect(() => {
+    if (isOpen && !isInitialized) {
+      const now = new Date();
+      const sessionStartTime = new Date(now.getTime() - sessionDurationMs);
+      
+      // Default to a reasonable session duration based on mode
+      const defaultDurationMs = mode === 'auto' ? 8 * 60 * 60 * 1000 : sessionDurationMs; // 8 hours for auto, original for manual
+      const defaultEndTime = new Date(sessionStartTime.getTime() + defaultDurationMs);
+      
+      // Ensure default end time is not in the future
+      const maxEndTime = defaultEndTime > now ? now : defaultEndTime;
+      
+      setAdjustForm({
+        startDate: sessionStartTime,
+        startHour: sessionStartTime.getHours().toString().padStart(2, '0'),
+        startMinute: sessionStartTime.getMinutes().toString().padStart(2, '0'),
+        endDate: maxEndTime,
+        endHour: maxEndTime.getHours().toString().padStart(2, '0'),
+        endMinute: maxEndTime.getMinutes().toString().padStart(2, '0'),
+        reason: mode === 'auto' 
+          ? "Long session detected - adjusted to actual work time"
+          : "Manual session time adjustment",
+      });
+      setIsInitialized(true);
+    }
+  }, [isOpen, sessionDurationMs, mode, isInitialized]);
+
+  // Reset initialization flag when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsInitialized(false);
+    }
+  }, [isOpen]);
+
+  const combineDateTime = (date: Date | null, hour: string, minute: string): Date | null => {
+    if (!date || !hour || !minute) return null;
+    const combined = new Date(date);
+    combined.setHours(parseInt(hour), parseInt(minute), 0, 0);
+    return combined;
   };
 
   const formatDuration = (ms: number) => {
@@ -61,29 +123,80 @@ export function SessionAdjustmentModal({
     return `${h}h ${m}m`;
   };
 
-  const newDurationMs = calculateNewDurationMs();
-  const originalDurationFormatted = formatDuration(sessionDurationMs);
-
-  const handleQuickAdjustment = (preset: { days: number; hours: number; minutes: number }) => {
-    setDays(preset.days);
-    setHours(preset.hours);
-    setMinutes(preset.minutes);
+  const handleQuickAdjustment = (preset: { hours: number; minutes: number }) => {
+    if (!adjustForm.startDate) return;
+    
+    const now = new Date();
+    const newEndTime = new Date(adjustForm.startDate);
+    newEndTime.setHours(
+      adjustForm.startDate.getHours() + preset.hours,
+      adjustForm.startDate.getMinutes() + preset.minutes,
+      0,
+      0
+    );
+    
+    // Ensure the new end time is not in the future
+    const finalEndTime = newEndTime > now ? now : newEndTime;
+    
+    setAdjustForm(prev => ({
+      ...prev,
+      endDate: finalEndTime,
+      endHour: finalEndTime.getHours().toString().padStart(2, '0'),
+      endMinute: finalEndTime.getMinutes().toString().padStart(2, '0'),
+    }));
   };
 
   const handleSave = async () => {
-    if (newDurationMs <= 0) {
+    if (!adjustForm.reason.trim()) {
       toast({
-        title: "Invalid Duration",
-        description: "The adjusted time must be greater than 0.",
+        title: "Error",
+        description: "Please provide a reason for the adjustment.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!adjustmentReason.trim()) {
+    const startTime = combineDateTime(adjustForm.startDate, adjustForm.startHour, adjustForm.startMinute);
+    const endTime = combineDateTime(adjustForm.endDate, adjustForm.endHour, adjustForm.endMinute);
+
+    if (!startTime || !endTime) {
       toast({
-        title: "Reason Required",
-        description: "Please provide a reason for the session adjustment.",
+        title: "Invalid Time",
+        description: "Please select both start and end dates and times.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const now = new Date();
+
+    // Client-side validation
+    if (startTime >= endTime) {
+      toast({
+        title: "Invalid Time Range",
+        description: "Start time must be before end time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Since start time is read-only (current session start), we only need to validate end time
+    if (endTime > now) {
+      toast({
+        title: "Invalid End Time", 
+        description: "End time cannot be in the future.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+
+
+    const adjustedDurationMs = endTime.getTime() - startTime.getTime();
+    if (adjustedDurationMs <= 0) {
+      toast({
+        title: "Invalid Duration",
+        description: "The adjusted session duration must be greater than 0.",
         variant: "destructive",
       });
       return;
@@ -96,9 +209,11 @@ export function SessionAdjustmentModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adjustedDurationMs: newDurationMs,
+          adjustedStartTime: startTime.toISOString(),
+          adjustedEndTime: endTime.toISOString(),
+          adjustedDurationMs,
           originalDurationMs: sessionDurationMs,
-          adjustmentReason: adjustmentReason,
+          adjustmentReason: adjustForm.reason.trim(),
         }),
       });
 
@@ -109,7 +224,7 @@ export function SessionAdjustmentModal({
 
       toast({
         title: "Session Adjusted",
-        description: `Session stopped and adjusted to ${formatDuration(newDurationMs)}.`,
+        description: `Session stopped and adjusted to ${formatDuration(adjustedDurationMs)}.`,
       });
 
       onSessionAdjusted();
@@ -160,59 +275,113 @@ export function SessionAdjustmentModal({
   };
 
   const handleCancel = () => {
-    // Reset to defaults
-    setDays(0);
-    setHours(8);
-    setMinutes(0);
-    setAdjustmentReason("Long session detected - adjusted to actual work time");
+    setAdjustForm({
+      startDate: null,
+      startHour: "",
+      startMinute: "",
+      endDate: null,
+      endHour: "",
+      endMinute: "",
+      reason: "",
+    });
+    setIsInitialized(false);
     onClose();
   };
 
+  // Calculate adjusted duration for display
+  const adjustedDuration = combineDateTime(adjustForm.endDate, adjustForm.endHour, adjustForm.endMinute) && 
+                           combineDateTime(adjustForm.startDate, adjustForm.startHour, adjustForm.startMinute)
+    ? formatDuration(
+        combineDateTime(adjustForm.endDate, adjustForm.endHour, adjustForm.endMinute)!.getTime() - 
+        combineDateTime(adjustForm.startDate, adjustForm.startHour, adjustForm.startMinute)!.getTime()
+      )
+    : "Invalid";
+
+  const getModalContent = () => {
+    const originalDuration = formatDuration(sessionDurationMs);
+
+    if (mode === 'auto') {
+      return {
+        title: "Long Session Detected",
+        alertIcon: <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />,
+        alertClass: "bg-amber-50 border border-amber-200 rounded-md p-3 dark:bg-amber-950/20 dark:border-amber-800",
+        alertTextClass: "text-sm text-amber-800 dark:text-amber-200",
+        message: (
+          <>
+            <p className="font-medium mb-1">Session Duration: {originalDuration}</p>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              This seems unusually long. Please adjust to your actual work time or keep if accurate.
+            </p>
+          </>
+        )
+      };
+    } else {
+      return {
+        title: "Adjust Session Time",
+        alertIcon: <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />,
+        alertClass: "bg-blue-50 border border-blue-200 rounded-md p-3 dark:bg-blue-950/20 dark:border-blue-800",
+        alertTextClass: "text-sm text-blue-800 dark:text-blue-200",
+        message: (
+          <>
+            <p className="font-medium mb-1">Current Session: {originalDuration}</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              Adjust the session start and end times to reflect your actual work period.
+            </p>
+          </>
+        )
+      };
+    }
+  };
+
+  const modalContent = getModalContent();
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Long Session Detected</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            {modalContent.title}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Info Alert - matching the style from Edit Session */}
-          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+          {/* Status Info */}
+          <div className={modalContent.alertClass}>
             <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-amber-800">
-                <p className="font-medium mb-1">Session Duration: {originalDurationFormatted}</p>
-                <p className="text-xs text-amber-700">
-                  This seems unusually long. Please adjust to your actual work time or keep if accurate.
-                </p>
+              {modalContent.alertIcon}
+              <div className={modalContent.alertTextClass}>
+                {modalContent.message}
               </div>
             </div>
           </div>
 
-          {/* Quick Adjustments - more compact */}
+          {/* Session Adjustment Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 dark:bg-blue-950/20 dark:border-blue-800">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-800 dark:text-blue-200">
+                <p className="font-medium mb-1">Quick Session Adjustment:</p>
+                <ul className="text-xs space-y-1 text-blue-700 dark:text-blue-300">
+                  <li>• Start time is fixed to when you began this session</li>
+                  <li>• Only end time can be adjusted (cannot be in the future)</li>
+                  <li>• For more complex edits, use "Edit Session" after stopping</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Adjustments */}
           <div>
             <Label className="text-sm font-medium mb-2 block">Quick Adjustments</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {quickAdjustments.slice(0, 3).map((preset) => (
+            <div className="grid grid-cols-2 gap-2">
+              {quickAdjustments.map((preset) => (
                 <Button
                   key={preset.label}
                   variant="outline"
                   size="sm"
                   onClick={() => handleQuickAdjustment(preset)}
-                  className="text-xs h-8"
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {quickAdjustments.slice(3).map((preset) => (
-                <Button
-                  key={preset.label}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickAdjustment(preset)}
-                  className="text-xs h-8"
+                  className="justify-start"
                 >
                   {preset.label}
                 </Button>
@@ -220,66 +389,158 @@ export function SessionAdjustmentModal({
             </div>
           </div>
 
-          {/* Manual Time Input - more compact */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label htmlFor="hours" className="text-sm">Hours</Label>
-              <Input
-                id="hours"
-                type="number"
-                min="0"
-                max="23"
-                value={hours}
-                onChange={(e) => setHours(Math.max(0, parseInt(e.target.value) || 0))}
-                className="text-center h-8"
-              />
+          {/* Time Selection */}
+          <div className="space-y-6">
+            {/* Start Time */}
+            <div className="space-y-2">
+              <Label>Start Time (Session Start)</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Fixed to when you actually started this session
+              </div>
+              
+              {/* Start Date */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      disabled={true}
+                      className={cn(
+                        "w-full justify-start text-left font-normal opacity-60 cursor-not-allowed",
+                        !adjustForm.startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {adjustForm.startDate ? format(adjustForm.startDate, "MMM d, yyyy") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                </Popover>
+              </div>
+
+              {/* Start Time */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Hour</Label>
+                  <Select value={adjustForm.startHour} disabled={true}>
+                    <SelectTrigger className="opacity-60 cursor-not-allowed">
+                      <SelectValue placeholder="HH" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hourOptions.map((hour) => (
+                        <SelectItem key={hour} value={hour}>{hour}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Minute</Label>
+                  <Select value={adjustForm.startMinute} disabled={true}>
+                    <SelectTrigger className="opacity-60 cursor-not-allowed">
+                      <SelectValue placeholder="MM" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {minuteOptions.map((minute) => (
+                        <SelectItem key={minute} value={minute}>{minute}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="minutes" className="text-sm">Minutes</Label>
-              <Input
-                id="minutes"
-                type="number"
-                min="0"
-                max="59"
-                value={minutes}
-                onChange={(e) => setMinutes(Math.max(0, parseInt(e.target.value) || 0))}
-                className="text-center h-8"
-              />
-            </div>
-            <div>
-              <Label htmlFor="days" className="text-sm">Days</Label>
-              <Input
-                id="days"
-                type="number"
-                min="0"
-                max="7"
-                value={days}
-                onChange={(e) => setDays(Math.max(0, parseInt(e.target.value) || 0))}
-                className="text-center h-8"
-              />
+
+            {/* End Time */}
+            <div className="space-y-2">
+              <Label>End Time (Adjustable)</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Set when you actually stopped working
+              </div>
+              
+              {/* End Date */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !adjustForm.endDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {adjustForm.endDate ? format(adjustForm.endDate, "MMM d, yyyy") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={adjustForm.endDate || undefined}
+                      onSelect={(date) => setAdjustForm(prev => ({ ...prev, endDate: date || null }))}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* End Time */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Hour</Label>
+                  <Select value={adjustForm.endHour} onValueChange={(value) => setAdjustForm(prev => ({ ...prev, endHour: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="HH" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hourOptions.map((hour) => (
+                        <SelectItem key={hour} value={hour}>{hour}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Minute</Label>
+                  <Select value={adjustForm.endMinute} onValueChange={(value) => setAdjustForm(prev => ({ ...prev, endMinute: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="MM" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {minuteOptions.map((minute) => (
+                        <SelectItem key={minute} value={minute}>{minute}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Cannot be in the future or before session start
+              </div>
             </div>
           </div>
 
-          {/* Duration Preview - more compact */}
-          <div className="flex items-center justify-between p-2 bg-muted rounded-md">
+          {/* Duration Preview */}
+          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <span className="text-sm text-muted-foreground">Adjusted Duration:</span>
-            <span className="text-sm font-medium">{formatDuration(newDurationMs)}</span>
+            <span className="text-sm font-medium">{adjustedDuration}</span>
           </div>
 
           {/* Adjustment Reason */}
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="reason">Reason for Adjustment</Label>
             <Textarea
               id="reason"
-              value={adjustmentReason}
-              onChange={(e) => setAdjustmentReason(e.target.value)}
+              value={adjustForm.reason}
+              onChange={(e) => setAdjustForm(prev => ({ ...prev, reason: e.target.value }))}
               placeholder="Why are you adjusting this session? (e.g., forgot to stop timer, break time included)"
               rows={3}
+              className="resize-none"
             />
           </div>
 
-          {/* Action Buttons - matching the style */}
-          <div className="flex justify-end gap-2">
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="outline"
               onClick={handleCancel}
@@ -296,7 +557,7 @@ export function SessionAdjustmentModal({
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isLoading || !adjustmentReason.trim()}
+              disabled={isLoading || !adjustForm.reason.trim()}
             >
               {isLoading ? "Adjusting..." : "Adjust & Stop"}
             </Button>

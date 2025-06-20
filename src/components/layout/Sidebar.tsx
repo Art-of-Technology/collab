@@ -9,7 +9,8 @@ import {
   EnvelopeIcon,
   Squares2X2Icon,
   RectangleStackIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  ClockIcon
 } from "@heroicons/react/24/outline";
 import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
@@ -19,6 +20,7 @@ import { CustomAvatar } from "@/components/ui/custom-avatar";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 
 interface SidebarProps {
   pathname?: string;
@@ -29,6 +31,7 @@ interface SidebarProps {
 export default function Sidebar({ pathname = "", isCollapsed = false, toggleSidebar }: SidebarProps) {
   const { data: session } = useSession();
   const { currentWorkspace, isLoading } = useWorkspace();
+  const { settings } = useWorkspaceSettings();
   
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
@@ -39,7 +42,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     // Use currentWorkspace.id if available, or 'loading' as placeholder
     const workspaceId = currentWorkspace?.id || 'loading';
     
-    return [
+    const baseNavigation = [
       {
         name: "Dashboard",
         href: `/${workspaceId}/dashboard`,
@@ -58,6 +61,20 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         icon: RectangleStackIcon,
         current: pathname === `/${workspaceId}/tasks`,
       },
+    ];
+
+    // Conditionally add Timesheet if time tracking is enabled
+    if (settings?.timeTrackingEnabled) {
+      baseNavigation.push({
+        name: "Timesheet",
+        href: `/${workspaceId}/timesheet`,
+        icon: ClockIcon,
+        current: pathname === `/${workspaceId}/timesheet`,
+      });
+    }
+
+    // Add the rest of the navigation items
+    baseNavigation.push(
       {
         name: "Notes",
         href: `/${workspaceId}/notes`,
@@ -100,7 +117,9 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         icon: LightBulbIcon,
         current: pathname === `/${workspaceId}/features`,
       },
-    ];
+    );
+
+    return baseNavigation;
   };
 
   const navigation = getNavigation();

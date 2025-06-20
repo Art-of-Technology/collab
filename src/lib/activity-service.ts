@@ -46,7 +46,24 @@ export class ActivityService {
 
         if (shouldStopCurrentTask) {
           const activityName = eventType === EventType.TASK_START ? 'another task' : eventType.toLowerCase().replace('_start', '');
-          // Create TASK_STOP record for the current task
+          
+          // Create TASK_STOP UserEvent first (this is what session processing looks for)
+          await tx.userEvent.create({
+            data: {
+              userId,
+              taskId: currentStatus.currentTaskId,
+              eventType: EventType.TASK_STOP,
+              description: `Automatically stopped when switching to ${activityName}`,
+              metadata: { 
+                autoStopped: true, 
+                newActivity: eventType,
+                newTaskId: taskId || null 
+              },
+              startedAt: new Date(),
+            },
+          });
+          
+          // Create TASK_STOP record for the current task (for activity log)
           await tx.taskActivity.create({
             data: {
               taskId: currentStatus.currentTaskId,
@@ -148,6 +165,19 @@ export class ActivityService {
 
       // If user is currently working on a task, create a TASK_STOP record
       if (currentStatus?.currentTaskId && currentStatus.currentStatus === 'WORKING') {
+        // Create TASK_STOP UserEvent first (this is what session processing looks for)
+        await tx.userEvent.create({
+          data: {
+            userId,
+            taskId: currentStatus.currentTaskId,
+            eventType: EventType.TASK_STOP,
+            description: description || 'Stopped work and set to available',
+            metadata: { source: 'end-activity' },
+            startedAt: new Date(),
+          },
+        });
+        
+        // Create TaskActivity record (for activity log)
         await tx.taskActivity.create({
           data: {
             taskId: currentStatus.currentTaskId,

@@ -528,11 +528,12 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
             <button
               onClick={() => {
                 if (userStatus?.currentTaskId) {
+                  const sessionDurationMs = userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0;
                   setTimeAdjustmentData({
                     taskId: userStatus.currentTaskId,
                     taskTitle: userStatus.currentTask?.title || "Task",
-                    sessionDurationMs: userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0,
-                    totalDurationMs: userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0,
+                    sessionDurationMs,
+                    totalDurationMs: sessionDurationMs,
                   });
                   setShowTimeAdjustmentModal(true);
                 }
@@ -556,7 +557,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           disabled={isLoading}
           className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 backdrop-blur-sm border border-red-400/30 hover:border-red-300/50 shadow-lg hover:shadow-red-500/25"
         >
-          {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Trash2 className="h-3 w-3 md:h-4 md:w-4" />}
+          {isLoading ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <StopCircle className="h-3 w-3 md:h-4 md:w-4" />}
         </button>
       );
     }
@@ -918,6 +919,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           sessionDurationMs={timeAdjustmentData.sessionDurationMs}
           taskId={timeAdjustmentData.taskId}
           onSessionAdjusted={handleTimeAdjusted}
+          mode={timeAdjustmentData.sessionDurationMs > 24 * 60 * 60 * 1000 ? 'auto' : 'manual'}
         />
       )}
     </>
