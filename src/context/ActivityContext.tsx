@@ -106,13 +106,21 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
       return response.json();
     },
     onSuccess: (_, { taskId }) => {
+      // Capture current task ID before invalidation to refresh sessions for stopped task
+      const currentTaskId = userStatus?.currentTaskId;
+      
       // Invalidate user status and task queries
       queryClient.invalidateQueries({ queryKey: ['userStatus'] });
       queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
       queryClient.invalidateQueries({ queryKey: ['searchTasks'] });
       
-      // If this was a task-related activity, invalidate session caches
-      if (taskId) {
+      // Invalidate sessions for the current task being stopped (if any)
+      if (currentTaskId) {
+        invalidateTaskSessions(queryClient, currentTaskId);
+      }
+      
+      // If this was a task-related activity, also invalidate session caches for the new task
+      if (taskId && taskId !== currentTaskId) {
         invalidateTaskSessions(queryClient, taskId);
       }
     },
@@ -142,14 +150,21 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
       return response.json();
     },
     onSuccess: (data) => {
+      // Capture current task ID before invalidation to refresh sessions for stopped task
+      const currentTaskId = userStatus?.currentTaskId;
+      
       // Invalidate user status and task queries
       queryClient.invalidateQueries({ queryKey: ['userStatus'] });
       queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
       queryClient.invalidateQueries({ queryKey: ['searchTasks'] });
       
-      // If the ended activity was task-related, invalidate session caches
-      // The API response should include the taskId if it was a task activity
-      if (data?.taskId) {
+      // If there was a current task, invalidate its sessions
+      if (currentTaskId) {
+        invalidateTaskSessions(queryClient, currentTaskId);
+      }
+      
+      // If the API response includes a taskId, also invalidate that (fallback)
+      if (data?.taskId && data.taskId !== currentTaskId) {
         invalidateTaskSessions(queryClient, data.taskId);
       }
     },

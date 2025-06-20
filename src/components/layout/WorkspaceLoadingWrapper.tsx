@@ -19,9 +19,10 @@ export function WorkspaceLoadingWrapper({ children }: WorkspaceLoadingWrapperPro
   const isWelcomePage = pathname === '/welcome';
   const isCreateWorkspacePage = pathname === '/create-workspace';
   const isWorkspacesListPage = pathname === '/workspaces';
+  const isWorkspaceInvitationPage = pathname?.startsWith('/workspace-invitation');
   
   // Pages that should not show global loading
-  const shouldSkipLoading = isAuthPage || isWelcomePage || isCreateWorkspacePage || isWorkspacesListPage;
+  const shouldSkipLoading = isAuthPage || isWelcomePage || isCreateWorkspacePage || isWorkspacesListPage || isWorkspaceInvitationPage;
   
   // Extract workspace ID from URL to see if we're on a workspace route
   const isWorkspaceRoute = pathname && /^\/[^\/]+\//.test(pathname);

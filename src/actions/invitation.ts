@@ -148,7 +148,7 @@ export async function acceptInvitation(token: string) {
       workspaceId: invitation.workspaceId,
       userId: session.user.id,
       // Use default role if not specified
-      role: 'member'
+      role: 'MEMBER'
     }
   });
 

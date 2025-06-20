@@ -35,6 +35,14 @@ import { StatusSelect } from "./selectors/StatusSelect";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
 import { TaskTabs } from "@/components/tasks/TaskTabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // Import types and utilities
 import type {
@@ -92,6 +100,9 @@ export function TaskDetailContent({
     sessionDurationMs: number;
     totalDurationMs: number;
   } | null>(null);
+
+  // Helper modal state
+  const [showHelperModal, setShowHelperModal] = useState(false);
 
   // Use TanStack Query mutation
   const updateTaskMutation = useUpdateTask(task?.id || "");
@@ -207,6 +218,17 @@ export function TaskDetailContent({
   const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
     if (!task?.id) return;
 
+    // Check if user is assigned to this task before starting
+    if (action === "play") {
+      const isAssignedToMe = task.assignee?.id === currentUserId;
+      
+      if (!isAssignedToMe) {
+        // User is not assigned, show helper modal
+        setShowHelperModal(true);
+        return;
+      }
+    }
+
     // Check for long session before stopping
     if (action === "stop" && userStatus?.statusStartedAt && userStatus?.currentTaskId === task.id) {
       const sessionStart = new Date(userStatus.statusStartedAt);
@@ -271,6 +293,56 @@ export function TaskDetailContent({
     }
     setShowTimeAdjustmentModal(false);
     setTimeAdjustmentData(null);
+  };
+
+  const handleHelperConfirm = async () => {
+    if (!task?.id) return;
+
+    try {
+      // First, send help request
+      const helpResponse = await fetch(`/api/tasks/${task.id}/request-help`, {
+        method: 'POST',
+      });
+
+      if (!helpResponse.ok) {
+        const error = await helpResponse.json();
+        throw new Error(error.message || 'Failed to request help');
+      }
+
+      const helpData = await helpResponse.json();
+
+      // Then, start working on the task as a helper
+      setIsTimerLoading(true);
+      await handleTaskAction("play", task.id);
+
+      if (helpData.status === "approved") {
+        toast({
+          title: "Started as Helper",
+          description: "You are already approved! Timer started and your time will be tracked separately.",
+        });
+      } else {
+        toast({
+          title: "Started as Helper",
+          description: "Help request sent and timer started. Your time will be tracked separately.",
+        });
+      }
+
+      setShowHelperModal(false);
+      await fetchTotalPlayTime();
+      refreshBoards();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start as helper",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTimerLoading(false);
+    }
+  };
+
+  const handleHelperCancel = () => {
+    setShowHelperModal(false);
   };
 
   const handleAiImproveDescription = async (text: string): Promise<string> => {
@@ -623,6 +695,19 @@ export function TaskDetailContent({
     // Handle session edit display
     if (activity.action === "SESSION_EDITED" && activityDetails) {
       actionText = "edited a work session for";
+    }
+
+    // Handle help request activities
+    if (activity.action === "HELP_REQUEST_SENT" && activityDetails) {
+      actionText = "requested help for";
+    }
+
+    if (activity.action === "HELP_REQUEST_APPROVED" && activityDetails) {
+      actionText = `approved ${activityDetails.helperName}'s help request for`;
+    }
+
+    if (activity.action === "HELP_REQUEST_REJECTED" && activityDetails) {
+      actionText = `rejected ${activityDetails.helperName}'s help request for`;
     }
 
     return (
@@ -1338,6 +1423,60 @@ export function TaskDetailContent({
           }}
         />
       )}
+
+      {/* Helper Confirmation Modal */}
+      <Dialog open={showHelperModal} onOpenChange={setShowHelperModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Work as Helper</DialogTitle>
+            <DialogDescription>
+              You are not assigned to this task. You will be added as a helper and your time will be tracked separately.
+              {task?.assignee && (
+                <span className="block mt-2 text-sm">
+                  This task is assigned to <strong>{task.assignee.name}</strong>.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {task && (
+            <div className="py-4">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <Play className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{task.title}</p>
+                  {task.issueKey && (
+                    <p className="text-xs text-muted-foreground font-mono">{task.issueKey}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handleHelperCancel}
+              disabled={isTimerLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHelperConfirm}
+              disabled={isTimerLoading}
+            >
+              {isTimerLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                "Yes, Start as Helper"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Time Adjustment Modal */}
       {timeAdjustmentData && (

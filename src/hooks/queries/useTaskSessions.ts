@@ -14,7 +14,7 @@ interface SessionsResponse {
 export const sessionKeys = {
   all: ['sessions'] as const,
   lists: () => [...sessionKeys.all, 'list'] as const,
-  list: (taskId: string, userId: string) => [...sessionKeys.lists(), taskId, userId] as const,
+  list: (taskId: string) => [...sessionKeys.lists(), taskId] as const,
 };
 
 // Fetch sessions for a task
@@ -22,7 +22,7 @@ export const useTaskSessions = (taskId: string) => {
   const { data: session } = useSession();
   
   return useQuery<SessionsResponse>({
-    queryKey: sessionKeys.list(taskId, session?.user?.id || ''),
+    queryKey: sessionKeys.list(taskId),
     queryFn: async () => {
       if (!taskId || !session?.user?.id) {
         throw new Error('Task ID and user session required');

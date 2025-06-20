@@ -22,10 +22,27 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { adjustedDurationMs, originalDurationMs, adjustmentReason } = body;
+    const { 
+      adjustedStartTime, 
+      adjustedEndTime, 
+      adjustedDurationMs, 
+      originalDurationMs, 
+      adjustmentReason 
+    } = body;
 
-    if (!adjustedDurationMs || !originalDurationMs || !adjustmentReason) {
-      return new NextResponse("Missing required fields", { status: 400 });
+    // Support both new format (with start/end times) and legacy format (duration only)
+    if (adjustedStartTime && adjustedEndTime) {
+      // New format with start and end times
+      if (!adjustedStartTime || !adjustedEndTime || !adjustmentReason) {
+        return new NextResponse("Missing required fields for time-based adjustment", { status: 400 });
+      }
+    } else if (adjustedDurationMs) {
+      // Legacy format with duration only
+      if (!adjustedDurationMs || !originalDurationMs || !adjustmentReason) {
+        return new NextResponse("Missing required fields for duration-based adjustment", { status: 400 });
+      }
+    } else {
+      return new NextResponse("Either adjustedStartTime/adjustedEndTime or adjustedDurationMs must be provided", { status: 400 });
     }
 
     // Verify the task exists and user has permission
@@ -84,9 +101,53 @@ export async function POST(
       return new NextResponse("Session already stopped", { status: 400 });
     }
 
-    // Calculate the adjusted end time based on the start time and adjusted duration
-    const adjustedEndTime = new Date(currentStartEvent.startedAt.getTime() + adjustedDurationMs);
-    const originalEndTime = new Date(currentStartEvent.startedAt.getTime() + originalDurationMs);
+    let finalStartTime: Date;
+    let finalEndTime: Date;
+    let finalDurationMs: number;
+
+    if (adjustedStartTime && adjustedEndTime) {
+      // New format: use provided start and end times
+      finalStartTime = new Date(adjustedStartTime);
+      finalEndTime = new Date(adjustedEndTime);
+      finalDurationMs = finalEndTime.getTime() - finalStartTime.getTime();
+      
+      // Validate times
+      const now = new Date();
+      if (finalStartTime > now || finalEndTime > now) {
+        return new NextResponse("Start time and end time cannot be in the future", { status: 400 });
+      }
+      
+      if (finalStartTime >= finalEndTime) {
+        return new NextResponse("Start time must be before end time", { status: 400 });
+      }
+      
+      if (finalDurationMs <= 0) {
+        return new NextResponse("Session duration must be greater than 0", { status: 400 });
+      }
+    } else {
+      // Legacy format: calculate end time based on current start time and adjusted duration
+      finalStartTime = currentStartEvent.startedAt;
+      finalDurationMs = adjustedDurationMs;
+      finalEndTime = new Date(finalStartTime.getTime() + finalDurationMs);
+    }
+
+    const originalEndTime = new Date(currentStartEvent.startedAt.getTime() + (originalDurationMs || 0));
+
+    // Update the start event if we have a new start time
+    if (adjustedStartTime && finalStartTime.getTime() !== currentStartEvent.startedAt.getTime()) {
+      await prisma.userEvent.update({
+        where: { id: currentStartEvent.id },
+        data: {
+          startedAt: finalStartTime,
+          metadata: {
+            ...((currentStartEvent.metadata as any) || {}),
+            editedAt: new Date().toISOString(),
+            editReason: adjustmentReason,
+            originalStartTime: currentStartEvent.startedAt.toISOString(),
+          },
+        },
+      });
+    }
 
     // Create the stop event with adjustment metadata
     const stopEvent = await prisma.userEvent.create({
@@ -94,16 +155,16 @@ export async function POST(
         userId,
         taskId,
         eventType: 'TASK_STOP',
-        startedAt: adjustedEndTime,
+        startedAt: finalEndTime,
         description: `Session stopped with adjustment: ${adjustmentReason}`,
         metadata: {
           editedAt: new Date().toISOString(),
           editReason: adjustmentReason,
           originalEndTime: originalEndTime.toISOString(),
-          adjustedEndTime: adjustedEndTime.toISOString(),
-          originalDurationMs,
-          adjustedDurationMs,
-          adjustmentType: 'long_session_protection',
+          adjustedEndTime: finalEndTime.toISOString(),
+          originalDurationMs: originalDurationMs || 0,
+          adjustedDurationMs: finalDurationMs,
+          adjustmentType: adjustedStartTime ? 'time_based_adjustment' : 'duration_based_adjustment',
         },
       },
     });
@@ -132,9 +193,11 @@ export async function POST(
       stopEvent: {
         id: stopEvent.id,
         startedAt: stopEvent.startedAt,
-        adjustedDurationMs,
-        originalDurationMs,
+        adjustedDurationMs: finalDurationMs,
+        originalDurationMs: originalDurationMs || 0,
         adjustmentReason,
+        adjustedStartTime: finalStartTime.toISOString(),
+        adjustedEndTime: finalEndTime.toISOString(),
       },
     });
 

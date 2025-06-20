@@ -62,6 +62,18 @@ export async function POST(
       return new NextResponse("Help request has already been processed", { status: 400 });
     }
 
+    // If rejecting, delete all user sessions for this task
+    if (action === 'reject') {
+      // Delete all user events for this helper on this task
+      await prisma.userEvent.deleteMany({
+        where: {
+          taskId: taskId,
+          userId: helperId,
+          eventType: { in: ['TASK_START', 'TASK_PAUSE', 'TASK_STOP'] }
+        }
+      });
+    }
+
     // Update the help request status
     const updatedRequest = await prisma.taskAssignee.update({
       where: {
@@ -74,6 +86,20 @@ export async function POST(
         status: action === 'approve' ? "APPROVED" : "REJECTED",
         approvedAt: action === 'approve' ? new Date() : null,
         approvedBy: session.user.id
+      }
+    });
+
+    // Log activity for help request approval/rejection
+    await prisma.taskActivity.create({
+      data: {
+        action: action === 'approve' ? "HELP_REQUEST_APPROVED" : "HELP_REQUEST_REJECTED",
+        details: JSON.stringify({
+          helperId: helperId,
+          helperName: helpRequest.user.name,
+          approverName: session.user.name
+        }),
+        taskId: taskId,
+        userId: session.user.id
       }
     });
 
