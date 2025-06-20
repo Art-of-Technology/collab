@@ -5,6 +5,20 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export interface TaskSession {
   id: string;
+  user: {
+    id: string;
+    name: string;
+    image?: string;
+    useCustomAvatar?: boolean;
+    avatarSkinTone?: number;
+    avatarEyes?: number;
+    avatarBrows?: number;
+    avatarMouth?: number;
+    avatarNose?: number;
+    avatarHair?: number;
+    avatarEyewear?: number;
+    avatarAccessory?: number;
+  };
   startEvent: {
     id: string;
     startedAt: Date;
@@ -74,29 +88,48 @@ export async function GET(
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    // Get all user events for this task
+    // Get all user events for this task with user info (from all users)
     const userEvents = await prisma.userEvent.findMany({
       where: {
         taskId,
-        userId,
         eventType: { in: ['TASK_START', 'TASK_PAUSE', 'TASK_STOP'] },
       },
-      orderBy: { startedAt: 'asc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true,
+          },
+        },
+      },
+      orderBy: [{ startedAt: 'asc' }, { userId: 'asc' }],
     });
 
-    // Group events into sessions
+    // Group events into sessions by user
     const sessions: TaskSession[] = [];
-    let currentStart: any = null;
+    const userSessionStates: Record<string, any> = {}; // Track ongoing sessions per user
 
     for (let i = 0; i < userEvents.length; i++) {
       const event = userEvents[i];
+      const currentUserId = event.userId;
       
       if (event.eventType === 'TASK_START') {
-        currentStart = event;
+        userSessionStates[currentUserId] = event;
       } else if (
         (event.eventType === 'TASK_PAUSE' || event.eventType === 'TASK_STOP') &&
-        currentStart
+        userSessionStates[currentUserId]
       ) {
+        const currentStart = userSessionStates[currentUserId];
         const durationMs = event.startedAt.getTime() - currentStart.startedAt.getTime();
         // Check if either start or end event has been edited
         const isAdjusted = !!(event.metadata as any)?.editedAt || !!(currentStart.metadata as any)?.editedAt;
@@ -104,9 +137,9 @@ export async function GET(
         // Check if this is a pause followed by a stop (user paused then completed work)
         let effectiveEventType = event.eventType;
         if (event.eventType === 'TASK_PAUSE') {
-          // Look ahead to see if the next event is a TASK_STOP without a TASK_START in between
-          const nextEvent = userEvents[i + 1];
-          if (nextEvent && nextEvent.eventType === 'TASK_STOP') {
+          // Look ahead to see if the next event for this user is a TASK_STOP without a TASK_START in between
+          const nextUserEvent = userEvents.slice(i + 1).find(e => e.userId === currentUserId);
+          if (nextUserEvent && nextUserEvent.eventType === 'TASK_STOP') {
             // This pause was followed by a stop, so treat it as stopped
             effectiveEventType = 'TASK_STOP';
           }
@@ -114,6 +147,20 @@ export async function GET(
         
         sessions.push({
           id: `${currentStart.id}-${event.id}`,
+          user: {
+            id: currentStart.user.id,
+            name: currentStart.user.name || '',
+            image: currentStart.user.image || undefined,
+            useCustomAvatar: currentStart.user.useCustomAvatar || false,
+            avatarSkinTone: currentStart.user.avatarSkinTone || undefined,
+            avatarEyes: currentStart.user.avatarEyes || undefined,
+            avatarBrows: currentStart.user.avatarBrows || undefined,
+            avatarMouth: currentStart.user.avatarMouth || undefined,
+            avatarNose: currentStart.user.avatarNose || undefined,
+            avatarHair: currentStart.user.avatarHair || undefined,
+            avatarEyewear: currentStart.user.avatarEyewear || undefined,
+            avatarAccessory: currentStart.user.avatarAccessory || undefined,
+          },
           startEvent: {
             id: currentStart.id,
             startedAt: currentStart.startedAt,
@@ -139,27 +186,43 @@ export async function GET(
           } : undefined,
         });
         
-        currentStart = null;
+        userSessionStates[currentUserId] = null;
       }
     }
 
-    // Handle ongoing session
-    if (currentStart) {
-      const durationMs = Date.now() - currentStart.startedAt.getTime();
-      sessions.push({
-        id: `${currentStart.id}-ongoing`,
-        startEvent: {
-          id: currentStart.id,
-          startedAt: currentStart.startedAt,
-          description: currentStart.description,
-          metadata: currentStart.metadata,
-        },
-        durationMs,
-        formattedDuration: formatDuration(durationMs),
-        isOngoing: true,
-        isAdjusted: false,
-      });
-    }
+    // Handle ongoing sessions for each user
+    Object.entries(userSessionStates).forEach(([, currentStart]) => {
+      if (currentStart) {
+        const durationMs = Date.now() - currentStart.startedAt.getTime();
+        sessions.push({
+          id: `${currentStart.id}-ongoing`,
+          user: {
+            id: currentStart.user.id,
+            name: currentStart.user.name || '',
+            image: currentStart.user.image || undefined,
+            useCustomAvatar: currentStart.user.useCustomAvatar || false,
+            avatarSkinTone: currentStart.user.avatarSkinTone || undefined,
+            avatarEyes: currentStart.user.avatarEyes || undefined,
+            avatarBrows: currentStart.user.avatarBrows || undefined,
+            avatarMouth: currentStart.user.avatarMouth || undefined,
+            avatarNose: currentStart.user.avatarNose || undefined,
+            avatarHair: currentStart.user.avatarHair || undefined,
+            avatarEyewear: currentStart.user.avatarEyewear || undefined,
+            avatarAccessory: currentStart.user.avatarAccessory || undefined,
+          },
+          startEvent: {
+            id: currentStart.id,
+            startedAt: currentStart.startedAt,
+            description: currentStart.description,
+            metadata: currentStart.metadata,
+          },
+          durationMs,
+          formattedDuration: formatDuration(durationMs),
+          isOngoing: true,
+          isAdjusted: false,
+        });
+      }
+    });
 
     // Calculate total time
     const totalTimeMs = sessions.reduce((total, session) => total + session.durationMs, 0);

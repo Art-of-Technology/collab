@@ -79,6 +79,19 @@ export function TaskActivity({
       actionText = "edited a work session for";
     }
 
+    // Handle help request activities
+    if (activity.action === "HELP_REQUEST_SENT" && activityDetails) {
+      actionText = "requested help for";
+    }
+
+    if (activity.action === "HELP_REQUEST_APPROVED" && activityDetails) {
+      actionText = `approved ${activityDetails.helperName}'s help request for`;
+    }
+
+    if (activity.action === "HELP_REQUEST_REJECTED" && activityDetails) {
+      actionText = `rejected ${activityDetails.helperName}'s help request for`;
+    }
+
     return (
       <div key={activity.id} className="group flex items-start space-x-3 py-3 border-b border-border/30 last:border-b-0 hover:bg-muted/20 px-2 rounded">
         <CustomAvatar user={activity.user} size="sm" />

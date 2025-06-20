@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useToast } from '@/hooks/use-toast';
-import type { TimesheetData, TimesheetEntry } from '@/app/api/activities/timesheet/route';
+import type { TimesheetData } from '@/app/api/activities/timesheet/route';
 
 export interface TimesheetFilters {
   view: 'daily' | 'weekly' | 'monthly';
@@ -21,7 +21,6 @@ const timesheetKeys = {
 
 export function useTimesheet(filters: TimesheetFilters) {
   const { currentWorkspace } = useWorkspace();
-  const { toast } = useToast();
 
   return useQuery({
     queryKey: timesheetKeys.list(currentWorkspace?.id || '', filters),

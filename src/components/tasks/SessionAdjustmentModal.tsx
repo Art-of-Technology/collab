@@ -365,7 +365,7 @@ export function SessionAdjustmentModal({
                 <ul className="text-xs space-y-1 text-blue-700 dark:text-blue-300">
                   <li>• Start time is fixed to when you began this session</li>
                   <li>• Only end time can be adjusted (cannot be in the future)</li>
-                  <li>• For more complex edits, use "Edit Session" after stopping</li>
+                  <li>• For more complex edits, use &quot;Edit Session&quot; after stopping</li>
                 </ul>
               </div>
             </div>

@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { TaskSession } from "@/app/api/tasks/[taskId]/sessions/route";
-import { useTaskSessions, useUpdateSession } from "@/hooks/queries/useTaskSessions";
+import { useTaskSessions } from "@/hooks/queries/useTaskSessions";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 
 interface TaskSessionsViewProps {
   taskId: string;
@@ -116,10 +117,13 @@ export function TaskSessionsView({ taskId, onRefresh }: TaskSessionsViewProps) {
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <div className="flex items-center gap-2">
-                      {getSessionIcon(session)}
-                      <Badge className={getSessionStatusColor(session)}>
-                        {getSessionStatus(session)}
-                      </Badge>
+                      <CustomAvatar user={session.user} size="sm" />
+                      <div className="flex items-center gap-2">
+                        {getSessionIcon(session)}
+                        <Badge className={getSessionStatusColor(session)}>
+                          {getSessionStatus(session)}
+                        </Badge>
+                      </div>
                     </div>
                     
                     <div className="flex-1">
@@ -142,6 +146,9 @@ export function TaskSessionsView({ taskId, onRefresh }: TaskSessionsViewProps) {
                       <div className="flex items-center gap-2 mt-1">
                         <span className="font-medium text-sm">
                           {getSessionStatus(session) === "Playing" ? "Not finished" : session.formattedDuration}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          by {session.user.name}
                         </span>
                         {session.isAdjusted && (
                           <Badge variant="outline" className="text-xs">

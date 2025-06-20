@@ -69,13 +69,46 @@ export async function POST(
       return new NextResponse("You are already the assignee of this task", { status: 400 });
     }
 
-    // Create helper request
-    await prisma.taskAssignee.create({
+    // Create or update helper request
+    if (existingAssignment && existingAssignment.status === "REJECTED") {
+      // User was previously rejected, update existing record to pending
+      await prisma.taskAssignee.update({
+        where: {
+          taskId_userId: {
+            taskId: taskId,
+            userId: session.user.id
+          }
+        },
+        data: {
+          status: "PENDING",
+          approvedAt: null,
+          approvedBy: null,
+          assignedAt: new Date() // Update the request time
+        }
+      });
+    } else {
+      // Create new helper request
+      await prisma.taskAssignee.create({
+        data: {
+          taskId: taskId,
+          userId: session.user.id,
+          role: "HELPER",
+          status: "PENDING"
+        }
+      });
+    }
+
+    // Log activity for help request
+    await prisma.taskActivity.create({
       data: {
+        action: "HELP_REQUEST_SENT",
+        details: JSON.stringify({
+          requesterName: session.user.name,
+          assigneeName: task.assignee?.name,
+          reporterName: task.reporter?.name
+        }),
         taskId: taskId,
-        userId: session.user.id,
-        role: "HELPER",
-        status: "PENDING"
+        userId: session.user.id
       }
     });
 

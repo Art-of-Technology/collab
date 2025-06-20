@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -12,19 +12,14 @@ import {
   Pause, 
   Square, 
   ChevronDown, 
-  ChevronUp,
   ExternalLink,
   Target,
   Coffee,
   Users,
-  Info,
-  Calendar,
   Activity,
   Eye,
   Search,
   CheckCircle2,
-  AlertCircle,
-  Timer,
   PenLine
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -362,7 +357,7 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {entry.sessions.map((session, index) => (
+                  {entry.sessions.map((session) => (
                     <div
                       key={session.id}
                       className="group/session flex items-center justify-between p-3 border rounded-lg hover:bg-muted/20 transition-colors"

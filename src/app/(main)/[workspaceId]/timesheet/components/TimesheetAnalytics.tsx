@@ -2,7 +2,6 @@
 
 import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { 
   BarChart3, 
@@ -12,7 +11,6 @@ import {
   TrendingUp,
   TrendingDown,
   Coffee,
-  Users
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { TimesheetData } from "@/app/api/activities/timesheet/route";
@@ -26,7 +24,7 @@ interface TimesheetAnalyticsProps {
 export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
   // Calculate analytics data
   const analytics = useMemo(() => {
-    const { entries, summary } = data;
+    const { entries } = data;
     
     // Group by activity type
     const timeByActivity = entries.reduce((acc, entry) => {
@@ -280,7 +278,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
             {data.summary.productivityScore >= 80 && (
               <div className="flex items-center gap-2 text-green-700">
                 <TrendingUp className="h-4 w-4" />
-                <span>Great productivity! You're maintaining excellent focus.</span>
+                <span>Great productivity! You&apos;re maintaining excellent focus.</span>
               </div>
             )}
             

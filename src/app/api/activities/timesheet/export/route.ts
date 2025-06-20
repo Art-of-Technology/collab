@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (exportFormat === 'csv') {
-      return generateCSVExport(userEvents, view, startDate, endDate);
+      return generateCSVExport(userEvents, view, startDate);
     } else if (exportFormat === 'pdf') {
       return generatePDFExport(userEvents, view, startDate, endDate, workspace.name);
     }
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateCSVExport(userEvents: any[], view: string, startDate: Date, endDate: Date) {
+function generateCSVExport(userEvents: any[], view: string, startDate: Date) {
   const headers = [
     'Date',
     'Start Time',
@@ -126,7 +126,7 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date, end
   ];
 
   const rows = [];
-  let currentSessions: Record<string, { start: Date; eventType: EventType; task?: any }> = {};
+  const currentSessions: Record<string, { start: Date; eventType: EventType; task?: any }> = {};
 
   for (const event of userEvents) {
     const activityType = getActivityType(event.eventType);
@@ -170,7 +170,7 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date, end
   }
 
   // Handle ongoing sessions
-  for (const [sessionKey, session] of Object.entries(currentSessions)) {
+  for (const [, session] of Object.entries(currentSessions)) {
     const duration = Date.now() - session.start.getTime();
     const durationHours = (duration / (1000 * 60 * 60)).toFixed(2);
     
@@ -206,7 +206,7 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date, end
 function generatePDFExport(userEvents: any[], view: string, startDate: Date, endDate: Date, workspaceName: string) {
   // Process events into sessions (like the main timesheet API does)
   const sessions = [];
-  let currentSessions: Record<string, { start: Date; eventType: EventType; task?: any }> = {};
+  const currentSessions: Record<string, { start: Date; eventType: EventType; task?: any }> = {};
 
   for (const event of userEvents) {
     const activityType = getActivityType(event.eventType);
@@ -248,7 +248,7 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
   }
 
   // Handle ongoing sessions
-  for (const [sessionKey, session] of Object.entries(currentSessions)) {
+  for (const [, session] of Object.entries(currentSessions)) {
     const duration = Date.now() - session.start.getTime();
     const durationFormatted = formatDuration(duration);
     
