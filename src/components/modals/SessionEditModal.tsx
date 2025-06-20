@@ -176,17 +176,42 @@ export function SessionEditModal({
     }
 
     try {
-      await updateSessionMutation.mutateAsync({
-        taskId,
-        sessionId: session.id,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        reason: editForm.reason.trim(),
-      });
+      // Determine if this is a task session or activity session
+      const isActivitySession = taskId.startsWith('activity-'); // entry ID for activities starts with 'activity-'
+      
+      if (isActivitySession) {
+        // Use the new activity session API
+        const response = await fetch(`/api/activities/sessions/${session.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            reason: editForm.reason.trim(),
+            // Don't send description - let the API preserve the original activity note
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error || 'Failed to update activity session');
+        }
+      } else {
+        // Use the existing task session API
+        await updateSessionMutation.mutateAsync({
+          taskId,
+          sessionId: session.id,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          reason: editForm.reason.trim(),
+        });
+      }
 
       toast({
         title: "Session Updated",
-        description: "The work session has been updated successfully.",
+        description: "The session has been updated successfully.",
       });
       
       onClose();
@@ -218,7 +243,9 @@ export function SessionEditModal({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Work Session</DialogTitle>
+          <DialogTitle>
+            {taskId.startsWith('activity-') ? 'Edit Activity Session' : 'Edit Work Session'}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {/* Constraints Info */}

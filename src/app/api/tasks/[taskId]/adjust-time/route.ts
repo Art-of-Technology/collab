@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { formatDurationUI } from "@/utils/duration";
 
 export async function POST(
   req: Request,
@@ -61,20 +62,9 @@ export async function POST(
     const adjustmentMs = newDurationMs - originalDurationMs;
     const isReduction = adjustmentMs < 0;
 
-    // Format duration for display
-    const formatDuration = (ms: number) => {
-      const totalSeconds = Math.floor(Math.abs(ms) / 1000);
-      const d = Math.floor(totalSeconds / (3600 * 24));
-      const h = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-
-      if (d > 0) return `${d}d ${h}h ${m}m`;
-      return `${h}h ${m}m`;
-    };
-
-    const originalFormatted = formatDuration(originalDurationMs);
-    const newFormatted = formatDuration(newDurationMs);
-    const adjustmentFormatted = formatDuration(adjustmentMs);
+    const originalFormatted = formatDurationUI(originalDurationMs);
+    const newFormatted = formatDurationUI(newDurationMs);
+    const adjustmentFormatted = formatDurationUI(adjustmentMs);
 
     // Create a time adjustment activity record
     await prisma.taskActivity.create({

@@ -27,7 +27,7 @@ interface ActivityContextType {
   userStatus: UserStatus | null;
   isLoading: boolean;
   error: Error | null;
-  startActivity: (eventType: string, taskId?: string, duration?: number) => Promise<void>;
+  startActivity: (eventType: string, taskId?: string, duration?: number, description?: string) => Promise<void>;
   endActivity: (description?: string) => Promise<void>;
   handleTaskAction: (action: "play" | "pause" | "stop", taskId: string) => Promise<void>;
   refetchStatus: () => void;
@@ -233,8 +233,8 @@ export function ActivityProvider({ children }: ActivityProviderProps) {
     userStatus: userStatus || null,
     isLoading: isLoading || startActivityMutation.isPending || endActivityMutation.isPending || taskActionMutation.isPending,
     error: error as Error | null,
-    startActivity: async (eventType: string, taskId?: string, duration?: number) => {
-      await startActivityMutation.mutateAsync({ eventType, taskId, duration });
+    startActivity: async (eventType: string, taskId?: string, duration?: number, description?: string) => {
+      await startActivityMutation.mutateAsync({ eventType, taskId, duration, description });
     },
     endActivity: async (description?: string) => {
       await endActivityMutation.mutateAsync(description);

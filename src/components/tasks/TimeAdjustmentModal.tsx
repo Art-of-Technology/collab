@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Clock, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formatDurationUI } from "@/utils/duration";
 
 interface TimeAdjustmentModalProps {
   isOpen: boolean;
@@ -74,15 +75,7 @@ export function TimeAdjustmentModal({
     return (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000);
   };
 
-  const formatDuration = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const d = Math.floor(totalSeconds / (3600 * 24));
-    const h = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
 
-    if (d > 0) return `${d}d ${h}h ${m}m`;
-    return `${h}h ${m}m`;
-  };
 
   const newDurationMs = calculateNewDurationMs();
   const timeDifference = newDurationMs - originalDurationMs;
@@ -136,7 +129,7 @@ export function TimeAdjustmentModal({
 
       toast({
         title: "Time Adjusted",
-        description: `Task time has been adjusted to ${formatDuration(newDurationMs)}.`,
+        description: `Task time has been adjusted to ${formatDurationUI(newDurationMs)}.`,
       });
 
       onTimeAdjusted();
@@ -254,11 +247,11 @@ export function TimeAdjustmentModal({
           <div className="bg-muted/30 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">New duration:</span>
-              <span className="font-mono font-bold text-lg">{formatDuration(newDurationMs)}</span>
+              <span className="font-mono font-bold text-lg">{formatDurationUI(newDurationMs)}</span>
             </div>
             {timeDifference !== 0 && (
               <div className="mt-2 text-sm text-muted-foreground">
-                {isReduction ? "Reducing" : "Adding"} {formatDuration(Math.abs(timeDifference))}
+                {isReduction ? "Reducing" : "Adding"} {formatDurationUI(Math.abs(timeDifference))}
               </div>
             )}
           </div>

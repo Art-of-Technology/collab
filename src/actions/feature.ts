@@ -80,23 +80,54 @@ export async function getFeatureRequests({
     const totalCount = featuresWithScores.length;
     const totalPages = Math.ceil(totalCount / limit);
 
-    // Sort ALL features by the requested criteria
+    // Sort ALL features by the requested criteria, but always put completed items at the end
     const sortedFeatures = [...featuresWithScores];
+
+    // Helper function to check if a feature is completed
+    const isCompleted = (feature: any) => {
+      return feature.status === 'COMPLETED' || feature.status === 'completed';
+    };
 
     switch (orderBy) {
       case 'latest':
-        sortedFeatures.sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
+        sortedFeatures.sort((a, b) => {
+          // First, sort by completion status (non-completed first)
+          const aCompleted = isCompleted(a);
+          const bCompleted = isCompleted(b);
+          
+          if (aCompleted !== bCompleted) {
+            return aCompleted ? 1 : -1; // Completed items go to the end
+          }
+          
+          // Then sort by date
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
         break;
       case 'oldest':
-        sortedFeatures.sort((a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
+        sortedFeatures.sort((a, b) => {
+          // First, sort by completion status (non-completed first)
+          const aCompleted = isCompleted(a);
+          const bCompleted = isCompleted(b);
+          
+          if (aCompleted !== bCompleted) {
+            return aCompleted ? 1 : -1; // Completed items go to the end
+          }
+          
+          // Then sort by date
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
         break;
       case 'most_votes':
         sortedFeatures.sort((a, b) => {
-          // If vote scores are different, sort by vote score
+          // First, sort by completion status (non-completed first)
+          const aCompleted = isCompleted(a);
+          const bCompleted = isCompleted(b);
+          
+          if (aCompleted !== bCompleted) {
+            return aCompleted ? 1 : -1; // Completed items go to the end
+          }
+          
+          // Then sort by vote score
           if (b.voteScore !== a.voteScore) {
             return b.voteScore - a.voteScore;
           }
@@ -106,7 +137,15 @@ export async function getFeatureRequests({
         break;
       case 'least_votes':
         sortedFeatures.sort((a, b) => {
-          // If vote scores are different, sort by vote score
+          // First, sort by completion status (non-completed first)
+          const aCompleted = isCompleted(a);
+          const bCompleted = isCompleted(b);
+          
+          if (aCompleted !== bCompleted) {
+            return aCompleted ? 1 : -1; // Completed items go to the end
+          }
+          
+          // Then sort by vote score
           if (a.voteScore !== b.voteScore) {
             return a.voteScore - b.voteScore;
           }
@@ -116,9 +155,18 @@ export async function getFeatureRequests({
         break;
       default:
         // Default to latest
-        sortedFeatures.sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
+        sortedFeatures.sort((a, b) => {
+          // First, sort by completion status (non-completed first)
+          const aCompleted = isCompleted(a);
+          const bCompleted = isCompleted(b);
+          
+          if (aCompleted !== bCompleted) {
+            return aCompleted ? 1 : -1; // Completed items go to the end
+          }
+          
+          // Then sort by date
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
     }
 
     // AFTER sorting, apply pagination

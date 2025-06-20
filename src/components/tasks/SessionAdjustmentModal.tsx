@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CalendarIcon, AlertTriangle, Clock, Info } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatDurationUI } from "@/utils/duration";
 
 interface SessionAdjustmentModalProps {
   isOpen: boolean;
@@ -113,15 +114,7 @@ export function SessionAdjustmentModal({
     return combined;
   };
 
-  const formatDuration = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const d = Math.floor(totalSeconds / (3600 * 24));
-    const h = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
 
-    if (d > 0) return `${d}d ${h}h ${m}m`;
-    return `${h}h ${m}m`;
-  };
 
   const handleQuickAdjustment = (preset: { hours: number; minutes: number }) => {
     if (!adjustForm.startDate) return;
@@ -224,7 +217,7 @@ export function SessionAdjustmentModal({
 
       toast({
         title: "Session Adjusted",
-        description: `Session stopped and adjusted to ${formatDuration(adjustedDurationMs)}.`,
+        description: `Session stopped and adjusted to ${formatDurationUI(adjustedDurationMs)}.`,
       });
 
       onSessionAdjusted();
@@ -291,14 +284,14 @@ export function SessionAdjustmentModal({
   // Calculate adjusted duration for display
   const adjustedDuration = combineDateTime(adjustForm.endDate, adjustForm.endHour, adjustForm.endMinute) && 
                            combineDateTime(adjustForm.startDate, adjustForm.startHour, adjustForm.startMinute)
-    ? formatDuration(
+    ? formatDurationUI(
         combineDateTime(adjustForm.endDate, adjustForm.endHour, adjustForm.endMinute)!.getTime() - 
         combineDateTime(adjustForm.startDate, adjustForm.startHour, adjustForm.startMinute)!.getTime()
       )
     : "Invalid";
 
   const getModalContent = () => {
-    const originalDuration = formatDuration(sessionDurationMs);
+    const originalDuration = formatDurationUI(sessionDurationMs);
 
     if (mode === 'auto') {
       return {
