@@ -403,7 +403,7 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {!session.isOngoing && entry.task && (
+                        {!session.isOngoing && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -432,7 +432,7 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
         isOpen={!!editingSession}
         onClose={() => setEditingSession(null)}
         session={editingSession}
-        taskId={entry.task?.id || ""}
+        taskId={entry.task?.id || entry.id}
         onSessionUpdated={() => {
           setEditingSession(null);
           onRefresh?.();

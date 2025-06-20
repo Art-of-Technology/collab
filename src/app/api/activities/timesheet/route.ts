@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { EventType } from "@prisma/client";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay, format } from "date-fns";
+import { formatDurationDetailed } from "@/utils/duration";
 
 export interface TimesheetEntry {
   id: string;
@@ -41,12 +42,16 @@ export interface TimesheetSummary {
   totalWorkTime: number;
   totalBreakTime: number;
   totalMeetingTime: number;
+  totalResearchTime: number;
+  totalReviewTime: number;
   totalTasks: number;
   totalActiveTasks: number;
   totalPausedTasks: number;
   formattedTotalWorkTime: string;
   formattedTotalBreakTime: string;
   formattedTotalMeetingTime: string;
+  formattedTotalResearchTime: string;
+  formattedTotalReviewTime: string;
   productivityScore: number;
 }
 
@@ -59,17 +64,7 @@ export interface TimesheetData {
   };
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 0) ms = 0;
-  const totalSeconds = Math.floor(ms / 1000);
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
 
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
 
 function getActivityType(eventType: EventType): string {
   const typeMap: Record<EventType, string> = {
@@ -95,53 +90,63 @@ function getActivityType(eventType: EventType): string {
   return typeMap[eventType] || 'other';
 }
 
-function getSessionDescription(startEventType: EventType, endEventType?: EventType): string {
+function getSessionDescription(startEventType: EventType, endEventType?: EventType, activityNote?: string): string {
   // For ongoing sessions (no end event)
   if (!endEventType) {
-    switch (startEventType) {
-      case EventType.TASK_START:
-        return 'Working on task';
-      case EventType.LUNCH_START:
-        return 'On lunch break';
-      case EventType.BREAK_START:
-        return 'Taking a break';
-      case EventType.MEETING_START:
-        return 'In a meeting';
-      case EventType.TRAVEL_START:
-        return 'Traveling';
-      case EventType.REVIEW_START:
-        return 'Reviewing work';
-      case EventType.RESEARCH_START:
-        return 'Researching';
-      default:
-        return 'Active';
-    }
+    const baseDescription = (() => {
+      switch (startEventType) {
+        case EventType.TASK_START:
+          return 'Working on task';
+        case EventType.LUNCH_START:
+          return 'On lunch break';
+        case EventType.BREAK_START:
+          return 'Taking a break';
+        case EventType.MEETING_START:
+          return 'In a meeting';
+        case EventType.TRAVEL_START:
+          return 'Traveling';
+        case EventType.REVIEW_START:
+          return 'Reviewing work';
+        case EventType.RESEARCH_START:
+          return 'Researching';
+        default:
+          return 'Active';
+      }
+    })();
+
+    // Add activity note if available
+    return activityNote ? `${baseDescription}: ${activityNote}` : baseDescription;
   }
 
   // For completed sessions, focus on what was accomplished
-  switch (startEventType) {
-    case EventType.TASK_START:
-      if (endEventType === EventType.TASK_PAUSE) {
-        return 'Work session (paused)';
-      } else if (endEventType === EventType.TASK_STOP) {
-        return 'Work session (completed)';
-      }
-      return 'Work session';
-    case EventType.LUNCH_START:
-      return 'Lunch break';
-    case EventType.BREAK_START:
-      return 'Break time';
-    case EventType.MEETING_START:
-      return 'Meeting session';
-    case EventType.TRAVEL_START:
-      return 'Travel time';
-    case EventType.REVIEW_START:
-      return 'Review session';
-    case EventType.RESEARCH_START:
-      return 'Research session';
-    default:
-      return 'Activity session';
-  }
+  const baseDescription = (() => {
+    switch (startEventType) {
+      case EventType.TASK_START:
+        if (endEventType === EventType.TASK_PAUSE) {
+          return 'Work session (paused)';
+        } else if (endEventType === EventType.TASK_STOP) {
+          return 'Work session (completed)';
+        }
+        return 'Work session';
+      case EventType.LUNCH_START:
+        return 'Lunch break';
+      case EventType.BREAK_START:
+        return 'Break time';
+      case EventType.MEETING_START:
+        return 'Meeting session';
+      case EventType.TRAVEL_START:
+        return 'Travel time';
+      case EventType.REVIEW_START:
+        return 'Review session';
+      case EventType.RESEARCH_START:
+        return 'Research session';
+      default:
+        return 'Activity session';
+    }
+  })();
+
+  // Add activity note if available
+  return activityNote ? `${baseDescription}: ${activityNote}` : baseDescription;
 }
 
 export async function GET(request: NextRequest) {
@@ -278,16 +283,31 @@ export async function GET(request: NextRequest) {
                   event.eventType.endsWith('_END')) && currentStart) {
           
           const duration = event.startedAt.getTime() - currentStart.startedAt.getTime();
+          
+          // Check if session was edited and get edit reason
+          const startMetadata = (currentStart.metadata as any) || {};
+          const endMetadata = (event.metadata as any) || {};
+          const isAdjusted = !!(endMetadata.editedAt || startMetadata.editedAt);
+          const editReason = endMetadata.editReason || startMetadata.editReason;
+          
+          // Get the base description with original activity note
+          let sessionDescription = getSessionDescription(currentStart.eventType, event.eventType, currentStart.description || undefined);
+          
+          // If session was adjusted, append the edit reason
+          if (isAdjusted && editReason) {
+            sessionDescription += ` (Adjusted: ${editReason})`;
+          }
+          
           const session: TimesheetSession = {
             id: `${currentStart.id}-${event.id}`,
             startTime: currentStart.startedAt.toISOString(),
             endTime: event.startedAt.toISOString(),
             duration,
-            formattedDuration: formatDuration(duration),
+            formattedDuration: formatDurationDetailed(duration),
             isOngoing: false,
-            isAdjusted: !!(event.metadata as any)?.editedAt || !!(currentStart.metadata as any)?.editedAt,
+            isAdjusted,
             eventType: event.eventType, // Use the END event type to determine session status
-            description: getSessionDescription(currentStart.eventType, event.eventType),
+            description: sessionDescription,
           };
           taskSessions[sessionKey].push(session);
           currentStart = null;
@@ -304,15 +324,29 @@ export async function GET(request: NextRequest) {
         if (isCurrentlyOngoing) {
           // This is truly ongoing
           const duration = Date.now() - currentStart.startedAt.getTime();
+          
+          // Check if start event was edited
+          const startMetadata = (currentStart.metadata as any) || {};
+          const isAdjusted = !!startMetadata.editedAt;
+          const editReason = startMetadata.editReason;
+          
+          // Get the base description with original activity note
+          let sessionDescription = getSessionDescription(currentStart.eventType, undefined, currentStart.description || undefined);
+          
+          // If session was adjusted, append the edit reason
+          if (isAdjusted && editReason) {
+            sessionDescription += ` (Adjusted: ${editReason})`;
+          }
+          
           const session: TimesheetSession = {
             id: `${currentStart.id}-ongoing`,
             startTime: currentStart.startedAt.toISOString(),
             duration,
-            formattedDuration: formatDuration(duration),
+            formattedDuration: formatDurationDetailed(duration),
             isOngoing: true,
-            isAdjusted: false,
+            isAdjusted,
             eventType: currentStart.eventType,
-            description: getSessionDescription(currentStart.eventType),
+            description: sessionDescription,
           };
           taskSessions[sessionKey].push(session);
         } else {
@@ -325,16 +359,30 @@ export async function GET(request: NextRequest) {
 
           if (nextActivityStart) {
             const duration = nextActivityStart.startedAt.getTime() - currentStart.startedAt.getTime();
+            
+            // Check if start event was edited
+            const startMetadata = (currentStart.metadata as any) || {};
+            const isAdjusted = !!startMetadata.editedAt;
+            const editReason = startMetadata.editReason;
+            
+            // Get the base description with original activity note
+            let sessionDescription = getSessionDescription(currentStart.eventType, EventType.TASK_STOP, currentStart.description || undefined);
+            
+            // If session was adjusted, append the edit reason
+            if (isAdjusted && editReason) {
+              sessionDescription += ` (Adjusted: ${editReason})`;
+            }
+            
             const session: TimesheetSession = {
               id: `${currentStart.id}-auto-ended`,
               startTime: currentStart.startedAt.toISOString(),
               endTime: nextActivityStart.startedAt.toISOString(),
               duration,
-              formattedDuration: formatDuration(duration),
+              formattedDuration: formatDurationDetailed(duration),
               isOngoing: false,
-              isAdjusted: false,
+              isAdjusted,
               eventType: EventType.TASK_STOP, // Auto-ended, treat as stopped
-              description: getSessionDescription(currentStart.eventType, EventType.TASK_STOP),
+              description: sessionDescription,
             };
             taskSessions[sessionKey].push(session);
           }
@@ -386,7 +434,7 @@ export async function GET(request: NextRequest) {
         } : undefined,
         sessions,
         totalDuration,
-        formattedDuration: formatDuration(totalDuration),
+        formattedDuration: formatDurationDetailed(totalDuration),
         activityType,
         status
       };
@@ -398,29 +446,38 @@ export async function GET(request: NextRequest) {
     const workEntries = entries.filter(e => e.activityType === 'work');
     const breakEntries = entries.filter(e => e.activityType === 'break');
     const meetingEntries = entries.filter(e => e.activityType === 'meeting');
+    const researchEntries = entries.filter(e => e.activityType === 'research');
+    const reviewEntries = entries.filter(e => e.activityType === 'review');
     
     const totalWorkTime = workEntries.reduce((sum, e) => sum + e.totalDuration, 0);
     const totalBreakTime = breakEntries.reduce((sum, e) => sum + e.totalDuration, 0);
     const totalMeetingTime = meetingEntries.reduce((sum, e) => sum + e.totalDuration, 0);
+    const totalResearchTime = researchEntries.reduce((sum, e) => sum + e.totalDuration, 0);
+    const totalReviewTime = reviewEntries.reduce((sum, e) => sum + e.totalDuration, 0);
     
     const totalTasks = workEntries.length;
     const totalActiveTasks = workEntries.filter(e => e.status === 'ongoing').length;
     const totalPausedTasks = workEntries.filter(e => e.status === 'paused').length;
     
-    const totalProductiveTime = totalWorkTime + totalMeetingTime;
+    // Include meetings, research, and review as productive work time
+    const totalProductiveTime = totalWorkTime + totalMeetingTime + totalResearchTime + totalReviewTime;
     const totalTime = totalProductiveTime + totalBreakTime;
     const productivityScore = totalTime > 0 ? Math.round((totalProductiveTime / totalTime) * 100) : 0;
 
     const summary: TimesheetSummary = {
-      totalWorkTime,
+      totalWorkTime: totalProductiveTime, // Include all productive activities
       totalBreakTime,
       totalMeetingTime,
+      totalResearchTime,
+      totalReviewTime,
       totalTasks,
       totalActiveTasks,
       totalPausedTasks,
-      formattedTotalWorkTime: formatDuration(totalWorkTime),
-      formattedTotalBreakTime: formatDuration(totalBreakTime),
-      formattedTotalMeetingTime: formatDuration(totalMeetingTime),
+      formattedTotalWorkTime: formatDurationDetailed(totalProductiveTime),
+      formattedTotalBreakTime: formatDurationDetailed(totalBreakTime),
+      formattedTotalMeetingTime: formatDurationDetailed(totalMeetingTime),
+      formattedTotalResearchTime: formatDurationDetailed(totalResearchTime),
+      formattedTotalReviewTime: formatDurationDetailed(totalReviewTime),
       productivityScore
     };
 

@@ -49,6 +49,7 @@ import { useActivity } from "@/context/ActivityContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { cn } from "@/lib/utils";
 import { SessionAdjustmentModal } from "@/components/tasks/SessionAdjustmentModal";
+import { formatDurationDetailed } from "@/utils/duration";
 
 interface ActivityStatusWidgetProps {
   className?: string;
@@ -121,12 +122,13 @@ const STATUS_CONFIGS = {
 };
 
 const QUICK_ACTIVITIES = [
-  { type: "LUNCH_START", label: "Going to Lunch", duration: null, eventType: "LUNCH_START" },
-  { type: "BREAK_START", label: "Taking a Break", duration: null, eventType: "BREAK_START" },
-  { type: "MEETING_START", label: "In a Meeting", duration: null, eventType: "MEETING_START" },
-  { type: "RESEARCH_START", label: "Researching", duration: null, eventType: "RESEARCH_START" },
-  { type: "TRAVEL_START", label: "Traveling", duration: null, eventType: "TRAVEL_START" },
-  { type: "OFFLINE", label: "Going Offline", duration: null, eventType: "OFFLINE" },
+  { type: "LUNCH_START", label: "Going to Lunch", duration: null, eventType: "LUNCH_START", allowNotes: false },
+  { type: "BREAK_START", label: "Taking a Break", duration: null, eventType: "BREAK_START", allowNotes: false },
+  { type: "MEETING_START", label: "In a Meeting", duration: null, eventType: "MEETING_START", allowNotes: true },
+  { type: "RESEARCH_START", label: "Researching", duration: null, eventType: "RESEARCH_START", allowNotes: true },
+  { type: "REVIEW_START", label: "Reviewing", duration: null, eventType: "REVIEW_START", allowNotes: true },
+  { type: "TRAVEL_START", label: "Traveling", duration: null, eventType: "TRAVEL_START", allowNotes: false },
+  { type: "OFFLINE", label: "Going Offline", duration: null, eventType: "OFFLINE", allowNotes: false },
 ];
 
 export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
@@ -152,6 +154,13 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     sessionDurationMs: number;
     totalDurationMs: number;
   } | null>(null);
+  const [showActivityNoteModal, setShowActivityNoteModal] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<{
+    eventType: string;
+    label: string;
+    duration?: number;
+  } | null>(null);
+  const [activityNote, setActivityNote] = useState("");
   const { toast } = useToast();
 
   // Live timer effect
@@ -172,7 +181,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           // Parse total time to milliseconds
           const totalTimeMs = parseDurationToMs(taskTotalTime);
           const currentTotalMs = totalTimeMs + sessionElapsed;
-          setLiveTime(formatDuration(currentTotalMs));
+          setLiveTime(formatDurationDetailed(currentTotalMs));
         };
 
         tick(); // Initial update
@@ -183,7 +192,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           const start = new Date(userStatus.statusStartedAt);
           const now = new Date();
           const diff = now.getTime() - start.getTime();
-          setLiveTime(formatDuration(diff));
+          setLiveTime(formatDurationDetailed(diff));
         };
 
         tick(); // Initial update
@@ -234,16 +243,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     }
   }, [userStatus?.currentTaskId, settings?.timeTrackingEnabled]);
 
-  const formatDuration = (ms: number): string => {
-    if (ms < 0) ms = 0;
-    const totalSeconds = Math.floor(ms / 1000);
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
 
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    return `${m}m ${s}s`;
-  };
 
   // Fetch total play time for a task
   const fetchTaskTotalTime = async (taskId: string) => {
@@ -363,13 +363,42 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     setTimeAdjustmentData(null);
   };
 
-  const handleQuickActivity = async (eventType: string, duration?: number) => {
+  const handleQuickActivity = async (eventType: string, duration?: number, allowNotes = false) => {
+    if (allowNotes) {
+      // Show note dialog for activities that support it
+      setSelectedActivity({ eventType, label: QUICK_ACTIVITIES.find(a => a.eventType === eventType)?.label || eventType, duration });
+      setActivityNote("");
+      setShowActivityNoteModal(true);
+    } else {
+      // Start activity directly for simple activities
+      try {
+        await startActivity(eventType, undefined, duration);
+        setIsDropdownOpen(false);
+      } catch (error) {
+        // Error handling is done in the context
+      }
+    }
+  };
+
+  const handleConfirmActivityWithNote = async () => {
+    if (!selectedActivity) return;
+
     try {
-      await startActivity(eventType, undefined, duration);
+      await startActivity(selectedActivity.eventType, undefined, selectedActivity.duration, activityNote.trim() || undefined);
+      setShowActivityNoteModal(false);
+      setSelectedActivity(null);
+      setActivityNote("");
       setIsDropdownOpen(false);
+      refetch();
     } catch (error) {
       // Error handling is done in the context
     }
+  };
+
+  const handleCancelActivityNote = () => {
+    setShowActivityNoteModal(false);
+    setSelectedActivity(null);
+    setActivityNote("");
   };
 
   const handleEndActivity = async () => {
@@ -825,7 +854,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                 return (
                   <DropdownMenuItem
                     key={activity.type}
-                    onClick={() => handleQuickActivity(activity.eventType, activity.duration || undefined)}
+                    onClick={() => handleQuickActivity(activity.eventType, activity.duration || undefined, activity.allowNotes)}
                     disabled={isLoading}
                   >
                     <div className="flex items-center gap-2">
@@ -905,6 +934,63 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                 </>
               ) : (
                 "Yes, Start as Helper"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activity Note Modal */}
+      <Dialog open={showActivityNoteModal} onOpenChange={setShowActivityNoteModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              {selectedActivity?.label}
+            </DialogTitle>
+            <DialogDescription>
+              Add a note to describe what you'll be working on during this session.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="space-y-2">
+              <label htmlFor="activity-note" className="text-sm font-medium">
+                Description (optional)
+              </label>
+              <Input
+                id="activity-note"
+                value={activityNote}
+                onChange={(e) => setActivityNote(e.target.value)}
+                placeholder={`Enter details about your ${selectedActivity?.label.toLowerCase()} session...`}
+                className="w-full"
+                maxLength={200}
+              />
+              <div className="text-xs text-muted-foreground">
+                {activityNote.length}/200 characters
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCancelActivityNote}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmActivityWithNote}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                `Start ${selectedActivity?.label}`
               )}
             </Button>
           </DialogFooter>

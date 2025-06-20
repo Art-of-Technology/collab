@@ -1,2 +1,5 @@
 // Export cloudinary utilities
-export * from './cloudinary'; 
+export * from './cloudinary';
+
+// Export duration utilities
+export * from './duration'; 

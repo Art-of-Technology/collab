@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { formatDurationDetailed } from "@/utils/duration";
 
 export interface TaskSession {
   id: string;
@@ -175,7 +176,7 @@ export async function GET(
             metadata: event.metadata,
           },
           durationMs,
-          formattedDuration: formatDuration(durationMs),
+          formattedDuration: formatDurationDetailed(durationMs),
           isOngoing: false,
           isAdjusted,
           adjustmentInfo: isAdjusted ? {
@@ -217,7 +218,7 @@ export async function GET(
             metadata: currentStart.metadata,
           },
           durationMs,
-          formattedDuration: formatDuration(durationMs),
+          formattedDuration: formatDurationDetailed(durationMs),
           isOngoing: true,
           isAdjusted: false,
         });
@@ -230,7 +231,7 @@ export async function GET(
     return NextResponse.json({
       sessions: sessions.reverse(), // Most recent first
       totalTimeMs,
-      formattedTotalTime: formatDuration(totalTimeMs),
+      formattedTotalTime: formatDurationDetailed(totalTimeMs),
     });
 
   } catch (error) {
@@ -239,14 +240,4 @@ export async function GET(
   }
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 0) ms = 0;
-  const totalSeconds = Math.floor(ms / 1000);
-  const d = Math.floor(totalSeconds / (3600 * 24));
-  const h = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-
-  if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
-  return `${h}h ${m}m ${s}s`;
-} 
+ 

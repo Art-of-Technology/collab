@@ -15,6 +15,7 @@ import {
 import { format, parseISO } from "date-fns";
 import type { TimesheetData } from "@/app/api/activities/timesheet/route";
 import type { TimesheetFilters } from "@/hooks/queries/useTimesheet";
+import { formatDurationUI } from "@/utils/duration";
 
 interface TimesheetAnalyticsProps {
   data: TimesheetData;
@@ -71,15 +72,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
     };
   }, [data]);
 
-  const formatDuration = (ms: number): string => {
-    if (ms < 0) ms = 0;
-    const totalMinutes = Math.floor(ms / (1000 * 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
+
 
   const getActivityColor = (activity: string) => {
     const colors: Record<string, string> = {
@@ -109,7 +102,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatDuration(analytics.avgSessionDuration)}
+              {formatDurationUI(analytics.avgSessionDuration)}
             </div>
             <p className="text-xs text-muted-foreground">
               {analytics.totalSessions} total sessions
@@ -181,7 +174,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
                         <span className="font-medium capitalize">{activity}</span>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium">{formatDuration(time)}</div>
+                        <div className="font-medium">{formatDurationUI(time)}</div>
                         <div className="text-xs text-muted-foreground">
                           {percentage.toFixed(1)}%
                         </div>
@@ -216,7 +209,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{board}</span>
                         <div className="text-right">
-                          <div className="font-medium">{formatDuration(time)}</div>
+                          <div className="font-medium">{formatDurationUI(time)}</div>
                           <div className="text-xs text-muted-foreground">
                             {percentage.toFixed(1)}% of work time
                           </div>
@@ -254,7 +247,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
                         <span className="font-medium">
                           {format(parseISO(date), 'EEE, MMM d')}
                         </span>
-                        <span className="font-medium">{formatDuration(time)}</span>
+                        <span className="font-medium">{formatDurationUI(time)}</span>
                       </div>
                       <Progress value={percentage} className="h-2" />
                     </div>

@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { EventType } from "@prisma/client";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay, format } from "date-fns";
+import { formatDurationDetailed } from "@/utils/duration";
 
 export async function POST(request: NextRequest) {
   try {
@@ -126,7 +127,7 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date) {
   ];
 
   const rows = [];
-  const currentSessions: Record<string, { start: Date; eventType: EventType; task?: any }> = {};
+  const currentSessions: Record<string, { start: Date; eventType: EventType; task?: any; startEvent: any }> = {};
 
   for (const event of userEvents) {
     const activityType = getActivityType(event.eventType);
@@ -137,7 +138,8 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date) {
       currentSessions[sessionKey] = {
         start: event.startedAt,
         eventType: event.eventType,
-        task: event.task
+        task: event.task,
+        startEvent: event
       };
     }
     // Handle session end events
@@ -160,7 +162,7 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date) {
           currentSession.task?.priority || '',
           currentSession.task?.taskBoard?.name || '',
           event.eventType === EventType.TASK_PAUSE ? 'Paused' : 'Completed',
-          event.description || '',
+          currentSession.startEvent?.description || '',
           !!(event.metadata as any)?.editedAt ? 'Yes' : 'No'
         ]);
         
@@ -206,7 +208,7 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date) {
 function generatePDFExport(userEvents: any[], view: string, startDate: Date, endDate: Date, workspaceName: string) {
   // Process events into sessions (like the main timesheet API does)
   const sessions = [];
-  const currentSessions: Record<string, { start: Date; eventType: EventType; task?: any }> = {};
+  const currentSessions: Record<string, { start: Date; eventType: EventType; task?: any; startEvent: any }> = {};
 
   for (const event of userEvents) {
     const activityType = getActivityType(event.eventType);
@@ -217,7 +219,8 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
       currentSessions[sessionKey] = {
         start: event.startedAt,
         eventType: event.eventType,
-        task: event.task
+        task: event.task,
+        startEvent: event
       };
     }
     // Handle session end events
@@ -227,7 +230,7 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
       const currentSession = currentSessions[sessionKey];
       if (currentSession) {
         const duration = event.startedAt.getTime() - currentSession.start.getTime();
-        const durationFormatted = formatDuration(duration);
+        const durationFormatted = formatDurationDetailed(duration);
         
         sessions.push({
           date: format(currentSession.start, 'yyyy-MM-dd'),
@@ -239,7 +242,8 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
           issueKey: currentSession.task?.issueKey || '',
           board: currentSession.task?.taskBoard?.name || '',
           status: event.eventType === EventType.TASK_PAUSE ? 'Paused' : 'Completed',
-          isAdjusted: !!(event.metadata as any)?.editedAt
+          isAdjusted: !!(event.metadata as any)?.editedAt,
+          description: currentSession.startEvent?.description || ''
         });
         
         delete currentSessions[sessionKey];
@@ -250,7 +254,7 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
   // Handle ongoing sessions
   for (const [, session] of Object.entries(currentSessions)) {
     const duration = Date.now() - session.start.getTime();
-    const durationFormatted = formatDuration(duration);
+          const durationFormatted = formatDurationDetailed(duration);
     
     sessions.push({
       date: format(session.start, 'yyyy-MM-dd'),
@@ -277,6 +281,14 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
 
   const totalMeetingTime = sessions
     .filter(s => s.activityType === 'meeting')
+    .reduce((total, s) => total + parseDurationToMs(s.duration), 0);
+
+  const totalResearchTime = sessions
+    .filter(s => s.activityType === 'research')
+    .reduce((total, s) => total + parseDurationToMs(s.duration), 0);
+
+  const totalReviewTime = sessions
+    .filter(s => s.activityType === 'review')
     .reduce((total, s) => total + parseDurationToMs(s.duration), 0);
 
   // Generate HTML for PDF conversion
@@ -391,15 +403,23 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
       <div class="summary">
         <div class="summary-card">
           <h3>Total Work Time</h3>
-          <p class="activity-work">${formatDuration(totalWorkTime)}</p>
+          <p class="activity-work">${formatDurationDetailed(totalWorkTime)}</p>
         </div>
         <div class="summary-card">
           <h3>Break Time</h3>
-          <p class="activity-break">${formatDuration(totalBreakTime)}</p>
+          <p class="activity-break">${formatDurationDetailed(totalBreakTime)}</p>
         </div>
         <div class="summary-card">
           <h3>Meeting Time</h3>
-          <p class="activity-meeting">${formatDuration(totalMeetingTime)}</p>
+          <p class="activity-meeting">${formatDurationDetailed(totalMeetingTime)}</p>
+        </div>
+        <div class="summary-card">
+          <h3>Research Time</h3>
+          <p class="activity-research">${formatDurationDetailed(totalResearchTime)}</p>
+        </div>
+        <div class="summary-card">
+          <h3>Review Time</h3>
+          <p class="activity-review">${formatDurationDetailed(totalReviewTime)}</p>
         </div>
         <div class="summary-card">
           <h3>Total Sessions</h3>
@@ -431,6 +451,7 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
                 <td><span class="activity-${session.activityType}">${session.activityType.charAt(0).toUpperCase() + session.activityType.slice(1)}</span></td>
                 <td>
                   ${session.issueKey ? `<strong>${session.issueKey}</strong> ` : ''}${session.taskTitle}
+                  ${session.description ? `<br><small style="color: #4b5563;">${session.description}</small>` : ''}
                   ${session.board ? `<br><small style="color: #6b7280;">${session.board}</small>` : ''}
                   ${session.isAdjusted ? `<br><small style="color: #f59e0b;">⚠ Adjusted</small>` : ''}
                 </td>
@@ -458,17 +479,7 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
   });
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 0) ms = 0;
-  const totalSeconds = Math.floor(ms / 1000);
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
 
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
 
 function parseDurationToMs(duration: string): number {
   const regex = /(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s\s*)?/;

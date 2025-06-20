@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { EventType, UserStatusType } from "@prisma/client";
+import { formatDurationDetailed, getDurationComponents } from "@/utils/duration";
 
 interface StartActivityOptions {
   userId: string;
@@ -86,8 +87,60 @@ export class ActivityService {
         }
       }
 
-      // 2. End any ongoing user events
-      await this.endOngoingUserEvents(userId, tx);
+      // 2. End any ongoing non-task activities by sending appropriate END events
+      const ongoingEvents = await tx.userEvent.findMany({
+        where: {
+          userId,
+          eventType: {
+            in: [
+              EventType.LUNCH_START,
+              EventType.BREAK_START,
+              EventType.MEETING_START,
+              EventType.TRAVEL_START,
+              EventType.REVIEW_START,
+              EventType.RESEARCH_START,
+            ]
+          }
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 10, // Get recent events to find what needs to be ended
+      });
+
+      // Check if there are any ongoing non-task activities that need to be ended
+      for (const ongoingEvent of ongoingEvents) {
+        // Check if this activity has already been ended
+        const hasEndEvent = await tx.userEvent.findFirst({
+          where: {
+            userId,
+            eventType: this.getEndEventType(ongoingEvent.eventType),
+            startedAt: {
+              gt: ongoingEvent.startedAt,
+            },
+          },
+        });
+
+        // If no end event exists and this activity should be ended by the new activity
+        if (!hasEndEvent && this.shouldEndActivity(ongoingEvent.eventType, eventType)) {
+          const endEventType = this.getEndEventType(ongoingEvent.eventType);
+          const activityName = this.getActivityDisplayName(ongoingEvent.eventType);
+          const newActivityName = this.getActivityDisplayName(eventType);
+          
+          await tx.userEvent.create({
+            data: {
+              userId,
+              eventType: endEventType,
+              description: `Automatically ended ${activityName} when switching to ${newActivityName}`,
+              metadata: { 
+                autoEnded: true, 
+                previousActivity: ongoingEvent.eventType,
+                newActivity: eventType,
+                newTaskId: taskId || null 
+              },
+              startedAt: new Date(),
+            },
+          });
+        }
+      }
 
       // 3. Create new user event
       const userEvent = await tx.userEvent.create({
@@ -195,8 +248,57 @@ export class ActivityService {
         await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
       }
 
-      // End ongoing user events
-      await this.endOngoingUserEvents(userId, tx);
+      // End any ongoing non-task activities by sending appropriate END events
+      const ongoingEvents = await tx.userEvent.findMany({
+        where: {
+          userId,
+          eventType: {
+            in: [
+              EventType.LUNCH_START,
+              EventType.BREAK_START,
+              EventType.MEETING_START,
+              EventType.TRAVEL_START,
+              EventType.REVIEW_START,
+              EventType.RESEARCH_START,
+            ]
+          }
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 10, // Get recent events to find what needs to be ended
+      });
+
+      // Check if there are any ongoing non-task activities that need to be ended
+      for (const ongoingEvent of ongoingEvents) {
+        // Check if this activity has already been ended
+        const hasEndEvent = await tx.userEvent.findFirst({
+          where: {
+            userId,
+            eventType: this.getEndEventType(ongoingEvent.eventType),
+            startedAt: {
+              gt: ongoingEvent.startedAt,
+            },
+          },
+        });
+
+        // If no end event exists, send the appropriate END event
+        if (!hasEndEvent) {
+          const endEventType = this.getEndEventType(ongoingEvent.eventType);
+          const activityName = this.getActivityDisplayName(ongoingEvent.eventType);
+          
+          await tx.userEvent.create({
+            data: {
+              userId,
+              eventType: endEventType,
+              description: `Ended ${activityName} session`,
+              metadata: { 
+                source: 'end-activity',
+                previousActivity: ongoingEvent.eventType
+              },
+              startedAt: new Date(),
+            },
+          });
+        }
+      }
 
       // Update user status to available
       await tx.userStatus.upsert({
@@ -534,28 +636,16 @@ export class ActivityService {
   }
 
   private static formatDuration(ms: number): ActivitySummary {
-    if (ms < 0) ms = 0;
-    
-    const totalSeconds = Math.floor(ms / 1000);
-    const days = Math.floor(totalSeconds / (3600 * 24));
-    const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    let formattedTime: string;
-    if (days > 0) {
-      formattedTime = `${days}d ${hours}h ${minutes}m ${seconds}s`;
-    } else {
-      formattedTime = `${hours}h ${minutes}m ${seconds}s`;
-    }
+    const components = getDurationComponents(ms);
+    const formattedTime = formatDurationDetailed(ms);
 
     return {
       totalTimeMs: ms,
       formattedTime,
-      days,
-      hours,
-      minutes,
-      seconds,
+      days: components.hours >= 24 ? Math.floor(components.hours / 24) : 0,
+      hours: components.hours % 24,
+      minutes: components.minutes,
+      seconds: components.seconds,
     };
   }
 
@@ -656,5 +746,47 @@ export class ActivityService {
         }
       });
     }
+  }
+
+  private static getEndEventType(eventType: EventType): EventType {
+    const endEvents: Partial<Record<EventType, EventType>> = {
+      [EventType.LUNCH_START]: EventType.LUNCH_END,
+      [EventType.BREAK_START]: EventType.BREAK_END,
+      [EventType.MEETING_START]: EventType.MEETING_END,
+      [EventType.TRAVEL_START]: EventType.TRAVEL_END,
+      [EventType.REVIEW_START]: EventType.REVIEW_END,
+      [EventType.RESEARCH_START]: EventType.RESEARCH_END,
+    };
+    return endEvents[eventType] || EventType.AVAILABLE;
+  }
+
+  private static shouldEndActivity(ongoingType: EventType, newType: EventType): boolean {
+    // All activities should be ended when starting any other activity
+    // This ensures only one activity is running at a time
+    return ongoingType !== newType;
+  }
+
+  private static getActivityDisplayName(eventType: EventType): string {
+    const mapping: Partial<Record<EventType, string>> = {
+      [EventType.TASK_START]: "task",
+      [EventType.TASK_PAUSE]: "task",
+      [EventType.TASK_STOP]: "task",
+      [EventType.TASK_COMPLETE]: "task",
+      [EventType.LUNCH_START]: "lunch",
+      [EventType.LUNCH_END]: "lunch",
+      [EventType.BREAK_START]: "break",
+      [EventType.BREAK_END]: "break",
+      [EventType.MEETING_START]: "meeting",
+      [EventType.MEETING_END]: "meeting",
+      [EventType.TRAVEL_START]: "travel",
+      [EventType.TRAVEL_END]: "travel",
+      [EventType.REVIEW_START]: "review",
+      [EventType.REVIEW_END]: "review",
+      [EventType.RESEARCH_START]: "research",
+      [EventType.RESEARCH_END]: "research",
+      [EventType.OFFLINE]: "offline",
+      [EventType.AVAILABLE]: "available",
+    };
+    return mapping[eventType] || eventType.toString();
   }
 } 

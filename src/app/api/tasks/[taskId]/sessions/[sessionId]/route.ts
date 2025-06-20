@@ -2,16 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(Math.abs(ms) / 1000);
-  const d = Math.floor(totalSeconds / (3600 * 24));
-  const h = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  return `${h}h ${m}m`;
-}
+import { formatDurationDetailed } from "@/utils/duration";
 
 export async function PATCH(
   req: Request,
@@ -203,13 +194,13 @@ export async function PATCH(
             oldValue: JSON.stringify({
               startTime: startEvent.startedAt.toISOString(),
               endTime: endEvent.startedAt.toISOString(),
-              duration: formatDuration(originalDurationMs),
+              duration: formatDurationDetailed(originalDurationMs),
               durationMs: originalDurationMs,
             }),
             newValue: JSON.stringify({
               startTime: startDate.toISOString(),
               endTime: endDate.toISOString(),
-              duration: formatDuration(newDurationMs),
+              duration: formatDurationDetailed(newDurationMs),
               durationMs: newDurationMs,
             }),
             changes: {
@@ -217,7 +208,7 @@ export async function PATCH(
               endTimeChanged: endEvent.startedAt.getTime() !== endDate.getTime(),
               durationChange: {
                 ms: adjustmentMs,
-                formatted: `${adjustmentMs >= 0 ? '+' : ''}${formatDuration(Math.abs(adjustmentMs))}`,
+                formatted: `${adjustmentMs >= 0 ? '+' : ''}${formatDurationDetailed(Math.abs(adjustmentMs))}`,
                 isIncrease: adjustmentMs > 0,
               },
             },
@@ -234,9 +225,9 @@ export async function PATCH(
         originalDurationMs,
         newDurationMs,
         adjustmentMs,
-        originalDuration: formatDuration(originalDurationMs),
-        newDuration: formatDuration(newDurationMs),
-        adjustment: `${adjustmentMs >= 0 ? '+' : ''}${formatDuration(adjustmentMs)}`,
+        originalDuration: formatDurationDetailed(originalDurationMs),
+        newDuration: formatDurationDetailed(newDurationMs),
+        adjustment: `${adjustmentMs >= 0 ? '+' : ''}${formatDurationDetailed(adjustmentMs)}`,
         reason: reason.trim(),
       },
     });

@@ -11,20 +11,28 @@ import {
   Activity,
 } from "lucide-react";
 import type { TimesheetSummary } from "@/app/api/activities/timesheet/route";
+import { formatDurationUI } from "@/utils/duration";
 
 interface TimesheetSummaryCardsProps {
   summary: TimesheetSummary;
 }
 
 export function TimesheetSummaryCards({ summary }: TimesheetSummaryCardsProps) {
+
   const summaryCards = [
     {
       title: "Total Work Time",
       value: summary.formattedTotalWorkTime,
       icon: <Target className="h-4 w-4" />,
-      description: `${summary.totalTasks} tasks tracked`,
+      description: `Including meetings & research`,
       color: "text-green-600",
       bgColor: "bg-green-50",
+      breakdown: [
+        { label: "Tasks", value: formatDurationUI(summary.totalWorkTime - (summary.totalMeetingTime || 0) - (summary.totalResearchTime || 0) - (summary.totalReviewTime || 0)), show: true },
+        { label: "Meetings", value: summary.formattedTotalMeetingTime || "0h 0m", show: !!summary.totalMeetingTime },
+        { label: "Research", value: summary.formattedTotalResearchTime || "0h 0m", show: !!summary.totalResearchTime },
+        { label: "Review", value: summary.formattedTotalReviewTime || "0h 0m", show: !!summary.totalReviewTime },
+      ].filter(item => item.show)
     },
     {
       title: "Break Time",
@@ -38,7 +46,7 @@ export function TimesheetSummaryCards({ summary }: TimesheetSummaryCardsProps) {
       title: "Meeting Time",
       value: summary.formattedTotalMeetingTime,
       icon: <Users className="h-4 w-4" />,
-      description: "Collaborative time",
+      description: "Collaborative work",
       color: "text-blue-600",
       bgColor: "bg-blue-50",
     },
@@ -73,6 +81,19 @@ export function TimesheetSummaryCards({ summary }: TimesheetSummaryCardsProps) {
             <p className="text-xs text-muted-foreground">
               {card.description}
             </p>
+            
+            {/* Show breakdown for Total Work Time if it has multiple components */}
+            {card.breakdown && card.breakdown.length > 1 && (
+              <div className="mt-3 space-y-1">
+                {card.breakdown.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">{item.label}:</span>
+                    <span className="font-medium">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            
             {card.title === "Productivity" && (
               <div className="mt-3">
                 <div className="flex items-center justify-between mb-2">
