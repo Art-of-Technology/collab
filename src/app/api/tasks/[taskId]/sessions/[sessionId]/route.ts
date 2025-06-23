@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { formatDurationDetailed } from "@/utils/duration";
+import { BoardItemActivityService } from "@/lib/board-item-activity-service";
 
 export async function PATCH(
   req: Request,
@@ -181,40 +182,38 @@ export async function PATCH(
       });
 
       // Create detailed audit log
-      await tx.taskActivity.create({
-        data: {
-          taskId,
-          userId,
-          action: 'SESSION_EDITED',
-          details: JSON.stringify({
-            type: 'session_edit',
-            sessionId,
-            reason: reason.trim(),
-            editedAt: new Date().toISOString(),
-            oldValue: JSON.stringify({
-              startTime: startEvent.startedAt.toISOString(),
-              endTime: endEvent.startedAt.toISOString(),
-              duration: formatDurationDetailed(originalDurationMs),
-              durationMs: originalDurationMs,
-            }),
-            newValue: JSON.stringify({
-              startTime: startDate.toISOString(),
-              endTime: endDate.toISOString(),
-              duration: formatDurationDetailed(newDurationMs),
-              durationMs: newDurationMs,
-            }),
-            changes: {
-              startTimeChanged: startEvent.startedAt.getTime() !== startDate.getTime(),
-              endTimeChanged: endEvent.startedAt.getTime() !== endDate.getTime(),
-              durationChange: {
-                ms: adjustmentMs,
-                formatted: `${adjustmentMs >= 0 ? '+' : ''}${formatDurationDetailed(Math.abs(adjustmentMs))}`,
-                isIncrease: adjustmentMs > 0,
-              },
-            },
+      await BoardItemActivityService.createTaskActivity(
+        taskId,
+        userId,
+        'SESSION_EDITED',
+        {
+          type: 'session_edit',
+          sessionId,
+          reason: reason.trim(),
+          editedAt: new Date().toISOString(),
+          oldValue: JSON.stringify({
+            startTime: startEvent.startedAt.toISOString(),
+            endTime: endEvent.startedAt.toISOString(),
+            duration: formatDurationDetailed(originalDurationMs),
+            durationMs: originalDurationMs,
           }),
-        },
-      });
+          newValue: JSON.stringify({
+            startTime: startDate.toISOString(),
+            endTime: endDate.toISOString(),
+            duration: formatDurationDetailed(newDurationMs),
+            durationMs: newDurationMs,
+          }),
+          changes: {
+            startTimeChanged: startEvent.startedAt.getTime() !== startDate.getTime(),
+            endTimeChanged: endEvent.startedAt.getTime() !== endDate.getTime(),
+            durationChange: {
+              ms: adjustmentMs,
+              formatted: `${adjustmentMs >= 0 ? '+' : ''}${formatDurationDetailed(Math.abs(adjustmentMs))}`,
+              isIncrease: adjustmentMs > 0,
+            },
+          },
+        }
+      );
     });
 
     return NextResponse.json({

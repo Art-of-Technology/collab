@@ -3,6 +3,7 @@
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { trackCreation, trackFieldChanges, compareObjects } from '@/lib/board-item-activity-service';
 
 /**
  * Get tasks for a workspace
@@ -494,6 +495,29 @@ export async function createTask(data: {
     }
   });
 
+  // Track task creation activity
+  try {
+          await trackCreation(
+      'TASK',
+      task.id,
+      user.id,
+      workspaceId,
+      taskBoardId,
+      {
+        title: task.title,
+        type: task.type,
+        priority: task.priority,
+        status: task.status,
+        assigneeId: task.assigneeId,
+        reporterId: task.reporterId,
+        issueKey: task.issueKey,
+      }
+    );
+  } catch (error) {
+    console.error('Failed to track task creation activity:', error);
+    // Don't fail the task creation if activity tracking fails
+  }
+
   return task;
 }
 
@@ -610,6 +634,32 @@ export async function updateTask(taskId: string, data: {
     }
   }
 
+  // Track changes before updating
+  const fieldsToTrack = ['title', 'description', 'assigneeId', 'reporterId', 'priority', 'status', 'type', 'columnId', 'dueDate'];
+  const oldTaskData = {
+    title: task.title,
+    description: task.description,
+    assigneeId: task.assigneeId,
+    reporterId: task.reporterId,
+    priority: task.priority,
+    status: task.status,
+    type: task.type,
+    columnId: task.columnId,
+    dueDate: task.dueDate,
+  };
+
+  const newTaskData = {
+    title: title !== undefined ? title.trim() : task.title,
+    description: description !== undefined ? (description?.trim() || null) : task.description,
+    assigneeId: assigneeId === null ? null : (assigneeId || task.assigneeId),
+    reporterId: reporterId === null ? null : (reporterId || task.reporterId),
+    priority: priority || task.priority,
+    status: status || task.status,
+    type: type !== undefined ? type : task.type,
+    columnId: columnId,
+    dueDate: dueDate === null ? null : (dueDate || task.dueDate),
+  };
+
   // Update the task
   const updatedTask = await prisma.task.update({
     where: {
@@ -674,6 +724,24 @@ export async function updateTask(taskId: string, data: {
       }
     }
   });
+
+  // Track field changes
+  try {
+          const changes = compareObjects(oldTaskData, newTaskData, fieldsToTrack);
+      if (changes.length > 0) {
+        await trackFieldChanges(
+        'TASK',
+        taskId,
+        user.id,
+        task.workspaceId,
+        changes,
+        task.taskBoardId || undefined
+      );
+    }
+  } catch (error) {
+    console.error('Failed to track task update activities:', error);
+    // Don't fail the task update if activity tracking fails
+  }
 
   return updatedTask;
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
+import { BoardItemActivityService } from "@/lib/board-item-activity-service";
 
 export async function POST(
   req: Request,
@@ -99,18 +100,16 @@ export async function POST(
     }
 
     // Log activity for help request
-    await prisma.taskActivity.create({
-      data: {
-        action: "HELP_REQUEST_SENT",
-        details: JSON.stringify({
-          requesterName: session.user.name,
-          assigneeName: task.assignee?.name,
-          reporterName: task.reporter?.name
-        }),
-        taskId: taskId,
-        userId: session.user.id
+    await BoardItemActivityService.createTaskActivity(
+      taskId,
+      session.user.id,
+      "HELP_REQUEST_SENT",
+      {
+        requesterName: session.user.name,
+        assigneeName: task.assignee?.name,
+        reporterName: task.reporter?.name
       }
-    });
+    );
 
     // Create notification for assignee and reporter
     const notificationRecipients = [task.assigneeId, task.reporterId].filter(id => id && id !== session.user.id);

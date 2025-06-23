@@ -58,7 +58,7 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     return (
       <div className="container max-w-4xl py-8">
         <div className="mb-6">
-          <Link href="/features">
+          <Link href={`/${workspaceId}/features`}>
             <Button variant="ghost" className="gap-1 pl-1">
               <ChevronLeft className="h-4 w-4" />
               Back to Feature Requests

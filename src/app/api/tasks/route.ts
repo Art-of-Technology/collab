@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { trackCreation } from "@/lib/board-item-activity-service";
 
 // POST /api/tasks - Create a new task
 export async function POST(request: NextRequest) {
@@ -115,43 +116,15 @@ export async function POST(request: NextRequest) {
         parentTaskId,
         postId,
         reporterId: session.user.id,
-        // Use relation syntax for storyId
-        ...(storyId ? {
-          story: {
-            connect: {
-              id: storyId
-            }
-          }
-        } : {}),
-        // Use relation syntax for epicId
-        ...(epicId ? {
-          epic: {
-            connect: {
-              id: epicId
-            }
-          }
-        } : {}),
-        // Use relation syntax for milestoneId
-        ...(milestoneId ? {
-          milestone: {
-            connect: {
-              id: milestoneId
-            }
-          }
-        } : {}),
-        // Create activity record for task creation
-        activity: {
-          create: {
-            action: "created",
-            userId: session.user.id,
-          },
-        },
+        storyId,
+        epicId,
+        milestoneId,
         // Connect labels if provided
-        labels: labels && labels.length > 0
-          ? {
-              connect: labels.map((labelId: string) => ({ id: labelId })),
-            }
-          : undefined,
+        ...(labels && labels.length > 0 && {
+          labels: {
+            connect: labels.map((labelId: string) => ({ id: labelId })),
+          }
+        }),
       },
       include: {
         assignee: {
@@ -185,6 +158,26 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Track task creation activity
+    try {
+      await trackCreation(
+        'TASK',
+        task.id,
+        session.user.id,
+        workspaceId,
+        taskBoardId,
+        {
+          title: task.title,
+          priority: task.priority,
+          assigneeId: task.assigneeId,
+          columnId: task.columnId,
+        }
+      );
+    } catch (activityError) {
+      console.error("Failed to track task creation activity:", activityError);
+      // Don't fail the task creation if activity tracking fails
+    }
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
