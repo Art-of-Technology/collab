@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { BoardItemType } from '@/lib/board-item-activity-service';
 import { 
   PlusCircle, 
@@ -413,7 +413,12 @@ export default function BoardItemActivityHistory({
                   </div>
                   
                   <div className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                    <div className="flex flex-col gap-0.5">
+                      <span>{formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}</span>
+                      <span className="text-xs opacity-75">
+                        {format(new Date(activity.createdAt), 'MMM dd, yyyy HH:mm:ss')}
+                      </span>
+                    </div>
                   </div>
                   
                   {/* Show change details for field changes */}
