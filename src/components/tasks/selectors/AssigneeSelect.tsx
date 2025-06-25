@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { 
@@ -54,6 +55,7 @@ export function AssigneeSelect({
   className = "",
   workspaceId
 }: AssigneeSelectProps) {
+  const { data: session } = useSession();
   const { currentWorkspace } = useWorkspace();
   const wsId = workspaceId || currentWorkspace?.id;
   
@@ -72,6 +74,9 @@ export function AssigneeSelect({
   if (data?.workspace?.owner && !users.some(user => user.id === data.workspace.owner.id)) {
     users.push(data.workspace.owner);
   }
+
+  // Get current user ID from session
+  const currentUserId = session?.user?.id;
 
   // Find the selected user
   const selectedUser = value && value !== "unassigned" 
@@ -121,10 +126,23 @@ export function AssigneeSelect({
     );
   }
 
-  // Filter the users based on the search
-  const filteredUsers = users.filter(user => 
-    !searchQuery || (user.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter and prioritize users based on the search
+  const filteredUsers = users
+    .filter(user => 
+      !searchQuery || (user.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+    .sort((a, b) => {
+      // Prioritize current user first
+      if (currentUserId) {
+        if (a.id === currentUserId && b.id !== currentUserId) return -1;
+        if (b.id === currentUserId && a.id !== currentUserId) return 1;
+      }
+      
+      // Then sort alphabetically by name
+      const nameA = a.name?.toLowerCase() || '';
+      const nameB = b.name?.toLowerCase() || '';
+      return nameA.localeCompare(nameB);
+    });
 
   // The key to fixing the scroll issue is removing animation and using Command's native scrolling
   return (
@@ -189,11 +207,13 @@ export function AssigneeSelect({
                   key={user.id}
                   value={user.name || ""}
                   onSelect={() => handleSelect(user.id)}
-                  className="cursor-pointer"
+                  className={`cursor-pointer ${user.id === currentUserId ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
                 >
                   <div className="flex items-center gap-2">
                     {renderAvatar(user)}
-                    <span>{user.name}</span>
+                    <span className={user.id === currentUserId ? 'font-medium' : ''}>
+                      {user.name}{user.id === currentUserId ? " (You)" : ""}
+                    </span>
                   </div>
                 </CommandItem>
               ))}

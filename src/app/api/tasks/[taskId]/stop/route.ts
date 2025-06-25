@@ -77,13 +77,54 @@ export async function POST(
       return new NextResponse("Session already stopped", { status: 400 });
     }
 
-    // Create the stop event
+    // Calculate session duration
+    const now = new Date();
+    const sessionDurationMs = now.getTime() - currentStartEvent.startedAt.getTime();
+    const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+
+    // If session is less than 1 minute, delete the start event instead of creating a stop event
+    if (sessionDurationMs < oneMinuteMs) {
+      await prisma.userEvent.delete({
+        where: { id: currentStartEvent.id },
+      });
+
+      // Update user status to available
+      await prisma.userStatus.upsert({
+        where: { userId },
+        update: {
+          currentStatus: 'AVAILABLE',
+          statusStartedAt: new Date(),
+          currentTaskId: null,
+          statusText: null,
+        },
+        create: {
+          userId,
+          currentStatus: 'AVAILABLE',
+          statusStartedAt: new Date(),
+          currentTaskId: null,
+          statusText: null,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Short session removed (less than 1 minute)",
+        sessionRemoved: true,
+        sessionDurationMs,
+        startEventDeleted: {
+          id: currentStartEvent.id,
+          startedAt: currentStartEvent.startedAt,
+        },
+      });
+    }
+
+    // Create the stop event for sessions longer than 1 minute
     const stopEvent = await prisma.userEvent.create({
       data: {
         userId,
         taskId,
         eventType: 'TASK_STOP',
-        startedAt: new Date(),
+        startedAt: now,
         description: 'Session stopped normally',
       },
     });
@@ -109,6 +150,8 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: "Session stopped successfully",
+      sessionRemoved: false,
+      sessionDurationMs,
       stopEvent: {
         id: stopEvent.id,
         startedAt: stopEvent.startedAt,

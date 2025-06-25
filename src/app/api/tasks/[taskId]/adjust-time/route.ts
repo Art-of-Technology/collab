@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { formatDurationUI } from "@/utils/duration";
+import BoardItemActivityService from "@/lib/board-item-activity-service";
 
 export async function POST(
   req: Request,
@@ -67,25 +68,23 @@ export async function POST(
     const adjustmentFormatted = formatDurationUI(adjustmentMs);
 
     // Create a time adjustment activity record
-    await prisma.taskActivity.create({
-      data: {
-        taskId,
-        userId,
-        action: 'TIME_ADJUSTED',
-        details: JSON.stringify({
-          type: 'manual_adjustment',
-          originalDurationMs,
-          newDurationMs,
-          adjustmentMs,
-          originalFormatted,
-          newFormatted,
-          adjustmentFormatted,
-          reason: reason.trim(),
-          isReduction,
-          adjustedAt: new Date().toISOString(),
-        }),
-      },
-    });
+    await BoardItemActivityService.createTaskActivity(
+      taskId,
+      userId,
+      'TIME_ADJUSTED',
+      {
+        type: 'manual_adjustment',
+        originalDurationMs,
+        newDurationMs,
+        adjustmentMs,
+        originalFormatted,
+        newFormatted,
+        adjustmentFormatted,
+        reason: reason.trim(),
+        isReduction,
+        adjustedAt: new Date().toISOString(),
+      }
+    );
 
     // Session-based approach: Find the most recent session and adjust it
     // This maintains data integrity while allowing precise time adjustments

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { EventType, UserStatusType } from "@prisma/client";
 import { formatDurationDetailed, getDurationComponents } from "@/utils/duration";
+import { createTaskActivity } from "@/lib/board-item-activity-service";
 
 interface StartActivityOptions {
   userId: string;
@@ -48,42 +49,66 @@ export class ActivityService {
         if (shouldStopCurrentTask) {
           const activityName = eventType === EventType.TASK_START ? 'another task' : eventType.toLowerCase().replace('_start', '');
           
-          // Create TASK_STOP UserEvent first (this is what session processing looks for)
-          await tx.userEvent.create({
-            data: {
+          // Find the current task start event
+          const currentTaskStartEvent = await tx.userEvent.findFirst({
+            where: {
               userId,
               taskId: currentStatus.currentTaskId,
-              eventType: EventType.TASK_STOP,
-              description: `Automatically stopped when switching to ${activityName}`,
-              metadata: { 
-                autoStopped: true, 
-                newActivity: eventType,
-                newTaskId: taskId || null 
-              },
-              startedAt: new Date(),
+              eventType: EventType.TASK_START,
             },
-          });
-          
-          // Create TASK_STOP record for the current task (for activity log)
-          await tx.taskActivity.create({
-            data: {
-              taskId: currentStatus.currentTaskId,
-              userId,
-              action: 'TASK_PLAY_STOPPED',
-              details: JSON.stringify({
-                eventType: 'TASK_STOP',
-                description: `Automatically stopped when switching to ${activityName}`,
-                metadata: { 
-                  autoStopped: true, 
-                  newActivity: eventType,
-                  newTaskId: taskId || null 
-                },
-              }),
-            },
+            orderBy: { startedAt: 'desc' },
           });
 
-          // Update helper time tracking for the previous task
-          await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
+          if (currentTaskStartEvent) {
+            // Calculate session duration
+            const now = new Date();
+            const sessionDurationMs = now.getTime() - currentTaskStartEvent.startedAt.getTime();
+            const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+
+            // If session is less than 1 minute, delete the start event instead of creating a stop event
+            if (sessionDurationMs < oneMinuteMs) {
+              await tx.userEvent.delete({
+                where: { id: currentTaskStartEvent.id },
+              });
+              
+              // No need to create task activity or update helper time tracking for deleted sessions
+            } else {
+              // Create TASK_STOP UserEvent for sessions longer than 1 minute
+              await tx.userEvent.create({
+                data: {
+                  userId,
+                  taskId: currentStatus.currentTaskId,
+                  eventType: EventType.TASK_STOP,
+                  description: `Automatically stopped when switching to ${activityName}`,
+                  metadata: { 
+                    autoStopped: true, 
+                    newActivity: eventType,
+                    newTaskId: taskId || null 
+                  },
+                  startedAt: now,
+                },
+              });
+              
+              // Create TASK_STOP record for the current task (for activity log)
+              await createTaskActivity(
+                currentStatus.currentTaskId,
+                userId,
+                'TASK_PLAY_STOPPED',
+                {
+                  eventType: 'TASK_STOP',
+                  description: `Automatically stopped when switching to ${activityName}`,
+                  metadata: { 
+                    autoStopped: true, 
+                    newActivity: eventType,
+                    newTaskId: taskId || null 
+                  },
+                }
+              );
+
+              // Update helper time tracking for the previous task
+              await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
+            }
+          }
         }
       }
 
@@ -121,24 +146,37 @@ export class ActivityService {
 
         // If no end event exists and this activity should be ended by the new activity
         if (!hasEndEvent && this.shouldEndActivity(ongoingEvent.eventType, eventType)) {
-          const endEventType = this.getEndEventType(ongoingEvent.eventType);
-          const activityName = this.getActivityDisplayName(ongoingEvent.eventType);
-          const newActivityName = this.getActivityDisplayName(eventType);
-          
-          await tx.userEvent.create({
-            data: {
-              userId,
-              eventType: endEventType,
-              description: `Automatically ended ${activityName} when switching to ${newActivityName}`,
-              metadata: { 
-                autoEnded: true, 
-                previousActivity: ongoingEvent.eventType,
-                newActivity: eventType,
-                newTaskId: taskId || null 
+          // Calculate session duration
+          const now = new Date();
+          const sessionDurationMs = now.getTime() - ongoingEvent.startedAt.getTime();
+          const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+
+          // If session is less than 1 minute, delete the start event instead of creating an end event
+          if (sessionDurationMs < oneMinuteMs) {
+            await tx.userEvent.delete({
+              where: { id: ongoingEvent.id },
+            });
+          } else {
+            // Create END event for sessions longer than 1 minute
+            const endEventType = this.getEndEventType(ongoingEvent.eventType);
+            const activityName = this.getActivityDisplayName(ongoingEvent.eventType);
+            const newActivityName = this.getActivityDisplayName(eventType);
+            
+            await tx.userEvent.create({
+              data: {
+                userId,
+                eventType: endEventType,
+                description: `Automatically ended ${activityName} when switching to ${newActivityName}`,
+                metadata: { 
+                  autoEnded: true, 
+                  previousActivity: ongoingEvent.eventType,
+                  newActivity: eventType,
+                  newTaskId: taskId || null 
+                },
+                startedAt: now,
               },
-              startedAt: new Date(),
-            },
-          });
+            });
+          }
         }
       }
 
@@ -178,20 +216,18 @@ export class ActivityService {
         },
       });
 
-      // 5. If this is a task activity, also create a TaskActivity entry for backwards compatibility
+      // 5. If this is a task activity, also create a BoardItemActivity entry for backwards compatibility
       if (taskId && this.isTaskRelatedEvent(eventType)) {
-        await tx.taskActivity.create({
-          data: {
-            taskId,
-            userId,
-            action: this.mapEventTypeToTaskAction(eventType),
-            details: JSON.stringify({
-              eventType,
-              description,
-              metadata,
-            }),
-          },
-        });
+        await createTaskActivity(
+          taskId,
+          userId,
+          this.mapEventTypeToTaskAction(eventType),
+          {
+            eventType,
+            description,
+            metadata,
+          }
+        );
 
         // 6. Update helper time tracking if this is a helper working on the task
         if (eventType === EventType.TASK_START) {
@@ -216,36 +252,60 @@ export class ActivityService {
         select: { currentTaskId: true, currentStatus: true }
       });
 
-      // If user is currently working on a task, create a TASK_STOP record
+      // If user is currently working on a task, handle task session
       if (currentStatus?.currentTaskId && currentStatus.currentStatus === 'WORKING') {
-        // Create TASK_STOP UserEvent first (this is what session processing looks for)
-        await tx.userEvent.create({
-          data: {
+        // Find the current task start event
+        const currentTaskStartEvent = await tx.userEvent.findFirst({
+          where: {
             userId,
             taskId: currentStatus.currentTaskId,
-            eventType: EventType.TASK_STOP,
-            description: description || 'Stopped work and set to available',
-            metadata: { source: 'end-activity' },
-            startedAt: new Date(),
+            eventType: EventType.TASK_START,
           },
-        });
-        
-        // Create TaskActivity record (for activity log)
-        await tx.taskActivity.create({
-          data: {
-            taskId: currentStatus.currentTaskId,
-            userId,
-            action: 'TASK_PLAY_STOPPED',
-            details: JSON.stringify({
-              eventType: 'TASK_STOP',
-              description: description || 'Stopped work and set to available',
-              metadata: { source: 'end-activity' },
-            }),
-          },
+          orderBy: { startedAt: 'desc' },
         });
 
-        // Update helper time tracking for the current task
-        await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
+        if (currentTaskStartEvent) {
+          // Calculate session duration
+          const now = new Date();
+          const sessionDurationMs = now.getTime() - currentTaskStartEvent.startedAt.getTime();
+          const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+
+          // If session is less than 1 minute, delete the start event instead of creating a stop event
+          if (sessionDurationMs < oneMinuteMs) {
+            await tx.userEvent.delete({
+              where: { id: currentTaskStartEvent.id },
+            });
+            
+            // No need to create task activity or update helper time tracking for deleted sessions
+          } else {
+            // Create TASK_STOP UserEvent for sessions longer than 1 minute
+            await tx.userEvent.create({
+              data: {
+                userId,
+                taskId: currentStatus.currentTaskId,
+                eventType: EventType.TASK_STOP,
+                description: description || 'Stopped work and set to available',
+                metadata: { source: 'end-activity' },
+                startedAt: now,
+              },
+            });
+            
+            // Create BoardItemActivity record (for activity log)
+            await createTaskActivity(
+              currentStatus.currentTaskId,
+              userId,
+              'TASK_PLAY_STOPPED',
+              {
+                eventType: 'TASK_STOP',
+                description: description || 'Stopped work and set to available',
+                metadata: { source: 'end-activity' },
+              }
+            );
+
+            // Update helper time tracking for the current task
+            await this.updateHelperTimeTracking(currentStatus.currentTaskId, userId, 'stop', tx);
+          }
+        }
       }
 
       // End any ongoing non-task activities by sending appropriate END events
@@ -280,23 +340,36 @@ export class ActivityService {
           },
         });
 
-        // If no end event exists, send the appropriate END event
+        // If no end event exists, handle the activity session
         if (!hasEndEvent) {
-          const endEventType = this.getEndEventType(ongoingEvent.eventType);
-          const activityName = this.getActivityDisplayName(ongoingEvent.eventType);
-          
-          await tx.userEvent.create({
-            data: {
-              userId,
-              eventType: endEventType,
-              description: `Ended ${activityName} session`,
-              metadata: { 
-                source: 'end-activity',
-                previousActivity: ongoingEvent.eventType
+          // Calculate session duration
+          const now = new Date();
+          const sessionDurationMs = now.getTime() - ongoingEvent.startedAt.getTime();
+          const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+
+          // If session is less than 1 minute, delete the start event instead of creating an end event
+          if (sessionDurationMs < oneMinuteMs) {
+            await tx.userEvent.delete({
+              where: { id: ongoingEvent.id },
+            });
+          } else {
+            // Create END event for sessions longer than 1 minute
+            const endEventType = this.getEndEventType(ongoingEvent.eventType);
+            const activityName = this.getActivityDisplayName(ongoingEvent.eventType);
+            
+            await tx.userEvent.create({
+              data: {
+                userId,
+                eventType: endEventType,
+                description: `Ended ${activityName} session`,
+                metadata: { 
+                  source: 'end-activity',
+                  previousActivity: ongoingEvent.eventType
+                },
+                startedAt: now,
               },
-              startedAt: new Date(),
-            },
-          });
+            });
+          }
         }
       }
 
@@ -357,9 +430,10 @@ export class ActivityService {
     
     if (status.currentTaskId && status.currentStatus === 'WORKING') {
       // Get the latest task activity for this user and task
-      const latestTaskActivity = await prisma.taskActivity.findFirst({
+      const latestTaskActivity = await prisma.boardItemActivity.findFirst({
         where: {
-          taskId: status.currentTaskId,
+          itemType: 'TASK',
+          itemId: status.currentTaskId,
           userId,
           action: { in: ['TASK_PLAY_STARTED', 'TASK_PLAY_PAUSED', 'TASK_PLAY_STOPPED'] },
         },

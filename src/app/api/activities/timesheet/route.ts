@@ -201,6 +201,11 @@ export async function GET(request: NextRequest) {
         break;
     }
 
+    // Debug logging for the specific issue
+    console.log(`[TIMESHEET DEBUG] View: ${view}, Target Date: ${targetDate.toISOString()}`);
+    console.log(`[TIMESHEET DEBUG] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    console.log(`[TIMESHEET DEBUG] June 19, 2024 would be: ${new Date('2024-06-19').toISOString()}`);
+
     // Fetch user events in the date range
     const userEvents = await prisma.userEvent.findMany({
       where: {
@@ -283,6 +288,13 @@ export async function GET(request: NextRequest) {
                   event.eventType.endsWith('_END')) && currentStart) {
           
           const duration = event.startedAt.getTime() - currentStart.startedAt.getTime();
+          const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+          
+          // Skip sessions shorter than 1 minute (these are test sessions)
+          if (duration < oneMinuteMs) {
+            currentStart = null;
+            continue;
+          }
           
           // Check if session was edited and get edit reason
           const startMetadata = (currentStart.metadata as any) || {};
@@ -359,32 +371,36 @@ export async function GET(request: NextRequest) {
 
           if (nextActivityStart) {
             const duration = nextActivityStart.startedAt.getTime() - currentStart.startedAt.getTime();
+            const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
             
-            // Check if start event was edited
-            const startMetadata = (currentStart.metadata as any) || {};
-            const isAdjusted = !!startMetadata.editedAt;
-            const editReason = startMetadata.editReason;
-            
-            // Get the base description with original activity note
-            let sessionDescription = getSessionDescription(currentStart.eventType, EventType.TASK_STOP, currentStart.description || undefined);
-            
-            // If session was adjusted, append the edit reason
-            if (isAdjusted && editReason) {
-              sessionDescription += ` (Adjusted: ${editReason})`;
+            // Skip auto-ended sessions shorter than 1 minute (these are test sessions)
+            if (duration >= oneMinuteMs) {
+              // Check if start event was edited
+              const startMetadata = (currentStart.metadata as any) || {};
+              const isAdjusted = !!startMetadata.editedAt;
+              const editReason = startMetadata.editReason;
+              
+              // Get the base description with original activity note
+              let sessionDescription = getSessionDescription(currentStart.eventType, EventType.TASK_STOP, currentStart.description || undefined);
+              
+              // If session was adjusted, append the edit reason
+              if (isAdjusted && editReason) {
+                sessionDescription += ` (Adjusted: ${editReason})`;
+              }
+              
+              const session: TimesheetSession = {
+                id: `${currentStart.id}-auto-ended`,
+                startTime: currentStart.startedAt.toISOString(),
+                endTime: nextActivityStart.startedAt.toISOString(),
+                duration,
+                formattedDuration: formatDurationDetailed(duration),
+                isOngoing: false,
+                isAdjusted,
+                eventType: EventType.TASK_STOP, // Auto-ended, treat as stopped
+                description: sessionDescription,
+              };
+              taskSessions[sessionKey].push(session);
             }
-            
-            const session: TimesheetSession = {
-              id: `${currentStart.id}-auto-ended`,
-              startTime: currentStart.startedAt.toISOString(),
-              endTime: nextActivityStart.startedAt.toISOString(),
-              duration,
-              formattedDuration: formatDurationDetailed(duration),
-              isOngoing: false,
-              isAdjusted,
-              eventType: EventType.TASK_STOP, // Auto-ended, treat as stopped
-              description: sessionDescription,
-            };
-            taskSessions[sessionKey].push(session);
           }
         }
       }

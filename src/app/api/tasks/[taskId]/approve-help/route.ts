@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
+import BoardItemActivityService from "@/lib/board-item-activity-service";
 
 export async function POST(
   req: Request,
@@ -90,18 +91,16 @@ export async function POST(
     });
 
     // Log activity for help request approval/rejection
-    await prisma.taskActivity.create({
-      data: {
-        action: action === 'approve' ? "HELP_REQUEST_APPROVED" : "HELP_REQUEST_REJECTED",
-        details: JSON.stringify({
-          helperId: helperId,
-          helperName: helpRequest.user.name,
-          approverName: session.user.name
-        }),
-        taskId: taskId,
-        userId: session.user.id
+    await BoardItemActivityService.createTaskActivity(
+      taskId,
+      session.user.id,
+      action === 'approve' ? "HELP_REQUEST_APPROVED" : "HELP_REQUEST_REJECTED",
+      {
+        helperId: helperId,
+        helperName: helpRequest.user.name,
+        approverName: session.user.name
       }
-    });
+    );
 
     // Create notification for the helper
     await prisma.notification.create({

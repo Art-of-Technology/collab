@@ -75,7 +75,7 @@ export async function GET(
             image: true,
           }
         },
-        activity: {
+        activities: {
           where: {
             action: {
               in: ["TASK_PLAY_STARTED", "TASK_PLAY_PAUSED", "TASK_PLAY_STOPPED"]
@@ -104,7 +104,7 @@ export async function GET(
       let currentPlayState = "stopped";
       
       // Filter activities by the current user and find the latest one
-      const userActivities = task.activity.filter(act => act.user.id === userId);
+      const userActivities = task.activities.filter(act => act.user.id === userId);
       if (userActivities.length > 0) {
         const lastActivity = userActivities[0]; // Already sorted by createdAt desc
         if (lastActivity.action === "TASK_PLAY_STARTED") {

@@ -119,16 +119,45 @@ export async function searchContent(query: string, tab: string = 'all') {
     
     // Search for users if needed
     if (tab === 'all' || tab === 'people') {
+      // Build search conditions for user fields
+      const userSearchConditions: any[] = [];
+      
+      // Name and email can use contains
+      if (query.trim()) {
+        userSearchConditions.push(
+          { name: { contains: query, mode: 'insensitive' as const } },
+          { email: { contains: query, mode: 'insensitive' as const } }
+        );
+        
+        // Team can use contains if not null
+        userSearchConditions.push({ 
+          team: { 
+            contains: query, 
+            mode: 'insensitive' as const
+          } 
+        });
+        
+        // For role enum, we need to check if the query matches any of the enum values
+        const roleEnumValues = [
+          'SYSTEM_ADMIN', 'DEVELOPER', 'PROJECT_MANAGER', 'HR', 'LEGAL', 
+          'FINANCE', 'MARKETING', 'SALES', 'CUSTOMER_SUPPORT', 'QA_TESTER', 
+          'DESIGNER', 'CONTENT_CREATOR', 'ANALYST', 'CONSULTANT', 'INTERN', 'GUEST'
+        ];
+        
+        const matchingRoles = roleEnumValues.filter(role => 
+          role.toLowerCase().includes(query.toLowerCase())
+        );
+        
+        if (matchingRoles.length > 0) {
+          userSearchConditions.push({ role: { in: matchingRoles } });
+        }
+      }
+
       users = await prisma.user.findMany({
         where: {
           AND: [
             {
-              OR: [
-                { name: { contains: query, mode: 'insensitive' } },
-                { email: { contains: query, mode: 'insensitive' } },
-                { role: { contains: query, mode: 'insensitive' } },
-                { team: { contains: query, mode: 'insensitive' } }
-              ]
+              OR: userSearchConditions
             },
             {
               OR: [

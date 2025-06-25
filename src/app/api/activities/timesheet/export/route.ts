@@ -149,22 +149,27 @@ function generateCSVExport(userEvents: any[], view: string, startDate: Date) {
       const currentSession = currentSessions[sessionKey];
       if (currentSession) {
         const duration = event.startedAt.getTime() - currentSession.start.getTime();
-        const durationHours = (duration / (1000 * 60 * 60)).toFixed(2);
+        const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
         
-        rows.push([
-          format(currentSession.start, 'yyyy-MM-dd'),
-          format(currentSession.start, 'HH:mm:ss'),
-          format(event.startedAt, 'HH:mm:ss'),
-          durationHours,
-          activityType,
-          currentSession.task?.title || '',
-          currentSession.task?.issueKey || '',
-          currentSession.task?.priority || '',
-          currentSession.task?.taskBoard?.name || '',
-          event.eventType === EventType.TASK_PAUSE ? 'Paused' : 'Completed',
-          currentSession.startEvent?.description || '',
-          !!(event.metadata as any)?.editedAt ? 'Yes' : 'No'
-        ]);
+        // Skip sessions shorter than 1 minute (these are test sessions)
+        if (duration >= oneMinuteMs) {
+          const durationHours = (duration / (1000 * 60 * 60)).toFixed(2);
+          
+          rows.push([
+            format(currentSession.start, 'yyyy-MM-dd'),
+            format(currentSession.start, 'HH:mm:ss'),
+            format(event.startedAt, 'HH:mm:ss'),
+            durationHours,
+            activityType,
+            currentSession.task?.title || '',
+            currentSession.task?.issueKey || '',
+            currentSession.task?.priority || '',
+            currentSession.task?.taskBoard?.name || '',
+            event.eventType === EventType.TASK_PAUSE ? 'Paused' : 'Completed',
+            currentSession.startEvent?.description || '',
+            !!(event.metadata as any)?.editedAt ? 'Yes' : 'No'
+          ]);
+        }
         
         delete currentSessions[sessionKey];
       }
@@ -230,21 +235,26 @@ function generatePDFExport(userEvents: any[], view: string, startDate: Date, end
       const currentSession = currentSessions[sessionKey];
       if (currentSession) {
         const duration = event.startedAt.getTime() - currentSession.start.getTime();
-        const durationFormatted = formatDurationDetailed(duration);
+        const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
         
-        sessions.push({
-          date: format(currentSession.start, 'yyyy-MM-dd'),
-          startTime: format(currentSession.start, 'HH:mm'),
-          endTime: format(event.startedAt, 'HH:mm'),
-          duration: durationFormatted,
-          activityType,
-          taskTitle: currentSession.task?.title || `${activityType} activity`,
-          issueKey: currentSession.task?.issueKey || '',
-          board: currentSession.task?.taskBoard?.name || '',
-          status: event.eventType === EventType.TASK_PAUSE ? 'Paused' : 'Completed',
-          isAdjusted: !!(event.metadata as any)?.editedAt,
-          description: currentSession.startEvent?.description || ''
-        });
+        // Skip sessions shorter than 1 minute (these are test sessions)
+        if (duration >= oneMinuteMs) {
+          const durationFormatted = formatDurationDetailed(duration);
+          
+          sessions.push({
+            date: format(currentSession.start, 'yyyy-MM-dd'),
+            startTime: format(currentSession.start, 'HH:mm'),
+            endTime: format(event.startedAt, 'HH:mm'),
+            duration: durationFormatted,
+            activityType,
+            taskTitle: currentSession.task?.title || `${activityType} activity`,
+            issueKey: currentSession.task?.issueKey || '',
+            board: currentSession.task?.taskBoard?.name || '',
+            status: event.eventType === EventType.TASK_PAUSE ? 'Paused' : 'Completed',
+            isAdjusted: !!(event.metadata as any)?.editedAt,
+            description: currentSession.startEvent?.description || ''
+          });
+        }
         
         delete currentSessions[sessionKey];
       }

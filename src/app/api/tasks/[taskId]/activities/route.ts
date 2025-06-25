@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
+import { getItemActivities } from "@/lib/board-item-activity-service";
 
 export async function GET(
   req: Request,
@@ -48,31 +49,11 @@ export async function GET(
     }
 
     // Show all activities for all users (Activity Feed should show everyone's activities)
-    const activities = await prisma.taskActivity.findMany({
-      where: { 
-        taskId
-        // Removed userId filter - show all activities
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            useCustomAvatar: true,
-            avatarAccessory: true,
-            avatarBrows: true,
-            avatarEyes: true,
-            avatarEyewear: true,
-            avatarHair: true,
-            avatarMouth: true,
-            avatarNose: true,
-            avatarSkinTone: true,
-          }
-        }
-      }
-    });
+    const activities = await getItemActivities(
+      'TASK',
+      taskId,
+      100 // Default limit
+    );
 
     return NextResponse.json(activities);
   } catch (error) {

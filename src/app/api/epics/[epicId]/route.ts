@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
+import { compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
 
 // Schema for PATCH validation
 const epicPatchSchema = z.object({
@@ -199,16 +200,20 @@ export async function PATCH(
     }
     // --- End Additional Validation ---
 
-    // Get the current epic to access its board
+    // Get the current epic to access its board and for change tracking
     const currentEpic = await prisma.epic.findUnique({
       where: { id: epicId },
       include: { taskBoard: true, column: true }
     });
 
+    if (!currentEpic) {
+      return NextResponse.json({ error: "Epic not found" }, { status: 404 });
+    }
+
     // Find the column ID if status is being updated
     let columnId = dataToUpdate.columnId;
 
-    if (dataToUpdate.status && currentEpic && dataToUpdate.status !== currentEpic.column?.name) {
+    if (dataToUpdate.status && dataToUpdate.status !== currentEpic.column?.name) {
       // Find the column with the given name in the epic's board
       const column = await prisma.taskColumn.findFirst({
         where: {
@@ -221,6 +226,32 @@ export async function PATCH(
         columnId = column.id;
       }
     }
+
+    // Track changes before updating
+    const fieldsToTrack = ['title', 'description', 'assigneeId', 'reporterId', 'status', 'priority', 'columnId', 'dueDate', 'startDate'];
+    const oldEpicData = {
+      title: currentEpic.title,
+      description: currentEpic.description,
+      assigneeId: currentEpic.assigneeId,
+      reporterId: currentEpic.reporterId,
+      status: currentEpic.column?.name || currentEpic.status,
+      priority: currentEpic.priority,
+      columnId: currentEpic.columnId,
+      dueDate: currentEpic.dueDate,
+      startDate: currentEpic.startDate,
+    };
+
+    const newEpicData = {
+      title: dataToUpdate.title !== undefined ? dataToUpdate.title : currentEpic.title,
+      description: dataToUpdate.description !== undefined ? dataToUpdate.description : currentEpic.description,
+      assigneeId: dataToUpdate.assigneeId !== undefined ? dataToUpdate.assigneeId : currentEpic.assigneeId,
+      reporterId: dataToUpdate.reporterId !== undefined ? dataToUpdate.reporterId : currentEpic.reporterId,
+      status: dataToUpdate.status !== undefined ? dataToUpdate.status : (currentEpic.column?.name || currentEpic.status),
+      priority: dataToUpdate.priority !== undefined ? dataToUpdate.priority : currentEpic.priority,
+      columnId: columnId !== undefined ? columnId : currentEpic.columnId,
+      dueDate: dataToUpdate.dueDate !== undefined ? dataToUpdate.dueDate : currentEpic.dueDate,
+      startDate: dataToUpdate.startDate !== undefined ? dataToUpdate.startDate : currentEpic.startDate,
+    };
 
     // Prepare labels update if provided
     const { labels, ...otherData } = dataToUpdate;
@@ -283,6 +314,100 @@ export async function PATCH(
         },
       }
     });
+
+    // Track field changes with enhanced user tracking for assignments
+    try {
+      const changes = compareObjects(oldEpicData, newEpicData, fieldsToTrack);
+      if (changes.length > 0) {
+        // Enhanced tracking for assignment changes
+        for (const change of changes) {
+          if (change.field === 'assigneeId') {
+            // Get user details for assignee change
+            const oldAssignee = change.oldValue ? await prisma.user.findUnique({
+              where: { id: change.oldValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+            
+            const newAssignee = change.newValue ? await prisma.user.findUnique({
+              where: { id: change.newValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+            await trackAssignment(
+              'EPIC',
+              epicId,
+              session.user.id,
+              currentEpic.workspaceId,
+              oldAssignee,
+              newAssignee,
+              currentEpic.taskBoardId || undefined
+            );
+          } else if (change.field === 'reporterId') {
+            // Get user details for reporter change
+            const oldReporter = change.oldValue ? await prisma.user.findUnique({
+              where: { id: change.oldValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+            
+            const newReporter = change.newValue ? await prisma.user.findUnique({
+              where: { id: change.newValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+            await createActivity({
+              itemType: 'EPIC',
+              itemId: epicId,
+              action: 'REPORTER_CHANGED',
+              userId: session.user.id,
+              workspaceId: currentEpic.workspaceId,
+              boardId: currentEpic.taskBoardId || undefined,
+              details: {
+                field: 'reporterId',
+                oldReporter,
+                newReporter,
+                changedAt: new Date().toISOString(),
+              },
+              fieldName: 'reporterId',
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+            });
+          } else {
+            // Use regular tracking for other fields
+            const fieldActionMap: Record<string, string> = {
+              'title': 'TITLE_UPDATED',
+              'description': 'DESCRIPTION_UPDATED',
+              'status': 'STATUS_CHANGED',
+              'priority': 'PRIORITY_CHANGED',
+              'columnId': 'COLUMN_CHANGED',
+              'dueDate': 'DUE_DATE_CHANGED',
+              'startDate': 'DUE_DATE_CHANGED',
+            };
+            
+            await createActivity({
+              itemType: 'EPIC',
+              itemId: epicId,
+              action: (fieldActionMap[change.field] || 'UPDATED') as any,
+              userId: session.user.id,
+              workspaceId: currentEpic.workspaceId,
+              boardId: currentEpic.taskBoardId || undefined,
+              details: {
+                field: change.field,
+                oldValue: change.oldValue,
+                newValue: change.newValue,
+                displayOldValue: change.displayOldValue,
+                displayNewValue: change.displayNewValue,
+              },
+              fieldName: change.field,
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to track epic update activities:', error);
+      // Don't fail the epic update if activity tracking fails
+    }
 
     return NextResponse.json(updatedEpic);
 

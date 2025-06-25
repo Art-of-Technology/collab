@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
-import { Loader2, Check, X, PenLine, Star, Calendar } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar, Copy } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -17,6 +17,8 @@ import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
 import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { BoardItemTabs } from "@/components/tasks/TaskTabs";
+import { useSession } from "next-auth/react";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -34,6 +36,7 @@ export interface Milestone {
     createdAt: Date;
     updatedAt: Date;
     workspaceId: string;
+    issueKey?: string;
     labels?: Array<{ id: string; name: string; color: string; }>;
     epics?: Array<{ id: string; title: string; }>;
     taskBoard?: {
@@ -87,6 +90,7 @@ export function MilestoneDetailContent({
     onClose,
     boardId
 }: MilestoneDetailContentProps) {
+    const { data: session } = useSession();
     const [editingTitle, setEditingTitle] = useState(false);
     const [title, setTitle] = useState(milestone?.title || "");
     const [savingTitle, setSavingTitle] = useState(false);
@@ -108,6 +112,24 @@ export function MilestoneDetailContent({
 
     // Prioritize the milestone's own board, then fall back to the one from props
     const effectiveBoardId = milestone?.taskBoard?.id || boardId;
+
+    // Copy to clipboard function
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            toast({
+                title: "Copied",
+                description: `${text} copied to clipboard`,
+            });
+        } catch (err) {
+            console.error('Failed to copy: ', err);
+            toast({
+                title: "Error",
+                description: "Failed to copy to clipboard",
+                variant: "destructive",
+            });
+        }
+    };
 
     const handleDescriptionChange = useCallback((md: string) => {
         setDescription(md);
@@ -399,28 +421,40 @@ export function MilestoneDetailContent({
                     <div className="space-y-2 flex-1">
                         {editingTitle ? (
                             <div className="flex flex-col gap-2 w-full">
-                                <div className="relative">
-                                    <Input
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSaveTitle();
-                                            } else if (e.key === 'Escape') {
-                                                handleCancelTitle();
-                                            }
-                                        }}
-                                        placeholder="Milestone title"
-                                        disabled={savingTitle}
-                                    />
-                                    {savingTitle && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                <div className="flex items-center gap-3">
+                                    {milestone.issueKey && (
+                                        <div
+                                            className="group relative font-mono px-3 py-1.5 text-sm bg-gradient-to-r from-indigo-500/5 to-indigo-500/10 border border-indigo-500/20 text-indigo-600/80 cursor-pointer hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-indigo-500/15 hover:border-indigo-500/40 hover:text-indigo-600 transition-all duration-200 rounded-lg flex items-center h-8 shadow-sm hover:shadow-md overflow-hidden"
+                                            onClick={() => copyToClipboard(milestone.issueKey || '')}
+                                            title="Click to copy"
+                                        >
+                                            <span className="font-semibold tracking-wide whitespace-nowrap">{milestone.issueKey}</span>
+                                            <Copy className="h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-indigo-500/60 w-0 p-0 group-hover:w-3.5" />
                                         </div>
                                     )}
+                                    <div className="relative flex-1">
+                                        <Input
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
+                                            autoFocus
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSaveTitle();
+                                                } else if (e.key === 'Escape') {
+                                                    handleCancelTitle();
+                                                }
+                                            }}
+                                            placeholder="Milestone title"
+                                            disabled={savingTitle}
+                                        />
+                                        {savingTitle && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <Button
@@ -454,14 +488,26 @@ export function MilestoneDetailContent({
                                 </div>
                             </div>
                         ) : (
-                            <div
-                                className="group relative cursor-pointer"
-                                onClick={() => setEditingTitle(true)}
-                            >
-                                <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
-                                    {milestone.title}
-                                </h1>
-                                <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
+                            <div className="flex items-center gap-3">
+                                {milestone.issueKey && (
+                                    <div
+                                        className="group relative font-mono px-3 py-1.5 text-sm bg-gradient-to-r from-indigo-500/5 to-indigo-500/10 border border-indigo-500/20 text-indigo-600/80 cursor-pointer hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-indigo-500/15 hover:border-indigo-500/40 hover:text-indigo-600 transition-all duration-200 rounded-lg flex items-center h-8 shadow-sm hover:shadow-md overflow-hidden"
+                                        onClick={() => copyToClipboard(milestone.issueKey || '')}
+                                        title="Click to copy"
+                                    >
+                                        <span className="font-semibold tracking-wide whitespace-nowrap">{milestone.issueKey}</span>
+                                        <Copy className="h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-indigo-500/60 w-0 p-0 group-hover:w-3.5" />
+                                    </div>
+                                )}
+                                <div
+                                    className="group relative cursor-pointer flex-1"
+                                    onClick={() => setEditingTitle(true)}
+                                >
+                                    <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
+                                        {milestone.title}
+                                    </h1>
+                                    <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
+                                </div>
                             </div>
                         )}
 
@@ -567,32 +613,18 @@ export function MilestoneDetailContent({
                         </CardContent>
                     </Card>
 
-                    {/* Epics linked to this milestone */}
-                    {milestone.epics && milestone.epics.length > 0 && (
-                        <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
-                            <CardHeader className="py-3 bg-muted/30 border-b">
-                                <CardTitle className="text-md">Epics</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4">
-                                <ul className="space-y-2">
-                                    {milestone.epics.map((epic) => (
-                                        <li key={epic.id}>
-                                            <Link
-                                                href={currentWorkspace ? `/${currentWorkspace.id}/epics/${epic.id}` : "#"}
-                                                className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md transition-colors"
-                                            >
-                                                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                                                    <Star className="h-3 w-3 mr-1" />
-                                                    Epic
-                                                </Badge>
-                                                <span className="text-sm">{epic.title}</span>
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Comments and Activity Tabs */}
+                    <BoardItemTabs
+                        itemType="milestone"
+                        itemId={milestone.id}
+                        currentUserId={session?.user?.id || ''}
+                        assigneeId={milestone.assignee?.id}
+                        reporterId={milestone.reporter?.id}
+                        itemData={milestone}
+                        onRefresh={onRefresh}
+                    />
+
+
                 </div>
 
                 <div className="space-y-6">
