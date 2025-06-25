@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Star, BookOpen, Copy } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Star, Copy } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -27,6 +27,8 @@ import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
 import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { BoardItemTabs } from "@/components/tasks/TaskTabs";
+import { useSession } from "next-auth/react";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -104,6 +106,7 @@ export function EpicDetailContent({
     onClose,
     boardId
 }: EpicDetailContentProps) {
+    const { data: session } = useSession();
     const [editingTitle, setEditingTitle] = useState(false);
     const [title, setTitle] = useState(epic?.title || "");
     const [savingTitle, setSavingTitle] = useState(false);
@@ -656,32 +659,18 @@ export function EpicDetailContent({
                         </CardContent>
                     </Card>
 
-                    {/* Stories linked to this epic */}
-                    {epic.stories && epic.stories.length > 0 && (
-                        <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
-                            <CardHeader className="py-3 bg-muted/30 border-b">
-                                <CardTitle className="text-md">Stories</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4">
-                                <ul className="space-y-2">
-                                    {epic.stories.map((story) => (
-                                        <li key={story.id}>
-                                            <Link
-                                                href={currentWorkspace ? `/${currentWorkspace.id}/stories/${story.id}` : "#"}
-                                                className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md transition-colors"
-                                            >
-                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                    <BookOpen className="h-3 w-3 mr-1" />
-                                                    Story
-                                                </Badge>
-                                                <span className="text-sm">{story.title}</span>
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Comments and Activity Tabs */}
+                    <BoardItemTabs
+                        itemType="epic"
+                        itemId={epic.id}
+                        currentUserId={session?.user?.id || ''}
+                        assigneeId={epic.assignee?.id}
+                        reporterId={epic.reporter?.id}
+                        itemData={epic}
+                        onRefresh={onRefresh}
+                    />
+
+
                 </div>
 
                 <div className="space-y-6">
@@ -859,21 +848,7 @@ export function EpicDetailContent({
                                 </div>
                             </div>
 
-                            {epic.milestone && (
-                                <div>
-                                    <p className="text-sm font-medium mb-1">Milestone</p>
-                                    <Link
-                                        href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${epic.milestoneId}` : "#"}
-                                        className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md border transition-colors"
-                                    >
-                                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-                                            <CalendarIcon className="h-3 w-3 mr-1" />
-                                            Milestone
-                                        </Badge>
-                                        <span className="text-sm">{epic.milestone.title}</span>
-                                    </Link>
-                                </div>
-                            )}
+
 
                             {epic.taskBoard && (
                                 <div>

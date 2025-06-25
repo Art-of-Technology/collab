@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
-import { Loader2, Check, X, PenLine, Star, Calendar, Copy } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar, Copy } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -17,6 +17,8 @@ import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
 import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { BoardItemTabs } from "@/components/tasks/TaskTabs";
+import { useSession } from "next-auth/react";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -88,6 +90,7 @@ export function MilestoneDetailContent({
     onClose,
     boardId
 }: MilestoneDetailContentProps) {
+    const { data: session } = useSession();
     const [editingTitle, setEditingTitle] = useState(false);
     const [title, setTitle] = useState(milestone?.title || "");
     const [savingTitle, setSavingTitle] = useState(false);
@@ -610,32 +613,18 @@ export function MilestoneDetailContent({
                         </CardContent>
                     </Card>
 
-                    {/* Epics linked to this milestone */}
-                    {milestone.epics && milestone.epics.length > 0 && (
-                        <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
-                            <CardHeader className="py-3 bg-muted/30 border-b">
-                                <CardTitle className="text-md">Epics</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4">
-                                <ul className="space-y-2">
-                                    {milestone.epics.map((epic) => (
-                                        <li key={epic.id}>
-                                            <Link
-                                                href={currentWorkspace ? `/${currentWorkspace.id}/epics/${epic.id}` : "#"}
-                                                className="flex items-center gap-2 p-2 hover:bg-muted/30 rounded-md transition-colors"
-                                            >
-                                                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                                                    <Star className="h-3 w-3 mr-1" />
-                                                    Epic
-                                                </Badge>
-                                                <span className="text-sm">{epic.title}</span>
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Comments and Activity Tabs */}
+                    <BoardItemTabs
+                        itemType="milestone"
+                        itemId={milestone.id}
+                        currentUserId={session?.user?.id || ''}
+                        assigneeId={milestone.assignee?.id}
+                        reporterId={milestone.reporter?.id}
+                        itemData={milestone}
+                        onRefresh={onRefresh}
+                    />
+
+
                 </div>
 
                 <div className="space-y-6">

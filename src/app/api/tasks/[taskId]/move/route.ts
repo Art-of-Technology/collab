@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { BoardItemActivityService } from "@/lib/board-item-activity-service";
+import BoardItemActivityService from "@/lib/board-item-activity-service";
 
 // PATCH /api/tasks/[taskId]/move - Move a task to a different column
 export async function PATCH(

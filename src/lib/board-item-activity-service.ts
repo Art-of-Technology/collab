@@ -201,6 +201,9 @@ export async function trackAssignment(
       newAssignee,
       assignedAt: new Date().toISOString(),
     },
+    fieldName: 'assigneeId',
+    oldValue: oldAssignee?.id || null,
+    newValue: newAssignee?.id || null,
   });
 }
 
@@ -486,3 +489,22 @@ function sanitizeItemData(itemData: any) {
   delete sanitized.token;
   return sanitized;
 } 
+
+const boardItemActivityService = {
+  createActivity,
+  trackCreation,
+  trackFieldChanges,
+  trackMove,
+  trackAssignment,
+  getItemActivities,
+  getWorkspaceActivities,
+  getBoardActivities,
+  createTaskActivity,
+  compareObjects,
+  hasChanged,
+  getDisplayValue,
+  getActionForField,
+  sanitizeItemData,
+};
+
+export default boardItemActivityService;

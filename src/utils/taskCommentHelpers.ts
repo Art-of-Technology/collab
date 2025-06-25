@@ -1,4 +1,19 @@
-import { TaskCommentWithAuthor } from "@/components/tasks/TaskComment";
+// TaskCommentWithAuthor type moved to UnifiedComment
+export type TaskCommentWithAuthor = {
+  id: string;
+  content: string;
+  html?: string | null;
+  createdAt: Date;
+  author: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    useCustomAvatar?: boolean;
+  };
+  reactions?: any[];
+  parentId?: string | null;
+  replies?: TaskCommentWithAuthor[];
+};
 
 /**
  * Organizes task comments into a hierarchical tree structure

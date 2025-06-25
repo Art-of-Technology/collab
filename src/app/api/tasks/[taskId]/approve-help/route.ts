@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
-import { BoardItemActivityService } from "@/lib/board-item-activity-service";
+import BoardItemActivityService from "@/lib/board-item-activity-service";
 
 export async function POST(
   req: Request,

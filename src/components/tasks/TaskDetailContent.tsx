@@ -1165,6 +1165,7 @@ export function TaskDetailContent({
             currentUserId={currentUserId || ""}
             assigneeId={task.assignee?.id}
             reporterId={task.reporter?.id || ""}
+            taskData={task}
             onRefresh={() => {
               fetchTotalPlayTime();
               onRefresh();
@@ -1306,119 +1307,7 @@ export function TaskDetailContent({
                 </div>
               </div>
 
-              {/* Relations Section */}
-              <div className="border-t border-border/50 pt-4 mt-2">
-                <h3 className="text-sm font-medium mb-3">Relations</h3>
 
-                {/* Milestone */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Milestone</p>
-                  {task.milestone ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${task.milestoneId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-                        Milestone
-                      </Badge>
-                      <span>{task.milestone.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No milestone linked
-                    </div>
-                  )}
-                </div>
-
-                {/* Epic */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Epic</p>
-                  {task.epic ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/epics/${task.epicId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                        Epic
-                      </Badge>
-                      <span>{task.epic.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No epic linked
-                    </div>
-                  )}
-                </div>
-
-                {/* Story */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Story</p>
-                  {task.story ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/stories/${task.storyId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                        Story
-                      </Badge>
-                      <span>{task.story.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No story linked
-                    </div>
-                  )}
-                </div>
-
-                {/* Parent Task */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Parent Task</p>
-                  {task.parentTask ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.parentTaskId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
-                        {task.parentTask.issueKey || 'Task'}
-                      </Badge>
-                      <span>{task.parentTask.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No parent task
-                    </div>
-                  )}
-                </div>
-
-                {/* Subtasks */}
-                {task.subtasks && task.subtasks.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs font-medium mb-1 text-muted-foreground">Subtasks</p>
-                    <ul className="space-y-2">
-                      {task.subtasks.map((subtask) => (
-                        <li key={subtask.id}>
-                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${subtask.id}` : "#"} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
-                                {subtask.issueKey || 'Task'}
-                              </Badge>
-                              <span className="truncate">{subtask.title}</span>
-                            </div>
-                            <Badge className={`${subtask.status === 'DONE' ? 'bg-green-500' :
-                              subtask.status === 'IN PROGRESS' ? 'bg-blue-500' :
-                                'bg-gray-500'
-                              } text-white flex-shrink-0 ml-1`}>
-                              {subtask.status}
-                            </Badge>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Create Subtask Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-2"
-                  onClick={() => {
-                    // Open task creation modal with parent task ID prefilled
-                    setSubtaskFormOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Create Subtask
-                </Button>
-              </div>
             </CardContent>
           </Card>
 

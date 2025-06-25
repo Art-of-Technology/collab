@@ -3,7 +3,8 @@
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { trackCreation, trackFieldChanges, compareObjects } from '@/lib/board-item-activity-service';
+import { trackCreation, compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
+import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
 
 /**
  * Get tasks for a workspace
@@ -725,18 +726,94 @@ export async function updateTask(taskId: string, data: {
     }
   });
 
-  // Track field changes
+  // Track field changes with enhanced user tracking for assignments
   try {
-          const changes = compareObjects(oldTaskData, newTaskData, fieldsToTrack);
-      if (changes.length > 0) {
-        await trackFieldChanges(
-        'TASK',
-        taskId,
-        user.id,
-        task.workspaceId,
-        changes,
-        task.taskBoardId || undefined
-      );
+    const changes = compareObjects(oldTaskData, newTaskData, fieldsToTrack);
+    if (changes.length > 0) {
+      // Enhanced tracking for assignment changes
+      for (const change of changes) {
+        if (change.field === 'assigneeId') {
+          // Get user details for assignee change
+          const oldAssignee = change.oldValue ? await prisma.user.findUnique({
+            where: { id: change.oldValue },
+            select: { id: true, name: true }
+          }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+          
+          const newAssignee = change.newValue ? await prisma.user.findUnique({
+            where: { id: change.newValue },
+            select: { id: true, name: true }
+          }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+          await trackAssignment(
+            'TASK',
+            taskId,
+            user.id,
+            task.workspaceId,
+            oldAssignee,
+            newAssignee,
+            task.taskBoardId || undefined
+          );
+        } else if (change.field === 'reporterId') {
+          // Get user details for reporter change
+          const oldReporter = change.oldValue ? await prisma.user.findUnique({
+            where: { id: change.oldValue },
+            select: { id: true, name: true }
+          }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+          
+          const newReporter = change.newValue ? await prisma.user.findUnique({
+            where: { id: change.newValue },
+            select: { id: true, name: true }
+          }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+          await createActivity({
+            itemType: 'TASK',
+            itemId: taskId,
+            action: 'REPORTER_CHANGED',
+            userId: user.id,
+            workspaceId: task.workspaceId,
+            boardId: task.taskBoardId || undefined,
+            details: {
+              field: 'reporterId',
+              oldReporter,
+              newReporter,
+              changedAt: new Date().toISOString(),
+            },
+            fieldName: 'reporterId',
+            oldValue: change.oldValue,
+            newValue: change.newValue,
+          });
+        } else {
+          // Use regular tracking for other fields
+          const fieldActionMap: Record<string, string> = {
+            'title': 'TITLE_UPDATED',
+            'description': 'DESCRIPTION_UPDATED',
+            'status': 'STATUS_CHANGED',
+            'priority': 'PRIORITY_CHANGED',
+            'columnId': 'COLUMN_CHANGED',
+            'dueDate': 'DUE_DATE_CHANGED',
+            'type': 'TYPE_CHANGED',
+          };
+          
+          await createActivity({
+            itemType: 'TASK',
+            itemId: taskId,
+            action: (fieldActionMap[change.field] || 'UPDATED') as any,
+            userId: user.id,
+            workspaceId: task.workspaceId,
+            boardId: task.taskBoardId || undefined,
+            details: {
+              field: change.field,
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+              displayOldValue: change.displayOldValue,
+              displayNewValue: change.displayNewValue,
+            },
+            fieldName: change.field,
+            oldValue: change.oldValue,
+            newValue: change.newValue,
+          });
+        }
+      }
     }
   } catch (error) {
     console.error('Failed to track task update activities:', error);
@@ -1223,26 +1300,9 @@ export async function createColumn(boardId: string, data: {
     throw new Error('Board not found');
   }
 
-  // Verify the user has admin rights in the workspace
-  const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
-    where: {
-      userId: user.id,
-      workspaceId: board.workspaceId
-    }
-  });
+  const hasPermission = await checkUserPermission(user.id, board.workspaceId, PermissionEnum.MANAGE_BOARD_SETTINGS);
 
-  // Check if the user is the workspace owner
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: board.workspaceId },
-    select: { ownerId: true }
-  });
-
-  const isWorkspaceOwner = workspace?.ownerId === user.id;
-  const isWorkspaceAdmin = userWorkspaceMembership?.role === 'admin' || userWorkspaceMembership?.role === 'owner';
-  const isGlobalAdmin = user.role === 'admin';
-
-  // Only allow workspace admins, workspace owners, or global admins to create columns
-  if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {
+  if (!hasPermission.hasPermission) {
     throw new Error('You don\'t have permission to create columns in this board');
   }
 
@@ -1304,29 +1364,12 @@ export async function updateColumn(columnId: string, data: {
     throw new Error('Column not found');
   }
 
-  // Verify the user has admin rights in the workspace
-  const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
-    where: {
-      userId: user.id,
-      workspaceId: column.taskBoard.workspaceId
-    }
-  });
+  const hasPermission = await checkUserPermission(user.id, column.taskBoard.workspaceId, PermissionEnum.MANAGE_BOARD_SETTINGS);
 
-  // Check if the user is the workspace owner
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: column.taskBoard.workspaceId },
-    select: { ownerId: true }
-  });
-
-  const isWorkspaceOwner = workspace?.ownerId === user.id;
-  const isWorkspaceAdmin = userWorkspaceMembership?.role === 'admin' || userWorkspaceMembership?.role === 'owner';
-  const isGlobalAdmin = user.role === 'admin';
-
-  // Only allow workspace admins, workspace owners, or global admins to edit columns
-  if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {
+  if (!hasPermission.hasPermission) {
     throw new Error('You don\'t have permission to edit columns in this board');
   }
-
+  
   // Update the column
   const updatedColumn = await prisma.taskColumn.update({
     where: { id: columnId },
@@ -1381,26 +1424,9 @@ export async function deleteColumn(columnId: string) {
     throw new Error('Column not found');
   }
 
-  // Verify the user has admin rights in the workspace
-  const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
-    where: {
-      userId: user.id,
-      workspaceId: column.taskBoard.workspaceId
-    }
-  });
+  const hasPermission = await checkUserPermission(user.id, column.taskBoard.workspaceId, PermissionEnum.MANAGE_BOARD_SETTINGS);
 
-  // Check if the user is the workspace owner
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: column.taskBoard.workspaceId },
-    select: { ownerId: true }
-  });
-
-  const isWorkspaceOwner = workspace?.ownerId === user.id;
-  const isWorkspaceAdmin = userWorkspaceMembership?.role === 'admin' || userWorkspaceMembership?.role === 'owner';
-  const isGlobalAdmin = user.role === 'admin';
-
-  // Only allow workspace admins, workspace owners, or global admins to delete columns
-  if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {
+  if (!hasPermission.hasPermission) {
     throw new Error('You don\'t have permission to delete columns in this board');
   }
 
@@ -1465,26 +1491,9 @@ export async function reorderColumns(boardId: string, columns: { id: string; ord
     throw new Error('Board not found');
   }
 
-  // Verify the user has admin rights in the workspace
-  const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
-    where: {
-      userId: user.id,
-      workspaceId: board.workspaceId
-    }
-  });
+  const hasPermission = await checkUserPermission(user.id, board.workspaceId, PermissionEnum.MANAGE_BOARD_SETTINGS);
 
-  // Check if the user is the workspace owner
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: board.workspaceId },
-    select: { ownerId: true }
-  });
-
-  const isWorkspaceOwner = workspace?.ownerId === user.id;
-  const isWorkspaceAdmin = userWorkspaceMembership?.role === 'admin' || userWorkspaceMembership?.role === 'owner';
-  const isGlobalAdmin = user.role === 'admin';
-
-  // Only allow workspace admins, workspace owners, or global admins to reorder columns
-  if (!isWorkspaceOwner && !isWorkspaceAdmin && !isGlobalAdmin) {
+  if (!hasPermission.hasPermission) {
     throw new Error('You don\'t have permission to reorder columns in this board');
   }
 

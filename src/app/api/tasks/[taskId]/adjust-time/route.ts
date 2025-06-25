@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { formatDurationUI } from "@/utils/duration";
-import { BoardItemActivityService } from "@/lib/board-item-activity-service";
+import BoardItemActivityService from "@/lib/board-item-activity-service";
 
 export async function POST(
   req: Request,

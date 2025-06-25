@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
+import { compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
 
 // Schema for PATCH validation
 const storyPatchSchema = z.object({
@@ -208,11 +209,40 @@ export async function PATCH(
     }
     // --- End Additional Validation ---
 
-    // Get the current story to access its board
+    // Get current user for activity tracking
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Get the current story to access its board and capture old data for tracking
     const currentStory = await prisma.story.findUnique({
       where: { id: storyId },
       include: { taskBoard: true, column: true }
     });
+
+    if (!currentStory) {
+      return NextResponse.json({ error: "Story not found" }, { status: 404 });
+    }
+
+    // Store old data for activity tracking
+    const oldStoryData = {
+      title: currentStory.title,
+      description: currentStory.description,
+      status: currentStory.column?.name || undefined,
+      priority: currentStory.priority,
+      type: currentStory.type,
+      storyPoints: currentStory.storyPoints,
+      epicId: currentStory.epicId,
+      assigneeId: currentStory.assigneeId,
+      reporterId: currentStory.reporterId,
+      color: currentStory.color,
+      columnId: currentStory.columnId,
+    };
 
     // Find the column ID if status is being updated
     let columnId = dataToUpdate.columnId;
@@ -232,12 +262,13 @@ export async function PATCH(
     }
 
     // Prepare labels update if provided
-    const { labels, ...otherData } = dataToUpdate;
+    const { labels, points, ...otherData } = dataToUpdate;
     
-    // Update the story with the columnId if found
+    // Update the story with the columnId if found, mapping points to storyPoints
     const finalDataToUpdate = {
       ...otherData,
       ...(columnId && { columnId }),
+      ...(points !== undefined && { storyPoints: points }), // Map points to storyPoints
       ...(labels !== undefined && {
         labels: {
           set: labels.map((labelId: string) => ({ id: labelId }))
@@ -290,6 +321,122 @@ export async function PATCH(
         },
       }
     });
+
+    // Create new data object for comparison
+    const newStoryData = {
+      title: updatedStory.title,
+      description: updatedStory.description,
+      status: dataToUpdate.status || oldStoryData.status,
+      priority: updatedStory.priority,
+      type: updatedStory.type,
+      storyPoints: updatedStory.storyPoints,
+      epicId: updatedStory.epicId,
+      assigneeId: updatedStory.assigneeId,
+      reporterId: updatedStory.reporterId,
+      color: updatedStory.color,
+      columnId: updatedStory.columnId,
+    };
+
+    // Define fields to track
+    const fieldsToTrack = [
+      'title', 'description', 'status', 'priority', 'type', 'storyPoints',
+      'epicId', 'assigneeId', 'reporterId', 'color', 'columnId'
+    ];
+
+    // Track field changes with enhanced user tracking for assignments
+    try {
+      const changes = compareObjects(oldStoryData, newStoryData, fieldsToTrack);
+      if (changes.length > 0) {
+        // Enhanced tracking for assignment changes
+        for (const change of changes) {
+          if (change.field === 'assigneeId') {
+            // Get user details for assignee change
+            const oldAssignee = change.oldValue ? await prisma.user.findUnique({
+              where: { id: change.oldValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+            
+            const newAssignee = change.newValue ? await prisma.user.findUnique({
+              where: { id: change.newValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+            await trackAssignment(
+              'STORY',
+              storyId,
+              user.id,
+              updatedStory.workspaceId,
+              oldAssignee,
+              newAssignee,
+              updatedStory.taskBoardId || undefined
+            );
+          } else if (change.field === 'reporterId') {
+            // Get user details for reporter change
+            const oldReporter = change.oldValue ? await prisma.user.findUnique({
+              where: { id: change.oldValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+            
+            const newReporter = change.newValue ? await prisma.user.findUnique({
+              where: { id: change.newValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+            await createActivity({
+              itemType: 'STORY',
+              itemId: storyId,
+              action: 'REPORTER_CHANGED',
+              userId: user.id,
+              workspaceId: updatedStory.workspaceId,
+              boardId: updatedStory.taskBoardId || undefined,
+              details: {
+                field: 'reporterId',
+                oldReporter,
+                newReporter,
+              },
+              fieldName: 'reporterId',
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+            });
+          } else {
+            // Use regular tracking for other fields  
+            const fieldActionMap: Record<string, any> = {
+              'title': 'TITLE_UPDATED',
+              'description': 'DESCRIPTION_UPDATED',
+              'status': 'STATUS_CHANGED',
+              'priority': 'PRIORITY_CHANGED',
+              'type': 'TYPE_CHANGED',
+              'storyPoints': 'POINTS_UPDATED',
+              'epicId': 'EPIC_CHANGED',
+              'color': 'COLOR_CHANGED',
+              'columnId': 'COLUMN_CHANGED',
+            };
+
+            await createActivity({
+              itemType: 'STORY',
+              itemId: storyId,
+              action: fieldActionMap[change.field] || 'UPDATED',
+              userId: user.id,
+              workspaceId: updatedStory.workspaceId,
+              boardId: updatedStory.taskBoardId || undefined,
+              details: {
+                field: change.field,
+                oldValue: change.oldValue,
+                newValue: change.newValue,
+                displayOldValue: change.displayOldValue,
+                displayNewValue: change.displayNewValue,
+              },
+              fieldName: change.field,
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to track story update activities:', error);
+      // Don't fail the story update if activity tracking fails
+    }
 
     return NextResponse.json(updatedStory);
 

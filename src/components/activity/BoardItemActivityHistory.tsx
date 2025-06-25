@@ -154,7 +154,7 @@ const getActionDisplayName = (action: string): string => {
   return actionMap[action] || action.replace(/_/g, ' ').toLowerCase();
 };
 
-const formatValue = (value: any): string => {
+const formatValue = (value: any, activity?: Activity): string => {
   if (value === null || value === undefined) return 'None';
   
   try {
@@ -172,8 +172,26 @@ const formatValue = (value: any): string => {
         return String(parsed);
       } catch {
         // If it looks like a database ID (starts with 'cm' and is long), 
-        // it's probably a column ID that should be hidden or replaced
-        if (value.startsWith('cm') && value.length > 20) {
+        // it's probably a user ID for assignment changes
+        if (value.startsWith('cm') && value.length > 20 && activity) {
+          // For assignment-related actions, try to get user info from activity details
+          if (activity.action === 'ASSIGNED' || activity.action === 'REPORTER_CHANGED') {
+            // Check if we have user details in activity.details
+            if (activity.details?.oldAssignee && activity.oldValue === value) {
+              return activity.details.oldAssignee.name || 'Unknown User';
+            }
+            if (activity.details?.newAssignee && activity.newValue === value) {
+              return activity.details.newAssignee.name || 'Unknown User';
+            }
+            if (activity.details?.oldReporter && activity.oldValue === value) {
+              return activity.details.oldReporter.name || 'Unknown User';
+            }
+            if (activity.details?.newReporter && activity.newValue === value) {
+              return activity.details.newReporter.name || 'Unknown User';
+            }
+            // If it's in oldValue/newValue, it's likely a user ID
+            return 'Unknown User';
+          }
           return 'Unknown';
         }
         return value;
@@ -426,25 +444,60 @@ export default function BoardItemActivityHistory({
                     <div className="mt-2 p-3 bg-muted/50 dark:bg-muted/20 rounded-md text-xs border border-border/50">
                       <div className="font-medium mb-2 text-foreground">Change Details:</div>
                       <div className="space-y-1">
-                        {activity.oldValue !== undefined && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span className="text-red-600 dark:text-red-400 font-medium">From:</span>
-                            <span className="line-through opacity-75">
-                              {activity.action === 'COLUMN_CHANGED' && activity.details?.fromColumn?.name 
-                                ? activity.details.fromColumn.name 
-                                : formatValue(activity.oldValue)}
-                            </span>
-                          </div>
-                        )}
-                        {activity.newValue !== undefined && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-green-600 dark:text-green-400 font-medium">To:</span>
-                            <span className="font-medium text-foreground">
-                              {activity.action === 'COLUMN_CHANGED' && activity.details?.toColumn?.name 
-                                ? activity.details.toColumn.name 
-                                : formatValue(activity.newValue)}
-                            </span>
-                          </div>
+                        {/* Special handling for assignment activities */}
+                        {(activity.action === 'ASSIGNED' || activity.action === 'UNASSIGNED') && activity.details ? (
+                          <>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <span className="text-red-600 dark:text-red-400 font-medium">From:</span>
+                              <span className="line-through opacity-75">
+                                {activity.details.oldAssignee?.name || 'Unassigned'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-600 dark:text-green-400 font-medium">To:</span>
+                              <span className="font-medium text-foreground">
+                                {activity.details.newAssignee?.name || 'Unassigned'}
+                              </span>
+                            </div>
+                          </>
+                        ) : activity.action === 'REPORTER_CHANGED' && activity.details ? (
+                          <>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <span className="text-red-600 dark:text-red-400 font-medium">From:</span>
+                              <span className="line-through opacity-75">
+                                {activity.details.oldReporter?.name || 'None'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-600 dark:text-green-400 font-medium">To:</span>
+                              <span className="font-medium text-foreground">
+                                {activity.details.newReporter?.name || 'None'}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {activity.oldValue !== undefined && (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <span className="text-red-600 dark:text-red-400 font-medium">From:</span>
+                                <span className="line-through opacity-75">
+                                  {activity.action === 'COLUMN_CHANGED' && activity.details?.fromColumn?.name 
+                                    ? activity.details.fromColumn.name 
+                                    : formatValue(activity.oldValue, activity)}
+                                </span>
+                              </div>
+                            )}
+                            {activity.newValue !== undefined && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-600 dark:text-green-400 font-medium">To:</span>
+                                <span className="font-medium text-foreground">
+                                  {activity.action === 'COLUMN_CHANGED' && activity.details?.toColumn?.name 
+                                    ? activity.details.toColumn.name 
+                                    : formatValue(activity.newValue, activity)}
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

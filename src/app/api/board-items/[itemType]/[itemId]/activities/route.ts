@@ -13,8 +13,8 @@ export async function GET(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { itemType, itemId } = params;
+    const _params = await params;
+    const { itemType, itemId } = _params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 

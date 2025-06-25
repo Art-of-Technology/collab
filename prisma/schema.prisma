@@ -164,11 +164,17 @@ model Comment {
   authorId         String
   parentId         String?
   featureRequestId String?
+  epicId           String?
+  storyId          String?
+  milestoneId      String?
   html             String?
   author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   parent           Comment?       @relation("CommentToComment", fields: [parentId], references: [id], onDelete: Cascade)
   children         Comment[]      @relation("CommentToComment")
   post             Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  story            Story?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   notifications    Notification[]
   reactions        Reaction[]
@@ -176,6 +182,9 @@ model Comment {
   @@index([postId])
   @@index([authorId])
   @@index([parentId])
+  @@index([epicId])
+  @@index([storyId])
+  @@index([milestoneId])
 }
 
 model Reaction {
@@ -581,6 +590,7 @@ model Milestone {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   notifications Notification[]
   labels        TaskLabel[]    @relation("MilestoneToLabel")
+  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -620,6 +630,7 @@ model Epic {
   stories       Story[]
   tasks         Task[]
   labels        TaskLabel[]    @relation("EpicToLabel")
+  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -638,6 +649,8 @@ model Story {
   priority      String         @default("medium")
   type          String         @default("user-story")
   storyPoints   Int?
+  startDate     DateTime?
+  dueDate       DateTime?
   epicId        String?
   taskBoardId   String?
   workspaceId   String
@@ -658,6 +671,7 @@ model Story {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks         Task[]
   labels        TaskLabel[]    @relation("StoryToLabel")
+  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
