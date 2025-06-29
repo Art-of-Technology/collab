@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock, Copy } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -103,6 +103,24 @@ export function TaskDetailContent({
 
   // Helper modal state
   const [showHelperModal, setShowHelperModal] = useState(false);
+
+  // Copy to clipboard function
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied",
+        description: `${text} copied to clipboard`,
+      });
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+      toast({
+        title: "Error",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Use TanStack Query mutation
   const updateTaskMutation = useUpdateTask(task?.id || "");
@@ -828,28 +846,38 @@ export function TaskDetailContent({
             <div className="space-y-2 flex-1">
               {editingTitle ? (
                 <div className="flex flex-col gap-2 w-full">
-                  <div className="relative">
-                    <Input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSaveTitle();
-                        } else if (e.key === 'Escape') {
-                          handleCancelTitle();
-                        }
-                      }}
-                      placeholder="Task title"
-                      disabled={savingTitle}
-                    />
-                    {savingTitle && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      </div>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="group relative font-mono px-3 py-1.5 text-sm bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 text-primary/80 cursor-pointer hover:bg-gradient-to-r hover:from-primary/10 hover:to-primary/15 hover:border-primary/40 hover:text-primary transition-all duration-200 rounded-lg flex items-center h-8 shadow-sm hover:shadow-md overflow-hidden"
+                      onClick={() => copyToClipboard(task.issueKey || '')}
+                      title="Click to copy"
+                    >
+                      <span className="font-semibold tracking-wide whitespace-nowrap">{task.issueKey}</span>
+                      <Copy className="h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-primary/60 w-0 p-0 group-hover:w-3.5" />
+                    </div>
+                    <div className="relative flex-1">
+                      <Input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSaveTitle();
+                          } else if (e.key === 'Escape') {
+                            handleCancelTitle();
+                          }
+                        }}
+                        placeholder="Task title"
+                        disabled={savingTitle}
+                      />
+                      {savingTitle && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -883,21 +911,28 @@ export function TaskDetailContent({
                   </div>
                 </div>
               ) : (
-                <div
-                  className="group relative cursor-pointer"
-                  onClick={() => setEditingTitle(true)}
-                >
-                  <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
-                    {task.title}
-                  </h1>
-                  <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
+                <div className="flex items-center gap-3">
+                  <div
+                    className="group relative font-mono px-3 py-1.5 text-sm bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 text-primary/80 cursor-pointer hover:bg-gradient-to-r hover:from-primary/10 hover:to-primary/15 hover:border-primary/40 hover:text-primary transition-all duration-200 rounded-lg flex items-center h-8 shadow-sm hover:shadow-md overflow-hidden"
+                    onClick={() => copyToClipboard(task.issueKey || '')}
+                    title="Click to copy"
+                  >
+                    <span className="font-semibold tracking-wide whitespace-nowrap">{task.issueKey}</span>
+                    <Copy className="h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-primary/60 w-0 group-hover:w-3.5" />
+                  </div>
+                  <div
+                    className="group relative cursor-pointer flex-1"
+                    onClick={() => setEditingTitle(true)}
+                  >
+                    <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
+                      {task.title}
+                    </h1>
+                    <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
+                  </div>
                 </div>
               )}
 
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="outline" className="font-mono px-2">
-                  {task.issueKey}
-                </Badge>
                 <span>Created on {formatDate(task.createdAt)}</span>
                 <div className="flex items-center gap-2">
                   <span>by</span>
@@ -1130,6 +1165,7 @@ export function TaskDetailContent({
             currentUserId={currentUserId || ""}
             assigneeId={task.assignee?.id}
             reporterId={task.reporter?.id || ""}
+            taskData={task}
             onRefresh={() => {
               fetchTotalPlayTime();
               onRefresh();
@@ -1271,119 +1307,7 @@ export function TaskDetailContent({
                 </div>
               </div>
 
-              {/* Relations Section */}
-              <div className="border-t border-border/50 pt-4 mt-2">
-                <h3 className="text-sm font-medium mb-3">Relations</h3>
 
-                {/* Milestone */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Milestone</p>
-                  {task.milestone ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${task.milestoneId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-                        Milestone
-                      </Badge>
-                      <span>{task.milestone.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No milestone linked
-                    </div>
-                  )}
-                </div>
-
-                {/* Epic */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Epic</p>
-                  {task.epic ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/epics/${task.epicId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                        Epic
-                      </Badge>
-                      <span>{task.epic.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No epic linked
-                    </div>
-                  )}
-                </div>
-
-                {/* Story */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Story</p>
-                  {task.story ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/stories/${task.storyId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                        Story
-                      </Badge>
-                      <span>{task.story.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No story linked
-                    </div>
-                  )}
-                </div>
-
-                {/* Parent Task */}
-                <div className="mb-3">
-                  <p className="text-xs font-medium mb-1 text-muted-foreground">Parent Task</p>
-                  {task.parentTask ? (
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.parentTaskId}` : "#"} className="flex items-center gap-2 text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                      <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
-                        {task.parentTask.issueKey || 'Task'}
-                      </Badge>
-                      <span>{task.parentTask.title}</span>
-                    </Link>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-1">
-                      No parent task
-                    </div>
-                  )}
-                </div>
-
-                {/* Subtasks */}
-                {task.subtasks && task.subtasks.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs font-medium mb-1 text-muted-foreground">Subtasks</p>
-                    <ul className="space-y-2">
-                      {task.subtasks.map((subtask) => (
-                        <li key={subtask.id}>
-                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${subtask.id}` : "#"} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded-md hover:bg-muted/30 transition-colors">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
-                                {subtask.issueKey || 'Task'}
-                              </Badge>
-                              <span className="truncate">{subtask.title}</span>
-                            </div>
-                            <Badge className={`${subtask.status === 'DONE' ? 'bg-green-500' :
-                              subtask.status === 'IN PROGRESS' ? 'bg-blue-500' :
-                                'bg-gray-500'
-                              } text-white flex-shrink-0 ml-1`}>
-                              {subtask.status}
-                            </Badge>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Create Subtask Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-2"
-                  onClick={() => {
-                    // Open task creation modal with parent task ID prefilled
-                    setSubtaskFormOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Create Subtask
-                </Button>
-              </div>
             </CardContent>
           </Card>
 

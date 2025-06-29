@@ -22,7 +22,7 @@ export default async function TimesheetPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold">Time Tracking</h1>
+        <h1 className="text-3xl font-bold">Timesheet</h1>
         <p className="text-muted-foreground">
           Track and analyze your time spent on tasks and activities
         </p>

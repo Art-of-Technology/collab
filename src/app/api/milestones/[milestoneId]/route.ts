@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
+import { compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
 
 // Schema for PATCH validation
 const milestonePatchSchema = z.object({
@@ -196,11 +197,38 @@ export async function PATCH(
       }
     }
 
-    // Get the current milestone to access its board
+    // Get current user for activity tracking
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email! },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Get the current milestone to access its board and capture old data for tracking
     const currentMilestone = await prisma.milestone.findUnique({
       where: { id: milestoneId },
       include: { taskBoard: true, column: true }
     });
+
+    if (!currentMilestone) {
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
+    }
+
+    // Store old data for activity tracking
+    const oldMilestoneData = {
+      title: currentMilestone.title,
+      description: currentMilestone.description,
+      status: currentMilestone.column?.name || undefined,
+      startDate: currentMilestone.startDate,
+      dueDate: currentMilestone.dueDate,
+      assigneeId: currentMilestone.assigneeId,
+      reporterId: currentMilestone.reporterId,
+      color: currentMilestone.color,
+      columnId: currentMilestone.columnId,
+    };
 
     // Find the column ID if status is being updated
     let columnId = dataToUpdate.columnId;
@@ -279,6 +307,118 @@ export async function PATCH(
         },
       }
     });
+
+    // Create new data object for comparison
+    const newMilestoneData = {
+      title: updatedMilestone.title,
+      description: updatedMilestone.description,
+      status: dataToUpdate.status || oldMilestoneData.status,
+      startDate: updatedMilestone.startDate,
+      dueDate: updatedMilestone.dueDate,
+      assigneeId: updatedMilestone.assigneeId,
+      reporterId: updatedMilestone.reporterId,
+      color: updatedMilestone.color,
+      columnId: updatedMilestone.columnId,
+    };
+
+    // Define fields to track
+    const fieldsToTrack = [
+      'title', 'description', 'status', 'startDate', 'dueDate',
+      'assigneeId', 'reporterId', 'color', 'columnId'
+    ];
+
+    // Track field changes with enhanced user tracking for assignments
+    try {
+      const changes = compareObjects(oldMilestoneData, newMilestoneData, fieldsToTrack);
+      if (changes.length > 0) {
+        // Enhanced tracking for assignment changes
+        for (const change of changes) {
+          if (change.field === 'assigneeId') {
+            // Get user details for assignee change
+            const oldAssignee = change.oldValue ? await prisma.user.findUnique({
+              where: { id: change.oldValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+            
+            const newAssignee = change.newValue ? await prisma.user.findUnique({
+              where: { id: change.newValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+            await trackAssignment(
+              'MILESTONE',
+              milestoneId,
+              user.id,
+              updatedMilestone.workspaceId,
+              oldAssignee,
+              newAssignee,
+              updatedMilestone.taskBoardId
+            );
+          } else if (change.field === 'reporterId') {
+            // Get user details for reporter change
+            const oldReporter = change.oldValue ? await prisma.user.findUnique({
+              where: { id: change.oldValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+            
+            const newReporter = change.newValue ? await prisma.user.findUnique({
+              where: { id: change.newValue },
+              select: { id: true, name: true }
+            }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
+
+            await createActivity({
+              itemType: 'MILESTONE',
+              itemId: milestoneId,
+              action: 'REPORTER_CHANGED',
+              userId: user.id,
+              workspaceId: updatedMilestone.workspaceId,
+              boardId: updatedMilestone.taskBoardId,
+              details: {
+                field: 'reporterId',
+                oldReporter,
+                newReporter,
+              },
+              fieldName: 'reporterId',
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+            });
+          } else {
+            // Use regular tracking for other fields
+            const fieldActionMap: Record<string, any> = {
+              'title': 'TITLE_UPDATED',
+              'description': 'DESCRIPTION_UPDATED',
+              'status': 'STATUS_CHANGED',
+              'startDate': 'START_DATE_CHANGED',
+              'dueDate': 'DUE_DATE_CHANGED',
+              'color': 'COLOR_CHANGED',
+              'columnId': 'COLUMN_CHANGED',
+            };
+
+            await createActivity({
+              itemType: 'MILESTONE',
+              itemId: milestoneId,
+              action: fieldActionMap[change.field] || 'UPDATED',
+              userId: user.id,
+              workspaceId: updatedMilestone.workspaceId,
+              boardId: updatedMilestone.taskBoardId,
+              details: {
+                field: change.field,
+                oldValue: change.oldValue,
+                newValue: change.newValue,
+                displayOldValue: change.displayOldValue,
+                displayNewValue: change.displayNewValue,
+              },
+              fieldName: change.field,
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to track milestone update activities:', error);
+      // Don't fail the milestone update if activity tracking fails
+    }
 
     return NextResponse.json(updatedMilestone);
 

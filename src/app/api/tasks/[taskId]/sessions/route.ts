@@ -132,6 +132,14 @@ export async function GET(
       ) {
         const currentStart = userSessionStates[currentUserId];
         const durationMs = event.startedAt.getTime() - currentStart.startedAt.getTime();
+        const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
+        
+        // Skip sessions shorter than 1 minute (these are test sessions)
+        if (durationMs < oneMinuteMs) {
+          userSessionStates[currentUserId] = null;
+          continue;
+        }
+        
         // Check if either start or end event has been edited
         const isAdjusted = !!(event.metadata as any)?.editedAt || !!(currentStart.metadata as any)?.editedAt;
         

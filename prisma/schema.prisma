@@ -57,7 +57,7 @@ model User {
   reportedStories        Story[]                 @relation("ReportedStories")
   assignedTasks          Task[]                  @relation("AssignedTasks")
   reportedTasks          Task[]                  @relation("ReportedTasks")
-  taskActivities         TaskActivity[]
+  boardItemActivities    BoardItemActivity[]
   approvedTaskHelpers    TaskAssignee[]          @relation("TaskAssigneeApprover")
   taskAssignees          TaskAssignee[]          @relation("TaskAssignee")
   taskAttachments        TaskAttachment[]
@@ -165,11 +165,17 @@ model Comment {
   authorId         String
   parentId         String?
   featureRequestId String?
+  epicId           String?
+  storyId          String?
+  milestoneId      String?
   html             String?
   author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   parent           Comment?       @relation("CommentToComment", fields: [parentId], references: [id], onDelete: Cascade)
   children         Comment[]      @relation("CommentToComment")
   post             Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  story            Story?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   notifications    Notification[]
   reactions        Reaction[]
@@ -177,6 +183,9 @@ model Comment {
   @@index([postId])
   @@index([authorId])
   @@index([parentId])
+  @@index([epicId])
+  @@index([storyId])
+  @@index([milestoneId])
 }
 
 model Reaction {
@@ -331,6 +340,7 @@ model Workspace {
   owner               User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   invitations         WorkspaceInvitation[]
   members             WorkspaceMember[]
+  boardItemActivities BoardItemActivity[]
   boardGenerationJobs BoardGenerationJob[]
 }
 
@@ -436,7 +446,7 @@ model Task {
   story         Story?           @relation(fields: [storyId], references: [id])
   taskBoard     TaskBoard?       @relation(fields: [taskBoardId], references: [id])
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  activity      TaskActivity[]
+  activities    BoardItemActivity[]
   assignees     TaskAssignee[]
   attachments   TaskAttachment[]
   comments      TaskComment[]
@@ -525,18 +535,36 @@ model TaskLabel {
   @@index([workspaceId])
 }
 
-model TaskActivity {
-  id        String   @id @default(cuid())
-  action    String
-  details   String?
-  taskId    String
-  userId    String
-  createdAt DateTime @default(now())
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model BoardItemActivity {
+  id           String   @id @default(cuid())
+  action       String   // CREATED, UPDATED, MOVED, ASSIGNED, STATUS_CHANGED, etc.
+  details      String?  // JSON string with change details
+  itemType     String   // TASK, MILESTONE, EPIC, STORY
+  itemId       String   // ID of the affected item (taskId, milestoneId, epicId, storyId)
+  userId       String   // User who performed the action
+  workspaceId  String   // For workspace-level filtering
+  boardId      String?  // For board-level filtering
+  createdAt    DateTime @default(now())
+  
+  // Field-specific change tracking
+  fieldName    String?  // Name of the field that changed (title, description, assignee, etc.)
+  oldValue     String?  // Previous value (JSON string for complex values)
+  newValue     String?  // New value (JSON string for complex values)
+  
+  // Legacy support - keep taskId for backward compatibility
+  taskId       String?  // Deprecated: use itemId + itemType instead
+  
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task         Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
+  @@index([itemId, itemType])
+  @@index([taskId]) // Keep for backward compatibility
   @@index([userId])
+  @@index([workspaceId])
+  @@index([boardId])
+  @@index([createdAt])
+  @@index([action])
 }
 
 model Milestone {
@@ -564,6 +592,7 @@ model Milestone {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   notifications Notification[]
   labels        TaskLabel[]    @relation("MilestoneToLabel")
+  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -603,6 +632,7 @@ model Epic {
   stories       Story[]
   tasks         Task[]
   labels        TaskLabel[]    @relation("EpicToLabel")
+  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -621,6 +651,8 @@ model Story {
   priority      String         @default("medium")
   type          String         @default("user-story")
   storyPoints   Int?
+  startDate     DateTime?
+  dueDate       DateTime?
   epicId        String?
   taskBoardId   String?
   workspaceId   String
@@ -641,6 +673,7 @@ model Story {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks         Task[]
   labels        TaskLabel[]    @relation("StoryToLabel")
+  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -1037,3 +1070,5 @@ enum Permission {
   PIN_POST
   RESOLVE_BLOCKER
 }
+
+

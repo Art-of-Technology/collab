@@ -15,9 +15,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   if (!session?.user) {
     redirect("/login");
   }
-
-  const query = searchParams.q || "";
-  const tab = searchParams.tab || "all";
+  const _searchParams = await searchParams;
+  const query = _searchParams.q || "";
+  const tab = _searchParams.tab || "all";
   
   // If no query, redirect to the homepage
   if (!query.trim()) {

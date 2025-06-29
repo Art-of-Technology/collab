@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import BoardItemActivityService from "@/lib/board-item-activity-service";
 
 // PATCH /api/tasks/[taskId]/move - Move a task to a different column
 export async function PATCH(
@@ -28,10 +29,21 @@ export async function PATCH(
       );
     }
 
-    // Fetch the task to check permissions
+    // Fetch the task to check permissions and get current column info
     const task = await prisma.task.findUnique({
       where: { id: taskId },
-      select: { workspaceId: true, columnId: true, position: true },
+      select: { 
+        workspaceId: true, 
+        columnId: true, 
+        position: true,
+        taskBoardId: true,
+        column: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      },
     });
 
     if (!task) {
@@ -170,18 +182,20 @@ export async function PATCH(
     });
 
     // Record activity
-    await prisma.taskActivity.create({
-      data: {
+    try {
+      await BoardItemActivityService.trackMove(
+        'TASK',
         taskId,
-        userId: currentUser.id,
-        action: "moved",
-        details: JSON.stringify({
-          columnId,
-          columnName: column.name,
-          position,
-        }),
-      },
-    });
+        currentUser.id,
+        task.workspaceId,
+        task.column,
+        { id: columnId, name: column.name },
+        task.taskBoardId || undefined
+      );
+    } catch (error) {
+      console.error('Failed to track task move activity:', error);
+      // Don't fail the move if activity tracking fails
+    }
 
     return NextResponse.json(updatedTask);
   } catch (error) {
