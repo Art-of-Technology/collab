@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { jobStorage, JobStatus } from '@/lib/job-storage';
+import { AI_PROMPTS, AI_TOKEN_LIMITS, AI_CONFIG } from '@/lib/ai-prompts';
 
 function useMockData() {
   return false; //use for production testing
@@ -112,7 +113,7 @@ async function startBackgroundGeneration(jobId: string) {
 
       // Step 5: Create Board and Import
       await updateJobStatus(jobId, 'COMPLETED', 90, 'Creating board...');
-      const boardId = await createBoardFromData(job.workspaceId, job.userId, fullBoardData);
+      const boardId = await createBoardFromData(job.workspaceId, job.userId, job.description, fullBoardData);
       
       await updateJobStatus(jobId, 'COMPLETED', 100, 'Board created successfully!', boardId);
 
@@ -150,6 +151,158 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Enhanced AI generation with streaming and completion handling
+async function generateWithAI(
+  systemPrompt: string, 
+  userMessages: Array<{role: string, content: string}>, 
+  maxTokens: number = 4000,
+  maxRetries: number = AI_CONFIG.MAX_RETRIES
+): Promise<string> {
+  let attempt = 0;
+  let fullContent = '';
+  let conversation = [...userMessages];
+
+  while (attempt < maxRetries) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: AI_CONFIG.MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...conversation
+          ],
+          temperature: AI_CONFIG.TEMPERATURE,
+          max_tokens: maxTokens,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!data.choices || !data.choices[0]) {
+        throw new Error('Invalid API response structure');
+      }
+
+      const choice = data.choices[0];
+      const content = choice.message?.content || '';
+      const finishReason = choice.finish_reason;
+
+      // Accumulate content
+      if (attempt === 0) {
+        fullContent = content;
+      } else {
+        // For continuation requests, append content
+        fullContent += content;
+      }
+
+      console.log(`Attempt ${attempt + 1}: finish_reason=${finishReason}, content_length=${content.length}`);
+
+      // Check if response was truncated due to length
+      if (finishReason === 'length') {
+        console.log('Response truncated due to length, requesting continuation...');
+        
+        // Add the incomplete response and ask for continuation
+        conversation.push({ role: 'assistant', content: content });
+        conversation.push({ 
+          role: 'user', 
+          content: 'Please continue your response from where you left off. Return ONLY the continuation of the JSON data, no explanations.' 
+        });
+        
+        attempt++;
+        continue;
+      }
+
+      // Response completed successfully
+      if (finishReason === 'stop') {
+        console.log('Response completed successfully');
+        break;
+      }
+
+      // Other finish reasons (content_filter, etc.)
+      if (finishReason) {
+        console.warn(`Unexpected finish_reason: ${finishReason}`);
+        break;
+      }
+
+    } catch (error) {
+      console.error(`AI generation attempt ${attempt + 1} failed:`, error);
+      attempt++;
+      
+      if (attempt >= maxRetries) {
+        throw new Error(`AI generation failed after ${maxRetries} attempts: ${error}`);
+      }
+      
+      // Wait before retry
+      await sleep(1000 * attempt);
+    }
+  }
+
+  return fullContent.trim();
+}
+
+// Enhanced JSON parsing with validation and retry
+async function parseAIResponse<T>(
+  content: string, 
+  expectedStructure: string,
+  retryPrompt?: string
+): Promise<T> {
+  // Clean up content
+  let cleanContent = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  
+  // Handle multiple JSON blocks (in case of continuation)
+  if (cleanContent.includes('}\n{') || cleanContent.includes(']\n[')) {
+    // Try to merge JSON blocks
+    cleanContent = cleanContent.replace(/}\s*{/g, '},{').replace(/]\s*\[/g, ',');
+  }
+
+  // Validate JSON structure
+  if (expectedStructure === 'array' && (!cleanContent.startsWith('[') || !cleanContent.endsWith(']'))) {
+    console.warn('Invalid JSON array format, attempting to fix...');
+    if (!cleanContent.startsWith('[')) cleanContent = '[' + cleanContent;
+    if (!cleanContent.endsWith(']')) cleanContent = cleanContent + ']';
+  }
+
+  try {
+    const parsed = JSON.parse(cleanContent);
+    console.log(`Successfully parsed JSON with ${Array.isArray(parsed) ? parsed.length : 'object'} items`);
+    return parsed;
+  } catch (error) {
+    console.error('JSON Parse Error:', error);
+    console.error('Content that failed to parse:', cleanContent.substring(0, 500) + '...');
+    
+    // Try to fix common issues
+    const fixes = [
+      // Remove trailing commas
+      () => cleanContent.replace(/,(\s*[}\]])/g, '$1'),
+      // Fix unescaped quotes
+      () => cleanContent.replace(/([^\\])"/g, '$1\\"'),
+      // Add missing closing brackets
+      () => {
+        const openBrackets = (cleanContent.match(/\[/g) || []).length;
+        const closeBrackets = (cleanContent.match(/\]/g) || []).length;
+        return cleanContent + ']'.repeat(Math.max(0, openBrackets - closeBrackets));
+      }
+    ];
+
+    for (const fix of fixes) {
+      try {
+        const fixedContent = fix();
+        const parsed = JSON.parse(fixedContent);
+        console.log('Successfully fixed and parsed JSON');
+        return parsed;
+      } catch (fixError) {
+        // Continue to next fix
+      }
+    }
+
+    throw new Error(`Failed to parse JSON after all fix attempts: ${error}`);
+  }
+}
+
 async function generateMilestones(description: string, projectType?: string, teamSize?: string, userId?: string) {
   if (useMockData()) {
     await sleep(1500);
@@ -168,67 +321,31 @@ async function generateMilestones(description: string, projectType?: string, tea
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     if (user?.email) userEmail = user.email;
   }
-  const systemPrompt = `You are a senior product manager, business analyst, and technical lead. Your task is to deeply analyse the following end user requirement for a whole product and deliver:
+  // Use enhanced AI generation with high token limit for comprehensive milestones
+  const content = await generateWithAI(
+    AI_PROMPTS.MILESTONES(userEmail),
+    [
+      { role: 'user', content: description }
+    ],
+    AI_TOKEN_LIMITS.MILESTONES
+  );
 
-1. Milestones: High-level deliverables/phases, with description, estimate, criteria, stakeholders.
-
-Tech stack: React, Node.js, .NET Core/MVC, PostgreSQL, SQL Server, Redis, DuckDB, Elasticsearch, NoSQL DB, Qdrant. Prefer self-hosted/dockerized solutions.
-
-Format: Return ONLY a JSON array of milestones with this exact format:
-[
-  {
-    "title": "Milestone name",
-    "description": "Detailed description",
-    "estimate": "Time/cost estimate",
-    "acceptanceCriteria": "Key acceptance criteria",
-    "stakeholders": ["role1", "role2"],
-    "startDate": "2024-01-01",
-    "endDate": "2024-01-31",
-    "assignedUsers": ["${userEmail}"]
-  }
-]
-IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations.`;
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAPI_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: description }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    }),
+  // Parse with enhanced error handling
+  const milestones = await parseAIResponse<any[]>(content, 'array');
+  
+  // Ensure proper user assignment
+  milestones.forEach((milestone: any) => {
+    if (!milestone.assignedUsers || !Array.isArray(milestone.assignedUsers)) {
+      milestone.assignedUsers = [userEmail];
+    } else {
+      milestone.assignedUsers = milestone.assignedUsers.map((email: string) => 
+        email.includes('@example.com') ? userEmail : email
+      );
+    }
   });
-  const data = await response.json();
-  let content = data.choices[0].message.content.trim();
-  content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  if (!content.startsWith('[') || !content.endsWith(']')) {
-    console.error('Invalid JSON format - content:');
-    console.error(content);
-    throw new Error('ChatGPT returned invalid JSON format');
-  }
-  try {
-    const milestones = JSON.parse(content);
-    milestones.forEach((milestone: any) => {
-      if (!milestone.assignedUsers || !Array.isArray(milestone.assignedUsers)) {
-        milestone.assignedUsers = [userEmail];
-      } else {
-        milestone.assignedUsers = milestone.assignedUsers.map((email: string) => email.includes('@example.com') ? userEmail : email);
-      }
-    });
-    return milestones;
-  } catch (error) {
-    console.error('Failed to parse milestones JSON:');
-    console.error(content);
-    console.error('Parse error:');
-    console.error(error);
-    throw new Error('Failed to generate valid milestones data');
-  }
+  
+  console.log(`Generated ${milestones.length} comprehensive milestones`);
+  return milestones;
 }
 
 async function generateEpics(description: string, milestones: any[], projectType?: string, userId?: string) {
@@ -249,70 +366,32 @@ async function generateEpics(description: string, milestones: any[], projectType
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     if (user?.email) userEmail = user.email;
   }
-  const systemPrompt = `You are a senior product manager, business analyst, and technical lead. Your task is to deeply analyse the following end user requirement for a whole product and deliver:
+  // Use enhanced AI generation with high token limit for detailed epics
+  const content = await generateWithAI(
+    AI_PROMPTS.EPICS(userEmail),
+    [
+      { role: 'user', content: description },
+      { role: 'user', content: `Milestones: ${JSON.stringify(milestones, null, 2)}` }
+    ],
+    AI_TOKEN_LIMITS.EPICS
+  );
 
-2. Epics: Break each milestone into major functional/technical areas or objectives. For each epic, provide:
-- Description
-- High-level technical solution/architecture overview (including recommendations for tech stack or new tools/platforms, if any)
-- Estimated effort/cost
-
-Tech stack: React, Node.js, .NET Core/MVC, PostgreSQL, SQL Server, Redis, DuckDB, Elasticsearch, NoSQL DB, Qdrant. Prefer self-hosted/dockerized solutions.
-
-Format: Return ONLY a JSON array of epics with this exact format:
-[
-  {
-    "title": "Epic name",
-    "description": "Detailed description",
-    "milestoneIndex": 0,
-    "priority": "high",
-    "solution": "High-level technical solution/architecture overview",
-    "estimate": "Effort/cost estimate",
-    "assignedUsers": ["${userEmail}"]
-  }
-]
-IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations.`;
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAPI_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: description },
-        { role: 'user', content: `Milestones: ${JSON.stringify(milestones, null, 2)}` }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    }),
+  // Parse with enhanced error handling
+  const epics = await parseAIResponse<any[]>(content, 'array');
+  
+  // Ensure proper user assignment
+  epics.forEach((epic: any) => {
+    if (!epic.assignedUsers || !Array.isArray(epic.assignedUsers)) {
+      epic.assignedUsers = [userEmail];
+    } else {
+      epic.assignedUsers = epic.assignedUsers.map((email: string) => 
+        email.includes('@example.com') ? userEmail : email
+      );
+    }
   });
-  const data = await response.json();
-  let content = data.choices[0].message.content.trim();
-  content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  if (!content.startsWith('[') || !content.endsWith(']')) {
-    console.error('Invalid JSON format - content:');
-    console.error(content);
-    throw new Error('ChatGPT returned invalid JSON format');
-  }
-  try {
-    const epics = JSON.parse(content);
-    epics.forEach((epic: any) => {
-      if (!epic.assignedUsers || !Array.isArray(epic.assignedUsers)) {
-        epic.assignedUsers = [userEmail];
-      } else {
-        epic.assignedUsers = epic.assignedUsers.map((email: string) => email.includes('@example.com') ? userEmail : email);
-      }
-    });
-    return epics;
-  } catch (error) {
-    console.error('Failed to parse epics JSON:');
-    console.error(content);
-    console.error('Parse error:');
-    console.error(error);
-    throw new Error('Failed to generate valid epics data');
-  }
+  
+  console.log(`Generated ${epics.length} comprehensive epics`);
+  return epics;
 }
 
 async function generateStories(description: string, epics: any[], projectType?: string, userId?: string) {
@@ -333,92 +412,32 @@ async function generateStories(description: string, epics: any[], projectType?: 
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     if (user?.email) userEmail = user.email;
   }
-  const systemPrompt = `You are a senior product manager, business analyst, and technical lead. Your task is to deeply analyse the following end user requirement for a whole product and deliver:
+  // Use enhanced AI generation with high token limit for detailed stories
+  const content = await generateWithAI(
+    AI_PROMPTS.STORIES(userEmail),
+    [
+      { role: 'user', content: description },
+      { role: 'user', content: `Epics: ${JSON.stringify(epics, null, 2)}` }
+    ],
+    AI_TOKEN_LIMITS.STORIES
+  );
 
-### 3. User Stories
-
-For each Epic listed below, break it down into several INVEST-compliant user stories.
-
-For **each user story**, provide:
-
-- **Story ID**
-- **Role** (As a…)
-- **Goal** (I want to…)
-- **Reason** (So that…)
-- **Acceptance Criteria** (clear, testable, in bullet points)
-- **Story Points / Effort Estimate** (e.g., 1-8 points, or XS/S/M/L/XL)
-- **Non-functional Requirements** (performance, security, compliance, UX, accessibility, etc.)
-- **Relevant Visuals/Diagrams** (describe user flow, API contract, architecture, or UI wireframe)
-- **Technical Notes** (if any edge case, integration, or dependency exists)
-
-**Tech stack:** React, Node.js, .NET Core/MVC, PostgreSQL, SQL Server, Redis, DuckDB, Elasticsearch, NoSQL DB, Qdrant. Prefer self-hosted/dockerized solutions.
-
-**Format your response in Markdown, with clear headings for each Epic and Story.**
-
-If any information is missing or unclear, list your clarification questions first before providing stories.
-
----
-**Input:**  
-- End User Requirement: ${description}
-- Epics: ${JSON.stringify(epics, null, 2)}
-
-Format: Return ONLY a JSON array of user stories with this exact format:
-[
-  {
-    "title": "Story title",
-    "description": "Detailed description",
-    "epicIndex": 0,
-    "priority": "medium",
-    "acceptanceCriteria": "Acceptance criteria",
-    "storyPoints": 3,
-    "nonFunctional": "Non-functional requirements",
-    "visuals": "Visuals/diagrams (describe or markdown image links)",
-    "assignedUsers": ["${userEmail}"]
-  }
-]
-IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations.`;
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAPI_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: description },
-        { role: 'user', content: `Epics: ${JSON.stringify(epics, null, 2)}` }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    }),
+  // Parse with enhanced error handling
+  const stories = await parseAIResponse<any[]>(content, 'array');
+  
+  // Ensure proper user assignment
+  stories.forEach((story: any) => {
+    if (!story.assignedUsers || !Array.isArray(story.assignedUsers)) {
+      story.assignedUsers = [userEmail];
+    } else {
+      story.assignedUsers = story.assignedUsers.map((email: string) => 
+        email.includes('@example.com') ? userEmail : email
+      );
+    }
   });
-  const data = await response.json();
-  let content = data.choices[0].message.content.trim();
-  content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  if (!content.startsWith('[') || !content.endsWith(']')) {
-    console.error('Invalid JSON format - content:');
-    console.error(content);
-    throw new Error('ChatGPT returned invalid JSON format');
-  }
-  try {
-    const stories = JSON.parse(content);
-    stories.forEach((story: any) => {
-      if (!story.assignedUsers || !Array.isArray(story.assignedUsers)) {
-        story.assignedUsers = [userEmail];
-      } else {
-        story.assignedUsers = story.assignedUsers.map((email: string) => email.includes('@example.com') ? userEmail : email);
-      }
-    });
-    return stories;
-  } catch (error) {
-    console.error('Failed to parse stories JSON:');
-    console.error(content);
-    console.error('Parse error:');
-    console.error(error);
-    throw new Error('Failed to generate valid stories data');
-  }
+  
+  console.log(`Generated ${stories.length} comprehensive stories`);
+  return stories;
 }
 
 async function generateTasks(description: string, stories: any[], projectType?: string, userId?: string) {
@@ -442,91 +461,67 @@ async function generateTasks(description: string, stories: any[], projectType?: 
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     if (user?.email) userEmail = user.email;
   }
-  const systemPrompt = `You are a senior product manager, business analyst, and technical lead. Your task is to deeply analyse the following end user requirement for a whole product and deliver:
+  // Use enhanced AI generation with highest token limit for comprehensive tasks
+  const content = await generateWithAI(
+    AI_PROMPTS.TASKS(userEmail),
+    [
+      { role: 'user', content: description },
+      { role: 'user', content: `Stories: ${JSON.stringify(stories, null, 2)}` }
+    ],
+    AI_TOKEN_LIMITS.TASKS
+  );
 
-4. Tasks & Sub-tasks: Break each user story into detailed technical and design tasks, and further into sub-tasks as needed. For every task:
-- Title & Description
-- Inputs/outputs
-- Dependencies
-- Responsible skillset/role (e.g., React dev, Node dev, designer, DBA, DevOps)
-- Time/cost estimate
-- References to relevant code patterns, docs, or best practices
-
-Tech stack: React, Node.js, .NET Core/MVC, PostgreSQL, SQL Server, Redis, DuckDB, Elasticsearch, NoSQL DB, Qdrant. Prefer self-hosted/dockerized solutions.
-
-Format: Return ONLY a JSON array of tasks with this exact format:
-[
-  {
-    "title": "Task title",
-    "description": "Detailed task description",
-    "storyIndex": 0,
-    "priority": "medium",
-    "type": "development",
-    "storyPoints": 3,
-    "inputs": "Inputs",
-    "outputs": "Outputs",
-    "dependencies": "Dependencies",
-    "role": "Responsible skillset/role",
-    "estimate": "Time/cost estimate",
-    "references": "References to code/docs/best practices",
-    "assignedUsers": ["${userEmail}"],
-    "labels": ["backend", "api"]
-  }
-]
-IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations.`;
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAPI_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: description },
-        { role: 'user', content: `Stories: ${JSON.stringify(stories, null, 2)}` }
-      ],
-      temperature: 0.7,
-      max_tokens: 3000,
-    }),
+  // Parse with enhanced error handling
+  const tasks = await parseAIResponse<any[]>(content, 'array');
+  
+  // Ensure proper user assignment
+  tasks.forEach((task: any) => {
+    if (!task.assignedUsers || !Array.isArray(task.assignedUsers)) {
+      task.assignedUsers = [userEmail];
+    } else {
+      task.assignedUsers = task.assignedUsers.map((email: string) => 
+        email.includes('@example.com') ? userEmail : email
+      );
+    }
   });
-  const data = await response.json();
-  let content = data.choices[0].message.content.trim();
-  content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  if (!content.startsWith('[') || !content.endsWith(']')) {
-    console.error('Invalid JSON format - content:');
-    console.error(content);
-    throw new Error('ChatGPT returned invalid JSON format');
-  }
-  try {
-    const tasks = JSON.parse(content);
-    tasks.forEach((task: any) => {
-      if (!task.assignedUsers || !Array.isArray(task.assignedUsers)) {
-        task.assignedUsers = [userEmail];
-      } else {
-        task.assignedUsers = task.assignedUsers.map((email: string) => email.includes('@example.com') ? userEmail : email);
-      }
-    });
-    return tasks;
-  } catch (error) {
-    console.error('Failed to parse tasks JSON:');
-    console.error(content);
-    console.error('Parse error:');
-    console.error(error);
-    throw new Error('Failed to generate valid tasks data');
-  }
+  
+  console.log(`Generated ${tasks.length} comprehensive tasks`);
+  return tasks;
 }
 
-async function createBoardFromData(workspaceId: string, userId: string, boardData: any) {
-  // Use the user's prompt/description as the board name (shortened)
-  const prompt = (boardData.description || '').trim() || 'Untitled';
-  const shortPrompt = prompt.length > 32 ? prompt.slice(0, 32) + '...' : prompt;
-  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+async function createBoardFromData(workspaceId: string, userId: string, description: string, boardData: any) {
+  // Generate a professional board name using AI
+  let boardName = 'AI Generated Board';
+  try {
+    console.log('Generating board name from description:', description);
+    
+    // Get user email for the prompt
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true }
+    });
+    const userEmail = user?.email || 'user@example.com';
+    
+    // Generate board name using AI
+    const boardNameContent = await generateWithAI(
+      AI_PROMPTS.BOARD_NAME(userEmail),
+      [{ role: 'user', content: description }],
+      AI_TOKEN_LIMITS.BOARD_NAME
+    );
+    
+    boardName = boardNameContent.trim() || 'AI Generated Board';
+    console.log('Generated board name:', boardName);
+  } catch (error) {
+    console.error('Failed to generate board name:', error);
+    // Fall back to description-based naming
+    const shortPrompt = description.length > 32 ? description.slice(0, 32) + '...' : description;
+    boardName = shortPrompt || 'AI Generated Board';
+  }
+
   const board = await prisma.taskBoard.create({
     data: {
-      name: `${shortPrompt} - ${uniqueSuffix}`,
-      description: `Generated from: ${prompt}`,
+      name: boardName,
+      description: `Generated from: ${description}`,
       issuePrefix: 'AI',
       nextIssueNumber: 1,
       workspaceId,
@@ -681,6 +676,7 @@ async function createBoardFromData(workspaceId: string, userId: string, boardDat
         priority: task.priority || 'medium',
         type: task.type || 'task',
         storyPoints: task.storyPoints || undefined,
+        dueDate: (task.dueDate && !isNaN(Date.parse(task.dueDate))) ? new Date(task.dueDate) : undefined,
         position: idx,
         taskBoardId: board.id,
         workspaceId,
