@@ -8,15 +8,9 @@ import { useTasks } from "@/context/TasksContext";
 import { useBoardItems } from "@/hooks/queries/useBoardItems";
 import KanbanFilters, { ItemType, GroupingOption, SortOption } from "./KanbanFilters";
 import { useEffect, useState } from "react";
-import TaskDetailModal from "./TaskDetailModal";
-import { lazy, Suspense } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useTaskModal } from "@/context/TaskModalContext";
 import React from "react";
-
-// Lazy load the detail modals
-const MilestoneDetailModal = lazy(() => import("../milestones/MilestoneDetailModal"));
-const EpicDetailModal = lazy(() => import("../epics/EpicDetailModal"));
-const StoryDetailModal = lazy(() => import("../stories/StoryDetailModal"));
 
 // Enhanced BoardItem interface with better type support
 interface BoardItem {
@@ -35,6 +29,10 @@ interface BoardItem {
     title: string;
   } | null;
   epic?: {
+    id: string;
+    title: string;
+  } | null;
+  story?: {
     id: string;
     title: string;
   } | null;
@@ -69,42 +67,13 @@ interface Group {
   items: BoardItem[];
 }
 
-// Create a wrapper component for TaskDetailModal that handles different item types
-interface TaskModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  taskId: string;
-  type: string;
-}
-
-function TaskModal({ isOpen, onClose, taskId, type }: TaskModalProps) {
-  // Only render the modal if it's open to improve performance
-  if (!isOpen) return null;
-
-  // Use the lazy-loaded components with Suspense
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
-      {(() => {
-        switch (type) {
-          case 'milestone':
-            return <MilestoneDetailModal milestoneId={taskId} onClose={onClose} />;
-          case 'epic':
-            return <EpicDetailModal epicId={taskId} onClose={onClose} />;
-          case 'story':
-            return <StoryDetailModal storyId={taskId} onClose={onClose} />;
-          case 'task':
-          default:
-            return <TaskDetailModal taskId={taskId} onClose={onClose} />;
-        }
-      })()}
-    </Suspense>
-  );
-}
+// We'll use the TaskModalContext instead of a local modal
 
 export default function ListView() {
   const { selectedBoardId } = useTasks();
   const { currentWorkspace } = useWorkspace();
   const { data: boardData, isLoading } = useBoardItems(selectedBoardId);
+  const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } = useTaskModal();
   const [filteredItems, setFilteredItems] = useState<BoardItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
@@ -113,8 +82,6 @@ export default function ListView() {
   const [groupBy, setGroupBy] = useState<GroupingOption>("none");
   const [sortField, setSortField] = useState<SortOption>("title");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [selectedItem, setSelectedItem] = useState<BoardItem | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   // Extract available statuses from board data
@@ -211,6 +178,20 @@ export default function ListView() {
           groupId = item.epic!.id;
           groupName = item.epic!.title;
           icon = <Star className="h-4 w-4 mr-2 text-purple-500" />;
+        }
+      }
+      else if (groupBy === 'story') {
+        if ((!item.story && itemType !== 'story') || (itemType === 'milestone' || itemType === 'epic')) {
+          groupId = 'no-story';
+          groupName = 'No Story';
+        } else if (itemType === 'story') {
+          groupId = item.id;
+          groupName = item.title;
+          icon = <BookOpen className="h-4 w-4 mr-2 text-blue-500" />;
+        } else {
+          groupId = item.story!.id;
+          groupName = item.story!.title;
+          icon = <BookOpen className="h-4 w-4 mr-2 text-blue-500" />;
         }
       }
       else if (groupBy === 'labels') {
@@ -402,8 +383,21 @@ export default function ListView() {
   };
 
   const handleItemClick = (item: BoardItem) => {
-    setSelectedItem(item);
-    setIsModalOpen(true);
+    switch (item.entityType) {
+      case 'milestone':
+        openMilestoneModal(item.id);
+        break;
+      case 'epic':
+        openEpicModal(item.id);
+        break;
+      case 'story':
+        openStoryModal(item.id);
+        break;
+      case 'task':
+      default:
+        openTaskModal(item.id);
+        break;
+    }
   };
 
   if (isLoading) {
@@ -681,17 +675,7 @@ export default function ListView() {
         </div>
       </div>
 
-      {selectedItem && (
-        <TaskModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedItem(null);
-          }}
-          taskId={selectedItem.id}
-          type={selectedItem.entityType}
-        />
-      )}
+      {/* Modal is now handled by TaskModalContext */}
     </>
   );
 } 

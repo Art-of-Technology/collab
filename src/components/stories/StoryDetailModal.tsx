@@ -82,8 +82,15 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
 
   if (!storyId) return null;
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setIsOpen(false);
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="sticky top-0 z-10 bg-background pb-2">
           <DialogTitle className="sr-only">Story Details</DialogTitle>

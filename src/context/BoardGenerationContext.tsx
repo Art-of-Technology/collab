@@ -25,7 +25,13 @@ export function BoardGenerationProvider({ workspaceId, children }: { workspaceId
     try {
       const response = await fetch(`/api/ai/board-generation/jobs?workspaceId=${workspaceId}`);
       const result = await response.json();
-      if (result.success) setJobs(result.jobs);
+      if (result.success) {
+        // Filter only board generation jobs (jobs that start with 'job_' but NOT 'task_job_')
+        const boardJobs = result.jobs.filter((job: JobStatus) => 
+          job.id.startsWith('job_') && !job.id.startsWith('task_job_')
+        );
+        setJobs(boardJobs);
+      }
     } catch {}
   };
 

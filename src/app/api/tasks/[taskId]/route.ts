@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { getAuthSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -249,6 +250,72 @@ export async function GET(
     console.error("Error fetching task:", error);
     return NextResponse.json(
       { error: "Failed to fetch task" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { taskId } = await params;
+
+    if (!taskId) {
+      return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
+    }
+
+    // First, get the task to verify permissions
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        taskBoard: {
+          include: {
+            workspace: true
+          }
+        }
+      }
+    });
+
+    if (!task) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    // Check if user has access to the workspace
+    const hasAccess = await prisma.workspace.findFirst({
+      where: {
+        id: task.workspaceId,
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id } } }
+        ]
+      }
+    });
+
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    // Delete the task (this will cascade delete related records due to foreign key constraints)
+    await prisma.task.delete({
+      where: { id: taskId }
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Task deleted successfully' 
+    });
+
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete task' },
       { status: 500 }
     );
   }
