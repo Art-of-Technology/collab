@@ -108,15 +108,15 @@ export default function PostHeader({
         </Avatar>
       )}
       <div className="flex-1">
-        <div className="flex justify-between items-center mb-1">
-          <div>
+        <div className="flex justify-between items-start mb-1">
+          <div className="flex flex-col sm:flex-row sm:items-center">
             <Link
               href={currentWorkspace ? `/${currentWorkspace.id}/profile/${authorId}` : `#`}
               className="font-semibold hover:underline hover:text-primary transition-colors"
             >
               {authorName}
             </Link>
-            <span className="text-muted-foreground text-xs ml-2">
+            <span className="text-muted-foreground text-xs sm:ml-2 block sm:inline">
               {timeAgo}
             </span>
           </div>

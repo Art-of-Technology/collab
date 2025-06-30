@@ -144,7 +144,7 @@ export default function PostActions({
 
   return (
     <>
-      <div className="w-full flex justify-between">
+      <div className="w-full flex justify-between gap-2">
         <Button
           onClick={handleLike}
           variant="ghost"
@@ -157,7 +157,7 @@ export default function PostActions({
           ) : (
             <HeartIcon className="h-4 w-4" />
           )}
-          <span>Like</span>
+          <span className="hidden sm:inline">Like</span>
         </Button>
         <Button
           onClick={onToggleExpand}
@@ -166,7 +166,7 @@ export default function PostActions({
           className="flex items-center gap-1 hover-effect"
         >
           <ChatBubbleLeftIcon className="h-4 w-4" />
-          <span>Comment</span>
+          <span className="hidden sm:inline">Comment</span>
         </Button>
         <Button
           onClick={handleBookmark}
@@ -180,7 +180,7 @@ export default function PostActions({
           ) : (
             <BookmarkIcon className="h-4 w-4" />
           )}
-          <span>Bookmark</span>
+          <span className="hidden sm:inline">Bookmark</span>
         </Button>
         <Button
           onClick={handleShare}
@@ -189,7 +189,7 @@ export default function PostActions({
           className="flex items-center gap-1 hover-effect"
         >
           <ShareIcon className="h-4 w-4" />
-          <span>Share</span>
+          <span className="hidden sm:inline">Share</span>
         </Button>
       </div>
       
@@ -220,7 +220,7 @@ export default function PostActions({
               ) : (
                 <ClipboardDocumentIcon className="h-4 w-4" />
               )}
-              <span className="sr-only">Copy</span>
+              <span>Copy</span>
             </Button>
           </div>
         </DialogContent>
