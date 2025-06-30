@@ -76,7 +76,7 @@ export default function CreateBoardDialog({
         workspaceId: currentWorkspace.id,
         name: formData.name,
         description: formData.description || undefined,
-        issuePrefix: formData.issuePrefix || undefined,
+        issuePrefix: formData.issuePrefix,
       });
       
       // Manually invalidate all board-related queries
