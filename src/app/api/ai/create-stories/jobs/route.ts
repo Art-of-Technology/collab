@@ -15,28 +15,35 @@ export async function GET(request: NextRequest) {
     const workspaceId = searchParams.get('workspaceId');
 
     if (!workspaceId) {
-      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Workspace ID is required' },
+        { status: 400 }
+      );
     }
 
-    // Get all jobs for the workspace
-    const allJobs = await jobStorage.getByWorkspace(workspaceId);
+    // Get all jobs for this user and workspace
+    const allJobs = await jobStorage.getAll();
     
-    // Filter only task creation jobs (jobs that start with 'task_job_')
-    const taskJobs = allJobs.filter(job => 
-      job.id.startsWith('task_job_') && 
-      job.userId === session.user.id
+    // Filter jobs for this user and workspace, and only story-related jobs
+    const userJobs = allJobs.filter(job => 
+      job.userId === session.user.id && 
+      job.workspaceId === workspaceId &&
+      job.id.startsWith('story_job_')
     );
 
     // Sort by creation date (newest first)
-    taskJobs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    userJobs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return NextResponse.json({
-      success: true,
-      jobs: taskJobs.slice(0, 10), // Return only the 10 most recent
+    // Return only last 10 jobs
+    const recentJobs = userJobs.slice(0, 10);
+
+    return NextResponse.json({ 
+      success: true, 
+      jobs: recentJobs 
     });
 
   } catch (error) {
-    console.error('Error fetching task creation jobs:', error);
+    console.error('Error fetching story generation jobs:', error);
     return NextResponse.json(
       { error: 'Failed to fetch jobs' },
       { status: 500 }

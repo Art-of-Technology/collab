@@ -1,3 +1,5 @@
+// DEPRECATED: This endpoint is replaced by /api/ai/jobs for better performance
+// Use the unified endpoint instead of individual job endpoints
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { jobStorage } from '@/lib/job-storage';

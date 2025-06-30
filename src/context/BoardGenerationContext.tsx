@@ -23,21 +23,20 @@ export function BoardGenerationProvider({ workspaceId, children }: { workspaceId
   const fetchJobs = async () => {
     if (!workspaceId) return;
     try {
-      const response = await fetch(`/api/ai/board-generation/jobs?workspaceId=${workspaceId}`);
+      const response = await fetch(`/api/ai/jobs?workspaceId=${workspaceId}`);
       const result = await response.json();
       if (result.success) {
-        // Filter only board generation jobs (jobs that start with 'job_' but NOT 'task_job_')
-        const boardJobs = result.jobs.filter((job: JobStatus) => 
-          job.id.startsWith('job_') && !job.id.startsWith('task_job_')
-        );
-        setJobs(boardJobs);
+        // Use pre-filtered board jobs from unified endpoint
+        setJobs(result.boardJobs || []);
       }
-    } catch {}
+    } catch (error) {
+      console.error('Failed to fetch board generation jobs:', error);
+    }
   };
 
   useEffect(() => {
     fetchJobs();
-    const interval = setInterval(fetchJobs, 3000);
+    const interval = setInterval(fetchJobs, 2000); // Sync with other contexts
     return () => clearInterval(interval);
   }, [workspaceId]);
 

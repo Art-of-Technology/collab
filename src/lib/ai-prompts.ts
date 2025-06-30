@@ -62,7 +62,6 @@ Each EPIC should cover a major functional or technical component, and together t
 - Include buffer time for integration and testing
 
 For each EPIC, include:
-
 1. **Epic Summary**: A short, clear explanation of what the Epic will achieve and why it matters.
 2. **Business Objective & Success Metrics**:
    - Objective: Business goal the Epic supports
@@ -159,6 +158,78 @@ Each story should be small enough to be completed within 1 week by a cross-funct
 IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations.
 `,
 
+  STORIES_FROM_EPIC: (userEmail: string) => `You are a highly experienced Agile Assistant and senior product manager. Your task is to break down a single EPIC into a comprehensive set of INVEST-compliant User Stories that enable incremental delivery of business value for that specific epic.
+
+Each story should be small enough to be completed within 1 week by a cross-functional agile team, and must deliver independent, testable functionality. Your output must reflect deep product thinking, edge case handling, and system behaviour under realistic conditions.
+
+**CONTEXT ANALYSIS:**
+You will receive an epic with its full context including:
+- Epic title and description
+- Business objectives and success metrics
+- Technical solution details
+- Dependencies and constraints
+- Scope definition
+
+Break this epic down into actionable user stories that collectively deliver the epic's value.
+
+**USER STORY STRUCTURE (PER ITEM):**
+- **Title**: Short and user-value-oriented
+- **Description**: Use "As a [role], I want [goal] so that [benefit]" format with Given-When-Then scenarios
+- **Priority**: Must be realistic (low, medium, high, critical) based on business value and dependencies
+- **Acceptance Criteria**: 3–5 testable, specific and unambiguous bullets
+- **Story Points**: Use the Fibonacci scale (1, 2, 3, 5, 8, 13) based on complexity
+- **Non-Functional Requirements**: Performance, accessibility, security, SEO, compliance needs
+- **Technical Notes**: Edge cases, integration needs, validation, dependencies, potential blockers
+- **Design Requirements**: UI components, flows, mockups, mobile/responsive considerations
+
+**STORY GUIDELINES:**
+- Break the epic into 4–10 high-value stories (adjust based on epic complexity)
+- Use a mix of user roles (admin, end-user, guest, API client, system, etc.)
+- Write from the user's perspective, not implementation steps
+- Include stories for error handling, failed states, and edge cases
+- Include setup/configuration stories if needed
+- Include testing and validation stories
+- Consider integration points with other systems
+- **Use clean HTML formatting** in all description fields for optimal database storage and UI rendering
+
+**STORY PRIORITIZATION:**
+- **Critical**: Core functionality that blocks other work
+- **High**: Important features that deliver main business value
+- **Medium**: Supporting features and improvements
+- **Low**: Nice-to-have features and edge case handling
+
+**Tech stack:** React, Node.js, .NET Core/MVC, PostgreSQL, SQL Server, Redis, DuckDB, Elasticsearch, NoSQL DB, Qdrant. Use self-hosted/dockerized solutions where possible.
+
+**OUTPUT FORMAT:** Return ONLY a JSON array of stories with clean HTML formatting in all description fields:
+[
+  {
+    "title": "[Story Title - user focused and specific to epic scope]",
+    "description": "<h3>User Story</h3><p>As a [role], I want [goal] so that [benefit].</p><h3>Given–When–Then</h3><p><strong>Given:</strong> [initial state/context]<br><strong>When:</strong> [event happens]<br><strong>Then:</strong> [expected outcome]</p><h3>Context</h3><p>[How this story contributes to the epic's goals and business value]</p>",
+    "priority": "high",
+    "acceptanceCriteria": "<h4>Acceptance Criteria</h4><ul><li>✅ AC1: [Testable condition specific to this story]</li><li>✅ AC2: [Testable condition specific to this story]</li><li>✅ AC3: [Testable condition specific to this story]</li><li>✅ AC4: [Additional testable condition if needed]</li></ul>",
+    "storyPoints": 5,
+    "nonFunctional": "<h4>Non-Functional Requirements</h4><ul><li><strong>Performance:</strong> [Response time, load requirements specific to this story]</li><li><strong>Accessibility:</strong> [WCAG compliance, keyboard navigation]</li><li><strong>Security:</strong> [Authentication, authorization, data protection]</li><li><strong>Browser Support:</strong> [Supported browsers and versions]</li><li><strong>Mobile:</strong> [Mobile responsiveness requirements]</li></ul>",
+    "visuals": "<h4>Design Requirements</h4><ul><li>[UI components needed for this story]</li><li>[Wireframes or mockup references]</li><li>[Interaction states: loading, error, success, empty]</li><li>[Mobile and responsive considerations]</li></ul>",
+    "technicalNotes": "<h4>Technical Notes</h4><ul><li>[API endpoints this story will create/use]</li><li>[Database schema changes or queries needed]</li><li>[Third-party integrations required]</li><li>[Edge cases and validation rules]</li><li>[Dependencies on other stories or systems]</li><li>[Potential technical risks or blockers]</li></ul>",
+    "assignedUsers": ["${userEmail}"]
+  }
+]
+
+IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations. Focus specifically on the provided epic and generate stories that collectively deliver its full scope.
+`,
+
+  AI_TOKEN_LIMITS: {
+    MAX_DESCRIPTION: 2000,
+    MAX_TITLE: 100,
+    MAX_RESPONSE: 4000,
+  },
+
+  AI_CONFIG: {
+    MAX_RETRIES: 3,
+    TIMEOUT: 30000,
+    TEMPERATURE: 0.7,
+  },
+
   TASKS: (userEmail: string) => `You are a highly experienced Agile Assistant and technical lead. Your task is to break down each User Story into clear, executable development Tasks that are implementation-ready and professionally formatted.
 
 Each task must be:
@@ -199,33 +270,20 @@ Each task should include comprehensive details formatted as follows:
 - **Design**: Flows, assets, responsive states, design QA
 - **Docs**: Code documentation, README updates, API docs
 
-**Tech stack:** React, Node.js, .NET Core/MVC, PostgreSQL, SQL Server, Redis, DuckDB, Elasticsearch, NoSQL DB, Qdrant. Use Dockerised/self-hosted solutions where possible.
-
-**ESTIMATION GUIDELINES:**
-For each task, analyze complexity factors and provide realistic estimates:
-- **1 day**: Simple CRUD operations, basic UI components, configuration changes, unit tests
-- **2 days**: Standard API integrations, business logic implementation, database operations, component testing
-- **3 days**: Complex integrations, advanced algorithms, security implementations, multi-service coordination
-- **4 days**: Payment gateway integrations, fraud detection systems, complex data processing, performance optimization
-- **5 days**: Large-scale architecture changes, comprehensive security audits, complex third-party integrations, advanced analytics systems
-
-**FORMAT: Return ONLY a valid JSON array in this exact structure:**
+**OUTPUT FORMAT:** Return ONLY a JSON array with clean HTML formatting:
 [
   {
-    "title": "[Task Title]",
-         "description": "<h3>Description</h3><p>[Detailed technical explanation of what needs to be built/done, including technical context, integration points, and business logic requirements]</p><h3>Design Reference</h3><p>[Figma links, design system references, UI mockup descriptions, or component specifications - or 'N/A' if not applicable]</p><h3>Dependencies</h3><ul><li>[Related stories or tasks]</li><li>[APIs, database, 3rd-party dependencies]</li><li>[Mockups, configuration needed]</li></ul><h3>Complexity Analysis & Estimate</h3><p><strong>Complexity Factors:</strong> API integration with external service, error handling, data validation, testing integration endpoints<br><strong>Estimated Duration:</strong> 2 days - medium complexity due to external API integration and comprehensive error handling</p><h3>Acceptance Criteria</h3><ul><li>✅ [Specific functional requirement]</li><li>✅ [Error handling requirement]</li><li>✅ [Performance/integration requirement]</li><li>✅ [Testing requirement]</li></ul><h3>Notes</h3><p>[Additional context: frontend/backend scope, existing implementations, QA validation approach, edge cases, security considerations]</p>",
-    "storyIndex": 0,
+    "title": "[Task title]",
+    "description": "[HTML formatted description with all sections]",
+    "type": "TASK",
     "priority": "medium",
-    "type": "development",
-    "storyPoints": 3,
-    "dueDate": "2025-01-16",
-    "taskCategory": "BE",
-    "estimate": "[X days - based on complexity analysis]",
-    "assignedUsers": ["${userEmail}"],
-    "labels": ["backend", "api"]
+    "estimate": "2 days",
+    "dueDate": "2025-01-18",
+    "assignedUsers": ["${userEmail}"]
   }
 ]
-IMPORTANT: Return ONLY the JSON array, no markdown formatting, no explanations.
+
+IMPORTANT: Return ONLY the JSON array, no markdown, no explanations.
 `,
 
   /* deprecated, DO NOT USE and MODIFY */
@@ -406,7 +464,7 @@ Examples of good output:
 IMPORTANT: Return ONLY the board name string, nothing else.
 `,
 
- };
+};
 
 // Token limits for different generation types
 export const AI_TOKEN_LIMITS = {

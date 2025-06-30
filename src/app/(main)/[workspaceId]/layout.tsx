@@ -8,6 +8,8 @@ import BoardGenerationStatus from "@/components/tasks/BoardGenerationStatus";
 import { BoardGenerationProvider } from "@/context/BoardGenerationContext";
 import TaskGenerationStatus from "@/components/tasks/TaskGenerationStatus";
 import { TaskGenerationProvider } from "@/context/TaskGenerationContext";
+import StoryGenerationStatus from "@/components/stories/StoryGenerationStatus";
+import { StoryGenerationProvider } from "@/context/StoryGenerationContext";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -65,15 +67,18 @@ export default async function WorkspaceLayout({
     <SidebarProvider>
       <BoardGenerationProvider workspaceId={workspaceId}>
         <TaskGenerationProvider workspaceId={workspaceId}>
-          <LayoutWithSidebar 
-            pathname={`/${workspaceId}`} 
-            session={session}
-            hasWorkspaces={hasWorkspaces}
-          >
-            {children}
-            <BoardGenerationStatus />
-            <TaskGenerationStatus />
-          </LayoutWithSidebar>
+          <StoryGenerationProvider workspaceId={workspaceId}>
+            <LayoutWithSidebar 
+              pathname={`/${workspaceId}`} 
+              session={session}
+              hasWorkspaces={hasWorkspaces}
+            >
+              {children}
+              <BoardGenerationStatus />
+              <TaskGenerationStatus />
+              <StoryGenerationStatus />
+            </LayoutWithSidebar>
+          </StoryGenerationProvider>
         </TaskGenerationProvider>
       </BoardGenerationProvider>
     </SidebarProvider>

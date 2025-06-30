@@ -10,6 +10,7 @@ import KanbanFilters, { ItemType, GroupingOption, SortOption } from "./KanbanFil
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useTaskModal } from "@/context/TaskModalContext";
+import { useSearchParams } from "next/navigation";
 import React from "react";
 
 // Enhanced BoardItem interface with better type support
@@ -74,6 +75,11 @@ export default function ListView() {
   const { currentWorkspace } = useWorkspace();
   const { data: boardData, isLoading } = useBoardItems(selectedBoardId);
   const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } = useTaskModal();
+  const searchParams = useSearchParams();
+
+  // Get highlighted item IDs from URL
+  const highlightParam = searchParams.get('highlight');
+  const highlightedIds = highlightParam ? highlightParam.split(',').filter(Boolean) : [];
   const [filteredItems, setFilteredItems] = useState<BoardItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
@@ -543,8 +549,16 @@ export default function ListView() {
                   {(!collapsedGroups[group.id] || groupBy === 'none') && group.items.map((item) => (
                     <TableRow
                       key={item.id}
-                      className="cursor-pointer hover:bg-muted/40 transition-colors border-b last:border-0"
+                      className={`cursor-pointer hover:bg-muted/40 transition-colors border-b last:border-0 ${
+                        highlightedIds.includes(item.id)
+                          ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 hover:bg-blue-100'
+                          : ''
+                      }`}
                       onClick={() => handleItemClick(item)}
+                      style={highlightedIds.includes(item.id) ? {
+                        boxShadow: '0 0 15px rgba(59, 130, 246, 0.2)',
+                        background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)'
+                      } : undefined}
                     >
                       <TableCell>
                         {renderTypeBadge(item)}

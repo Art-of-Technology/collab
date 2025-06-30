@@ -3,21 +3,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { JobStatus } from '@/lib/job-storage';
 
-interface TaskGenerationContextType {
+interface StoryGenerationContextType {
   jobs: JobStatus[];
   refreshJobs: () => void;
 }
 
-const TaskGenerationContext = createContext<TaskGenerationContextType>({
+const StoryGenerationContext = createContext<StoryGenerationContextType>({
   jobs: [],
   refreshJobs: () => {},
 });
 
-export function useTaskGeneration() {
-  return useContext(TaskGenerationContext);
+export function useStoryGeneration() {
+  return useContext(StoryGenerationContext);
 }
 
-export function TaskGenerationProvider({ workspaceId, children }: { workspaceId: string, children: ReactNode }) {
+export function StoryGenerationProvider({ workspaceId, children }: { workspaceId: string, children: ReactNode }) {
   const [jobs, setJobs] = useState<JobStatus[]>([]);
 
   const fetchJobs = async () => {
@@ -26,12 +26,12 @@ export function TaskGenerationProvider({ workspaceId, children }: { workspaceId:
       const response = await fetch(`/api/ai/jobs?workspaceId=${workspaceId}`);
       const result = await response.json();
       if (result.success) {
-        // Use pre-filtered task jobs from unified endpoint
-        setJobs(result.taskJobs || []);
+        // Use pre-filtered story jobs from unified endpoint
+        setJobs(result.storyJobs || []);
       }
     } catch (error) {
       // Silently fail - context should not break the app
-      console.error('Failed to fetch task generation jobs:', error);
+      console.error('Failed to fetch story generation jobs:', error);
     }
   };
 
@@ -42,8 +42,8 @@ export function TaskGenerationProvider({ workspaceId, children }: { workspaceId:
   }, [workspaceId]);
 
   return (
-    <TaskGenerationContext.Provider value={{ jobs, refreshJobs: fetchJobs }}>
+    <StoryGenerationContext.Provider value={{ jobs, refreshJobs: fetchJobs }}>
       {children}
-    </TaskGenerationContext.Provider>
+    </StoryGenerationContext.Provider>
   );
 } 

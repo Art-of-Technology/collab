@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
+import { useSearchParams } from "next/navigation";
 
 // Define task interface
 interface Task {
@@ -51,6 +52,11 @@ export default function KanbanView() {
   const isDraggingRef = useRef(false);
   const pendingUpdateRef = useRef(false);
   const { canManageBoard, isLoading: permissionsLoading } = useWorkspacePermissions();
+  const searchParams = useSearchParams();
+
+  // Get highlighted item IDs from URL
+  const highlightParam = searchParams.get('highlight');
+  const highlightedIds = highlightParam ? highlightParam.split(',').filter(Boolean) : [];
 
   // Filter and grouping state
   const [searchTerm, setSearchTerm] = useState("");
@@ -502,6 +508,7 @@ export default function KanbanView() {
                               onCreateTask={handleCreateTask}
                               onColumnEdit={canManageBoard ? handleColumnEdit : undefined}
                               onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
+                              highlightedIds={highlightedIds}
                             />
                           </div>
                         )}
