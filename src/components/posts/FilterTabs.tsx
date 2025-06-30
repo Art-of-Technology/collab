@@ -45,6 +45,7 @@ export default function FilterTabs() {
             <TabsTrigger 
               key={filter.key}
               value={filter.key}
+              className="px-1 sm:px-3 text-xs sm:text-sm"
             >
               {filter.label}
             </TabsTrigger>
