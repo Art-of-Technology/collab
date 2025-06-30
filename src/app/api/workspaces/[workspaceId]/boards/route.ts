@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { checkUserPermission, Permission } from "@/lib/permissions";
 
 // GET /api/workspaces/[workspaceId]/boards - Get all boards for a workspace
 export async function GET(
@@ -79,6 +80,23 @@ export async function POST(
       return NextResponse.json(
         { error: "Name is required" },
         { status: 400 }
+      );
+    }
+
+    if (!issuePrefix || !issuePrefix.trim()) {
+      return NextResponse.json(
+        { error: "Issue prefix is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if user has permission to create boards in this workspace
+    const hasPermission = await checkUserPermission(session.user.id, workspaceId, Permission.CREATE_BOARD);
+
+    if (!hasPermission.hasPermission) {
+      return NextResponse.json(
+        { error: "You don't have permission to create boards in this workspace" },
+        { status: 403 }
       );
     }
 

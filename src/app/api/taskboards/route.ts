@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { checkUserPermission } from "@/lib/permissions";
+import { Permission } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   try {
@@ -104,12 +106,29 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { name, description, workspaceId } = body;
+    const { name, description, workspaceId, issuePrefix } = body;
 
     if (!name || !workspaceId) {
       return NextResponse.json(
         { message: "Missing required fields" },
         { status: 400 }
+      );
+    }
+
+    if (!issuePrefix || !issuePrefix.trim()) {
+      return NextResponse.json(
+        { message: "Issue prefix is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if user has permission to create boards in this workspace
+    const hasPermission = await checkUserPermission(currentUser.id, workspaceId, Permission.CREATE_BOARD);
+
+    if (!hasPermission.hasPermission) {
+      return NextResponse.json(
+        { message: "You don't have permission to create boards in this workspace" },
+        { status: 403 }
       );
     }
 
@@ -136,6 +155,8 @@ export async function POST(req: Request) {
       data: {
         name,
         description,
+        issuePrefix: issuePrefix.trim(),
+        nextIssueNumber: 1,
         workspaceId
       }
     });

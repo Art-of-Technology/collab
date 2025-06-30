@@ -580,7 +580,7 @@ export async function checkWorkspaceLimit() {
     where: { ownerId: user.id }
   });
   
-  const maxWorkspaces = 3; // Free plan limit
+  const maxWorkspaces = 15; // Free plan limit
   const canCreateWorkspace = ownedWorkspacesCount < maxWorkspaces;
   
   return {

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Sparkles, Check, Clock, Code, Palette, Bug, TestTube, CheckCircle } from "lucide-react";
+import { Loader2, Sparkles, Check, Clock, Code, Palette, Bug, TestTube } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -283,7 +283,7 @@ ${story.description || story.title}
             Enhance Story with AI Tasks
           </DialogTitle>
           <DialogDescription>
-            Generate detailed technical tasks for "{story.title}" using AI. Review and select which tasks to create.
+            Generate detailed technical tasks for &quot;{story.title}&quot; using AI. Review and select which tasks to create.
           </DialogDescription>
         </DialogHeader>
 

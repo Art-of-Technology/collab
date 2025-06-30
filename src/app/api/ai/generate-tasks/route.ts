@@ -10,7 +10,7 @@ async function generateWithAI(
 ): Promise<string> {
   let attempt = 0;
   let fullContent = '';
-  let conversation = [...userMessages];
+  const conversation = [...userMessages];
 
   while (attempt < maxRetries) {
     try {
@@ -90,10 +90,11 @@ async function generateWithAI(
 }
 
 // Enhanced JSON parsing with multiple fix strategies
-async function parseAIResponse<T>(
+async function _parseAIResponse<T>(
   content: string, 
   expectedStructure: string,
-  retryPrompt?: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _retryPrompt?: string
 ): Promise<T> {
   let cleanedContent = content.trim();
   
@@ -121,13 +122,14 @@ async function parseAIResponse<T>(
   }
 
   for (let i = 0; i < jsonBlocks.length; i++) {
-    let jsonStr = jsonBlocks[i].trim();
+    const jsonStr = jsonBlocks[i].trim();
     
     try {
       const parsed = JSON.parse(jsonStr);
       console.log(`Successfully parsed JSON on block ${i + 1}:`, typeof parsed);
       return parsed;
-    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       console.log(`JSON parse attempt ${i + 1} failed, trying fixes...`);
       
       // Try various fixes for common JSON issues
@@ -165,7 +167,8 @@ async function parseAIResponse<T>(
           const parsed = JSON.parse(fixedJson);
           console.log(`JSON successfully fixed and parsed`);
           return parsed;
-        } catch (fixError) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (_fixError) {
           // Continue to next fix
         }
       }
@@ -204,7 +207,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Parse the AI response
-    const parsedData = await parseAIResponse(aiResponse, "TASKS generation");
+    const parsedData = await _parseAIResponse(aiResponse, "TASKS generation");
 
     if (!parsedData || !Array.isArray(parsedData)) {
       console.error("Invalid AI response format:", aiResponse);

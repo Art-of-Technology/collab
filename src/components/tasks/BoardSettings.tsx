@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,7 @@ interface BoardSettingsProps {
   onSubmit: (data: {
     name: string;
     description?: string;
-    issuePrefix?: string;
+    issuePrefix: string;
   }) => Promise<void>;
 }
 
@@ -39,17 +39,21 @@ export default function BoardSettings({
     issuePrefix: board.issuePrefix || "",
   });
 
-  // Reset form data when board changes
-  if (board.id && board.name !== formData.name && !loading) {
+  // Reset form data when board ID changes or dialog opens
+  useEffect(() => {
     setFormData({
       name: board.name,
       description: board.description || "",
       issuePrefix: board.issuePrefix || "",
     });
-  }
+  }, [board.id, isOpen]);
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
+      return;
+    }
+
+    if (!formData.issuePrefix.trim()) {
       return;
     }
 
@@ -97,7 +101,7 @@ export default function BoardSettings({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="issuePrefix">Issue ID Prefix</Label>
+            <Label htmlFor="issuePrefix">Issue ID Prefix *</Label>
             <Input
               id="issuePrefix"
               placeholder="e.g. WZB"

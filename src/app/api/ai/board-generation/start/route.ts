@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { jobStorage, JobStatus } from '@/lib/job-storage';
 import { AI_PROMPTS, AI_TOKEN_LIMITS, AI_CONFIG } from '@/lib/ai-prompts';
 
-function useMockData() {
+function mockData() {
   return false; //use for production testing
  //   return process.env.NODE_ENV === 'development';
 }
@@ -160,7 +160,7 @@ async function generateWithAI(
 ): Promise<string> {
   let attempt = 0;
   let fullContent = '';
-  let conversation = [...userMessages];
+  const conversation = [...userMessages];
 
   while (attempt < maxRetries) {
     try {
@@ -248,7 +248,8 @@ async function generateWithAI(
 async function parseAIResponse<T>(
   content: string, 
   expectedStructure: string,
-  retryPrompt?: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _retryPrompt?: string
 ): Promise<T> {
   // Clean up content
   let cleanContent = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -294,7 +295,8 @@ async function parseAIResponse<T>(
         const parsed = JSON.parse(fixedContent);
         console.log('Successfully fixed and parsed JSON');
         return parsed;
-      } catch (fixError) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (_fixError) {
         // Continue to next fix
       }
     }
@@ -304,7 +306,7 @@ async function parseAIResponse<T>(
 }
 
 async function generateMilestones(description: string, projectType?: string, teamSize?: string, userId?: string) {
-  if (useMockData()) {
+  if (mockData()) {
     await sleep(1500);
     return [
       {
@@ -349,7 +351,7 @@ async function generateMilestones(description: string, projectType?: string, tea
 }
 
 async function generateEpics(description: string, milestones: any[], projectType?: string, userId?: string) {
-  if (useMockData()) {
+  if (mockData()) {
     await sleep(1500);
     return [
       {
@@ -395,7 +397,7 @@ async function generateEpics(description: string, milestones: any[], projectType
 }
 
 async function generateStories(description: string, epics: any[], projectType?: string, userId?: string) {
-  if (useMockData()) {
+  if (mockData()) {
     await sleep(1500);
     return [
       {
@@ -441,7 +443,7 @@ async function generateStories(description: string, epics: any[], projectType?: 
 }
 
 async function generateTasks(description: string, stories: any[], projectType?: string, userId?: string) {
-  if (useMockData()) {
+  if (mockData()) {
     await sleep(1500);
     return [
       {

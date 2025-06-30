@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Sparkles, Loader2, Clock, CheckCircle, Users, FileText, Target } from "lucide-react";
+import { Sparkles, Loader2, FileText, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useSession } from "next-auth/react";
@@ -264,7 +264,7 @@ ${epic.description || epic.title}
             Enhance Epic with AI Stories
           </DialogTitle>
           <DialogDescription>
-            Generate detailed user stories for "{epic.title}" using AI. Review and select which stories to create.
+            Generate detailed user stories for &quot;{epic.title}&quot; using AI. Review and select which stories to create.
           </DialogDescription>
         </DialogHeader>
 
@@ -362,14 +362,14 @@ ${epic.description || epic.title}
                         </div>
                         
                         <div className="text-sm text-muted-foreground">
-                          <MarkdownContent content={story.description} />
+                          <MarkdownContent htmlContent={story.description} content={story.description} />
                         </div>
 
                         {story.acceptanceCriteria && (
                           <div className="text-sm">
                             <div className="font-medium text-muted-foreground mb-1">Acceptance Criteria:</div>
                             <div className="text-muted-foreground">
-                              <MarkdownContent content={story.acceptanceCriteria} />
+                              <MarkdownContent htmlContent={story.acceptanceCriteria} content={story.acceptanceCriteria} />
                             </div>
                           </div>
                         )}

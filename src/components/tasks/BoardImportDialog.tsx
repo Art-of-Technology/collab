@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Download, AlertCircle, CheckCircle2, Loader2, Sparkles, Clock } from "lucide-react";
+import { Upload, Download, AlertCircle, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BoardImportData, SAMPLE_IMPORT_JSON } from "@/types/board-import";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,7 +43,7 @@ export default function BoardImportDialog({
   
   // Background job states
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<any>(null);
+  const [, setJobStatus] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
 
   // Background job monitoring
@@ -127,9 +127,10 @@ export default function BoardImportDialog({
 
         setImportData(data);
         setJsonInput(JSON.stringify(data, null, 2));
-        setError("");
+                setError("");
         setValidationErrors([]);
-      } catch (err) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (_err) {
         setError("Invalid JSON file format");
         setImportData(null);
       }
@@ -160,7 +161,8 @@ export default function BoardImportDialog({
       setImportData(data);
       setError("");
       setValidationErrors([]);
-    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_err) {
       setError("Invalid JSON format");
       setImportData(null);
       setValidationErrors([]);

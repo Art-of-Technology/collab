@@ -176,4 +176,9 @@ export function useCanInviteMembers(workspaceId?: string) {
 export function useCanEditFeatureRequests(workspaceId?: string) {
   const { hasAnyPermission } = usePermissions(workspaceId);
   return hasAnyPermission([Permission.EDIT_ANY_FEATURE_REQUEST, Permission.DELETE_ANY_FEATURE_REQUEST]);
+}
+
+export function useCanCreateBoard(workspaceId?: string) {
+  const { checkPermission } = usePermissions(workspaceId);
+  return checkPermission(Permission.CREATE_BOARD);
 } 

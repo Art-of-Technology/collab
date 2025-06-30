@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useCanCreateBoard } from "@/hooks/use-permissions";
 import CreateBoardDialog from "./CreateBoardDialog";
 import BoardImportDialog from "./BoardImportDialog";
 
@@ -27,6 +28,11 @@ export default function TaskBoardSelector() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const { boards, selectedBoardId, selectBoard, refreshBoards } = useTasks();
   const { currentWorkspace } = useWorkspace();
+  
+  // Check if user can create boards
+  const canCreateBoardResult = useCanCreateBoard(currentWorkspace?.id);
+  const canCreateBoard = canCreateBoardResult.hasPermission;
+  const permissionsLoading = canCreateBoardResult.loading;
 
   return (
     <div className="flex gap-2 items-center">
@@ -93,18 +99,35 @@ export default function TaskBoardSelector() {
                 Import from JSON
               </CommandItem>
             </CommandGroup>
+            {canCreateBoard && (
+              <CommandGroup>
+                <CommandItem 
+                  onSelect={() => {
+                    setOpen(false);
+                    setIsCreateDialogOpen(true);
+                  }}
+                  className="text-primary"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create new board
+                </CommandItem>
+              </CommandGroup>
+            )}
           </Command>
         </PopoverContent>
       </Popover>
       
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        onClick={() => setIsCreateDialogOpen(true)}
-        className="h-9 w-9"
-      >
-        <Plus size={16} />
-      </Button>
+      {canCreateBoard && (
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setIsCreateDialogOpen(true)}
+          className="h-9 w-9"
+          disabled={permissionsLoading}
+        >
+          <Plus size={16} />
+        </Button>
+      )}
       
       <CreateBoardDialog 
         isOpen={isCreateDialogOpen}

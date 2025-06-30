@@ -435,7 +435,8 @@ Generate a JSON structure following this exact format:
 IMPORTANT: Return ONLY valid JSON, no additional text or explanations.
 `,
 
-  BOARD_NAME: (userEmail: string) => `You are a product naming expert. Your task is to analyze the provided project description and generate a concise, professional board name that clearly represents the project.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  BOARD_NAME: (_userEmail: string) => `You are a product naming expert. Your task is to analyze the provided project description and generate a concise, professional board name that clearly represents the project.
 
 **NAMING REQUIREMENTS:**
 - Keep it short and memorable (2-4 words maximum)

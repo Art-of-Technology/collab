@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { jobStorage, JobStatus } from '@/lib/job-storage';
 import { prisma } from '@/lib/prisma';
-import { AI_PROMPTS, AI_TOKEN_LIMITS, AI_CONFIG } from '@/lib/ai-prompts';
+import { AI_PROMPTS, AI_CONFIG } from '@/lib/ai-prompts';
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,7 +113,8 @@ async function updateJobStatus(jobId: string, status: JobStatus['status'], progr
 }
 
 // Enhanced AI generation with streaming and completion handling
-async function generateWithAI(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _generateWithAI(
   systemPrompt: string, 
   userMessages: Array<{role: string, content: string}>, 
   maxTokens: number = 4000,
@@ -121,7 +122,7 @@ async function generateWithAI(
 ): Promise<string> {
   let attempt = 0;
   let fullContent = '';
-  let conversation = [...userMessages];
+  const conversation = [...userMessages];
 
   while (attempt < maxRetries) {
     try {
@@ -201,10 +202,12 @@ async function generateWithAI(
 }
 
 // Enhanced JSON parsing with multiple fix strategies
-async function parseAIResponse<T>(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _parseAIResponse<T>(
   content: string, 
   expectedStructure: string,
-  retryPrompt?: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _retryPrompt?: string
 ): Promise<T> {
   let cleanedContent = content.trim();
   
@@ -232,13 +235,14 @@ async function parseAIResponse<T>(
   }
 
   for (let i = 0; i < jsonBlocks.length; i++) {
-    let jsonStr = jsonBlocks[i].trim();
+    const jsonStr = jsonBlocks[i].trim();
     
     try {
       const parsed = JSON.parse(jsonStr);
       console.log(`Successfully parsed JSON on block ${i + 1}:`, typeof parsed);
       return parsed;
-    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       console.log(`JSON parse attempt ${i + 1} failed, trying fixes...`);
       
       // Try various fixes for common JSON issues
@@ -276,7 +280,8 @@ async function parseAIResponse<T>(
           const parsed = JSON.parse(fixedJson);
           console.log(`JSON successfully fixed and parsed`);
           return parsed;
-        } catch (fixError) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (_fixError) {
           // Continue to next fix
         }
       }
