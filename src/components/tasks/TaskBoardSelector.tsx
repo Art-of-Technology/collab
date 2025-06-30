@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useCanCreateBoard } from "@/hooks/use-permissions";
+
 import CreateBoardDialog from "./CreateBoardDialog";
 import BoardImportDialog from "./BoardImportDialog";
 
@@ -29,10 +30,12 @@ export default function TaskBoardSelector() {
   const { boards, selectedBoardId, selectBoard, refreshBoards } = useTasks();
   const { currentWorkspace } = useWorkspace();
   
+
   // Check if user can create boards
   const canCreateBoardResult = useCanCreateBoard(currentWorkspace?.id);
   const canCreateBoard = canCreateBoardResult.hasPermission;
   const permissionsLoading = canCreateBoardResult.loading;
+
 
   return (
     <div className="flex gap-2 items-center">
