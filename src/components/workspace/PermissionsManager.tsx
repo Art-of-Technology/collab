@@ -406,7 +406,10 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                       const implementedPermissions = [
                         Permission.PIN_POST,
                         Permission.RESOLVE_BLOCKER,
-                        Permission.MANAGE_WORKSPACE_PERMISSIONS
+                        Permission.MANAGE_WORKSPACE_PERMISSIONS,
+                        Permission.CREATE_BOARD,
+                        Permission.EDIT_BOARD,
+                        Permission.MANAGE_BOARD_SETTINGS,
                       ];
                       const isPermissionImplemented = implementedPermissions.includes(permission);
                       

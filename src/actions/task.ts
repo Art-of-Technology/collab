@@ -1105,7 +1105,7 @@ export async function createBoard(data: {
   workspaceId: string;
   name: string;
   description?: string;
-  issuePrefix?: string;
+  issuePrefix: string;
   isDefault?: boolean;
 }) {
   const session = await getServerSession(authOptions);
@@ -1121,6 +1121,10 @@ export async function createBoard(data: {
     throw new Error('Board name is required');
   }
 
+  if (!issuePrefix || !issuePrefix.trim()) {
+    throw new Error('Issue prefix is required');
+  }
+
   if (!workspaceId) {
     throw new Error('Workspace ID is required');
   }
@@ -1134,6 +1138,13 @@ export async function createBoard(data: {
 
   if (!user) {
     throw new Error('User not found');
+  }
+
+  // Check if user has permission to create boards in this workspace
+  const hasPermission = await checkUserPermission(user.id, workspaceId, PermissionEnum.CREATE_BOARD);
+
+  if (!hasPermission.hasPermission) {
+    throw new Error('You don\'t have permission to create boards in this workspace');
   }
 
   // Verify the user has access to this workspace
@@ -1156,7 +1167,7 @@ export async function createBoard(data: {
     data: {
       name: name.trim(),
       description: description?.trim() || null,
-      issuePrefix: issuePrefix?.trim() || null,
+      issuePrefix: issuePrefix.trim(),
       nextIssueNumber: 1, // Start issue numbering from 1
       isDefault: isDefault || false,
       workspaceId,
@@ -1198,6 +1209,11 @@ export async function updateBoard(boardId: string, data: {
   // Validate board id
   if (!boardId) {
     throw new Error('Board ID is required');
+  }
+
+  // Validate issuePrefix if provided
+  if (issuePrefix !== undefined && (!issuePrefix || !issuePrefix.trim())) {
+    throw new Error('Issue prefix is required');
   }
 
   // Get the current user
@@ -1242,7 +1258,7 @@ export async function updateBoard(boardId: string, data: {
     data: {
       name: name ? name.trim() : undefined,
       description: description !== undefined ? (description?.trim() || null) : undefined,
-      issuePrefix: issuePrefix !== undefined ? (issuePrefix?.trim() || null) : undefined,
+      issuePrefix: issuePrefix !== undefined ? issuePrefix.trim() : undefined,
     },
     include: {
       columns: {

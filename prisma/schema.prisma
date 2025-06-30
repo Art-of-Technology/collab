@@ -378,7 +378,7 @@ model TaskBoard {
   isDefault       Boolean      @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  issuePrefix     String?
+  issuePrefix     String
   nextIssueNumber Int          @default(1)
   epics           Epic[]
   milestones      Milestone[]

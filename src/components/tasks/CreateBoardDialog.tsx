@@ -53,6 +53,15 @@ export default function CreateBoardDialog({
       return;
     }
 
+    if (!formData.issuePrefix.trim()) {
+      toast({
+        title: "Error",
+        description: "Issue prefix is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!currentWorkspace) {
       toast({
         title: "Error",
@@ -160,10 +169,10 @@ export default function CreateBoardDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="issuePrefix">Issue Prefix</Label>
+            <Label htmlFor="issuePrefix">Issue Prefix *</Label>
             <Input
               id="issuePrefix"
-              placeholder="e.g., PRJ, TASK (optional)"
+              placeholder="e.g., PRJ, TASK"
               value={formData.issuePrefix}
               onChange={(e) =>
                 setFormData((prev) => ({
