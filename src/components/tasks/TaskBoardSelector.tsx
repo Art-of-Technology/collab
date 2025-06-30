@@ -84,16 +84,6 @@ export default function TaskBoardSelector() {
               <CommandItem 
                 onSelect={() => {
                   setOpen(false);
-                  setIsCreateDialogOpen(true);
-                }}
-                className="text-primary"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Create new board
-              </CommandItem>
-              <CommandItem 
-                onSelect={() => {
-                  setOpen(false);
                   setIsImportDialogOpen(true);
                 }}
                 className="text-blue-600"
