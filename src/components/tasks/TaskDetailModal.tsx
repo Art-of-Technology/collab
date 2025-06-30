@@ -25,14 +25,14 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
   // Use TanStack Query to fetch task data
   const { data: task, error, isError, refetch } = useTaskById(taskId || '');
 
-  // Open modal when task data is loaded
+  // Open modal when taskId is provided
   useEffect(() => {
-    if (taskId && task) {
+    if (taskId) {
       setIsOpen(true);
-    } else if (!taskId) {
+    } else {
       setIsOpen(false);
     }
-  }, [taskId, task]);
+  }, [taskId]);
   
   // Function to refresh task details
   const refreshTaskDetails = () => {
@@ -41,8 +41,15 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
 
   if (!taskId) return null;
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setIsOpen(false);
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="sticky top-0 z-10 bg-background pb-2 flex-shrink-0">
           <DialogTitle className="sr-only">Task Details</DialogTitle>

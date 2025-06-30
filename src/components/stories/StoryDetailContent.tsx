@@ -30,6 +30,8 @@ import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { BoardItemTabs } from "@/components/tasks/TaskTabs";
 import { useSession } from "next-auth/react";
+import { Sparkles } from "lucide-react";
+import { useTaskGeneration } from "@/context/TaskGenerationContext";
 
 // Format date helper
 const formatDate = (date: Date | string | null | undefined) => {
@@ -113,6 +115,7 @@ export function StoryDetailContent({
 }: StoryDetailContentProps) {
   const { currentWorkspace } = useWorkspace();
   const { data: session } = useSession();
+  const { refreshJobs } = useTaskGeneration();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(story?.title || "");
   const [savingTitle, setSavingTitle] = useState(false);
@@ -131,6 +134,7 @@ export function StoryDetailContent({
   const [startDate, setStartDate] = useState<Date | undefined>(story?.startDate || undefined);
   const [dueDate, setDueDate] = useState<Date | undefined>(story?.dueDate || undefined);
   const [points, setPoints] = useState<number | undefined>(story?.points || undefined);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -409,6 +413,52 @@ export function StoryDetailContent({
       await saveStoryField('labels', labelIds);
     } finally {
       setSavingLabels(false);
+    }
+  };
+
+  const handleGenerateAndCreateTasks = async () => {
+    if (!story || !effectiveBoardId || !currentWorkspace || isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/ai/generate-and-create-tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          storyId: story.id,
+          boardId: effectiveBoardId,
+          workspaceId: currentWorkspace.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start task generation');
+      }
+
+      const data = await response.json();
+      console.log('AI task generation started:', data);
+
+      // Immediately refresh jobs to show the widget
+      refreshJobs();
+
+      toast({
+        title: "AI Task Generation Started",
+        description: "Tasks are being generated in the background. Check the widget for progress.",
+      });
+
+      // Reset generating state after a short delay
+      setTimeout(() => setIsGenerating(false), 2000);
+
+    } catch (error) {
+      console.error('Error starting AI task generation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start AI task generation. Please try again.",
+        variant: "destructive",
+      });
+      setIsGenerating(false);
     }
   };
 
@@ -934,10 +984,33 @@ export function StoryDetailContent({
                   </Link>
                 </div>
               )}
+
+              {/* AI Task Enhancement Section */}
+              <div className="pt-4 border-t">
+                <p className="text-sm font-medium mb-2">AI Enhancement</p>
+                <Button
+                  onClick={handleGenerateAndCreateTasks}
+                  className="w-full gap-2"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGenerating || !effectiveBoardId}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {isGenerating ? 'Generating Tasks...' : 'Generate Tasks with AI'}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {!effectiveBoardId 
+                    ? 'No board assigned to this story'
+                    : 'AI will generate and create tasks in the background'
+                  }
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+
     </div>
   );
 }

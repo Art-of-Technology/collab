@@ -54,6 +54,7 @@ export interface EnhancedTaskCardProps {
   entityType?: 'task' | 'milestone' | 'epic' | 'story';
   dueDate?: Date | string | null;
   _count?: any;
+  isHighlighted?: boolean;
 }
 
 export default function EnhancedTaskCard({
@@ -75,6 +76,7 @@ export default function EnhancedTaskCard({
   color,
   entityType = 'task',
   _count,
+  isHighlighted = false,
 }: EnhancedTaskCardProps) {
   const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } = useTaskModal();
 
@@ -299,10 +301,19 @@ export default function EnhancedTaskCard({
   return (
     <div onClick={handleClick}>
       <Card
-        className="overflow-hidden transition-all cursor-pointer border-l-4"
+        className={`overflow-hidden transition-all cursor-pointer border-l-4 ${
+          isHighlighted 
+            ? 'ring-2 ring-blue-500 ring-opacity-75 shadow-lg shadow-blue-500/25 animate-pulse border-blue-500' 
+            : ''
+        }`}
         style={{
-          borderLeftColor: cardStyles.borderColor,
-          backgroundColor: cardStyles.backgroundColor
+          borderLeftColor: isHighlighted ? '#3B82F6' : cardStyles.borderColor,
+          backgroundColor: isHighlighted 
+            ? 'rgba(59, 130, 246, 0.05)' 
+            : cardStyles.backgroundColor,
+          boxShadow: isHighlighted 
+            ? '0 0 20px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+            : undefined
         }}
       >
         <CardContent className="p-3">

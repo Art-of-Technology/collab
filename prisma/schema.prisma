@@ -69,6 +69,7 @@ model User {
   workspaceInvitations   WorkspaceInvitation[]
   workspaceMemberships   WorkspaceMember[]
   conversations          Conversation[]          @relation("UserConversations")
+  boardGenerationJobs    BoardGenerationJob[]
 }
 
 model Account {
@@ -340,6 +341,7 @@ model Workspace {
   invitations         WorkspaceInvitation[]
   members             WorkspaceMember[]
   boardItemActivities BoardItemActivity[]
+  boardGenerationJobs BoardGenerationJob[]
 }
 
 model WorkspaceMember {
@@ -843,6 +845,30 @@ model RolePermission {
   @@unique([workspaceId, role, permission])
 }
 
+model BoardGenerationJob {
+  id           String                @id @default(cuid())
+  workspaceId  String
+  userId       String
+  description  String
+  projectType  String?
+  teamSize     String?
+  status       BoardGenerationStatus @default(PENDING)
+  progress     Int                   @default(0)
+  currentStep  String?
+  boardData    Json?
+  boardId      String?
+  error        String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([status])
+}
+
 enum EventType {
   TASK_START
   TASK_PAUSE
@@ -949,6 +975,16 @@ enum WorkspaceRole {
   MEMBER
   VIEWER
   GUEST
+}
+
+enum BoardGenerationStatus {
+  PENDING
+  GENERATING_MILESTONES
+  GENERATING_EPICS
+  GENERATING_STORIES
+  GENERATING_TASKS
+  COMPLETED
+  FAILED
 }
 
 enum Permission {

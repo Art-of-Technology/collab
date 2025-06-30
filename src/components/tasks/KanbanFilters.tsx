@@ -24,7 +24,7 @@ import { CheckSquare, Bug, Sparkles, TrendingUp, Calendar, Star, BookOpen, Filte
 import { LabelSelector } from "@/components/ui/label-selector";
 
 export type ItemType = 'TASK' | 'BUG' | 'FEATURE' | 'IMPROVEMENT' | 'MILESTONE' | 'EPIC' | 'STORY' | null;
-export type GroupingOption = 'none' | 'type' | 'assignee' | 'milestone' | 'epic' | 'labels';
+export type GroupingOption = 'none' | 'type' | 'assignee' | 'milestone' | 'epic' | 'story' | 'labels';
 export type SortOption = 'title' | 'id' | 'status' | 'priority';
 
 interface KanbanFiltersProps {
@@ -351,6 +351,7 @@ export default function KanbanFilters({
           <SelectItem value="assignee">Group by Assignee</SelectItem>
           <SelectItem value="milestone">Group by Milestone</SelectItem>
           <SelectItem value="epic">Group by Epic</SelectItem>
+          <SelectItem value="story">Group by Story</SelectItem>
           <SelectItem value="labels">Group by Labels</SelectItem>
         </SelectContent>
       </Select>

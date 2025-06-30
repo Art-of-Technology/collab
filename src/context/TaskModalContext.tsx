@@ -84,20 +84,21 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
     const epicId = searchParams.get("epicId");
     const storyId = searchParams.get("storyId");
 
-    // Prioritize Task if multiple are present? Or handle error?
-    // For now, just set the first one found.
-    if (taskId && !activeTaskId) {
-      setActiveTaskId(taskId);
-      setIsTaskModalOpen(true);
-    } else if (milestoneId && !activeMilestoneId) {
-      setActiveMilestoneId(milestoneId);
-      setIsMilestoneModalOpen(true);
-    } else if (epicId && !activeEpicId) {
-      setActiveEpicId(epicId);
-      setIsEpicModalOpen(true);
-    } else if (storyId && !activeStoryId) {
-      setActiveStoryId(storyId);
-      setIsStoryModalOpen(true);
+    // Only sync from URL if we don't have any active modals
+    if (!activeTaskId && !activeMilestoneId && !activeEpicId && !activeStoryId) {
+      if (taskId) {
+        setActiveTaskId(taskId);
+        setIsTaskModalOpen(true);
+      } else if (milestoneId) {
+        setActiveMilestoneId(milestoneId);
+        setIsMilestoneModalOpen(true);
+      } else if (epicId) {
+        setActiveEpicId(epicId);
+        setIsEpicModalOpen(true);
+      } else if (storyId) {
+        setActiveStoryId(storyId);
+        setIsStoryModalOpen(true);
+      }
     }
     
     // If no modal ID is in the URL, ensure all are closed in state
@@ -112,8 +113,8 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
         setIsStoryModalOpen(false);
     }
 
-  // Add missing dependencies to the dependency array
-  }, [searchParams, activeTaskId, activeMilestoneId, activeEpicId, activeStoryId]);
+  // Only depend on searchParams to avoid infinite loops
+  }, [searchParams]);
 
   const updateUrl = (paramName: string, paramValue: string | null) => {
     const params = new URLSearchParams(searchParams.toString());

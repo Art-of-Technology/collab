@@ -32,6 +32,7 @@ interface GroupedColumnProps {
   onCreateTask?: (columnId: string) => void;
   onColumnEdit?: (columnId: string, name: string) => Promise<void>;
   onColumnDelete?: (columnId: string) => Promise<void>;
+  highlightedIds?: string[];
 }
 
 export default function GroupedColumn({
@@ -44,7 +45,8 @@ export default function GroupedColumn({
   dragHandleProps,
   onCreateTask,
   onColumnEdit,
-  onColumnDelete
+  onColumnDelete,
+  highlightedIds = []
 }: GroupedColumnProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isEditingColumnName, setIsEditingColumnName] = useState(false);
@@ -424,6 +426,7 @@ export default function GroupedColumn({
                                   entityType={item.entityType}
                                   dueDate={item.dueDate}
                                   _count={item._count}
+                                  isHighlighted={highlightedIds.includes(item.id)}
                                 />
                               </div>
                             )}
@@ -469,6 +472,7 @@ export default function GroupedColumn({
                                 entityType={item.entityType}
                                 dueDate={item.dueDate}
                                 _count={item._count}
+                                isHighlighted={highlightedIds.includes(item.id)}
                               />
                             </div>
                           )}
