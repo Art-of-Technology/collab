@@ -7,6 +7,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 export interface Board {
   id: string;
   name: string;
+  slug?: string;
   description?: string | null;
   isDefault?: boolean;
   issuePrefix?: string | null;

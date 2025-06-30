@@ -21,6 +21,7 @@ import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
+import { urls } from "@/lib/url-resolver";
 
 interface SidebarProps {
   pathname?: string;
@@ -39,27 +40,63 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
   // Generate navigation based on current workspace
   const getNavigation = () => {
     // Always provide navigation structure to prevent layout shifts
-    // Use currentWorkspace.id if available, or 'loading' as placeholder
+    // Use currentWorkspace.slug if available, or fallback to ID, or 'loading' as placeholder
+    const workspaceSlug = currentWorkspace?.slug;
     const workspaceId = currentWorkspace?.id || 'loading';
     
+    // Helper function to generate URLs with fallback
+    const getUrl = (path: string) => {
+      if (workspaceSlug) {
+        // Use URL resolver for slug-based URLs
+        switch (path) {
+          case '/dashboard':
+            return urls.workspaceDashboard(workspaceSlug);
+          case '/timeline':
+            return urls.workspaceTimeline(workspaceSlug);
+          case '/tasks':
+            return urls.tasks(workspaceSlug);
+          case '/notes':
+            return urls.workspaceNotes(workspaceSlug);
+          case '/my-posts':
+            return urls.workspace({ workspaceSlug, path: '/my-posts' });
+          case '/bookmarks':
+            return urls.workspace({ workspaceSlug, path: '/bookmarks' });
+          case '/profile':
+            return urls.workspaceProfile({ workspaceSlug });
+          case '/messages':
+            return urls.messages(workspaceSlug);
+          case '/tags':
+            return urls.workspace({ workspaceSlug, path: '/tags' });
+          case '/features':
+            return urls.features(workspaceSlug);
+          case '/timesheet':
+            return urls.workspace({ workspaceSlug, path: '/timesheet' });
+          default:
+            return urls.workspace({ workspaceSlug, path });
+        }
+      }
+      // Fallback to legacy URL structure
+      return `/${workspaceId}${path}`;
+    };
+
     const baseNavigation = [
       {
         name: "Dashboard",
-        href: `/${workspaceId}/dashboard`,
+        href: getUrl('/dashboard'),
         icon: Squares2X2Icon,
-        current: pathname === `/${workspaceId}/dashboard`,
+        current: pathname === getUrl('/dashboard') || pathname === `/${workspaceId}/dashboard`,
       },
       {
         name: "Timeline",
-        href: `/${workspaceId}/timeline`,
+        href: getUrl('/timeline'),
         icon: HomeIcon,
-        current: pathname === `/${workspaceId}/timeline`,
+        current: pathname === getUrl('/timeline') || pathname === `/${workspaceId}/timeline`,
       },
       {
         name: "Tasks",
-        href: `/${workspaceId}/tasks`,
+        href: getUrl('/tasks'),
         icon: RectangleStackIcon,
-        current: pathname === `/${workspaceId}/tasks`,
+        current: pathname === getUrl('/tasks') || pathname === `/${workspaceId}/tasks`,
       },
     ];
 
@@ -67,9 +104,9 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     if (settings?.timeTrackingEnabled) {
       baseNavigation.push({
         name: "Timesheet",
-        href: `/${workspaceId}/timesheet`,
+        href: getUrl('/timesheet'),
         icon: ClockIcon,
-        current: pathname === `/${workspaceId}/timesheet`,
+        current: pathname === getUrl('/timesheet') || pathname === `/${workspaceId}/timesheet`,
       });
     }
 
@@ -77,45 +114,45 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     baseNavigation.push(
       {
         name: "Notes",
-        href: `/${workspaceId}/notes`,
+        href: getUrl('/notes'),
         icon: DocumentTextIcon,
-        current: pathname === `/${workspaceId}/notes`,
+        current: pathname === getUrl('/notes') || pathname === `/${workspaceId}/notes`,
       },
       {
         name: "My Posts",
-        href: `/${workspaceId}/my-posts`,
+        href: getUrl('/my-posts'),
         icon: UserGroupIcon,
-        current: pathname === `/${workspaceId}/my-posts`,
+        current: pathname === getUrl('/my-posts') || pathname === `/${workspaceId}/my-posts`,
       },
       {
         name: "Bookmarks",
-        href: `/${workspaceId}/bookmarks`,
+        href: getUrl('/bookmarks'),
         icon: PlusIcon,
-        current: pathname === `/${workspaceId}/bookmarks`,
+        current: pathname === getUrl('/bookmarks') || pathname === `/${workspaceId}/bookmarks`,
       },
       {
         name: "Profile",
-        href: `/${workspaceId}/profile`,
+        href: getUrl('/profile'),
         icon: UserIcon,
-        current: pathname === `/${workspaceId}/profile`,
+        current: pathname === getUrl('/profile') || pathname === `/${workspaceId}/profile`,
       },
       {
         name: "Messages",
-        href: `/${workspaceId}/messages`,
+        href: getUrl('/messages'),
         icon: EnvelopeIcon,
-        current: pathname === `/${workspaceId}/messages` || pathname.startsWith(`/${workspaceId}/messages/`),
+        current: pathname === getUrl('/messages') || pathname === `/${workspaceId}/messages` || pathname.startsWith(getUrl('/messages') + '/') || pathname.startsWith(`/${workspaceId}/messages/`),
       },
       {
         name: "Tags",
-        href: `/${workspaceId}/tags`,
+        href: getUrl('/tags'),
         icon: HashtagIcon,
-        current: pathname === `/${workspaceId}/tags`,
+        current: pathname === getUrl('/tags') || pathname === `/${workspaceId}/tags`,
       },
       {
         name: "Feature Requests",
-        href: `/${workspaceId}/features`,
+        href: getUrl('/features'),
         icon: LightBulbIcon,
-        current: pathname === `/${workspaceId}/features`,
+        current: pathname === getUrl('/features') || pathname === `/${workspaceId}/features`,
       },
     );
 
@@ -245,7 +282,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
             asChild
             disabled={!currentWorkspace?.id}
           >
-            <Link href={`/${currentWorkspace?.id || 'loading'}/timeline`}>
+            <Link href={currentWorkspace?.slug ? urls.workspaceTimeline(currentWorkspace.slug) : `/${currentWorkspace?.id || 'loading'}/timeline`}>
               <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
               New Post
             </Link>

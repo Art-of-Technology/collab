@@ -6,6 +6,8 @@ import { ArrowLeft } from "lucide-react";
 import { getAuthSession } from "@/lib/auth";
 import { getTaskById } from "@/actions/task";
 import TaskDetailClient from "@/components/tasks/TaskDetailClient";
+import { urls } from "@/lib/url-resolver";
+import { resolveBoardSlug, resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 
 interface TaskDetailPageProps {
   params: {
@@ -31,11 +33,35 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
     // Use boardId from searchParams or fallback to task's board ID
     const boardId = _searchParams?.boardId || task.taskBoardId || '';
     
+    // Generate back URL using URL resolver
+    const getBackUrl = async (): Promise<string> => {
+      try {
+        // Try to resolve workspace and board slugs
+        const workspaceSlug = await resolveWorkspaceSlug(_params.workspaceId);
+        const boardSlug = boardId ? await resolveBoardSlug(boardId, _params.workspaceId) : null;
+        
+        if (workspaceSlug && boardSlug) {
+          return urls.board({
+            workspaceSlug,
+            boardSlug,
+            view: 'kanban'
+          });
+        }
+      } catch (err) {
+        console.log('Failed to resolve slugs, using fallback URL:', err);
+      }
+      
+      // Fallback to legacy URL
+      return `/${_params.workspaceId}/tasks?board=${boardId}`;
+    };
+
+    const backUrl = await getBackUrl();
+    
     return (
       <div className="container py-6 space-y-6">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" size="sm" asChild className="gap-1">
-            <Link href={`/${_params.workspaceId}/tasks?board=${boardId}`}>
+            <Link href={backUrl}>
               <ArrowLeft className="h-4 w-4" />
               Back to Board
             </Link>

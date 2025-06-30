@@ -73,12 +73,27 @@ export async function POST(
 
     const { workspaceId } = params;
     const body = await request.json();
-    const { name, description, isDefault, issuePrefix } = body;
+    const { name, slug, description, isDefault, issuePrefix } = body;
 
     // Required fields
     if (!name) {
       return NextResponse.json(
         { error: "Name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!slug) {
+      return NextResponse.json(
+        { error: "Slug is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate slug format
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return NextResponse.json(
+        { error: "Slug can only contain lowercase letters, numbers, and hyphens" },
         { status: 400 }
       );
     }
@@ -122,6 +137,7 @@ export async function POST(
     const board = await prisma.taskBoard.create({
       data: {
         name,
+        slug,
         description,
         issuePrefix,
         nextIssueNumber: 1, // Start issue numbering from 1

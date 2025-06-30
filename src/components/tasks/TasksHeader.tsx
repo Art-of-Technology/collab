@@ -20,13 +20,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { urls } from "@/lib/url-resolver";
 
 export default function TasksHeader() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
   const [isEpicDialogOpen, setIsEpicDialogOpen] = useState(false);
   const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
-  const { selectedBoardId, view } = useTasks();
+  const { selectedBoardId, view, selectedBoard } = useTasks();
   const { currentWorkspace } = useWorkspace();
   const router = useRouter();
   const pathname = usePathname();
@@ -47,21 +48,26 @@ export default function TasksHeader() {
   };
 
   const handleViewChange = (newView: 'kanban' | 'list' | 'hierarchy') => {
-    // Create a new URL with the current params
-    const params = new URLSearchParams(searchParams.toString());
-    
-    // Set the new view
-    params.set('view', newView);
-    
-    // Ensure we're using the current board ID
-    if (selectedBoardId) {
-      params.set('board', selectedBoardId);
+    // Use URL resolver to generate the URL with the current board and new view
+    if (currentWorkspace?.slug && selectedBoard?.slug) {
+      const url = urls.board({
+        workspaceSlug: currentWorkspace.slug,
+        boardSlug: selectedBoard.slug,
+        view: newView
+      });
+      router.push(url, { scroll: false });
+    } else {
+      // Fallback to manual URL construction for backward compatibility
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', newView);
+      
+      if (selectedBoardId) {
+        params.set('board', selectedBoardId);
+      }
+      
+      const url = `${pathname}?${params.toString()}`;
+      router.push(url, { scroll: false });
     }
-    
-    // Create the URL and navigate
-    const url = `${pathname}?${params.toString()}`;
-    // Use router.push with replace option to avoid browser history accumulation
-    router.push(url, { scroll: false });
   };
 
   const handleCreateMilestone = () => {
