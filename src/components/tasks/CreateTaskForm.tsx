@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
 import React, { useState, useEffect, useCallback, memo } from "react";
@@ -196,10 +197,10 @@ export default function CreateTaskForm({
   // Set current user as default reporter when form is initialized
   useEffect(() => {
     // Only set if session exists and form hasn't been modified yet
-    if (session?.data?.user?.id && !form.getValues('reporterId')) {
+    if (session?.data?.user?.id && !form.getValues('reporterId') && isOpen) {
       form.setValue('reporterId', session.data.user.id);
     }
-  }, [session?.data?.user?.id, form]);
+  }, [session?.data?.user?.id, isOpen]);
 
   // Watch the selected board ID
   const selectedBoardId = form.watch('taskBoardId');
@@ -220,23 +221,29 @@ export default function CreateTaskForm({
       form.setValue('columnId', undefined);
       setSelectedColumnId(undefined);
     }
-  }, [boardColumns, selectedBoardId, form]);
+  }, [boardColumns, selectedBoardId]);
 
-  // Clear Epic and Story when Board changes
+  // Clear Epic and Story when Board changes (only if board actually changes)
   useEffect(() => {
-    form.setValue('epicId', null);
-    form.setValue('storyId', null);
-  }, [selectedBoardId, form]);
+    if (selectedBoardId) {
+      form.setValue('epicId', null);
+      form.setValue('storyId', null);
+    }
+  }, [selectedBoardId]);
 
   // Clear Story if Epic is selected, Clear Epic if Story is selected
   const selectedEpicId = form.watch('epicId');
   const selectedStoryId = form.watch('storyId');
   useEffect(() => {
-    if (selectedEpicId) form.setValue('storyId', null);
-  }, [selectedEpicId, form]);
+    if (selectedEpicId && selectedStoryId) {
+      form.setValue('storyId', null);
+    }
+  }, [selectedEpicId]);
   useEffect(() => {
-    if (selectedStoryId) form.setValue('epicId', null);
-  }, [selectedStoryId, form]);
+    if (selectedStoryId && selectedEpicId) {
+      form.setValue('epicId', null);
+    }
+  }, [selectedStoryId]);
 
   // AI Improve Handler
   const handleAiImproveDescription = useCallback(async (text: string): Promise<string> => {
@@ -326,7 +333,23 @@ export default function CreateTaskForm({
         queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
         
         // Reset form and close dialog on success
-        form.reset();
+        form.reset({
+          title: "",
+          description: "",
+          workspaceId: workspaceId,
+          priority: "MEDIUM",
+          type: "TASK",
+          epicId: null,
+          storyId: null,
+          taskBoardId: "",
+          columnId: undefined,
+          labels: [],
+          postId: null,
+          dueDate: null,
+          parentTaskId: null,
+          assigneeId: null,
+          reporterId: session?.data?.user?.id || null,
+        });
         onClose();
       },
       onError: (error) => {
@@ -343,9 +366,9 @@ export default function CreateTaskForm({
     if (urlParentTaskId && isOpen && !form.getValues('parentTaskId')) {
       form.setValue("parentTaskId", urlParentTaskId);
     }
-  }, [searchParams, isOpen, form]);
+  }, [searchParams, isOpen]);
 
-  // Reset form when dialog opens/closes
+  // Reset form only when dialog opens (not on every dependency change)
   useEffect(() => {
     if (isOpen) {
       // Reset form with fresh initial data when dialog opens
@@ -368,7 +391,7 @@ export default function CreateTaskForm({
       };
       form.reset(defaultValues);
     }
-  }, [isOpen, initialData, workspaceId, postId, session?.data?.user?.id, form]);
+  }, [isOpen]); // Only depend on isOpen to prevent unwanted resets
 
   // Handle initial column selection when initialData.columnId is provided
   useEffect(() => {
@@ -392,8 +415,6 @@ export default function CreateTaskForm({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
-        // Reset form when dialog closes
-        form.reset();
         onClose();
       }
     }}>
