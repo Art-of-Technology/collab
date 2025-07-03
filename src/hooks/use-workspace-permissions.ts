@@ -1,6 +1,7 @@
-import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useState, useEffect } from "react";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useCurrentUser } from "@/hooks/queries/useUser";
+import { Permission } from "@/lib/permissions";
 
 type WorkspacePermissions = {
   isWorkspaceAdmin: boolean;
@@ -15,57 +16,37 @@ type WorkspacePermissions = {
  * @returns Workspace permission status for the current user
  */
 export function useWorkspacePermissions(): WorkspacePermissions {
-  const { data: session } = useSession();
   const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
-  const [workspaceMember, setWorkspaceMember] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: currentUser } = useCurrentUser();
+  const { checkPermission, isSystemAdmin } = usePermissions(currentWorkspace?.id);
 
-  useEffect(() => {
-    const checkRole = async () => {
-      if (!session?.user?.id || !currentWorkspace?.id || workspaceLoading) {
-        return;
-      }
+  const isLoading = workspaceLoading || !currentUser;
 
-      try {
-        setIsLoading(true);
-        // Fetch the member information to get the user's role in workspace
-        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/members/role`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          setWorkspaceMember(data);
-        }
-      } catch (error) {
-        console.error("Error checking workspace role:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Check if user is workspace admin (has admin permissions or is system admin)
+  const isWorkspaceAdmin =
+    !isLoading &&
+    (isSystemAdmin() ||
+      checkPermission(Permission.MANAGE_WORKSPACE_SETTINGS).hasPermission ||
+      checkPermission(Permission.MANAGE_WORKSPACE_MEMBERS).hasPermission ||
+      checkPermission(Permission.MANAGE_WORKSPACE_PERMISSIONS).hasPermission ||
+      currentWorkspace?.ownerId === currentUser?.id);
 
-    checkRole();
-  }, [session?.user?.id, currentWorkspace?.id, workspaceLoading]);
+  // Check if user is workspace owner specifically
+  const isWorkspaceOwner =
+    !isLoading &&
+    (currentWorkspace?.ownerId === currentUser?.id);
 
-  // Global admin, workspace owner, or workspace admin
-  const isWorkspaceAdmin = 
-    !isLoading && 
-    (session?.user?.role === 'admin' || 
-     workspaceMember?.role === 'admin' ||
-     workspaceMember?.role === 'owner' ||
-     currentWorkspace?.ownerId === session?.user?.id);
-
-  // Workspace owner specifically
-  const isWorkspaceOwner = 
-    !isLoading && 
-    (currentWorkspace?.ownerId === session?.user?.id || 
-     workspaceMember?.role === 'owner');
-
-  // Can manage boards and columns
-  const canManageBoard = isWorkspaceAdmin || isWorkspaceOwner;
+  // Check if user can manage boards and columns
+  const canManageBoard =
+    !isLoading &&
+    (isWorkspaceAdmin ||
+      isWorkspaceOwner ||
+      checkPermission(Permission.MANAGE_BOARD_SETTINGS).hasPermission);
 
   return {
     isWorkspaceAdmin,
     isWorkspaceOwner,
     canManageBoard,
-    isLoading: isLoading || workspaceLoading
+    isLoading
   };
 } 
