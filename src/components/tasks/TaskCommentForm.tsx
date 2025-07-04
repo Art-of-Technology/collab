@@ -142,7 +142,7 @@ export function TaskCommentForm({
     );
   }
 
-  // Handler for editing a comment (placeholder, should call update API)
+  // Handler for editing a comment
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) {
