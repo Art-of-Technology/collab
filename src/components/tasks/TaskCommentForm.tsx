@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { useAddTaskComment, useUpdateTaskComment } from "@/hooks/queries/useTaskComment";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { extractMentionUserIds } from "@/utils/mentions";
@@ -13,15 +13,26 @@ import axios from "axios";
 
 interface TaskCommentFormProps {
   taskId: string;
+  initialContent?: string;
+  commentId?: string;
+  onCancel?: () => void;
+  onSuccess?: () => void;
+  isEdit?: boolean;
 }
 
 export function TaskCommentForm({
-  taskId
+  taskId,
+  initialContent = "",
+  commentId,
+  onCancel,
+  onSuccess,
+  isEdit = false
 }: TaskCommentFormProps) {
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState(initialContent);
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
   const addCommentMutation = useAddTaskComment();
+  const updateCommentMutation = useUpdateTaskComment();
   
   // Get current user data with custom avatar fields
   const { data: currentUser } = useCurrentUser();
@@ -128,6 +139,54 @@ export function TaskCommentForm({
         <div className="h-7 w-7 bg-muted/50 rounded-full animate-pulse" />
         <div className="flex-1 h-20 bg-muted/50 rounded-md animate-pulse" />
       </div>
+    );
+  }
+
+  // Handler for editing a comment (placeholder, should call update API)
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim()) {
+      toast({
+        title: "Error",
+        description: "Comment cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      await updateCommentMutation.mutateAsync({ taskId, commentId: commentId!, content });
+      toast({
+        title: "Success",
+        description: "Comment updated successfully",
+      });
+      if (onSuccess) onSuccess();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update comment",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (isEdit) {
+    return (
+      <form onSubmit={handleEdit} className="space-y-4">
+        <MarkdownEditor
+          onChange={setContent}
+          placeholder="Edit your comment..."
+          minHeight="80px"
+          maxHeight="200px"
+          content={content}
+          onAiImprove={handleAiImprove}
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={updateCommentMutation.isPending}>Cancel</Button>
+          <Button type="submit" size="sm" disabled={!content.trim() || isImproving || updateCommentMutation.isPending}>
+            {updateCommentMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </form>
     );
   }
 

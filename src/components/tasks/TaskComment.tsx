@@ -12,6 +12,7 @@ import Link from "next/link";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useTaskCommentLikes, useToggleTaskCommentLike } from "@/hooks/queries/useTaskComment";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { TaskCommentForm } from "./TaskCommentForm";
 
 export type TaskCommentAuthor = {
   id: string;
@@ -56,6 +57,7 @@ export function TaskComment({
 }: TaskCommentProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const { currentWorkspace } = useWorkspace();
 
   // For debugging - check if author is missing
@@ -130,6 +132,12 @@ export function TaskComment({
               )}
               <button
                 className="text-xs text-muted-foreground hover:text-primary"
+                onClick={() => setIsEditing(true)}
+              >
+                Edit
+              </button>
+              <button
+                className="text-xs text-muted-foreground hover:text-primary"
                 onClick={() => setIsReplying(!isReplying)}
               >
                 Reply
@@ -145,9 +153,21 @@ export function TaskComment({
               onCancel={() => setIsReplying(false)}
             />
           )}
+          {isEditing && (
+            <div className="mt-2">
+              <TaskCommentForm
+                taskId={taskId}
+                initialContent={comment.content}
+                commentId={comment.id}
+                onCancel={() => setIsEditing(false)}
+                onSuccess={() => setIsEditing(false)}
+                isEdit
+              />
+            </div>
+          )}
         </div>
         <button
-          className={`flex ml-auto items-center hover:text-primary ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+          className={`flex items-center hover:text-primary ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
           onClick={handleLike}
           disabled={toggleLikeMutation.isPending}
         >
