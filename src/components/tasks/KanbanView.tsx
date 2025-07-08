@@ -407,7 +407,7 @@ export default function KanbanView() {
 
   return (
     <>
-      <div className="sticky top-16 pt-4 z-40 backdrop-blur-sm mt-0">
+      <div className="sticky top-16 pt-4 z-40 w-full bg-background backdrop-blur-sm mt-0">
         <KanbanFilters
           onSearchChange={setSearchTerm}
           onTypeFilter={setSelectedTypes}
@@ -421,165 +421,167 @@ export default function KanbanView() {
         />
       </div>
 
-      <div className="flex justify-between items-center my-4">
-        <h3 className="text-md font-medium">Board Columns</h3>
-
-        {permissionsLoading ? (
-          <Button size="sm" variant="outline" disabled>
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            Loading...
-          </Button>
-        ) : canManageBoard && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setEditingColumnId(null);
-              setNewColumnName("");
-              setIsColumnDialogOpen(true);
-            }}
-            disabled={isLoading}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add Column
-          </Button>
-        )}
-      </div>
-
-      {(!localBoardState.columns || localBoardState.columns.length === 0) ? (
-        <div className="text-center py-16">
-          <h3 className="text-xl font-medium">No columns found</h3>
-          <p className="text-muted-foreground">This board doesn&apos;t have any columns yet.</p>
+      <div className="w-full overflow-hidden">
+        <div className="flex justify-between items-center my-4">
+          <h3 className="text-md font-medium">Board Columns</h3>
 
           {permissionsLoading ? (
-            <Button className="mt-4" disabled>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Button size="sm" variant="outline" disabled>
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               Loading...
             </Button>
           ) : canManageBoard && (
             <Button
-              className="mt-4"
+              size="sm"
+              variant="outline"
               onClick={() => {
                 setEditingColumnId(null);
                 setNewColumnName("");
                 setIsColumnDialogOpen(true);
               }}
+              disabled={isLoading}
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4 mr-1" />
               Add Column
             </Button>
           )}
         </div>
-      ) : (
-        <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
-          <Droppable droppableId="columns" direction="horizontal" type="column">
-            {(provided) => (
-              <div
-                className="grid grid-flow-col auto-cols-[300px] gap-4 pb-4"
-                ref={provided.innerRef}
-                {...provided.droppableProps}
+
+        {(!localBoardState.columns || localBoardState.columns.length === 0) ? (
+          <div className="text-center py-16">
+            <h3 className="text-xl font-medium">No columns found</h3>
+            <p className="text-muted-foreground">This board doesn&apos;t have any columns yet.</p>
+
+            {permissionsLoading ? (
+              <Button className="mt-4" disabled>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading...
+              </Button>
+            ) : canManageBoard && (
+              <Button
+                className="mt-4"
+                onClick={() => {
+                  setEditingColumnId(null);
+                  setNewColumnName("");
+                  setIsColumnDialogOpen(true);
+                }}
               >
-                {(localBoardState.columns || [])
-                  .sort((a: any, b: any) => a.order - b.order)
-                  .map((column: any, index: number) => {
-                    const filteredTasks = getFilteredTasks(column.tasks);
-
-                    return (
-                      <Draggable
-                        key={column.id}
-                        draggableId={column.id}
-                        index={index}
-                        isDragDisabled={!canManageBoard}
-                      >
-                        {(provided) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            className="w-full"
-                          >
-                            <GroupedColumn
-                              columnId={column.id}
-                              columnName={column.name}
-                              columnColor={column.color}
-                              tasks={filteredTasks}
-                              groupBy={groupBy}
-                              canManageBoard={canManageBoard}
-                              dragHandleProps={provided.dragHandleProps}
-                              onCreateTask={handleCreateTask}
-                              onColumnEdit={canManageBoard ? handleColumnEdit : undefined}
-                              onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
-                              highlightedIds={highlightedIds}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
-                {provided.placeholder}
-              </div>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Column
+              </Button>
             )}
-          </Droppable>
-        </DragDropContext>
-      )}
-
-      {/* Column Edit/Create Dialog */}
-      <Dialog open={isColumnDialogOpen} onOpenChange={setIsColumnDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>
-              {editingColumnId ? "Edit Column" : "Create New Column"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="column-name">Column Name</Label>
-              <Input
-                id="column-name"
-                placeholder="Enter column name"
-                value={newColumnName}
-                onChange={(e) => setNewColumnName(e.target.value)}
-                autoFocus
-              />
-            </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsColumnDialogOpen(false);
-                setNewColumnName("");
-                setEditingColumnId(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleColumnSubmit}
-              disabled={isLoading || !newColumnName.trim()}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {editingColumnId ? "Updating..." : "Creating..."}
-                </>
-              ) : (
-                editingColumnId ? "Update Column" : "Create Column"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
+            <Droppable droppableId="columns" direction="horizontal" type="column">
+              {(provided) => (
+                <div
+                  className="grid grid-flow-col overflow-auto w-full auto-cols-[300px] gap-4 pb-4"
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                >
+                  {(localBoardState.columns || [])
+                    .sort((a: any, b: any) => a.order - b.order)
+                    .map((column: any, index: number) => {
+                      const filteredTasks = getFilteredTasks(column.tasks);
 
-      {/* Quick Task Creation Dialog */}
-      <CreateTaskForm
-        key={`quick-task-${quickTaskColumnId}`}
-        isOpen={isQuickTaskOpen}
-        onClose={() => setIsQuickTaskOpen(false)}
-        initialData={{
-          taskBoardId: selectedBoardId,
-          columnId: quickTaskColumnId || undefined
-        }}
-      />
+                      return (
+                        <Draggable
+                          key={column.id}
+                          draggableId={column.id}
+                          index={index}
+                          isDragDisabled={!canManageBoard}
+                        >
+                          {(provided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className="w-full"
+                            >
+                              <GroupedColumn
+                                columnId={column.id}
+                                columnName={column.name}
+                                columnColor={column.color}
+                                tasks={filteredTasks}
+                                groupBy={groupBy}
+                                canManageBoard={canManageBoard}
+                                dragHandleProps={provided.dragHandleProps}
+                                onCreateTask={handleCreateTask}
+                                onColumnEdit={canManageBoard ? handleColumnEdit : undefined}
+                                onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
+                                highlightedIds={highlightedIds}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        )}
+
+        {/* Column Edit/Create Dialog */}
+        <Dialog open={isColumnDialogOpen} onOpenChange={setIsColumnDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingColumnId ? "Edit Column" : "Create New Column"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="column-name">Column Name</Label>
+                <Input
+                  id="column-name"
+                  placeholder="Enter column name"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsColumnDialogOpen(false);
+                  setNewColumnName("");
+                  setEditingColumnId(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleColumnSubmit}
+                disabled={isLoading || !newColumnName.trim()}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {editingColumnId ? "Updating..." : "Creating..."}
+                  </>
+                ) : (
+                  editingColumnId ? "Update Column" : "Create Column"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quick Task Creation Dialog */}
+        <CreateTaskForm
+          key={`quick-task-${quickTaskColumnId}`}
+          isOpen={isQuickTaskOpen}
+          onClose={() => setIsQuickTaskOpen(false)}
+          initialData={{
+            taskBoardId: selectedBoardId,
+            columnId: quickTaskColumnId || undefined
+          }}
+        />
+      </div>
     </>
   );
 } 
