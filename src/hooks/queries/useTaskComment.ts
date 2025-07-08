@@ -5,7 +5,8 @@ import {
   getTaskComments, 
   addTaskComment, 
   toggleTaskCommentLike, 
-  getTaskCommentLikes 
+  getTaskCommentLikes, 
+  updateTaskComment
 } from '@/actions/taskComment';
 
 // Define query keys
@@ -72,6 +73,21 @@ export function useToggleTaskCommentLike() {
       queryClient.invalidateQueries({ queryKey: taskCommentKeys.likesForComment(taskId, commentId) });
       
       // Also invalidate all comments to update like counts
+      queryClient.invalidateQueries({ queryKey: taskCommentKeys.list(taskId) });
+    },
+  });
+}
+
+/**
+ * Hook to update a task comment
+ */
+export function useUpdateTaskComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, commentId, content }: { taskId: string; commentId: string; content: string }) =>
+      updateTaskComment(taskId, commentId, content),
+    onSuccess: (_, { taskId }) => {
+      // Invalidate task comments query
       queryClient.invalidateQueries({ queryKey: taskCommentKeys.list(taskId) });
     },
   });
