@@ -62,7 +62,7 @@ export default function KanbanBoard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center w-full sticky top-0 pt-4 z-40 bg-background backdrop-blur-sm">
+      <div className="flex justify-between items-center w-full sticky top-0 pt-4 z-40 bg-[#191919] backdrop-blur-sm">
         <div>
           <h2 className="text-xl font-semibold">{selectedBoard.name}</h2>
           {selectedBoard.description && (
