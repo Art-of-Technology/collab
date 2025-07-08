@@ -82,7 +82,7 @@ export default function LandingPage() {
                         <span className="hidden sm:inline">One Click at a Time</span>
                     </h1>
                     <p className="text-base sm:text-lg text-gray-600 mb-6 sm:mb-8 px-2 max-w-2xl mx-auto leading-relaxed">
-                        Collab is a collaborative platform designed to streamline your workflow and enhance team productivity. Whether you're managing projects, brainstorming ideas, or tracking tasks, Collab has you covered.
+                        Collab is a collaborative platform designed to streamline your workflow and enhance team productivity. Whether you&apos;re managing projects, brainstorming ideas, or tracking tasks, Collab has you covered.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
                         <Link 
@@ -119,7 +119,7 @@ export default function LandingPage() {
                                     Your new <br />collaboration partner.
                                 </h2>
                                 <p className="text-gray-600 dark:text-gray-300 mb-4 sm:mb-6 text-sm sm:text-base leading-relaxed">
-                                    Ditch the clunky tools and bring your team together on a platform that's built for real collaboration. Chat, plan, and execute—all in one place, without losing momentum.
+                                    Ditch the clunky tools and bring your team together on a platform that&apos;s built for real collaboration. Chat, plan, and execute—all in one place, without losing momentum.
                                 </p>
                             </div>
                             <ul className="space-y-3 sm:space-y-4 text-gray-700 dark:text-gray-300 mt-4 sm:mt-8">
@@ -211,7 +211,7 @@ export default function LandingPage() {
                         </div>
                         <div>
                             <h4 className="text-base sm:text-lg font-semibold mb-2">Customisable for Teams</h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">Whether you're a startup or an enterprise, Collab fits your structure and scale.</p>
+                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">Whether you&apos;re a startup or an enterprise, Collab fits your structure and scale.</p>
                         </div>
                         <div>
                             <h4 className="text-base sm:text-lg font-semibold mb-2">No Learning Curve</h4>
@@ -225,7 +225,7 @@ export default function LandingPage() {
                     <div className="max-w-6xl mx-auto text-center mb-8 sm:mb-16">
                         <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Simple pricing for every team</h2>
                         <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base px-4">
-                            Choose the plan that fits your team's needs. Upgrade any time.
+                            Choose the plan that fits your team&apos;s needs. Upgrade any time.
                         </p>
                     </div>
 
@@ -293,7 +293,7 @@ export default function LandingPage() {
                 {/* Call to Action Section */}
                 <section className="w-full py-12 sm:py-20 px-4 text-center bg-green-900 text-white rounded-lg mt-12 sm:mt-20 mb-12 sm:mb-20">
                     <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 px-2">Ready to streamline your workflow?</h2>
-                    <p className="mb-6 text-base sm:text-lg px-4 max-w-2xl mx-auto">Start your journey with Collab today. It's free and takes less than 2 minutes to get started.</p>
+                    <p className="mb-6 text-base sm:text-lg px-4 max-w-2xl mx-auto">Start your journey with Collab today. It&apos;s free and takes less than 2 minutes to get started.</p>
                     <Link href="/login">
                         <Button className="bg-white text-green-900 font-semibold hover:bg-gray-100 px-6 py-3 rounded-md">
                             Get Started
