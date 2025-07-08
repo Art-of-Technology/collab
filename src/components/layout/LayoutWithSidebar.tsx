@@ -36,38 +36,51 @@ export default function LayoutWithSidebar({
         userImage={session.user.image || ''}
       />
 
-      {/* Toggle Button - fixed position */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleSidebar}
-        className={`fixed z-50 top-1/2 -translate-y-1/2 hidden md:flex items-center justify-center ${isCollapsed
-            ? 'left-[16px] md:left-[16px]' // When collapsed
-            : 'left-[254px]'               // When expanded
-          } bg-[#1c1c1c] hover:bg-[#2a2929] rounded-full p-1 shadow-md border border-[#333] h-8 w-8`}
-      >
-        {isCollapsed ? (
-          <ChevronRightIcon className="h-5 w-5 text-gray-300" />
-        ) : (
-          <ChevronLeftIcon className="h-5 w-5 text-gray-300" />
-        )}
-      </Button>
-
       <div className="flex h-[calc(100vh-4rem)]">
         {/* Left sidebar - responsive */}
         <div
           className={`${isCollapsed ? 'w-16' : 'w-64'
-            } fixed top-16 bottom-0 left-0 bg-[#191919] border-r border-[#2a2929] z-30 overflow-y-auto transition-all duration-300 ease-in-out ${isCollapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0'
+            } fixed top-16 bottom-0 left-0 bg-[#191919] z-30 overflow-y-auto transition-all duration-300 ease-in-out ${isCollapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0'
             }`}
         >
-          <div className="p-4">
-            <Sidebar
-              pathname={pathname}
-              isCollapsed={isCollapsed}
-              toggleSidebar={toggleSidebar}
-            />
+          {/* Sidebar content with border */}
+          <div className="h-full border-r border-[#2a2929] relative">
+            <div className="p-4">
+              <Sidebar
+                pathname={pathname}
+                isCollapsed={isCollapsed}
+                toggleSidebar={toggleSidebar}
+              />
+            </div>
           </div>
         </div>
+
+        {/* Toggle Button - positioned outside sidebar but accessible */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleSidebar}
+          className={`fixed top-1/2 -translate-y-1/2 z-50 hidden md:flex items-center justify-center bg-[#191919] hover:bg-[#2a2929] h-12 w-6 border-t border-r border-b border-[#2a2929] transition-all duration-300 ease-in-out ${
+            isCollapsed 
+              ? 'left-[64px]'  // When collapsed
+              : 'left-[256px]' // When expanded
+          }`}
+          style={{
+            borderLeft: 'none',
+            borderTopRightRadius: '6px',
+            borderBottomRightRadius: '6px',
+            borderTopLeftRadius: '0px',
+            borderBottomLeftRadius: '0px'
+          }}
+        >
+          {/* Border cover inside the button */}
+          <div className="absolute left-[-1px] top-0 w-[1px] h-full bg-[#191919]"></div>
+          {isCollapsed ? (
+            <ChevronRightIcon className="h-4 w-4 text-gray-300" />
+          ) : (
+            <ChevronLeftIcon className="h-4 w-4 text-gray-300" />
+          )}
+        </Button>
 
         {/* Dark overlay when sidebar is open on mobile */}
         {!isCollapsed && (
@@ -95,4 +108,4 @@ export default function LayoutWithSidebar({
       </div>
     </div>
   );
-} 
+}
