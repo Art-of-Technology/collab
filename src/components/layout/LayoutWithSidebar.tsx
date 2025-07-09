@@ -59,19 +59,14 @@ export default function LayoutWithSidebar({
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Toggle Sidebar"
+          aria-expanded={isCollapsed}
           onClick={toggleSidebar}
-          className={`fixed top-1/2 -translate-y-1/2 z-50 hidden md:flex items-center justify-center bg-[#191919] hover:bg-[#2a2929] h-12 w-6 border-t border-r border-b border-[#2a2929] transition-all duration-300 ease-in-out ${
+          className={`fixed top-1/2 -translate-y-1/2 z-50 hidden md:flex items-center justify-center bg-[#191919] hover:bg-[#2a2929] h-12 w-6 border-t border-r border-b border-[#2a2929] transition-all duration-300 ease-in-out rounded-tr-md rounded-br-md  ${
             isCollapsed 
-              ? 'left-[64px]'  // When collapsed
-              : 'left-[256px]' // When expanded
+              ? 'left-16'  // When collapsed
+              : 'left-64' // When expanded
           }`}
-          style={{
-            borderLeft: 'none',
-            borderTopRightRadius: '6px',
-            borderBottomRightRadius: '6px',
-            borderTopLeftRadius: '0px',
-            borderBottomLeftRadius: '0px'
-          }}
         >
           {/* Border cover inside the button */}
           <div className="absolute left-[-1px] top-0 w-[1px] h-full bg-[#191919]"></div>
