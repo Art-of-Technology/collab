@@ -220,7 +220,7 @@ export default function PostActions({
               ) : (
                 <ClipboardDocumentIcon className="h-4 w-4" />
               )}
-              <span>Copy</span>
+              <span className="hidden sm:inline">Copy</span>
             </Button>
           </div>
         </DialogContent>
