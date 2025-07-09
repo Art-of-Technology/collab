@@ -407,7 +407,7 @@ export default function KanbanView() {
 
   return (
     <>
-      <div className="sticky top-16 pt-4 z-40 w-full bg-background backdrop-blur-sm mt-0">
+      <div className="sticky top-16 pt-4 z-40 w-full bg-[#191919] backdrop-blur-sm mt-0">
         <KanbanFilters
           onSearchChange={setSearchTerm}
           onTypeFilter={setSelectedTypes}
