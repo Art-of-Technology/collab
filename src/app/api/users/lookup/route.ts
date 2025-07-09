@@ -29,24 +29,28 @@ export async function POST(req: NextRequest) {
     }
     
     const { usernames, workspaceId } = validationResult.data;
-    
+
     // Look up users by usernames
     // We use email to match username parts for simplicity
     // email is in format username@domain.com
     const users = await prisma.user.findMany({
       where: {
-        OR: usernames.map(username => ({
-          OR: [
-            { name: { equals: username, mode: 'insensitive' } },
-            { email: { contains: username, mode: 'insensitive' } }
-          ]
-        })),
-        ...(workspaceId ? {
-          OR: [
-            { ownedWorkspaces: { some: { id: workspaceId } } },
-            { workspaceMemberships: { some: { workspaceId } } }
-          ]
-        } : {}),
+        AND: [
+          {
+            OR: usernames.map(username => ({
+              OR: [
+                { name: { equals: username, mode: 'insensitive' } },
+                { email: { contains: username, mode: 'insensitive' } }
+              ]
+            }))
+          },
+          ...(workspaceId ? [{
+            OR: [
+              { ownedWorkspaces: { some: { id: workspaceId } } },
+              { workspaceMemberships: { some: { workspaceId } } }
+            ]
+          }] : [])
+        ]
       },
       select: {
         id: true,
