@@ -14,8 +14,8 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
 
   const { id } = params;
 
-  // Combined DB call: find task and check workspace access
-  const taskWithWorkspace = await prisma.task.findFirst({
+  // DB call: find task and check workspace access
+  const task = await prisma.task.findFirst({
     where: {
       OR: [
         { id },
@@ -37,11 +37,11 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
     },
   });
 
-  if (!taskWithWorkspace) {
+  if (!task) {
     notFound();
   }
 
-  const { workspace } = taskWithWorkspace;
+  const { workspace } = task;
   const userHasAccess =
     workspace.ownerId === session.user.id ||
     workspace.members.some((member) => member.userId === session.user.id);
@@ -51,9 +51,14 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
     notFound();
   }
 
+  // Check if required fields exist
+  if (!task.workspaceId || !task.taskBoardId) {
+    notFound();
+  }
+
   // Build canonical URL with URL-encoded values
-  const encodedWorkspaceId = encodeURIComponent(task.workspaceId || '');
-  const encodedTaskBoardId = encodeURIComponent(task.taskBoardId || '');
+  const encodedWorkspaceId = encodeURIComponent(task.workspaceId);
+  const encodedTaskBoardId = encodeURIComponent(task.taskBoardId);
   const encodedTaskId = encodeURIComponent(task.id);
   
   const canonicalUrl = `/${encodedWorkspaceId}/tasks?board=${encodedTaskBoardId}&taskId=${encodedTaskId}`;
