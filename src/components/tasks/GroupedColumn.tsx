@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen, Edit2, Check, X, Trash2, Tag } from "lucide-react";
-import { Droppable, Draggable } from "@hello-pangea/dnd";
+import { Draggable } from "@hello-pangea/dnd";
 import EnhancedTaskCard from "./EnhancedTaskCard";
 import { GroupingOption } from "./KanbanFilters";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -33,6 +33,7 @@ interface GroupedColumnProps {
   onColumnEdit?: (columnId: string, name: string) => Promise<void>;
   onColumnDelete?: (columnId: string) => Promise<void>;
   highlightedIds?: string[];
+  placeholder?: React.ReactNode;
 }
 
 export default function GroupedColumn({
@@ -46,7 +47,8 @@ export default function GroupedColumn({
   onCreateTask,
   onColumnEdit,
   onColumnDelete,
-  highlightedIds = []
+  highlightedIds = [],
+  placeholder
 }: GroupedColumnProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isEditingColumnName, setIsEditingColumnName] = useState(false);
@@ -355,137 +357,124 @@ export default function GroupedColumn({
       </CardHeader>
 
       <CardContent className="px-2 pb-2 space-y-2">
-        <Droppable droppableId={columnId} type="task">
-          {(provided, snapshot) => (
-            <div
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              className={`min-h-[100px] rounded-sm transition-colors ${snapshot.isDraggingOver ? "bg-muted/50" : ""
-                }`}
-            >
-              {groups.map((group, groupIndex) => (
-                <div key={group.id} className="mb-2">
-                  {groupBy !== 'none' && (
-                    <Collapsible
-                      open={!collapsedGroups[group.id]}
-                      onOpenChange={() => toggleGroup(group.id)}
-                    >
-                      <div className="flex items-center py-1 px-1">
-                        <CollapsibleTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 p-1">
-                            {collapsedGroups[group.id] ? (
-                              <ChevronRight className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </CollapsibleTrigger>
-                        <div className="flex items-center gap-1 text-xs font-medium">
-                          {group.icon}
-                          {group.name}
-                          <Badge variant="outline" className="ml-1 text-[10px]">
-                            {group.items.length}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {!collapsedGroups[group.id] && <Separator className="my-1" />}
-
-                      <CollapsibleContent>
-                        {group.items.map((item, taskIndex) => (
-                          <Draggable
-                            key={item.id}
-                            draggableId={item.id}
-                            index={taskIndex + (groupIndex * 1000)} // Ensure unique indices across groups
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`mb-2 transition-shadow ${snapshot.isDragging ? "shadow-lg" : ""
-                                  }`}
-                              >
-                                <EnhancedTaskCard
-                                  id={item.id}
-                                  title={item.title}
-                                  type={item.type || 'TASK'}
-                                  priority={item.priority}
-                                  assignee={item.assignee}
-                                  reporter={item.reporter}
-                                  commentCount={item._count?.comments || 0}
-                                  attachmentCount={item._count?.attachments || 0}
-                                  issueKey={item.issueKey}
-                                  isMilestone={item.type === 'MILESTONE'}
-                                  isEpic={item.type === 'EPIC'}
-                                  isStory={item.type === 'STORY'}
-                                  milestoneTitle={item.milestone?.title}
-                                  epicTitle={item.epic?.title}
-                                  storyTitle={item.story?.title}
-                                  color={item.color}
-                                  entityType={item.entityType}
-                                  dueDate={item.dueDate}
-                                  _count={item._count}
-                                  isHighlighted={highlightedIds.includes(item.id)}
-                                />
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-
-                  {groupBy === 'none' && (
-                    <>
-                      {group.items.map((item, taskIndex) => (
-                        <Draggable
-                          key={item.id}
-                          draggableId={item.id}
-                          index={taskIndex}
-                        >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className={`mb-2 transition-shadow ${snapshot.isDragging ? "shadow-lg" : ""
-                                }`}
-                            >
-                              <EnhancedTaskCard
-                                id={item.id}
-                                title={item.title}
-                                type={item.type || 'TASK'}
-                                priority={item.priority}
-                                assignee={item.assignee}
-                                reporter={item.reporter}
-                                commentCount={item._count?.comments || 0}
-                                attachmentCount={item._count?.attachments || 0}
-                                issueKey={item.issueKey}
-                                isMilestone={item.type === 'MILESTONE'}
-                                isEpic={item.type === 'EPIC'}
-                                isStory={item.type === 'STORY'}
-                                milestoneTitle={item.milestone?.title}
-                                epicTitle={item.epic?.title}
-                                storyTitle={item.story?.title}
-                                color={item.color}
-                                entityType={item.entityType}
-                                dueDate={item.dueDate}
-                                _count={item._count}
-                                isHighlighted={highlightedIds.includes(item.id)}
-                              />
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                    </>
-                  )}
+        {groups.map((group, groupIndex) => (
+          <div key={group.id} className="mb-2">
+            {groupBy !== 'none' && (
+              <Collapsible
+                open={!collapsedGroups[group.id]}
+                onOpenChange={() => toggleGroup(group.id)}
+              >
+                <div className="flex items-center py-1 px-1">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 p-1">
+                      {collapsedGroups[group.id] ? (
+                        <ChevronRight className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <div className="flex items-center gap-1 text-xs font-medium">
+                    {group.icon}
+                    {group.name}
+                    <Badge variant="outline" className="ml-1 text-[10px]">
+                      {group.items.length}
+                    </Badge>
+                  </div>
                 </div>
-              ))}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
+
+                {!collapsedGroups[group.id] && <Separator className="my-1" />}
+
+                <CollapsibleContent>
+                  {group.items.map((item, taskIndex) => (
+                    <Draggable
+                      key={item.id}
+                      draggableId={item.id}
+                      index={taskIndex + (groupIndex * 1000)} // Ensure unique indices across groups
+                    >
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="mb-2 transition-shadow"
+                        >
+                          <EnhancedTaskCard
+                            id={item.id}
+                            title={item.title}
+                            type={item.type || 'TASK'}
+                            priority={item.priority}
+                            assignee={item.assignee}
+                            reporter={item.reporter}
+                            commentCount={item._count?.comments || 0}
+                            attachmentCount={item._count?.attachments || 0}
+                            issueKey={item.issueKey}
+                            isMilestone={item.type === 'MILESTONE'}
+                            isEpic={item.type === 'EPIC'}
+                            isStory={item.type === 'STORY'}
+                            milestoneTitle={item.milestone?.title}
+                            epicTitle={item.epic?.title}
+                            storyTitle={item.story?.title}
+                            color={item.color}
+                            entityType={item.entityType}
+                            dueDate={item.dueDate}
+                            _count={item._count}
+                            isHighlighted={highlightedIds.includes(item.id)}
+                          />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {groupBy === 'none' && (
+              <>
+                {group.items.map((item, taskIndex) => (
+                  <Draggable
+                    key={item.id}
+                    draggableId={item.id}
+                    index={taskIndex}
+                  >
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className="mb-2 transition-shadow"
+                      >
+                        <EnhancedTaskCard
+                          id={item.id}
+                          title={item.title}
+                          type={item.type || 'TASK'}
+                          priority={item.priority}
+                          assignee={item.assignee}
+                          reporter={item.reporter}
+                          commentCount={item._count?.comments || 0}
+                          attachmentCount={item._count?.attachments || 0}
+                          issueKey={item.issueKey}
+                          isMilestone={item.type === 'MILESTONE'}
+                          isEpic={item.type === 'EPIC'}
+                          isStory={item.type === 'STORY'}
+                          milestoneTitle={item.milestone?.title}
+                          epicTitle={item.epic?.title}
+                          storyTitle={item.story?.title}
+                          color={item.color}
+                          entityType={item.entityType}
+                          dueDate={item.dueDate}
+                          _count={item._count}
+                          isHighlighted={highlightedIds.includes(item.id)}
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+              </>
+            )}
+          </div>
+        ))}
+        {placeholder}
       </CardContent>
     </Card>
   );

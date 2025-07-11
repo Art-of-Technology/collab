@@ -492,25 +492,37 @@ export default function KanbanView() {
                           index={index}
                           isDragDisabled={!canManageBoard}
                         >
-                          {(provided) => (
+                          {(draggableProvided) => (
                             <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className="w-full"
+                              ref={draggableProvided.innerRef}
+                              {...draggableProvided.draggableProps}
+                              className="w-full flex flex-col h-full"
                             >
-                              <GroupedColumn
-                                columnId={column.id}
-                                columnName={column.name}
-                                columnColor={column.color}
-                                tasks={filteredTasks}
-                                groupBy={groupBy}
-                                canManageBoard={canManageBoard}
-                                dragHandleProps={provided.dragHandleProps}
-                                onCreateTask={handleCreateTask}
-                                onColumnEdit={canManageBoard ? handleColumnEdit : undefined}
-                                onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
-                                highlightedIds={highlightedIds}
-                              />
+                              <Droppable droppableId={column.id} type="task">
+                                {(droppableProvided, droppableSnapshot) => (
+                                  <div
+                                    ref={droppableProvided.innerRef}
+                                    {...droppableProvided.droppableProps}
+                                    className="flex flex-col h-full"
+                                    style={{ minHeight: '100%' }}
+                                  >
+                                    <GroupedColumn
+                                      columnId={column.id}
+                                      columnName={column.name}
+                                      columnColor={column.color}
+                                      tasks={filteredTasks}
+                                      groupBy={groupBy}
+                                      canManageBoard={canManageBoard}
+                                      dragHandleProps={draggableProvided.dragHandleProps}
+                                      onCreateTask={handleCreateTask}
+                                      onColumnEdit={canManageBoard ? handleColumnEdit : undefined}
+                                      onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
+                                      highlightedIds={highlightedIds}
+                                      placeholder={droppableProvided.placeholder}
+                                    />
+                                  </div>
+                                )}
+                              </Droppable>
                             </div>
                           )}
                         </Draggable>
