@@ -9,7 +9,8 @@ interface PageProps {
 export default async function TaskShortlinkPage({ params }: PageProps) {
   const session = await getAuthSession();
   if (!session?.user) {
-    redirect("/login");
+    const callbackUrl = `/tasks/${encodeURIComponent(params.id)}`;
+    redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
   const { id } = params;
