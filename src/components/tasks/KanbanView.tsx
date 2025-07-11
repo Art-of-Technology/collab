@@ -499,7 +499,7 @@ export default function KanbanView() {
                               className="w-full flex flex-col h-full"
                             >
                               <Droppable droppableId={column.id} type="task">
-                                {(droppableProvided, droppableSnapshot) => (
+                                {(droppableProvided, _droppableSnapshot) => (
                                   <div
                                     ref={droppableProvided.innerRef}
                                     {...droppableProvided.droppableProps}
