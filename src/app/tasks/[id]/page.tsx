@@ -33,7 +33,30 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
     notFound();
   }
 
-  // Build canonical URL
-  const canonicalUrl = `/${task.workspaceId}/tasks?board=${task.taskBoardId}&taskId=${task.id}`;
+  // Check if user has access to the workspace (either as owner or member)
+  const workspaceAccess = await prisma.workspace.findFirst({
+    where: {
+      id: task.workspaceId,
+      OR: [
+        { ownerId: session.user.id }, // User is the owner
+        { members: { some: { userId: session.user.id } } } // User is a member
+      ]
+    },
+    select: {
+      id: true,
+    }
+  });
+
+  if (!workspaceAccess) {
+    // User doesn't have access to this workspace
+    notFound();
+  }
+
+  // Build canonical URL with URL-encoded values
+  const encodedWorkspaceId = encodeURIComponent(task.workspaceId || '');
+  const encodedTaskBoardId = encodeURIComponent(task.taskBoardId || '');
+  const encodedTaskId = encodeURIComponent(task.id);
+  
+  const canonicalUrl = `/${encodedWorkspaceId}/tasks?board=${encodedTaskBoardId}&taskId=${encodedTaskId}`;
   redirect(canonicalUrl);
 } 
