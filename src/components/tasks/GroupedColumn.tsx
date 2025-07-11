@@ -392,12 +392,12 @@ export default function GroupedColumn({
                       draggableId={item.id}
                       index={taskIndex + (groupIndex * 1000)} // Ensure unique indices across groups
                     >
-                      {(provided) => (
+                      {(provided, snapshot) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           {...provided.dragHandleProps}
-                          className="mb-2 transition-shadow"
+                          className={`mb-2 transition-shadow ${snapshot.isDragging ? "shadow-lg" : ""}`}
                         >
                           <EnhancedTaskCard
                             id={item.id}
@@ -437,12 +437,12 @@ export default function GroupedColumn({
                     draggableId={item.id}
                     index={taskIndex}
                   >
-                    {(provided) => (
+                    {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        className="mb-2 transition-shadow"
+                        className={`mb-2 transition-shadow ${snapshot.isDragging ? "shadow-lg" : ""}`}
                       >
                         <EnhancedTaskCard
                           id={item.id}

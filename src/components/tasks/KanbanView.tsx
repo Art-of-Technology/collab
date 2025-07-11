@@ -503,7 +503,7 @@ export default function KanbanView() {
                                   <div
                                     ref={droppableProvided.innerRef}
                                     {...droppableProvided.droppableProps}
-                                    className="flex flex-col h-full"
+                                    className={`flex flex-col h-full ${droppableSnapshot.isDraggingOver ? 'bg-background' : ''}`}
                                     style={{ minHeight: '100%' }}
                                   >
                                     <GroupedColumn
