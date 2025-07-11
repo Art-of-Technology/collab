@@ -16,13 +16,8 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
   const { id } = params;
 
   // DB call: find task and check workspace access
-  const task = await prisma.task.findFirst({
-    where: {
-      OR: [
-        { id },
-        { issueKey: id },
-      ],
-    },
+  let task = await prisma.task.findUnique({
+    where: { id },
     include: {
       workspace: {
         select: {
