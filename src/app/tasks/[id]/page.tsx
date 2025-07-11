@@ -14,40 +14,39 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
 
   const { id } = params;
 
-  // Single DB call: find by id OR issueKey
-  const task = await prisma.task.findFirst({
+  // Combined DB call: find task and check workspace access
+  const taskWithWorkspace = await prisma.task.findFirst({
     where: {
       OR: [
         { id },
         { issueKey: id },
       ],
     },
-    select: {
-      id: true,
-      workspaceId: true,
-      taskBoardId: true,
+    include: {
+      workspace: {
+        select: {
+          id: true,
+          ownerId: true,
+          members: {
+            select: {
+              userId: true,
+            },
+          },
+        },
+      },
     },
   });
 
-  if (!task) {
+  if (!taskWithWorkspace) {
     notFound();
   }
 
-  // Check if user has access to the workspace (either as owner or member)
-  const workspaceAccess = await prisma.workspace.findFirst({
-    where: {
-      id: task.workspaceId,
-      OR: [
-        { ownerId: session.user.id }, // User is the owner
-        { members: { some: { userId: session.user.id } } } // User is a member
-      ]
-    },
-    select: {
-      id: true,
-    }
-  });
+  const { workspace } = taskWithWorkspace;
+  const userHasAccess =
+    workspace.ownerId === session.user.id ||
+    workspace.members.some((member) => member.userId === session.user.id);
 
-  if (!workspaceAccess) {
+  if (!userHasAccess) {
     // User doesn't have access to this workspace
     notFound();
   }
