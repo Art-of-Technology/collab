@@ -62,7 +62,7 @@ export default function LayoutWithSidebar({
           aria-label="Toggle Sidebar"
           aria-expanded={isCollapsed}
           onClick={toggleSidebar}
-          className={`fixed top-1/2 -translate-y-1/2 z-50 hidden md:flex items-center justify-center bg-[#191919] hover:bg-[#2a2929] focus-visible:ring focus-visible:outline-none h-12 w-6 border-1 border-t border-r border-b border-[#2a2929] transition-all duration-300 ease-in-out rounded-tr-md rounded-br-md  ${
+          className={`fixed top-1/2 -translate-y-1/2 z-50 hidden md:flex items-center justify-center bg-[#191919] hover:bg-[#2a2929] focus-visible:ring focus-visible:outline-none h-12 w-6 border-t border-r border-b border-[#2a2929] transition-all duration-300 ease-in-out border border-l-0 rounded-r-md rounded-l-none  ${
             isCollapsed 
               ? 'left-16'  // When collapsed
               : 'left-64' // When expanded
