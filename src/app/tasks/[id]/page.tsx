@@ -7,56 +7,61 @@ interface PageProps {
 }
 
 export default async function TaskShortlinkPage({ params }: PageProps) {
-  const session = await getAuthSession();
-  if (!session?.user) {
-    const callbackUrl = `/tasks/${encodeURIComponent(params.id)}`;
-    redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-  }
-
   const { id } = params;
 
-  // DB call: find task and check workspace access
-  let task = await prisma.task.findUnique({
-    where: { id },
-    include: {
-      workspace: {
-        select: {
-          id: true,
-          ownerId: true,
-          members: {
-            select: {
-              userId: true,
-            },
-          },
+  const task =
+    (await prisma.task.findUnique({
+      where: { id },
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            ownerId: true,
+            members: { select: { userId: true } }
+          }
         },
-      },
-    },
-  });
+        taskBoard: { select: { id: true } }
+      }
+    })) ||
+    (await prisma.task.findFirst({
+      where: { issueKey: id },
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            ownerId: true,
+            members: { select: { userId: true } }
+          }
+        },
+        taskBoard: { select: { id: true } }
+      }
+    }));
 
   if (!task) {
     notFound();
   }
 
-  const { workspace } = task;
+  if (!task.workspace || !task.taskBoard) {
+    notFound();
+  }
+
+  const encodedWorkspaceId = encodeURIComponent(task.workspace.id);
+  const encodedTaskBoardId = encodeURIComponent(task.taskBoard.id);
+  const encodedTaskId = encodeURIComponent(task.id);
+  const canonicalUrl = `/${encodedWorkspaceId}/tasks?board=${encodedTaskBoardId}&taskId=${encodedTaskId}`;
+
+  const session = await getAuthSession();
+  if (!session?.user) {
+    redirect(`/login?callbackUrl=${encodeURIComponent(canonicalUrl)}`);
+  }
+
   const userHasAccess =
-    workspace.ownerId === session.user.id ||
-    workspace.members.some((member) => member.userId === session.user.id);
+    task.workspace.ownerId === session.user.id ||
+    task.workspace.members.some((member) => member.userId === session.user.id);
 
   if (!userHasAccess) {
-    // User doesn't have access to this workspace
     notFound();
   }
 
-  // Check if required fields exist
-  if (!task.workspaceId || !task.taskBoardId) {
-    notFound();
-  }
-
-  // Build canonical URL with URL-encoded values
-  const encodedWorkspaceId = encodeURIComponent(task.workspaceId);
-  const encodedTaskBoardId = encodeURIComponent(task.taskBoardId);
-  const encodedTaskId = encodeURIComponent(task.id);
-  
-  const canonicalUrl = `/${encodedWorkspaceId}/tasks?board=${encodedTaskBoardId}&taskId=${encodedTaskId}`;
   redirect(canonicalUrl);
 } 
