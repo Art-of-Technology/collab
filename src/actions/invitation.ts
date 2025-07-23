@@ -165,4 +165,59 @@ export async function acceptInvitation(token: string) {
     workspaceId: invitation.workspaceId,
     workspaceName: invitation.workspace.name
   };
+}
+
+/**
+ * Add user to workspace without authentication (for internal use)
+ */
+export async function addUserToWorkspace(workspaceId: string, userId: string) {
+  if (!workspaceId || !userId) {
+    throw new Error('WorkspaceId and UserId are required');
+  }
+
+  // Check if workspace exists
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId }
+  });
+
+  if (!workspace) {
+    throw new Error('Workspace not found');
+  }
+
+  // Check if user exists
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  // Check if user is already a member of the workspace
+  const existingMember = await prisma.workspaceMember.findFirst({
+    where: {
+      workspaceId: workspaceId,
+      userId: userId
+    }
+  });
+
+  if (existingMember) {
+    throw new Error('User is already a member of this workspace');
+  }
+
+  // Add user as a member
+  await prisma.workspaceMember.create({
+    data: {
+      workspaceId: workspaceId,
+      userId: userId,
+      role: 'MEMBER'
+    }
+  });
+
+  return { 
+    success: true, 
+    workspaceId: workspaceId,
+    workspaceName: workspace.name,
+    userId: userId
+  };
 } 

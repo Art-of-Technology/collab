@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermission, Permission } from "@/lib/permissions";
+import { validateMCPToken } from "@/lib/mcp-auth";
 
 // GET /api/workspaces/[workspaceId]/boards - Get all boards for a workspace
 export async function GET(
@@ -11,24 +12,48 @@ export async function GET(
 ) {
   const _params = await params;
   try {
-    const session = await getServerSession(authOptions);
+    const { workspaceId } = _params;
+    
+    // First try MCP token authentication
+    const mcpUser = await validateMCPToken(request);
+    let currentUserId: string | null = null;
 
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    if (mcpUser) {
+      currentUserId = mcpUser.id;
+    } else {
+      // Fall back to NextAuth session authentication
+      const session = await getServerSession(authOptions);
+
+      if (!session?.user?.email) {
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 }
+        );
+      }
+
+      // Get user ID from session
+      const sessionUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true }
+      });
+
+      if (!sessionUser) {
+        return NextResponse.json(
+          { error: "User not found" },
+          { status: 404 }
+        );
+      }
+
+      currentUserId = sessionUser.id;
     }
 
-    const { workspaceId } = _params;
-
-    // Check if the workspace exists and user is a member
-    const workspace = await prisma.workspace.findUnique({
+    // Check if user has access to this workspace
+    const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
         OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
+          { ownerId: currentUserId },
+          { members: { some: { userId: currentUserId } } }
         ]
       },
     });
@@ -62,16 +87,41 @@ export async function POST(
   { params }: { params: { workspaceId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { workspaceId } = await params;
+    
+    // First try MCP token authentication
+    const mcpUser = await validateMCPToken(request);
+    let currentUserId: string | null = null;
 
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    if (mcpUser) {
+      currentUserId = mcpUser.id;
+    } else {
+      // Fall back to NextAuth session authentication
+      const session = await getServerSession(authOptions);
+
+      if (!session?.user?.email) {
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 }
+        );
+      }
+
+      // Get user ID from session
+      const sessionUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true }
+      });
+
+      if (!sessionUser) {
+        return NextResponse.json(
+          { error: "User not found" },
+          { status: 404 }
+        );
+      }
+
+      currentUserId = sessionUser.id;
     }
 
-    const { workspaceId } = params;
     const body = await request.json();
     const { name, description, isDefault, issuePrefix } = body;
 
@@ -91,7 +141,7 @@ export async function POST(
     }
 
     // Check if user has permission to create boards in this workspace
-    const hasPermission = await checkUserPermission(session.user.id, workspaceId, Permission.CREATE_BOARD);
+    const hasPermission = await checkUserPermission(currentUserId, workspaceId, Permission.CREATE_BOARD);
 
     if (!hasPermission.hasPermission) {
       return NextResponse.json(
@@ -101,12 +151,12 @@ export async function POST(
     }
 
     // Check if the workspace exists and user is a member
-    const workspace = await prisma.workspace.findUnique({
+    const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
         OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
+          { ownerId: currentUserId },
+          { members: { some: { userId: currentUserId } } }
         ]
       },
     });

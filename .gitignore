@@ -10,6 +10,8 @@
 !.yarn/releases
 !.yarn/versions
 /WTeamsBot
+/mcp-server/node_modules
+/mcp-server/dist
 
 # testing
 /coverage

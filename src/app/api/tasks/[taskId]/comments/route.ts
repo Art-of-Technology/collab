@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { validateMCPToken } from "@/lib/mcp-auth";
 
 // GET /api/tasks/[taskId]/comments - Get all comments for a task
 export async function GET(
@@ -8,7 +11,26 @@ export async function GET(
   { params }: { params: { taskId: string } }
 ) {
   try {
-    const user = await getCurrentUser();
+    // Support both NextAuth sessions and MCP tokens
+    let user = null;
+    
+    // Try MCP token authentication first
+    try {
+      const mcpUser = await validateMCPToken(request);
+      if (mcpUser) {
+        user = mcpUser;
+      }
+    } catch (error) {
+      // If MCP token fails, try NextAuth session
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        user = await prisma.user.findUnique({
+          where: {
+            email: session.user.email
+          }
+        });
+      }
+    }
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,11 +38,19 @@ export async function GET(
 
     const taskId = params.taskId;
 
+    // Check if taskId is an issue key (e.g., MA-120)
+    const isIssueKey = /^[A-Z]+-\d+$/.test(taskId);
+
     // Find the task to check workspace access
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { workspaceId: true },
-    });
+    const task = isIssueKey 
+      ? await prisma.task.findFirst({
+          where: { issueKey: taskId },
+          select: { id: true, workspaceId: true },
+        })
+      : await prisma.task.findUnique({
+          where: { id: taskId },
+          select: { id: true, workspaceId: true },
+        });
 
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -41,7 +71,7 @@ export async function GET(
     // Get comments for the task
     const comments = await prisma.taskComment.findMany({
       where: {
-        taskId,
+        taskId: task.id, // Use the actual database ID
       },
       include: {
         author: {
@@ -81,16 +111,35 @@ export async function GET(
 // POST /api/tasks/[taskId]/comments - Create a new comment
 export async function POST(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
+    // Support both NextAuth sessions and MCP tokens
+    let user = null;
+    
+    // Try MCP token authentication first
+    try {
+      const mcpUser = await validateMCPToken(request);
+      if (mcpUser) {
+        user = mcpUser;
+      }
+    } catch (error) {
+      // If MCP token fails, try NextAuth session
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        user = await prisma.user.findUnique({
+          where: {
+            email: session.user.email
+          }
+        });
+      }
+    }
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const taskId = params.taskId;
+    const taskId = (await params).taskId;
     const { content, html, parentId } = await request.json();
 
     if (!content) {
@@ -100,11 +149,19 @@ export async function POST(
       );
     }
 
+    // Check if taskId is an issue key (e.g., MA-120)
+    const isIssueKey = /^[A-Z]+-\d+$/.test(taskId);
+
     // Find the task to check workspace access
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { workspaceId: true },
-    });
+    const task = isIssueKey 
+      ? await prisma.task.findFirst({
+          where: { issueKey: taskId },
+          select: { id: true, workspaceId: true },
+        })
+      : await prisma.task.findUnique({
+          where: { id: taskId },
+          select: { id: true, workspaceId: true },
+        });
 
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -127,7 +184,7 @@ export async function POST(
       const parentComment = await prisma.taskComment.findFirst({
         where: {
           id: parentId,
-          taskId,
+          taskId: task.id, // Use the actual database ID
         },
       });
 
@@ -145,7 +202,7 @@ export async function POST(
         content,
         html,
         authorId: user.id,
-        taskId,
+        taskId: task.id, // Use the actual database ID
         parentId,
       },
       include: {

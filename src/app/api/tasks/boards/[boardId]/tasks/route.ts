@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { userSelectFields } from "@/lib/user-utils";
+import { validateMCPToken } from "@/lib/mcp-auth";
 
 // GET /api/tasks/boards/[boardId]/tasks - Get all tasks for a board
 export async function GET(
@@ -11,16 +12,40 @@ export async function GET(
 ) {
   const _params = await params;
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     const { boardId } = _params;
+    
+    // First try MCP token authentication
+    const mcpUser = await validateMCPToken(request);
+    let currentUserId: string | null = null;
+
+    if (mcpUser) {
+      currentUserId = mcpUser.id;
+    } else {
+      // Fall back to NextAuth session authentication
+      const session = await getServerSession(authOptions);
+
+      if (!session?.user?.email) {
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 }
+        );
+      }
+
+      // Get user ID from session
+      const sessionUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true }
+      });
+
+      if (!sessionUser) {
+        return NextResponse.json(
+          { error: "User not found" },
+          { status: 404 }
+        );
+      }
+
+      currentUserId = sessionUser.id;
+    }
 
     // Check if the board exists
     const board = await prisma.taskBoard.findUnique({

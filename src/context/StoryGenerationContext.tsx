@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { JobStatus } from '@/lib/job-storage';
 
 interface StoryGenerationContextType {
@@ -19,6 +19,12 @@ export function useStoryGeneration() {
 
 export function StoryGenerationProvider({ workspaceId, children }: { workspaceId: string, children: ReactNode }) {
   const [jobs, setJobs] = useState<JobStatus[]>([]);
+  const jobsRef = useRef<JobStatus[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
 
   const fetchJobs = async () => {
     if (!workspaceId) return;
@@ -37,7 +43,21 @@ export function StoryGenerationProvider({ workspaceId, children }: { workspaceId
 
   useEffect(() => {
     fetchJobs();
-    const interval = setInterval(fetchJobs, 2000); // Poll every 2 seconds
+    
+    // Set up intelligent polling - only poll when there are active jobs
+    const interval = setInterval(() => {
+      const hasActiveJobs = jobsRef.current.some((job: JobStatus) => 
+        job.status === 'PENDING' || 
+        job.status === 'GENERATING_MILESTONES' ||
+        job.status === 'GENERATING_EPICS' ||
+        job.status === 'GENERATING_STORIES' ||
+        job.status === 'GENERATING_TASKS'
+      );
+      if (hasActiveJobs) {
+        fetchJobs();
+      }
+    }, 10000); // Poll every 10 seconds instead of 2
+    
     return () => clearInterval(interval);
   }, [workspaceId]);
 

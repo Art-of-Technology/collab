@@ -1,33 +1,64 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { validateMCPToken } from "@/lib/mcp-auth";
 
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  // Support both NextAuth sessions and MCP tokens
+  let currentUser = null;
+  
+  // Try MCP token authentication first
+  try {
+    const mcpUser = await validateMCPToken(req);
+    if (mcpUser) {
+      currentUser = mcpUser;
+    }
+  } catch (error) {
+    // If MCP token fails, try NextAuth session
+    const session = await getServerSession(authOptions);
+    if (session?.user?.email) {
+      currentUser = await prisma.user.findUnique({
+        where: {
+          email: session.user.email
+        }
+      });
+    }
+  }
+
+  if (!currentUser) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const _params = await params;
   const { taskId } = _params;
-  const userId = session.user.id;
+  const userId = currentUser.id;
 
   if (!taskId) {
     return new NextResponse("Task ID is required", { status: 400 });
   }
 
   try {
+    // Check if taskId is an issue key (e.g., MA-120)
+    const isIssueKey = /^[A-Z]+-\d+$/.test(taskId);
+    
     // Verify the task exists and user has permission
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        workspace: true,
-      },
-    });
+    const task = isIssueKey 
+      ? await prisma.task.findFirst({
+          where: { issueKey: taskId },
+          include: {
+            workspace: true,
+          },
+        })
+      : await prisma.task.findUnique({
+          where: { id: taskId },
+          include: {
+            workspace: true,
+          },
+        });
 
     if (!task) {
       return new NextResponse("Task not found", { status: 404 });
@@ -52,7 +83,7 @@ export async function POST(
     const currentStartEvent = await prisma.userEvent.findFirst({
       where: {
         userId,
-        taskId,
+        taskId: task.id, // Use the actual database ID
         eventType: 'TASK_START',
       },
       orderBy: { startedAt: 'desc' },
@@ -66,7 +97,7 @@ export async function POST(
     const existingStopEvent = await prisma.userEvent.findFirst({
       where: {
         userId,
-        taskId,
+        taskId: task.id, // Use the actual database ID
         eventType: { in: ['TASK_STOP', 'TASK_PAUSE'] },
         startedAt: { gt: currentStartEvent.startedAt },
       },
@@ -122,7 +153,7 @@ export async function POST(
     const stopEvent = await prisma.userEvent.create({
       data: {
         userId,
-        taskId,
+        taskId: task.id, // Use the actual database ID
         eventType: 'TASK_STOP',
         startedAt: now,
         description: 'Session stopped normally',

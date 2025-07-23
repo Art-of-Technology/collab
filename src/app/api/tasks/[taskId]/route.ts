@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { getAuthSession } from '@/lib/auth';
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { validateMCPToken } from "@/lib/mcp-auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +14,26 @@ export async function GET(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
-    const currentUser = await getCurrentUser();
+    // Support both NextAuth sessions and MCP tokens
+    let currentUser = null;
+    
+    // Try MCP token authentication first
+    try {
+      const mcpUser = await validateMCPToken(req);
+      if (mcpUser) {
+        currentUser = mcpUser;
+      }
+    } catch (error) {
+      // If MCP token fails, try NextAuth session
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        currentUser = await prisma.user.findUnique({
+          where: {
+            email: session.user.email
+          }
+        });
+      }
+    }
 
     if (!currentUser) {
       return NextResponse.json(
@@ -260,8 +282,28 @@ export async function DELETE(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
-    const session = await getAuthSession();
-    if (!session?.user?.id) {
+    // Support both NextAuth sessions and MCP tokens
+    let currentUser = null;
+    
+    // Try MCP token authentication first
+    try {
+      const mcpUser = await validateMCPToken(request);
+      if (mcpUser) {
+        currentUser = mcpUser;
+      }
+    } catch (error) {
+      // If MCP token fails, try NextAuth session
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        currentUser = await prisma.user.findUnique({
+          where: {
+            email: session.user.email
+          }
+        });
+      }
+    }
+
+    if (!currentUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -292,8 +334,8 @@ export async function DELETE(
       where: {
         id: task.workspaceId,
         OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id } } }
         ]
       }
     });

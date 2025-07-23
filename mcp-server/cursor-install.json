@@ -1,0 +1,91 @@
+{
+  "name": "collab",
+  "displayName": "Collab Project Management",
+  "description": "Collab MCP server for task management, time tracking, and workflow integration",
+  "version": "1.0.0",
+  "transport": {
+    "type": "stdio"
+  },
+  "config": {
+    "command": "npx",
+    "args": ["-y", "collab-mcp-server"],
+    "env": {
+      "COLLAB_API_URL": "http://localhost:3000"
+    }
+  },
+  "capabilities": {
+    "tools": [
+      {
+        "name": "get-task",
+        "description": "Get detailed information about a task by issue key or ID"
+      },
+      {
+        "name": "add-comment", 
+        "description": "Add a comment to a task"
+      },
+      {
+        "name": "start-work",
+        "description": "Start time tracking on a task"
+      },
+      {
+        "name": "stop-work",
+        "description": "Stop time tracking on a task"
+      },
+      {
+        "name": "list-tasks",
+        "description": "List tasks in a workspace"
+      },
+      {
+        "name": "get-workspaces",
+        "description": "Get available workspaces"
+      },
+      {
+        "name": "update-task-status",
+        "description": "Update the status of a task"
+      },
+      {
+        "name": "get-task-comments",
+        "description": "Get all comments for a task"
+      }
+    ],
+    "resources": [
+      {
+        "uri": "collab://workspaces",
+        "name": "User Workspaces",
+        "description": "List of accessible workspaces"
+      },
+      {
+        "uri": "collab://current-user",
+        "name": "Current User Profile",
+        "description": "Current user information"
+      },
+      {
+        "uri": "collab://task-template",
+        "name": "Task Schema",
+        "description": "JSON schema for task objects"
+      },
+      {
+        "uri": "collab://api-endpoints",
+        "name": "API Documentation",
+        "description": "Available API endpoints reference"
+      },
+      {
+        "uri": "collab://mcp-usage-guide",
+        "name": "Usage Guide",
+        "description": "How to use the MCP server"
+      }
+    ]
+  },
+  "installation": {
+    "requirements": [
+      "Node.js 18+",
+      "Running Collab application",
+      "Network access to Collab API"
+    ],
+    "steps": [
+      "Set COLLAB_API_URL environment variable",
+      "Optionally set COLLAB_API_KEY for authentication",
+      "Add server configuration to Cursor"
+    ]
+  }
+} 
