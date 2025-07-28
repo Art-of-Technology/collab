@@ -90,7 +90,11 @@ export function TaskRelations({ task }: TaskRelationsProps) {
               <RelationItem
                 title={task.milestone.title}
                 type="milestone"
-                href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${task.milestoneId}` : "#"}
+                href={currentWorkspace ? 
+                  (currentWorkspace.slug && task.milestone.issueKey 
+                    ? `/${currentWorkspace.slug}/milestones/${task.milestone.issueKey}`
+                    : `/${currentWorkspace.id}/milestones/${task.milestoneId}`
+                  ) : "#"}
               />
             ) : (
               <div className="text-sm text-muted-foreground italic">
@@ -106,7 +110,11 @@ export function TaskRelations({ task }: TaskRelationsProps) {
               <RelationItem
                 title={task.epic.title}
                 type="epic"
-                href={currentWorkspace ? `/${currentWorkspace.id}/epics/${task.epicId}` : "#"}
+                href={currentWorkspace ? 
+                  (currentWorkspace.slug && task.epic.issueKey 
+                    ? `/${currentWorkspace.slug}/epics/${task.epic.issueKey}`
+                    : `/${currentWorkspace.id}/epics/${task.epicId}`
+                  ) : "#"}
               />
             ) : (
               <div className="text-sm text-muted-foreground italic">
@@ -122,7 +130,11 @@ export function TaskRelations({ task }: TaskRelationsProps) {
               <RelationItem
                 title={task.story.title}
                 type="story"
-                href={currentWorkspace ? `/${currentWorkspace.id}/stories/${task.storyId}` : "#"}
+                href={currentWorkspace ? 
+                  (currentWorkspace.slug && task.story.issueKey 
+                    ? `/${currentWorkspace.slug}/stories/${task.story.issueKey}`
+                    : `/${currentWorkspace.id}/stories/${task.storyId}`
+                  ) : "#"}
               />
             ) : (
               <div className="text-sm text-muted-foreground italic">
@@ -139,7 +151,11 @@ export function TaskRelations({ task }: TaskRelationsProps) {
                 title={task.parentTask.title}
                 type="task"
                 issueKey={task.parentTask.issueKey}
-                href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.parentTaskId}` : "#"}
+                href={currentWorkspace ? 
+                  (currentWorkspace.slug && task.parentTask.issueKey 
+                    ? `/${currentWorkspace.slug}/tasks/${task.parentTask.issueKey}`
+                    : `/${currentWorkspace.id}/tasks/${task.parentTaskId}`
+                  ) : "#"}
               />
             ) : (
               <div className="text-sm text-muted-foreground italic">
@@ -160,7 +176,11 @@ export function TaskRelations({ task }: TaskRelationsProps) {
                     type="task"
                     issueKey={subtask.issueKey}
                     status={subtask.status}
-                    href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${subtask.id}` : "#"}
+                    href={currentWorkspace ? 
+                      (currentWorkspace.slug && subtask.issueKey 
+                        ? `/${currentWorkspace.slug}/tasks/${subtask.issueKey}`
+                        : `/${currentWorkspace.id}/tasks/${subtask.id}`
+                      ) : "#"}
                   />
                 ))}
               </div>
@@ -196,7 +216,11 @@ export function EpicRelations({ epic }: EpicRelationsProps) {
               <RelationItem
                 title={epic.milestone.title}
                 type="milestone"
-                href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${epic.milestoneId}` : "#"}
+                href={currentWorkspace ? 
+                  (currentWorkspace.slug && epic.milestone.issueKey 
+                    ? `/${currentWorkspace.slug}/milestones/${epic.milestone.issueKey}`
+                    : `/${currentWorkspace.id}/milestones/${epic.milestoneId}`
+                  ) : "#"}
               />
             ) : (
               <div className="text-sm text-muted-foreground italic">
@@ -216,7 +240,11 @@ export function EpicRelations({ epic }: EpicRelationsProps) {
                     title={story.title}
                     type="story"
                     status={story.status}
-                    href={currentWorkspace ? `/${currentWorkspace.id}/stories/${story.id}` : "#"}
+                    href={currentWorkspace ? 
+                      (currentWorkspace.slug && story.issueKey 
+                        ? `/${currentWorkspace.slug}/stories/${story.issueKey}`
+                        : `/${currentWorkspace.id}/stories/${story.id}`
+                      ) : "#"}
                   />
                 ))}
               </div>
@@ -239,7 +267,11 @@ export function EpicRelations({ epic }: EpicRelationsProps) {
                     type="task"
                     issueKey={task.issueKey}
                     status={task.status}
-                    href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.id}` : "#"}
+                    href={currentWorkspace ? 
+                      (currentWorkspace.slug && task.issueKey 
+                        ? `/${currentWorkspace.slug}/tasks/${task.issueKey}`
+                        : `/${currentWorkspace.id}/tasks/${task.id}`
+                      ) : "#"}
                   />
                 ))}
               </div>
@@ -279,7 +311,11 @@ export function StoryRelations({ story }: StoryRelationsProps) {
               <RelationItem
                 title={story.epic.title}
                 type="epic"
-                href={currentWorkspace ? `/${currentWorkspace.id}/epics/${story.epicId}` : "#"}
+                href={currentWorkspace ? 
+                  (currentWorkspace.slug && story.epic.issueKey 
+                    ? `/${currentWorkspace.slug}/epics/${story.epic.issueKey}`
+                    : `/${currentWorkspace.id}/epics/${story.epicId}`
+                  ) : "#"}
               />
             ) : (
               <div className="text-sm text-muted-foreground italic">
@@ -300,7 +336,11 @@ export function StoryRelations({ story }: StoryRelationsProps) {
                     type="task"
                     issueKey={task.issueKey}
                     status={task.status}
-                    href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.id}` : "#"}
+                    href={currentWorkspace ? 
+                      (currentWorkspace.slug && task.issueKey 
+                        ? `/${currentWorkspace.slug}/tasks/${task.issueKey}`
+                        : `/${currentWorkspace.id}/tasks/${task.id}`
+                      ) : "#"}
                   />
                 ))}
               </div>
@@ -344,7 +384,11 @@ export function MilestoneRelations({ milestone }: MilestoneRelationsProps) {
                     title={epic.title}
                     type="epic"
                     status={epic.status}
-                    href={currentWorkspace ? `/${currentWorkspace.id}/epics/${epic.id}` : "#"}
+                    href={currentWorkspace ? 
+                      (currentWorkspace.slug && epic.issueKey 
+                        ? `/${currentWorkspace.slug}/epics/${epic.issueKey}`
+                        : `/${currentWorkspace.id}/epics/${epic.id}`
+                      ) : "#"}
                   />
                 ))}
               </div>
@@ -367,7 +411,11 @@ export function MilestoneRelations({ milestone }: MilestoneRelationsProps) {
                       title={`${story.title} (via ${epic.title})`}
                       type="story"
                       status={story.status}
-                      href={currentWorkspace ? `/${currentWorkspace.id}/stories/${story.id}` : "#"}
+                      href={currentWorkspace ? 
+                        (currentWorkspace.slug && story.issueKey 
+                          ? `/${currentWorkspace.slug}/stories/${story.issueKey}`
+                          : `/${currentWorkspace.id}/stories/${story.id}`
+                        ) : "#"}
                     />
                   )) || []
                 )}
@@ -392,7 +440,11 @@ export function MilestoneRelations({ milestone }: MilestoneRelationsProps) {
                       type="task"
                       issueKey={task.issueKey}
                       status={task.status}
-                      href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.id}` : "#"}
+                      href={currentWorkspace ? 
+                        (currentWorkspace.slug && task.issueKey 
+                          ? `/${currentWorkspace.slug}/tasks/${task.issueKey}`
+                          : `/${currentWorkspace.id}/tasks/${task.id}`
+                        ) : "#"}
                     />
                   )) || []
                 )}

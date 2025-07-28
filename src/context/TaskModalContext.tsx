@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
+import { resolveIssueKeyToId, resolveIdToIssueKey } from '@/lib/client-issue-key-resolvers';
+import { isIssueKey } from '@/lib/shared-issue-key-utils';
 
 // Dynamically import the Detail Modals
 const TaskDetailModal = dynamic(() => import("@/components/tasks/TaskDetailModal"), {
@@ -21,7 +23,7 @@ const StoryDetailModal = dynamic(() => import("@/components/stories/StoryDetailM
 interface TaskModalContextType {
   isTaskModalOpen: boolean;
   activeTaskId: string | null;
-  openTaskModal: (taskId: string) => void;
+  openTaskModal: (taskId: string) => Promise<void>;
   closeTaskModal: () => void;
   
   // New entity modal states and methods
@@ -31,9 +33,9 @@ interface TaskModalContextType {
   isMilestoneModalOpen: boolean;
   isEpicModalOpen: boolean;
   isStoryModalOpen: boolean;
-  openMilestoneModal: (milestoneId: string) => void;
-  openEpicModal: (epicId: string) => void;
-  openStoryModal: (storyId: string) => void;
+  openMilestoneModal: (milestoneId: string) => Promise<void>;
+  openEpicModal: (epicId: string) => Promise<void>;
+  openStoryModal: (storyId: string) => Promise<void>;
   closeMilestoneModal: () => void;
   closeEpicModal: () => void;
   closeStoryModal: () => void;
@@ -42,7 +44,7 @@ interface TaskModalContextType {
 export const TaskModalContext = createContext<TaskModalContextType>({
   isTaskModalOpen: false,
   activeTaskId: null,
-  openTaskModal: () => {},
+  openTaskModal: async () => {},
   closeTaskModal: () => {},
   
   // Default values for new entity modal states and methods
@@ -52,9 +54,9 @@ export const TaskModalContext = createContext<TaskModalContextType>({
   isMilestoneModalOpen: false,
   isEpicModalOpen: false,
   isStoryModalOpen: false,
-  openMilestoneModal: () => {},
-  openEpicModal: () => {},
-  openStoryModal: () => {},
+  openMilestoneModal: async () => {},
+  openEpicModal: async () => {},
+  openStoryModal: async () => {},
   closeMilestoneModal: () => {},
   closeEpicModal: () => {},
   closeStoryModal: () => {},
@@ -79,40 +81,61 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
 
   // Sync URL to state on initial load or direct navigation
   useEffect(() => {
-    const taskId = searchParams.get("taskId");
-    const milestoneId = searchParams.get("milestoneId");
-    const epicId = searchParams.get("epicId");
-    const storyId = searchParams.get("storyId");
+    const handleUrlSync = async () => {
+      const taskParam = searchParams.get("taskId");
+      const milestoneParam = searchParams.get("milestoneId");
+      const epicParam = searchParams.get("epicId");
+      const storyParam = searchParams.get("storyId");
 
-    // Prioritize Task if multiple are present? Or handle error?
-    // For now, just set the first one found.
-    if (taskId && !activeTaskId) {
-      setActiveTaskId(taskId);
-      setIsTaskModalOpen(true);
-    } else if (milestoneId && !activeMilestoneId) {
-      setActiveMilestoneId(milestoneId);
-      setIsMilestoneModalOpen(true);
-    } else if (epicId && !activeEpicId) {
-      setActiveEpicId(epicId);
-      setIsEpicModalOpen(true);
-    } else if (storyId && !activeStoryId) {
-      setActiveStoryId(storyId);
-      setIsStoryModalOpen(true);
-    }
-    
-    // If no modal ID is in the URL, ensure all are closed in state
-    if (!taskId && !milestoneId && !epicId && !storyId) {
-        setActiveTaskId(null);
-        setActiveMilestoneId(null);
-        setActiveEpicId(null);
-        setActiveStoryId(null);
-        setIsTaskModalOpen(false);
-        setIsMilestoneModalOpen(false);
-        setIsEpicModalOpen(false);
-        setIsStoryModalOpen(false);
-    }
+      // Helper function to resolve param to ID
+      const resolveParamToId = async (param: string, entityType: 'task' | 'epic' | 'story' | 'milestone') => {
+        if (isIssueKey(param)) {
+          return await resolveIssueKeyToId(param, entityType);
+        }
+        return param; // Already an ID
+      };
 
-  // Add missing dependencies to the dependency array
+      // Prioritize Task if multiple are present
+      if (taskParam && !activeTaskId) {
+        const resolvedId = await resolveParamToId(taskParam, 'task');
+        if (resolvedId) {
+          setActiveTaskId(resolvedId);
+          setIsTaskModalOpen(true);
+        }
+      } else if (milestoneParam && !activeMilestoneId) {
+        const resolvedId = await resolveParamToId(milestoneParam, 'milestone');
+        if (resolvedId) {
+          setActiveMilestoneId(resolvedId);
+          setIsMilestoneModalOpen(true);
+        }
+      } else if (epicParam && !activeEpicId) {
+        const resolvedId = await resolveParamToId(epicParam, 'epic');
+        if (resolvedId) {
+          setActiveEpicId(resolvedId);
+          setIsEpicModalOpen(true);
+        }
+      } else if (storyParam && !activeStoryId) {
+        const resolvedId = await resolveParamToId(storyParam, 'story');
+        if (resolvedId) {
+          setActiveStoryId(resolvedId);
+          setIsStoryModalOpen(true);
+        }
+      }
+      
+      // If no modal ID is in the URL, ensure all are closed in state
+      if (!taskParam && !milestoneParam && !epicParam && !storyParam) {
+          setActiveTaskId(null);
+          setActiveMilestoneId(null);
+          setActiveEpicId(null);
+          setActiveStoryId(null);
+          setIsTaskModalOpen(false);
+          setIsMilestoneModalOpen(false);
+          setIsEpicModalOpen(false);
+          setIsStoryModalOpen(false);
+      }
+    };
+
+    handleUrlSync();
   }, [searchParams, activeTaskId, activeMilestoneId, activeEpicId, activeStoryId]);
 
   const updateUrl = (paramName: string, paramValue: string | null) => {
@@ -130,10 +153,13 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  const openTaskModal = (taskId: string) => {
+  const openTaskModal = async (taskId: string) => {
     setActiveTaskId(taskId);
     setIsTaskModalOpen(true);
-    updateUrl("taskId", taskId);
+    
+    // Try to get the issue key for the URL
+    const issueKey = await resolveIdToIssueKey(taskId, 'task');
+    updateUrl("taskId", issueKey || taskId);
   };
 
   const closeTaskModal = () => {
@@ -143,10 +169,13 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
   };
   
   // --- Milestone Modal ---
-  const openMilestoneModal = (milestoneId: string) => {
+  const openMilestoneModal = async (milestoneId: string) => {
     setActiveMilestoneId(milestoneId);
     setIsMilestoneModalOpen(true);
-    updateUrl("milestoneId", milestoneId);
+    
+    // Try to get the issue key for the URL
+    const issueKey = await resolveIdToIssueKey(milestoneId, 'milestone');
+    updateUrl("milestoneId", issueKey || milestoneId);
   };
   
   const closeMilestoneModal = () => {
@@ -156,10 +185,13 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
   };
   
   // --- Epic Modal ---
-  const openEpicModal = (epicId: string) => {
+  const openEpicModal = async (epicId: string) => {
     setActiveEpicId(epicId);
     setIsEpicModalOpen(true);
-    updateUrl("epicId", epicId);
+    
+    // Try to get the issue key for the URL
+    const issueKey = await resolveIdToIssueKey(epicId, 'epic');
+    updateUrl("epicId", issueKey || epicId);
   };
   
   const closeEpicModal = () => {
@@ -169,10 +201,13 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
   };
   
   // --- Story Modal ---
-  const openStoryModal = (storyId: string) => {
+  const openStoryModal = async (storyId: string) => {
     setActiveStoryId(storyId);
     setIsStoryModalOpen(true);
-    updateUrl("storyId", storyId);
+    
+    // Try to get the issue key for the URL
+    const issueKey = await resolveIdToIssueKey(storyId, 'story');
+    updateUrl("storyId", issueKey || storyId);
   };
   
   const closeStoryModal = () => {

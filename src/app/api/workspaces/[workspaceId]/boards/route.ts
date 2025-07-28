@@ -22,16 +22,29 @@ export async function GET(
 
     const { workspaceId } = _params;
 
-    // Check if the workspace exists and user is a member
-    const workspace = await prisma.workspace.findUnique({
+    // Check if the workspace exists and user is a member - try by slug first, then by ID
+    let workspace = await prisma.workspace.findFirst({
       where: {
-        id: workspaceId,
+        slug: workspaceId,
         OR: [
           { ownerId: session.user.id },
           { members: { some: { userId: session.user.id } } }
         ]
       },
     });
+
+    // If not found by slug, try by ID for backward compatibility
+    if (!workspace) {
+      workspace = await prisma.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          OR: [
+            { ownerId: session.user.id },
+            { members: { some: { userId: session.user.id } } }
+          ]
+        },
+      });
+    }
 
     if (!workspace) {
       return NextResponse.json(
@@ -40,9 +53,9 @@ export async function GET(
       );
     }
 
-    // Get all boards for the workspace
+    // Get all boards for the workspace using the actual workspace ID
     const boards = await prisma.taskBoard.findMany({
-      where: { workspaceId },
+      where: { workspaceId: workspace.id },
       orderBy: { createdAt: "asc" },
     });
 
@@ -105,20 +118,10 @@ export async function POST(
       );
     }
 
-    // Check if user has permission to create boards in this workspace
-    const hasPermission = await checkUserPermission(session.user.id, workspaceId, Permission.CREATE_BOARD);
-
-    if (!hasPermission.hasPermission) {
-      return NextResponse.json(
-        { error: "You don't have permission to create boards in this workspace" },
-        { status: 403 }
-      );
-    }
-
-    // Check if the workspace exists and user is a member
-    const workspace = await prisma.workspace.findUnique({
+    // First resolve workspace slug to get the actual workspace
+    let workspace = await prisma.workspace.findFirst({
       where: {
-        id: workspaceId,
+        slug: workspaceId,
         OR: [
           { ownerId: session.user.id },
           { members: { some: { userId: session.user.id } } }
@@ -126,10 +129,33 @@ export async function POST(
       },
     });
 
+    // If not found by slug, try by ID for backward compatibility
+    if (!workspace) {
+      workspace = await prisma.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          OR: [
+            { ownerId: session.user.id },
+            { members: { some: { userId: session.user.id } } }
+          ]
+        },
+      });
+    }
+
     if (!workspace) {
       return NextResponse.json(
         { error: "Workspace not found or you don't have access" },
         { status: 404 }
+      );
+    }
+
+    // Check if user has permission to create boards in this workspace (using actual workspace ID)
+    const hasPermission = await checkUserPermission(session.user.id, workspace.id, Permission.CREATE_BOARD);
+
+    if (!hasPermission.hasPermission) {
+      return NextResponse.json(
+        { error: "You don't have permission to create boards in this workspace" },
+        { status: 403 }
       );
     }
 
@@ -142,7 +168,7 @@ export async function POST(
         issuePrefix,
         nextIssueNumber: 1, // Start issue numbering from 1
         isDefault: isDefault || false,
-        workspaceId,
+        workspaceId: workspace.id,
         columns: {
           create: [
             { name: "To Do", order: 0, color: "#6366F1" },

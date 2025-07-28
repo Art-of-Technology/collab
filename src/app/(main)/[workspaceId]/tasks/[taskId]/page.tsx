@@ -8,6 +8,8 @@ import { getTaskById } from "@/actions/task";
 import TaskDetailClient from "@/components/tasks/TaskDetailClient";
 import { urls } from "@/lib/url-resolver";
 import { resolveBoardSlug, resolveWorkspaceSlug } from "@/lib/slug-resolvers";
+import { resolveIssueKeyToId } from "@/lib/issue-key-resolvers";
+import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
 interface TaskDetailPageProps {
   params: {
@@ -28,8 +30,19 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
   }
   
   try {
+    // Resolve taskId to database ID if it's an issue key
+    let taskId = _params.taskId;
+    if (isIssueKey(_params.taskId)) {
+      const resolvedId = await resolveIssueKeyToId(_params.taskId, 'task');
+      if (!resolvedId) {
+        console.error(`Failed to resolve issue key: ${_params.taskId}`);
+        notFound();
+      }
+      taskId = resolvedId;
+    }
+    
     // Get task details using server action
-    const task = await getTaskById(_params.taskId);
+    const task = await getTaskById(taskId);
     // Use boardId from searchParams or fallback to task's board ID
     const boardId = _searchParams?.boardId || task.taskBoardId || '';
     

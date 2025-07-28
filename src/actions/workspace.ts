@@ -124,10 +124,10 @@ export async function getWorkspaceById(workspaceId: string) {
     throw new Error('User not found');
   }
   
-  // Get the workspace
-  const workspace = await prisma.workspace.findUnique({
+    // Try to find by slug first, then by ID for backward compatibility
+  let workspace = await prisma.workspace.findUnique({
     where: {
-      id: workspaceId
+      slug: workspaceId
     },
     include: {
       owner: {
@@ -151,7 +151,37 @@ export async function getWorkspaceById(workspaceId: string) {
       }
     }
   });
-  
+
+  // If not found by slug, try by ID for backward compatibility
+  if (!workspace) {
+    workspace = await prisma.workspace.findUnique({
+      where: {
+        id: workspaceId
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                role: true
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
   if (!workspace) {
     throw new Error('Workspace not found');
   }
@@ -662,10 +692,10 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
     throw new Error('Unauthorized');
   }
   
-  // Get the workspace with all related data
-  const workspace = await prisma.workspace.findUnique({
+  // Try to find by slug first, then by ID for backward compatibility
+  let workspace = await prisma.workspace.findUnique({
     where: {
-      id: workspaceId
+      slug: workspaceId
     },
     include: {
       owner: {
@@ -724,6 +754,71 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
       }
     }
   });
+
+  // If not found by slug, try by ID for backward compatibility
+  if (!workspace) {
+    workspace = await prisma.workspace.findUnique({
+      where: {
+        id: workspaceId
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            role: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+                role: true,
+                useCustomAvatar: true,
+                avatarSkinTone: true,
+                avatarEyes: true,
+                avatarBrows: true,
+                avatarMouth: true,
+                avatarNose: true,
+                avatarHair: true,
+                avatarEyewear: true,
+                avatarAccessory: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
+        invitations: {
+          where: { status: 'pending' },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            invitedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              }
+            }
+          }
+        }
+      }
+    });
+  }
   
   if (!workspace) {
     throw new Error('Workspace not found');

@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
 import { compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
+import { resolveIssueKeyToId } from '@/lib/issue-key-resolvers';
+import { isIssueKey } from '@/lib/shared-issue-key-utils';
 
 // Schema for PATCH validation
 const storyPatchSchema = z.object({
@@ -28,6 +30,14 @@ const storyPatchSchema = z.object({
   color: z.string().optional(),
 }).strict(); // Ensure no extra fields are passed
 
+// Helper function to resolve story ID from issue key or database ID
+async function resolveStoryId(storyIdOrKey: string): Promise<string | null> {
+  if (isIssueKey(storyIdOrKey)) {
+    return await resolveIssueKeyToId(storyIdOrKey, 'story');
+  }
+  return storyIdOrKey; // Already a database ID
+}
+
 // GET /api/stories/{storyId} - Fetch a single story by ID
 export async function GET(
   request: NextRequest,
@@ -39,10 +49,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const _params = await params;
-    const { storyId } = _params;
+    const { storyId: storyIdParam } = _params;
 
-    if (!storyId) {
+    if (!storyIdParam) {
       return NextResponse.json({ error: "Story ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const storyId = await resolveStoryId(storyIdParam);
+    if (!storyId) {
+      return NextResponse.json({ error: "Story not found" }, { status: 404 });
     }
 
     const story = await prisma.story.findUnique({
@@ -137,9 +153,15 @@ export async function PATCH(
     }
 
     const _params = await params;
-    const { storyId } = _params;
-    if (!storyId) {
+    const { storyId: storyIdParam } = _params;
+    if (!storyIdParam) {
       return NextResponse.json({ error: "Story ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const storyId = await resolveStoryId(storyIdParam);
+    if (!storyId) {
+      return NextResponse.json({ error: "Story not found" }, { status: 404 });
     }
 
     const body = await request.json();
@@ -459,9 +481,15 @@ export async function DELETE(
     }
 
     const _params = await params;
-    const { storyId } = _params;
-    if (!storyId) {
+    const { storyId: storyIdParam } = _params;
+    if (!storyIdParam) {
       return NextResponse.json({ error: "Story ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const storyId = await resolveStoryId(storyIdParam);
+    if (!storyId) {
+      return new NextResponse(null, { status: 204 });
     }
 
     // Fetch the story first to check ownership/permissions

@@ -24,16 +24,29 @@ export async function GET(req: Request) {
     
     // Filter by workspace
     if (workspaceId) {
-      // Verify the user has access to this workspace
-      const hasAccess = await prisma.workspace.findFirst({
+      // Verify the user has access to this workspace - try by slug first, then by ID
+      let hasAccess = await prisma.workspace.findFirst({
         where: {
-          id: workspaceId,
+          slug: workspaceId,
           OR: [
             { ownerId: currentUser.id },
             { members: { some: { userId: currentUser.id } } }
           ]
         },
       });
+
+      // If not found by slug, try by ID for backward compatibility
+      if (!hasAccess) {
+        hasAccess = await prisma.workspace.findFirst({
+          where: {
+            id: workspaceId,
+            OR: [
+              { ownerId: currentUser.id },
+              { members: { some: { userId: currentUser.id } } }
+            ]
+          },
+        });
+      }
       
       if (!hasAccess) {
         return NextResponse.json(
@@ -42,7 +55,8 @@ export async function GET(req: Request) {
         );
       }
       
-      query.workspaceId = workspaceId;
+      // Use the actual workspace ID for the query (not the slug)
+      query.workspaceId = hasAccess.id;
     } else {
       // Get all workspaces the user has access to
       const accessibleWorkspaces = await prisma.workspace.findMany({

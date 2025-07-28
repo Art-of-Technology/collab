@@ -19,7 +19,7 @@ export default async function LoginPage() {
           { members: { some: { userId: user.id } } }
         ]
       },
-      select: { id: true },
+      select: { id: true, slug: true },
       orderBy: { createdAt: 'asc' },
       take: 1
     });
@@ -29,8 +29,10 @@ export default async function LoginPage() {
       redirect("/welcome");
     }
 
-    // Otherwise, redirect to the first workspace's dashboard
-    redirect(`/${userWorkspaces[0].id}/timeline`);
+    // Otherwise, redirect to the first workspace's timeline using slug if available
+    const workspace = userWorkspaces[0];
+    const workspaceSlugOrId = workspace.slug || workspace.id;
+    redirect(`/${workspaceSlugOrId}/timeline`);
   }
 
   return (

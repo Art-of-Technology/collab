@@ -8,6 +8,7 @@ import Link from "next/link";
 import { EpicDetailContent } from "@/components/epics/EpicDetailContent";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { resolveIdToIssueKey } from '@/lib/client-issue-key-resolvers';
 
 interface EpicDetailModalProps {
   epicId: string | null;
@@ -18,6 +19,7 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
   const [epic, setEpic] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [epicIssueKey, setEpicIssueKey] = useState<string | null>(null);
   
   // Get current board ID from TasksContext
   const { selectedBoardId } = useTasks();
@@ -42,6 +44,13 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
       setEpic(data);
       // Only open modal after data is successfully loaded
       setIsOpen(true);
+      
+      // Resolve epic ID to issue key for the View Full URL
+      if (epicId) {
+        resolveIdToIssueKey(epicId, 'epic').then(issueKey => {
+          setEpicIssueKey(issueKey);
+        });
+      }
     } catch (err) {
       console.error("Failed to fetch epic details:", err);
       setError("Failed to load epic details. Please try again.");
@@ -80,7 +89,17 @@ export default function EpicDetailModal({ epicId, onClose }: EpicDetailModalProp
           <DialogTitle className="sr-only">Epic Details</DialogTitle>
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>
-              <Link href={currentWorkspace ? `/${currentWorkspace.id}/epics/${epicId}` : "#"} target="_blank" className="flex items-center gap-1">
+              <Link 
+                href={
+                  currentWorkspace?.slug && epicIssueKey 
+                    ? `/${currentWorkspace.slug}/epics/${epicIssueKey}`
+                    : currentWorkspace 
+                    ? `/${currentWorkspace.id}/epics/${epicId}` 
+                    : "#"
+                } 
+                target="_blank" 
+                className="flex items-center gap-1"
+              >
                 <ExternalLink className="h-4 w-4" />
                 <span>View Full</span>
               </Link>

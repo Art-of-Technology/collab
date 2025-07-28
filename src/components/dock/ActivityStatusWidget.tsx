@@ -260,9 +260,14 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     return 0;
   };
 
-  const handleTaskNavigation = (taskId: string) => {
-    if (currentWorkspace?.id) {
-      router.push(`/${currentWorkspace.id}/tasks/${taskId}`);
+  const handleTaskNavigation = (taskId: string, issueKey?: string) => {
+    if (currentWorkspace) {
+      // Use workspace slug and issue key if available, otherwise fall back to legacy format
+      if (currentWorkspace.slug && issueKey) {
+        router.push(`/${currentWorkspace.slug}/tasks/${issueKey}`);
+      } else {
+        router.push(`/${currentWorkspace.id}/tasks/${taskId}`);
+      }
       setIsDropdownOpen(false);
     }
   };
@@ -620,7 +625,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
             <div className="space-y-0.5">
               <div className="flex items-center gap-1 md:gap-2">
                 <button
-                  onClick={() => handleTaskNavigation(userStatus.currentTask!.id)}
+                  onClick={() => handleTaskNavigation(userStatus.currentTask!.id, userStatus.currentTask!.issueKey)}
                   className="font-mono text-xs text-white/60 hover:text-white/90 hover:underline transition-colors cursor-pointer"
                   title="Click to view full task"
                 >
@@ -783,7 +788,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            handleTaskNavigation(task.id);
+                                            handleTaskNavigation(task.id, task.issueKey);
                                           }}
                                           className="font-mono text-xs opacity-70 flex-shrink-0 hover:opacity-100 hover:underline transition-opacity"
                                           title="Click to view full task"
@@ -820,7 +825,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                                       className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTaskNavigation(task.id);
+                                        handleTaskNavigation(task.id, task.issueKey);
                                       }}
                                       title="Open full task view"
                                     >

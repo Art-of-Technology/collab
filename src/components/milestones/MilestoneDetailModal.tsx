@@ -8,6 +8,7 @@ import Link from "next/link";
 import { MilestoneDetailContent } from "@/components/milestones/MilestoneDetailContent";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { resolveIdToIssueKey } from '@/lib/client-issue-key-resolvers';
 
 interface MilestoneDetailModalProps {
   milestoneId: string | null;
@@ -18,6 +19,7 @@ export default function MilestoneDetailModal({ milestoneId, onClose }: Milestone
   const [milestone, setMilestone] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [milestoneIssueKey, setMilestoneIssueKey] = useState<string | null>(null);
   
   // Get current board ID from TasksContext
   const { selectedBoardId } = useTasks();
@@ -42,6 +44,13 @@ export default function MilestoneDetailModal({ milestoneId, onClose }: Milestone
       setMilestone(data);
       // Only open modal after data is successfully loaded
       setIsOpen(true);
+      
+      // Resolve milestone ID to issue key for the View Full URL
+      if (milestoneId) {
+        resolveIdToIssueKey(milestoneId, 'milestone').then(issueKey => {
+          setMilestoneIssueKey(issueKey);
+        });
+      }
     } catch (err) {
       console.error("Failed to fetch milestone details:", err);
       setError("Failed to load milestone details. Please try again.");
@@ -80,7 +89,17 @@ export default function MilestoneDetailModal({ milestoneId, onClose }: Milestone
           <DialogTitle className="sr-only">Milestone Details</DialogTitle>
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>
-              <Link href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${milestoneId}` : "#"} target="_blank" className="flex items-center gap-1">
+              <Link 
+                href={
+                  currentWorkspace?.slug && milestoneIssueKey 
+                    ? `/${currentWorkspace.slug}/milestones/${milestoneIssueKey}`
+                    : currentWorkspace 
+                    ? `/${currentWorkspace.id}/milestones/${milestoneId}` 
+                    : "#"
+                } 
+                target="_blank" 
+                className="flex items-center gap-1"
+              >
                 <ExternalLink className="h-4 w-4" />
                 <span>View Full</span>
               </Link>
