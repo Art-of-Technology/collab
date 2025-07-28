@@ -5,12 +5,15 @@ import { EpicDetailContent } from "@/components/epics/EpicDetailContent";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
+import { urls } from "@/lib/url-resolver";
+import { getWorkspaceSlug, getBoardSlug } from "@/lib/client-slug-resolvers";
 
 export default function EpicPage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
   const [epic, setEpic] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [epicId, setEpicId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [backUrl, setBackUrl] = useState<string>('#');
 
   // Resolve params first
   useEffect(() => {
@@ -60,8 +63,39 @@ export default function EpicPage({ params }: { params: Promise<{ workspaceId: st
     }
   };
 
-  const boardId = epic?.taskBoardId || '';
-  const backUrl = workspaceId ? `/${workspaceId}/tasks${boardId ? `?board=${boardId}` : ''}` : '#';
+  // Generate back URL using URL resolver when epic and workspaceId are available
+  useEffect(() => {
+    const generateBackUrl = async () => {
+      if (!workspaceId || !epic) return;
+      
+      const boardId = epic.taskBoardId || '';
+      
+      try {
+        // Get the workspace slug for URL generation
+        const workspaceSlug = await getWorkspaceSlug(workspaceId);
+        
+        // Get the board slug for URL generation
+        const boardSlug = boardId ? await getBoardSlug(boardId, workspaceId) : null;
+        
+        if (workspaceSlug && boardSlug) {
+          const url = urls.board({
+            workspaceSlug,
+            boardSlug,
+            view: 'kanban'
+          });
+          setBackUrl(url);
+          return;
+        }
+      } catch (err) {
+        console.log('Failed to resolve slugs, using fallback URL:', err);
+      }
+      
+      // Fallback to legacy URL
+      setBackUrl(`/${workspaceId}/tasks${boardId ? `?board=${boardId}` : ''}`);
+    };
+
+    generateBackUrl();
+  }, [workspaceId, epic]);
 
   return (
     <div className="container py-6 max-w-7xl">

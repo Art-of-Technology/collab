@@ -26,13 +26,15 @@ export default async function WelcomePage() {
           { members: { some: { userId: session.user.id } } }
         ]
       },
-      select: { id: true },
+      select: { id: true, slug: true },
       orderBy: { createdAt: 'asc' },
       take: 1
     });
 
     if (userWorkspaces.length > 0) {
-      redirect(`/${userWorkspaces[0].id}/dashboard`);
+      const workspace = userWorkspaces[0];
+      const workspaceSlugOrId = workspace.slug || workspace.id;
+      redirect(`/${workspaceSlugOrId}/dashboard`);
     }
   }
 

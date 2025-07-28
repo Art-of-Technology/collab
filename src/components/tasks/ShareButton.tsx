@@ -9,18 +9,27 @@ import {
 } from "@/components/ui/tooltip";
 import { Share2, Check } from "lucide-react";
 import { useState } from "react";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export interface ShareButtonProps {
-  taskId: string;
+  entityId: string;
   issueKey: string;
+  entityType: 'tasks' | 'epics' | 'stories' | 'milestones';
 }
 
-export function ShareButton({ taskId, issueKey }: ShareButtonProps) {
+export function ShareButton({ entityId, issueKey, entityType }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
+  const { currentWorkspace } = useWorkspace();
   
   const handleCopyLink = () => {
-    // Use issue key if available, otherwise use task ID
-    const url = `${window.location.origin}/tasks/${issueKey || taskId}`;
+    // Generate URL with workspace slug if available, fallback to workspace ID
+    const workspaceIdentifier = currentWorkspace?.slug || currentWorkspace?.id;
+    const entityIdentifier = issueKey || entityId;
+    
+    const url = workspaceIdentifier 
+      ? `${window.location.origin}/${workspaceIdentifier}/${entityType}/${entityIdentifier}`
+      : `${window.location.origin}/${entityType}/${entityIdentifier}`;
+      
     navigator.clipboard.writeText(url);
     setCopied(true);
     

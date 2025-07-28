@@ -8,6 +8,7 @@ import Link from "next/link";
 import { StoryDetailContent } from "@/components/stories/StoryDetailContent";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { resolveIdToIssueKey } from '@/lib/client-issue-key-resolvers';
 
 interface StoryDetailModalProps {
   storyId: string | null;
@@ -19,6 +20,7 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [storyIssueKey, setStoryIssueKey] = useState<string | null>(null);
   
   // Get current board ID from TasksContext
   const { selectedBoardId } = useTasks();
@@ -47,6 +49,13 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
       // Only open modal after data is successfully loaded
       if (showLoading) {
         setIsOpen(true);
+      }
+      
+      // Resolve story ID to issue key for the View Full URL
+      if (storyId) {
+        resolveIdToIssueKey(storyId, 'story').then(issueKey => {
+          setStoryIssueKey(issueKey);
+        });
       }
     } catch (err) {
       console.error("Failed to fetch story details:", err);
@@ -96,7 +105,17 @@ export default function StoryDetailModal({ storyId, onClose }: StoryDetailModalP
           <DialogTitle className="sr-only">Story Details</DialogTitle>
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button size="sm" variant="ghost" asChild>
-              <Link href={currentWorkspace ? `/${currentWorkspace.id}/stories/${storyId}` : "#"} target="_blank" className="flex items-center gap-1">
+              <Link 
+                href={
+                  currentWorkspace?.slug && storyIssueKey 
+                    ? `/${currentWorkspace.slug}/stories/${storyIssueKey}`
+                    : currentWorkspace 
+                    ? `/${currentWorkspace.id}/stories/${storyId}` 
+                    : "#"
+                } 
+                target="_blank" 
+                className="flex items-center gap-1"
+              >
                 <ExternalLink className="h-4 w-4" />
                 <span>View Full</span>
               </Link>

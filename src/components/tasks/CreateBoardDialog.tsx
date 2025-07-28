@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +25,16 @@ interface CreateBoardDialogProps {
   onSuccess: () => void;
 }
 
+// Helper function to generate slug from name
+const generateSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+};
+
 export default function CreateBoardDialog({
   isOpen,
   onClose,
@@ -36,18 +46,37 @@ export default function CreateBoardDialog({
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     name: "",
+    slug: "",
     description: "",
     issuePrefix: "",
   });
+  const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
   
   // Use the mutation hook
   const createBoardMutation = useCreateBoard();
+
+  // Auto-generate slug from name when name changes (unless manually edited)
+  useEffect(() => {
+    if (!isSlugManuallyEdited && formData.name.trim()) {
+      const generatedSlug = generateSlug(formData.name);
+      setFormData(prev => ({ ...prev, slug: generatedSlug }));
+    }
+  }, [formData.name, isSlugManuallyEdited]);
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       toast({
         title: "Error",
         description: "Board name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.slug.trim()) {
+      toast({
+        title: "Error",
+        description: "Board slug is required",
         variant: "destructive",
       });
       return;
@@ -71,10 +100,21 @@ export default function CreateBoardDialog({
       return;
     }
 
+    // Validate slug format
+    if (!/^[a-z0-9-]+$/.test(formData.slug)) {
+      toast({
+        title: "Error",
+        description: "Board slug can only contain lowercase letters, numbers, and hyphens",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const result = await createBoardMutation.mutateAsync({
         workspaceId: currentWorkspace.id,
         name: formData.name,
+        slug: formData.slug,
         description: formData.description || undefined,
         issuePrefix: formData.issuePrefix,
       });
@@ -90,9 +130,11 @@ export default function CreateBoardDialog({
       // Reset form
       setFormData({
         name: "",
+        slug: "",
         description: "",
         issuePrefix: "",
       });
+      setIsSlugManuallyEdited(false);
       
       // Show success toast
       toast({
@@ -142,7 +184,7 @@ export default function CreateBoardDialog({
 
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Board Name</Label>
+            <Label htmlFor="name">Board Name *</Label>
             <Input
               id="name"
               placeholder="Enter board name"
@@ -151,6 +193,22 @@ export default function CreateBoardDialog({
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="slug">Board Slug *</Label>
+            <Input
+              id="slug"
+              placeholder="board-slug"
+              value={formData.slug}
+              onChange={(e) => {
+                setIsSlugManuallyEdited(true);
+                setFormData((prev) => ({ ...prev, slug: e.target.value }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Used in URLs. Only lowercase letters, numbers, and hyphens allowed.
+            </p>
           </div>
 
           <div className="space-y-2">

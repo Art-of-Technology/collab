@@ -375,6 +375,7 @@ model WorkspaceInvitation {
 model TaskBoard {
   id              String       @id @default(cuid())
   name            String
+  slug            String
   description     String?
   workspaceId     String
   isDefault       Boolean      @default(false)
@@ -390,6 +391,7 @@ model TaskBoard {
   columns         TaskColumn[]
 
   @@unique([name, workspaceId])
+  @@unique([slug, workspaceId])
   @@index([workspaceId])
 }
 

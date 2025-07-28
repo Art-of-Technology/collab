@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Gauge } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { urls } from "@/lib/url-resolver";
 
 interface DashboardButtonProps {
   workspaceId: string;
+  workspaceSlug?: string;
 }
 
-export default function DashboardButton({ workspaceId }: DashboardButtonProps) {
+export default function DashboardButton({ workspaceId, workspaceSlug }: DashboardButtonProps) {
   const router = useRouter();
   const { switchWorkspace } = useWorkspace();
 
@@ -18,8 +20,12 @@ export default function DashboardButton({ workspaceId }: DashboardButtonProps) {
     // Set workspace context
     switchWorkspace(workspaceId);
     
-    // Navigate to workspace-specific dashboard
-    router.push(`/${workspaceId}/dashboard`);
+    // Navigate to workspace-specific dashboard using URL resolver
+    const dashboardUrl = workspaceSlug 
+      ? urls.workspaceDashboard(workspaceSlug)
+      : `/${workspaceId}/dashboard`; // Fallback for backward compatibility
+    
+    router.push(dashboardUrl);
   };
 
   return (
