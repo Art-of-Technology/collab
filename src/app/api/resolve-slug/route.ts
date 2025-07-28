@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isUUID } from '@/lib/url-utils';
 
+// Check if a string is a CUID (Prisma's default ID format)
+function isCUID(str: string): boolean {
+  return /^c[a-z0-9]{24}$/.test(str);
+}
+
+// Check if a string is a database ID (UUID or CUID)
+function isDatabaseId(str: string): boolean {
+  return isUUID(str) || isCUID(str);
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const value = searchParams.get('value');
@@ -18,11 +28,10 @@ export async function GET(request: NextRequest) {
 
   try {
     let result: string | null = null;
-    console.log('🔍 API Debug - resolving:', { type, value, workspaceSlugOrId });
 
     if (type === 'workspace-slug') {
       // Get workspace slug from ID or return slug if already a slug
-      if (isUUID(value)) {
+      if (isDatabaseId(value)) {
         const workspace = await prisma.workspace.findUnique({
           where: { id: value },
           select: { slug: true }
@@ -32,7 +41,6 @@ export async function GET(request: NextRequest) {
         // Already a slug, just return it
         result = value;
       }
-      console.log('📍 Workspace slug result:', result);
     } else if (type === 'board-slug') {
       if (!workspaceSlugOrId) {
         return NextResponse.json({ error: 'workspaceSlugOrId required for board resolution' }, { status: 400 });
@@ -40,7 +48,7 @@ export async function GET(request: NextRequest) {
       
       // First resolve workspace to ID if needed
       let workspaceId = workspaceSlugOrId;
-      if (!isUUID(workspaceSlugOrId)) {
+      if (!isDatabaseId(workspaceSlugOrId)) {
         const workspace = await prisma.workspace.findUnique({
           where: { slug: workspaceSlugOrId },
           select: { id: true }
@@ -49,7 +57,7 @@ export async function GET(request: NextRequest) {
       }
       
       // Get board slug from ID or return slug if already a slug
-      if (isUUID(value)) {
+      if (isDatabaseId(value)) {
         const board = await prisma.taskBoard.findFirst({
           where: { 
             id: value,
@@ -62,10 +70,8 @@ export async function GET(request: NextRequest) {
         // Already a slug, just return it
         result = value;
       }
-      console.log('📋 Board slug result:', result);
     }
 
-    console.log('✅ API returning result:', result);
     return NextResponse.json({ result });
   } catch (error) {
     console.error('Slug resolution error:', error);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -19,18 +19,23 @@ import { cn } from "@/lib/utils";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useCanCreateBoard } from "@/hooks/use-permissions";
+
 import CreateBoardDialog from "./CreateBoardDialog";
+import BoardImportDialog from "./BoardImportDialog";
 
 export default function TaskBoardSelector() {
   const [open, setOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const { boards, selectedBoardId, selectBoard, refreshBoards } = useTasks();
   const { currentWorkspace } = useWorkspace();
   
+
   // Check if user can create boards
   const canCreateBoardResult = useCanCreateBoard(currentWorkspace?.id);
   const canCreateBoard = canCreateBoardResult.hasPermission;
   const permissionsLoading = canCreateBoardResult.loading;
+
 
   return (
     <div className="flex gap-2 items-center">
@@ -75,6 +80,18 @@ export default function TaskBoardSelector() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            <CommandGroup>
+              <CommandItem 
+                onSelect={() => {
+                  setOpen(false);
+                  setIsImportDialogOpen(true);
+                }}
+                className="text-blue-600"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Import from JSON
+              </CommandItem>
+            </CommandGroup>
             {canCreateBoard && (
               <CommandGroup>
                 <CommandItem 
@@ -109,6 +126,16 @@ export default function TaskBoardSelector() {
         isOpen={isCreateDialogOpen}
         onClose={() => setIsCreateDialogOpen(false)}
         onSuccess={() => refreshBoards()}
+      />
+      
+      <BoardImportDialog 
+        isOpen={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        onSuccess={(boardId) => {
+          refreshBoards();
+          selectBoard(boardId);
+        }}
+        workspaceId={currentWorkspace?.id || ""}
       />
     </div>
   );

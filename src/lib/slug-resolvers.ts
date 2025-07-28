@@ -5,14 +5,24 @@
 import { prisma } from '@/lib/prisma';
 import { isUUID } from '@/lib/url-utils';
 
+// Check if a string is a CUID (Prisma's default ID format)
+function isCUID(str: string): boolean {
+  return /^c[a-z0-9]{24}$/.test(str);
+}
+
+// Check if a string is a database ID (UUID or CUID)
+function isDatabaseId(str: string): boolean {
+  return isUUID(str) || isCUID(str);
+}
+
 /**
  * Resolve workspace slug to workspace ID
  * Supports both slugs and legacy UUIDs for backward compatibility
  */
 export async function resolveWorkspaceSlug(slugOrId: string): Promise<string | null> {
   try {
-    // If it's already a UUID, return it (legacy support)
-    if (isUUID(slugOrId)) {
+    // If it's already a database ID (UUID or CUID), return it (legacy support)
+    if (isDatabaseId(slugOrId)) {
       // Verify the workspace exists
       const workspace = await prisma.workspace.findUnique({
         where: { id: slugOrId },
@@ -40,8 +50,8 @@ export async function resolveWorkspaceSlug(slugOrId: string): Promise<string | n
  */
 export async function resolveBoardSlug(workspaceId: string, slugOrId: string): Promise<string | null> {
   try {
-    // If it's already a UUID, return it (legacy support)
-    if (isUUID(slugOrId)) {
+    // If it's already a database ID (UUID or CUID), return it (legacy support)
+    if (isDatabaseId(slugOrId)) {
       // Verify the board exists in the workspace
       const board = await prisma.taskBoard.findFirst({
         where: { 

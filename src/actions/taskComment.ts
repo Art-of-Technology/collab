@@ -428,4 +428,95 @@ export async function getTaskCommentLikes(taskId: string, commentId: string) {
     console.error('Error getting task comment likes:', error);
     throw error;
   }
+}
+
+/**
+ * Update a comment on a task
+ */
+export async function updateTaskComment(taskId: string, commentId: string, content: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+
+  if (!content.trim()) {
+    throw new Error('Comment content cannot be empty');
+  }
+
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Check if comment exists and belongs to the task
+    const comment = await prisma.taskComment.findFirst({
+      where: {
+        id: commentId,
+        taskId: taskId,
+      },
+    });
+
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+
+    // Only the author can edit
+    if (comment.authorId !== user.id) {
+      throw new Error('You do not have permission to edit this comment');
+    }
+
+    // Update the comment
+    const updatedComment = await prisma.taskComment.update({
+      where: { id: commentId },
+      data: { content },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true,
+          }
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                useCustomAvatar: true
+              }
+            }
+          }
+        },
+        parent: true
+      }
+    });
+
+    // Revalidate the task page
+    revalidatePath(`/${comment.taskId}/tasks/${taskId}`);
+
+    return updatedComment;
+  } catch (error) {
+    console.error('Error updating task comment:', error);
+    throw error;
+  }
 } 

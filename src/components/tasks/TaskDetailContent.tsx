@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock, Copy } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock, Copy, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -103,6 +103,10 @@ export function TaskDetailContent({
 
   // Helper modal state
   const [showHelperModal, setShowHelperModal] = useState(false);
+  
+  // Delete task state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Copy to clipboard function
   const copyToClipboard = async (text: string) => {
@@ -140,6 +144,25 @@ export function TaskDetailContent({
     
     return userStatus.currentTaskPlayState || "stopped";
   }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, task?.id]);
+
+  // Update title state when task changes
+  useEffect(() => {
+    if (task?.title) {
+      setTitle(task.title);
+    }
+  }, [task?.title]);
+
+  // Update description state when task changes
+  useEffect(() => {
+    if (task?.description) {
+      setDescription(task.description);
+    }
+  }, [task?.description]);
+
+  // Update due date state when task changes
+  useEffect(() => {
+    setDueDate(task?.dueDate);
+  }, [task?.dueDate]);
 
   // Update comments state when task changes
   useEffect(() => {
@@ -361,6 +384,41 @@ export function TaskDetailContent({
 
   const handleHelperCancel = () => {
     setShowHelperModal(false);
+  };
+
+  const handleDeleteTask = async () => {
+    if (!task?.id || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete task');
+      }
+
+      toast({
+        title: "Task deleted",
+        description: "The task has been successfully deleted.",
+      });
+
+      // Close modal and refresh data
+      setShowDeleteModal(false);
+      onClose?.();
+      refreshBoards();
+
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete task. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleAiImproveDescription = async (text: string): Promise<string> => {
@@ -649,14 +707,7 @@ export function TaskDetailContent({
 
 
 
-  // Update state when task changes
-  useEffect(() => {
-    if (task) {
-      setTitle(task.title);
-      setDescription(task.description || "");
-      setDueDate(task.dueDate);
-    }
-  }, [task]);
+
 
   if (error) {
     return (
@@ -1307,6 +1358,22 @@ export function TaskDetailContent({
                 </div>
               </div>
 
+              {/* Delete Task Section */}
+              <div className="pt-4 border-t">
+                <p className="text-sm font-medium mb-2">Danger Zone</p>
+                <Button
+                  onClick={() => setShowDeleteModal(true)}
+                  variant="destructive"
+                  size="sm"
+                  className="w-full gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Task
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This action cannot be undone
+                </p>
+              </div>
 
             </CardContent>
           </Card>
@@ -1414,6 +1481,59 @@ export function TaskDetailContent({
           onTimeAdjusted={handleTimeAdjusted}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this task? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {task && (
+            <div className="py-4">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <Trash2 className="h-4 w-4 text-destructive" />
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{task.title}</p>
+                  {task.issueKey && (
+                    <p className="text-xs text-muted-foreground font-mono">{task.issueKey}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteTask}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Task
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

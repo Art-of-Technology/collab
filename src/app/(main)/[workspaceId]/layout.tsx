@@ -4,6 +4,12 @@ import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SidebarProvider from "@/components/providers/SidebarProvider";
 import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
+import BoardGenerationStatus from "@/components/tasks/BoardGenerationStatus";
+import { BoardGenerationProvider } from "@/context/BoardGenerationContext";
+import TaskGenerationStatus from "@/components/tasks/TaskGenerationStatus";
+import { TaskGenerationProvider } from "@/context/TaskGenerationContext";
+import StoryGenerationStatus from "@/components/stories/StoryGenerationStatus";
+import { StoryGenerationProvider } from "@/context/StoryGenerationContext";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -69,15 +75,26 @@ export default async function WorkspaceLayout({
   const hasWorkspaces = userWorkspaces.length > 0;
   
   // Workspace routes should always show sidebar
+  console.log('Layout rendering with workspaceId:', workspaceId);
+  
   return (
     <SidebarProvider>
-      <LayoutWithSidebar 
-        pathname={`/${workspaceId}`} 
-        session={session}
-        hasWorkspaces={hasWorkspaces}
-      >
-        {children}
-      </LayoutWithSidebar>
+      <BoardGenerationProvider workspaceId={workspaceId}>
+        <TaskGenerationProvider workspaceId={workspaceId}>
+          <StoryGenerationProvider workspaceId={workspaceId}>
+            <LayoutWithSidebar 
+              pathname={`/${workspaceId}`} 
+              session={session}
+              hasWorkspaces={hasWorkspaces}
+            >
+              {children}
+              <BoardGenerationStatus />
+              <TaskGenerationStatus />
+              <StoryGenerationStatus />
+            </LayoutWithSidebar>
+          </StoryGenerationProvider>
+        </TaskGenerationProvider>
+      </BoardGenerationProvider>
     </SidebarProvider>
   );
 } 

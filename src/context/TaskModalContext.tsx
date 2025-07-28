@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { resolveIssueKeyToId, resolveIdToIssueKey } from '@/lib/client-issue-key-resolvers';
-import { isIssueKey } from '@/lib/shared-issue-key-utils';
+import { resolveIssueKeyToId, resolveIdToIssueKey } from "@/lib/client-issue-key-resolvers";
+import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
 // Dynamically import the Detail Modals
 const TaskDetailModal = dynamic(() => import("@/components/tasks/TaskDetailModal"), {
@@ -25,7 +25,7 @@ interface TaskModalContextType {
   activeTaskId: string | null;
   openTaskModal: (taskId: string) => Promise<void>;
   closeTaskModal: () => void;
-  
+
   // New entity modal states and methods
   activeMilestoneId: string | null;
   activeEpicId: string | null;
@@ -46,7 +46,7 @@ export const TaskModalContext = createContext<TaskModalContextType>({
   activeTaskId: null,
   openTaskModal: async () => {},
   closeTaskModal: () => {},
-  
+
   // Default values for new entity modal states and methods
   activeMilestoneId: null,
   activeEpicId: null,
@@ -88,42 +88,42 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
       const storyParam = searchParams.get("storyId");
 
       // Helper function to resolve param to ID
-      const resolveParamToId = async (param: string, entityType: 'task' | 'epic' | 'story' | 'milestone') => {
+      const resolveParamToId = async (param: string, entityType: "task" | "epic" | "story" | "milestone") => {
         if (isIssueKey(param)) {
           return await resolveIssueKeyToId(param, entityType);
         }
         return param; // Already an ID
       };
+      if (!activeTaskId && !activeMilestoneId && !activeEpicId && !activeStoryId) {
+        // Prioritize Task if multiple are present
+        if (taskParam && !activeTaskId) {
+          const resolvedId = await resolveParamToId(taskParam, "task");
+          if (resolvedId) {
+            setActiveTaskId(resolvedId);
+            setIsTaskModalOpen(true);
+          }
+        } else if (milestoneParam && !activeMilestoneId) {
+          const resolvedId = await resolveParamToId(milestoneParam, "milestone");
+          if (resolvedId) {
+            setActiveMilestoneId(resolvedId);
+            setIsMilestoneModalOpen(true);
+          }
+        } else if (epicParam && !activeEpicId) {
+          const resolvedId = await resolveParamToId(epicParam, "epic");
+          if (resolvedId) {
+            setActiveEpicId(resolvedId);
+            setIsEpicModalOpen(true);
+          }
+        } else if (storyParam && !activeStoryId) {
+          const resolvedId = await resolveParamToId(storyParam, "story");
+          if (resolvedId) {
+            setActiveStoryId(resolvedId);
+            setIsStoryModalOpen(true);
+          }
+        }
 
-      // Prioritize Task if multiple are present
-      if (taskParam && !activeTaskId) {
-        const resolvedId = await resolveParamToId(taskParam, 'task');
-        if (resolvedId) {
-          setActiveTaskId(resolvedId);
-          setIsTaskModalOpen(true);
-        }
-      } else if (milestoneParam && !activeMilestoneId) {
-        const resolvedId = await resolveParamToId(milestoneParam, 'milestone');
-        if (resolvedId) {
-          setActiveMilestoneId(resolvedId);
-          setIsMilestoneModalOpen(true);
-        }
-      } else if (epicParam && !activeEpicId) {
-        const resolvedId = await resolveParamToId(epicParam, 'epic');
-        if (resolvedId) {
-          setActiveEpicId(resolvedId);
-          setIsEpicModalOpen(true);
-        }
-      } else if (storyParam && !activeStoryId) {
-        const resolvedId = await resolveParamToId(storyParam, 'story');
-        if (resolvedId) {
-          setActiveStoryId(resolvedId);
-          setIsStoryModalOpen(true);
-        }
-      }
-      
-      // If no modal ID is in the URL, ensure all are closed in state
-      if (!taskParam && !milestoneParam && !epicParam && !storyParam) {
+        // If no modal ID is in the URL, ensure all are closed in state
+        if (!taskParam && !milestoneParam && !epicParam && !storyParam) {
           setActiveTaskId(null);
           setActiveMilestoneId(null);
           setActiveEpicId(null);
@@ -132,11 +132,12 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
           setIsMilestoneModalOpen(false);
           setIsEpicModalOpen(false);
           setIsStoryModalOpen(false);
+        }
       }
     };
-
     handleUrlSync();
-  }, [searchParams, activeTaskId, activeMilestoneId, activeEpicId, activeStoryId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const updateUrl = (paramName: string, paramValue: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -145,20 +146,20 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
     params.delete("milestoneId");
     params.delete("epicId");
     params.delete("storyId");
-    
+
     if (paramValue) {
       params.set(paramName, paramValue);
     } // If null, all params are already deleted
-    
+
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const openTaskModal = async (taskId: string) => {
     setActiveTaskId(taskId);
     setIsTaskModalOpen(true);
-    
+
     // Try to get the issue key for the URL
-    const issueKey = await resolveIdToIssueKey(taskId, 'task');
+    const issueKey = await resolveIdToIssueKey(taskId, "task");
     updateUrl("taskId", issueKey || taskId);
   };
 
@@ -167,49 +168,49 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
     setActiveTaskId(null);
     updateUrl("taskId", null);
   };
-  
+
   // --- Milestone Modal ---
   const openMilestoneModal = async (milestoneId: string) => {
     setActiveMilestoneId(milestoneId);
     setIsMilestoneModalOpen(true);
-    
+
     // Try to get the issue key for the URL
-    const issueKey = await resolveIdToIssueKey(milestoneId, 'milestone');
+    const issueKey = await resolveIdToIssueKey(milestoneId, "milestone");
     updateUrl("milestoneId", issueKey || milestoneId);
   };
-  
+
   const closeMilestoneModal = () => {
     setIsMilestoneModalOpen(false);
     setActiveMilestoneId(null);
     updateUrl("milestoneId", null);
   };
-  
+
   // --- Epic Modal ---
   const openEpicModal = async (epicId: string) => {
     setActiveEpicId(epicId);
     setIsEpicModalOpen(true);
-    
+
     // Try to get the issue key for the URL
-    const issueKey = await resolveIdToIssueKey(epicId, 'epic');
+    const issueKey = await resolveIdToIssueKey(epicId, "epic");
     updateUrl("epicId", issueKey || epicId);
   };
-  
+
   const closeEpicModal = () => {
     setIsEpicModalOpen(false);
     setActiveEpicId(null);
     updateUrl("epicId", null);
   };
-  
+
   // --- Story Modal ---
   const openStoryModal = async (storyId: string) => {
     setActiveStoryId(storyId);
     setIsStoryModalOpen(true);
-    
+
     // Try to get the issue key for the URL
-    const issueKey = await resolveIdToIssueKey(storyId, 'story');
+    const issueKey = await resolveIdToIssueKey(storyId, "story");
     updateUrl("storyId", issueKey || storyId);
   };
-  
+
   const closeStoryModal = () => {
     setIsStoryModalOpen(false);
     setActiveStoryId(null);
@@ -223,7 +224,7 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
         activeTaskId,
         openTaskModal,
         closeTaskModal,
-        
+
         // New entity modal states and methods
         activeMilestoneId,
         activeEpicId,
@@ -240,15 +241,14 @@ export const TaskModalProvider = ({ children }: { children: React.ReactNode }) =
       }}
     >
       {children}
-      
+
       {/* Render Modals Conditionally based on active IDs */}
       {activeTaskId && <TaskDetailModal taskId={activeTaskId} onClose={closeTaskModal} />}
       {activeMilestoneId && <MilestoneDetailModal milestoneId={activeMilestoneId} onClose={closeMilestoneModal} />}
       {activeEpicId && <EpicDetailModal epicId={activeEpicId} onClose={closeEpicModal} />}
       {activeStoryId && <StoryDetailModal storyId={activeStoryId} onClose={closeStoryModal} />}
-      
     </TaskModalContext.Provider>
   );
 };
 
-export const useTaskModal = () => useContext(TaskModalContext); 
+export const useTaskModal = () => useContext(TaskModalContext);

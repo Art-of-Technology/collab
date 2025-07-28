@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Star, Copy } from "lucide-react";
+import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Star, Copy, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -30,6 +30,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { BoardItemTabs } from "@/components/tasks/TaskTabs";
 import { useSession } from "next-auth/react";
 import { ShareButton } from "@/components/tasks/ShareButton";
+import { useStoryGeneration } from "@/context/StoryGenerationContext";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -127,6 +128,8 @@ export function EpicDetailContent({
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { currentWorkspace } = useWorkspace();
+    const { refreshJobs } = useStoryGeneration();
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const effectiveBoardId = epic?.taskBoard?.id || boardId;
 
@@ -366,6 +369,52 @@ export function EpicDetailContent({
             await saveEpicField('labels', labelIds);
         } finally {
             setSavingLabels(false);
+        }
+    };
+
+    const handleGenerateAndCreateStories = async () => {
+        if (!epic || !effectiveBoardId || !currentWorkspace || isGenerating) return;
+
+        setIsGenerating(true);
+        try {
+            const response = await fetch('/api/ai/generate-and-create-stories', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    epicId: epic.id,
+                    boardId: effectiveBoardId,
+                    workspaceId: currentWorkspace.id,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to start story generation');
+            }
+
+            const data = await response.json();
+            console.log('AI story generation started:', data);
+
+            // Immediately refresh jobs to show the widget
+            refreshJobs();
+
+            toast({
+                title: "AI Story Generation Started",
+                description: "Stories are being generated in the background. Check the widget for progress.",
+            });
+
+            // Reset generating state after a short delay
+            setTimeout(() => setIsGenerating(false), 2000);
+
+        } catch (error) {
+            console.error('Error starting AI story generation:', error);
+            toast({
+                title: "Error",
+                description: "Failed to start AI story generation. Please try again.",
+                variant: "destructive",
+            });
+            setIsGenerating(false);
         }
     };
 
@@ -863,6 +912,27 @@ export function EpicDetailContent({
                                     </Link>
                                 </div>
                             )}
+
+                            {/* AI Story Enhancement Section */}
+                            <div className="pt-4 border-t">
+                                <p className="text-sm font-medium mb-2">AI Enhancement</p>
+                                <Button
+                                    onClick={handleGenerateAndCreateStories}
+                                    className="w-full gap-2"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isGenerating || !effectiveBoardId}
+                                >
+                                    <Sparkles className="h-4 w-4" />
+                                    {isGenerating ? 'Generating Stories...' : 'Generate Stories with AI'}
+                                </Button>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {!effectiveBoardId 
+                                        ? 'No board assigned to this epic'
+                                        : 'AI will generate and create stories in the background'
+                                    }
+                                </p>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>

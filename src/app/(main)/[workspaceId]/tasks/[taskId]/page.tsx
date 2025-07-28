@@ -7,7 +7,7 @@ import { getAuthSession } from "@/lib/auth";
 import { getTaskById } from "@/actions/task";
 import TaskDetailClient from "@/components/tasks/TaskDetailClient";
 import { urls } from "@/lib/url-resolver";
-import { resolveBoardSlug, resolveWorkspaceSlug } from "@/lib/slug-resolvers";
+import { getWorkspaceSlugServer, getBoardSlugServer } from "@/lib/server-slug-getters";
 import { resolveIssueKeyToId } from "@/lib/issue-key-resolvers";
 import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
@@ -50,8 +50,8 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
     const getBackUrl = async (): Promise<string> => {
       try {
         // Try to resolve workspace and board slugs
-        const workspaceSlug = await resolveWorkspaceSlug(_params.workspaceId);
-        const boardSlug = boardId ? await resolveBoardSlug(boardId, _params.workspaceId) : null;
+        const workspaceSlug = await getWorkspaceSlugServer(_params.workspaceId);
+        const boardSlug = boardId ? await getBoardSlugServer(boardId, _params.workspaceId) : null;
         
         if (workspaceSlug && boardSlug) {
           return urls.board({

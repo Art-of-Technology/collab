@@ -69,16 +69,13 @@ export default function EpicPage({ params }: { params: Promise<{ workspaceId: st
       if (!workspaceId || !epic) return;
       
       const boardId = epic.taskBoardId || '';
-      console.log('🔍 Debug URL generation:', { workspaceId, boardId });
       
       try {
         // Get the workspace slug for URL generation
         const workspaceSlug = await getWorkspaceSlug(workspaceId);
-        console.log('📍 Workspace slug:', workspaceSlug);
         
         // Get the board slug for URL generation
         const boardSlug = boardId ? await getBoardSlug(boardId, workspaceId) : null;
-        console.log('📋 Board slug:', boardSlug);
         
         if (workspaceSlug && boardSlug) {
           const url = urls.board({
@@ -86,20 +83,15 @@ export default function EpicPage({ params }: { params: Promise<{ workspaceId: st
             boardSlug,
             view: 'kanban'
           });
-          console.log('✅ Generated friendly URL:', url);
           setBackUrl(url);
           return;
         }
-        
-        console.log('❌ Missing slugs, using fallback');
       } catch (err) {
         console.log('Failed to resolve slugs, using fallback URL:', err);
       }
       
       // Fallback to legacy URL
-      const fallbackUrl = `/${workspaceId}/tasks${boardId ? `?board=${boardId}` : ''}`;
-      console.log('🔄 Using fallback URL:', fallbackUrl);
-      setBackUrl(fallbackUrl);
+      setBackUrl(`/${workspaceId}/tasks${boardId ? `?board=${boardId}` : ''}`);
     };
 
     generateBackUrl();
