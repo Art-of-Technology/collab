@@ -48,7 +48,7 @@ export default async function TaskShortlinkPage({ params }: PageProps) {
   const encodedWorkspaceId = encodeURIComponent(task.workspace.id);
   const encodedTaskBoardId = encodeURIComponent(task.taskBoard.id);
   const encodedTaskId = encodeURIComponent(task.id);
-  const canonicalUrl = `/${encodedWorkspaceId}/tasks?board=${encodedTaskBoardId}&taskId=${encodedTaskId}`;
+  const canonicalUrl = `/${encodedWorkspaceId}/boards?board=${encodedTaskBoardId}&taskId=${encodedTaskId}`;
 
   const session = await getAuthSession();
   if (!session?.user) {

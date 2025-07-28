@@ -35,11 +35,11 @@ export function TaskGenerationProvider({ workspaceId, children }: { workspaceId:
     }
   };
 
-  useEffect(() => {
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 2000); // Poll every 2 seconds
-    return () => clearInterval(interval);
-  }, [workspaceId]);
+  // useEffect(() => {
+  //   fetchJobs();
+  //   const interval = setInterval(fetchJobs, 2000); // Poll every 2 seconds
+  //   return () => clearInterval(interval);
+  // }, [workspaceId]);
 
   return (
     <TaskGenerationContext.Provider value={{ jobs, refreshJobs: fetchJobs }}>

@@ -337,6 +337,8 @@ model Workspace {
   tasks               Task[]
   taskBoards          TaskBoard[]
   taskLabels          TaskLabel[]
+  projects            Project[]
+  sharedBoards        BoardShare[]
   owner               User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   invitations         WorkspaceInvitation[]
   members             WorkspaceMember[]
@@ -373,21 +375,23 @@ model WorkspaceInvitation {
 }
 
 model TaskBoard {
-  id              String       @id @default(cuid())
+  id              String         @id @default(cuid())
   name            String
   description     String?
   workspaceId     String
-  isDefault       Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  isDefault       Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   issuePrefix     String
-  nextIssueNumber Int          @default(1)
+  nextIssueNumber Int            @default(1)
   epics           Epic[]
   milestones      Milestone[]
   stories         Story[]
   tasks           Task[]
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   columns         TaskColumn[]
+  boardProjects   BoardProject[]
+  boardShares     BoardShare[]
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
@@ -424,6 +428,7 @@ model Task {
   columnId      String?
   taskBoardId   String?
   workspaceId   String
+  projectId     String?
   assigneeId    String?
   reporterId    String?
   parentTaskId  String?
@@ -442,6 +447,7 @@ model Task {
   parentTask    Task?            @relation("TaskToSubtasks", fields: [parentTaskId], references: [id])
   subtasks      Task[]           @relation("TaskToSubtasks")
   post          Post?            @relation(fields: [postId], references: [id])
+  project       Project?         @relation(fields: [projectId], references: [id])
   reporter      User?            @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
   story         Story?           @relation(fields: [storyId], references: [id])
   taskBoard     TaskBoard?       @relation(fields: [taskBoardId], references: [id])
@@ -465,6 +471,7 @@ model Task {
   @@index([storyId])
   @@index([epicId])
   @@index([milestoneId])
+  @@index([projectId])
 }
 
 model TaskComment {
@@ -576,6 +583,7 @@ model Milestone {
   dueDate       DateTime?
   taskBoardId   String
   workspaceId   String
+  projectId     String?
   color         String?        @default("#6366F1")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -587,6 +595,7 @@ model Milestone {
   epics         Epic[]
   assignee      User?          @relation("AssignedMilestones", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
+  project       Project?       @relation(fields: [projectId], references: [id])
   reporter      User?          @relation("ReportedMilestones", fields: [reporterId], references: [id])
   taskBoard     TaskBoard      @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -600,6 +609,7 @@ model Milestone {
   @@index([issueKey])
   @@index([assigneeId])
   @@index([reporterId])
+  @@index([projectId])
 }
 
 model Epic {
@@ -613,6 +623,7 @@ model Epic {
   milestoneId   String?
   taskBoardId   String
   workspaceId   String
+  projectId     String?
   color         String?        @default("#6366F1")
   progress      Int            @default(0)
   issueKey      String?
@@ -625,6 +636,7 @@ model Epic {
   assignee      User?          @relation("AssignedEpics", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
   milestone     Milestone?     @relation(fields: [milestoneId], references: [id])
+  project       Project?       @relation(fields: [projectId], references: [id])
   reporter      User?          @relation("ReportedEpics", fields: [reporterId], references: [id])
   taskBoard     TaskBoard      @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -641,6 +653,7 @@ model Epic {
   @@index([columnId])
   @@index([assigneeId])
   @@index([reporterId])
+  @@index([projectId])
 }
 
 model Story {
@@ -656,6 +669,7 @@ model Story {
   epicId        String?
   taskBoardId   String?
   workspaceId   String
+  projectId     String?
   issueKey      String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -668,6 +682,7 @@ model Story {
   assignee      User?          @relation("AssignedStories", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
   epic          Epic?          @relation(fields: [epicId], references: [id])
+  project       Project?       @relation(fields: [projectId], references: [id])
   reporter      User?          @relation("ReportedStories", fields: [reporterId], references: [id])
   taskBoard     TaskBoard?     @relation(fields: [taskBoardId], references: [id])
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -682,6 +697,7 @@ model Story {
   @@index([columnId])
   @@index([assigneeId])
   @@index([reporterId])
+  @@index([projectId])
 }
 
 model Notification {
@@ -866,6 +882,60 @@ model BoardGenerationJob {
 
   @@index([workspaceId])
   @@index([userId])
+  @@index([status])
+}
+
+model Project {
+  id              String          @id @default(cuid())
+  orgId           String
+  name            String
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  workspace       Workspace       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  boardProjects   BoardProject[]
+  tasks           Task[]
+  epics           Epic[]
+  milestones      Milestone[]
+  stories         Story[]
+
+  @@unique([name, orgId])
+  @@index([orgId])
+}
+
+model BoardProject {
+  id        String    @id @default(cuid())
+  boardId   String
+  projectId String
+  createdAt DateTime  @default(now())
+  
+  // Relations
+  board     TaskBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([boardId, projectId])
+  @@index([boardId])
+  @@index([projectId])
+}
+
+model BoardShare {
+  id              String            @id @default(cuid())
+  boardId         String
+  orgId           String
+  permissionLevel BoardPermission   @default(VIEW)
+  status          ShareStatus       @default(PENDING)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relations  
+  board           TaskBoard         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  sharedWithOrg   Workspace         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  
+  @@unique([boardId, orgId])
+  @@index([boardId])
+  @@index([orgId])
   @@index([status])
 }
 
@@ -1069,6 +1139,18 @@ enum Permission {
   VIEW_REPORTS
   PIN_POST
   RESOLVE_BLOCKER
+}
+
+enum BoardPermission {
+  VIEW
+  EDIT
+  ADMIN
+}
+
+enum ShareStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 

@@ -129,7 +129,7 @@ export default function BoardImportDialog({
         setJsonInput(JSON.stringify(data, null, 2));
                 setError("");
         setValidationErrors([]);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+         
       } catch (_err) {
         setError("Invalid JSON file format");
         setImportData(null);
@@ -161,7 +161,7 @@ export default function BoardImportDialog({
       setImportData(data);
       setError("");
       setValidationErrors([]);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
     } catch (_err) {
       setError("Invalid JSON format");
       setImportData(null);

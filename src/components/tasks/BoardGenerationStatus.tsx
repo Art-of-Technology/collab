@@ -130,7 +130,7 @@ export default function BoardGenerationStatus() {
                     size="sm" 
                     variant="outline"
                     onClick={() => {
-                      router.push(`/${workspaceId}/tasks?board=${job.boardId}&view=kanban`);
+                      router.push(`/${workspaceId}/boards?board=${job.boardId}&view=kanban`);
                     }}
                   >
                     <Eye className="w-3 h-3 mr-1" />

@@ -64,4 +64,62 @@ interface Reaction {
   authorId: string;
   postId: string | null;
   commentId: string | null;
-} 
+}
+
+// Project model
+interface Project {
+  id: string;
+  orgId: string;
+  name: string;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  workspace?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  _count?: {
+    tasks: number;
+    epics: number;
+    milestones: number;
+    stories: number;
+    boardProjects: number;
+  };
+  boardProjects?: BoardProject[];
+}
+
+// BoardProject model
+interface BoardProject {
+  id: string;
+  boardId: string;
+  projectId: string;
+  createdAt: Date;
+  board?: {
+    id: string;
+    name: string;
+    description: string | null;
+  };
+  project?: Project;
+}
+
+// BoardShare model
+interface BoardShare {
+  id: string;
+  boardId: string;
+  orgId: string;
+  permissionLevel: 'VIEW' | 'EDIT' | 'ADMIN';
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: Date;
+  updatedAt: Date;
+  board?: {
+    id: string;
+    name: string;
+    description: string | null;
+  };
+  sharedWithOrg?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+}

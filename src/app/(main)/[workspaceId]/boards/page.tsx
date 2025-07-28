@@ -3,7 +3,7 @@ import { getAuthSession } from "@/lib/auth";
 import { getTasksData } from "@/actions/getTasks";
 import TasksClient from "@/components/tasks/TasksClient";
 
-export default async function TasksPage() {
+export default async function BoardsPage() {
   const session = await getAuthSession();
   
   if (!session?.user) {

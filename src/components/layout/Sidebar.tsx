@@ -8,9 +8,9 @@ import {
   PlusIcon,
   EnvelopeIcon,
   Squares2X2Icon,
-  RectangleStackIcon,
   DocumentTextIcon,
-  ClockIcon
+  ClockIcon,
+  FolderIcon
 } from "@heroicons/react/24/outline";
 import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
@@ -21,6 +21,7 @@ import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
+import { useTaskBoards } from "@/hooks/queries/useTaskBoard";
 
 interface SidebarProps {
   pathname?: string;
@@ -35,6 +36,12 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
   
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
+  
+  // Fetch task boards for the current workspace
+  const { data: taskBoards } = useTaskBoards({
+    workspaceId: currentWorkspace?.id,
+    includeStats: false
+  });
 
   // Generate navigation based on current workspace
   const getNavigation = () => {
@@ -56,11 +63,23 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         current: pathname === `/${workspaceId}/timeline`,
       },
       {
-        name: "Tasks",
-        href: `/${workspaceId}/tasks`,
-        icon: RectangleStackIcon,
-        current: pathname === `/${workspaceId}/tasks`,
+        name: "Projects",
+        href: `/${workspaceId}/projects`,
+        icon: FolderIcon,
+        current: pathname === `/${workspaceId}/projects` || pathname.startsWith(`/${workspaceId}/projects/`),
       },
+      {
+        name: "Boards",
+        href: `/${workspaceId}/boards`,
+        icon: Squares2X2Icon,
+        current: pathname === `/${workspaceId}/boards` || pathname.startsWith(`/${workspaceId}/boards/`),
+      },
+      // {
+      //   name: "In Progress",
+      //   href: `/${workspaceId}/tasks/in-progress`,
+      //   icon: ClockIcon,
+      //   current: pathname === `/${workspaceId}/tasks/in-progress`,
+      // },
     ];
 
     // Conditionally add Timesheet if time tracking is enabled
@@ -237,6 +256,45 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
             </Button>
           ))}
         </div>
+
+        {/* Boards Section */}
+        {taskBoards && taskBoards.length > 0 && (
+          <div className="border-t border-[#2a2929] pt-4">
+            <div className="px-2 pb-2">
+              <h3 className="text-xs uppercase tracking-wider text-gray-400 mb-2">
+                Boards
+              </h3>
+              <div className="space-y-1">
+                {taskBoards.slice(0, 5).map((board) => (
+                  <Button
+                    key={board.id}
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-gray-400 hover:text-gray-200 hover:bg-[#1c1c1c] h-8"
+                    asChild
+                  >
+                    <Link href={`/${currentWorkspace?.id}/boards?board=${board.id}`}>
+                      <Squares2X2Icon className="mr-2 h-3 w-3 flex-shrink-0" />
+                      <span className="truncate text-xs">{board.name}</span>
+                    </Link>
+                  </Button>
+                ))}
+                {taskBoards.length > 5 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-gray-400 hover:text-gray-200 hover:bg-[#1c1c1c] h-8"
+                    asChild
+                  >
+                    <Link href={`/${currentWorkspace?.id}/boards`}>
+                      <span className="text-xs">View all boards ({taskBoards.length})</span>
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="border-t border-[#2a2929] pt-4">
           <Button 

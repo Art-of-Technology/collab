@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Kanban, List, Plus, GitBranch, ChevronDown } from "lucide-react";
+import { Kanban, List, Plus, GitBranch, ChevronDown, FolderOpen } from "lucide-react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import TaskBoardSelector from "@/components/tasks/TaskBoardSelector";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
@@ -12,12 +13,21 @@ import { CreateMilestoneDialog } from "@/components/milestones/CreateMilestoneDi
 import { CreateEpicDialog } from "@/components/epics/CreateEpicDialog";
 import { CreateStoryDialog } from "@/components/stories/CreateStoryDialog";
 import { useTaskBoards } from "@/hooks/queries/useTaskBoard";
+import { useProjects } from "@/hooks/queries/useProject";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
@@ -26,6 +36,7 @@ export default function TasksHeader() {
   const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
   const [isEpicDialogOpen, setIsEpicDialogOpen] = useState(false);
   const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string>("all");
   const { selectedBoardId, view } = useTasks();
   const { currentWorkspace } = useWorkspace();
   const router = useRouter();
@@ -37,6 +48,9 @@ export default function TasksHeader() {
     workspaceId: currentWorkspace?.id,
     includeStats: true
   });
+
+  // Fetch projects for the current workspace
+  const { data: projects } = useProjects(currentWorkspace?.id || '');
 
   const handleCreateTaskOpen = () => {
     setIsCreateTaskOpen(true);
@@ -84,11 +98,32 @@ export default function TasksHeader() {
   return (
     <>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Tasks</h1>
-          <p className="text-muted-foreground">
-            Manage and track your team&apos;s tasks
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Boards</h1>
+            <p className="text-muted-foreground">
+              Manage and track your team&apos;s work across boards
+            </p>
+          </div>
+          
+          {/* Projects Filter */}
+          <div className="flex items-center gap-2">
+            <FolderOpen className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedProject} onValueChange={setSelectedProject}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {projects?.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="no-project">No Project</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <DropdownMenu>

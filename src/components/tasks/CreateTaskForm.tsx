@@ -47,6 +47,7 @@ import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import { BoardSelect } from "./selectors/BoardSelect";
 import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
 import { StorySelect } from "@/components/tasks/selectors/StorySelect";
+import { ProjectSelect } from "@/components/tasks/selectors/ProjectSelect";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { taskKeys } from "@/hooks/queries/useTask";
 import { useQueryClient } from "@tanstack/react-query";
@@ -69,6 +70,7 @@ const taskFormSchema = z.object({
   workspaceId: z.string().min(1, "Workspace ID is required"),
   priority: z.string().optional(),
   type: z.string().optional(),
+  projectId: z.string().nullable().optional(),
   epicId: z.string().nullable().optional(),
   storyId: z.string().nullable().optional(),
   taskBoardId: z.string().min(1, "Board is required"),
@@ -635,6 +637,24 @@ export default function CreateTaskForm({
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project (Optional)</FormLabel>
+                    <FormControl>
+                      <ProjectSelect
+                        value={field.value || undefined}
+                        onValueChange={field.onChange}
+                        disabled={createTaskMutation.isPending}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

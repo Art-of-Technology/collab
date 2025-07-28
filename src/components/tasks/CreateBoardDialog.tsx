@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, FolderOpen, X } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateBoard, boardKeys } from "@/hooks/queries/useTask";
 import { useTasks } from "@/context/TasksContext";
 import { useQueryClient } from "@tanstack/react-query";
+import { useProjects } from "@/hooks/queries/useProject";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,30 +19,60 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 interface CreateBoardDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialProjectIds?: string[];
 }
 
 export default function CreateBoardDialog({
   isOpen,
   onClose,
   onSuccess,
+  initialProjectIds = [],
 }: CreateBoardDialogProps) {
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
   const { refreshBoards, selectBoard } = useTasks();
   const queryClient = useQueryClient();
+  const { data: projects } = useProjects(currentWorkspace?.id || '');
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     issuePrefix: "",
+    selectedProjects: initialProjectIds,
   });
   
   // Use the mutation hook
   const createBoardMutation = useCreateBoard();
+
+  // Helper functions for project selection
+  const handleAddProject = (projectId: string) => {
+    if (!formData.selectedProjects.includes(projectId)) {
+      setFormData(prev => ({
+        ...prev,
+        selectedProjects: [...prev.selectedProjects, projectId]
+      }));
+    }
+  };
+
+  const handleRemoveProject = (projectId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedProjects: prev.selectedProjects.filter(id => id !== projectId)
+    }));
+  };
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
@@ -77,6 +108,7 @@ export default function CreateBoardDialog({
         name: formData.name,
         description: formData.description || undefined,
         issuePrefix: formData.issuePrefix,
+        projectIds: formData.selectedProjects,
       });
       
       // Manually invalidate all board-related queries
@@ -92,6 +124,7 @@ export default function CreateBoardDialog({
         name: "",
         description: "",
         issuePrefix: "",
+        selectedProjects: initialProjectIds,
       });
       
       // Show success toast
@@ -183,6 +216,56 @@ export default function CreateBoardDialog({
             />
             <p className="text-xs text-muted-foreground">
               This prefix will be used for task identification (e.g., PRJ-123)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Projects (Optional)</Label>
+            <Select onValueChange={handleAddProject}>
+              <SelectTrigger>
+                <SelectValue placeholder="Add projects to this board..." />
+              </SelectTrigger>
+              <SelectContent>
+                {projects?.filter(project => !formData.selectedProjects.includes(project.id)).map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    <div className="flex items-center">
+                      <FolderOpen className="mr-2 h-4 w-4 text-blue-600" />
+                      <span>{project.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+                {projects?.filter(project => !formData.selectedProjects.includes(project.id)).length === 0 && (
+                  <SelectItem value="no-projects" disabled>
+                    {projects?.length === 0 ? "No projects available" : "All projects already selected"}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            
+            {formData.selectedProjects.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {formData.selectedProjects.map((projectId) => {
+                  const project = projects?.find(p => p.id === projectId);
+                  return project ? (
+                    <Badge key={projectId} variant="secondary" className="flex items-center gap-1">
+                      <FolderOpen className="h-3 w-3" />
+                      {project.name}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1 hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => handleRemoveProject(projectId)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ) : null;
+                })}
+              </div>
+            )}
+            
+            <p className="text-xs text-muted-foreground">
+              Select which projects this board will be associated with. You can add projects later.
             </p>
           </div>
         </div>

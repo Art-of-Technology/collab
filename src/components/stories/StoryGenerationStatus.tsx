@@ -127,7 +127,7 @@ export default function StoryGenerationStatus() {
                     onClick={() => {
                       // Create URL with story highlighting
                       const storyIds = job.boardData?.createdStories?.map((s: any) => s.id).join(',') || '';
-                      const baseUrl = `/${workspaceId}/tasks?board=${job.boardId}&view=kanban`;
+                      const baseUrl = `/${workspaceId}/boards?board=${job.boardId}&view=kanban`;
                       const highlightUrl = storyIds ? `${baseUrl}&highlight=${storyIds}` : baseUrl;
                       router.push(highlightUrl);
                     }}

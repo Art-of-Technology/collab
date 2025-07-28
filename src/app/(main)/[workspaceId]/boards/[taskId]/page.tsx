@@ -35,7 +35,7 @@ export default async function TaskDetailPage({ params, searchParams }: TaskDetai
       <div className="container py-6 space-y-6">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" size="sm" asChild className="gap-1">
-            <Link href={`/${_params.workspaceId}/tasks?board=${boardId}`}>
+            <Link href={`/${_params.workspaceId}/boards?board=${boardId}`}>
               <ArrowLeft className="h-4 w-4" />
               Back to Board
             </Link>

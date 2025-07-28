@@ -93,7 +93,7 @@ async function generateWithAI(
 async function _parseAIResponse<T>(
   content: string, 
   expectedStructure: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _retryPrompt?: string
 ): Promise<T> {
   let cleanedContent = content.trim();
@@ -128,7 +128,7 @@ async function _parseAIResponse<T>(
       const parsed = JSON.parse(jsonStr);
       console.log(`Successfully parsed JSON on block ${i + 1}:`, typeof parsed);
       return parsed;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
     } catch (_error) {
       console.log(`JSON parse attempt ${i + 1} failed, trying fixes...`);
       
@@ -167,7 +167,7 @@ async function _parseAIResponse<T>(
           const parsed = JSON.parse(fixedJson);
           console.log(`JSON successfully fixed and parsed`);
           return parsed;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+           
         } catch (_fixError) {
           // Continue to next fix
         }

@@ -73,7 +73,7 @@ export async function POST(
 
     const { workspaceId } = params;
     const body = await request.json();
-    const { name, description, isDefault, issuePrefix } = body;
+    const { name, description, isDefault, issuePrefix, projectIds } = body;
 
     // Required fields
     if (!name) {
@@ -118,29 +118,61 @@ export async function POST(
       );
     }
 
-    // Create board with default columns
-    const board = await prisma.taskBoard.create({
-      data: {
-        name,
-        description,
-        issuePrefix,
-        nextIssueNumber: 1, // Start issue numbering from 1
-        isDefault: isDefault || false,
-        workspaceId,
-        columns: {
-          create: [
-            { name: "To Do", order: 0, color: "#6366F1" },
-            { name: "In Progress", order: 1, color: "#EC4899" },
-            { name: "Review", order: 2, color: "#F59E0B" },
-            { name: "Done", order: 3, color: "#10B981" },
-          ],
+    // Validate project IDs if provided
+    if (projectIds && Array.isArray(projectIds) && projectIds.length > 0) {
+      const existingProjects = await prisma.project.findMany({
+        where: {
+          id: { in: projectIds },
+          orgId: workspaceId,
         },
-      },
-      include: {
-        columns: {
-          orderBy: { order: "asc" },
+      });
+
+      if (existingProjects.length !== projectIds.length) {
+        return NextResponse.json(
+          { error: "Some project IDs are invalid or don't belong to this workspace" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Create board with default columns and project associations in a transaction
+    const board = await prisma.$transaction(async (prisma) => {
+      // Create the board first
+      const newBoard = await prisma.taskBoard.create({
+        data: {
+          name,
+          description,
+          issuePrefix,
+          nextIssueNumber: 1, // Start issue numbering from 1
+          isDefault: isDefault || false,
+          workspaceId,
+          columns: {
+            create: [
+              { name: "To Do", order: 0, color: "#6366F1" },
+              { name: "In Progress", order: 1, color: "#EC4899" },
+              { name: "Review", order: 2, color: "#F59E0B" },
+              { name: "Done", order: 3, color: "#10B981" },
+            ],
+          },
         },
-      },
+        include: {
+          columns: {
+            orderBy: { order: "asc" },
+          },
+        },
+      });
+
+      // Create project associations if any projects were selected
+      if (projectIds && Array.isArray(projectIds) && projectIds.length > 0) {
+        await prisma.boardProject.createMany({
+          data: projectIds.map((projectId: string) => ({
+            boardId: newBoard.id,
+            projectId,
+          })),
+        });
+      }
+
+      return newBoard;
     });
 
     return NextResponse.json(board, { status: 201 });

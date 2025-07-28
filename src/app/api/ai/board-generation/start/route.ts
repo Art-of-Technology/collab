@@ -248,7 +248,7 @@ async function generateWithAI(
 async function parseAIResponse<T>(
   content: string, 
   expectedStructure: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _retryPrompt?: string
 ): Promise<T> {
   // Clean up content
@@ -295,7 +295,7 @@ async function parseAIResponse<T>(
         const parsed = JSON.parse(fixedContent);
         console.log('Successfully fixed and parsed JSON');
         return parsed;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+         
       } catch (_fixError) {
         // Continue to next fix
       }

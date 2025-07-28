@@ -903,7 +903,7 @@ export function EpicDetailContent({
                                 <div>
                                     <p className="text-sm font-medium mb-1">Board</p>
                                     <Link
-                                        href={currentWorkspace ? `/${currentWorkspace.id}/tasks?board=${epic.taskBoard.id}` : "#"}
+                                        href={currentWorkspace ? `/${currentWorkspace.id}/boards?board=${epic.taskBoard.id}` : "#"}
                                         className="flex items-center border rounded-md p-2 hover:bg-muted/20 transition-colors"
                                     >
                                         {epic.taskBoard.name}
