@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { createLabel, getWorkspaceLabels } from "@/actions/label";
 import { useToast } from "@/hooks/use-toast";
+import { SelectedLabelsDisplay } from "@/components/ui/SelectedLabelsDisplay";
 
 export interface TaskLabel {
   id: string;
@@ -153,31 +154,7 @@ export function LabelSelector({
   return (
     <div className="space-y-2">
       {/* Selected Labels Display */}
-      {selectedLabels.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {selectedLabels.map((label) => (
-            <Badge
-              key={label.id}
-              variant="secondary"
-              className="text-xs"
-              style={{ backgroundColor: `${label.color}20`, borderColor: label.color }}
-            >
-              <div
-                className="w-2 h-2 rounded-full mr-1"
-                style={{ backgroundColor: label.color }}
-              />
-              {label.name}
-              <button
-                onClick={(e) => handleRemoveLabel(label.id, e)}
-                className="ml-1 hover:bg-gray-200 rounded-full p-0.5"
-                type="button"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-        </div>
-      )}
+      <SelectedLabelsDisplay selectedLabels={selectedLabels} onRemove={handleRemoveLabel} />
 
       {/* Label Selector */}
       <Popover open={open} onOpenChange={setOpen}>
