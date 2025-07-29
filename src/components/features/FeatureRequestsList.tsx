@@ -181,7 +181,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
           </Select>
         </div>
 
-        <div className="text-sm bg-secondary/50 py-1 px-3 rounded-full text-secondary-foreground text-center sm:text-left">
+                    <div className="text-sm bg-secondary/50 py-1 px-3 rounded-full text-secondary-foreground text-left tracking-tight sm:tracking-normal">
           {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
         </div>
       </div>
@@ -201,8 +201,8 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
               <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
                 <div className="p-6">
                   <div className="flex justify-between">
-                    <div className="space-y-2 text-center sm:text-left">
-                      <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors">{request.title}</h3>
+                    <div className="space-y-2 text-left">
+                                              <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors tracking-tight sm:tracking-normal">{request.title}</h3>
                       <div className="hidden sm:flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span>
                           {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
@@ -211,7 +211,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                       </div>
                       
                       {/* Mobile-only meta info */}
-                      <div className="sm:hidden text-center space-y-2">
+                                              <div className="sm:hidden text-left space-y-2">
                         <div className="text-sm text-muted-foreground">
                           {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
                         </div>
@@ -242,11 +242,11 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                     </div>
                   </div>
 
-                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors text-center sm:text-left">
+                                          <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors text-left">
                     <MarkdownContent 
                       content={truncateText(request.description, 200)} 
                       htmlContent={request.description}
-                      className="prose-sm text-muted-foreground text-center sm:text-left"
+                                              className="prose-sm text-muted-foreground text-left"
                     />
                   </div>
 

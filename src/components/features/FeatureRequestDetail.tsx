@@ -383,10 +383,10 @@ export default function FeatureRequestDetail({
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-start justify-between pb-2">
+      <CardHeader className="flex flex-row items-baseline justify-between pb-2">
         <div className="space-y-1">
-          <CardTitle className="text-xl sm:text-2xl font-bold">{featureRequest.title}</CardTitle>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <CardTitle className="text-lg sm:text-2xl font-bold tracking-tight sm:tracking-normal">{featureRequest.title}</CardTitle>
+          <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground">
             <span>
               Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
             </span>
@@ -395,7 +395,7 @@ export default function FeatureRequestDetail({
         </div>
         
         {(canManageFeatures || isAuthor) && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-secondary/80 transition-colors">
@@ -481,7 +481,7 @@ export default function FeatureRequestDetail({
         </div>
       )}
       
-      <CardContent className="pt-4 pb-6">
+      <CardContent className="pt-2 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-6">
         <div className="flex gap-6">
           {/* Vote controls */}
           <div className="flex flex-col items-center gap-1">
@@ -490,12 +490,12 @@ export default function FeatureRequestDetail({
               size="icon"
               onClick={() => handleVote(1)}
               disabled={isVoting || !currentUserId}
-              className={`rounded-full hover:bg-green-100 transition-all ${currentUserVote === 1 ? 'bg-green-100 text-green-600 shadow-sm' : ''}`}
+              className={`rounded-full hover:bg-green-100 transition-all h-8 w-8 sm:h-10 sm:w-10 ${currentUserVote === 1 ? 'bg-green-100 text-green-600 shadow-sm' : ''}`}
             >
-              <ChevronUp className="h-6 w-6" />
+              <ChevronUp className="h-4 w-4 sm:h-6 sm:w-6" />
             </Button>
             
-            <span className={`font-bold text-lg transition-colors ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
+            <span className={`font-bold text-sm sm:text-lg transition-colors ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
               {voteScore}
             </span>
             
@@ -504,12 +504,12 @@ export default function FeatureRequestDetail({
               size="icon"
               onClick={() => handleVote(-1)}
               disabled={isVoting || !currentUserId}
-              className={`rounded-full hover:bg-red-100 transition-all ${currentUserVote === -1 ? 'bg-red-100 text-red-600 shadow-sm' : ''}`}
+              className={`rounded-full hover:bg-red-100 transition-all h-8 w-8 sm:h-10 sm:w-10 ${currentUserVote === -1 ? 'bg-red-100 text-red-600 shadow-sm' : ''}`}
             >
-              <ChevronDown className="h-6 w-6" />
+              <ChevronDown className="h-4 w-4 sm:h-6 sm:w-6" />
             </Button>
             
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">
               <div className="flex flex-col items-center">
                 <span>{upvotes} up</span>
                 <span>{downvotes} down</span>
@@ -527,10 +527,10 @@ export default function FeatureRequestDetail({
                     {featureRequest.author.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="font-medium">{featureRequest.author.name}</span>
+                <span className="font-medium text-sm sm:text-base tracking-tight sm:tracking-normal">{featureRequest.author.name}</span>
               </div>
               
-              <h3 className="text-lg font-medium">Description</h3>
+              <h3 className="text-base sm:text-lg font-medium tracking-tight sm:tracking-normal">Description</h3>
               {featureRequest.html ? (
                 <MarkdownContent 
                   content={featureRequest.description}
