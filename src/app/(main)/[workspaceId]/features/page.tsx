@@ -18,15 +18,17 @@ export default async function FeatureRequestsPage() {
   }
 
   return (
-    <div className="container max-w-5xl py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Feature Requests</h1>
-          <p className="text-muted-foreground mt-1">
+    <div className="container max-w-5xl py-4 sm:py-8 px-4 sm:px-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0 mb-6 sm:mb-8">
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-bold">Feature Requests</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Submit your ideas and vote on features you want to see
           </p>
         </div>
-        <CreateFeatureRequestButton />
+        <div className="flex justify-center sm:justify-end">
+          <CreateFeatureRequestButton />
+        </div>
       </div>
 
       <Suspense fallback={<FeatureRequestsListSkeleton />}>
@@ -44,7 +46,7 @@ function FeatureRequestsListSkeleton() {
         .map((_, i) => (
           <div
             key={i}
-            className="p-6 border border-border rounded-lg space-y-3"
+            className="p-4 sm:p-6 border border-border rounded-lg space-y-3"
           >
             <div className="flex justify-between items-start">
               <div className="space-y-2">
