@@ -193,11 +193,11 @@ export default function Navbar({
     const displayImage = userImage || session?.user?.image;
 
     return (
-      <Avatar>
+      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
         {displayImage ? (
           <AvatarImage src={displayImage} alt={displayName || "User"} />
         ) : (
-          <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+          <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(displayName)}</AvatarFallback>
         )}
       </Avatar>
     );
@@ -446,7 +446,7 @@ export default function Navbar({
               {/* Profile dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full overflow-hidden h-7 w-7 sm:h-10 sm:w-10">
+                  <Button variant="ghost" size="icon" className="rounded-full overflow-hidden h-6 w-6 sm:h-10 sm:w-10">
                     {renderAvatar()}
                   </Button>
                 </DropdownMenuTrigger>

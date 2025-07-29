@@ -385,7 +385,7 @@ export default function FeatureRequestDetail({
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-start justify-between pb-2">
         <div className="space-y-1">
-          <CardTitle className="text-2xl font-bold">{featureRequest.title}</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl font-bold">{featureRequest.title}</CardTitle>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>
               Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
