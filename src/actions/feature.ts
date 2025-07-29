@@ -25,7 +25,10 @@ export async function getFeatureRequests({
     // Build where clause for filtering
     const where: any = {};
     if (status && status !== 'all') {
-      where.status = status.toUpperCase();
+      // Handle mixed case status values in legacy data
+      where.status = {
+        in: [status.toLowerCase(), status.toUpperCase(), status]
+      };
     }
 
     // First, fetch ALL matching feature requests
@@ -94,11 +97,11 @@ export async function getFeatureRequests({
           // First, sort by completion status (non-completed first)
           const aCompleted = isCompleted(a);
           const bCompleted = isCompleted(b);
-          
+
           if (aCompleted !== bCompleted) {
             return aCompleted ? 1 : -1; // Completed items go to the end
           }
-          
+
           // Then sort by date
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
@@ -108,11 +111,11 @@ export async function getFeatureRequests({
           // First, sort by completion status (non-completed first)
           const aCompleted = isCompleted(a);
           const bCompleted = isCompleted(b);
-          
+
           if (aCompleted !== bCompleted) {
             return aCompleted ? 1 : -1; // Completed items go to the end
           }
-          
+
           // Then sort by date
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         });
@@ -122,11 +125,11 @@ export async function getFeatureRequests({
           // First, sort by completion status (non-completed first)
           const aCompleted = isCompleted(a);
           const bCompleted = isCompleted(b);
-          
+
           if (aCompleted !== bCompleted) {
             return aCompleted ? 1 : -1; // Completed items go to the end
           }
-          
+
           // Then sort by vote score
           if (b.voteScore !== a.voteScore) {
             return b.voteScore - a.voteScore;
@@ -140,11 +143,11 @@ export async function getFeatureRequests({
           // First, sort by completion status (non-completed first)
           const aCompleted = isCompleted(a);
           const bCompleted = isCompleted(b);
-          
+
           if (aCompleted !== bCompleted) {
             return aCompleted ? 1 : -1; // Completed items go to the end
           }
-          
+
           // Then sort by vote score
           if (a.voteScore !== b.voteScore) {
             return a.voteScore - b.voteScore;
@@ -159,11 +162,11 @@ export async function getFeatureRequests({
           // First, sort by completion status (non-completed first)
           const aCompleted = isCompleted(a);
           const bCompleted = isCompleted(b);
-          
+
           if (aCompleted !== bCompleted) {
             return aCompleted ? 1 : -1; // Completed items go to the end
           }
-          
+
           // Then sort by date
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
