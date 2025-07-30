@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useRelationsApi } from "@/hooks/useRelationsApi";
 
 interface Story {
   id: string;
@@ -28,6 +29,8 @@ export function AddStoryModal({
   currentStoryIds = [] 
 }: AddStoryModalProps) {
   const { currentWorkspace } = useWorkspace();
+  const relationsApi = useRelationsApi({ workspaceId: currentWorkspace?.id || '' });
+  
   const [stories, setStories] = useState<Story[]>([]);
   const [filteredStories, setFilteredStories] = useState<Story[]>([]);
   const [selectedStoryIds, setSelectedStoryIds] = useState<string[]>([]);
@@ -52,26 +55,13 @@ export function AddStoryModal({
   }, [stories, searchTerm, currentStoryIds]);
 
   const fetchStories = async () => {
+    if (!currentWorkspace?.id) return;
+    
     setIsLoadingStories(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/workspaces/${currentWorkspace.id}/stories`);
-      // const data = await response.json();
-      
-      // Mock data for now
-      const mockStories: Story[] = [
-        { id: "1", title: "User Registration Flow", status: "IN_PROGRESS", issueKey: "ST-1" },
-        { id: "2", title: "Password Reset Feature", status: "TODO", issueKey: "ST-2" },
-        { id: "3", title: "Social Login Integration", status: "DONE", issueKey: "ST-3" },
-        { id: "4", title: "Email Verification", status: "IN_PROGRESS", issueKey: "ST-4" },
-        { id: "5", title: "Profile Management", status: "BACKLOG", issueKey: "ST-5" },
-      ];
-      
-      setStories(mockStories);
-    } catch (error) {
-      console.error("Failed to fetch stories:", error);
-      // TODO: Add proper error handling/toast
-    } finally {
+      const fetchedStories = await relationsApi.fetchStories();
+      setStories(fetchedStories);
+    }  finally {
       setIsLoadingStories(false);
     }
   };
@@ -96,7 +86,7 @@ export function AddStoryModal({
       handleClose();
     } catch (error) {
       console.error("Failed to add stories:", error);
-      // TODO: Add proper error handling/toast
+      
     } finally {
       setIsLoading(false);
     }

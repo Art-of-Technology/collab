@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useRelationsApi } from "@/hooks/useRelationsApi";
 
 interface Epic {
   id: string;
@@ -28,6 +29,8 @@ export function AddEpicModal({
   currentEpicIds = [] 
 }: AddEpicModalProps) {
   const { currentWorkspace } = useWorkspace();
+  const relationsApi = useRelationsApi({ workspaceId: currentWorkspace?.id || '' });
+  
   const [epics, setEpics] = useState<Epic[]>([]);
   const [filteredEpics, setFilteredEpics] = useState<Epic[]>([]);
   const [selectedEpicIds, setSelectedEpicIds] = useState<string[]>([]);
@@ -52,24 +55,15 @@ export function AddEpicModal({
   }, [epics, searchTerm, currentEpicIds]);
 
   const fetchEpics = async () => {
+    if (!currentWorkspace?.id) return;
+    
     setIsLoadingEpics(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/workspaces/${currentWorkspace.id}/epics`);
-      // const data = await response.json();
-      
-      // Mock data for now
-      const mockEpics: Epic[] = [
-        { id: "1", title: "User Authentication Epic", status: "IN_PROGRESS", issueKey: "EP-1" },
-        { id: "2", title: "Payment System Epic", status: "TODO", issueKey: "EP-2" },
-        { id: "3", title: "Mobile App Epic", status: "DONE", issueKey: "EP-3" },
-        { id: "4", title: "Performance Optimization Epic", status: "IN_PROGRESS", issueKey: "EP-4" },
-      ];
-      
-      setEpics(mockEpics);
+      const fetchedEpics = await relationsApi.fetchEpics();
+      setEpics(fetchedEpics);
     } catch (error) {
       console.error("Failed to fetch epics:", error);
-      // TODO: Add proper error handling/toast
+      setEpics([]); // Set empty array on error
     } finally {
       setIsLoadingEpics(false);
     }
@@ -95,7 +89,7 @@ export function AddEpicModal({
       handleClose();
     } catch (error) {
       console.error("Failed to add epics:", error);
-      // TODO: Add proper error handling/toast
+      
     } finally {
       setIsLoading(false);
     }

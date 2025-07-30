@@ -10,7 +10,9 @@ import { useState, useEffect } from "react";
 import { AddEpicModal } from "@/components/modals/AddEpicModal";
 import { AddStoryModal } from "@/components/modals/AddStoryModal";
 import { AddParentTaskModal } from "@/components/modals/AddParentTaskModal";
+import { AddMilestoneModal } from "@/components/modals/AddMilestoneModal";
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
+import { useRelationsApi } from "@/hooks/useRelationsApi";
 
 interface RelationItemProps {
   title: string;
@@ -95,86 +97,71 @@ interface TaskRelationsProps {
 
 export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskRelationsProps) {
   const { currentWorkspace } = useWorkspace();
+  const relationsApi = useRelationsApi({ workspaceId: currentWorkspace?.id || '' });
+  
   const [showAddEpicModal, setShowAddEpicModal] = useState(false);
   const [showAddStoryModal, setShowAddStoryModal] = useState(false);
   const [showAddParentTaskModal, setShowAddParentTaskModal] = useState(false);
+  const [showAddMilestoneModal, setShowAddMilestoneModal] = useState(false);
   
   // Confirmation modal states
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [confirmationAction, setConfirmationAction] = useState<{
-    type: 'epic' | 'story' | 'parentTask';
+    type: 'epic' | 'story' | 'parentTask' | 'milestone';
     id: string;
     title: string;
   } | null>(null);
   
-  // Local state to handle task updates
-  const [localTask, setLocalTask] = useState(task);
+  // Relations state from API
+  const [relations, setRelations] = useState<{
+    epics: any[];
+    stories: any[];
+    milestones: any[];
+    parentTasks: any[];
+  }>({
+    epics: [],
+    stories: [],
+    milestones: [],
+    parentTasks: []
+  });
+  
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Update local state when task prop changes
+  // Load relations when task changes
   useEffect(() => {
-    setLocalTask(task);
-  }, [task]);
+    if (task?.id && currentWorkspace?.id) {
+      loadRelations();
+    }
+  }, [task?.id, currentWorkspace?.id]);
 
-  // Use local task data
-  const currentTask = localTask;
-
-  // Multiple epics handler
-  const handleAddMultipleEpics = async (epicIds: string[]) => {
+  const loadRelations = async () => {
+    if (!task?.id || !currentWorkspace?.id) return;
+    
     try {
-      console.log('Add multiple epics:', epicIds);
-      
-      // Create mock epics for all selected IDs
-      const mockEpics = epicIds.map(epicId => ({
-        id: epicId,
-        title: epicId === "1" ? "User Authentication Epic" : 
-               epicId === "2" ? "Payment System Epic" : 
-               epicId === "3" ? "Mobile App Epic" : 
-               "Performance Optimization Epic",
-        status: "IN_PROGRESS"
-      }));
-      
-      // Update both local state and parent callback - ADD all epics at once
-      const currentEpics = currentTask.epics || [];
-      const updatedEpics = [...currentEpics, ...mockEpics];
-      const updatedTask = { ...currentTask, epics: updatedEpics };
-      if (onUpdateRelations) {
-        onUpdateRelations(updatedTask);
-      }
-      setLocalTask(updatedTask);
+      setIsLoading(true);
+      const taskRelations = await relationsApi.getTaskRelations(task.id);
+      setRelations(taskRelations);
     } catch (error) {
-      console.error("Failed to add multiple epics:", error);
+      console.error('Failed to load relations:', error);
+      setRelations({ epics: [], stories: [], milestones: [], parentTasks: [] });
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Add handlers using real API
   const handleAddEpic = async (epicId: string) => {
     await handleAddMultipleEpics([epicId]);
   };
 
-  // Multiple stories handler
-  const handleAddMultipleStories = async (storyIds: string[]) => {
+  const handleAddMultipleEpics = async (epicIds: string[]) => {
     try {
-      console.log('Add multiple stories:', storyIds);
-      
-      // Create mock stories for all selected IDs
-      const mockStories = storyIds.map(storyId => ({
-        id: storyId,
-        title: storyId === "1" ? "User Registration Flow" : 
-               storyId === "2" ? "Password Reset Feature" : 
-               storyId === "3" ? "Social Login Integration" : 
-               storyId === "4" ? "Email Verification" : 
-               "Profile Management",
-        status: "IN_PROGRESS"
-      }));
-      
-      const currentStories = currentTask.stories || [];
-      const updatedStories = [...currentStories, ...mockStories];
-      const updatedTask = { ...currentTask, stories: updatedStories };
-      if (onUpdateRelations) {
-        onUpdateRelations(updatedTask);
+      for (const epicId of epicIds) {
+        await relationsApi.addRelation(task.id, epicId, 'EPIC');
       }
-      setLocalTask(updatedTask);
+      await loadRelations();
     } catch (error) {
-      console.error("Failed to add multiple stories:", error);
+      console.error("Failed to add epics:", error);
     }
   };
 
@@ -182,32 +169,14 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
     await handleAddMultipleStories([storyId]);
   };
 
-  // Multiple parent tasks handler
-  const handleAddMultipleParentTasks = async (parentTaskIds: string[]) => {
+  const handleAddMultipleStories = async (storyIds: string[]) => {
     try {
-      console.log('Add multiple parent tasks:', parentTaskIds);
-      
-      const mockParentTasks = parentTaskIds.map(parentTaskId => ({
-        id: parentTaskId,
-        title: parentTaskId === "1" ? "Setup Authentication System" : 
-               parentTaskId === "2" ? "Design User Interface" : 
-               parentTaskId === "3" ? "Implement Database Schema" : 
-               parentTaskId === "4" ? "Create API Endpoints" : 
-               parentTaskId === "5" ? "Write Unit Tests" : 
-               "Deploy to Production",
-        issueKey: `TSK-${parentTaskId}`,
-        status: "IN_PROGRESS"
-      }));
-      
-      const currentParentTasks = currentTask.parentTasks || [];
-      const updatedParentTasks = [...currentParentTasks, ...mockParentTasks];
-      const updatedTask = { ...currentTask, parentTasks: updatedParentTasks };
-      if (onUpdateRelations) {
-        onUpdateRelations(updatedTask);
+      for (const storyId of storyIds) {
+        await relationsApi.addRelation(task.id, storyId, 'STORY');
       }
-      setLocalTask(updatedTask);
+      await loadRelations();
     } catch (error) {
-      console.error("Failed to add multiple parent tasks:", error);
+      console.error("Failed to add stories:", error);
     }
   };
 
@@ -215,20 +184,101 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
     await handleAddMultipleParentTasks([parentTaskId]);
   };
 
+  const handleAddMultipleParentTasks = async (parentTaskIds: string[]) => {
+    try {
+      for (const parentTaskId of parentTaskIds) {
+        await relationsApi.addRelation(task.id, parentTaskId, 'PARENT_TASK');
+      }
+      await loadRelations();
+    } catch (error) {
+      console.error("Failed to add parent tasks:", error);
+    }
+  };
+
+  const handleAddMilestone = async (milestoneId: string) => {
+    await handleAddMultipleMilestones([milestoneId]);
+  };
+
+  const handleAddMultipleMilestones = async (milestoneIds: string[]) => {
+    try {
+      for (const milestoneId of milestoneIds) {
+        await relationsApi.addRelation(task.id, milestoneId, 'MILESTONE');
+      }
+      await loadRelations();
+    } catch (error) {
+      console.error("Failed to add milestones:", error);
+    }
+  };
+
+  // Remove handlers
+  const handleRemoveEpic = (epicId: string) => {
+    const epic = relations.epics.find((e: any) => e.id === epicId);
+    setConfirmationAction({
+      type: 'epic',
+      id: epicId,
+      title: epic?.title || 'Epic'
+    });
+    setShowConfirmationModal(true);
+  };
+
+  const handleRemoveStory = (storyId: string) => {
+    const story = relations.stories.find((s: any) => s.id === storyId);
+    setConfirmationAction({
+      type: 'story',
+      id: storyId,
+      title: story?.title || 'Story'
+    });
+    setShowConfirmationModal(true);
+  };
+
+  const handleRemoveParentTask = (parentTaskId: string) => {
+    const parentTask = relations.parentTasks.find((p: any) => p.id === parentTaskId);
+    setConfirmationAction({
+      type: 'parentTask',
+      id: parentTaskId,
+      title: parentTask?.title || 'Parent Task'
+    });
+    setShowConfirmationModal(true);
+  };
+
+  const handleRemoveMilestone = (milestoneId: string) => {
+    const milestone = relations.milestones.find((m: any) => m.id === milestoneId);
+    setConfirmationAction({
+      type: 'milestone',
+      id: milestoneId,
+      title: milestone?.title || 'Milestone'
+    });
+    setShowConfirmationModal(true);
+  };
+
   // Confirmation handlers
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!confirmationAction) return;
     
-    switch (confirmationAction.type) {
-      case 'epic':
-        performRemoveEpic(confirmationAction.id);
-        break;
-      case 'story':
-        performRemoveStory(confirmationAction.id);
-        break;
-      case 'parentTask':
-        performRemoveParentTask(confirmationAction.id);
-        break;
+    try {
+      let relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK';
+      switch (confirmationAction.type) {
+        case 'epic':
+          relationType = 'EPIC';
+          break;
+        case 'story':
+          relationType = 'STORY';
+          break;
+        case 'parentTask':
+          relationType = 'PARENT_TASK';
+          break;
+        case 'milestone':
+          relationType = 'MILESTONE';
+          break;
+        default:
+          return;
+      }
+      
+      await relationsApi.removeRelation(task.id, confirmationAction.id, relationType);
+      await loadRelations();
+      
+    } catch (error) {
+      console.error("Failed to remove relation:", error);
     }
     
     setShowConfirmationModal(false);
@@ -240,82 +290,23 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
     setConfirmationAction(null);
   };
 
-  // Show confirmation modal before deletion
-  const handleRemoveEpic = (epicId: string) => {
-    const epic = currentTask.epics?.find((e: any) => e.id === epicId);
-    setConfirmationAction({
-      type: 'epic',
-      id: epicId,
-      title: epic?.title || 'Epic'
-    });
-    setShowConfirmationModal(true);
-  };
-
-  const handleRemoveStory = (storyId: string) => {
-    const story = currentTask.stories?.find((s: any) => s.id === storyId);
-    setConfirmationAction({
-      type: 'story',
-      id: storyId,
-      title: story?.title || 'Story'
-    });
-    setShowConfirmationModal(true);
-  };
-
-  const handleRemoveParentTask = (parentTaskId: string) => {
-    const parentTask = currentTask.parentTasks?.find((p: any) => p.id === parentTaskId);
-    setConfirmationAction({
-      type: 'parentTask',
-      id: parentTaskId,
-      title: parentTask?.title || 'Parent Task'
-    });
-    setShowConfirmationModal(true);
-  };
-
-  // Actual deletion functions (called after confirmation)
-  const performRemoveEpic = async (epicId: string) => {
-    try {
-      console.log('Remove epic relation:', epicId);
-      
-      const updatedEpics = (currentTask.epics || []).filter((epic: any) => epic.id !== epicId);
-      const updatedTask = { ...currentTask, epics: updatedEpics };
-      if (onUpdateRelations) {
-        onUpdateRelations(updatedTask);
-      }
-      setLocalTask(updatedTask);
-    } catch (error) {
-      console.error("Failed to remove epic:", error);
-    }
-  };
-
-  const performRemoveStory = async (storyId: string) => {
-    try {
-      console.log('Remove story relation:', storyId);
-      
-      const updatedStories = (currentTask.stories || []).filter((story: any) => story.id !== storyId);
-      const updatedTask = { ...currentTask, stories: updatedStories };
-      if (onUpdateRelations) {
-        onUpdateRelations(updatedTask);
-      }
-      setLocalTask(updatedTask);
-    } catch (error) {
-      console.error("Failed to remove story:", error);
-    }
-  };
-
-  const performRemoveParentTask = async (parentTaskId: string) => {
-    try {
-      console.log('Remove parent task relation:', parentTaskId);
-      
-      const updatedParentTasks = (currentTask.parentTasks || []).filter((parentTask: any) => parentTask.id !== parentTaskId);
-      const updatedTask = { ...currentTask, parentTasks: updatedParentTasks };
-      if (onUpdateRelations) {
-        onUpdateRelations(updatedTask);
-      }
-      setLocalTask(updatedTask);
-    } catch (error) {
-      console.error("Failed to remove parent task:", error);
-    }
-  };
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <LinkIcon className="h-5 w-5" />
+            Relations
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4 text-muted-foreground">
+            Loading relations...
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -327,18 +318,38 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Milestone */}
+          {/* Milestones */}
           <div>
-            <h4 className="text-sm font-medium mb-2">Milestone</h4>
-            {currentTask.milestone ? (
-              <RelationItem
-                title={currentTask.milestone.title}
-                type="milestone"
-                href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${currentTask.milestoneId}` : "#"}
-              />
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="text-sm font-medium">Milestones ({relations.milestones?.length || 0})</h4>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowAddMilestoneModal(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            {relations.milestones && relations.milestones.length > 0 ? (
+              <div className="space-y-2">
+                {relations.milestones.map((milestone: any) => (
+                  <RelationItem
+                    key={milestone.id}
+                    title={milestone.title}
+                    type="milestone"
+                    status={milestone.status}
+                    href={currentWorkspace ? `/${currentWorkspace.id}/milestones/${milestone.id}` : "#"}
+                    onRemove={() => handleRemoveMilestone(milestone.id)}
+                    canRemove={canEdit}
+                  />
+                ))}
+              </div>
             ) : (
               <div className="text-sm text-muted-foreground italic">
-                No milestone linked
+                No milestones linked
               </div>
             )}
           </div>
@@ -346,7 +357,7 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
           {/* Epics */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h4 className="text-sm font-medium">Epics ({currentTask.epics?.length || 0})</h4>
+              <h4 className="text-sm font-medium">Epics ({relations.epics?.length || 0})</h4>
               {canEdit && (
                 <Button
                   variant="ghost"
@@ -358,13 +369,14 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
                 </Button>
               )}
             </div>
-            {currentTask.epics && currentTask.epics.length > 0 ? (
+            {relations.epics && relations.epics.length > 0 ? (
               <div className="space-y-2">
-                {currentTask.epics.map((epic: any) => (
+                {relations.epics.map((epic: any) => (
                   <RelationItem
                     key={epic.id}
                     title={epic.title}
                     type="epic"
+                    issueKey={epic.issueKey}
                     status={epic.status}
                     href={currentWorkspace ? `/${currentWorkspace.id}/epics/${epic.id}` : "#"}
                     onRemove={() => handleRemoveEpic(epic.id)}
@@ -382,7 +394,7 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
           {/* Stories */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h4 className="text-sm font-medium">Stories ({currentTask.stories?.length || 0})</h4>
+              <h4 className="text-sm font-medium">Stories ({relations.stories?.length || 0})</h4>
               {canEdit && (
                 <Button
                   variant="ghost"
@@ -394,13 +406,14 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
                 </Button>
               )}
             </div>
-            {currentTask.stories && currentTask.stories.length > 0 ? (
+            {relations.stories && relations.stories.length > 0 ? (
               <div className="space-y-2">
-                {currentTask.stories.map((story: any) => (
+                {relations.stories.map((story: any) => (
                   <RelationItem
                     key={story.id}
                     title={story.title}
                     type="story"
+                    issueKey={story.issueKey}
                     status={story.status}
                     href={currentWorkspace ? `/${currentWorkspace.id}/stories/${story.id}` : "#"}
                     onRemove={() => handleRemoveStory(story.id)}
@@ -418,7 +431,7 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
           {/* Parent Tasks */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h4 className="text-sm font-medium">Parent Tasks ({currentTask.parentTasks?.length || 0})</h4>
+              <h4 className="text-sm font-medium">Parent Tasks ({relations.parentTasks?.length || 0})</h4>
               {canEdit && (
                 <Button
                   variant="ghost"
@@ -430,9 +443,9 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
                 </Button>
               )}
             </div>
-            {currentTask.parentTasks && currentTask.parentTasks.length > 0 ? (
+            {relations.parentTasks && relations.parentTasks.length > 0 ? (
               <div className="space-y-2">
-                {currentTask.parentTasks.map((parentTask: any) => (
+                {relations.parentTasks.map((parentTask: any) => (
                   <RelationItem
                     key={parentTask.id}
                     title={parentTask.title}
@@ -460,7 +473,7 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
         onClose={() => setShowAddEpicModal(false)}
         onAddEpic={handleAddEpic}
         onAddMultipleEpics={handleAddMultipleEpics}
-        currentEpicIds={currentTask.epics?.map((epic: any) => epic.id) || []}
+        currentEpicIds={relations.epics?.map((epic: any) => epic.id) || []}
       />
       
       <AddStoryModal
@@ -468,7 +481,7 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
         onClose={() => setShowAddStoryModal(false)}
         onAddStory={handleAddStory}
         onAddMultipleStories={handleAddMultipleStories}
-        currentStoryIds={currentTask.stories?.map((story: any) => story.id) || []}
+        currentStoryIds={relations.stories?.map((story: any) => story.id) || []}
       />
       
       <AddParentTaskModal
@@ -476,8 +489,16 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
         onClose={() => setShowAddParentTaskModal(false)}
         onAddParentTask={handleAddParentTask}
         onAddMultipleParentTasks={handleAddMultipleParentTasks}
-        currentTaskId={currentTask.id}
-        currentParentTaskIds={currentTask.parentTasks?.map((parentTask: any) => parentTask.id) || []}
+        currentTaskId={task.id}
+        currentParentTaskIds={relations.parentTasks?.map((parentTask: any) => parentTask.id) || []}
+      />
+
+      <AddMilestoneModal
+        isOpen={showAddMilestoneModal}
+        onClose={() => setShowAddMilestoneModal(false)}
+        onAddMilestone={handleAddMilestone}
+        onAddMultipleMilestones={handleAddMultipleMilestones}
+        currentMilestoneIds={relations.milestones?.map((milestone: any) => milestone.id) || []}
       />
 
       {/* Confirmation Modal */}

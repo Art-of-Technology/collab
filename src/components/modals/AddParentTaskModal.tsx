@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useRelationsApi } from "@/hooks/useRelationsApi";
 
 interface Task {
   id: string;
@@ -21,15 +22,17 @@ interface AddParentTaskModalProps {
   currentParentTaskIds?: string[]; // Array of currently linked parent task IDs to exclude from list
 }
 
-export function AddParentTaskModal({ 
-  isOpen, 
-  onClose, 
-  onAddParentTask, 
+export function AddParentTaskModal({
+  isOpen,
+  onClose,
+  onAddParentTask,
   onAddMultipleParentTasks,
   currentTaskId,
-  currentParentTaskIds = [] 
+  currentParentTaskIds = []
 }: AddParentTaskModalProps) {
   const { currentWorkspace } = useWorkspace();
+  const relationsApi = useRelationsApi({ workspaceId: currentWorkspace?.id || '' });
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
@@ -46,7 +49,7 @@ export function AddParentTaskModal({
 
   // Filter tasks based on search term and prevent circular dependencies
   useEffect(() => {
-    const filtered = tasks.filter(task => 
+    const filtered = tasks.filter(task =>
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
       task.id !== currentTaskId && // Can't be parent of itself
       !currentParentTaskIds.includes(task.id) // Exclude currently linked parents
@@ -57,26 +60,12 @@ export function AddParentTaskModal({
   }, [tasks, searchTerm, currentTaskId, currentParentTaskIds]);
 
   const fetchTasks = async () => {
+    if (!currentWorkspace?.id) return;
+
     setIsLoadingTasks(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/workspaces/${currentWorkspace.id}/tasks`);
-      // const data = await response.json();
-      
-      // Mock data for now
-      const mockTasks: Task[] = [
-        { id: "1", title: "Setup Authentication System", status: "IN_PROGRESS", issueKey: "TSK-1" },
-        { id: "2", title: "Design User Interface", status: "TODO", issueKey: "TSK-2" },
-        { id: "3", title: "Implement Database Schema", status: "DONE", issueKey: "TSK-3" },
-        { id: "4", title: "Create API Endpoints", status: "IN_PROGRESS", issueKey: "TSK-4" },
-        { id: "5", title: "Write Unit Tests", status: "BACKLOG", issueKey: "TSK-5" },
-        { id: "6", title: "Deploy to Production", status: "TODO", issueKey: "TSK-6" },
-      ];
-      
-      setTasks(mockTasks);
-    } catch (error) {
-      console.error("Failed to fetch tasks:", error);
-      // TODO: Add proper error handling/toast
+      const fetchedTasks = await relationsApi.fetchTasks();
+      setTasks(fetchedTasks);
     } finally {
       setIsLoadingTasks(false);
     }
@@ -84,7 +73,7 @@ export function AddParentTaskModal({
 
   const handleConfirm = async () => {
     if (selectedTaskIds.length === 0) return;
-    
+
     setIsLoading(true);
     try {
       if (selectedTaskIds.length === 1) {
@@ -102,7 +91,7 @@ export function AddParentTaskModal({
       handleClose();
     } catch (error) {
       console.error("Failed to add parent tasks:", error);
-      // TODO: Add proper error handling/toast
+
     } finally {
       setIsLoading(false);
     }
@@ -115,8 +104,8 @@ export function AddParentTaskModal({
   };
 
   const toggleTaskSelection = (taskId: string) => {
-    setSelectedTaskIds(prev => 
-      prev.includes(taskId) 
+    setSelectedTaskIds(prev =>
+      prev.includes(taskId)
         ? prev.filter(id => id !== taskId)
         : [...prev, taskId]
     );
@@ -124,16 +113,16 @@ export function AddParentTaskModal({
 
   const getStatusBadge = (status?: string) => {
     if (!status) return null;
-    
+
     const statusColors = {
       'DONE': 'bg-green-500',
-      'IN_PROGRESS': 'bg-blue-500', 
+      'IN_PROGRESS': 'bg-blue-500',
       'TODO': 'bg-gray-500',
       'BACKLOG': 'bg-gray-500',
     };
-    
+
     const color = statusColors[status as keyof typeof statusColors] || 'bg-gray-500';
-    
+
     return (
       <Badge className={`${color} text-white text-xs`}>
         {status}
@@ -174,7 +163,7 @@ export function AddParentTaskModal({
           <p className="text-sm text-muted-foreground mb-2">
             Select a task to be the parent:
           </p>
-          
+
           {isLoadingTasks ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">Loading tasks...</p>
@@ -191,11 +180,10 @@ export function AddParentTaskModal({
                 {filteredTasks.map((task) => (
                   <div
                     key={task.id}
-                    className={`p-3 rounded-md border cursor-pointer transition-colors ${
-                      selectedTaskIds.includes(task.id)
+                    className={`p-3 rounded-md border cursor-pointer transition-colors ${selectedTaskIds.includes(task.id)
                         ? "bg-primary/10 border-primary"
                         : "hover:bg-muted/50"
-                    }`}
+                      }`}
                     onClick={() => toggleTaskSelection(task.id)}
                   >
                     <div className="flex items-center justify-between">
