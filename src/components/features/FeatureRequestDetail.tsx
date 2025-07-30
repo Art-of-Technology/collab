@@ -18,7 +18,8 @@ import {
   ChevronUp,
   ChevronDown,
   Pencil,
-  Loader2
+  Loader2,
+  ThumbsDown
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -347,7 +348,7 @@ export default function FeatureRequestDetail({
 
   // Helper function to get status badge
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "pending":
         return (
           <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 transition-colors">
@@ -382,15 +383,19 @@ export default function FeatureRequestDetail({
   };
 
   return (
-    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-baseline justify-between pb-2">
+    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm px-1 py-2">
+      <CardHeader className="flex flex-row items-baseline justify-between space-y-1.5 p-3 pb-6">
         <div className="space-y-1">
           <CardTitle className="text-lg sm:text-2xl font-bold tracking-tight sm:tracking-normal">{featureRequest.title}</CardTitle>
-          <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground">
-            <span>
-              Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
-            </span>
-            {getStatusBadge(currentStatus)}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 pt-3 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+              <span>
+                Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
+              </span>
+              <span className="sm:ml-0">
+                {getStatusBadge(currentStatus)}
+              </span>
+            </div>
           </div>
         </div>
         
@@ -398,7 +403,7 @@ export default function FeatureRequestDetail({
           <div className="flex items-center gap-2 pt-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-secondary/80 transition-colors">
+                <Button variant="ghost" size="icon" className="h-8 w-8 pl-6 rounded-full hover:bg-secondary/80 transition-colors">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -510,9 +515,15 @@ export default function FeatureRequestDetail({
             </Button>
             
             <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">
-              <div className="flex flex-col items-center">
-                <span>{upvotes} up</span>
-                <span>{downvotes} down</span>
+              <div className="flex flex-col items-center gap-3">
+                <span className="flex items-center gap-1">
+                  {upvotes}
+                  <ThumbsUp  className="ml-1" size={14} />
+                </span>
+                <span className="flex items-center gap-1">
+                  {downvotes}
+                  <ThumbsDown className="ml-1" size={14} />
+                </span>
               </div>
             </div>
           </div>
