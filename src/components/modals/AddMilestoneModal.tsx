@@ -130,9 +130,10 @@ export function AddMilestoneModal({
       isOpen={isOpen}
       onClose={handleClose}
       title="Add Milestone"
-      onConfirm={selectedMilestoneIds.length > 0 ? handleConfirm : undefined}
+      onConfirm={handleConfirm}
       onCancel={handleClose}
       confirmText={selectedMilestoneIds.length === 0 ? "Add Milestone" : `Add ${selectedMilestoneIds.length} Milestone${selectedMilestoneIds.length > 1 ? 's' : ''}`}
+      isConfirmDisabled={selectedMilestoneIds.length === 0}
       isLoading={isLoading}
     >
       <div className="space-y-4">
