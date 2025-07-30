@@ -94,7 +94,7 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
       }
       return await response.json();
     } catch (error) {
-      console.error('Error fetching task:', error);
+      console.error('Error fetching tasks:', error);
       throw error;
     }
   };
