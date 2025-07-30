@@ -20,7 +20,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useCreatePost } from "@/hooks/queries/usePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { CollabInput } from "@/components/ui/collab-input";
-import { 
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -37,11 +37,11 @@ export default function CreatePostForm() {
   const [isImproving, setIsImproving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  
+
   // Use TanStack Query hooks
   const { data: currentUser } = useCurrentUser();
   const createPostMutation = useCreatePost();
-  
+
   const [formData, setFormData] = useState({
     message: "",
     type: "UPDATE",
@@ -77,13 +77,13 @@ export default function CreatePostForm() {
     if (isImproving || !text.trim()) {
       return text;
     }
-    
+
     setIsImproving(true);
     toast({
       title: "Improving text...",
       description: "Please wait while AI improves your text"
     });
-    
+
     try {
       const response = await fetch("/api/ai/shorten", {
         method: "POST",
@@ -92,22 +92,22 @@ export default function CreatePostForm() {
         },
         body: JSON.stringify({ text })
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to improve text");
       }
-      
+
       const data = await response.json();
       handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
       // Extract message from the response
       const improvedText = data.message || data.improvedText || text;
-      
+
       // Ensure options are open if AI suggests a type change
       if (data.category && !optionsOpen) {
         setOptionsOpen(true);
       }
-      
+
       // Return the improved text to be displayed in the popup
       return improvedText;
     } catch (error) {
@@ -128,38 +128,42 @@ export default function CreatePostForm() {
   const processMentions = async (postId: string, message: string) => {
     // Extract user IDs directly from the message if using new format
     const mentionedUserIds = extractMentionUserIds(message);
-    
-    // Also extract usernames for backward compatibility (old format)
-    const mentionedUsernames = extractMentions(message);
-    
-    // If neither format found, return early
-    if (mentionedUserIds.length === 0 && mentionedUsernames.length === 0) return;
-    
-    try {
-      let userIds = [...mentionedUserIds]; // Start with directly extracted IDs
-      
-      // If we have usernames that need to be looked up
-      if (mentionedUsernames.length > 0) {
-        // Query users by usernames to get their IDs
-        const response = await axios.post("/api/users/lookup", {
-          usernames: mentionedUsernames,
-          workspaceId: currentWorkspace?.id
+
+    // If we have user IDs from the new format, use only those
+    if (mentionedUserIds.length > 0) {
+      try {
+        await axios.post("/api/mentions", {
+          userIds: mentionedUserIds,
+          sourceType: "post",
+          sourceId: postId,
+          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`
         });
-        
-        const mentionedUsers = response.data;
-        
-        if (mentionedUsers && mentionedUsers.length > 0) {
-          // Add the looked-up user IDs
-          const lookupUserIds = mentionedUsers.map((user: any) => user.id);
-          userIds = [...userIds, ...lookupUserIds];
-          
-          // Remove duplicates
-          userIds = [...new Set(userIds)];
-        }
+      } catch (error) {
+        console.error("Failed to process mentions:", error);
+        // Don't fail the post creation if mentions fail
       }
-      
-      // Create notifications for mentioned users (if any found)
-      if (userIds.length > 0) {
+      return;
+    }
+
+    // Fallback: extract usernames for backward compatibility (old format only)
+    const mentionedUsernames = extractMentions(message);
+
+    // If no mentions found in either format, return early
+    if (mentionedUsernames.length === 0) return;
+
+    try {
+      // Query users by usernames to get their IDs
+      const response = await axios.post("/api/users/lookup", {
+        usernames: mentionedUsernames,
+        workspaceId: currentWorkspace?.id
+      });
+
+      const mentionedUsers = response.data;
+
+      if (mentionedUsers && mentionedUsers.length > 0) {
+        const userIds = mentionedUsers.map((user: any) => user.id);
+
+        // Create notifications for mentioned users
         await axios.post("/api/mentions", {
           userIds,
           sourceType: "post",
@@ -250,7 +254,7 @@ export default function CreatePostForm() {
 
   const renderAvatar = () => {
     if (!currentUser) return null;
-    
+
     return currentUser.useCustomAvatar ? (
       <CustomAvatar user={currentUser} size="sm" />
     ) : (
@@ -292,13 +296,13 @@ export default function CreatePostForm() {
               showSubmitButton={true}
             />
           </div>
-          
+
           {/* Centered Chevron Trigger */}
           <div className="flex justify-center items-center h-4">
             <CollapsibleTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className={cn(
                   "h-6 w-6 rounded-md transition-transform duration-300 data-[state=open]:rotate-180",
                   "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -309,7 +313,7 @@ export default function CreatePostForm() {
             </CollapsibleTrigger>
           </div>
 
-          <CollapsibleContent 
+          <CollapsibleContent
             className={cn(
               "space-y-4 pt-3 overflow-hidden transition-all duration-300",
               "data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
