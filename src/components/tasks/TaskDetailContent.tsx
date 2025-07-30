@@ -1115,8 +1115,8 @@ export function TaskDetailContent({
                   </div>
                 )}
               </div>
-              {/* Share Button */}
-              <ShareButton taskId={task.id} issueKey={task.issueKey || ""} />
+                              {/* Share Button */}
+                <ShareButton entityId={task.id} issueKey={task.issueKey || ""} entityType="tasks" />
             </div>
           </div>
         </div>

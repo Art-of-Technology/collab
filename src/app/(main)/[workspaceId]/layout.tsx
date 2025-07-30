@@ -31,17 +31,31 @@ export default async function WorkspaceLayout({
     redirect("/login");
   }
   
-  // Verify the workspace exists and user has access to it
-  const workspace = await prisma.workspace.findFirst({
+    // Verify the workspace exists and user has access to it
+  // First try to find by slug, then by ID for backward compatibility
+  let workspace = await prisma.workspace.findFirst({
     where: {
-      id: workspaceId,
+      slug: workspaceId,
       OR: [
         { ownerId: session.user.id },
         { members: { some: { userId: session.user.id } } }
       ]
     },
   });
-  
+
+  // If not found by slug, try by ID (for backward compatibility)
+  if (!workspace) {
+    workspace = await prisma.workspace.findFirst({
+      where: {
+        id: workspaceId,
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id } } }
+        ]
+      },
+    });
+  }
+
   if (!workspace) {
     redirect("/welcome");
   }

@@ -29,6 +29,7 @@ import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { BoardItemTabs } from "@/components/tasks/TaskTabs";
 import { useSession } from "next-auth/react";
+import { ShareButton } from "@/components/tasks/ShareButton";
 import { useStoryGeneration } from "@/context/StoryGenerationContext";
 
 // Format date helper
@@ -617,6 +618,7 @@ export function EpicDetailContent({
                     <div className="flex items-center gap-2">
                         {getStatusBadge(epic.status || "PLANNED")}
                         {getPriorityBadge(epic.priority)}
+                        <ShareButton entityId={epic.id} issueKey={epic.issueKey || ""} entityType="epics" />
                     </div>
                 </div>
             </div>

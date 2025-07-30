@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { urls } from "@/lib/url-resolver";
 
 interface Task {
   id: string;
@@ -13,6 +14,10 @@ interface Task {
   status: string;
   priority: string;
   type: string;
+  issueKey?: string;
+  taskBoard?: {
+    slug?: string;
+  };
 }
 
 interface LinkedTasksProps {
@@ -115,27 +120,46 @@ export default function LinkedTasks({ postId }: LinkedTasksProps) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y">
-          {tasks.map((task: Task) => (
-            <Link 
-              href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${task.id}` : "#"} 
-              key={task.id}
-            >
-              <div className="p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex justify-between items-start mb-1">
-                  <h4 className="font-medium text-sm">{task.title}</h4>
-                  <div>{renderStatusBadge(task.status)}</div>
+          {tasks.map((task: Task) => {
+            // Generate task URL using URL resolver
+            const getTaskUrl = () => {
+              if (!currentWorkspace) return "#";
+              
+              if (currentWorkspace.slug && task.taskBoard?.slug && task.issueKey) {
+                // Use URL resolver for slug-based URLs
+                return urls.task({
+                  workspaceSlug: currentWorkspace.slug,
+                  boardSlug: task.taskBoard.slug,
+                  issueKey: task.issueKey
+                });
+              }
+              
+              // Fallback to legacy URL for backward compatibility
+              return `/${currentWorkspace.id}/tasks/${task.id}`;
+            };
+
+            return (
+              <Link 
+                href={getTaskUrl()} 
+                key={task.id}
+              >
+                <div className="p-4 hover:bg-muted/50 transition-colors">
+                  <div className="flex justify-between items-start mb-1">
+                    <h4 className="font-medium text-sm">{task.title}</h4>
+                    <div>{renderStatusBadge(task.status)}</div>
+                  </div>
+                  <div className="flex gap-2 items-center mt-2">
+                    <Badge variant="outline" className="text-xs">
+                      {task.type}
+                    </Badge>
+                    <Badge variant={task.priority === "high" ? "destructive" : "outline"} className="text-xs">
+                      {task.priority}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex gap-2 items-center mt-2">
-                  <Badge variant="outline" className="text-xs">
-                    {task.type}
-                  </Badge>
-                  <Badge variant={task.priority === "high" ? "destructive" : "outline"} className="text-xs">
-                    {task.priority}
-                  </Badge>
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       </CardContent>
     </Card>

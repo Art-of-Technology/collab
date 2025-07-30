@@ -120,8 +120,15 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
   };
 
   const handleTaskNavigation = () => {
-    if (entry.task && currentWorkspace?.id) {
-      router.push(`/${currentWorkspace.id}/tasks/${entry.task.id}`);
+    if (entry.task && currentWorkspace) {
+      // Try to use workspace slug and issue key if available
+      if (currentWorkspace.slug && entry.task.issueKey) {
+        // For timesheet entries, we might not have board slug, so construct URL manually
+        router.push(`/${currentWorkspace.slug}/tasks/${entry.task.issueKey}`);
+      } else {
+        // Fallback to legacy URL format
+        router.push(`/${currentWorkspace.id}/tasks/${entry.task.id}`);
+      }
     }
   };
 

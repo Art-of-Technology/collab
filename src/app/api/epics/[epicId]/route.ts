@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
 import { compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
+import { resolveIssueKeyToId } from '@/lib/issue-key-resolvers';
+import { isIssueKey } from '@/lib/shared-issue-key-utils';
 
 // Schema for PATCH validation
 const epicPatchSchema = z.object({
@@ -26,6 +28,14 @@ const epicPatchSchema = z.object({
   reporterId: z.string().nullable().optional(),
 }).strict();
 
+// Helper function to resolve epic ID from issue key or database ID
+async function resolveEpicId(epicIdOrKey: string): Promise<string | null> {
+  if (isIssueKey(epicIdOrKey)) {
+    return await resolveIssueKeyToId(epicIdOrKey, 'epic');
+  }
+  return epicIdOrKey; // Already a database ID
+}
+
 // GET /api/epics/{epicId} - Fetch a single epic by ID
 export async function GET(
   request: NextRequest,
@@ -37,9 +47,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const _params = await params;
-    const { epicId } = _params;
-    if (!epicId) {
+    const { epicId: epicIdParam } = _params;
+    if (!epicIdParam) {
       return NextResponse.json({ error: "Epic ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const epicId = await resolveEpicId(epicIdParam);
+    if (!epicId) {
+      return NextResponse.json({ error: "Epic not found" }, { status: 404 });
     }
 
     const epic = await prisma.epic.findUnique({
@@ -128,9 +144,15 @@ export async function PATCH(
     }
 
     const _params = await params;
-    const { epicId } = _params;
-    if (!epicId) {
+    const { epicId: epicIdParam } = _params;
+    if (!epicIdParam) {
       return NextResponse.json({ error: "Epic ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const epicId = await resolveEpicId(epicIdParam);
+    if (!epicId) {
+      return NextResponse.json({ error: "Epic not found" }, { status: 404 });
     }
 
     const body = await request.json();
@@ -429,9 +451,15 @@ export async function DELETE(
     }
 
     const _params = await params;
-    const { epicId } = _params;
-    if (!epicId) {
+    const { epicId: epicIdParam } = _params;
+    if (!epicIdParam) {
       return NextResponse.json({ error: "Epic ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const epicId = await resolveEpicId(epicIdParam);
+    if (!epicId) {
+      return new NextResponse(null, { status: 204 });
     }
 
     // Fetch the epic first to check ownership

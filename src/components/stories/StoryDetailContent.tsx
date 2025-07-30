@@ -30,6 +30,7 @@ import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { BoardItemTabs } from "@/components/tasks/TaskTabs";
 import { useSession } from "next-auth/react";
+import { ShareButton } from "@/components/tasks/ShareButton";
 import { Sparkles } from "lucide-react";
 import { useTaskGeneration } from "@/context/TaskGenerationContext";
 
@@ -670,6 +671,7 @@ export function StoryDetailContent({
           <div className="flex items-center gap-2">
             {getStatusBadge(story.status)}
             {getPriorityBadge(story.priority)}
+            <ShareButton entityId={story.id} issueKey={story.issueKey || ""} entityType="stories" />
           </div>
         </div>
       </div>

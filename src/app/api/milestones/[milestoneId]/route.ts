@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
 import { compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
+import { resolveIssueKeyToId } from '@/lib/issue-key-resolvers';
+import { isIssueKey } from '@/lib/shared-issue-key-utils';
 
 // Schema for PATCH validation
 const milestonePatchSchema = z.object({
@@ -24,6 +26,14 @@ const milestonePatchSchema = z.object({
   reporterId: z.string().nullable().optional(),
 }).strict();
 
+// Helper function to resolve milestone ID from issue key or database ID
+async function resolveMilestoneId(milestoneIdOrKey: string): Promise<string | null> {
+  if (isIssueKey(milestoneIdOrKey)) {
+    return await resolveIssueKeyToId(milestoneIdOrKey, 'milestone');
+  }
+  return milestoneIdOrKey; // Already a database ID
+}
+
 // GET /api/milestones/{milestoneId} - Fetch a single milestone by ID
 export async function GET(
   request: NextRequest,
@@ -36,9 +46,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { milestoneId } = _params;
-    if (!milestoneId) {
+    const { milestoneId: milestoneIdParam } = _params;
+    if (!milestoneIdParam) {
       return NextResponse.json({ error: "Milestone ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const milestoneId = await resolveMilestoneId(milestoneIdParam);
+    if (!milestoneId) {
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
     const milestone = await prisma.milestone.findUnique({
@@ -131,9 +147,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { milestoneId } = _params;
-    if (!milestoneId) {
+    const { milestoneId: milestoneIdParam } = _params;
+    if (!milestoneIdParam) {
       return NextResponse.json({ error: "Milestone ID is required" }, { status: 400 });
+    }
+    
+    // Resolve issue key to database ID if necessary
+    const milestoneId = await resolveMilestoneId(milestoneIdParam);
+    if (!milestoneId) {
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
     const body = await request.json();
@@ -439,9 +461,15 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { milestoneId } = params;
-    if (!milestoneId) {
+    const { milestoneId: milestoneIdParam } = params;
+    if (!milestoneIdParam) {
       return NextResponse.json({ error: "Milestone ID is required" }, { status: 400 });
+    }
+
+    // Resolve issue key to database ID if necessary
+    const milestoneId = await resolveMilestoneId(milestoneIdParam);
+    if (!milestoneId) {
+      return new NextResponse(null, { status: 204 });
     }
 
     // Fetch the milestone first to check ownership

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 export interface Board {
   id: string;
   name: string;
+  slug?: string;
   description?: string | null;
   isDefault?: boolean;
   issuePrefix?: string | null;
@@ -147,19 +148,50 @@ export const TasksProvider = ({
   }, [searchParams, view, urlSelectedBoardId]);
 
   // Board Fetching and Selection Logic
-  const determineBoardSelection = useCallback((fetchedBoards: Board[], currentSelectedId: string): string => {
+  const determineBoardSelection = useCallback((fetchedBoards: Board[], currentSelectedSlugOrId: string): string => {
     if (!fetchedBoards || fetchedBoards.length === 0) {
       return '';
     }
 
-    const currentSelectionValid = fetchedBoards.some(board => board.id === currentSelectedId);
-    if (currentSelectionValid) {
-      return currentSelectedId;
+    // First try to find by ID (for exact match)
+    let matchingBoard = fetchedBoards.find(board => board.id === currentSelectedSlugOrId);
+    
+    // If not found by ID, try to find by slug
+    if (!matchingBoard) {
+      matchingBoard = fetchedBoards.find(board => board.slug === currentSelectedSlugOrId);
+    }
+    
+    // If we found a matching board, return its ID
+    if (matchingBoard) {
+      return matchingBoard.id;
     }
 
+    // Fallback to first board if no match found
     const firstBoardId = fetchedBoards[0].id;
     return firstBoardId;
   }, []);
+
+  // Handle board selection when URL changes after boards are loaded
+  useEffect(() => {
+    if (boards.length > 0 && urlSelectedBoardId) {
+      const resolvedBoardId = determineBoardSelection(boards, urlSelectedBoardId);
+      if (resolvedBoardId && resolvedBoardId !== selectedBoardId) {
+        setSelectedBoardId(resolvedBoardId);
+        
+        // If the URL parameter was a board ID, update it to use the slug
+        const board = boards.find(b => b.id === resolvedBoardId);
+        if (board?.slug && urlSelectedBoardId !== board.slug) {
+          setUrlSelectedBoardId(board.slug);
+          
+          // Update the URL to use the slug
+          const params = new URLSearchParams(window.location.search);
+          params.set('board', board.slug);
+          const url = `${pathname}?${params.toString()}`;
+          router.replace(url, { scroll: false });
+        }
+      }
+    }
+  }, [urlSelectedBoardId, boards, determineBoardSelection, selectedBoardId, pathname, router]);
 
   const fetchBoardsList = useCallback(async (wsId: string) => {
     // Cancel previous fetch if it exists
@@ -339,11 +371,15 @@ export const TasksProvider = ({
   const selectBoard = useCallback((boardId: string) => {
     if (boardId !== selectedBoardId) {
       setSelectedBoardId(boardId);
-      setUrlSelectedBoardId(boardId);
+      
+      // Find the board to get its slug
+      const board = boards.find(b => b.id === boardId);
+      const boardSlugOrId = board?.slug || boardId; // Fallback to ID if no slug
+      setUrlSelectedBoardId(boardSlugOrId);
 
-      // Update the URL with the new board ID while preserving the current view
+      // Update the URL with the board slug (or ID as fallback) while preserving the current view
       const params = new URLSearchParams(window.location.search);
-      params.set('board', boardId);
+      params.set('board', boardSlugOrId);
 
       // Keep the current view
       if (view && !params.has('view')) {
@@ -354,7 +390,7 @@ export const TasksProvider = ({
       const url = `${pathname}?${params.toString()}`;
       router.replace(url, { scroll: false });
     }
-  }, [selectedBoardId, view, pathname, router]);
+  }, [selectedBoardId, view, pathname, router, boards]);
 
   const setViewWithUrlUpdate = useCallback((newView: 'kanban' | 'list' | 'hierarchy') => {
     if (newView !== view) {

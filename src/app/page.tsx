@@ -18,7 +18,7 @@ export default async function Home() {
         { members: { some: { userId: session.user.id } } }
       ]
     },
-    select: { id: true },
+    select: { id: true, slug: true },
     orderBy: { createdAt: 'asc' },
     take: 1
   });
@@ -28,6 +28,8 @@ export default async function Home() {
     redirect("/welcome");
   }
 
-  // Otherwise, redirect to the first workspace's dashboard
-  redirect(`/${userWorkspaces[0].id}/dashboard`);
+  // Otherwise, redirect to the first workspace's dashboard using slug if available
+  const workspace = userWorkspaces[0];
+  const workspaceSlugOrId = workspace.slug || workspace.id;
+  redirect(`/${workspaceSlugOrId}/dashboard`);
 }

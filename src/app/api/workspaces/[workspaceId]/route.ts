@@ -20,8 +20,9 @@ export async function GET(
     const _params = await params;
     const { workspaceId } = _params;
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
+    // Try to find by slug first, then by ID for backward compatibility
+    let workspace = await prisma.workspace.findUnique({
+      where: { slug: workspaceId },
       include: {
         members: {
           include: {
@@ -47,6 +48,37 @@ export async function GET(
         }
       }
     });
+
+    // If not found by slug, try by ID for backward compatibility
+    if (!workspace) {
+      workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  image: true,
+                  role: true,
+                }
+              }
+            }
+          },
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              role: true,
+            }
+          }
+        }
+      });
+    }
 
     if (!workspace) {
       return NextResponse.json(

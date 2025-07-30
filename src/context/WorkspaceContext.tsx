@@ -186,8 +186,9 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         }
       }
       
-      // Navigate to the new workspace with the preserved route
-      router.push(`/${workspaceDetails.id}${routePart}`);
+      // Navigate to the new workspace with the preserved route (use slug if available)
+      const workspaceSlugOrId = workspaceDetails.slug || workspaceDetails.id;
+      router.push(`/${workspaceSlugOrId}${routePart}`);
     } catch (err) {
       console.error('Error switching workspace:', err);
       
@@ -210,7 +211,9 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
           }
         }
         
-        router.push(`/${workspace.id}${routePart}`);
+        // Use slug if available, fallback to ID
+        const workspaceSlugOrId = workspace.slug || workspace.id;
+        router.push(`/${workspaceSlugOrId}${routePart}`);
       }
     }
   };

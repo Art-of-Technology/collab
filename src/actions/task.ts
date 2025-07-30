@@ -1104,6 +1104,7 @@ export async function getBoardColumns(boardId: string) {
 export async function createBoard(data: {
   workspaceId: string;
   name: string;
+  slug: string;
   description?: string;
   issuePrefix: string;
   isDefault?: boolean;
@@ -1114,11 +1115,20 @@ export async function createBoard(data: {
     throw new Error('Unauthorized');
   }
 
-  const { workspaceId, name, description, issuePrefix, isDefault } = data;
+  const { workspaceId, name, slug, description, issuePrefix, isDefault } = data;
 
   // Validate input
   if (!name || !name.trim()) {
     throw new Error('Board name is required');
+  }
+
+  if (!slug || !slug.trim()) {
+    throw new Error('Board slug is required');
+  }
+
+  // Validate slug format
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    throw new Error('Board slug can only contain lowercase letters, numbers, and hyphens');
   }
 
   if (!issuePrefix || !issuePrefix.trim()) {
@@ -1162,32 +1172,46 @@ export async function createBoard(data: {
     throw new Error('Workspace not found or access denied');
   }
 
-  // Create the board with default columns
-  const board = await prisma.taskBoard.create({
-    data: {
-      name: name.trim(),
-      description: description?.trim() || null,
-      issuePrefix: issuePrefix.trim(),
-      nextIssueNumber: 1, // Start issue numbering from 1
-      isDefault: isDefault || false,
-      workspaceId,
-      columns: {
-        create: [
-          { name: "To Do", order: 0, color: "#6366F1" },
-          { name: "In Progress", order: 1, color: "#EC4899" },
-          { name: "Review", order: 2, color: "#F59E0B" },
-          { name: "Done", order: 3, color: "#10B981" },
-        ],
+  try {
+    // Create the board with default columns
+    const board = await prisma.taskBoard.create({
+      data: {
+        name: name.trim(),
+        slug: slug.trim(),
+        description: description?.trim() || null,
+        issuePrefix: issuePrefix.trim(),
+        nextIssueNumber: 1, // Start issue numbering from 1
+        isDefault: isDefault || false,
+        workspaceId,
+        columns: {
+          create: [
+            { name: "To Do", order: 0, color: "#6366F1" },
+            { name: "In Progress", order: 1, color: "#EC4899" },
+            { name: "Review", order: 2, color: "#F59E0B" },
+            { name: "Done", order: 3, color: "#10B981" },
+          ],
+        },
       },
-    },
-    include: {
-      columns: {
-        orderBy: { order: "asc" },
+      include: {
+        columns: {
+          orderBy: { order: "asc" },
+        },
       },
-    },
-  });
+    });
 
-  return board;
+    return board;
+  } catch (error: any) {
+    // Handle unique constraint violations
+    if (error.code === 'P2002') {
+      if (error.meta?.target?.includes('slug')) {
+        throw new Error('A board with this slug already exists in this workspace');
+      }
+      if (error.meta?.target?.includes('name')) {
+        throw new Error('A board with this name already exists in this workspace');
+      }
+    }
+    throw error;
+  }
 }
 
 /**

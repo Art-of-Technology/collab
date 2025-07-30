@@ -8,6 +8,7 @@ import { PrismaPost } from "./types";
 import CreateTaskButton from "./CreateTaskButton";
 import LinkedTasks from "./LinkedTasks";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { urls } from "@/lib/url-resolver";
 
 interface PostPageContentProps {
   post: PrismaPost;
@@ -17,11 +18,20 @@ interface PostPageContentProps {
 export default function PostPageContent({ post, currentUserId }: PostPageContentProps) {
   const { currentWorkspace } = useWorkspace();
   
+  // Generate back URL using URL resolver
+  const getBackUrl = () => {
+    if (!currentWorkspace) return "/welcome";
+    
+    return currentWorkspace.slug 
+      ? urls.workspaceTimeline(currentWorkspace.slug)
+      : `/${currentWorkspace.id}/timeline`; // Fallback for backward compatibility
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" asChild>
-          <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : "/welcome"}>
+          <Link href={getBackUrl()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             See All Posts
           </Link>

@@ -19,6 +19,7 @@ import { LabelSelector } from "@/components/ui/label-selector";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { BoardItemTabs } from "@/components/tasks/TaskTabs";
 import { useSession } from "next-auth/react";
+import { ShareButton } from "@/components/tasks/ShareButton";
 
 // Format date helper
 const formatDate = (date: Date | string) => {
@@ -520,8 +521,9 @@ export function MilestoneDetailContent({
                         </div>
                     </div>
 
-                    <div>
+                    <div className="flex items-center gap-2">
                         {getStatusBadge(milestone.status || "PLANNED")}
+                        <ShareButton entityId={milestone.id} issueKey={milestone.issueKey || ""} entityType="milestones" />
                     </div>
                 </div>
             </div>

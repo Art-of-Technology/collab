@@ -3,6 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { userSelectFields } from "@/lib/user-utils";
 import { checkUserPermission, Permission } from "@/lib/permissions";
+import { isUUID } from "@/lib/url-utils";
+
+// Check if a string is a CUID (Prisma's default ID format)
+function isCUID(str: string): boolean {
+  return /^c[a-z0-9]{24}$/.test(str);
+}
+
+// Check if a string is a database ID (UUID or CUID)
+function isDatabaseId(str: string): boolean {
+  return isUUID(str) || isCUID(str);
+}
 
 // Define a Task interface
 interface TaskWithPosition {
@@ -23,34 +34,67 @@ export async function GET(req: NextRequest, { params }: { params: { boardId: str
 
     const { boardId } = _params;
 
-    // Fetch the board with columns and tasks
-    const board = await prisma.taskBoard.findUnique({
-      where: {
-        id: boardId,
-      },
-      include: {
-        columns: {
-          orderBy: {
-            order: "asc",
-          },
-          include: {
-            tasks: {
-              include: {
-                assignee: {
-                  select: userSelectFields,
-                },
-                _count: {
-                  select: {
-                    comments: true,
-                    attachments: true,
+    // Resolve board slug to ID if needed
+    let board;
+    if (isDatabaseId(boardId)) {
+      // It's a database ID, find by ID
+      board = await prisma.taskBoard.findUnique({
+        where: {
+          id: boardId,
+        },
+        include: {
+          columns: {
+            orderBy: {
+              order: "asc",
+            },
+            include: {
+              tasks: {
+                include: {
+                  assignee: {
+                    select: userSelectFields,
+                  },
+                  _count: {
+                    select: {
+                      comments: true,
+                      attachments: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
+      });
+    } else {
+      // It's a slug, find by slug
+      board = await prisma.taskBoard.findFirst({
+        where: {
+          slug: boardId,
+        },
+        include: {
+          columns: {
+            orderBy: {
+              order: "asc",
+            },
+            include: {
+              tasks: {
+                include: {
+                  assignee: {
+                    select: userSelectFields,
+                  },
+                  _count: {
+                    select: {
+                      comments: true,
+                      attachments: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
 
     if (!board) {
       return NextResponse.json({ error: "Board not found" }, { status: 404 });
@@ -137,11 +181,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { boardId: s
       return NextResponse.json({ error: "Issue prefix is required" }, { status: 400 });
     }
 
-    // Find board to check permissions
-    const existingBoard = await prisma.taskBoard.findUnique({
-      where: { id: boardId },
-      select: { workspaceId: true },
-    });
+    // Find board to check permissions - handle both ID and slug
+    let existingBoard;
+    if (isDatabaseId(boardId)) {
+      existingBoard = await prisma.taskBoard.findUnique({
+        where: { id: boardId },
+        select: { id: true, workspaceId: true },
+      });
+    } else {
+      existingBoard = await prisma.taskBoard.findFirst({
+        where: { slug: boardId },
+        select: { id: true, workspaceId: true },
+      });
+    }
 
     if (!existingBoard) {
       return NextResponse.json({ error: "Board not found" }, { status: 404 });
@@ -153,9 +205,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { boardId: s
     if (!hasPermission.hasPermission) {
       return NextResponse.json({ error: "You don't have permission to update board settings" }, { status: 403 });
     }
-    // Update board
+    // Update board using the resolved database ID
     const updatedBoard = await prisma.taskBoard.update({
-      where: { id: boardId },
+      where: { id: existingBoard.id },
       data: {
         name,
         description,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { jobStorage } from '@/lib/job-storage';
+import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,22 +11,32 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
+    const workspaceSlugOrId = searchParams.get('workspaceId');
 
-    if (!workspaceId) {
+    if (!workspaceSlugOrId) {
       return NextResponse.json(
         { error: 'Workspace ID is required' },
         { status: 400 }
       );
     }
 
+    // Resolve workspace slug to actual workspace ID if needed
+    const actualWorkspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+    
+    if (!actualWorkspaceId) {
+      return NextResponse.json(
+        { error: 'Workspace not found' },
+        { status: 404 }
+      );
+    }
+
     // Get all jobs for this user and workspace
     const allJobs = await jobStorage.getAll();
     
-    // Filter jobs for this user and workspace
+    // Filter jobs for this user and workspace using the resolved workspace ID
     const userJobs = allJobs.filter(job => 
       job.userId === session.user.id && 
-      job.workspaceId === workspaceId
+      job.workspaceId === actualWorkspaceId
     );
 
     // Sort by creation date (newest first)
