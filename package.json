@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:init-workspace": "ts-node prisma/scripts/create-default-workspace.ts",
-    "email:test-credentials": "ts-node scripts/generate-test-email.ts"
+    "email:test-credentials": "ts-node scripts/generate-test-email.ts",
+    "migrate:unified-issue": "ts-node scripts/data-migration.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.8.0",

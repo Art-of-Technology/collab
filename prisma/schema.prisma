@@ -70,6 +70,17 @@ model User {
   workspaceMemberships   WorkspaceMember[]
   conversations          Conversation[]          @relation("UserConversations")
   boardGenerationJobs    BoardGenerationJob[]
+  
+  // New unified Issue relationships
+  assignedIssues         Issue[]                 @relation("AssignedIssues")
+  reportedIssues         Issue[]                 @relation("ReportedIssues")
+  
+  // New View relationships
+  ownedViews             View[]                  @relation("OwnedViews")
+  
+  // New Issue Comment relationships
+  issueComments          IssueComment[]          @relation("IssueCommentAuthor")
+  issueCommentReactions  IssueCommentReaction[]  @relation("IssueCommentReactions")
 }
 
 model Account {
@@ -342,6 +353,11 @@ model Workspace {
   members             WorkspaceMember[]
   boardItemActivities BoardItemActivity[]
   boardGenerationJobs BoardGenerationJob[]
+  
+  // New unified models
+  projects            Project[]
+  views               View[]
+  issues              Issue[]
 }
 
 model WorkspaceMember {
@@ -372,6 +388,32 @@ model WorkspaceInvitation {
   @@unique([email, workspaceId])
 }
 
+model Project {
+  id              String       @id @default(cuid())
+  name            String
+  slug            String
+  description     String?
+  workspaceId     String
+  isDefault       Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  issuePrefix     String
+  nextIssueNumbers Json        @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"DEFECT\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
+  
+  // Relationships
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  columns         TaskColumn[]
+  issues          Issue[]
+  
+  // Legacy relationships for migration (will be removed after migration)
+  // Note: These will be handled through taskBoardId in the existing models during migration
+
+  @@unique([name, workspaceId])
+  @@unique([slug, workspaceId])
+  @@index([workspaceId])
+}
+
+// Legacy TaskBoard model for migration purposes (will be removed after migration)
 model TaskBoard {
   id              String       @id @default(cuid())
   name            String
@@ -395,23 +437,184 @@ model TaskBoard {
   @@index([workspaceId])
 }
 
+model Issue {
+  id            String      @id @default(cuid())
+  title         String
+  description   String?
+  type          IssueType   @default(TASK)
+  status        String?
+  priority      String      @default("medium")
+  storyPoints   Int?
+  
+  // Hierarchy relationships
+  parentId      String?
+  parent        Issue?      @relation("IssueHierarchy", fields: [parentId], references: [id])
+  children      Issue[]     @relation("IssueHierarchy")
+  
+  // Core relationships
+  assigneeId    String?
+  reporterId    String?
+  projectId     String
+  workspaceId   String
+  columnId      String?
+  
+  // Dates and tracking
+  dueDate       DateTime?
+  startDate     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Issue identification
+  issueKey      String?
+  position      Int?
+  
+  // Type-specific fields (used conditionally)
+  progress      Int?        @default(0)
+  color         String?
+  
+  // Legacy fields for migration
+  postId        String?
+  
+  // Relationships
+  assignee      User?            @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  reporter      User?            @relation("ReportedIssues", fields: [reporterId], references: [id])
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  column        TaskColumn?      @relation(fields: [columnId], references: [id])
+  
+  // Legacy post relationship will be added when Post model is updated
+  
+  // Unified relationships
+  comments      IssueComment[]
+  labels        TaskLabel[]      @relation("IssueToLabel")
+  
+  // Legacy relationships will be migrated gradually as we update corresponding models
+  // activities, assignees, attachments, notifications, userEvents, userStatuses
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@index([assigneeId])
+  @@index([reporterId])
+  @@index([parentId])
+  @@index([columnId])
+  @@index([issueKey])
+  @@index([type])
+  @@index([status])
+  @@index([postId])
+  @@unique([issueKey, projectId])
+}
+
+model View {
+  id            String          @id @default(cuid())
+  name          String
+  description   String?
+  workspaceId   String
+  ownerId       String
+  
+  // View Configuration
+  displayType   ViewDisplayType @default(KANBAN)
+  filters       Json?
+  sorting       Json?
+  grouping      Json?
+  fields        Json?
+  layout        Json?
+  
+  // Multi-project and cross-workspace support
+  projectIds    String[]
+  workspaceIds  String[]
+  
+  // Permission and visibility
+  visibility    ViewVisibility  @default(PERSONAL)
+  isDefault     Boolean         @default(false)
+  isFavorite    Boolean         @default(false)
+  sharedWith    String[]
+  color         String?
+  
+  // Metadata
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  lastAccessedAt DateTime?
+  accessCount   Int             @default(0)
+  
+  // Relationships
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner         User            @relation("OwnedViews", fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  @@index([workspaceId])
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([isDefault])
+  @@index([isFavorite])
+}
+
+model IssueComment {
+  id            String                @id @default(cuid())
+  content       String
+  issueId       String
+  authorId      String
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  html          String?
+  parentId      String?
+  
+  author        User                  @relation("IssueCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parent        IssueComment?         @relation("IssueCommentHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       IssueComment[]        @relation("IssueCommentHierarchy")
+  issue         Issue                 @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  reactions     IssueCommentReaction[]
+  
+  // Notifications relationship will be added when Notification model is updated
+
+  @@index([issueId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model IssueCommentReaction {
+  id            String       @id @default(cuid())
+  type          String
+  commentId     String
+  authorId      String
+  createdAt     DateTime     @default(now())
+  
+  author        User         @relation("IssueCommentReactions", fields: [authorId], references: [id])
+  comment       IssueComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([authorId, commentId, type])
+  @@index([commentId])
+  @@index([authorId])
+}
+
 model TaskColumn {
   id          String      @id @default(cuid())
   name        String
   order       Int         @default(0)
   color       String?
-  taskBoardId String
+  projectId   String?     // Made optional for migration, will be required after data migration
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   description String?
+  
+  // New unified relationships
+  issues      Issue[]
+  
+  // Legacy relationships for migration (will be removed after migration)
   epics       Epic[]
   milestones  Milestone[]
   stories     Story[]
   tasks       Task[]
-  taskBoard   TaskBoard   @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Legacy relationship for migration
+  taskBoard   TaskBoard?  @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  taskBoardId String?
 
-  @@unique([name, taskBoardId])
-  @@index([taskBoardId])
+  // Temporary: unique constraint will be updated after migration
+  // @@unique([name, projectId])  
+  @@unique([name, taskBoardId])  // Keep existing constraint during migration
+  @@index([projectId])
+  @@index([taskBoardId]) // Legacy index for migration
 }
 
 model Task {
@@ -532,6 +735,7 @@ model TaskLabel {
   milestones  Milestone[] @relation("MilestoneToLabel")
   stories     Story[]     @relation("StoryToLabel")
   tasks       Task[]      @relation("TaskToLabel")
+  issues      Issue[]     @relation("IssueToLabel")
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
@@ -1071,6 +1275,31 @@ enum Permission {
   VIEW_REPORTS
   PIN_POST
   RESOLVE_BLOCKER
+}
+
+enum IssueType {
+  EPIC
+  STORY
+  TASK
+  DEFECT
+  MILESTONE
+  SUBTASK
+}
+
+enum ViewDisplayType {
+  KANBAN
+  LIST
+  TABLE
+  CALENDAR
+  TIMELINE
+  GANTT
+  BOARD
+}
+
+enum ViewVisibility {
+  PERSONAL
+  WORKSPACE
+  SHARED
 }
 
 

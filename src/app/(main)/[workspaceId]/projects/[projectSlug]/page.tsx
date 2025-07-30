@@ -3,55 +3,57 @@ import { getServerSession } from 'next-auth';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-interface TasksPageProps {
+interface ProjectPageProps {
   params: {
     workspaceId: string;
+    projectSlug: string;
   };
 }
 
-export default async function TasksPage({ params }: TasksPageProps) {
+export default async function ProjectPage({ params }: ProjectPageProps) {
   const session = await getServerSession(authConfig);
   
   if (!session?.user?.id) {
     redirect('/auth/signin');
   }
 
-  // Redirect to the first available view or create a default all-projects view
-  let defaultView = await prisma.view.findFirst({
+  // Find the project by slug
+  const project = await prisma.project.findFirst({
     where: {
+      slug: params.projectSlug,
       workspaceId: params.workspaceId,
-      OR: [
-        { visibility: 'WORKSPACE' },
-        { visibility: 'SHARED' },
-        { ownerId: session.user.id }
-      ]
     },
-    orderBy: [
-      { isDefault: 'desc' },
-      { isFavorite: 'desc' },
-      { createdAt: 'asc' }
-    ]
   });
 
-  // If no views exist, create a default "All Issues" view
-  if (!defaultView) {
-    const allProjects = await prisma.project.findMany({
-      where: { workspaceId: params.workspaceId },
-      select: { id: true }
-    });
+  if (!project) {
+    redirect(`/${params.workspaceId}`);
+  }
 
+  // Find or create a default view for this project
+  let defaultView = await prisma.view.findFirst({
+    where: {
+      projectIds: {
+        has: project.id
+      },
+      isDefault: true,
+      workspaceId: params.workspaceId,
+    },
+  });
+
+  // If no default view exists, create one
+  if (!defaultView) {
     defaultView = await prisma.view.create({
       data: {
-        name: 'All Issues',
-        description: 'All issues across all projects',
+        name: `${project.name} Board`,
+        description: `Default kanban view for ${project.name}`,
         workspaceId: params.workspaceId,
         ownerId: session.user.id,
         displayType: 'KANBAN',
-        projectIds: allProjects.map(p => p.id),
+        projectIds: [project.id],
         workspaceIds: [params.workspaceId],
         visibility: 'WORKSPACE',
         isDefault: true,
-        isFavorite: false,
+
         filters: {},
         sorting: { field: 'position', direction: 'asc' },
         grouping: { field: 'status' },
@@ -61,11 +63,11 @@ export default async function TasksPage({ params }: TasksPageProps) {
           showLabels: true,
           showAssigneeAvatars: true
         },
-        sharedWith: [],
-        color: '#3b82f6'
+        sharedWith: []
       },
     });
   }
 
+  // Redirect to the default view
   redirect(`/${params.workspaceId}/views/${defaultView.id}`);
-} 
+}
