@@ -20,13 +20,13 @@ export default async function FeatureRequestsPage() {
   return (
     <div className="container max-w-5xl py-4 sm:py-8 px-0 sm:px-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0 mb-6 sm:mb-8">
-        <div className="space-y-2 text-center sm:text-left">
-          <h1 className="text-2xl sm:text-3xl font-bold">Feature Requests</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+        <div className="space-y-2 text-left">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight sm:tracking-normal">Feature Requests</h1>
+          <p className="text-sm sm:text-base text-muted-foreground tracking-tight sm:tracking-normal">
             Submit your ideas and vote on features you want to see
           </p>
         </div>
-        <div className="flex justify-center sm:justify-end">
+        <div className="flex justify-start sm:justify-end">
           <CreateFeatureRequestButton />
         </div>
       </div>

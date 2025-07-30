@@ -144,8 +144,8 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6 px-2 sm:px-0">
-        <div className="flex flex-wrap gap-2 sm:gap-3 items-center justify-center sm:justify-start">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6 px-1 sm:px-0">
+        <div className="flex flex-wrap gap-2 sm:gap-3 items-center justify-start">
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Filter className="h-4 w-4" />
             <span>Filter:</span>
@@ -163,7 +163,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 text-muted-foreground text-sm ml-2">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm pl-2">
             <ArrowUpDown className="h-4 w-4" />
             <span>Sort:</span>
           </div>
@@ -181,7 +181,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
           </Select>
         </div>
 
-        <div className="text-sm bg-secondary/50 py-1 px-3 rounded-full text-secondary-foreground text-center sm:text-left">
+        <div className="text-sm bg-secondary/50 py-1  rounded-full text-secondary-foreground text-left tracking-tight sm:tracking-normal">
           {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
         </div>
       </div>
@@ -201,21 +201,21 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
               <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
                 <div className="p-6">
                   <div className="flex justify-between">
-                    <div className="space-y-2 text-center sm:text-left">
-                      <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors">{request.title}</h3>
+                    <div className="space-y-2 text-left">
+                      <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors tracking-tight sm:tracking-normal">{request.title}</h3>
                       <div className="hidden sm:flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span>
                           {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
                         </span>
                         {getStatusBadge(request.status)}
                       </div>
-                      
+
                       {/* Mobile-only meta info */}
-                      <div className="sm:hidden text-center space-y-2">
+                      <div className="sm:hidden text-left space-y-2">
                         <div className="text-sm text-muted-foreground">
                           {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
                         </div>
-                        <div className="flex items-center justify-center gap-3">
+                        <div className="flex items-center justify-start gap-3">
                           {getStatusBadge(request.status)}
                           <span className="text-muted-foreground">•</span>
                           <span className={`text-sm ${request.voteScore > 0
@@ -242,11 +242,11 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                     </div>
                   </div>
 
-                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors text-center sm:text-left">
-                    <MarkdownContent 
-                      content={truncateText(request.description, 200)} 
+                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors text-left">
+                    <MarkdownContent
+                      content={truncateText(request.description, 200)}
                       htmlContent={request.description}
-                      className="prose-sm text-muted-foreground text-center sm:text-left"
+                      className="prose-sm text-muted-foreground text-left"
                     />
                   </div>
 

@@ -78,7 +78,7 @@ export default function FeatureRequestComments({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold">
+      <h2 className="text-lg sm:text-2xl font-semibold tracking-tight sm:tracking-normal">
         Comments ({comments.length})
       </h2>
 
@@ -88,13 +88,13 @@ export default function FeatureRequestComments({
           placeholder="Add a comment..."
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          className="min-h-[100px] resize-none"
+          className="min-h-[100px] resize-none text-sm"
         />
         <div className="flex justify-end">
           <Button 
             type="submit" 
             disabled={addComment.isPending || !commentText.trim()}
-            className="min-w-[120px]"
+            className="min-w-[120px] text-[10px] sm:text-sm h-7 sm:h-10 px-2 sm:px-4"
           >
             {addComment.isPending ? (
               <>
@@ -111,7 +111,7 @@ export default function FeatureRequestComments({
       {/* Comments list */}
       <div className="space-y-4 mt-8">
         {comments.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">
+          <p className="text-left sm:text-center text-muted-foreground py-8 text-xs sm:text-sm tracking-tight sm:tracking-normal">
             No comments yet. Be the first to add a comment!
           </p>
         ) : (
@@ -131,17 +131,17 @@ export default function FeatureRequestComments({
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="font-medium text-sm">
+                  <div className="font-medium text-xs sm:text-sm tracking-tight sm:tracking-normal">
                     {comment.author.id === currentUserId ? "You" : comment.author.name}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-[10px] sm:text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(comment.createdAt), {
                       addSuffix: true,
                     })}
                   </div>
                 </div>
               </div>
-              <div className="text-sm whitespace-pre-wrap">{comment.content}</div>
+              <div className="text-xs sm:text-sm whitespace-pre-wrap tracking-tight sm:tracking-normal">{comment.content}</div>
             </div>
           ))
         )}
