@@ -120,17 +120,17 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
     switch (status) {
       case "pending":
       case "PENDING":
-        return <Badge variant="secondary" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors">Pending</Badge>;
+        return <Badge variant="secondary" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors text-sm">Pending</Badge>;
       case "accepted":
       case "PLANNED":
-        return <Badge variant="secondary" className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors">Accepted</Badge>;
+        return <Badge variant="secondary" className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors text-sm">Accepted</Badge>;
       case "rejected":
       case "DECLINED":
-        return <Badge variant="secondary" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors">Rejected</Badge>;
+        return <Badge variant="secondary" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors text-sm">Rejected</Badge>;
       case "completed":
       case "COMPLETED":
       case "IN_PROGRESS":
-        return <Badge variant="secondary" className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 transition-colors">Completed</Badge>;
+        return <Badge variant="secondary" className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 transition-colors text-sm">Completed</Badge>;
       default:
         return null;
     }
@@ -144,8 +144,8 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
-        <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6 px-1 sm:px-0">
+        <div className="flex flex-wrap gap-2 sm:gap-3 items-center justify-start">
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Filter className="h-4 w-4" />
             <span>Filter:</span>
@@ -163,7 +163,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 text-muted-foreground text-sm ml-2">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm pl-2">
             <ArrowUpDown className="h-4 w-4" />
             <span>Sort:</span>
           </div>
@@ -181,7 +181,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
           </Select>
         </div>
 
-        <div className="text-sm bg-secondary/50 py-1 px-3 rounded-full text-secondary-foreground">
+        <div className="text-sm bg-secondary/50 py-1  rounded-full text-secondary-foreground text-left tracking-tight sm:tracking-normal">
           {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
         </div>
       </div>
@@ -201,16 +201,35 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
               <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
                 <div className="p-6">
                   <div className="flex justify-between">
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-semibold group-hover:text-primary transition-colors">{request.title}</h3>
-                      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <div className="space-y-2 text-left">
+                      <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors tracking-tight sm:tracking-normal">{request.title}</h3>
+                      <div className="hidden sm:flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span>
                           {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
                         </span>
                         {getStatusBadge(request.status)}
                       </div>
+
+                      {/* Mobile-only meta info */}
+                      <div className="sm:hidden text-left space-y-2">
+                        <div className="text-sm text-muted-foreground">
+                          {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
+                        </div>
+                        <div className="flex items-center justify-start gap-3">
+                          {getStatusBadge(request.status)}
+                          <span className="text-muted-foreground">•</span>
+                          <span className={`text-sm ${request.voteScore > 0
+                            ? 'text-green-600'
+                            : request.voteScore < 0
+                              ? 'text-red-600'
+                              : ''
+                            }`}>
+                            {request.voteScore} {Math.abs(request.voteScore) === 1 ? 'vote' : 'votes'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-center justify-center min-w-[70px] text-center">
+                    <div className="hidden sm:flex flex-col items-center justify-center min-w-[70px] text-center">
                       <span className={`text-2xl font-bold transition-colors ${request.voteScore > 0
                         ? 'text-green-600'
                         : request.voteScore < 0
@@ -223,11 +242,11 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                     </div>
                   </div>
 
-                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors">
-                    <MarkdownContent 
-                      content={truncateText(request.description, 200)} 
+                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors text-left">
+                    <MarkdownContent
+                      content={truncateText(request.description, 200)}
                       htmlContent={request.description}
-                      className="prose-sm text-muted-foreground"
+                      className="prose-sm text-muted-foreground text-left"
                     />
                   </div>
 
