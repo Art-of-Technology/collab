@@ -90,7 +90,7 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/task`);
       if (!response.ok) {
-        throw new Error('Failed to fetch task');
+        throw new Error('Failed to fetch tasks');
       }
       return await response.json();
     } catch (error) {
