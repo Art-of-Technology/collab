@@ -338,11 +338,28 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => setEditingNote(note)}>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditingNote(note);
+                            // Close dropdown after a short delay
+                            setTimeout(() => {
+                              const event = new MouseEvent('click', {
+                                bubbles: true,
+                                cancelable: true,
+                                view: window
+                              });
+                              document.body.dispatchEvent(event);
+                            }, 100);
+                          }}>
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleDeleteNote(note.id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteNote(note.id);
+                            }}
                             className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
