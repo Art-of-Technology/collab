@@ -216,7 +216,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-7 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2" style={{ fontSize: '14px' }}>
+              <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }}>
                 <Plus className="h-3 w-3 mr-1 sm:h-4 sm:w-4" />
                 <span className="ml-0 sm:ml-0">New Note</span>
               </Button>
@@ -310,8 +310,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                 href={`/${workspaceId}/notes/${note.id}`}
                 className="block"
               >
-                <div className="bg-card border rounded-lg p-2 sm:p-4 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
-                  <div className="flex items-start justify-end mb-2 sm:mb-3">
+                <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
+                  <div className="flex items-start justify-end mb-2 sm:mb-2 sm:pt-0">
                     <div className="flex items-center gap-3 sm:gap-0">
                       <Button
                         variant="ghost"
@@ -361,8 +361,21 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   
                   <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
                     <div className="text-muted-foreground text-sm sm:text-sm">
-                      {note.content.replace(/<[^>]*>/g, '').substring(0, 100)}
-                      {note.content.replace(/<[^>]*>/g, '').length > 100 && '...'}
+                      {note.content
+                        .replace(/<p[^>]*>/gi, '')
+                        .replace(/<\/p>/gi, ' ')
+                        .replace(/<br\s*\/?>/gi, ' ')
+                        .replace(/<[^>]*>/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .substring(0, 100)}
+                      {note.content
+                        .replace(/<p[^>]*>/gi, '')
+                        .replace(/<\/p>/gi, ' ')
+                        .replace(/<br\s*\/?>/gi, ' ')
+                        .replace(/<[^>]*>/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim().length > 100 && '...'}
                     </div>
                   </div>
                   
