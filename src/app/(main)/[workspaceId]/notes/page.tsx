@@ -203,22 +203,22 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   }
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <div className="container mx-auto py-6 px-1">
       <div className="flex flex-col gap-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Notes</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-4 tracking-tight">Notes</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
               Create and organize your notes with markdown support
             </p>
           </div>
           
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Note
+              <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-7 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2" style={{ fontSize: '14px' }}>
+                <Plus className="h-3 w-3 mr-1 sm:h-4 sm:w-4" />
+                <span className="ml-0 sm:ml-0">New Note</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -245,7 +245,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               placeholder="Search notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 text-xs sm:text-sm h-7 sm:h-10"
+              style={{ fontSize: '14px' }}
             />
           </div>
           
@@ -253,15 +254,17 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             <Button
               variant={showFavorites ? "default" : "outline"}
               onClick={() => setShowFavorites(!showFavorites)}
+              className="text-xs w-[100px] sm:text-sm h-7 sm:h-10"
+              style={{ fontSize: '14px' }}
             >
-              <Star className="h-4 w-4 mr-2" />
+              <Star className="h-4 w-4" />
               Favorites
             </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="h-4 w-4 mr-2" />
+                <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: '14px' }}>
+                  <Filter className="h-4 w-4" />
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DropdownMenuTrigger>
@@ -300,27 +303,27 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {notes.map((note) => (
               <Link
                 key={note.id}
                 href={`/${workspaceId}/notes/${note.id}`}
                 className="block"
               >
-                <div className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col">
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-semibold line-clamp-1">{note.title}</h3>
-                    <div className="flex items-center gap-1">
+                <div className="bg-card border rounded-lg p-2 sm:p-4 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
+                  <div className="flex items-start justify-end mb-2 sm:mb-3">
+                    <div className="flex items-center gap-3 sm:gap-0">
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
                           e.preventDefault();
                           toggleFavorite(note.id, note.isFavorite);
                         }}
                       >
                         <Star
-                          className={`h-4 w-4 ${
+                          className={`h-1 w-1 sm:h-4 sm:w-4 ${
                             note.isFavorite 
                               ? "fill-yellow-400 text-yellow-400" 
                               : "text-muted-foreground"
@@ -330,51 +333,56 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       <Button 
                         variant="ghost" 
                         size="sm"
+                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setEditingNote(note);
                         }}
                       >
-                        <Edit className="h-4 w-4" />
+                        <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
                       </Button>
                       <Button 
                         variant="ghost" 
                         size="sm"
+                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           handleDeleteNote(note.id);
                         }}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
                   </div>
                   
-                  <div className="prose prose-sm max-w-none line-clamp-3 mb-3 flex-1">
-                    <div className="text-muted-foreground">
-                      {note.content.replace(/<[^>]*>/g, '').substring(0, 150)}
-                      {note.content.replace(/<[^>]*>/g, '').length > 150 && '...'}
+                  <h3 className="font-semibold line-clamp-1 text-sm sm:text-base mb-2 sm:mb-3">{note.title}</h3>
+                  
+                  <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
+                    <div className="text-muted-foreground text-sm sm:text-sm">
+                      {note.content.replace(/<[^>]*>/g, '').substring(0, 100)}
+                      {note.content.replace(/<[^>]*>/g, '').length > 100 && '...'}
                     </div>
                   </div>
                   
                   {note.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
+                    <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
                       {note.tags.map((tag) => (
                         <Badge
                           key={tag.id}
                           variant="secondary"
+                          className="text-sm px-1 py-0.5 sm:px-2 sm:py-1"
                           style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
                         >
-                          <TagIcon className="h-3 w-3 mr-1" />
+                          <TagIcon className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
                           {tag.name}
                         </Badge>
                       ))}
                     </div>
                   )}
                   
-                  <div className="text-xs text-muted-foreground mt-auto">
+                  <div className="text-sm text-muted-foreground mt-auto">
                     Updated {new Date(note.updatedAt).toLocaleDateString()}
                     {note.workspace && (
                       <span className="ml-2">• {note.workspace.name}</span>
