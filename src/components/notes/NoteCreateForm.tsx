@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { NotionEditor } from "@/components/ui/notion-editor";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
@@ -139,10 +139,10 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
             <FormItem>
               <FormLabel>Content</FormLabel>
               <FormControl>
-                <MarkdownEditor
+                <NotionEditor
                   initialValue={field.value}
                   onChange={field.onChange}
-                  placeholder="Write your note content (supports markdown)..."
+                  placeholder="Type '/' for commands or start writing..."
                   minHeight="300px"
                   maxHeight="500px"
                 />
