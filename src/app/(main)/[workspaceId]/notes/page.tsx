@@ -34,6 +34,7 @@ import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 interface Note {
   id: string;
@@ -69,17 +70,27 @@ interface NoteTag {
   };
 }
 
-export default function NotesPage() {
+export default function NotesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { data: session, status } = useSession();
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<NoteTag[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Resolve params first
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolvedParams = await params;
+      setWorkspaceId(resolvedParams.workspaceId);
+    };
+    resolveParams();
+  }, [params]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -291,74 +302,87 @@ export default function NotesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {notes.map((note) => (
-              <div
+              <Link
                 key={note.id}
-                className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow"
+                href={`/${workspaceId}/notes/${note.id}`}
+                className="block"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-semibold line-clamp-1">{note.title}</h3>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleFavorite(note.id, note.isFavorite)}
-                    >
-                      <Star
-                        className={`h-4 w-4 ${
-                          note.isFavorite 
-                            ? "fill-yellow-400 text-yellow-400" 
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => setEditingNote(note)}>
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteNote(note.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                
-                <div className="prose prose-sm max-w-none line-clamp-3 mb-3">
-                  <MarkdownRenderer content={note.content} />
-                </div>
-                
-                {note.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {note.tags.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                <div className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold line-clamp-1">{note.title}</h3>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          toggleFavorite(note.id, note.isFavorite);
+                        }}
                       >
-                        <TagIcon className="h-3 w-3 mr-1" />
-                        {tag.name}
-                      </Badge>
-                    ))}
+                        <Star
+                          className={`h-4 w-4 ${
+                            note.isFavorite 
+                              ? "fill-yellow-400 text-yellow-400" 
+                              : "text-muted-foreground"
+                          }`}
+                        />
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => e.preventDefault()}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => setEditingNote(note)}>
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                )}
-                
-                <div className="text-xs text-muted-foreground">
-                  Updated {new Date(note.updatedAt).toLocaleDateString()}
-                  {note.workspace && (
-                    <span className="ml-2">• {note.workspace.name}</span>
+                  
+                  <div className="prose prose-sm max-w-none line-clamp-3 mb-3 flex-1">
+                    <div className="text-muted-foreground">
+                      {note.content.replace(/<[^>]*>/g, '').substring(0, 150)}
+                      {note.content.replace(/<[^>]*>/g, '').length > 150 && '...'}
+                    </div>
+                  </div>
+                  
+                  {note.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {note.tags.map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                        >
+                          <TagIcon className="h-3 w-3 mr-1" />
+                          {tag.name}
+                        </Badge>
+                      ))}
+                    </div>
                   )}
+                  
+                  <div className="text-xs text-muted-foreground mt-auto">
+                    Updated {new Date(note.updatedAt).toLocaleDateString()}
+                    {note.workspace && (
+                      <span className="ml-2">• {note.workspace.name}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}
