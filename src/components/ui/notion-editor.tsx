@@ -11,6 +11,10 @@ import TextStyle from "@tiptap/extension-text-style";
 import Heading from "@tiptap/extension-heading";
 import Color from "@tiptap/extension-color";
 import HorizontalRule from "@tiptap/extension-horizontal-rule";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
 import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
@@ -28,7 +32,7 @@ import {
   Quote,
   Code,
   CheckSquare,
-  Table,
+  Table as TableIcon,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -37,6 +41,9 @@ import {
   Minus,
   Plus,
   MoreHorizontal,
+  Columns,
+  Rows,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,6 +94,8 @@ const handleSlashCommand = (editor: any, command: string) => {
       return editor.chain().focus().toggleCodeBlock().run()
     case 'horizontalRule':
       return editor.chain().focus().setHorizontalRule().run()
+    case 'table':
+      return editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()
     default:
       return false
   }
@@ -186,6 +195,30 @@ export function NotionEditor({
         levels: [1, 2, 3],
       }),
       Color,
+      Table.configure({
+        resizable: false,
+        HTMLAttributes: {
+          class: 'border-collapse border border-border w-full',
+          style: 'table-layout: fixed; width: 100%;',
+        },
+      }),
+      TableRow.configure({
+        HTMLAttributes: {
+          class: 'border-b border-border',
+        },
+      }),
+      TableCell.configure({
+        HTMLAttributes: {
+          class: 'border border-border p-2',
+          style: 'word-wrap: break-word; overflow-wrap: break-word; max-width: 200px; min-width: 100px;',
+        },
+      }),
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'border border-border p-2 font-semibold bg-muted',
+          style: 'word-wrap: break-word; overflow-wrap: break-word; max-width: 200px; min-width: 100px;',
+        },
+      }),
       FloatingToolbar,
     ],
     content: initialContentRef.current,
@@ -379,6 +412,7 @@ export function NotionEditor({
     { title: 'Numbered List', icon: ListOrdered, command: 'orderedList' },
     { title: 'Quote', icon: Quote, command: 'blockquote' },
     { title: 'Code Block', icon: Code, command: 'codeBlock' },
+    { title: 'Table', icon: TableIcon, command: 'table' },
     { title: 'Divider', icon: Minus, command: 'horizontalRule' },
   ];
 
@@ -555,6 +589,132 @@ export function NotionEditor({
           </Tooltip>
 
           <Separator orientation="vertical" className="mx-1 h-6" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()}
+              >
+                <TableIcon size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Insert Table</TooltipContent>
+          </Tooltip>
+
+          {editor.isActive('table') && (
+            <>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().addColumnBefore().run()}
+                  >
+                    <Columns size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Add Column Before</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().addColumnAfter().run()}
+                  >
+                    <Columns size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Add Column After</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().deleteColumn().run()}
+                  >
+                    <Minus size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Delete Column</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().addRowBefore().run()}
+                  >
+                    <Rows size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Add Row Before</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().addRowAfter().run()}
+                  >
+                    <Rows size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Add Row After</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().deleteRow().run()}
+                  >
+                    <Minus size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Delete Row</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => editor.chain().focus().deleteTable().run()}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Delete Table</TooltipContent>
+              </Tooltip>
+            </>
+          )}
 
           <Popover open={showLinkPopover} onOpenChange={setShowLinkPopover}>
             <TooltipProvider>
@@ -738,6 +898,61 @@ export function NotionEditor({
           max-width: 100%;
           height: auto;
           border-radius: 0.5rem;
+        }
+        
+        .notion-editor table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 1em 0;
+          table-layout: fixed;
+          word-wrap: break-word;
+        }
+        
+        .notion-editor th,
+        .notion-editor td {
+          border: 1px solid #e5e7eb;
+          padding: 0.5rem;
+          text-align: left;
+          vertical-align: top;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          max-width: 200px;
+          min-width: 100px;
+        }
+        
+        .notion-editor th {
+          background-color: #f9fafb;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        
+        .notion-editor tr:nth-child(even) {
+          background-color: #f9fafb;
+        }
+        
+        .notion-editor tr:hover {
+          background-color: #f3f4f6;
+        }
+        
+        .notion-editor table td,
+        .notion-editor table th {
+          position: relative;
+        }
+        
+        .notion-editor table td:focus,
+        .notion-editor table th:focus {
+          outline: 2px solid #3b82f6;
+          outline-offset: -2px;
+        }
+        
+        .notion-editor table {
+          overflow-x: auto;
+          display: block;
+        }
+        
+        .notion-editor table tbody {
+          display: table;
+          width: 100%;
         }
       `}</style>
     </div>
