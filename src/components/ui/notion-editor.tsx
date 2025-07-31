@@ -44,6 +44,7 @@ import {
   Columns,
   Rows,
   Trash2,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +63,8 @@ import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
+import { ColorPalette } from "@/components/ui/color-palette";
+import { RgbaColor, RgbaTextStyle } from "@/components/ui/rgba-color-extension";
 
 interface NotionEditorProps {
   onChange?: (html: string) => void;
@@ -96,6 +99,8 @@ const handleSlashCommand = (editor: any, command: string) => {
       return editor.chain().focus().setHorizontalRule().run()
     case 'table':
       return editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()
+    case 'color':
+      return editor.chain().focus().setColor('rgba(59, 130, 246, 1)').run()
     default:
       return false
   }
@@ -168,6 +173,7 @@ export function NotionEditor({
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 });
+  const [selectedColor, setSelectedColor] = useState('#3b82f6');
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   const initialContentRef = useRef(initialValue || content);
@@ -190,11 +196,11 @@ export function NotionEditor({
       Placeholder.configure({
         placeholder,
       }),
-      TextStyle,
+      RgbaTextStyle,
       Heading.configure({
         levels: [1, 2, 3],
       }),
-      Color,
+      RgbaColor,
       Table.configure({
         resizable: false,
         HTMLAttributes: {
@@ -413,6 +419,7 @@ export function NotionEditor({
     { title: 'Quote', icon: Quote, command: 'blockquote' },
     { title: 'Code Block', icon: Code, command: 'codeBlock' },
     { title: 'Table', icon: TableIcon, command: 'table' },
+    { title: 'Color', icon: Palette, command: 'color' },
     { title: 'Divider', icon: Minus, command: 'horizontalRule' },
   ];
 
@@ -603,6 +610,28 @@ export function NotionEditor({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Insert Table</TooltipContent>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="mx-1 h-6" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ColorPalette
+                value={selectedColor}
+                onChange={(color) => {
+                  try {
+                    setSelectedColor(color);
+                    // Apply color immediately
+                    if (editor && editor.isDestroyed === false) {
+                      editor.chain().focus().setColor(color).run();
+                    }
+                  } catch (error) {
+                    console.error('Error applying color:', error);
+                  }
+                }}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Text Color</TooltipContent>
           </Tooltip>
 
           {editor.isActive('table') && (
@@ -953,6 +982,14 @@ export function NotionEditor({
         .notion-editor table tbody {
           display: table;
           width: 100%;
+        }
+        
+        .notion-editor [style*="color"] {
+          transition: color 0.2s ease;
+        }
+        
+        .notion-editor .ProseMirror-selectednode {
+          outline: 2px solid #3b82f6;
         }
       `}</style>
     </div>
