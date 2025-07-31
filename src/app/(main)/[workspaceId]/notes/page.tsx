@@ -327,46 +327,28 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           }`}
                         />
                       </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={(e) => e.preventDefault()}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditingNote(note);
-                            // Close dropdown after a short delay
-                            setTimeout(() => {
-                              const event = new MouseEvent('click', {
-                                bubbles: true,
-                                cancelable: true,
-                                view: window
-                              });
-                              document.body.dispatchEvent(event);
-                            }, 100);
-                          }}>
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteNote(note.id);
-                            }}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingNote(note);
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteNote(note.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                   
