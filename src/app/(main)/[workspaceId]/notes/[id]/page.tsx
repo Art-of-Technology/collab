@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { NoteEditForm } from "@/components/notes/NoteEditForm";
 
 interface Note {
   id: string;
@@ -37,6 +39,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
   const [error, setError] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
   const { toast } = useToast();
 
   // Resolve params first
@@ -154,12 +157,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
         </Link>
         
         <div className="flex items-center gap-2">
-          <Link href={`/${workspaceId}/notes/${note.id}/edit`}>
-            <Button variant="outline" size="sm">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-          </Link>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setEditingNote(note)}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
           <Button variant="outline" size="sm" onClick={handleDelete}>
             <Trash2 className="h-4 w-4 mr-2" />
             Delete
@@ -231,6 +236,31 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Note Dialog */}
+      {editingNote && (
+        <Dialog open={!!editingNote} onOpenChange={() => setEditingNote(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Note</DialogTitle>
+            </DialogHeader>
+            <NoteEditForm
+              note={editingNote}
+              onSuccess={() => {
+                setEditingNote(null);
+                // Refresh the note data
+                if (noteId) {
+                  fetch(`/api/notes/${noteId}`)
+                    .then(res => res.json())
+                    .then(data => setNote(data))
+                    .catch(err => console.error('Error refreshing note:', err));
+                }
+              }}
+              onCancel={() => setEditingNote(null)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 } 
