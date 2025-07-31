@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { DateRange } from "react-day-picker";
 
 // Form schema for leave request
 const leaveRequestSchema = z.object({
@@ -90,7 +91,7 @@ export function LeaveRequestForm({
       type: undefined,
       dateRange: undefined,
       isFullDay: "full",
-      notes: undefined,
+      notes: "",
     },
   });
 
@@ -123,6 +124,11 @@ export function LeaveRequestForm({
     resetForm();
     onCancel();
   };
+
+  const isDateRange = (dateRange: DateRange | undefined) => {
+    return dateRange?.from && dateRange?.to && 
+      dateRange.from.getTime() !== dateRange.to.getTime();
+  }
 
   return (
     <Form {...form}>
@@ -191,7 +197,7 @@ export function LeaveRequestForm({
                     onSelect={(range) => {
                       field.onChange(range);
                       // If multi-day range is selected, set duration to full day
-                      if (range?.from && range?.to && range.from.getTime() !== range.to.getTime()) {
+                      if (isDateRange(range)) {
                         form.setValue("isFullDay", "full");
                       }
                     }}
@@ -212,8 +218,6 @@ export function LeaveRequestForm({
           name="isFullDay"
           render={({ field }) => {
             const dateRange = form.watch("dateRange");
-            const isDateRange = dateRange?.from && dateRange?.to && 
-              dateRange.from.getTime() !== dateRange.to.getTime();
             
             return (
               <FormItem className="space-y-3">
@@ -232,14 +236,14 @@ export function LeaveRequestForm({
                       <RadioGroupItem 
                         value="half" 
                         id="half-day" 
-                        disabled={isDateRange}
+                        disabled={isDateRange(dateRange)}
                       />
                       <Label 
                         htmlFor="half-day" 
-                        className={isDateRange ? "text-muted-foreground cursor-not-allowed" : ""}
+                        className={isDateRange(dateRange) ? "text-muted-foreground cursor-not-allowed" : ""}
                       >
                         Half Day
-                        {isDateRange && (
+                        {isDateRange(dateRange) && (
                           <span className="text-xs text-muted-foreground ml-1">
                             (Not available for date ranges)
                           </span>
