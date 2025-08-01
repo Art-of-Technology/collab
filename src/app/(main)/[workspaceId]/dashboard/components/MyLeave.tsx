@@ -27,7 +27,7 @@ export interface LeaveRequest {
   type: "holiday" | "sick" | "other";
   startDate: Date;
   endDate: Date;
-  isFullDay: "full" | "half";
+  duration: "FULL_DAY" | "HALF_DAY";
   notes?: string;
   status: "pending" | "approved" | "rejected";
   createdAt: Date;
@@ -168,17 +168,17 @@ export function MyLeave({
                     {getStatusBadge(request.status)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    {request.startDate.toDateString() === request.endDate.toDateString() ? (
+                    {request.startDate.getTime() === request.endDate.getTime() ? (
                       // Single day request
                       <>
                         {format(request.startDate, "MMM dd, yyyy")}
-                        {request.isFullDay === "half" && " (Half Day)"}
+                        {request.duration === "HALF_DAY" && " (Half Day)"}
                       </>
                     ) : (
                       // Multi-day request  
                       <>
                         {format(request.startDate, "MMM dd")} - {format(request.endDate, "MMM dd, yyyy")}
-                        {request.isFullDay === "half" && " (Half Day)"}
+                        {request.startDate.getTime() === request.endDate.getTime() && request.duration === "HALF_DAY" && " (Half Day)"}
                       </>
                     )}
                   </div>

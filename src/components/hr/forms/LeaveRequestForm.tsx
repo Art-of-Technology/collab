@@ -57,10 +57,10 @@ const leaveRequestSchema = z.object({
     message: "End date must be after or equal to start date",
     path: ["to"],
   }),
-  isFullDay: z.enum(["full", "half"]).default("full"),
+  duration: z.enum(["FULL_DAY", "HALF_DAY"]).default("FULL_DAY"),
   notes: z.string({
-    required_error: "Please add any additional notes for your leave request.",
-  }).min(1, "Please add any additional notes for your leave request.").max(500, "Notes cannot exceed 500 characters"),
+    required_error: "Notes are required for your leave request.",
+  }).min(1, "Notes are required for your leave request.").max(500, "Notes cannot exceed 500 characters"),
 });
 
 export type LeaveRequestFormData = z.infer<typeof leaveRequestSchema>;
@@ -70,7 +70,7 @@ export interface LeaveRequestSubmissionData {
   type: "holiday" | "sick" | "other";
   startDate: Date;
   endDate: Date;
-  isFullDay: "full" | "half";
+  duration: "FULL_DAY" | "HALF_DAY";
   notes: string;
 }
 
@@ -90,7 +90,7 @@ export function LeaveRequestForm({
     defaultValues: {
       type: undefined,
       dateRange: undefined,
-      isFullDay: "full",
+      duration: "FULL_DAY",
       notes: "",
     },
   });
@@ -99,7 +99,7 @@ export function LeaveRequestForm({
     form.reset({
       type: undefined,
       dateRange: undefined,
-      isFullDay: "full",
+      duration: "FULL_DAY",
       notes: "",
     }); 
   };
@@ -110,7 +110,7 @@ export function LeaveRequestForm({
       type: data.type,
       startDate: data.dateRange.from,
       endDate: data.dateRange.to || data.dateRange.from, // If no end date, use start date (single day)
-      isFullDay: data.isFullDay,
+      duration: data.duration,
       notes: data.notes,
     };
     
@@ -198,12 +198,12 @@ export function LeaveRequestForm({
                       field.onChange(range);
                       // If multi-day range is selected, set duration to full day
                       if (isDateRange(range)) {
-                        form.setValue("isFullDay", "full");
+                        form.setValue("duration", "FULL_DAY");
                       }
                     }}
                     numberOfMonths={2}
                     disabled={(date) =>
-                      date < new Date().setHours(0, 0, 0, 0)
+                      date < new Date(new Date().setHours(0, 0, 0, 0))
                     }
                   />
                 </PopoverContent>
@@ -215,7 +215,7 @@ export function LeaveRequestForm({
 
         <FormField
           control={form.control}
-          name="isFullDay"
+          name="duration"
           render={({ field }) => {
             const dateRange = form.watch("dateRange");
             
@@ -229,17 +229,17 @@ export function LeaveRequestForm({
                     className="flex flex-row space-x-6"
                   >
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="full" id="full-day" />
-                      <Label htmlFor="full-day">Full Day</Label>
+                      <RadioGroupItem value="FULL_DAY" id="FULL_DAY" />
+                      <Label htmlFor="FULL_DAY">Full Day</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem 
-                        value="half" 
-                        id="half-day" 
+                        value="HALF_DAY" 
+                        id="HALF_DAY" 
                         disabled={isDateRange(dateRange)}
                       />
                       <Label 
-                        htmlFor="half-day" 
+                        htmlFor="HALF_DAY" 
                         className={isDateRange(dateRange) ? "text-muted-foreground cursor-not-allowed" : ""}
                       >
                         Half Day
