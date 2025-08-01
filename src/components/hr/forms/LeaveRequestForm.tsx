@@ -203,7 +203,7 @@ export function LeaveRequestForm({
                     }}
                     numberOfMonths={2}
                     disabled={(date) =>
-                      date < new Date(new Date().setHours(0, 0, 0, 0))
+                      date < new Date().setHours(0, 0, 0, 0)
                     }
                   />
                 </PopoverContent>
