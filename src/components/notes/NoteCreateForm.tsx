@@ -13,16 +13,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { NotionEditor } from "@/components/ui/notion-editor";
+import { TagSelect } from "@/components/notes/TagSelect";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
@@ -202,64 +196,12 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tags</FormLabel>
-              <Select
-                onValueChange={(value) => {
-                  const currentTags = field.value || [];
-                  if (!currentTags.includes(value)) {
-                    field.onChange([...currentTags, value]);
-                  }
-                }}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select tags..." />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {tags.map((tag) => (
-                    <SelectItem key={tag.id} value={tag.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        {tag.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {field.value && field.value.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {field.value.map((tagId) => {
-                    const tag = tags.find((t) => t.id === tagId);
-                    if (!tag) return null;
-                    return (
-                      <div
-                        key={tagId}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-secondary rounded-md text-sm"
-                      >
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        {tag.name}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            field.onChange(
-                              field.value?.filter((id) => id !== tagId) || []
-                            );
-                          }}
-                          className="ml-1 text-muted-foreground hover:text-foreground"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <FormControl>
+                <TagSelect
+                  value={field.value || []}
+                  onChange={field.onChange}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
