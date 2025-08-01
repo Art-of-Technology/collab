@@ -29,7 +29,7 @@ export interface LeaveRequest {
   endDate: Date;
   duration: "FULL_DAY" | "HALF_DAY";
   notes?: string;
-  status: "pending" | "approved" | "rejected";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
   createdAt: Date;
 }
 
@@ -96,19 +96,24 @@ export function MyLeave({
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <Badge variant="secondary" className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors">Approved</Badge>;
-      case "rejected":
-        return <Badge variant="secondary" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors">Rejected</Badge>;
-      case "pending":
-      default:
-        return <Badge variant="secondary" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors">Pending</Badge>;
-    }
+  const getStatusBadge = (status?: LeaveRequest["status"]) => {
+    if (!status) return null;
+
+    const statusColors = {
+      'APPROVED': 'bg-green-500/10 text-green-600',
+      'REJECTED': 'bg-red-500/10 text-red-600',
+      'PENDING': 'bg-yellow-500/10 text-yellow-600',
+      'CANCELLED': 'bg-gray-500/10 text-gray-600',
+    };
+
+    const color = statusColors[status] || 'bg-gray-500';
+
+    return (
+      <Badge variant="secondary" className={`${color} capitalize`}>
+        {status}
+      </Badge>
+    );
   };
-
-
 
   return (
     <Card className={`h-full relative ${!isFeatureEnabled ? 'opacity-80' : ''}`}>
