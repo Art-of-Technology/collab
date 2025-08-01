@@ -13,6 +13,21 @@ interface MarkdownRendererProps {
 }
 
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
+  // Check if content contains HTML tags
+  const hasHtmlTags = /<[^>]*>/g.test(content);
+  
+  if (hasHtmlTags) {
+    // If content contains HTML, render it as HTML
+    return (
+      <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
+        <div 
+          className="text-foreground leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
       <ReactMarkdown

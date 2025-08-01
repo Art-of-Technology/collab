@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 interface Note {
   id: string;
@@ -69,17 +70,43 @@ interface NoteTag {
   };
 }
 
-export default function NotesPage() {
+// Utility function to process note content for preview
+const getNotePreview = (content: string, maxLength: number = 100) => {
+  const processedContent = content
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<\/p>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const truncated = processedContent.length > maxLength;
+  const preview = processedContent.substring(0, maxLength);
+
+  return { preview, truncated };
+};
+
+export default function NotesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { data: session, status } = useSession();
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<NoteTag[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Resolve params first
+  useEffect(() => {
+    const resolveParams = async () => {
+      const resolvedParams = await params;
+      setWorkspaceId(resolvedParams.workspaceId);
+    };
+    resolveParams();
+  }, [params]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -192,22 +219,22 @@ export default function NotesPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <div className="container mx-auto py-6 px-1">
       <div className="flex flex-col gap-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Notes</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-4 tracking-tight">Notes</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
               Create and organize your notes with markdown support
             </p>
           </div>
           
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Note
+              <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }}>
+                <Plus className="h-3 w-3 mr-1 sm:h-4 sm:w-4" />
+                <span className="ml-0 sm:ml-0">New Note</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -234,7 +261,8 @@ export default function NotesPage() {
               placeholder="Search notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 text-xs sm:text-sm h-7 sm:h-10"
+              style={{ fontSize: '14px' }}
             />
           </div>
           
@@ -242,15 +270,17 @@ export default function NotesPage() {
             <Button
               variant={showFavorites ? "default" : "outline"}
               onClick={() => setShowFavorites(!showFavorites)}
+              className="text-xs w-[100px] sm:text-sm h-7 sm:h-10"
+              style={{ fontSize: '14px' }}
             >
-              <Star className="h-4 w-4 mr-2" />
+              <Star className="h-4 w-4" />
               Favorites
             </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="h-4 w-4 mr-2" />
+                <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: '14px' }}>
+                  <Filter className="h-4 w-4" />
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DropdownMenuTrigger>
@@ -289,76 +319,100 @@ export default function NotesPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {notes.map((note) => (
-              <div
+              <Link
                 key={note.id}
-                className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow"
+                href={`/${workspaceId}/notes/${note.id}`}
+                className="block"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-semibold line-clamp-1">{note.title}</h3>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleFavorite(note.id, note.isFavorite)}
-                    >
-                      <Star
-                        className={`h-4 w-4 ${
-                          note.isFavorite 
-                            ? "fill-yellow-400 text-yellow-400" 
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => setEditingNote(note)}>
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteNote(note.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                
-                <div className="prose prose-sm max-w-none line-clamp-3 mb-3">
-                  <MarkdownRenderer content={note.content} />
-                </div>
-                
-                {note.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {note.tags.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
+                  <div className="flex items-start justify-end mb-2 sm:mb-2 sm:pt-0">
+                    <div className="flex items-center gap-3 sm:gap-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          toggleFavorite(note.id, note.isFavorite);
+                        }}
                       >
-                        <TagIcon className="h-3 w-3 mr-1" />
-                        {tag.name}
-                      </Badge>
-                    ))}
+                        <Star
+                          className={`h-1 w-1 sm:h-4 sm:w-4 ${
+                            note.isFavorite 
+                              ? "fill-yellow-400 text-yellow-400" 
+                              : "text-muted-foreground"
+                          }`}
+                        />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingNote(note);
+                        }}
+                      >
+                        <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteNote(note.id);
+                        }}
+                      >
+                        <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
+                      </Button>
+                    </div>
                   </div>
-                )}
-                
-                <div className="text-xs text-muted-foreground">
-                  Updated {new Date(note.updatedAt).toLocaleDateString()}
-                  {note.workspace && (
-                    <span className="ml-2">• {note.workspace.name}</span>
+                  
+                  <h3 className="font-semibold line-clamp-1 text-sm sm:text-base mb-2 sm:mb-3">{note.title}</h3>
+                  
+                  <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
+                    <div className="text-muted-foreground text-sm sm:text-sm">
+                      {(() => {
+                        const { preview, truncated } = getNotePreview(note.content, 100);
+                        return (
+                          <>
+                            {preview}
+                            {truncated && '...'}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  
+                  {note.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
+                      {note.tags.map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          className="text-sm px-1 py-0.5 sm:px-2 sm:py-1"
+                          style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                        >
+                          <TagIcon className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                          {tag.name}
+                        </Badge>
+                      ))}
+                    </div>
                   )}
+                  
+                  <div className="text-sm text-muted-foreground mt-auto">
+                    Updated {new Date(note.updatedAt).toLocaleDateString()}
+                    {note.workspace && (
+                      <span className="ml-2">• {note.workspace.name}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}
