@@ -177,17 +177,6 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     tag.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Debug: Log tags to see the data structure
-  console.log("All tags:", tags);
-  console.log("Filtered tags:", filteredTags);
-  console.log("Tags with count 0:", filteredTags.filter(tag => tag._count?.notes === 0));
-  console.log("Tags with count 0 (detailed):", filteredTags.map(tag => ({
-    name: tag.name,
-    count: tag._count?.notes,
-    hasCount: !!tag._count,
-    countType: typeof tag._count?.notes
-  })));
-
   const selectedTags = tags.filter(tag => value.includes(tag.id));
 
   return (
@@ -241,18 +230,8 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                         </span>
                       )}
                     </button>
-                    {/* Temporarily show delete button for all tags to test */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTag(tag.id);
-                      }}
-                      className="ml-2 p-1.5 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground rounded border border-transparent hover:border-destructive transition-colors"
-                      title="Delete tag"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    {/* Original condition - uncomment after debugging
+
+                    {/* Delete unused tags */}
                     {tag._count?.notes === 0 && (
                       <button
                         onClick={(e) => {
@@ -265,7 +244,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     )}
-                    */}
+                   
                   </div>
                 ))}
                 

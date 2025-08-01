@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -69,6 +69,22 @@ interface NoteTag {
     notes: number;
   };
 }
+
+// Utility function to process note content for preview
+const getNotePreview = (content: string, maxLength: number = 100) => {
+  const processedContent = content
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<\/p>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const truncated = processedContent.length > maxLength;
+  const preview = processedContent.substring(0, maxLength);
+
+  return { preview, truncated };
+};
 
 export default function NotesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { data: session, status } = useSession();
@@ -361,21 +377,15 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   
                   <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
                     <div className="text-muted-foreground text-sm sm:text-sm">
-                      {note.content
-                        .replace(/<p[^>]*>/gi, '')
-                        .replace(/<\/p>/gi, ' ')
-                        .replace(/<br\s*\/?>/gi, ' ')
-                        .replace(/<[^>]*>/g, '')
-                        .replace(/\s+/g, ' ')
-                        .trim()
-                        .substring(0, 100)}
-                      {note.content
-                        .replace(/<p[^>]*>/gi, '')
-                        .replace(/<\/p>/gi, ' ')
-                        .replace(/<br\s*\/?>/gi, ' ')
-                        .replace(/<[^>]*>/g, '')
-                        .replace(/\s+/g, ' ')
-                        .trim().length > 100 && '...'}
+                      {(() => {
+                        const { preview, truncated } = getNotePreview(note.content, 100);
+                        return (
+                          <>
+                            {preview}
+                            {truncated && '...'}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   
