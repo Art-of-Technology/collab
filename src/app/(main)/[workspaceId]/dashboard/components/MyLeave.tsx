@@ -178,7 +178,6 @@ export function MyLeave({
                       // Multi-day request  
                       <>
                         {format(request.startDate, "MMM dd")} - {format(request.endDate, "MMM dd, yyyy")}
-                        {request.startDate.getTime() === request.endDate.getTime() && request.duration === "HALF_DAY" && " (Half Day)"}
                       </>
                     )}
                   </div>
