@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { CalendarDays, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,62 +31,61 @@ interface LeaveBalanceProps {
   isLoading?: boolean;
 }
 
+const demoBalances: LeaveBalanceType[] = [
+  {
+    policyId: "1",
+    policyName: "Annual Leave",
+    totalAccrued: 25,
+    totalUsed: 17,
+    balance: 8,
+    rollover: 0,
+    year: 2025,
+    trackUnit: "DAYS",
+    isPaid: true,
+    accrualType: "FIXED",
+  },
+  {
+    policyId: "2",
+    policyName: "Sick Leave",
+    totalAccrued: 10,
+    totalUsed: 1,
+    balance: 9,
+    rollover: 0,
+    year: 2025,
+    trackUnit: "DAYS",
+    isPaid: true,
+    accrualType: "FIXED",
+  },
+  {
+    policyId: "3",
+    policyName: "Personal Leave",
+    totalAccrued: 40,
+    totalUsed: 8,
+    balance: 32,
+    rollover: 0,
+    year: 2025,
+    trackUnit: "HOURS",
+    isPaid: false,
+    accrualType: "HOURLY",
+  },
+  {
+    policyId: "4",
+    policyName: "Compassionate Leave",
+    totalAccrued: 3,
+    totalUsed: 0,
+    balance: 3,
+    rollover: 0,
+    year: 2025,
+    trackUnit: "DAYS",
+    isPaid: true,
+    accrualType: "DOES_NOT_ACCRUE",
+  },
+];
+
 export function LeaveBalance({
   balances = [],
-  isLoading = false,
 }: LeaveBalanceProps) {
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
-
-  const demoBalances: LeaveBalanceType[] = [
-    {
-      policyId: "1",
-      policyName: "Annual Leave",
-      totalAccrued: 25,
-      totalUsed: 17,
-      balance: 8,
-      rollover: 0,
-      year: 2025,
-      trackUnit: "DAYS",
-      isPaid: true,
-      accrualType: "FIXED",
-    },
-    {
-      policyId: "2",
-      policyName: "Sick Leave",
-      totalAccrued: 10,
-      totalUsed: 1,
-      balance: 9,
-      rollover: 0,
-      year: 2025,
-      trackUnit: "DAYS",
-      isPaid: true,
-      accrualType: "FIXED",
-    },
-    {
-      policyId: "3",
-      policyName: "Personal Leave",
-      totalAccrued: 40,
-      totalUsed: 8,
-      balance: 32,
-      rollover: 0,
-      year: 2025,
-      trackUnit: "HOURS",
-      isPaid: false,
-      accrualType: "HOURLY",
-    },
-    {
-      policyId: "4",
-      policyName: "Compassionate Leave",
-      totalAccrued: 3,
-      totalUsed: 0,
-      balance: 3,
-      rollover: 0,
-      year: 2025,
-      trackUnit: "DAYS",
-      isPaid: true,
-      accrualType: "DOES_NOT_ACCRUE",
-    },
-  ];
 
   const displayBalances = balances.length > 0 ? balances : demoBalances;
 
@@ -102,19 +101,19 @@ export function LeaveBalance({
     (balance) => balance.policyId === selectedLeaveType
   );
 
-  const formatValue = (value: number, unit: string) => {
+  const formatValue = useCallback((value: number, unit: string) => {
     if (unit === "HOURS") {
       return value === 1 ? `${value} hr` : `${value} hrs`;
     }
     return value === 1 ? `${value} day` : `${value} days`;
-  };
+  }, []);
 
-  const getAvailableColorHex = (balance: number, total: number) => {
+  const getAvailableColorHex = useCallback((balance: number, total: number) => {
     const percentage = (balance / total) * 100;
     if (percentage >= 50) return "#16a34a"; // green-600
     if (percentage >= 10) return "#ca8a04"; // yellow-600
     return "#dc2626"; // red-600
-  };
+  }, []);
 
   if (!currentBalance) {
     return null;
