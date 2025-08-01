@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
+import { getDemoData } from "./demo-data";
 
 export interface LeaveBalanceType {
   policyId: string;
@@ -31,63 +32,12 @@ interface LeaveBalanceProps {
   isLoading?: boolean;
 }
 
-const demoBalances: LeaveBalanceType[] = [
-  {
-    policyId: "1",
-    policyName: "Annual Leave",
-    totalAccrued: 25,
-    totalUsed: 17,
-    balance: 8,
-    rollover: 0,
-    year: 2025,
-    trackUnit: "DAYS",
-    isPaid: true,
-    accrualType: "FIXED",
-  },
-  {
-    policyId: "2",
-    policyName: "Sick Leave",
-    totalAccrued: 10,
-    totalUsed: 1,
-    balance: 9,
-    rollover: 0,
-    year: 2025,
-    trackUnit: "DAYS",
-    isPaid: true,
-    accrualType: "FIXED",
-  },
-  {
-    policyId: "3",
-    policyName: "Personal Leave",
-    totalAccrued: 40,
-    totalUsed: 8,
-    balance: 32,
-    rollover: 0,
-    year: 2025,
-    trackUnit: "HOURS",
-    isPaid: false,
-    accrualType: "HOURLY",
-  },
-  {
-    policyId: "4",
-    policyName: "Compassionate Leave",
-    totalAccrued: 3,
-    totalUsed: 0,
-    balance: 3,
-    rollover: 0,
-    year: 2025,
-    trackUnit: "DAYS",
-    isPaid: true,
-    accrualType: "DOES_NOT_ACCRUE",
-  },
-];
-
 export function LeaveBalance({
   balances = [],
 }: LeaveBalanceProps) {
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
 
-  const displayBalances = balances.length > 0 ? balances : demoBalances;
+  const displayBalances = balances.length > 0 ? balances : getDemoData();
 
   // Set initial selected type if not set
   useEffect(() => {
@@ -115,6 +65,25 @@ export function LeaveBalance({
     return "#dc2626"; // red-600
   }, []);
 
+  // Handle case when no data is available
+  if (displayBalances.length === 0) {
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div>
+              <h3 className="font-medium text-muted-foreground">No Leave Data Available</h3>
+              <p className="text-sm text-muted-foreground/70">
+                Leave balance information will appear here when available.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!currentBalance) {
     return null;
   }
@@ -137,8 +106,8 @@ export function LeaveBalance({
         </Select>
       </div>
 
-      {/* Single leave type card - half size */}
-      <Card className="w-full hover:shadow-md transition-shadow">
+      {/* Single leave type card */}
+      <Card className="w-full">
         <CardHeader className="p-4 min-h-14">
           <div className="flex justify-between">
             <div className="flex flex-wrap items-center gap-2">
