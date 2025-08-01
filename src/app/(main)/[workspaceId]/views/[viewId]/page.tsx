@@ -69,7 +69,6 @@ export default async function ViewPage({ params }: ViewPageProps) {
         { visibility: 'PERSONAL', ownerId: user.id }
       ]
     },
-
   });
 
   if (!view) {
@@ -89,14 +88,14 @@ export default async function ViewPage({ params }: ViewPageProps) {
     }
   });
 
-  // Fetch issues based on view filters
+  // Build issues query with proper filtering
   const issuesQuery: any = {
     where: {
-      projectId: view.projectIds.length > 0 
-        ? { in: view.projectIds }
-        : undefined,
-      // Apply filters from view
-      ...(view.filters as any)
+      workspaceId: workspace.id,
+      // Apply project filter if specified
+      ...(view.projectIds.length > 0 && {
+        projectId: { in: view.projectIds }
+      }),
     },
     include: {
       project: {
@@ -162,14 +161,48 @@ export default async function ViewPage({ params }: ViewPageProps) {
           comments: true
         }
       }
-    },
-    orderBy: [
-      { priority: 'desc' },
-      { updatedAt: 'desc' }
-    ]
+    }
   };
 
-  // If no projects are specified, include all workspace projects
+  // Apply view filters
+  if (view.filters && typeof view.filters === 'object') {
+    const filters = view.filters as Record<string, string[]>;
+    
+    Object.entries(filters).forEach(([filterKey, filterValues]) => {
+      if (Array.isArray(filterValues) && filterValues.length > 0) {
+        switch (filterKey) {
+          case 'status':
+            issuesQuery.where.status = { in: filterValues };
+            break;
+          case 'priority':
+            issuesQuery.where.priority = { in: filterValues };
+            break;
+          case 'type':
+            issuesQuery.where.type = { in: filterValues };
+            break;
+          case 'assignee':
+            issuesQuery.where.assigneeId = { in: filterValues };
+            break;
+          case 'reporter':
+            issuesQuery.where.reporterId = { in: filterValues };
+            break;
+          case 'dueDate':
+            // Handle date filters
+            if (filterValues.includes('Overdue')) {
+              issuesQuery.where.dueDate = { lt: new Date() };
+            } else if (filterValues.includes('Due Today')) {
+              const today = new Date();
+              const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+              issuesQuery.where.dueDate = { gte: startOfDay, lt: endOfDay };
+            }
+            break;
+        }
+      }
+    });
+  }
+
+  // If no projects are specified in the view, include all workspace projects
   if (view.projectIds.length === 0) {
     const workspaceProjects = await prisma.project.findMany({
       where: { workspaceId: workspace.id },
@@ -180,27 +213,35 @@ export default async function ViewPage({ params }: ViewPageProps) {
 
   const issues = await prisma.issue.findMany(issuesQuery);
 
-  // Transform view data
+  // Transform view data with proper field mapping
   const viewData = {
     id: view.id,
     name: view.name,
     description: view.description || '',
-    type: 'USER', // Default type since schema doesn't have this field
+    type: 'USER',
     displayType: view.displayType.toString(),
     visibility: view.visibility.toString(),
     color: view.color || '#3b82f6',
-    issueCount: 0, // TODO: Calculate issue count
-    filters: view.filters,
+    issueCount: issues.length,
+    filters: view.filters || {},
+    sorting: (view.sorting as any) || { field: 'updatedAt', direction: 'desc' },
+    grouping: (view.grouping as any) || { field: 'none' },
+    fields: (view.fields as string[]) || ['Priority', 'Status', 'Assignee'],
+    layout: (view.layout as any) || {
+      showSubtasks: true,
+      showLabels: true,
+      showAssigneeAvatars: true
+    },
     projects: projects.map(p => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
       issuePrefix: p.issuePrefix,
-      color: '#3b82f6' // Default project color
+      color: '#3b82f6' // Default color since Project model doesn't have color field
     })),
     isDefault: view.isDefault,
     isFavorite: view.isFavorite || false,
-    createdBy: view.ownerId, // Map ownerId to createdBy for backward compatibility
+    createdBy: view.ownerId,
     ownerId: view.ownerId,
     sharedWith: view.sharedWith,
     createdAt: view.createdAt,

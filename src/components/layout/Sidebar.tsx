@@ -1,24 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import {
-  HomeIcon,
-  HashtagIcon,
-  UserGroupIcon,
-  PlusIcon,
-  EnvelopeIcon,
-  Squares2X2Icon,
-  RectangleStackIcon,
-  DocumentTextIcon,
-  ClockIcon
-} from "@heroicons/react/24/outline";
-import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Search, 
-  Target, 
-  Zap, 
-  Archive, 
   Star, 
   ChevronDown, 
   ChevronRight, 
@@ -26,8 +12,22 @@ import {
   Loader2,
   MoreHorizontal,
   Settings,
-  Keyboard,
-  LogOut
+  LogOut,
+  Users,
+  FolderOpen,
+  Eye,
+  Plus,
+  Hash,
+  CheckSquare,
+  MessageSquare,
+  FileText,
+  Clock,
+  Home,
+  Bookmark,
+  Tag,
+  Lightbulb,
+  Calendar,
+  Timer
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -65,11 +65,9 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ pathname = "", isCollapsed = false, toggleSidebar }: SidebarProps) {
-  const { data: session } = useSession();
-  const { currentWorkspace, isLoading } = useWorkspace();
+  const router = useRouter();
+  const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { settings } = useWorkspaceSettings();
-  
-  // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
 
   // Fetch projects and views using the new hooks
@@ -83,310 +81,247 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     includeStats: true
   });
 
-  // Local state for enhanced sidebar features
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    views: false,
-    projects: false
-  });
+  // Local state for Linear-style sidebar
+  const [viewSearchQuery, setViewSearchQuery] = useState("");
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    teams: false,
+    views: false
+  });
+  const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({});
 
-  // Generate navigation based on current workspace
-  const getNavigation = () => {
-    // Always provide navigation structure to prevent layout shifts
-    // Use currentWorkspace.slug if available, or fallback to ID, or 'loading' as placeholder
-    const workspaceSlug = currentWorkspace?.slug;
-    const workspaceId = currentWorkspace?.id || 'loading';
+  // Filter views for sidebar display - show favorites or latest 3
+  const sidebarViews = useMemo(() => {
+    if (!views.length) return [];
     
-    // Helper function to generate URLs with fallback
-    const getUrl = (path: string) => {
-      if (workspaceSlug) {
-        // Use URL resolver for slug-based URLs
-        switch (path) {
-          case '/dashboard':
-            return urls.workspaceDashboard(workspaceSlug);
-          case '/timeline':
-            return urls.workspaceTimeline(workspaceSlug);
-          case '/tasks':
-            return urls.tasks(workspaceSlug);
-          case '/notes':
-            return urls.workspaceNotes(workspaceSlug);
-          case '/my-posts':
-            return urls.workspace({ workspaceSlug, path: '/my-posts' });
-          case '/bookmarks':
-            return urls.workspace({ workspaceSlug, path: '/bookmarks' });
-          case '/profile':
-            return urls.workspaceProfile({ workspaceSlug });
-          case '/messages':
-            return urls.messages(workspaceSlug);
-          case '/tags':
-            return urls.workspace({ workspaceSlug, path: '/tags' });
-          case '/features':
-            return urls.features(workspaceSlug);
-          case '/timesheet':
-            return urls.workspace({ workspaceSlug, path: '/timesheet' });
-          default:
-            return urls.workspace({ workspaceSlug, path });
-        }
-      }
-      // Fallback to legacy URL structure
-      return `/${workspaceId}${path}`;
-    };
-
-    const baseNavigation = [
-      {
-        name: "Dashboard",
-        href: getUrl('/dashboard'),
-        icon: Squares2X2Icon,
-        current: pathname === getUrl('/dashboard') || pathname === `/${workspaceId}/dashboard`,
-      },
-      {
-        name: "Timeline",
-        href: getUrl('/timeline'),
-        icon: HomeIcon,
-        current: pathname === getUrl('/timeline') || pathname === `/${workspaceId}/timeline`,
-      },
-
-    ];
-
-    // Conditionally add Timesheet if time tracking is enabled
-    if (settings?.timeTrackingEnabled) {
-      baseNavigation.push({
-        name: "Timesheet",
-        href: getUrl('/timesheet'),
-        icon: ClockIcon,
-        current: pathname === getUrl('/timesheet') || pathname === `/${workspaceId}/timesheet`,
-      });
+    // Filter by search query first
+    let filteredViews = views;
+    if (viewSearchQuery.trim()) {
+      filteredViews = views.filter(view => 
+        view.name.toLowerCase().includes(viewSearchQuery.toLowerCase())
+      );
     }
+    
+    // If no search, show favorites or latest 3
+    if (!viewSearchQuery.trim()) {
+      const favoriteViews = views.filter(view => view.isFavorite);
+      if (favoriteViews.length > 0) {
+        return favoriteViews;
+      } else {
+        // Show latest 3 views by updatedAt
+        return [...views]
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          .slice(0, 3);
+      }
+    }
+    
+    return filteredViews;
+  }, [views, viewSearchQuery]);
 
-    // Add the rest of the navigation items
-    baseNavigation.push(
+  // Generate workspace navigation
+  const workspaceNavigation = [
+    {
+      name: "Issues",
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/issues` : "#",
+      icon: CheckSquare,
+      current: pathname.includes("/issues"),
+    },
+    {
+      name: "Projects", 
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/projects` : "#",
+      icon: FolderOpen,
+      current: pathname.includes("/projects"),
+    },
+    {
+      name: "Views",
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/views` : "#", 
+      icon: Eye,
+      current: pathname.includes("/views"),
+    },
+  ];
+
+  // Other workspace features
+  const workspaceFeatures = [
+      {
+      name: "Posts",
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline` : "#",
+      icon: Clock,
+      current: pathname.includes("/timeline"),
+    },
+    {
+        name: "Timesheet",
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timesheet` : "#",
+      icon: Timer,
+      current: pathname.includes("/timesheet"),
+    },
       {
         name: "Notes",
-        href: getUrl('/notes'),
-        icon: DocumentTextIcon,
-        current: pathname === getUrl('/notes') || pathname === `/${workspaceId}/notes`,
-      },
-      {
-        name: "My Posts",
-        href: getUrl('/my-posts'),
-        icon: UserGroupIcon,
-        current: pathname === getUrl('/my-posts') || pathname === `/${workspaceId}/my-posts`,
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/notes` : "#",
+      icon: FileText,
+      current: pathname.includes("/notes"),
       },
       {
         name: "Bookmarks",
-        href: getUrl('/bookmarks'),
-        icon: PlusIcon,
-        current: pathname === getUrl('/bookmarks') || pathname === `/${workspaceId}/bookmarks`,
-      },
-      {
-        name: "Profile",
-        href: getUrl('/profile'),
-        icon: UserIcon,
-        current: pathname === getUrl('/profile') || pathname === `/${workspaceId}/profile`,
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/bookmarks` : "#",
+      icon: Bookmark,
+      current: pathname.includes("/bookmarks"),
       },
       {
         name: "Messages",
-        href: getUrl('/messages'),
-        icon: EnvelopeIcon,
-        current: pathname === getUrl('/messages') || pathname === `/${workspaceId}/messages` || pathname.startsWith(getUrl('/messages') + '/') || pathname.startsWith(`/${workspaceId}/messages/`),
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/messages` : "#",
+      icon: MessageSquare,
+      current: pathname.includes("/messages"),
       },
       {
-        name: "Tags",
-        href: getUrl('/tags'),
-        icon: HashtagIcon,
-        current: pathname === getUrl('/tags') || pathname === `/${workspaceId}/tags`,
-      },
-      {
-        name: "Feature Requests",
-        href: getUrl('/features'),
-        icon: LightBulbIcon,
-        current: pathname === getUrl('/features') || pathname === `/${workspaceId}/features`,
-      },
-    );
-
-    return baseNavigation;
-  };
-
-  const navigation = getNavigation();
-
-  // Quick actions for Linear-style functionality
-  const quickActions = [
-    {
-      id: 'new-issue',
-      label: 'New Issue',
-      shortcut: 'C',
-      icon: PlusIcon,
-      action: () => {
-        // TODO: Open issue creation modal
-        console.log('Create new issue');
-      },
-      color: '#3b82f6'
+      name: "Tags",
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/tags` : "#",
+      icon: Tag,
+      current: pathname.includes("/tags"),
     },
     {
-      id: 'search',
-      label: 'Search',
-      shortcut: '/',
-      icon: Search,
-      action: () => {
-        // Focus search input
-        document.querySelector('input[placeholder="Search issues..."]')?.focus();
-      },
-      color: '#6b7280'
+      name: "Feature Requests",
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/features` : "#",
+      icon: Lightbulb,
+      current: pathname.includes("/features"),
     },
-    {
-      id: 'filter',
-      label: 'Filter',
-      shortcut: 'F',
-      icon: Filter,
-      action: () => {
-        // TODO: Open filter panel
-        console.log('Open filters');
-      },
-      color: '#8b5cf6'
-    }
   ];
 
-  // Get actual views from database
-  const workspaceViews = views.filter(view => view.visibility === 'WORKSPACE' || view.visibility === 'SHARED');
-  const personalViews = views.filter(view => view.visibility === 'PERSONAL');
-  const favoriteViews = views.filter(view => view.isFavorite);
-
-  // Filter projects based on search
-  const filteredProjects = projects.filter(project => 
-    !searchQuery || project.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Toggle section collapse
-  const toggleSection = (sectionId: string) => {
+  const toggleSection = (section: string) => {
     setCollapsedSections(prev => ({
       ...prev,
-      [sectionId]: !prev[sectionId]
+      [section]: !prev[section]
     }));
   };
 
-  // Handle project selection
-  const handleProjectSelect = (projectSlug: string) => {
-    // Navigate to project's default view
-    window.location.href = `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${projectSlug}`;
-    // Auto-close mobile sidebar
+  const toggleWorkspace = (workspaceId: string) => {
+    setCollapsedWorkspaces(prev => ({
+      ...prev,
+      [workspaceId]: !prev[workspaceId]
+    }));
+  };
+
+  // Initialize workspace collapsed state (current workspace open by default)
+  useEffect(() => {
+    if (currentWorkspace && !collapsedWorkspaces.hasOwnProperty(currentWorkspace.id)) {
+      setCollapsedWorkspaces(prev => ({
+        ...prev,
+        [currentWorkspace.id]: false // Current workspace is expanded by default
+      }));
+    }
+  }, [currentWorkspace]);
+
+  // Handle navigation with workspace switching
+  const handleWorkspaceNavigation = async (workspaceId: string, href: string) => {
+    // Close mobile sidebar if open
     if (window.innerWidth < 768 && toggleSidebar) {
       toggleSidebar();
     }
-  };
 
-  // Handle view selection
-  const handleViewSelect = (viewId: string) => {
-    // Navigate to view
-    window.location.href = `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${viewId}`;
-    // Auto-close mobile sidebar
-    if (window.innerWidth < 768 && toggleSidebar) {
-      toggleSidebar();
-    }
-  };
-
-  // Render the avatar based on user data
-  const renderAvatar = () => {
-    if (userData?.useCustomAvatar) {
-      return <CustomAvatar user={userData} size="md" className="border-2 border-[#2a2929]" />;
-    }
-
-    return (
-      <Avatar className="border-2 border-[#2a2929]">
-        {session?.user?.image ? (
-          <AvatarImage
-            src={session.user.image}
-            alt={session.user.name || "User"}
-          />
-        ) : (
-          <AvatarFallback className="bg-gray-800 text-gray-200">
-            {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-          </AvatarFallback>
-        )}
-      </Avatar>
-    );
-  };
-
-  // Show loading state or "no workspace" only for non-workspace routes or true loading states
-  const shouldShowEmptyState = !currentWorkspace?.id && !isLoading && !pathname.match(/^\/[^\/]+\//);
-  
-  if (shouldShowEmptyState) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400">
-        <p>No workspace selected</p>
-      </div>
-    );
+    // If it's a different workspace, switch first
+    if (workspaceId !== currentWorkspace?.id && switchWorkspace) {
+      try {
+        // Extract the path part from href (e.g., "/issues" from "/workspace123/issues")
+        const pathMatch = href.match(/\/[^\/]+(\/.+)$/);
+        const targetPath = pathMatch ? pathMatch[1] : '/dashboard';
+        
+        // Switch workspace - this will handle navigation to the workspace
+        await switchWorkspace(workspaceId);
+        
+        // After workspace switch completes, navigate to the specific path
+        // Add a small delay to ensure workspace context is updated
+        setTimeout(() => {
+          const workspace = workspaces.find(w => w.id === workspaceId);
+          const workspaceSlugOrId = workspace?.slug || workspaceId;
+          router.push(`/${workspaceSlugOrId}${targetPath}`);
+        }, 100);
+      } catch (error) {
+        console.error('Error switching workspace:', error);
+        // Fallback: navigate directly if switching fails
+        router.push(href);
+      }
+    } else {
+      // Same workspace, just navigate
+      router.push(href);
   }
+  };
 
   if (isCollapsed) {
     return (
-      <div className="h-full bg-[#0D1117] border-r border-[#21262d] flex flex-col">
-        {/* Collapsed Quick Actions */}
-        <div className="p-3 border-b border-[#21262d]">
-          <div className="space-y-2">
-            {quickActions.slice(0, 3).map((action) => (
-              <Button
-                key={action.id}
-                variant="ghost"
-                size="icon"
-                onClick={action.action}
-                className="w-full h-10 text-gray-400 hover:text-white hover:bg-[#21262d]"
-                title={`${action.label} ${action.shortcut ? `(${action.shortcut})` : ''}`}
-              >
-                <action.icon className="h-5 w-5" />
+      <div className="flex flex-col h-full">
+        {/* Workspace selector - collapsed */}
+        <div className="p-3 border-b border-[#1f1f1f]">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="w-full h-8 p-0">
+                <div className="flex items-center justify-center">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={currentWorkspace?.logoUrl || ""} />
+                    <AvatarFallback className="bg-[#1f1f1f] text-white text-xs font-semibold">
+                      {currentWorkspace?.name?.charAt(0)?.toUpperCase() || "W"}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
               </Button>
-            ))}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" className="w-64 bg-[#090909] border-[#1f1f1f]">
+              <div className="px-2 py-1.5 text-xs font-medium text-gray-400">Your workspaces</div>
+              {workspaces.map((workspace) => (
+                <DropdownMenuItem
+                  key={workspace.id}
+                  className="flex items-center justify-between p-2 text-gray-300 hover:text-white focus:bg-[#1f1f1f]"
+                  onClick={() => {
+                    if (workspace.id !== currentWorkspace?.id && switchWorkspace) {
+                      switchWorkspace(workspace.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-center">
+                    <Avatar className="h-4 w-4 mr-2">
+                      <AvatarImage src={workspace.logoUrl || ""} />
+                      <AvatarFallback className="bg-[#1f1f1f] text-white text-[10px] font-semibold">
+                        {workspace.name?.charAt(0)?.toUpperCase() || "W"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm truncate">{workspace.name}</span>
+                  </div>
+                  {workspace.id === currentWorkspace?.id && (
+                    <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        {/* Collapsed Main Navigation */}
-        <div className="flex-1 p-2">
-          <div className="space-y-1">
-            {navigation.map((item) => (
+        {/* Navigation - collapsed */}
+        <div className="flex-1 p-2 space-y-1">
+          {workspaceNavigation.map((item) => (
               <Button
                 key={item.name}
-                variant={item.current ? "secondary" : "ghost"}
+              variant="ghost"
                 size="icon"
                 className={cn(
                   "w-full h-10 transition-colors",
                   item.current 
-                    ? "bg-[#1c2128] text-white border-l-2 border-blue-500" 
-                    : "text-gray-400 hover:text-white hover:bg-[#21262d]",
+                  ? "bg-[#1f1f1f] text-white" 
+                  : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
                   (!currentWorkspace?.id && isLoading) && "opacity-50 pointer-events-none"
                 )}
-                asChild
+              onClick={() => currentWorkspace?.id && handleWorkspaceNavigation(currentWorkspace.id, item.href)}
                 disabled={!currentWorkspace?.id && isLoading}
-              >
-                <Link
-                  href={item.href}
-                  aria-current={item.current ? "page" : undefined}
-                  onClick={() => {
-                    if (window.innerWidth < 768 && toggleSidebar) {
-                      toggleSidebar();
-                    }
-                  }}
                   title={item.name}
                 >
-                  <item.icon
-                    className={cn(
-                      "h-5 w-5 flex-shrink-0",
-                      item.current ? "text-blue-500" : "text-gray-400"
-                    )}
-                    aria-hidden="true"
-                  />
-                </Link>
+              <item.icon className="h-5 w-5" />
               </Button>
             ))}
-          </div>
         </div>
 
-        {/* Collapsed Footer */}
-        <div className="p-3 border-t border-[#21262d]">
+        {/* User - collapsed */}
+        <div className="p-3 border-t border-[#1f1f1f]">
           <Button
             variant="ghost"
             size="icon"
-            className="w-full h-10 text-gray-400 hover:text-white hover:bg-[#21262d]"
+            className="w-full h-10 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
           >
             <Settings className="h-5 w-5" />
           </Button>
@@ -396,478 +331,372 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
   }
 
   return (
-    <div className="h-full bg-[#0D1117] border-r border-[#21262d] flex flex-col">
-      {/* Header with workspace selector */}
-      <div className="p-4 border-b border-[#21262d]">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex-1 min-w-0">
-        {/* Workspace selector for mobile */}
-            <div className="md:hidden mb-2">
-              <div className="text-xs uppercase tracking-wider text-gray-400 mb-1">Workspace</div>
-            </div>
+    <div className="flex flex-col h-full">
+      {/* Header - Workspace Selector */}
+      <div className="p-3 border-b border-[#1f1f1f]">
           <WorkspaceSelector />
-        </div>
-        </div>
-
-        {/* Search */}
-        <div className={cn(
-          "relative transition-all duration-200",
-          searchFocused && "ring-1 ring-blue-500 rounded-md"
-        )}>
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search issues..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className={cn(
-              "pl-10 bg-[#21262d] border-[#30363d] text-gray-200 placeholder-gray-400",
-              "focus:border-blue-500 focus:ring-0",
-              "hover:bg-[#30363d] transition-colors"
-            )}
-          />
-        </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="px-4 py-3 border-b border-[#21262d]">
-        <div className="grid grid-cols-3 gap-2">
-          {quickActions.map((action) => (
-            <Button
-              key={action.id}
-              variant="ghost"
-              size="sm"
-              onClick={action.action}
-              className={cn(
-                "h-8 px-2 text-xs text-gray-400 hover:text-white hover:bg-[#21262d]",
-                "flex items-center gap-1.5 justify-start"
-              )}
-              title={`${action.label} ${action.shortcut ? `(${action.shortcut})` : ''}`}
+      {/* Main Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-2 space-y-6">
+          {/* Teams Section */}
+          <div>
+            <Collapsible
+              open={!collapsedSections.teams}
+              onOpenChange={() => toggleSection('teams')}
             >
-              <action.icon className="h-3.5 w-3.5" style={{ color: action.color }} />
-              <span className="truncate">{action.label}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
+                <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-xs font-medium"
+                >
+                  <div className="flex items-center">
+                    <Users className="mr-2 h-3 w-3" />
+                    Your workspaces
+                  </div>
+                  {collapsedSections.teams ? (
+                    <ChevronRight className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 mt-1">
+                {/* All workspaces */}
+                <div className="space-y-1">
+                                    {workspaces.map((workspace) => {
+                    const isWorkspaceExpanded = collapsedWorkspaces[workspace.id] !== undefined 
+                      ? !collapsedWorkspaces[workspace.id] 
+                      : workspace.id === currentWorkspace?.id;
+                    return (
+                      <Collapsible
+                        key={workspace.id}
+                        open={isWorkspaceExpanded}
+                        onOpenChange={() => toggleWorkspace(workspace.id)}
+                      >
+                        <div className="flex items-center group">
+                          <CollapsibleTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              className="flex-1 justify-start h-7 px-2 text-gray-300 hover:text-white hover:bg-[#1f1f1f]"
+                            >
+                              <div className="flex items-center">
+                                <ChevronRight className={cn(
+                                  "mr-1 h-3 w-3 transition-transform",
+                                  isWorkspaceExpanded && "rotate-90"
+                                )} />
+                              <Avatar className="h-4 w-4 mr-2">
+                                <AvatarImage src={workspace.logoUrl || ""} />
+                                <AvatarFallback className="bg-[#1f1f1f] text-white text-[10px] font-semibold">
+                                  {workspace.name?.charAt(0)?.toUpperCase() || "W"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm truncate">{workspace.name}</span>
+                              {workspace.id === currentWorkspace?.id && (
+                                <div className="ml-2 w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
+                              )}
+                            </div>
+                          </Button>
+                        </CollapsibleTrigger>
+                        
+                        {/* Three dots menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white hover:bg-[#1f1f1f] transition-opacity"
+                                  >
+                              <MoreHorizontal className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 bg-[#090909] border-[#1f1f1f]">
+                            <DropdownMenuItem 
+                              className="text-gray-300 hover:text-white"
+                              onClick={() => {
+                                window.open(`/workspaces/${workspace.id}`, '_blank');
+                              }}
+                            >
+                              <Settings className="mr-2 h-4 w-4" />
+                              Workspace settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-gray-300 hover:text-white">
+                              <Star className="mr-2 h-4 w-4" />
+                              Favorite workspace
+                            </DropdownMenuItem>
+                            {workspace.id !== currentWorkspace?.id && (
+                              <>
+                                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                                <DropdownMenuItem 
+                                  className="text-gray-300 hover:text-white"
+                                  onClick={() => {
+                                    if (switchWorkspace) {
+                                      switchWorkspace(workspace.id);
+                                    }
+                                  }}
+                                >
+                                  <ChevronRight className="mr-2 h-4 w-4" />
+                                  Switch to workspace
+                                </DropdownMenuItem>
+                      </>
+                    )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        </div>
+                      
+                      <CollapsibleContent className="space-y-0.5 mt-1">
+                        {/* Workspace navigation - works for all workspaces */}
+                        <div className="ml-6 space-y-0.5">
+                          {(workspace.id === currentWorkspace?.id ? workspaceNavigation : [
+                            {
+                              name: "Issues",
+                              href: `/${workspace.slug || workspace.id}/issues`,
+                              icon: CheckSquare,
+                              current: false,
+                            },
+                            {
+                              name: "Projects", 
+                              href: `/${workspace.slug || workspace.id}/projects`,
+                              icon: FolderOpen,
+                              current: false,
+                            },
+                            {
+                              name: "Views",
+                              href: `/${workspace.slug || workspace.id}/views`,
+                              icon: Eye,
+                              current: false,
+                            },
+                          ]).map((item) => (
+                              <Button
+                              key={item.name}
+                                variant="ghost"
+                                className={cn(
+                                "w-full justify-start h-6 px-2 text-sm transition-colors",
+                                item.current 
+                                  ? "bg-[#1f1f1f] text-white" 
+                                  : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                                )}
+                              onClick={() => handleWorkspaceNavigation(workspace.id, item.href)}
+                              disabled={!currentWorkspace?.id && isLoading}
+                            >
+                              <item.icon className="mr-2 h-3 w-3" />
+                              {item.name}
+                              {workspace.id !== currentWorkspace?.id && (
+                                <span className="ml-auto text-[10px] text-gray-500">Switch</span>
+                                  )}
+                              </Button>
+                          ))}
+                        </div>
+                                             </CollapsibleContent>
+                     </Collapsible>
+                          );
+                        })}
+                      </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
 
-      {/* Navigation Sections */}
-      <ScrollArea className="flex-1 px-2">
-        <div className="space-y-4 py-4">
           {/* Views Section */}
           <div>
             <Collapsible
               open={!collapsedSections.views}
               onOpenChange={() => toggleSection('views')}
             >
-              <div className="flex items-center justify-between px-2 mb-2 group">
                 <CollapsibleTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-6 px-1 text-xs font-medium text-gray-400 hover:text-white"
-                  >
-                    {collapsedSections.views ? (
-                      <ChevronRight className="h-3 w-3 mr-1" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3 mr-1" />
-                    )}
+                  className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-xs font-medium"
+                >
+                  <div className="flex items-center">
+                    <Eye className="mr-2 h-3 w-3" />
                     Views
-                  </Button>
-                </CollapsibleTrigger>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Create new view"
-                  onClick={() => setShowCreateViewModal(true)}
-                >
-                  <PlusIcon className="h-3 w-3" />
-                </Button>
-              </div>
-
-              <CollapsibleContent className="space-y-1">
-                {isViewsLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                   </div>
-                ) : (
-                  <>
-                    {/* Favorite Views */}
-                    {favoriteViews.length > 0 && (
-                      <>
-                        <div className="px-2 py-1">
-                          <div className="text-xs text-gray-500">Favorites</div>
-                        </div>
-                        {favoriteViews.map((view) => (
-                          <div key={view.id} className="group relative">
-                            <Button
-                              variant="ghost"
-                              className={cn(
-                                "w-full justify-start h-8 px-2 text-gray-300 hover:text-white hover:bg-[#21262d]",
-                                pathname.includes(`/views/${view.id}`) && "bg-[#1c2128] text-white border-l-2 border-blue-500"
-                              )}
-                              onClick={() => handleViewSelect(view.id)}
-                            >
-                              <div className="flex items-center gap-2 w-full min-w-0">
-                                <Star className="h-4 w-4 flex-shrink-0 text-yellow-500" />
-                                <span className="truncate text-sm">{view.name}</span>
-                                {view._count?.issues && view._count.issues > 0 && (
-                                  <Badge 
-                                    variant="secondary" 
-                                    className="ml-auto text-xs bg-[#21262d] text-gray-400 border-0"
-                                  >
-                                    {view._count.issues}
-                                  </Badge>
-                                )}
-                              </div>
-                            </Button>
-                          </div>
-                        ))}
-                      </>
+                  <div className="flex items-center">
+                    {views.filter(v => v.isFavorite).length > 0 && (
+                      <Badge variant="secondary" className="mr-2 h-4 px-1 text-[10px] bg-[#1f1f1f]">
+                        {views.filter(v => v.isFavorite).length}
+                      </Badge>
                     )}
-                    
-                    {/* Workspace Views */}
-                    {workspaceViews.length > 0 && (
-                      <>
-                        {favoriteViews.length > 0 && <div className="border-t border-[#30363d] my-2"></div>}
-                        <div className="px-2 py-1">
-                          <div className="text-xs text-gray-500">Workspace</div>
-                        </div>
-                        {workspaceViews.map((view) => {
-                          const getViewIcon = (displayType: string) => {
-                            switch (displayType) {
-                              case 'KANBAN': return Target;
-                              case 'LIST': return RectangleStackIcon;
-                              case 'TABLE': return Squares2X2Icon;
-                              default: return Target;
-                            }
-                          };
-                          const ViewIcon = getViewIcon(view.displayType);
-                          
-                          return (
-                            <div key={view.id} className="group relative">
-                              <Button
-                                variant="ghost"
-                                className={cn(
-                                  "w-full justify-start h-8 px-2 text-gray-300 hover:text-white hover:bg-[#21262d]",
-                                  pathname.includes(`/views/${view.id}`) && "bg-[#1c2128] text-white border-l-2 border-blue-500"
-                                )}
-                                onClick={() => handleViewSelect(view.id)}
-                              >
-                                <div className="flex items-center gap-2 w-full min-w-0">
-                                  <ViewIcon 
-                                    className="h-4 w-4 flex-shrink-0" 
-                                    style={{ color: view.color || '#6b7280' }} 
-                                  />
-                                  <span className="truncate text-sm">{view.name}</span>
-                                  {view._count?.issues && view._count.issues > 0 && (
-                                    <Badge 
-                                      variant="secondary" 
-                                      className="ml-auto text-xs bg-[#21262d] text-gray-400 border-0"
-                                    >
-                                      {view._count.issues}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                    
-                    {/* Personal Views */}
-                    {personalViews.length > 0 && (
-                      <>
-                        {(favoriteViews.length > 0 || workspaceViews.length > 0) && <div className="border-t border-[#30363d] my-2"></div>}
-                        <div className="px-2 py-1">
-                          <div className="text-xs text-gray-500">Personal</div>
-                        </div>
-                        {personalViews.map((view) => {
-                          const getViewIcon = (displayType: string) => {
-                            switch (displayType) {
-                              case 'KANBAN': return Target;
-                              case 'LIST': return RectangleStackIcon;
-                              case 'TABLE': return Squares2X2Icon;
-                              default: return Target;
-                            }
-                          };
-                          const ViewIcon = getViewIcon(view.displayType);
-                          
-                          return (
-                            <div key={view.id} className="group relative">
-                              <Button
-                                variant="ghost"
-                                className={cn(
-                                  "w-full justify-start h-8 px-2 text-gray-300 hover:text-white hover:bg-[#21262d]",
-                                  pathname.includes(`/views/${view.id}`) && "bg-[#1c2128] text-white border-l-2 border-blue-500"
-                                )}
-                                onClick={() => handleViewSelect(view.id)}
-                              >
-                                <div className="flex items-center gap-2 w-full min-w-0">
-                                  <ViewIcon 
-                                    className="h-4 w-4 flex-shrink-0" 
-                                    style={{ color: view.color || '#6b7280' }} 
-                                  />
-                                  <span className="truncate text-sm">{view.name}</span>
-                                  {view._count?.issues && view._count.issues > 0 && (
-                                    <Badge 
-                                      variant="secondary" 
-                                      className="ml-auto text-xs bg-[#21262d] text-gray-400 border-0"
-                                    >
-                                      {view._count.issues}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                    
-                    {/* No views state */}
-                    {views.length === 0 && (
-                      <div className="px-2 py-4 text-center">
-                        <p className="text-xs text-gray-500">No views yet</p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-2 h-7 text-xs text-gray-400 hover:text-white"
-                          onClick={() => setShowCreateViewModal(true)}
-                        >
-                          <PlusIcon className="h-3 w-3 mr-1" />
-                          New View
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-
-          {/* Projects Section */}
-          <div>
-            <Collapsible
-              open={!collapsedSections.projects}
-              onOpenChange={() => toggleSection('projects')}
-            >
-              <div className="flex items-center justify-between px-2 mb-2">
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1 text-xs font-medium text-gray-400 hover:text-white"
-                  >
-                    {collapsedSections.projects ? (
-                      <ChevronRight className="h-3 w-3 mr-1" />
+                    {collapsedSections.views ? (
+                      <ChevronRight className="h-3 w-3" />
                     ) : (
-                      <ChevronDown className="h-3 w-3 mr-1" />
+                      <ChevronDown className="h-3 w-3" />
                     )}
-                    Projects
-                  </Button>
-                </CollapsibleTrigger>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Create new project"
-                >
-                  <PlusIcon className="h-3 w-3" />
+                  </div>
                 </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 mt-1">
+                {/* Views search */}
+                <div className="px-2 mb-2">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                    <Input
+                      placeholder="Search views..."
+                      value={viewSearchQuery}
+                      onChange={(e) => setViewSearchQuery(e.target.value)}
+                      className="h-7 pl-7 text-xs bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
+                    />
+                  </div>
               </div>
 
-              <CollapsibleContent className="space-y-1">
-                {isProjectsLoading ? (
+                {/* Views list */}
+                <div className="space-y-0.5">
+                  {isViewsLoading ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                   </div>
-                ) : filteredProjects.length > 0 ? (
-                  filteredProjects.map((project) => (
-                    <div key={project.id} className="group relative">
+                  ) : sidebarViews.length > 0 ? (
+                    sidebarViews.map((view) => (
                       <Button
+                        key={view.id}
                         variant="ghost"
                         className={cn(
-                          "w-full justify-start h-8 px-2 text-gray-300 hover:text-white hover:bg-[#21262d]",
-                          pathname.includes(`/projects/${project.slug}`) && "bg-[#1c2128] text-white border-l-2 border-blue-500"
+                          "w-full justify-start h-7 px-2 text-sm transition-colors",
+                          pathname.includes(`/views/${view.id}`)
+                            ? "bg-[#1f1f1f] text-white" 
+                            : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                         )}
-                        onClick={() => handleProjectSelect(project.slug)}
+                        asChild
                       >
-                        <div className="flex items-center gap-2 w-full min-w-0">
-                          <div 
-                            className="w-3 h-3 rounded flex-shrink-0" 
-                            style={{ backgroundColor: project.color || '#6b7280' }}
-                          />
-                          <span className="truncate text-sm">{project.name}</span>
-                          <Badge 
-                            variant="secondary" 
-                            className="ml-auto text-xs bg-[#21262d] text-gray-400 border-0"
-                          >
-                            {project._count?.issues || 0}
+                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.id}`}>
+                          <div className="flex items-center w-full">
+                            {view.isFavorite && <Star className="mr-2 h-3 w-3 text-yellow-500 fill-current" />}
+                            <span className="truncate flex-1">{view.name}</span>
+                            {view._count?.issues && (
+                              <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
+                                {view._count.issues}
                           </Badge>
+                            )}
                         </div>
+                        </Link>
                       </Button>
+                    ))
+                  ) : viewSearchQuery ? (
+                    <div className="px-2 py-2 text-xs text-gray-500 text-center">
+                      No views found for "{viewSearchQuery}"
                     </div>
-                  ))
                 ) : (
-                  <div className="px-2 py-4 text-center">
-                    <p className="text-xs text-gray-500">No projects yet</p>
+                    <div className="px-2 py-2 text-xs text-gray-500 text-center">
+                      No favorite views. Latest views will appear here.
+                    </div>
+                  )}
+                  
+                  {/* Create new view or see all views */}
+                  <div className="pt-1 space-y-0.5">
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="mt-2 h-7 text-xs text-gray-400 hover:text-white"
-                      onClick={() => {
-                        // TODO: Open create project modal
-                        console.log('Create new project');
-                      }}
+                      onClick={() => setShowCreateViewModal(true)}
+                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                     >
-                      <PlusIcon className="h-3 w-3 mr-1" />
-                      New Project
+                      <Plus className="mr-2 h-3 w-3" />
+                      Create view
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      asChild
+                    >
+                      <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views`}>
+                        <Eye className="mr-2 h-3 w-3" />
+                        All views
+                      </Link>
                     </Button>
                   </div>
-                )}
+                </div>
               </CollapsibleContent>
             </Collapsible>
           </div>
 
-          {/* Main Navigation Section */}
-          <div>
+          {/* Other workspace features */}
+          <div className="space-y-0.5">
             <div className="px-2 mb-2">
-              <div className="text-xs font-medium text-gray-400">Workspace</div>
+              <div className="text-xs font-medium text-gray-500">More</div>
             </div>
-        <div className="space-y-1">
-          {navigation.map((item) => (
+            {workspaceFeatures.map((item) => (
             <Button
               key={item.name}
-              variant={item.current ? "secondary" : "ghost"}
+                variant="ghost"
                   className={cn(
-                    "w-full justify-start h-8 px-2 transition-colors text-sm",
+                  "w-full justify-start h-7 px-2 text-sm transition-colors",
                     item.current 
-                      ? "bg-[#1c2128] text-white border-l-2 border-blue-500" 
-                      : "text-gray-300 hover:text-white hover:bg-[#21262d]",
+                    ? "bg-[#1f1f1f] text-white" 
+                    : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
                     (!currentWorkspace?.id && isLoading) && "opacity-50 pointer-events-none"
                   )}
               asChild
               disabled={!currentWorkspace?.id && isLoading}
             >
-              <Link
-                href={item.href}
-                aria-current={item.current ? "page" : undefined}
-                onClick={() => {
-                  // On mobile, close sidebar after navigation
-                  if (window.innerWidth < 768 && toggleSidebar) {
-                    toggleSidebar();
-                  }
-                }}
-              >
-                <item.icon
-                      className={cn(
-                        "mr-3 h-4 w-4 flex-shrink-0",
-                    item.current ? "text-blue-500" : "text-gray-400"
-                      )}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{item.name}</span>
+                <Link href={item.href}>
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.name}
               </Link>
             </Button>
           ))}
-        </div>
           </div>
         </div>
       </ScrollArea>
 
-      {/* Action Button Section */}
-      <div className="border-t border-[#21262d] p-3">
-          <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
-            size="sm" 
-            asChild
-            disabled={!currentWorkspace?.id}
-          >
-            <Link href={currentWorkspace?.slug ? urls.workspaceTimeline(currentWorkspace.slug) : `/${currentWorkspace?.id || 'loading'}/timeline`}>
-              <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-              New Post
-            </Link>
-          </Button>
-        </div>
-
-      {/* Footer with User Info */}
-      <div className="border-t border-[#21262d] p-3">
-        {session?.user && (
+      {/* Footer - User menu */}
+      <div className="border-t border-[#1f1f1f] p-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="w-full justify-start h-10 px-3 text-gray-300 hover:text-white hover:bg-[#21262d]"
+              className="w-full justify-start h-8 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
               >
-                <div className="flex items-center gap-3 w-full min-w-0">
-              {renderAvatar()}
-              <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-gray-200 text-sm">
-                  {session.user.name}
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  {session.user.role || "Developer"}
-                </p>
-              </div>
-                  <MoreHorizontal className="h-4 w-4 ml-auto flex-shrink-0" />
-            </div>
+                             {userData?.useCustomAvatar ? (
+                 <CustomAvatar 
+                   user={userData}
+                   size="sm"
+                   className="mr-2"
+                 />
+               ) : (
+                <Avatar className="mr-2 h-5 w-5">
+                  <AvatarImage src={userData?.image || ""} />
+                  <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
+                    {userData?.name?.charAt(0)?.toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              <span className="truncate text-sm">{userData?.name || "User"}</span>
+              <MoreHorizontal className="ml-auto h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              align="end" 
-              className="w-56 bg-[#1c2128] border-[#30363d] text-gray-200"
-            >
-              <DropdownMenuItem className="hover:bg-[#21262d]">
-                <UserIcon className="h-4 w-4 mr-2" />
-                Profile
+                      <DropdownMenuContent align="end" className="w-56 bg-[#090909] border-[#1f1f1f]">
+              <DropdownMenuItem asChild>
+                <Link 
+                  href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile` : "/profile"} 
+                  className="text-gray-300 hover:text-white"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Your Profile
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-[#21262d]">
-                <Settings className="h-4 w-4 mr-2" />
-                Workspace Settings
+              <DropdownMenuItem asChild>
+                <Link href="/workspaces" className="text-gray-300 hover:text-white">
+                  <Users className="mr-2 h-4 w-4" />
+                  Manage Workspaces
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-[#21262d]">
-                <Keyboard className="h-4 w-4 mr-2" />
-                Keyboard Shortcuts
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#30363d]" />
-              <DropdownMenuItem asChild className="hover:bg-[#21262d]">
-                <Link href="/terms">Terms</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className="hover:bg-[#21262d]">
-                <Link href="/privacy-policy">Privacy</Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#30363d]" />
-              <DropdownMenuItem className="hover:bg-[#21262d] text-red-400">
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+              <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+              <DropdownMenuItem className="text-gray-300 hover:text-white">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
-        
-        <div className="text-center mt-2 text-xs text-gray-500">
-            © {new Date().getFullYear()} Collab by Weezboo
-        </div>
       </div>
       
       {/* Create View Modal */}
+      {showCreateViewModal && (
       <CreateViewModal
         isOpen={showCreateViewModal}
         onClose={() => setShowCreateViewModal(false)}
         workspaceId={currentWorkspace?.id || ''}
-        projects={projects.map(p => ({ id: p.id, name: p.name, color: p.color }))}
-        onViewCreated={(view) => {
-          console.log('View created:', view);
-          // TODO: Optionally navigate to the new view
-          setShowCreateViewModal(false);
-        }}
+          projects={projects}
       />
+      )}
     </div>
   );
 } 

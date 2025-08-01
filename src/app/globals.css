@@ -20,14 +20,14 @@
 
 /* Dark theme variables */
 .dark-theme {
-  --background: #1c1c1c;
+  --background: #101011;
   --foreground: #ededed;
   --primary: #22c55e;
-  --card-bg: #1c1c1c;
+  --card-bg: #101011;
   --card-border: #333333;
-  --navbar-bg: #0a0a0a;
-  --sidebar-bg: #1a1a1a;
-  --hover-bg: #1c1c1c;
+  --navbar-bg: #090909;
+  --sidebar-bg: #090909;
+  --hover-bg: #1a1a1a;
   --text-primary: #ffffff;
   --text-secondary: #a0aec0;
   --text-muted: #718096;
@@ -95,22 +95,22 @@
   }
   
   .dark {
-    --background: 0 0% 11%;  /* #1c1c1c */
+    --background: 0 0% 6.3%;  /* #101011 - Linear page background */
     --foreground: 0 0% 95%;  /* #f2f2f2 */
     
-    --card: 0 0% 11%;  /* #1c1c1c */
+    --card: 0 0% 6.3%;  /* #101011 */
     --card-foreground: 0 0% 95%;  /* #f2f2f2 */
     
-    --popover: 0 0% 11%;  /* #1c1c1c */
+    --popover: 0 0% 3.5%;  /* #090909 */
     --popover-foreground: 0 0% 95%;  /* #f2f2f2 */
     
     --primary: 142 71% 45%;  /* #22c55e (green) */
     --primary-foreground: 0 0% 100%;  /* #ffffff */
     
-    --secondary: 0 0% 11%;  /* #1c1c1c */
+    --secondary: 0 0% 3.5%;  /* #090909 */
     --secondary-foreground: 0 0% 90%;  /* #e6e6e6 */
     
-    --muted: 0 0% 11%;  /* #1c1c1c */
+    --muted: 0 0% 3.5%;  /* #090909 */
     --muted-foreground: 0 0% 65%;  /* #a6a6a6 */
     
     --accent: 142 71% 45%;  /* #22c55e with 10% opacity */
@@ -119,8 +119,8 @@
     --destructive: 0 84% 60%;  /* #f04444 */
     --destructive-foreground: 0 0% 100%;  /* #ffffff */
     
-    --border: 0 0% 18%;  /* #2e2e2e */
-    --input: 0 0% 18%;  /* #2e2e2e */
+    --border: 0 0% 12%;  /* #1f1f1f - lighter border for Linear style */
+    --input: 0 0% 12%;  /* #1f1f1f */
     --ring: 142 71% 45%;  /* #22c55e (green) */
     
     --chart-1: 142 71% 45%;  /* #22c55e */
@@ -146,13 +146,13 @@
   .card, 
   .dropdown-content,
   .dialog-content {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
   }
   
   /* Make cards stand out slightly from background */
   .card {
-    background-color: #1c1c1c;
-    border-color: #2a2929;
+    background-color: #101011;
+    border-color: #1f1f1f;
   }
   
   /* Add subtle hover effects */
@@ -161,7 +161,7 @@
   }
   
   .hover-effect:hover {
-    background-color: #1c1c1c;
+    background-color: #1a1a1a;
     transform: translateY(-1px);
   }
   
@@ -185,7 +185,7 @@
   
   /* Add subtle gradient to backgrounds for more visual interest */
   .gradient-subtle {
-    background-image: linear-gradient(to bottom, #1c1c1c, #181818);
+    background-image: linear-gradient(to bottom, #101011, #0a0a0a);
   }
   
   /* Add border glow effect for selected items */
@@ -196,8 +196,8 @@
   
   /* Improve navbar with subtle border */
   nav {
-    border-bottom: 1px solid #2a2929;
-    background-color: #191919;
+    border-bottom: 1px solid #1f1f1f;
+    background-color: #090909;
     backdrop-filter: blur(10px);
   }
 }

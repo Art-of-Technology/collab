@@ -138,6 +138,8 @@ export async function POST(
       visibility = 'PERSONAL',
       color,
       filters = {},
+      sorting = { field: 'updatedAt', direction: 'desc' },
+      grouping = { field: 'status' },
       projectIds = [],
       sharedWith = []
     } = body;
@@ -176,8 +178,8 @@ export async function POST(
         visibility,
         color: color || '#3b82f6',
         filters,
-        sorting: { field: 'position', direction: 'asc' },
-        grouping: { field: 'status' },
+        sorting,
+        grouping,
         fields: ['title', 'status', 'priority', 'assignee', 'dueDate'],
         layout: {
           showSubtasks: true,
