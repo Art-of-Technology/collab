@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,11 +44,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchTags();
-  }, [workspaceId]);
-
-  const fetchTags = async () => {
+  const fetchTags = useCallback(async () => {
     try {
       const url = workspaceId 
         ? `/api/notes/tags?workspace=${workspaceId}`
@@ -61,7 +57,11 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     } catch (error) {
       console.error("Error fetching tags:", error);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
 
   const createTag = async () => {
     if (!newTagName.trim()) return;
