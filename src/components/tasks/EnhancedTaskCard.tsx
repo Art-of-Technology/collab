@@ -18,6 +18,7 @@ import {
   Calendar,
   Star,
   BookOpen,
+  CornerDownRight,
 } from 'lucide-react';
 import { useTaskModal } from '@/context/TaskModalContext';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
@@ -76,6 +77,11 @@ export interface EnhancedTaskCardProps {
   dueDate?: Date | string | null;
   _count?: any;
   isHighlighted?: boolean;
+  parentTask?: {
+    id: string;
+    title: string;
+    issueKey?: string | null;
+  } | null;
 }
 
 export default function EnhancedTaskCard({
@@ -99,6 +105,7 @@ export default function EnhancedTaskCard({
   entityType = 'task',
   _count,
   isHighlighted = false,
+  parentTask = null,
 }: EnhancedTaskCardProps) {
   const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } =
     useTaskModal();
@@ -229,6 +236,13 @@ export default function EnhancedTaskCard({
           <div className="flex items-center text-xs">
             <CheckSquare className="h-3 w-3 mr-1" />
             {_count.tasks}
+          </div>
+        ) : null;
+      case 'task':
+        return _count.subtasks > 0 ? (
+          <div className="flex items-center text-xs">
+            <CheckSquare className="h-3 w-3 mr-1" />
+            {_count.subtasks}
           </div>
         ) : null;
       default:
@@ -404,6 +418,15 @@ export default function EnhancedTaskCard({
                   >
                     <BookOpen className="h-2.5 w-2.5 mr-0.5" />
                     {storyTitle}
+                  </Badge>
+                )}
+                {parentTask && itemType === 'task' && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] py-0 px-1.5 bg-gray-50 text-gray-700 border-gray-200"
+                  >
+                    <CornerDownRight className="h-2.5 w-2.5 mr-0.5" />
+                    {parentTask.issueKey || parentTask.title}
                   </Badge>
                 )}
               </div>
