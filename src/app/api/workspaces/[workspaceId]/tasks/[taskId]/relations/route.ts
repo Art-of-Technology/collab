@@ -42,16 +42,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     });
 
+    // Find subtasks where this task is the parent
+    const childRelations = await prisma.taskRelations.findMany({
+      where: {
+        relatedItemType: 'PARENT_TASK',
+        relatedItemId: taskId
+      },
+      select: { taskId: true }
+    });
+
     // Group by relation type
     const epicIds = relations.filter(r => r.relatedItemType === 'EPIC').map(r => r.relatedItemId);
     const storyIds = relations.filter(r => r.relatedItemType === 'STORY').map(r => r.relatedItemId);
     const milestoneIds = relations.filter(r => r.relatedItemType === 'MILESTONE').map(r => r.relatedItemId);
     const parentTaskIds = relations.filter(r => r.relatedItemType === 'PARENT_TASK').map(r => r.relatedItemId);
+    const subtaskIds = childRelations.map(r => r.taskId);
 
     // Fetch all details in parallel
-    const [epics, stories, milestones, parentTasks] = await Promise.all([
+    const [epics, stories, milestones, parentTasks, subtasks] = await Promise.all([
       epicIds.length > 0 ? prisma.epic.findMany({
-        where: { 
+        where: {
           id: { in: epicIds },
           workspaceId
         },
@@ -93,8 +103,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }) : [],
       
       parentTaskIds.length > 0 ? prisma.task.findMany({
-        where: { 
+        where: {
           id: { in: parentTaskIds },
+          workspaceId
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          issueKey: true,
+          description: true
+        }
+      }) : [],
+
+      subtaskIds.length > 0 ? prisma.task.findMany({
+        where: {
+          id: { in: subtaskIds },
           workspaceId
         },
         select: {
@@ -111,7 +135,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       epics,
       stories,
       milestones,
-      parentTasks
+      parentTasks,
+      subtasks
     });
 
   } catch (error) {
