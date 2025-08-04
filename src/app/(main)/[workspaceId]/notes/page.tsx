@@ -413,24 +413,24 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 rounded-md">
-                <div className="p-4 border-b">
-                  <DialogTitle>Select Tag</DialogTitle>
-                  <div className="relative mt-2">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2">
+                <div className="p-2 sm:p-4 border-b">
+                  <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
+                  <div className="relative mt-2 mb-1">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-3 w-3 sm:h-4 sm:w-4" />
                     <Input
                       ref={tagSearchInputRef}
                       placeholder="Search tags..."
                       value={tagSearchTerm}
                       onChange={(e) => setTagSearchTerm(e.target.value)}
-                      className="pl-8"
+                      className="pl-6 sm:pl-8 text-sm sm:text-base h-8 sm:h-10"
                     />
                   </div>
                 </div>
-                <div ref={tagListRef} className="max-h-[300px] overflow-y-auto p-2">
+                <div ref={tagListRef} className="max-h-[250px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1 sm:mt-0">
                   <div 
                     data-tag-index="0"
-                    className={`flex items-center gap-2 p-2 rounded cursor-pointer border-2 ${
+                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
                       selectedIndex === 0 ? 'bg-[#21C45D] dark:bg-[#21C45D]' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
                     }`}
                     onClick={() => {
@@ -439,14 +439,14 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       setIsTagDropdownOpen(false);
                     }}
                   >
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#D97706' }} />
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: '#D97706' }} />
                     All Tags
                   </div>
                   {filteredTags.map((tag, index) => (
                     <div
                       key={tag.id}
                       data-tag-index={index + 1}
-                      className={`flex items-center gap-2 p-2 rounded cursor-pointer ${
+                      className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${
                         selectedIndex === index + 1 
                           ? 'bg-[#21C45D]' 
                           : 'hover:bg-[#21C45D]/10'
@@ -458,14 +458,14 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       }}
                     >
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="w-2 h-2 sm:w-3 sm:h-3 rounded-full"
                         style={{ backgroundColor: tag.color }}
                       />
                       {tag.name} ({tag._count.notes})
                     </div>
                   ))}
                   {filteredTags.length === 0 && tagSearchTerm.trim() && (
-                    <div className="px-2 py-2 text-sm text-muted-foreground text-center">
+                    <div className="px-2 py-2 text-sm sm:text-base text-muted-foreground text-center">
                       No tags found matching "{tagSearchTerm}"
                     </div>
                   )}
