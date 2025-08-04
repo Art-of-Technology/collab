@@ -27,7 +27,9 @@ async function getUserLeaveBalances(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch leave balances: ${response.status}`);
+    throw new Error(
+      `Failed to fetch leave balances: ${response.status} - ${errorText}`
+    );
   }
 
   const data = await response.json();

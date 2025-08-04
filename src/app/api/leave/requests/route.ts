@@ -7,8 +7,18 @@ import { z } from "zod";
 // Validation schema for creating a leave request
 const createLeaveRequestSchema = z.object({
   policyId: z.string().min(1, "Policy ID is required"),
-  startDate: z.string().transform((str) => new Date(str)),
-  endDate: z.string().transform((str) => new Date(str)),
+  startDate: z
+    .string()
+    .refine((str) => !isNaN(Date.parse(str)), {
+      message: "startDate must be a valid ISO date string",
+    })
+    .transform((str) => new Date(str)),
+  endDate: z
+    .string()
+    .refine((str) => !isNaN(Date.parse(str)), {
+      message: "endDate must be a valid ISO date string",
+    })
+    .transform((str) => new Date(str)),
   duration: z.enum(["FULL_DAY", "HALF_DAY"]),
   notes: z
     .string()

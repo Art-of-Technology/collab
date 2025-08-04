@@ -37,17 +37,22 @@ export function LeaveBalance({
 }: LeaveBalanceProps) {
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0]?.policyId || "");
 
-  // Update selectedLeaveType when balances change
-  useEffect(() => {
-    if (balances.length > 0 && (!selectedLeaveType || !balances.find(b => b.policyId === selectedLeaveType))) {
-      setSelectedLeaveType(balances[0].policyId);
-    }
+  // Memoize the check for whether the selected leave type exists in balances
+  const isSelectedLeaveTypeValid = useMemo(() => {
+    return selectedLeaveType && balances.some(b => b.policyId === selectedLeaveType);
   }, [balances, selectedLeaveType]);
 
-  // Show only the selected leave type
-  const currentBalance = balances.find(
-    (balance) => balance.policyId === selectedLeaveType
-  );
+  // Update selectedLeaveType when balances change
+  useEffect(() => {
+    if (balances.length > 0 && (!selectedLeaveType || !isSelectedLeaveTypeValid)) {
+      setSelectedLeaveType(balances[0].policyId);
+    }
+  }, [balances, selectedLeaveType, isSelectedLeaveTypeValid]);
+
+  // Memoize the current balance calculation
+  const currentBalance = useMemo(() => {
+    return balances.find((balance) => balance.policyId === selectedLeaveType);
+  }, [balances, selectedLeaveType]);
 
   const formatValue = useCallback((value: number, unit: string) => {
     if (unit === "HOURS") {

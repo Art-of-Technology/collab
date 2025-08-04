@@ -113,7 +113,8 @@ export function LeaveRequestForm({
   const { 
     data: policies = [], 
     isLoading: isLoadingPolicies,
-    error: policiesError 
+    error: policiesError,
+    refetch: refetchPolicies
   } = useLeavePolicies(workspaceId);
   
   const createLeaveRequestMutation = useCreateLeaveRequest(workspaceId);
@@ -190,12 +191,13 @@ export function LeaveRequestForm({
         <AlertDescription>
           Failed to load leave policies. Please try again.
           <Button 
-            onClick={() => window.location.reload()} 
+            onClick={() => refetchPolicies()} 
             variant="outline" 
             size="sm"
             className="ml-2"
+            disabled={isLoadingPolicies}
           >
-            Retry
+            {isLoadingPolicies ? "Retrying..." : "Retry"}
           </Button>
         </AlertDescription>
       </Alert>
