@@ -11,7 +11,9 @@ interface AnimatedCircularProgressBarProps {
 }
 
 // Circle radius for the progress bar
-const CIRCLE_RADIUS = 45;
+const VIEWBOX_SIZE = 100;
+const STROKE_WIDTH = 10;
+const CIRCLE_RADIUS = (VIEWBOX_SIZE / 2) - (STROKE_WIDTH / 2);
 
 // Threshold below which the secondary circle is displayed to show remaining progress
 const SECONDARY_CIRCLE_THRESHOLD = 90;
@@ -51,14 +53,14 @@ export function AnimatedCircularProgressBar({
         fill="none"
         className="size-full"
         strokeWidth="2"
-        viewBox="0 0 100 100"
+        viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
       >
         {currentPercent <= SECONDARY_CIRCLE_THRESHOLD && currentPercent >= 0 && (
           <circle
             cx="50"
             cy="50"
             r={CIRCLE_RADIUS}
-            strokeWidth="10"
+            strokeWidth={STROKE_WIDTH}
             strokeDashoffset="0"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -83,7 +85,7 @@ export function AnimatedCircularProgressBar({
           cx="50"
           cy="50"
           r={CIRCLE_RADIUS}
-          strokeWidth="10"
+          strokeWidth={STROKE_WIDTH}
           strokeDashoffset="0"
           strokeLinecap="round"
           strokeLinejoin="round"

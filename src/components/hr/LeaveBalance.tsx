@@ -33,14 +33,7 @@ interface LeaveBalanceProps {
 export function LeaveBalance({
   balances = [],
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
-
-  // Set initial selected type if not set
-  useEffect(() => {
-    if (!selectedLeaveType && balances.length > 0) {
-      setSelectedLeaveType(balances[0].policyId);
-    }
-  }, [balances, selectedLeaveType]);
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0].policyId || "");
 
   // Show only the selected leave type
   const currentBalance = balances.find(
