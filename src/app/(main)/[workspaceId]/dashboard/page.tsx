@@ -102,7 +102,7 @@ export default async function DashboardPage() {
         </div>
       </div>
       {/* My Leave */}
-                <MyLeave workspaceId={workspaceId} isFeatureEnabled={false} />
+        <MyLeave workspaceId={workspaceId} isFeatureEnabled={false} />
     </div>
   );
 } 

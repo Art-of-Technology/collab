@@ -35,7 +35,14 @@ export function LeaveBalance({
   balances = [],
   isLoading = false,
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0].policyId || "");
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0]?.policyId || "");
+
+  // Update selectedLeaveType when balances change
+  useEffect(() => {
+    if (balances.length > 0 && (!selectedLeaveType || !balances.find(b => b.policyId === selectedLeaveType))) {
+      setSelectedLeaveType(balances[0].policyId);
+    }
+  }, [balances, selectedLeaveType]);
 
   // Show only the selected leave type
   const currentBalance = balances.find(
