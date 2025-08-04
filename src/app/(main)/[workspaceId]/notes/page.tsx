@@ -413,7 +413,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2">
+              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2">
                 <div className="p-2 sm:p-4 border-b">
                   <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
                   <div className="relative mt-2 mb-1">
@@ -427,7 +427,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                     />
                   </div>
                 </div>
-                <div ref={tagListRef} className="max-h-[250px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
+                <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
                   <div 
                     data-tag-index="0"
                     className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
