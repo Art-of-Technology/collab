@@ -455,7 +455,7 @@ model Task {
   userEvents    UserEvent[]
   userStatuses  UserStatus[]
   labels        TaskLabel[]      @relation("TaskToLabel")
-   relations TaskRelations[]
+  
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -881,7 +881,7 @@ model TaskRelations {
   updatedAt       DateTime     @updatedAt
 
   // Relations
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
 
   // Indexes
   @@unique([taskId, relatedItemId, relatedItemType])

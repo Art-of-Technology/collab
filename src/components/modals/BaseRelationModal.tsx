@@ -46,7 +46,7 @@ export function BaseRelationModal({
       />
       
       {/* Modal */}
-      <div className="relative bg-background rounded-lg shadow-lg w-full max-w-md mx-4">
+      <div className="relative bg-background rounded-lg shadow-lg w-full max-w-3xl mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold">{title}</h2>

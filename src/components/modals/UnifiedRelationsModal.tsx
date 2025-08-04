@@ -1,0 +1,249 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { BaseRelationModal } from "./BaseRelationModal";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useRelationsApi } from "@/hooks/useRelationsApi";
+
+export type RelationType = "EPIC" | "STORY" | "MILESTONE" | "PARENT_TASK" | "TASK";
+export type TargetType = "TASK" | "EPIC" | "STORY" | "MILESTONE";
+
+interface RelationItem {
+  id: string;
+  title: string;
+  status?: string;
+  issueKey?: string;
+}
+
+interface UnifiedRelationsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (itemIds: string[]) => void;
+  relationType: RelationType;
+  targetType: TargetType;
+  targetId: string;
+  targetTitle?: string;
+  currentRelations?: string[];
+}
+
+const RELATION_CONFIG = {
+  EPIC: {
+    singular: "Epic",
+    plural: "Epics",
+    fetchMethod: "fetchEpics",
+    searchPlaceholder: "Search epics...",
+    noItemsMessage: "No available epics",
+    noSearchMessage: "No epics found matching your search"
+  },
+  STORY: {
+    singular: "Story",
+    plural: "Stories",
+    fetchMethod: "fetchStories",
+    searchPlaceholder: "Search stories...",
+    noItemsMessage: "No available stories",
+    noSearchMessage: "No stories found matching your search"
+  },
+  MILESTONE: {
+    singular: "Milestone",
+    plural: "Milestones",
+    fetchMethod: "fetchMilestones",
+    searchPlaceholder: "Search milestones...",
+    noItemsMessage: "No available milestones",
+    noSearchMessage: "No milestones found matching your search"
+  },
+  PARENT_TASK: {
+    singular: "Parent Task",
+    plural: "Parent Tasks",
+    fetchMethod: "fetchTasks",
+    searchPlaceholder: "Search tasks...",
+    noItemsMessage: "No available tasks",
+    noSearchMessage: "No tasks found matching your search"
+  },
+  TASK: {
+    singular: "Task",
+    plural: "Tasks",
+    fetchMethod: "fetchTasks",
+    searchPlaceholder: "Search tasks...",
+    noItemsMessage: "No available tasks",
+    noSearchMessage: "No tasks found matching your search"
+  }
+} as const;
+
+export function UnifiedRelationsModal({
+  isOpen,
+  onClose,
+  onAdd,
+  relationType,
+  targetType,
+  targetId,
+  targetTitle,
+  currentRelations = []
+}: UnifiedRelationsModalProps) {
+  const { currentWorkspace } = useWorkspace();
+  const relationsApi = useRelationsApi({ workspaceId: currentWorkspace?.id || "" });
+  const config = RELATION_CONFIG[relationType];
+
+  const [items, setItems] = useState<RelationItem[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [displayCount, setDisplayCount] = useState(10);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const fetchItems = async () => {
+    if (!currentWorkspace?.id) return;
+    setIsLoading(true);
+    try {
+      const fetchMethod = config.fetchMethod as keyof typeof relationsApi;
+      const fetchFunction = relationsApi[fetchMethod] as () => Promise<RelationItem[]>;
+      const data = await fetchFunction();
+      const filtered = data.filter((i) => !currentRelations.includes(i.id) && i.id !== targetId);
+      setItems(filtered);
+    } catch (error) {
+      console.error("Failed to fetch items:", error);
+      setItems([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchItems();
+      setSelectedIds([]);
+      setSearchTerm("");
+      setDisplayCount(10);
+      setIsExpanded(false);
+    }
+  }, [isOpen, relationType, targetType, currentWorkspace?.id]);
+
+  const availableItems = items.filter(
+    (i) =>
+      i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.issueKey?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Show items based on display count and search term
+  const displayedItems = searchTerm 
+    ? availableItems.slice(0, displayCount)
+    : availableItems.slice(0, displayCount);
+
+  // Determine if we should show more or less button
+  const hasMoreItems = availableItems.length > displayCount;
+  const isFullyExpanded = displayCount >= availableItems.length;
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirm = () => {
+    if (selectedIds.length === 0) return;
+    onAdd(selectedIds);
+    onClose();
+  };
+
+  const handleShowMore = () => {
+    setDisplayCount(prev => prev + 10);
+    setIsExpanded(true);
+  };
+
+  const handleShowLess = () => {
+    setDisplayCount(10);
+    setIsExpanded(false);
+  };
+
+  const getStatusBadge = (status?: string) => {
+    if (!status) return null;
+    const statusColors: Record<string, string> = {
+      DONE: "bg-green-500",
+      IN_PROGRESS: "bg-blue-500",
+      TODO: "bg-gray-500",
+      BACKLOG: "bg-gray-500"
+    };
+    const color = statusColors[status] || "bg-gray-500";
+    return <Badge className={`${color} text-white text-xs`}>{status}</Badge>;
+  };
+
+  const buttonText =
+    selectedIds.length === 0
+      ? `Add ${config.singular}`
+      : `Add ${selectedIds.length} ${config.plural}`;
+
+  return (
+    <BaseRelationModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Add ${config.singular}`}
+      confirmText={buttonText}
+      onConfirm={selectedIds.length > 0 ? handleConfirm : undefined}
+    >
+      <div className="space-y-4">
+        <Input
+          placeholder={config.searchPlaceholder}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="text-sm"
+        />
+        {isLoading ? (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            Loading {config.plural}...
+          </div>
+        ) : displayedItems.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            {searchTerm ? config.noSearchMessage : config.noItemsMessage}
+          </div>
+        ) : (
+          <ScrollArea className="h-[28rem] rounded-md border">
+            <div className="p-2 space-y-1">
+              {displayedItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`flex items-center justify-between p-2 rounded-md border cursor-pointer transition text-sm ${
+                    selectedIds.includes(item.id)
+                      ? "border-primary bg-primary/10"
+                      : "hover:bg-muted/50"
+                  }`}
+                  onClick={() => toggleSelection(item.id)}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge
+                      variant="outline"
+                      className="bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 text-xs"
+                    >
+                      {item.issueKey || config.singular}
+                    </Badge>
+                    <span className="truncate max-w-[220px] text-sm">{item.title}</span>
+                  </div>
+                  {getStatusBadge(item.status)}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+        
+        {/* Show More/Less Button */}
+        {availableItems.length > 10 && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={isFullyExpanded ? handleShowLess : handleShowMore}
+              className="text-sm"
+            >
+              {isFullyExpanded 
+                ? `Show Less (${availableItems.length} items)` 
+                : `Show More (${displayCount} of ${availableItems.length})`
+              }
+            </Button>
+          </div>
+        )}
+      </div>
+    </BaseRelationModal>
+  );
+}

@@ -159,14 +159,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Verify task belongs to workspace
-    const task = await prisma.task.findFirst({
-      where: { id: taskId, workspaceId }
-    });
+    // Verify item belongs to workspace (could be task, epic, story, or milestone)
+let sourceItem;
+const itemChecks = [
+  prisma.task.findFirst({ where: { id: taskId, workspaceId } }),
+  prisma.epic.findFirst({ where: { id: taskId, workspaceId } }),
+  prisma.story.findFirst({ where: { id: taskId, workspaceId } }),
+  prisma.milestone.findFirst({ where: { id: taskId, workspaceId } })
+];
 
-    if (!task) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
+const results = await Promise.all(itemChecks);
+sourceItem = results.find(item => item !== null);
+
+if (!sourceItem) {
+  return NextResponse.json({ error: 'Source item not found' }, { status: 404 });
+}
 
     // Verify related item exists and belongs to workspace
     let relatedItem;

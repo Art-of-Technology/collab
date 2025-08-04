@@ -8,7 +8,7 @@ import { TaskWorkSessions } from "./TaskWorkSessions";
 import { TaskActivity } from "./TaskActivity";
 import { UnifiedCommentsSection } from "@/components/ui/unified-comments-section";
 import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHistory";
-import { RelationsSection } from "@/components/ui/relations-section";
+import { RelationsSection } from "@/components/tasks/relations";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import type { TaskComment } from "@/types/task";
 import { BoardItemType as ActivityBoardItemType } from "@/lib/board-item-activity-service";
@@ -87,6 +87,7 @@ export function BoardItemTabs({
               <RelationsSection
                 itemType={itemType}
                 itemData={itemData}
+                canEdit={true}
               />
             </TabsContent>
           )}

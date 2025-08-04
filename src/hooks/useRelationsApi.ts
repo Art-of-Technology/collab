@@ -1,3 +1,4 @@
+// src/hooks/useRelationsApi.ts - Final simple approach
 interface Epic {
   id: string;
   title: string;
@@ -43,27 +44,81 @@ interface UseRelationsApiProps {
 
 export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
   
-  // Get all relations for a specific task
-  const getTaskRelations = async (taskId: string): Promise<TaskRelationsResponse> => {
+  // Get relations for any item (task, epic, story, milestone)
+  // Always use /tasks/ endpoint - itemId can be any item type
+  const getTaskRelations = async (itemId: string): Promise<TaskRelationsResponse> => {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/relations`);
+      const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${itemId}/relations`);
       if (!response.ok) {
-        throw new Error('Failed to fetch task relations');
+        throw new Error('Failed to fetch relations');
       }
       return await response.json();
     } catch (error) {
-      console.error('Error fetching task relations:', error);
+      console.error('Error fetching item relations:', error);
       throw error;
     }
   };
 
-  // Fetch available epics for selection (for dropdowns)
+  // Add relation for any item (task, epic, story, milestone)
+  // Always use /tasks/ endpoint - itemId can be any item type
+  const addRelation = async (
+    itemId: string,  // Any item ID (task/epic/story/milestone)
+    relatedItemId: string, 
+    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK' | 'TASK'
+  ) => {
+    try {
+      console.log(`🔗 Adding relation: ${itemId} -> ${relatedItemId} (${relationType})`);
+      
+      const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${itemId}/relations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relatedItemId, relatedItemType: relationType }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API Error:', errorText);
+        throw new Error(`Failed to add ${relationType.toLowerCase()} relation`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Relation added successfully:', result);
+      return result;
+    } catch (error) {
+      console.error(`Error adding ${relationType.toLowerCase()} relation:`, error);
+      throw error;
+    }
+  };
+
+  // Remove relation for any item
+  const removeRelation = async (
+    itemId: string,
+    relatedItemId: string, 
+    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK' | 'TASK'
+  ) => {
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${itemId}/relations`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relatedItemId, relatedItemType: relationType }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to remove ${relationType.toLowerCase()} relation`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error(`Error removing ${relationType.toLowerCase()} relation:`, error);
+      throw error;
+    }
+  };
+
+  // Fetch functions for dropdowns
   const fetchEpics = async (): Promise<Epic[]> => {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/epics`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch epics');
-      }
+      if (!response.ok) throw new Error('Failed to fetch epics');
       return await response.json();
     } catch (error) {
       console.error('Error fetching epics:', error);
@@ -71,13 +126,10 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  // Fetch available stories for selection (for dropdowns)
   const fetchStories = async (): Promise<Story[]> => {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/stories`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch stories');
-      }
+      if (!response.ok) throw new Error('Failed to fetch stories');
       return await response.json();
     } catch (error) {
       console.error('Error fetching stories:', error);
@@ -85,13 +137,10 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  // Fetch available tasks for parent selection (for dropdowns)
   const fetchTasks = async (): Promise<Task[]> => {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/task`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch tasks');
-      }
+      if (!response.ok) throw new Error('Failed to fetch tasks');
       return await response.json();
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -99,163 +148,53 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  // Fetch available milestones for selection (for dropdowns)
   const fetchMilestones = async (): Promise<Milestone[]> => {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/milestones`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch milestones');
-      }
+      if (!response.ok) throw new Error('Failed to fetch milestones');
       return await response.json();
     } catch (error) {
       console.error('Error fetching milestones:', error);
       throw error;
     }
   };
-
-  // Generic function to add relation
-  const addRelation = async (
-    taskId: string, 
-    relatedItemId: string, 
-    relatedItemType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK'
+  // Generic remove handler for any component
+  const createRemoveHandler = (
+    currentItemId: string,
+    currentItemType: 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE',
+    reloadFunction: () => Promise<void>
   ) => {
-    try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/relations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ relatedItemId, relatedItemType }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to add ${relatedItemType.toLowerCase()} relation`);
+    return async (itemId: string, relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'TASK') => {
+      try {
+        console.log(`🗑️ Removing ${relationType.toLowerCase()} from ${currentItemType.toLowerCase()}:`, itemId);
+        
+        // Logic: Task relations are always stored as task->other, others are stored as source->target
+        if (currentItemType === 'TASK' || relationType === 'TASK') {
+          if (currentItemType === 'TASK') {
+            await removeRelation(currentItemId, itemId, relationType);
+          } else {
+            await removeRelation(itemId, currentItemId, currentItemType);
+          }
+        } else {
+          await removeRelation(currentItemId, itemId, relationType);
+        }
+        
+        await reloadFunction();
+        console.log(`✅ ${relationType} removed successfully`);
+      } catch (error) {
+        console.error(`Failed to remove ${relationType.toLowerCase()}:`, error);
       }
-      
-      return await response.json();
-    } catch (error) {
-      console.error(`Error adding ${relatedItemType.toLowerCase()} relation:`, error);
-      throw error;
-    }
-  };
-
-  // Generic function to remove relation
-  const removeRelation = async (
-    taskId: string, 
-    relatedItemId: string, 
-    relatedItemType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK'
-  ) => {
-    try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${taskId}/relations`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ relatedItemId, relatedItemType }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to remove ${relatedItemType.toLowerCase()} relation`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error(`Error removing ${relatedItemType.toLowerCase()} relation:`, error);
-      throw error;
-    }
-  };
-
-  // Specific relation functions for backward compatibility
-  const addEpicRelation = (taskId: string, epicId: string) => 
-    addRelation(taskId, epicId, 'EPIC');
-
-  const removeEpicRelation = (taskId: string, epicId: string) => 
-    removeRelation(taskId, epicId, 'EPIC');
-
-  const addStoryRelation = (taskId: string, storyId: string) => 
-    addRelation(taskId, storyId, 'STORY');
-
-  const removeStoryRelation = (taskId: string, storyId: string) => 
-    removeRelation(taskId, storyId, 'STORY');
-
-  const addParentTaskRelation = (taskId: string, parentTaskId: string) => 
-    addRelation(taskId, parentTaskId, 'PARENT_TASK');
-
-  const removeParentTaskRelation = (taskId: string, parentTaskId: string) => 
-    removeRelation(taskId, parentTaskId, 'PARENT_TASK');
-
-  const addMilestoneRelation = (taskId: string, milestoneId: string) => 
-    addRelation(taskId, milestoneId, 'MILESTONE');
-
-  const removeMilestoneRelation = (taskId: string, milestoneId: string) => 
-    removeRelation(taskId, milestoneId, 'MILESTONE');
-
-  // Bulk operations for multiple relations
-  const addMultipleRelations = async (
-    taskId: string, 
-    items: Array<{ id: string; type: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK' }>
-  ) => {
-    try {
-      const promises = items.map(item => 
-        addRelation(taskId, item.id, item.type)
-      );
-      return await Promise.all(promises);
-    } catch (error) {
-      console.error('Error adding multiple relations:', error);
-      throw error;
-    }
-  };
-
-  // Legacy functions for backward compatibility (these were in original hook)
-  const addMultipleEpicRelations = async (taskId: string, epicIds: string[]) => {
-    const items = epicIds.map(id => ({ id, type: 'EPIC' as const }));
-    return addMultipleRelations(taskId, items);
-  };
-
-  const addMultipleStoryRelations = async (taskId: string, storyIds: string[]) => {
-    const items = storyIds.map(id => ({ id, type: 'STORY' as const }));
-    return addMultipleRelations(taskId, items);
-  };
-
-  const addMultipleParentTaskRelations = async (taskId: string, parentTaskIds: string[]) => {
-    const items = parentTaskIds.map(id => ({ id, type: 'PARENT_TASK' as const }));
-    return addMultipleRelations(taskId, items);
-  };
-
-  const addMultipleMilestoneRelations = async (taskId: string, milestoneIds: string[]) => {
-    const items = milestoneIds.map(id => ({ id, type: 'MILESTONE' as const }));
-    return addMultipleRelations(taskId, items);
+    };
   };
 
   return {
-    // Main relation function - NEW
     getTaskRelations,
-    
-    // Fetch functions for dropdowns - SAME AS BEFORE
+    addRelation,
+    removeRelation,
     fetchEpics,
     fetchStories,
     fetchTasks,
     fetchMilestones,
-    
-    // Generic relation functions - NEW
-    addRelation,
-    removeRelation,
-    addMultipleRelations,
-    
-    // Specific relation functions - BACKWARD COMPATIBLE
-    addEpicRelation,
-    removeEpicRelation,
-    addStoryRelation,
-    removeStoryRelation,
-    addParentTaskRelation,
-    removeParentTaskRelation,
-    addMilestoneRelation,
-    removeMilestoneRelation,
-    
-    // Legacy bulk functions - BACKWARD COMPATIBLE
-    addMultipleEpicRelations,
-    addMultipleStoryRelations,
-    addMultipleParentTaskRelations,
-    addMultipleMilestoneRelations,
+    createRemoveHandler,
   };
 }
