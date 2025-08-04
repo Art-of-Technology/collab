@@ -427,7 +427,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                     />
                   </div>
                 </div>
-                <div ref={tagListRef} className="max-h-[250px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1 sm:mt-0">
+                <div ref={tagListRef} className="max-h-[250px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
                   <div 
                     data-tag-index="0"
                     className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
