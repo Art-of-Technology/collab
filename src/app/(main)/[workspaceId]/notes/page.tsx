@@ -107,9 +107,23 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   // Filter tags based on search term
   const filteredTags = useMemo(() => {
     if (!tagSearchTerm.trim()) return tags;
-    return tags.filter(tag => 
-      tag.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
+    
+    const searchTerm = tagSearchTerm.toLowerCase();
+    const filtered = tags.filter(tag => 
+      tag.name.toLowerCase().includes(searchTerm)
     );
+    
+    // Sort: tags starting with search term first, then others
+    return filtered.sort((a, b) => {
+      const aStartsWith = a.name.toLowerCase().startsWith(searchTerm);
+      const bStartsWith = b.name.toLowerCase().startsWith(searchTerm);
+      
+      if (aStartsWith && !bStartsWith) return -1;
+      if (!aStartsWith && bStartsWith) return 1;
+      
+      // If both start with or both don't start with, sort alphabetically
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
   }, [tags, tagSearchTerm]);
 
   // Resolve params first
