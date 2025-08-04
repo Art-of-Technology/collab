@@ -49,6 +49,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
 import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion";
+import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-suggestion";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
@@ -538,6 +539,106 @@ const Mention = TiptapNode.create({
   },
 })
 
+// Define a TaskMention extension for TipTap
+const TaskMention = TiptapNode.create({
+  name: 'taskMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-task-mention]',
+        getAttrs: element => {
+          const id = element.getAttribute('data-task-id')
+          const title = element.getAttribute('data-task-title')
+          const issueKey = element.getAttribute('data-task-issue-key')
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-task-mention': true, class: 'task-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '#',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `#[${displayText}](${node.attrs.id})`
+  },
+})
+
 export function MarkdownEditor({
   onChange,
   content = "",
@@ -557,7 +658,11 @@ export function MarkdownEditor({
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showTaskMentions, setShowTaskMentions] = useState(false);
+  const [taskQuery, setTaskQuery] = useState("");
+  const [taskMentionPosition, setTaskMentionPosition] = useState({ top: 0, left: 0 });
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const { currentWorkspace: workspaceData } = useWorkspace();
 
   // Use a stable reference for initialValue to prevent re-renders
   const initialContentRef = useRef(initialValue || content);
@@ -588,6 +693,7 @@ export function MarkdownEditor({
       }),
       Color,
       Mention, // Add Mention extension
+      TaskMention, // Add Task Mention extension
     ],
     content: initialContentRef.current,
     editorProps: {
@@ -790,6 +896,13 @@ export function MarkdownEditor({
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [caretPosition, setCaretPosition] = useState({ top: 0, left: 0 });
   const mentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add task mention state
+  const [taskMentionQuery, setTaskMentionQuery] = useState("");
+  const [showTaskMentionSuggestions, setShowTaskMentionSuggestions] = useState(false);
+  const [taskCaretPosition, setTaskCaretPosition] = useState({ top: 0, left: 0 });
+  const taskMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
   const { currentWorkspace } = useWorkspace();
   
   // Track the last time a mention was inserted
@@ -867,6 +980,84 @@ export function MarkdownEditor({
         attrs: {
           id: user.id,
           name: user.name,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
+  // Insert a task mention at cursor position
+  const insertTaskMention = useCallback((task: Task) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the # symbol --- //
+    let hashPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (hashPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeHashPos = nodeText.lastIndexOf('#', searchFromIndex);
+
+        while (relativeHashPos !== -1) {
+          const absoluteHashPos = pos + relativeHashPos;
+          // Ensure the found # is within the search range and before the cursor
+          if (absoluteHashPos >= searchLimit && absoluteHashPos < currentPosition) {
+            // Check if there's a space or start of node right after the #
+            // (to ensure we found the start of the mention query)
+            const textAfterHash = editor.state.doc.textBetween(absoluteHashPos + 1, currentPosition, "");
+            if (!textAfterHash.match(/^\s/) && textAfterHash.indexOf('#') === -1) { // Ensure no space and no other # between trigger and cursor
+              hashPosition = absoluteHashPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeHashPos - 1;
+          relativeHashPos = nodeText.lastIndexOf('#', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowTaskMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if # was found
+    if (hashPosition !== -1) {
+      // Delete from the found # position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: hashPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the task mention node where the # was
+      editor.chain().insertContentAt(hashPosition, {
+        type: 'taskMention',
+        attrs: {
+          id: task.id,
+          title: task.title,
+          issueKey: task.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(hashPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no # was found, insert the task mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'taskMention',
+        attrs: {
+          id: task.id,
+          title: task.title,
+          issueKey: task.issueKey,
         },
       }).insertContent(' ').run();
     }
