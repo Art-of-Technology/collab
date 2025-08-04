@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,20 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [tagSearchTerm, setTagSearchTerm] = useState("");
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const tagSearchInputRef = useRef<HTMLInputElement>(null);
+  const tagListRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Filter tags based on search term
+  const filteredTags = useMemo(() => {
+    if (!tagSearchTerm.trim()) return tags;
+    return tags.filter(tag => 
+      tag.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
+    );
+  }, [tags, tagSearchTerm]);
 
   // Resolve params first
   useEffect(() => {
@@ -120,6 +133,91 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchTags();
     }
   }, [session?.user, searchQuery, selectedTag, showFavorites]);
+
+  // Focus search input when dialog opens
+  useEffect(() => {
+    if (isTagDropdownOpen) {
+      setTimeout(() => {
+        tagSearchInputRef.current?.focus();
+      }, 100);
+      setSelectedIndex(-1);
+    } else {
+      setTagSearchTerm("");
+      setSelectedIndex(-1);
+    }
+  }, [isTagDropdownOpen]);
+
+  // Reset selected index when search term changes
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [tagSearchTerm]);
+
+  // Add global keyboard listener when dialog is open
+  useEffect(() => {
+    if (isTagDropdownOpen) {
+      const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        const totalItems = filteredTags.length + 1;
+        
+        switch (e.key) {
+          case 'ArrowDown':
+            e.preventDefault();
+            setSelectedIndex(prev => 
+              prev < totalItems - 1 ? prev + 1 : 0
+            );
+            break;
+          case 'ArrowUp':
+            e.preventDefault();
+            setSelectedIndex(prev => 
+              prev > 0 ? prev - 1 : totalItems - 1
+            );
+            break;
+          case 'Enter':
+            e.preventDefault();
+            if (selectedIndex === 0) {
+              setSelectedTag(null);
+              setTagSearchTerm("");
+              setIsTagDropdownOpen(false);
+            } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
+              const selectedTagItem = filteredTags[selectedIndex - 1];
+              setSelectedTag(selectedTagItem.id);
+              setTagSearchTerm("");
+              setIsTagDropdownOpen(false);
+            }
+            break;
+          case 'Escape':
+            e.preventDefault();
+            setIsTagDropdownOpen(false);
+            break;
+        }
+      };
+
+      window.addEventListener('keydown', handleGlobalKeyDown);
+      return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }
+  }, [isTagDropdownOpen, selectedIndex, filteredTags]);
+
+  // Auto-scroll to selected item
+  useEffect(() => {
+    if (selectedIndex >= 0 && tagListRef.current) {
+      const container = tagListRef.current;
+      const items = container.querySelectorAll('[data-tag-index]');
+      const selectedItem = items[selectedIndex] as HTMLElement;
+      
+      if (selectedItem) {
+        const containerRect = container.getBoundingClientRect();
+        const itemRect = selectedItem.getBoundingClientRect();
+        
+        // Check if item is above the visible area
+        if (itemRect.top < containerRect.top) {
+          container.scrollTop -= (containerRect.top - itemRect.top) + 10;
+        }
+        // Check if item is below the visible area
+        else if (itemRect.bottom > containerRect.bottom) {
+          container.scrollTop += (itemRect.bottom - containerRect.bottom) + 10;
+        }
+      }
+    }
+  }, [selectedIndex]);
 
   const fetchNotes = async () => {
     try {
@@ -277,33 +375,76 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               Favorites
             </Button>
             
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
+              <DialogTrigger asChild>
                 <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: '14px' }}>
                   <Filter className="h-4 w-4" />
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setSelectedTag(null)}>
-                  All Tags
-                </DropdownMenuItem>
-                {tags.map((tag) => (
-                  <DropdownMenuItem
-                    key={tag.id}
-                    onClick={() => setSelectedTag(tag.id)}
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
+                <div className="p-4 border-b">
+                  <DialogTitle>Select Tag</DialogTitle>
+                  <div className="relative mt-2">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      ref={tagSearchInputRef}
+                      placeholder="Search tags..."
+                      value={tagSearchTerm}
+                      onChange={(e) => setTagSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+                <div ref={tagListRef} className="max-h-[300px] overflow-y-auto p-2">
+                  <div 
+                    data-tag-index="0"
+                    className={`flex items-center gap-2 p-2 rounded cursor-pointer border-2 ${
+                      selectedIndex === 0 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
+                    }`}
+                    onClick={() => {
+                      setSelectedTag(null);
+                      setTagSearchTerm("");
+                      setIsTagDropdownOpen(false);
+                    }}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-gray-400" />
+                    All Tags
+                  </div>
+                  {filteredTags.map((tag, index) => (
+                    <div
+                      key={tag.id}
+                      data-tag-index={index + 1}
+                      className={`flex items-center gap-2 p-2 rounded cursor-pointer border-2 ${
+                        selectedIndex === index + 1 
+                          ? 'bg-opacity-10' 
+                          : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
+                      }`}
+                      style={{
+                        borderColor: selectedIndex === index + 1 ? tag.color : 'transparent',
+                        backgroundColor: selectedIndex === index + 1 ? `${tag.color}20` : 'transparent'
+                      }}
+                      onClick={() => {
+                        setSelectedTag(tag.id);
+                        setTagSearchTerm("");
+                        setIsTagDropdownOpen(false);
+                      }}
+                    >
                       <div
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: tag.color }}
                       />
                       {tag.name} ({tag._count.notes})
                     </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  ))}
+                  {filteredTags.length === 0 && tagSearchTerm.trim() && (
+                    <div className="px-2 py-2 text-sm text-muted-foreground text-center">
+                      No tags found matching "{tagSearchTerm}"
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
