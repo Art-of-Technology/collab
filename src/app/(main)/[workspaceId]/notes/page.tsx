@@ -400,7 +400,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   <div 
                     data-tag-index="0"
                     className={`flex items-center gap-2 p-2 rounded cursor-pointer border-2 ${
-                      selectedIndex === 0 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
+                      selectedIndex === 0 ? 'bg-[#21C45D] dark:bg-[#21C45D]' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
                     }`}
                     onClick={() => {
                       setSelectedTag(null);
@@ -415,15 +415,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                     <div
                       key={tag.id}
                       data-tag-index={index + 1}
-                      className={`flex items-center gap-2 p-2 rounded cursor-pointer border-2 ${
+                      className={`flex items-center gap-2 p-2 rounded cursor-pointer ${
                         selectedIndex === index + 1 
-                          ? 'bg-opacity-10' 
-                          : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
+                          ? 'bg-[#21C45D]' 
+                          : 'hover:bg-[#21C45D]/10'
                       }`}
-                      style={{
-                        borderColor: selectedIndex === index + 1 ? tag.color : 'transparent',
-                        backgroundColor: selectedIndex === index + 1 ? `${tag.color}20` : 'transparent'
-                      }}
                       onClick={() => {
                         setSelectedTag(tag.id);
                         setTagSearchTerm("");
