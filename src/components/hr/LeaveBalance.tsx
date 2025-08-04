@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
-import { getDemoData } from "./demo-data";
 
 export interface LeaveBalanceType {
   policyId: string;
@@ -30,30 +29,22 @@ export interface LeaveBalanceType {
 interface LeaveBalanceProps {
   balances?: LeaveBalanceType[];
   isLoading?: boolean;
-  showDemoData?: boolean;
 }
 
 export function LeaveBalance({
   balances = [],
-  showDemoData = false,
 }: LeaveBalanceProps) {
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
 
-  const displayBalances = useMemo(() => {
-    if (balances.length > 0) return balances;
-    if (showDemoData) return getDemoData();
-    return [];
-  }, [balances, showDemoData]);
-
   // Set initial selected type if not set
   useEffect(() => {
-    if (!selectedLeaveType && displayBalances.length > 0) {
-      setSelectedLeaveType(displayBalances[0].policyId);
+    if (!selectedLeaveType && balances.length > 0) {
+      setSelectedLeaveType(balances[0].policyId);
     }
-  }, [displayBalances, selectedLeaveType]);
+  }, [balances, selectedLeaveType]);
 
   // Show only the selected leave type
-  const currentBalance = displayBalances.find(
+  const currentBalance = balances.find(
     (balance) => balance.policyId === selectedLeaveType
   );
 
@@ -71,8 +62,8 @@ export function LeaveBalance({
     return "#dc2626"; // red-600
   }, []);
 
-  // Handle case when no data is available and demo data is not requested
-  if (displayBalances.length === 0) {
+  // Handle case when no data is available
+  if (balances.length === 0) {
     return (
       <Card className="w-full">
         <CardContent className="p-6 text-center">
@@ -99,11 +90,11 @@ export function LeaveBalance({
       {/* Dropdown for leave type selection */}
       <div className="space-y-2">
         <Select value={selectedLeaveType} onValueChange={setSelectedLeaveType}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger aria-label="Leave type selection" className="w-full">
             <SelectValue placeholder="Select leave type" />
           </SelectTrigger>
           <SelectContent>
-            {displayBalances.map((balance) => (
+            {balances.map((balance) => (
               <SelectItem key={balance.policyId} value={balance.policyId}>
                 {balance.policyName}
               </SelectItem>
