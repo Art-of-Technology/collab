@@ -22,63 +22,52 @@ import {
   LeaveBalance,
   type LeaveBalanceType,
 } from "@/components/hr/LeaveBalance";
-
-export interface LeaveRequest {
-  id: string;
-  type: "holiday" | "sick" | "other";
-  startDate: Date;
-  endDate: Date;
-  duration: "FULL_DAY" | "HALF_DAY";
-  notes?: string;
-  status: "pending" | "approved" | "rejected";
-  createdAt: Date;
-}
+import { 
+  useLeaveBalances, 
+  useUserLeaveRequests, 
+  useCreateLeaveRequest 
+} from "@/hooks/queries/useLeave";
+import type { LeaveRequest, LeaveStatus } from "@/types/leave";
 
 interface MyLeaveProps {
-  activeRequests?: LeaveRequest[];
-  leaveBalances?: LeaveBalanceType[];
-  isLoadingBalances?: boolean;
-  onSubmitRequest?: (data: LeaveRequestSubmissionData) => Promise<void>;
+  workspaceId: string;
   isFeatureEnabled?: boolean;
 }
 
 export function MyLeave({
-  activeRequests = [],
-  leaveBalances = [],
-  isLoadingBalances = false,
-  onSubmitRequest,
+  workspaceId,
   isFeatureEnabled = false,
 }: MyLeaveProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
+  // Fetch data using hooks
+  const { 
+    data: leaveBalances = [], 
+    isLoading: isLoadingBalances 
+  } = useLeaveBalances(workspaceId);
+  
+  const { 
+    data: leaveRequests = [], 
+    isLoading: isLoadingRequests 
+  } = useUserLeaveRequests(workspaceId);
+  
+  const createLeaveRequestMutation = useCreateLeaveRequest(workspaceId);
+
   const handleSubmit = async (data: LeaveRequestSubmissionData) => {
-    setIsSubmitting(true);
     try {
-      if (onSubmitRequest) {
-        await onSubmitRequest(data);
-        toast({
-          title: "Leave request submitted",
-          description: "Your leave request has been submitted for approval.",
-        });
-        setIsDialogOpen(false);
-      } else {
-        // Fallback for demo purposes
-        toast({
-          title: "Leave request submitted",
-          description: "Your leave request has been submitted for approval.",
-        });
-        setIsDialogOpen(false);
-      }
+      await createLeaveRequestMutation.mutateAsync(data);
+      toast({
+        title: "Leave request submitted",
+        description: "Your leave request has been submitted for approval.",
+      });
+      setIsDialogOpen(false);
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to submit leave request. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -86,22 +75,9 @@ export function MyLeave({
     setIsDialogOpen(false);
   };
 
-  const getLeaveTypeLabel = (type: string) => {
-    switch (type) {
-      case "holiday":
-        return "Holiday";
-      case "sick":
-        return "Sick Leave";
-      case "other":
-        return "Other";
-      default:
-        return type;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: LeaveStatus) => {
     switch (status) {
-      case "approved":
+      case "APPROVED":
         return (
           <Badge
             variant="secondary"
@@ -110,7 +86,7 @@ export function MyLeave({
             Approved
           </Badge>
         );
-      case "rejected":
+      case "REJECTED":
         return (
           <Badge
             variant="secondary"
@@ -119,7 +95,16 @@ export function MyLeave({
             Rejected
           </Badge>
         );
-      case "pending":
+      case "CANCELED":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-gray-500/10 hover:bg-gray-500/20 text-gray-600 transition-colors"
+          >
+            Canceled
+          </Badge>
+        );
+      case "PENDING":
       default:
         return (
           <Badge
@@ -157,10 +142,11 @@ export function MyLeave({
               <DialogTitle>Request Leave</DialogTitle>
             </DialogHeader>
 
+
             <LeaveRequestForm
-              onSubmit={handleSubmit}
+                              workspaceId={workspaceId}
+                onSubmit={handleSubmit}
               onCancel={handleCancel}
-              isSubmitting={isSubmitting}
             />
           </DialogContent>
         </Dialog>
@@ -185,10 +171,11 @@ export function MyLeave({
               <h3 className="text-sm font-medium text-muted-foreground">
                 Available Balance
               </h3>
-              <LeaveBalance
-                balances={leaveBalances}
-                isLoading={isLoadingBalances}
-              />
+                          <LeaveBalance
+              workspaceId={workspaceId}
+              balances={leaveBalances}
+              isLoading={isLoadingBalances}
+            />
             </div>
 
             {/* Right Column - Leave Requests */}
@@ -196,9 +183,11 @@ export function MyLeave({
               <h3 className="text-sm font-medium text-muted-foreground">
                 Recent Requests
               </h3>
-              {activeRequests.length > 0 ? (
+              {isLoadingRequests ? (
+                <div className="text-sm text-muted-foreground">Loading requests...</div>
+              ) : leaveRequests.length > 0 ? (
                 <div className="space-y-3">
-                  {activeRequests.map((request) => (
+                  {leaveRequests.map((request) => (
                     <div
                       key={request.id}
                       className="flex items-center justify-between p-3 rounded-lg border bg-muted/50"
@@ -206,7 +195,7 @@ export function MyLeave({
                       <div className="flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">
-                            {getLeaveTypeLabel(request.type)}
+                            {request.policy?.name || "Unknown Policy"}
                           </span>
                           {getStatusBadge(request.status)}
                         </div>
@@ -215,14 +204,14 @@ export function MyLeave({
                           request.endDate.getTime() ? (
                             // Single day request
                             <>
-                              {format(request.startDate, "MMM dd, yyyy")}
+                              {format(new Date(request.startDate), "MMM dd, yyyy")}
                               {request.duration === "HALF_DAY" && " (Half Day)"}
                             </>
                           ) : (
                             // Multi-day request
                             <>
-                              {format(request.startDate, "MMM dd")} -{" "}
-                              {format(request.endDate, "MMM dd, yyyy")}
+                              {format(new Date(request.startDate), "MMM dd")} -{" "}
+                              {format(new Date(request.endDate), "MMM dd, yyyy")}
                             </>
                           )}
                         </div>
@@ -267,3 +256,4 @@ export function MyLeave({
     </Card>
   );
 }
+

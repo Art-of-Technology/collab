@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
-import { getDemoData } from "./demo-data";
 
 export interface LeaveBalanceType {
   policyId: string;
@@ -28,21 +27,33 @@ export interface LeaveBalanceType {
 }
 
 interface LeaveBalanceProps {
+  workspaceId: string;
   balances?: LeaveBalanceType[];
   isLoading?: boolean;
 }
 
 export function LeaveBalance({
+  workspaceId,
   balances = [],
+  isLoading = false,
 }: LeaveBalanceProps) {
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
 
-  const displayBalances = balances.length > 0 ? balances : getDemoData();
-
-  // Set initial selected type if not set
+  // Filter to only show balances where user has accrued time
+  const filteredBalances = balances.filter(balance => balance.totalAccrued > 0);
+  const displayBalances = filteredBalances;
+  // Set initial selected type if not set, or reset if current selection is no longer available
   useEffect(() => {
     if (!selectedLeaveType && displayBalances.length > 0) {
       setSelectedLeaveType(displayBalances[0].policyId);
+    } else if (selectedLeaveType && displayBalances.length > 0) {
+      // Check if current selection is still available in filtered results
+      const isCurrentSelectionAvailable = displayBalances.some(
+        (balance) => balance.policyId === selectedLeaveType
+      );
+      if (!isCurrentSelectionAvailable) {
+        setSelectedLeaveType(displayBalances[0].policyId);
+      }
     }
   }, [displayBalances, selectedLeaveType]);
 
@@ -65,17 +76,17 @@ export function LeaveBalance({
     return "#dc2626"; // red-600
   }, []);
 
-  // Handle case when no data is available
-  if (displayBalances.length === 0) {
+  // Handle loading state
+  if (isLoading) {
     return (
       <Card className="w-full">
         <CardContent className="p-6 text-center">
           <div className="flex flex-col items-center gap-4">
-            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full" />
             <div>
-              <h3 className="font-medium text-muted-foreground">No Leave Data Available</h3>
+              <h3 className="font-medium text-muted-foreground">Loading Leave Balances</h3>
               <p className="text-sm text-muted-foreground/70">
-                Leave balance information will appear here when available.
+                Please wait while we fetch your leave information.
               </p>
             </div>
           </div>
@@ -84,8 +95,89 @@ export function LeaveBalance({
     );
   }
 
+  // Handle case when no accrued balances are available
+  if (filteredBalances.length === 0) {
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div>
+              <h3 className="font-medium text-muted-foreground">No Accrued Leave Available</h3>
+              <p className="text-sm text-muted-foreground/70">
+                You haven't accrued any leave balances yet. Leave will appear here as you earn it.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Safety check - if no current balance is found, show the first available one
+  if (!currentBalance && displayBalances.length > 0) {
+    const firstBalance = displayBalances[0];
+    return (
+      <div className="space-y-4">
+        {/* Dropdown for leave type selection */}
+        <div className="space-y-2">
+          <Select value={firstBalance.policyId} onValueChange={setSelectedLeaveType}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select leave type" />
+            </SelectTrigger>
+            <SelectContent>
+              {displayBalances.map((balance) => (
+                <SelectItem key={balance.policyId} value={balance.policyId}>
+                  {balance.policyName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Render first balance as fallback */}
+        <Card className="w-full">
+          <CardHeader className="p-4 min-h-14">
+            <div className="flex justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {firstBalance.trackUnit === "HOURS" ? (
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="font-medium text-sm truncate">
+                  {firstBalance.policyName}
+                </span>
+                {!firstBalance.isPaid && (
+                  <Badge variant="outline" className="text-xs w-fit">
+                    Unpaid
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // If still no current balance, return empty state
   if (!currentBalance) {
-    return null;
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div>
+              <h3 className="font-medium text-muted-foreground">No Leave Balance Selected</h3>
+              <p className="text-sm text-muted-foreground/70">
+                Please select a leave type from the dropdown.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
