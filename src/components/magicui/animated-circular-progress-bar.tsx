@@ -15,7 +15,12 @@ const VIEWBOX_SIZE = 100;
 const STROKE_WIDTH = 10;
 const CIRCLE_RADIUS = (VIEWBOX_SIZE / 2) - (STROKE_WIDTH / 2);
 
-// Threshold below which the secondary circle is displayed to show remaining progress
+// Threshold below which the secondary circle is displayed to show remaining progress.
+// The value 90 was chosen so that the secondary (background) circle is only visible
+// when the progress is less than 90%. This creates a visual effect where, for high
+// completion values (90% and above), the primary progress arc dominates and the
+// remaining (secondary) arc is hidden, emphasizing near-completion. For values below
+// 90%, the secondary arc appears, visually highlighting the remaining progress.
 const SECONDARY_CIRCLE_THRESHOLD = 90;
 
 export function AnimatedCircularProgressBar({
