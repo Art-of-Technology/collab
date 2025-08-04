@@ -413,7 +413,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
+              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 rounded-md">
                 <div className="p-4 border-b">
                   <DialogTitle>Select Tag</DialogTitle>
                   <div className="relative mt-2">
@@ -439,7 +439,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       setIsTagDropdownOpen(false);
                     }}
                   >
-                    <div className="w-3 h-3 rounded-full bg-gray-400" />
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#D97706' }} />
                     All Tags
                   </div>
                   {filteredTags.map((tag, index) => (
