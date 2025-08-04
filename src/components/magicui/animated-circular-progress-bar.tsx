@@ -10,6 +10,12 @@ interface AnimatedCircularProgressBarProps {
   className?: string;
 }
 
+// Circle radius for the progress bar
+const CIRCLE_RADIUS = 45;
+
+// Threshold below which the secondary circle is displayed to show remaining progress
+const SECONDARY_CIRCLE_THRESHOLD = 90;
+
 export function AnimatedCircularProgressBar({
   max = 100,
   min = 0,
@@ -19,7 +25,7 @@ export function AnimatedCircularProgressBar({
   gaugeSecondaryColor,
   className,
 }: AnimatedCircularProgressBarProps) {
-  const circumference = 2 * Math.PI * 45;
+  const circumference = 2 * Math.PI * CIRCLE_RADIUS;
   const percentPx = circumference / 100;
   const currentPercent = Math.round(((value - min) / (max - min)) * 100);
 
@@ -47,11 +53,11 @@ export function AnimatedCircularProgressBar({
         strokeWidth="2"
         viewBox="0 0 100 100"
       >
-        {currentPercent <= 90 && currentPercent >= 0 && (
+        {currentPercent <= SECONDARY_CIRCLE_THRESHOLD && currentPercent >= 0 && (
           <circle
             cx="50"
             cy="50"
-            r="45"
+            r={CIRCLE_RADIUS}
             strokeWidth="10"
             strokeDashoffset="0"
             strokeLinecap="round"
@@ -60,7 +66,7 @@ export function AnimatedCircularProgressBar({
             style={
               {
                 stroke: gaugeSecondaryColor,
-                "--stroke-percent": 90 - currentPercent,
+                "--stroke-percent": SECONDARY_CIRCLE_THRESHOLD - currentPercent,
                 "--offset-factor-secondary": "calc(1 - var(--offset-factor))",
                 strokeDasharray:
                   "calc(var(--stroke-percent) * var(--percent-to-px)) var(--circumference)",
@@ -76,7 +82,7 @@ export function AnimatedCircularProgressBar({
         <circle
           cx="50"
           cy="50"
-          r="45"
+          r={CIRCLE_RADIUS}
           strokeWidth="10"
           strokeDashoffset="0"
           strokeLinecap="round"
