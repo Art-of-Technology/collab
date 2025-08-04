@@ -22,10 +22,11 @@ interface TaskMentionSuggestionProps {
   query: string;
   onSelect: (task: Task) => void;
   workspaceId?: string;
+  onEscape?: () => void;
 }
 
 export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSuggestionProps>(
-  ({ query, onSelect, workspaceId }, ref) => {
+  ({ query, onSelect, workspaceId, onEscape }, ref) => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -73,33 +74,37 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
         // Arrow keys for navigation
         if (e.key === "ArrowDown") {
           e.preventDefault();
+          e.stopPropagation();
           setSelectedIndex((prev) => (prev < tasks.length - 1 ? prev + 1 : prev));
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
+          e.stopPropagation();
           setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
         } else if (e.key === "Enter" && tasks[selectedIndex]) {
-          e.preventDefault();
+                    e.preventDefault();
+          e.stopPropagation();
           onSelect(tasks[selectedIndex]);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onEscape?.();
         }
       };
 
-      window.addEventListener("keydown", handleKeyDown);
+      // Add event listener to document with capture phase
+      document.addEventListener("keydown", handleKeyDown, true);
       return () => {
-        window.removeEventListener("keydown", handleKeyDown);
+        document.removeEventListener("keydown", handleKeyDown, true);
       };
-    }, [tasks, tasks.length, selectedIndex, onSelect]);
+    }, [tasks, tasks.length, selectedIndex, onSelect, onEscape]);
 
     // Search tasks when query changes
     useEffect(() => {
       const fetchTasks = async () => {
-        if (query.length < 1) {
-          setTasks([]);
-          return;
-        }
-        
         setLoading(true);
         try {
-          const params = new URLSearchParams({ q: query });
+          // Fetch tasks with the query (empty query will return all workspace tasks)
+          const params = new URLSearchParams({ q: query || '' });
           if (workspaceId) {
             params.append('workspace', workspaceId);
           }
@@ -137,7 +142,7 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
 
     return (
       <div ref={ref} className="z-50 overflow-hidden rounded-lg border shadow-lg animate-in fade-in-0 zoom-in-95 bg-popover">
-        <Command ref={commandRef} className="w-[350px]">
+        <Command ref={commandRef} className="w-[350px]" shouldFilter={false}>
           <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
             Mention a task
           </div>

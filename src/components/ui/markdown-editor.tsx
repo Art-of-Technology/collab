@@ -910,7 +910,7 @@ export function MarkdownEditor({
 
   // Insert a mention at cursor position
   const insertMention = useCallback((user: User) => {
-    console.log('MarkdownEditor: insertMention called for user:', user);
+
     if (!editor) return;
 
     const { from } = editor.state.selection;
@@ -1108,6 +1108,45 @@ export function MarkdownEditor({
     
     setShowMentionSuggestions(false);
   }, [editor]);
+
+  // Check for # task mentions when typing
+  const checkForTaskMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last # character
+    const lastHashIndex = content.lastIndexOf('#');
+    
+    if (lastHashIndex >= 0) {
+      // Check if there's a space between the last # and the word we're typing
+      const textAfterHash = content.substring(lastHashIndex + 1);
+      const hasSpaceAfterHash = textAfterHash.match(/^\s/);
+      
+      if (!hasSpaceAfterHash) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterHash.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for task mention suggestions
+          setTaskCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setTaskMentionQuery(textAfterHash);
+          setShowTaskMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowTaskMentionSuggestions(false);
+  }, [editor]);
   
   // Add mention event handlers
   useEffect(() => {
@@ -1115,11 +1154,13 @@ export function MarkdownEditor({
     
     // Update the editor
     editor.on('update', checkForMentionTrigger);
+    editor.on('update', checkForTaskMentionTrigger);
     
     return () => {
       editor.off('update', checkForMentionTrigger);
+      editor.off('update', checkForTaskMentionTrigger);
     };
-  }, [editor, checkForMentionTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger]);
   
   // Close mention suggestions when clicking outside
   useEffect(() => {
@@ -1131,6 +1172,15 @@ export function MarkdownEditor({
         !editor.view.dom.contains(event.target as HTMLElement)
       ) {
         setShowMentionSuggestions(false);
+      }
+      
+      if (
+        taskMentionSuggestionRef.current &&
+        !taskMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowTaskMentionSuggestions(false);
       }
     }
     
@@ -1631,6 +1681,27 @@ export function MarkdownEditor({
               onSelect={insertMention}
               workspaceId={currentWorkspace?.id}
               onEscape={() => setShowMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Task Mention Suggestions */}
+        {showTaskMentionSuggestions && (
+          <div 
+            ref={taskMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${taskCaretPosition.top}px`,
+              left: `${taskCaretPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <TaskMentionSuggestion
+              query={taskMentionQuery}
+              onSelect={insertTaskMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowTaskMentionSuggestions(false)}
             />
           </div>
         )}

@@ -14,9 +14,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const query = url.searchParams.get("q");
     
-    if (!query || query.length < 1) {
-      return NextResponse.json([]);
-    }
+    // If no query provided, we'll return all tasks (with limit)
+    const searchQuery = query?.trim() || "";
     
     // Get the workspace context if available
     const workspaceId = url.searchParams.get("workspace");
@@ -26,21 +25,27 @@ export async function GET(req: NextRequest) {
     
     if (workspaceId) {
       // If we have a workspace ID, only search for tasks within that workspace
-      tasks = await prisma.task.findMany({
-        where: {
-          OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { issueKey: { contains: query, mode: 'insensitive' } },
-          ],
-          AND: [
-            { workspaceId },
-            { 
-              taskBoard: {
-                workspaceId
-              }
+      const whereCondition: any = {
+        AND: [
+          { workspaceId },
+          { 
+            taskBoard: {
+              workspaceId
             }
-          ]
-        },
+          }
+        ]
+      };
+
+      // Add search conditions only if we have a search query
+      if (searchQuery.length > 0) {
+        whereCondition.OR = [
+          { title: { contains: searchQuery, mode: 'insensitive' } },
+          { issueKey: { contains: searchQuery, mode: 'insensitive' } },
+        ];
+      }
+
+      tasks = await prisma.task.findMany({
+        where: whereCondition,
         select: {
           id: true,
           title: true,
@@ -61,31 +66,37 @@ export async function GET(req: NextRequest) {
       });
     } else {
       // If no workspace is specified, search all tasks user has access to
-      tasks = await prisma.task.findMany({
-        where: {
-          OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { issueKey: { contains: query, mode: 'insensitive' } },
-          ],
-          AND: [
-            {
-              OR: [
-                { assigneeId: currentUser.id },
-                { reporterId: currentUser.id },
-                {
-                  taskBoard: {
-                    workspace: {
-                      OR: [
-                        { ownerId: currentUser.id },
-                        { members: { some: { userId: currentUser.id } } }
-                      ]
-                    }
+      const whereCondition: any = {
+        AND: [
+          {
+            OR: [
+              { assigneeId: currentUser.id },
+              { reporterId: currentUser.id },
+              {
+                taskBoard: {
+                  workspace: {
+                    OR: [
+                      { ownerId: currentUser.id },
+                      { members: { some: { userId: currentUser.id } } }
+                    ]
                   }
                 }
-              ]
-            }
-          ]
-        },
+              }
+            ]
+          }
+        ]
+      };
+
+      // Add search conditions only if we have a search query
+      if (searchQuery.length > 0) {
+        whereCondition.OR = [
+          { title: { contains: searchQuery, mode: 'insensitive' } },
+          { issueKey: { contains: searchQuery, mode: 'insensitive' } },
+        ];
+      }
+
+      tasks = await prisma.task.findMany({
+        where: whereCondition,
         select: {
           id: true,
           title: true,

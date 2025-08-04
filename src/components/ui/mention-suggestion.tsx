@@ -66,7 +66,7 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
         } else if (e.key === "Enter" && users[selectedIndex]) {
           e.preventDefault();
           e.stopPropagation();
-          console.log('MentionSuggestion: Enter pressed, selecting user:', users[selectedIndex]);
+
           onSelect(users[selectedIndex]);
         } else if (e.key === "Escape") {
           e.preventDefault();
