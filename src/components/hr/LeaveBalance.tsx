@@ -28,7 +28,6 @@ export interface LeaveBalanceType {
 
 interface LeaveBalanceProps {
   balances?: LeaveBalanceType[];
-  isLoading?: boolean;
 }
 
 export function LeaveBalance({
