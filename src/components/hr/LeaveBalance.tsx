@@ -124,7 +124,7 @@ export function LeaveBalance({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-4 h-full flex flex-col items-center gap-4 min-w-[var(--card-min-width)]">
+        <CardContent className="p-4 h-full flex flex-col items-center gap-4 min-w-[250px]">
           {/* Circular Progress Bar */}
           <div>
             <AnimatedCircularProgressBar

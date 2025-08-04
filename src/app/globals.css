@@ -92,7 +92,6 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --card-min-width: 250px;
   }
   
   .dark {
@@ -129,7 +128,6 @@
     --chart-3: 40 100% 60%;  /* #ffcc33 */
     --chart-4: 330 100% 60%;  /* #f83f93 */
     --chart-5: 270 100% 60%;  /* #9966ff */
-    --card-min-width: 250px;
   }
 }
 
