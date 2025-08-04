@@ -10,6 +10,19 @@ interface AnimatedCircularProgressBarProps {
   className?: string;
 }
 
+// Circle radius for the progress bar
+const VIEWBOX_SIZE = 100;
+const STROKE_WIDTH = 10;
+const CIRCLE_RADIUS = (VIEWBOX_SIZE / 2) - (STROKE_WIDTH / 2);
+
+// Threshold below which the secondary circle is displayed to show remaining progress.
+// The value 90 was chosen so that the secondary (background) circle is only visible
+// when the progress is less than 90%. This creates a visual effect where, for high
+// completion values (90% and above), the primary progress arc dominates and the
+// remaining (secondary) arc is hidden, emphasizing near-completion. For values below
+// 90%, the secondary arc appears, visually highlighting the remaining progress.
+const SECONDARY_CIRCLE_THRESHOLD = 90;
+
 export function AnimatedCircularProgressBar({
   max = 100,
   min = 0,
@@ -19,7 +32,7 @@ export function AnimatedCircularProgressBar({
   gaugeSecondaryColor,
   className,
 }: AnimatedCircularProgressBarProps) {
-  const circumference = 2 * Math.PI * 45;
+  const circumference = 2 * Math.PI * CIRCLE_RADIUS;
   const percentPx = circumference / 100;
   const currentPercent = Math.round(((value - min) / (max - min)) * 100);
 
@@ -45,22 +58,22 @@ export function AnimatedCircularProgressBar({
         fill="none"
         className="size-full"
         strokeWidth="2"
-        viewBox="0 0 100 100"
+        viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
       >
-        {currentPercent <= 90 && currentPercent >= 0 && (
+        {currentPercent <= SECONDARY_CIRCLE_THRESHOLD && currentPercent >= 0 && (
           <circle
             cx="50"
             cy="50"
-            r="45"
-            strokeWidth="10"
+            r={CIRCLE_RADIUS}
+            strokeWidth={STROKE_WIDTH}
             strokeDashoffset="0"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className=" opacity-100"
+            className="opacity-100"
             style={
               {
                 stroke: gaugeSecondaryColor,
-                "--stroke-percent": 90 - currentPercent,
+                "--stroke-percent": SECONDARY_CIRCLE_THRESHOLD - currentPercent,
                 "--offset-factor-secondary": "calc(1 - var(--offset-factor))",
                 strokeDasharray:
                   "calc(var(--stroke-percent) * var(--percent-to-px)) var(--circumference)",
@@ -76,8 +89,8 @@ export function AnimatedCircularProgressBar({
         <circle
           cx="50"
           cy="50"
-          r="45"
-          strokeWidth="10"
+          r={CIRCLE_RADIUS}
+          strokeWidth={STROKE_WIDTH}
           strokeDashoffset="0"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -103,7 +116,7 @@ export function AnimatedCircularProgressBar({
         data-current-value={currentPercent}
         className="duration-[var(--transition-length)] delay-[var(--delay)] absolute inset-0 m-auto size-fit ease-linear animate-in fade-in"
       >
-        {customValue ? customValue : currentPercent}
+        {customValue ?? currentPercent}
       </span>
     </div>
   );

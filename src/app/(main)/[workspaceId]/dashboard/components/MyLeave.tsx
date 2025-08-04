@@ -75,52 +75,27 @@ export function MyLeave({
     setIsDialogOpen(false);
   };
 
-  const getStatusBadge = (status: LeaveStatus) => {
-    switch (status) {
-      case "APPROVED":
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors"
-          >
-            Approved
-          </Badge>
-        );
-      case "REJECTED":
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors"
-          >
-            Rejected
-          </Badge>
-        );
-      case "CANCELED":
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-gray-500/10 hover:bg-gray-500/20 text-gray-600 transition-colors"
-          >
-            Canceled
-          </Badge>
-        );
-      case "PENDING":
-      default:
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors"
-          >
-            Pending
-          </Badge>
-        );
-    }
+  const getStatusBadge = (status?: LeaveRequest["status"]) => {
+    if (!status) return null;
+
+    const statusColors = {
+      'APPROVED': 'bg-green-500/10 text-green-600',
+      'REJECTED': 'bg-red-500/10 text-red-600',
+      'PENDING': 'bg-yellow-500/10 text-yellow-600',
+      'CANCELED': 'bg-gray-500/10 text-gray-600',
+    };
+
+    const color = statusColors[status] || 'bg-gray-500/10 text-gray-600';
+
+    return (
+      <Badge variant="secondary" className={`${color} capitalize`}>
+        {status}
+      </Badge>
+    );
   };
 
   return (
-    <Card
-      className={`h-full relative ${!isFeatureEnabled ? "opacity-80" : ""}`}
-    >
+    <Card className={`h-full relative ${!isFeatureEnabled ? 'opacity-80' : ''}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <div className="flex items-center space-x-2">
           <PlaneTakeoff className="h-5 w-5 text-blue-600" />
@@ -128,8 +103,8 @@ export function MyLeave({
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button
-              size="sm"
+            <Button 
+              size="sm" 
               className="flex items-center gap-2"
               disabled={!isFeatureEnabled}
             >
@@ -171,11 +146,10 @@ export function MyLeave({
               <h3 className="text-sm font-medium text-muted-foreground">
                 Available Balance
               </h3>
-                          <LeaveBalance
-              workspaceId={workspaceId}
-              balances={leaveBalances}
-              isLoading={isLoadingBalances}
-            />
+                <LeaveBalance
+                  balances={leaveBalances}
+                  isLoading={isLoadingBalances}
+                />
             </div>
 
             {/* Right Column - Leave Requests */}

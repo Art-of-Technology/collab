@@ -416,6 +416,7 @@ export default function GroupedColumn({
                             milestoneTitle={item.milestone?.title}
                             epicTitle={item.epic?.title}
                             storyTitle={item.story?.title}
+                            parentTask={item.parentTask}
                             color={item.color}
                             entityType={item.entityType}
                             dueDate={item.dueDate}
@@ -462,6 +463,7 @@ export default function GroupedColumn({
                           milestoneTitle={item.milestone?.title}
                           epicTitle={item.epic?.title}
                           storyTitle={item.story?.title}
+                          parentTask={item.parentTask}
                           color={item.color}
                           entityType={item.entityType}
                           dueDate={item.dueDate}

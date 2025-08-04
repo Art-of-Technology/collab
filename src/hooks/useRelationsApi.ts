@@ -35,6 +35,7 @@ interface TaskRelationsResponse {
   stories: Story[];
   milestones: Milestone[];
   parentTasks: Task[];
+  subtasks: Task[];
 }
 
 interface UseRelationsApiProps {

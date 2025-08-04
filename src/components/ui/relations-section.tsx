@@ -111,18 +111,20 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
     id: string;
     title: string;
   } | null>(null);
-  
+
   // Relations state from API
   const [relations, setRelations] = useState<{
     epics: any[];
     stories: any[];
     milestones: any[];
     parentTasks: any[];
+    subtasks: any[];
   }>({
     epics: [],
     stories: [],
     milestones: [],
-    parentTasks: []
+    parentTasks: [],
+    subtasks: []
   });
   
   const [isLoading, setIsLoading] = useState(false);
@@ -143,7 +145,7 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
       setRelations(taskRelations);
     } catch (error) {
       console.error('Failed to load relations:', error);
-      setRelations({ epics: [], stories: [], milestones: [], parentTasks: [] });
+      setRelations({ epics: [], stories: [], milestones: [], parentTasks: [], subtasks: [] });
     } finally {
       setIsLoading(false);
     }
@@ -468,6 +470,28 @@ export function TaskRelations({ task, onUpdateRelations, canEdit = true }: TaskR
               </div>
             )}
           </div>
+
+          {/* Subtasks (read-only) */}
+          {relations.subtasks && relations.subtasks.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className="text-sm font-medium">Subtasks ({relations.subtasks.length})</h4>
+              </div>
+              <div className="space-y-2">
+                {relations.subtasks.map((subtask: any) => (
+                  <RelationItem
+                    key={subtask.id}
+                    title={subtask.title}
+                    type="task"
+                    issueKey={subtask.issueKey}
+                    status={subtask.status}
+                    href={currentWorkspace ? `/${currentWorkspace.id}/tasks/${subtask.id}` : "#"}
+                    canRemove={false}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

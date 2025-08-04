@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { CalendarDays, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,38 +27,18 @@ export interface LeaveBalanceType {
 }
 
 interface LeaveBalanceProps {
-  workspaceId: string;
   balances?: LeaveBalanceType[];
   isLoading?: boolean;
 }
 
 export function LeaveBalance({
-  workspaceId,
   balances = [],
   isLoading = false,
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
-
-  // Filter to only show balances where user has accrued time
-  const filteredBalances = balances.filter(balance => balance.totalAccrued > 0);
-  const displayBalances = filteredBalances;
-  // Set initial selected type if not set, or reset if current selection is no longer available
-  useEffect(() => {
-    if (!selectedLeaveType && displayBalances.length > 0) {
-      setSelectedLeaveType(displayBalances[0].policyId);
-    } else if (selectedLeaveType && displayBalances.length > 0) {
-      // Check if current selection is still available in filtered results
-      const isCurrentSelectionAvailable = displayBalances.some(
-        (balance) => balance.policyId === selectedLeaveType
-      );
-      if (!isCurrentSelectionAvailable) {
-        setSelectedLeaveType(displayBalances[0].policyId);
-      }
-    }
-  }, [displayBalances, selectedLeaveType]);
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0].policyId || "");
 
   // Show only the selected leave type
-  const currentBalance = displayBalances.find(
+  const currentBalance = balances.find(
     (balance) => balance.policyId === selectedLeaveType
   );
 
@@ -96,7 +76,7 @@ export function LeaveBalance({
   }
 
   // Handle case when no accrued balances are available
-  if (filteredBalances.length === 0) {
+  if (balances.length === 0) {
     return (
       <Card className="w-full">
         <CardContent className="p-6 text-center">
@@ -115,8 +95,9 @@ export function LeaveBalance({
   }
 
   // Safety check - if no current balance is found, show the first available one
-  if (!currentBalance && displayBalances.length > 0) {
-    const firstBalance = displayBalances[0];
+  if (!currentBalance && balances.length > 0) {
+    const firstBalance = balances[0];
+    
     return (
       <div className="space-y-4">
         {/* Dropdown for leave type selection */}
@@ -126,7 +107,7 @@ export function LeaveBalance({
               <SelectValue placeholder="Select leave type" />
             </SelectTrigger>
             <SelectContent>
-              {displayBalances.map((balance) => (
+              {balances.map((balance) => (
                 <SelectItem key={balance.policyId} value={balance.policyId}>
                   {balance.policyName}
                 </SelectItem>
@@ -185,11 +166,11 @@ export function LeaveBalance({
       {/* Dropdown for leave type selection */}
       <div className="space-y-2">
         <Select value={selectedLeaveType} onValueChange={setSelectedLeaveType}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger aria-label="Leave type selection" className="w-full">
             <SelectValue placeholder="Select leave type" />
           </SelectTrigger>
           <SelectContent>
-            {displayBalances.map((balance) => (
+            {balances.map((balance) => (
               <SelectItem key={balance.policyId} value={balance.policyId}>
                 {balance.policyName}
               </SelectItem>
@@ -268,7 +249,6 @@ export function LeaveBalance({
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <span>Used: {currentBalance.totalUsed}</span>
               </div>
-
               <div className="flex items-center gap-2">
                 <div
                   className="w-2 h-2 rounded-full"
@@ -281,7 +261,6 @@ export function LeaveBalance({
                 ></div>
                 <span>Remaining: {currentBalance.balance}</span>
               </div>
-
             </div>
           </div>
         </CardContent>
