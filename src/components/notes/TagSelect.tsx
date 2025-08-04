@@ -44,6 +44,10 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  useEffect(() => {
+    fetchTags();
+  }, [workspaceId]);
+
   const fetchTags = useCallback(async () => {
     try {
       const url = workspaceId 
@@ -58,10 +62,6 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
       console.error("Error fetching tags:", error);
     }
   }, [workspaceId]);
-
-  useEffect(() => {
-    fetchTags();
-  }, [fetchTags]);
 
   const createTag = async () => {
     if (!newTagName.trim()) return;
@@ -183,8 +183,8 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <div className="flex-1">
-          <Popover open={isOpen} onOpenChange={handleOpenChange}>
-            <PopoverTrigger asChild>
+          <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
               <Button
                 variant="outline"
                 role="combobox"
@@ -194,10 +194,11 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                 Select tags...
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0">
-              <div className="p-2 border-b">
-                <div className="relative">
+            </DialogTrigger>
+            <DialogContent className="max-w-md p-0">
+              <div className="p-4 border-b">
+                <DialogTitle>Select Tags</DialogTitle>
+                <div className="relative mt-2">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     ref={searchInputRef}
@@ -209,7 +210,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                 </div>
               </div>
               
-              <div className="max-h-60 overflow-y-auto">
+              <div className="max-h-[300px] overflow-y-auto p-2">
                 {filteredTags.map((tag) => (
                   <div
                     key={tag.id}
@@ -255,7 +256,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                 )}
               </div>
 
-              <div className="p-2 border-t">
+              <div className="p-4 border-t">
                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                   <DialogTrigger asChild>
                     <Button
@@ -311,8 +312,8 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                   </DialogContent>
                 </Dialog>
               </div>
-            </PopoverContent>
-          </Popover>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
