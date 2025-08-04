@@ -29,7 +29,8 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
   ({ query, onSelect, workspaceId, onEscape }, ref) => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
     const commandRef = useRef<HTMLDivElement>(null);
 
     // Function to get priority color
@@ -75,13 +76,25 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
         if (e.key === "ArrowDown") {
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex((prev) => (prev < tasks.length - 1 ? prev + 1 : prev));
+          setIsKeyboardNavigation(true);
+          setSelectedIndex((prev) => {
+            // If no item is selected (-1), start from 0
+            if (prev === -1) return 0;
+            // Otherwise move to next item
+            return prev < tasks.length - 1 ? prev + 1 : prev;
+          });
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
-        } else if (e.key === "Enter" && tasks[selectedIndex]) {
-                    e.preventDefault();
+          setIsKeyboardNavigation(true);
+          setSelectedIndex((prev) => {
+            // If no item is selected (-1), start from last item
+            if (prev === -1) return tasks.length - 1;
+            // Otherwise move to previous item
+            return prev > 0 ? prev - 1 : prev;
+          });
+        } else if (e.key === "Enter" && selectedIndex >= 0 && tasks[selectedIndex]) {
+          e.preventDefault();
           e.stopPropagation();
           onSelect(tasks[selectedIndex]);
         } else if (e.key === "Escape") {
@@ -114,7 +127,8 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
             const searchedTasks = await response.json();
             setTasks(searchedTasks);
             // Reset selected index when new results come in
-            setSelectedIndex(0);
+            setSelectedIndex(-1);
+            setIsKeyboardNavigation(false);
           } else {
             console.error('Failed to search tasks');
             setTasks([]);
@@ -132,13 +146,19 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
 
     // Scroll selected item into view
     useEffect(() => {
-      if (commandRef.current && tasks.length > 0) {
+      if (commandRef.current && tasks.length > 0 && isKeyboardNavigation) {
         const selectedElement = commandRef.current.querySelector(`[data-index="${selectedIndex}"]`);
         if (selectedElement) {
           selectedElement.scrollIntoView({ block: 'nearest' });
         }
       }
-    }, [selectedIndex, tasks.length]);
+    }, [selectedIndex, tasks.length, isKeyboardNavigation]);
+
+    // Handle mouse enter to disable keyboard navigation styling
+    const handleMouseEnter = (index: number) => {
+      setIsKeyboardNavigation(false);
+      setSelectedIndex(index);
+    };
 
     return (
       <div ref={ref} className="z-50 overflow-hidden rounded-lg border shadow-lg animate-in fade-in-0 zoom-in-95 bg-popover">
@@ -152,60 +172,60 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
                 <div className="animate-spin h-3 w-3 rounded-full border-b-2 border-primary"></div>
                 <span className="text-sm text-muted-foreground">Searching...</span>
               </div>
+            ) : tasks.length === 0 ? (
+              <div className="py-6 text-center">
+                <HashIcon className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground mt-2">No tasks found</p>
+              </div>
             ) : (
-              <>
-                <CommandEmpty>
-                  <div className="py-6 text-center">
-                    <HashIcon className="h-8 w-8 mx-auto text-muted-foreground/50" />
-                    <p className="text-sm text-muted-foreground mt-2">No tasks found</p>
-                  </div>
-                </CommandEmpty>
-                <CommandGroup>
-                  {tasks.map((task, index) => (
-                    <CommandItem
-                      key={task.id}
-                      data-index={index}
-                      onSelect={() => onSelect(task)}
-                      className={cn(
-                        "flex items-center gap-2 px-2 py-2 cursor-pointer",
-                        selectedIndex === index && "bg-accent"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 flex-1">
-                        <HashIcon className="h-4 w-4 text-muted-foreground" />
-                        <div className="flex flex-col gap-1 flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {task.issueKey && (
-                              <Badge variant="outline" className="text-xs shrink-0">
-                                {task.issueKey}
-                              </Badge>
-                            )}
-                            <span className="text-sm font-medium truncate">{task.title}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {task.status && (
-                              <Badge className={cn("text-xs", getStatusColor(task.status))}>
-                                {task.status}
-                              </Badge>
-                            )}
-                            <Badge className={cn("text-xs", getPriorityColor(task.priority))}>
-                              {task.priority}
+              <CommandGroup>
+                {tasks.map((task, index) => (
+                  <div
+                    key={task.id}
+                    data-index={index}
+                    onClick={() => onSelect(task)}
+                    onMouseEnter={() => handleMouseEnter(index)}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-2 cursor-pointer rounded-sm",
+                      // Our own hover and selected states
+                      !isKeyboardNavigation && "hover:bg-accent/50",
+                      isKeyboardNavigation && selectedIndex === index && "bg-accent"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <HashIcon className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex flex-col gap-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {task.issueKey && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {task.issueKey}
                             </Badge>
-                            {task.taskBoard && (
-                              <span className="text-xs text-muted-foreground truncate">
-                                {task.taskBoard.name}
-                              </span>
-                            )}
-                          </div>
+                          )}
+                          <span className="text-sm font-medium truncate">{task.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {task.status && (
+                            <Badge className={cn("text-xs", getStatusColor(task.status))}>
+                              {task.status}
+                            </Badge>
+                          )}
+                          <Badge className={cn("text-xs", getPriorityColor(task.priority))}>
+                            {task.priority}
+                          </Badge>
+                          {task.taskBoard && (
+                            <span className="text-xs text-muted-foreground truncate">
+                              {task.taskBoard.name}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      {selectedIndex === index && (
-                        <CheckIcon className="h-4 w-4 text-primary" />
-                      )}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </>
+                    </div>
+                    {isKeyboardNavigation && selectedIndex === index && (
+                      <CheckIcon className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                ))}
+              </CommandGroup>
             )}
           </CommandList>
           {tasks.length > 0 && (
@@ -225,4 +245,4 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
   }
 );
 
-TaskMentionSuggestion.displayName = "TaskMentionSuggestion"; 
+TaskMentionSuggestion.displayName = "TaskMentionSuggestion";
