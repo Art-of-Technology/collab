@@ -910,6 +910,7 @@ export function MarkdownEditor({
 
   // Insert a mention at cursor position
   const insertMention = useCallback((user: User) => {
+    console.log('MarkdownEditor: insertMention called for user:', user);
     if (!editor) return;
 
     const { from } = editor.state.selection;
@@ -1108,33 +1109,17 @@ export function MarkdownEditor({
     setShowMentionSuggestions(false);
   }, [editor]);
   
-  // Handle key events for mentions
-  const handleKeyDown = useCallback((event: React.KeyboardEvent | KeyboardEvent) => {
-    if (!showMentionSuggestions) return;
-    
-    // Let MentionSuggestion handle these keys
-    if (event.key === "ArrowUp" || event.key === "ArrowDown" || 
-        event.key === "Enter" || event.key === "Tab" || event.key === "Escape") {
-      event.preventDefault();
-    }
-  }, [showMentionSuggestions]);
-  
   // Add mention event handlers
   useEffect(() => {
     if (!editor) return;
-    
-    // Listen for keydown events
-    const onKeyDown = (e: KeyboardEvent) => handleKeyDown(e);
-    editor.view.dom.addEventListener('keydown', onKeyDown);
     
     // Update the editor
     editor.on('update', checkForMentionTrigger);
     
     return () => {
-      editor.view.dom.removeEventListener('keydown', onKeyDown);
       editor.off('update', checkForMentionTrigger);
     };
-  }, [editor, handleKeyDown, checkForMentionTrigger]);
+  }, [editor, checkForMentionTrigger]);
   
   // Close mention suggestions when clicking outside
   useEffect(() => {
@@ -1645,6 +1630,7 @@ export function MarkdownEditor({
               query={mentionQuery}
               onSelect={insertMention}
               workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowMentionSuggestions(false)}
             />
           </div>
         )}

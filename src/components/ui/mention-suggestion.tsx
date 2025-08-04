@@ -27,10 +27,11 @@ interface MentionSuggestionProps {
   query: string;
   onSelect: (user: User) => void;
   workspaceId?: string;
+  onEscape?: () => void;
 }
 
 export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionProps>(
-  ({ query, onSelect, workspaceId }, ref) => {
+  ({ query, onSelect, workspaceId, onEscape }, ref) => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -56,38 +57,44 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
         // Arrow keys for navigation
         if (e.key === "ArrowDown") {
           e.preventDefault();
+          e.stopPropagation();
           setSelectedIndex((prev) => (prev < users.length - 1 ? prev + 1 : prev));
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
+          e.stopPropagation();
           setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
         } else if (e.key === "Enter" && users[selectedIndex]) {
           e.preventDefault();
+          e.stopPropagation();
+          console.log('MentionSuggestion: Enter pressed, selecting user:', users[selectedIndex]);
           onSelect(users[selectedIndex]);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onEscape?.();
         }
       };
 
-      window.addEventListener("keydown", handleKeyDown);
+      // Add event listener to document instead of window, with higher priority
+      document.addEventListener("keydown", handleKeyDown, true); // Use capture phase
       return () => {
-        window.removeEventListener("keydown", handleKeyDown);
+        document.removeEventListener("keydown", handleKeyDown, true);
       };
-    }, [users, users.length, selectedIndex, onSelect]);
+    }, [users, users.length, selectedIndex, onSelect, onEscape]);
 
     // Search users when query changes
     useEffect(() => {
       const fetchUsers = async () => {
-        if (query.length < 1) {
-          setUsers([]);
-          return;
-        }
-        
         setLoading(true);
         try {
-          const searchedUsers = await searchUsers(query);
+          // Fetch users with the query (empty query will return all workspace users)
+          const searchedUsers = await searchUsers(query, workspaceId);
           setUsers(searchedUsers);
           // Reset selected index when new results come in
           setSelectedIndex(0);
         } catch (error) {
           console.error('Error searching users:', error);
+          setUsers([]);
         } finally {
           setLoading(false);
         }
