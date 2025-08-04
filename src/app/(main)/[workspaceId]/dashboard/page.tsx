@@ -18,6 +18,7 @@ import { UserPosts } from "./components/UserPosts";
 import { PostsByType } from "./components/PostsByType";
 import { PopularTags } from "./components/PopularTags";
 import { UnansweredPosts } from "./components/UnansweredPosts";
+import { MyLeave } from "./components/MyLeave";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -100,6 +101,8 @@ export default async function DashboardPage() {
           <PostsByType type="QUESTION" workspaceId={workspaceId} initialPosts={questions} />
         </div>
       </div>
+      {/* My Leave - Coming Soon */}
+      <MyLeave isFeatureEnabled={false} />
     </div>
   );
 } 
