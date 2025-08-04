@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Search, X, ChevronsUpDown, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { sortTagsBySearchTerm } from "@/utils/sortUtils";
 
 interface NoteTag {
   id: string;
@@ -44,10 +45,6 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchTags();
-  }, [workspaceId]);
-
   const fetchTags = useCallback(async () => {
     try {
       const url = workspaceId 
@@ -62,6 +59,10 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
       console.error("Error fetching tags:", error);
     }
   }, [workspaceId]);
+
+  useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
 
   const createTag = async () => {
     if (!newTagName.trim()) return;
@@ -176,22 +177,12 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   const filteredTags = useMemo(() => {
     if (!searchTerm.trim()) return tags;
     
-    const searchTermLower = searchTerm.toLowerCase();
     const filtered = tags.filter(tag =>
-      tag.name.toLowerCase().includes(searchTermLower)
+      tag.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     // Sort: tags starting with search term first, then others
-    return filtered.sort((a, b) => {
-      const aStartsWith = a.name.toLowerCase().startsWith(searchTermLower);
-      const bStartsWith = b.name.toLowerCase().startsWith(searchTermLower);
-      
-      if (aStartsWith && !bStartsWith) return -1;
-      if (!aStartsWith && bStartsWith) return 1;
-      
-      // If both start with or both don't start with, sort alphabetically
-      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-    });
+    return sortTagsBySearchTerm(filtered, searchTerm);
   }, [tags, searchTerm]);
 
   const selectedTags = tags.filter(tag => value.includes(tag.id));

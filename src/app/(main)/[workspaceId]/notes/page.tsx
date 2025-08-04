@@ -6,15 +6,17 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Plus, 
-  Filter, 
-  Star, 
+import {
+  Search,
+  Plus,
+  Filter,
+  Star,
   FileText,
   Tag as TagIcon,
   Edit,
-  Trash2
+  Trash2,
+  Eye,
+  Lock
 } from "lucide-react";
 import {
   Dialog,
@@ -30,10 +32,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { useToast } from "@/hooks/use-toast";
+import { sortNotesBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
 
 interface Note {
@@ -94,6 +98,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -107,20 +112,20 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   // Filter tags based on search term
   const filteredTags = useMemo(() => {
     if (!tagSearchTerm.trim()) return tags;
-    
+
     const searchTerm = tagSearchTerm.toLowerCase();
-    const filtered = tags.filter(tag => 
+    const filtered = tags.filter(tag =>
       tag.name.toLowerCase().includes(searchTerm)
     );
-    
+
     // Sort: tags starting with search term first, then others
     return filtered.sort((a, b) => {
       const aStartsWith = a.name.toLowerCase().startsWith(searchTerm);
       const bStartsWith = b.name.toLowerCase().startsWith(searchTerm);
-      
+
       if (aStartsWith && !bStartsWith) return -1;
       if (!aStartsWith && bStartsWith) return 1;
-      
+
       // If both start with or both don't start with, sort alphabetically
       return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
@@ -146,7 +151,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, searchQuery, selectedTag, showFavorites]);
+  }, [session?.user, searchQuery, selectedTag, showFavorites, visibilityFilter]);
 
   // Focus search input when dialog opens
   useEffect(() => {
@@ -166,47 +171,58 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     setSelectedIndex(-1);
   }, [tagSearchTerm]);
 
-  // Add global keyboard listener when dialog is open
+  // Add keyboard listener when dialog is open
   useEffect(() => {
     if (isTagDropdownOpen) {
-      const handleGlobalKeyDown = (e: KeyboardEvent) => {
-        const totalItems = filteredTags.length + 1;
-        
-        switch (e.key) {
-          case 'ArrowDown':
-            e.preventDefault();
-            setSelectedIndex(prev => 
-              prev < totalItems - 1 ? prev + 1 : 0
-            );
-            break;
-          case 'ArrowUp':
-            e.preventDefault();
-            setSelectedIndex(prev => 
-              prev > 0 ? prev - 1 : totalItems - 1
-            );
-            break;
-          case 'Enter':
-            e.preventDefault();
-            if (selectedIndex === 0) {
-              setSelectedTag(null);
-              setTagSearchTerm("");
-              setIsTagDropdownOpen(false);
-            } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
-              const selectedTagItem = filteredTags[selectedIndex - 1];
-              setSelectedTag(selectedTagItem.id);
-              setTagSearchTerm("");
-              setIsTagDropdownOpen(false);
-            }
-            break;
-          case 'Escape':
-            e.preventDefault();
-            setIsTagDropdownOpen(false);
-            break;
-        }
-      };
+      // Add listener to the dialog content instead of window
+      const dialogElement = document.querySelector('[role="dialog"]');
+      if (dialogElement) {
+        const handleKeyDownElement = (e: Event) => {
+          const keyboardEvent = e as KeyboardEvent;
+          // Only handle keys when the dialog is focused or when specific keys are pressed
+          const isDialogFocused = document.activeElement?.closest('[role="dialog"]');
+          if (!isDialogFocused && !['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(keyboardEvent.key)) {
+            return;
+          }
 
-      window.addEventListener('keydown', handleGlobalKeyDown);
-      return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+          const totalItems = filteredTags.length + 1;
+
+          switch (keyboardEvent.key) {
+            case 'ArrowDown':
+              keyboardEvent.preventDefault();
+              setSelectedIndex(prev =>
+                prev < totalItems - 1 ? prev + 1 : 0
+              );
+              break;
+            case 'ArrowUp':
+              keyboardEvent.preventDefault();
+              setSelectedIndex(prev =>
+                prev > 0 ? prev - 1 : totalItems - 1
+              );
+              break;
+            case 'Enter':
+              keyboardEvent.preventDefault();
+              if (selectedIndex === 0) {
+                setSelectedTag(null);
+                setTagSearchTerm("");
+                setIsTagDropdownOpen(false);
+              } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
+                const selectedTagItem = filteredTags[selectedIndex - 1];
+                setSelectedTag(selectedTagItem.id);
+                setTagSearchTerm("");
+                setIsTagDropdownOpen(false);
+              }
+              break;
+            case 'Escape':
+              keyboardEvent.preventDefault();
+              setIsTagDropdownOpen(false);
+              break;
+          }
+        };
+
+        dialogElement.addEventListener('keydown', handleKeyDownElement);
+        return () => dialogElement.removeEventListener('keydown', handleKeyDownElement);
+      }
     }
   }, [isTagDropdownOpen, selectedIndex, filteredTags]);
 
@@ -216,11 +232,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       const container = tagListRef.current;
       const items = container.querySelectorAll('[data-tag-index]');
       const selectedItem = items[selectedIndex] as HTMLElement;
-      
+
       if (selectedItem) {
         const containerRect = container.getBoundingClientRect();
         const itemRect = selectedItem.getBoundingClientRect();
-        
+
         // Check if item is above the visible area
         if (itemRect.top < containerRect.top) {
           container.scrollTop -= (containerRect.top - itemRect.top) + 10;
@@ -239,24 +255,16 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (searchQuery) params.append("search", searchQuery);
       if (selectedTag) params.append("tag", selectedTag);
       if (showFavorites) params.append("favorite", "true");
+      if (visibilityFilter === "public") params.append("public", "true");
+      if (visibilityFilter === "private") params.append("public", "false");
 
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
         const data = await response.json();
-        
+
         // Sort notes: titles starting with search term first, then others
         if (searchQuery.trim()) {
-          const searchTerm = searchQuery.toLowerCase();
-          const sortedNotes = data.sort((a: Note, b: Note) => {
-            const aStartsWith = a.title.toLowerCase().startsWith(searchTerm);
-            const bStartsWith = b.title.toLowerCase().startsWith(searchTerm);
-            
-            if (aStartsWith && !bStartsWith) return -1;
-            if (!aStartsWith && bStartsWith) return 1;
-            
-            // If both start with or both don't start with, sort by updatedAt desc
-            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-          });
+          const sortedNotes = sortNotesBySearchTerm(data, searchQuery) as Note[];
           setNotes(sortedNotes);
         } else {
           setNotes(data);
@@ -325,7 +333,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
       if (response.ok) {
         const updatedNote = await response.json();
-        setNotes(notes.map(note => 
+        setNotes(notes.map(note =>
           note.id === noteId ? updatedNote : note
         ));
       }
@@ -358,7 +366,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               Create and organize your notes with markdown support
             </p>
           </div>
-          
+
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }}>
@@ -394,7 +402,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               style={{ fontSize: '14px' }}
             />
           </div>
-          
+
           <div className="flex gap-2">
             <Button
               variant={showFavorites ? "default" : "outline"}
@@ -405,7 +413,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               <Star className="h-4 w-4" />
               Favorites
             </Button>
-            
+
             <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: '14px' }}>
@@ -413,7 +421,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2">
+              <DialogContent className="tag-dialog-content">
                 <div className="p-2 sm:p-4 border-b">
                   <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
                   <div className="relative mt-2 mb-1">
@@ -428,11 +436,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   </div>
                 </div>
                 <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
-                  <div 
+                  <div
                     data-tag-index="0"
-                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
-                      selectedIndex === 0 ? 'bg-[#21C45D] dark:bg-[#21C45D]' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
-                    }`}
+                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${selectedIndex === 0 ? 'bg-[#21C45D] dark:bg-[#21C45D]' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
+                      }`}
                     onClick={() => {
                       setSelectedTag(null);
                       setTagSearchTerm("");
@@ -446,11 +453,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                     <div
                       key={tag.id}
                       data-tag-index={index + 1}
-                      className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${
-                        selectedIndex === index + 1 
-                          ? 'bg-[#21C45D]' 
+                      className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${selectedIndex === index + 1
+                          ? 'bg-[#21C45D]'
                           : 'hover:bg-[#21C45D]/10'
-                      }`}
+                        }`}
                       onClick={() => {
                         setSelectedTag(tag.id);
                         setTagSearchTerm("");
@@ -475,13 +481,22 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </div>
         </div>
 
+        {/* Visibility Filter Tabs */}
+        <Tabs value={visibilityFilter} onValueChange={(value) => setVisibilityFilter(value as "all" | "public" | "private")}>
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="all">All Notes</TabsTrigger>
+            <TabsTrigger value="public">Public</TabsTrigger>
+            <TabsTrigger value="private">Private</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Notes Grid */}
         {notes.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-medium">No notes found</h3>
             <p className="text-muted-foreground">
-              {searchQuery || selectedTag || showFavorites
+              {searchQuery || selectedTag || showFavorites || visibilityFilter !== "all"
                 ? "Try adjusting your filters"
                 : "Get started by creating your first note"}
             </p>
@@ -507,15 +522,14 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                         }}
                       >
                         <Star
-                          className={`h-1 w-1 sm:h-4 sm:w-4 ${
-                            note.isFavorite 
-                              ? "fill-yellow-400 text-yellow-400" 
+                          className={`h-1 w-1 sm:h-4 sm:w-4 ${note.isFavorite
+                              ? "fill-yellow-400 text-yellow-400"
                               : "text-muted-foreground"
-                          }`}
+                            }`}
                         />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
@@ -526,8 +540,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       >
                         <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
@@ -540,9 +554,22 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       </Button>
                     </div>
                   </div>
-                  
-                  <h3 className="font-semibold line-clamp-1 text-sm sm:text-base mb-2 sm:mb-3">{note.title}</h3>
-                  
+
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="font-semibold line-clamp-1 text-sm sm:text-base flex-1">{note.title}</h3>
+                    <div className="flex items-center gap-1 ml-2">
+                      {note.isPublic ? (
+                        <div title="Public note">
+                          <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
+                        </div>
+                      ) : (
+                        <div title="Private note">
+                          <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
                     <div className="text-muted-foreground text-sm sm:text-sm">
                       {(() => {
@@ -556,7 +583,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       })()}
                     </div>
                   </div>
-                  
+
                   {note.tags.length > 0 && (
                     <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
                       {note.tags.map((tag) => (
@@ -572,7 +599,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       ))}
                     </div>
                   )}
-                  
+
                   <div className="text-sm text-muted-foreground mt-auto">
                     Updated {new Date(note.updatedAt).toLocaleDateString()}
                     {note.workspace && (
