@@ -23,6 +23,7 @@ import { useTaskModal } from '@/context/TaskModalContext';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
 import React from 'react';
 import { SelectedLabelsDisplay } from '../ui/SelectedLabelsDisplay';
+import { TaskFollowButton } from './TaskFollowButton';
 
 export interface EnhancedTaskCardProps {
   id: string;
@@ -76,6 +77,8 @@ export interface EnhancedTaskCardProps {
   dueDate?: Date | string | null;
   _count?: any;
   isHighlighted?: boolean;
+  boardId?: string;
+  showFollowButton?: boolean;
 }
 
 export default function EnhancedTaskCard({
@@ -99,6 +102,8 @@ export default function EnhancedTaskCard({
   entityType = 'task',
   _count,
   isHighlighted = false,
+  boardId,
+  showFollowButton = true,
 }: EnhancedTaskCardProps) {
   const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } =
     useTaskModal();
@@ -447,6 +452,7 @@ export default function EnhancedTaskCard({
                 )}
               </div>
             </div>
+
           </div>
         </CardContent>
       </Card>

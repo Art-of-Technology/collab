@@ -3,6 +3,8 @@
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { extractMentionUserIds } from '@/utils/mentions';
+import { NotificationService, NotificationType } from '@/lib/notification-service';
 
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED';
 type PostPriority = 'normal' | 'high' | 'critical';
@@ -24,7 +26,7 @@ export async function getPosts({
   limit?: number;
 }) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user?.email) {
     throw new Error('Unauthorized');
   }
@@ -128,11 +130,21 @@ export async function getPosts({
           authorId: true,
         },
       },
+      followers: {
+        select: {
+          userId: true,
+        }
+      }
     },
     take: limit,
   });
 
-  return posts;
+  const postsWithFollowers = posts.map(post => ({
+    ...post,
+    isFollowing: post.followers.some(follower => follower.userId === session.user.id),
+  }));
+
+  return postsWithFollowers;
 }
 
 /**
@@ -335,6 +347,40 @@ export async function createPost(data: {
 
     return newPost;
   });
+  
+  // Process mentions and auto-follow mentioned users
+  const mentionedUserIds = extractMentionUserIds(html || message);
+  if (mentionedUserIds.length > 0) {
+    try {
+      // Create mention notifications
+      await prisma.notification.createMany({
+        data: mentionedUserIds.map(userId => ({
+          type: "post_mention",
+          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`,
+          userId: userId,
+          senderId: user.id,
+          read: false,
+          postId: post.id,
+        }))
+      });
+
+      // Auto-follow mentioned users to the post
+      await NotificationService.autoFollowPost(post.id, mentionedUserIds);
+
+      if(post.type === 'BLOCKER') {
+        await NotificationService.notifyPostFollowers({
+          postId: post.id,
+          senderId: user.id,
+          type: NotificationType.POST_BLOCKER_CREATED,
+          content: `${user.name} created a blocker post`,
+          excludeUserIds: [],
+        });
+      }
+    } catch (error) {
+      console.error("Failed to create mention notifications or auto-follow:", error);
+      // Don't fail the post creation if mentions fail
+    }
+  }
   
   // Process tags if provided
   if (tags && tags.length > 0) {
@@ -780,6 +826,20 @@ export async function resolveBlockerPost(postId: string) {
 
     return post;
   });
+  
+  // Notify post followers about the resolution
+  try {
+    await NotificationService.notifyPostFollowers({
+      postId: postId,
+      senderId: user.id,
+      type: NotificationType.POST_RESOLVED,
+      content: `resolved the blocker post`,
+      excludeUserIds: [],
+    });
+  } catch (error) {
+    console.error("Failed to notify post followers:", error);
+    // Don't fail the post resolution if notifications fail
+  }
   
   return updatedPost;
 }

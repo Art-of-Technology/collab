@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
+import { NotificationService, NotificationType } from "@/lib/notification-service";
 
 // POST /api/tasks - Create a new task
 export async function POST(request: NextRequest) {
@@ -174,6 +175,14 @@ export async function POST(request: NextRequest) {
           columnId: task.columnId,
         }
       );
+      await NotificationService.notifyBoardFollowers({
+        boardId: taskBoardId,
+        taskId: task.id,
+        senderId: session.user.id,
+        type: NotificationType.TASK_CREATED,
+        content: `Task ${task.title} was created`,
+        excludeUserIds: [session.user.id],
+      });
     } catch (activityError) {
       console.error("Failed to track task creation activity:", activityError);
       // Don't fail the task creation if activity tracking fails

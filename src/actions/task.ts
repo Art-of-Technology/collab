@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { trackCreation, compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
 import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
+import { NotificationService, NotificationType } from '@/lib/notification-service';
 
 /**
  * Get tasks for a workspace
@@ -259,7 +260,6 @@ export async function createTask(data: {
   parentTaskId?: string | null;
 }) {
   const session = await getServerSession(authOptions);
-
   if (!session?.user?.email) {
     throw new Error('Unauthorized');
   }
@@ -498,7 +498,7 @@ export async function createTask(data: {
 
   // Track task creation activity
   try {
-          await trackCreation(
+    await trackCreation(
       'TASK',
       task.id,
       user.id,
@@ -517,6 +517,38 @@ export async function createTask(data: {
   } catch (error) {
     console.error('Failed to track task creation activity:', error);
     // Don't fail the task creation if activity tracking fails
+  }
+
+  // Auto-follow the task for relevant users
+  try {
+    const autoFollowUsers = [];
+    
+    // Auto-follow the reporter (creator)
+    if (task.reporterId) {
+      autoFollowUsers.push(task.reporterId);
+    }
+    
+    // Auto-follow the assignee if different from reporter
+    if (task.assigneeId && task.assigneeId !== task.reporterId) {
+      autoFollowUsers.push(task.assigneeId);
+    }
+    
+    if (autoFollowUsers.length > 0) {
+      await NotificationService.autoFollowTask(task.id, autoFollowUsers);
+    }
+    if (task.taskBoardId) {
+      await NotificationService.notifyBoardFollowers({
+        boardId: task.taskBoardId,
+        taskId: task.id,
+        senderId: user.id,
+        type: NotificationType.BOARD_TASK_CREATED,
+        content: `${user.name} created a task: ${task.title}`,
+        excludeUserIds: [],
+      });
+    }
+  } catch (error) {
+    console.error('Failed to auto-follow task:', error);
+    // Don't fail the task creation if auto-follow fails
   }
 
   return task;
@@ -782,6 +814,11 @@ export async function updateTask(taskId: string, data: {
             oldValue: change.oldValue,
             newValue: change.newValue,
           });
+
+          // Auto-follow the new reporter if one was assigned
+          if (change.newValue) {
+            await NotificationService.addTaskFollower(taskId, change.newValue);
+          }
         } else {
           // Use regular tracking for other fields
           const fieldActionMap: Record<string, string> = {
@@ -818,6 +855,77 @@ export async function updateTask(taskId: string, data: {
   } catch (error) {
     console.error('Failed to track task update activities:', error);
     // Don't fail the task update if activity tracking fails
+  }
+
+  // Send notifications to task followers based on changes
+  try {
+    const changes = compareObjects(oldTaskData, newTaskData, fieldsToTrack);
+    if (changes.length > 0) {
+      for (const change of changes) {
+        let notificationType: NotificationType | null = null;
+        let content = '';
+
+        switch (change.field) {
+          case 'status':
+            notificationType = NotificationType.TASK_STATUS_CHANGED;
+            content = `Task status changed from "${change.oldValue || 'None'}" to "${change.newValue || 'None'}"`;
+            break;
+          case 'assigneeId':
+            if (change.newValue) {
+              notificationType = NotificationType.TASK_ASSIGNED;
+              const assignee = await prisma.user.findUnique({
+                where: { id: change.newValue },
+                select: { name: true }
+              });
+              content = `Task assigned to ${assignee?.name || 'Unknown User'}`;
+              
+              // Auto-follow the new assignee
+              await NotificationService.addTaskFollower(taskId, change.newValue);
+            }
+            break;
+          case 'priority':
+            notificationType = NotificationType.TASK_PRIORITY_CHANGED;
+            content = `Task priority changed from "${change.oldValue || 'None'}" to "${change.newValue || 'None'}"`;
+            break;
+          case 'dueDate':
+            notificationType = NotificationType.TASK_DUE_DATE_CHANGED;
+            content = change.newValue 
+              ? `Task due date set to ${new Date(change.newValue).toLocaleDateString()}`
+              : 'Task due date removed';
+            break;
+          case 'title':
+          case 'description':
+            notificationType = NotificationType.TASK_UPDATED;
+            content = `Task ${change.field} was updated`;
+            break;
+        }
+
+        if (notificationType && content) {
+          await NotificationService.notifyTaskFollowers({
+            taskId,
+            senderId: user.id,
+            type: notificationType,
+            content,
+            excludeUserIds: []
+          });
+
+          // Notify board followers only for status changes
+          if (change.field === 'status' && task.taskBoardId) {
+            await NotificationService.notifyBoardFollowers({
+              boardId: task.taskBoardId,
+              taskId,
+              senderId: user.id,
+              type: NotificationType.BOARD_TASK_STATUS_CHANGED,
+              content: `Task "${task.title}" status changed from "${change.oldValue || 'None'}" to "${change.newValue || 'None'}"`,
+              excludeUserIds: []
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to send task update notifications:', error);
+    // Don't fail the task update if notifications fail
   }
 
   return updatedTask;
@@ -873,7 +981,21 @@ export async function deleteTask(taskId: string) {
     throw new Error('You do not have permission to delete this task');
   }
 
-  // Delete the task
+  // Notify followers before deleting the task
+  try {
+    await NotificationService.notifyTaskFollowers({
+      taskId,
+      senderId: user.id,
+      type: NotificationType.TASK_DELETED,
+      content: `Task "${task.title}" has been deleted`,
+      excludeUserIds: []
+    });
+  } catch (error) {
+    console.error('Failed to send task deletion notifications:', error);
+    // Don't fail the deletion if notifications fail
+  }
+
+  // Delete the task (this will cascade delete followers due to foreign key constraints)
   await prisma.task.delete({
     where: {
       id: taskId
