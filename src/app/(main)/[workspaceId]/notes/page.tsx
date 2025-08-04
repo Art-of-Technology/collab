@@ -243,7 +243,24 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
         const data = await response.json();
-        setNotes(data);
+        
+        // Sort notes: titles starting with search term first, then others
+        if (searchQuery.trim()) {
+          const searchTerm = searchQuery.toLowerCase();
+          const sortedNotes = data.sort((a: Note, b: Note) => {
+            const aStartsWith = a.title.toLowerCase().startsWith(searchTerm);
+            const bStartsWith = b.title.toLowerCase().startsWith(searchTerm);
+            
+            if (aStartsWith && !bStartsWith) return -1;
+            if (!aStartsWith && bStartsWith) return 1;
+            
+            // If both start with or both don't start with, sort by updatedAt desc
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          });
+          setNotes(sortedNotes);
+        } else {
+          setNotes(data);
+        }
       }
     } catch (error) {
       console.error("Error fetching notes:", error);
