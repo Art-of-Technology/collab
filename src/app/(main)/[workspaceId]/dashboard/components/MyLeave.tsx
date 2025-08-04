@@ -106,7 +106,7 @@ export function MyLeave({
       'CANCELLED': 'bg-gray-500/10 text-gray-600',
     };
 
-    const color = statusColors[status] || 'bg-gray-500';
+    const color = statusColors[status] || 'bg-gray-500/10 text-gray-600';
 
     return (
       <Badge variant="secondary" className={`${color} capitalize`}>
