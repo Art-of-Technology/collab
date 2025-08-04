@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { CalendarDays, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,14 +30,20 @@ export interface LeaveBalanceType {
 interface LeaveBalanceProps {
   balances?: LeaveBalanceType[];
   isLoading?: boolean;
+  showDemoData?: boolean;
 }
 
 export function LeaveBalance({
   balances = [],
+  showDemoData = false,
 }: LeaveBalanceProps) {
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
 
-  const displayBalances = balances.length > 0 ? balances : getDemoData();
+  const displayBalances = useMemo(() => {
+    if (balances.length > 0) return balances;
+    if (showDemoData) return getDemoData();
+    return [];
+  }, [balances, showDemoData]);
 
   // Set initial selected type if not set
   useEffect(() => {
@@ -65,7 +71,7 @@ export function LeaveBalance({
     return "#dc2626"; // red-600
   }, []);
 
-  // Handle case when no data is available
+  // Handle case when no data is available and demo data is not requested
   if (displayBalances.length === 0) {
     return (
       <Card className="w-full">
