@@ -423,7 +423,6 @@ export async function createPost(data: {
       });
     }
   }
-  console.log(post);
   
   return post;
 }
