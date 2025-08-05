@@ -1,13 +1,4 @@
-interface Tag {
-    id: string;
-    name: string;
-  }
-  
-  interface Note {
-    id: string;
-    title: string;
-    updatedAt: string;
-  }
+import type { Tag, Note } from '../types/models';
   
   export function sortTagsBySearchTerm(tags: Tag[], searchTerm: string): Tag[] {
     if (!searchTerm.trim()) return tags;
