@@ -1254,6 +1254,25 @@ export function MarkdownEditor({
       editor.off('update', checkForCommandTrigger);
     };
   }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForCommandTrigger]);
+
+  // Handle keyboard events for command menu
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Let CommandMenu handle these keys when it's open
+      if (showCommandMenu && ["ArrowUp", "ArrowDown", "Enter", "Escape"].includes(event.key)) {
+        event.preventDefault();
+        return;
+      }
+    };
+
+    editor.view.dom.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      editor.view.dom.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editor, showCommandMenu]);
   
   // Close mention suggestions when clicking outside
   useEffect(() => {
