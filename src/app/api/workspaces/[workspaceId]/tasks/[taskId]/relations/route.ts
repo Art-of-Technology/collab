@@ -11,6 +11,23 @@ interface RouteParams {
   }>;
 }
 
+// Helper function to determine item type
+async function getItemType(itemId: string, workspaceId: string): Promise<'TASK' | 'EPIC' | 'STORY' | 'MILESTONE'> {
+  const [task, epic, story, milestone] = await Promise.all([
+    prisma.task.findFirst({ where: { id: itemId, workspaceId } }),
+    prisma.epic.findFirst({ where: { id: itemId, workspaceId } }),
+    prisma.story.findFirst({ where: { id: itemId, workspaceId } }),
+    prisma.milestone.findFirst({ where: { id: itemId, workspaceId } })
+  ]);
+
+  if (task) return 'TASK';
+  if (epic) return 'EPIC';
+  if (story) return 'STORY';
+  if (milestone) return 'MILESTONE';
+  
+  throw new Error('Item type not found');
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -226,6 +243,38 @@ if (!sourceItem) {
       }
     });
 
+    // Create reverse relation for bidirectional support
+    // Determine the correct reverse relation type based on the source item type
+    let reverseRelationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK';
+    
+    // Check what type the source item is
+    const sourceItemType = await getItemType(taskId, workspaceId);
+    
+    switch (sourceItemType) {
+      case 'TASK':
+        reverseRelationType = 'PARENT_TASK';
+        break;
+      case 'EPIC':
+        reverseRelationType = 'EPIC';
+        break;
+      case 'STORY':
+        reverseRelationType = 'STORY';
+        break;
+      case 'MILESTONE':
+        reverseRelationType = 'MILESTONE';
+        break;
+      default:
+        reverseRelationType = 'PARENT_TASK';
+    }
+
+    const reverseRelation = await prisma.taskRelations.create({
+      data: {
+        taskId: relatedItemId,
+        relatedItemId: taskId,
+        relatedItemType: reverseRelationType
+      }
+    });
+
     return NextResponse.json({
       success: true,
       relation: {
@@ -271,16 +320,45 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Delete relation
-    const deletedRelation = await prisma.taskRelations.deleteMany({
+    // Delete both directions of the relation
+    const sourceItemType = await getItemType(taskId, workspaceId);
+    let reverseRelationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK';
+    
+    switch (sourceItemType) {
+      case 'TASK':
+        reverseRelationType = 'PARENT_TASK';
+        break;
+      case 'EPIC':
+        reverseRelationType = 'EPIC';
+        break;
+      case 'STORY':
+        reverseRelationType = 'STORY';
+        break;
+      case 'MILESTONE':
+        reverseRelationType = 'MILESTONE';
+        break;
+      default:
+        reverseRelationType = 'PARENT_TASK';
+    }
+
+    const deletedRelations = await prisma.taskRelations.deleteMany({
       where: {
-        taskId,
-        relatedItemId,
-        relatedItemType
+        OR: [
+          {
+            taskId,
+            relatedItemId,
+            relatedItemType
+          },
+          {
+            taskId: relatedItemId,
+            relatedItemId: taskId,
+            relatedItemType: reverseRelationType
+          }
+        ]
       }
     });
 
-    if (deletedRelation.count === 0) {
+    if (deletedRelations.count === 0) {
       return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     }
 

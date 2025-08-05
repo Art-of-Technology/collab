@@ -114,10 +114,11 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  // Fetch functions for dropdowns
-  const fetchEpics = async (): Promise<Epic[]> => {
+  // Fetch functions for dropdowns with search support
+  const fetchEpics = async (search?: string): Promise<Epic[]> => {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/epics`);
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const response = await fetch(`/api/workspaces/${workspaceId}/epics${params}`);
       if (!response.ok) throw new Error('Failed to fetch epics');
       return await response.json();
     } catch (error) {
@@ -126,9 +127,10 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  const fetchStories = async (): Promise<Story[]> => {
+  const fetchStories = async (search?: string): Promise<Story[]> => {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/stories`);
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const response = await fetch(`/api/workspaces/${workspaceId}/stories${params}`);
       if (!response.ok) throw new Error('Failed to fetch stories');
       return await response.json();
     } catch (error) {
@@ -137,9 +139,10 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  const fetchTasks = async (): Promise<Task[]> => {
+  const fetchTasks = async (search?: string): Promise<Task[]> => {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/task`);
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const response = await fetch(`/api/workspaces/${workspaceId}/task${params}`);
       if (!response.ok) throw new Error('Failed to fetch tasks');
       return await response.json();
     } catch (error) {
@@ -148,9 +151,10 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     }
   };
 
-  const fetchMilestones = async (): Promise<Milestone[]> => {
+  const fetchMilestones = async (search?: string): Promise<Milestone[]> => {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/milestones`);
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const response = await fetch(`/api/workspaces/${workspaceId}/milestones${params}`);
       if (!response.ok) throw new Error('Failed to fetch milestones');
       return await response.json();
     } catch (error) {

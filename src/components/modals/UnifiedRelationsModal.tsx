@@ -91,16 +91,22 @@ export function UnifiedRelationsModal({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [displayCount, setDisplayCount] = useState(10);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
-  const fetchItems = async () => {
+  const fetchItems = async (searchQuery?: string) => {
     if (!currentWorkspace?.id) return;
-    setIsLoading(true);
+    
+    if (searchQuery) {
+      setIsSearching(true);
+    } else {
+      setIsLoading(true);
+    }
+    
     try {
       const fetchMethod = config.fetchMethod as keyof typeof relationsApi;
-      const fetchFunction = relationsApi[fetchMethod] as () => Promise<RelationItem[]>;
-      const data = await fetchFunction();
+      const fetchFunction = relationsApi[fetchMethod] as (search?: string) => Promise<RelationItem[]>;
+      const data = await fetchFunction(searchQuery);
       const filtered = data.filter((i) => !currentRelations.includes(i.id) && i.id !== targetId);
       setItems(filtered);
     } catch (error) {
@@ -108,6 +114,7 @@ export function UnifiedRelationsModal({
       setItems([]);
     } finally {
       setIsLoading(false);
+      setIsSearching(false);
     }
   };
 
@@ -116,25 +123,27 @@ export function UnifiedRelationsModal({
       fetchItems();
       setSelectedIds([]);
       setSearchTerm("");
-      setDisplayCount(10);
-      setIsExpanded(false);
+      setShowAll(false);
     }
   }, [isOpen, relationType, targetType, currentWorkspace?.id]);
 
-  const availableItems = items.filter(
-    (i) =>
-      i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      i.issueKey?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Debounced search effect
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const timeoutId = setTimeout(() => {
+      if (searchTerm.trim()) {
+        fetchItems(searchTerm.trim());
+      } else {
+        fetchItems();
+      }
+    }, 300); // 300ms debounce
 
-  // Show items based on display count and search term
-  const displayedItems = searchTerm 
-    ? availableItems.slice(0, displayCount)
-    : availableItems.slice(0, displayCount);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, isOpen]);
 
-  // Determine if we should show more or less button
-  const hasMoreItems = availableItems.length > displayCount;
-  const isFullyExpanded = displayCount >= availableItems.length;
+  // Show items based on showAll state
+  const displayedItems = showAll ? items : items.slice(0, 10);
 
   const toggleSelection = (id: string) => {
     setSelectedIds((prev) =>
@@ -148,15 +157,15 @@ export function UnifiedRelationsModal({
     onClose();
   };
 
-  const handleShowMore = () => {
-    setDisplayCount(prev => prev + 10);
-    setIsExpanded(true);
+  const handleShowAll = () => {
+    setShowAll(true);
   };
 
   const handleShowLess = () => {
-    setDisplayCount(10);
-    setIsExpanded(false);
+    setShowAll(false);
   };
+
+
 
   const getStatusBadge = (status?: string) => {
     if (!status) return null;
@@ -190,11 +199,11 @@ export function UnifiedRelationsModal({
           onChange={(e) => setSearchTerm(e.target.value)}
           className="text-sm"
         />
-        {isLoading ? (
+        {(isLoading || isSearching) ? (
           <div className="text-center py-6 text-muted-foreground text-sm">
-            Loading {config.plural}...
+            {isSearching ? `Searching ${config.plural}...` : `Loading ${config.plural}...`}
           </div>
-        ) : displayedItems.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground text-sm">
             {searchTerm ? config.noSearchMessage : config.noItemsMessage}
           </div>
@@ -227,18 +236,18 @@ export function UnifiedRelationsModal({
           </ScrollArea>
         )}
         
-        {/* Show More/Less Button */}
-        {availableItems.length > 10 && (
+        {/* Show All/Less Button */}
+        {items.length > 10 && (
           <div className="flex justify-center pt-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={isFullyExpanded ? handleShowLess : handleShowMore}
+              onClick={showAll ? handleShowLess : handleShowAll}
               className="text-sm"
             >
-              {isFullyExpanded 
-                ? `Show Less (${availableItems.length} items)` 
-                : `Show More (${displayCount} of ${availableItems.length})`
+              {showAll 
+                ? `Show Less (${items.length} items)` 
+                : `Show All (${items.length} items)`
               }
             </Button>
           </div>
