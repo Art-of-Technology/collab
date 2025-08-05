@@ -138,7 +138,7 @@ export function LeaveRequestForm({
       // Call onSuccess callback if provided
       onSuccess?.();
     } catch (error) {
-      console.error("Failed to submit leave request:", {error, submissionData});
+      console.error("Failed to submit leave request:", error);
     }
   };
 
