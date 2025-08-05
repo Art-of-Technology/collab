@@ -233,6 +233,8 @@ export class NotificationService {
         postUpdated: true,
         postResolved: true,
         emailNotificationsEnabled: true,
+        pushNotificationsEnabled: false,
+        postBlockerCreated: false
       };
     }
   }
