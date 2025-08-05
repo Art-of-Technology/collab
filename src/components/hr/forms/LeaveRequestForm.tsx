@@ -138,9 +138,7 @@ export function LeaveRequestForm({
       // Call onSuccess callback if provided
       onSuccess?.();
     } catch (error) {
-      // Error handling is managed by React Query for mutations
-      // or can be handled by the parent component for custom onSubmit
-      console.error("Failed to submit leave request:", error);
+      console.error("Failed to submit leave request:", {error, submissionData});
     }
   };
 

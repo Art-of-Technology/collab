@@ -7,12 +7,13 @@ import {
   createLeaveRequest,
   getUserLeaveRequests,
 } from "@/actions/leave";
+import { LeaveBalanceType } from "@/types/leave";
 
 // Function to fetch leave balances
 async function getUserLeaveBalances(
   workspaceId: string,
   year?: number
-): Promise<any[]> {
+): Promise<LeaveBalanceType[]> {
   const currentYear = year || new Date().getFullYear();
 
   const response = await fetch(

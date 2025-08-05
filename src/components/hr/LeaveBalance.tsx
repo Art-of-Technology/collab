@@ -18,7 +18,7 @@ export function LeaveBalance({
   balances = [],
   isLoading = false,
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string | undefined>(balances[0]?.policyId || "");
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
 
   // Memoize the check for whether the selected leave type exists in balances
   const isSelectedLeaveTypeValid = useMemo(() => {
@@ -97,7 +97,7 @@ export function LeaveBalance({
       <div className="space-y-4">
         {/* Dropdown for leave type selection */}
         <div className="space-y-2">
-          <Select value={firstBalance.policyId} onValueChange={setSelectedLeaveType}>
+          <Select value={selectedLeaveType || firstBalance.policyId} onValueChange={setSelectedLeaveType}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select leave type" />
             </SelectTrigger>
