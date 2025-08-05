@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { format } from "date-fns";
 import { PlaneTakeoff, Plus } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,85 +14,59 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  LeaveRequestForm,
-  type LeaveRequestSubmissionData,
-} from "@/components/hr/forms/LeaveRequestForm";
-
-
-
-export interface LeaveRequest {
-  id: string;
-  type: "holiday" | "sick" | "other";
-  startDate: Date;
-  endDate: Date;
-  duration: "FULL_DAY" | "HALF_DAY";
-  notes?: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
-  createdAt: Date;
-}
-
-
+import { LeaveRequestForm } from "@/components/hr/forms/LeaveRequestForm";
+import { LeaveBalance } from "@/components/hr/LeaveBalance";
+import { 
+  useLeaveBalances, 
+  useUserLeaveRequests, 
+  useCreateLeaveRequest 
+} from "@/hooks/queries/useLeave";
+import type { LeaveRequest, LeaveRequestSubmissionData } from "@/types/leave";
 
 interface MyLeaveProps {
-  activeRequests?: LeaveRequest[];
-  onSubmitRequest?: (data: LeaveRequestSubmissionData) => Promise<void>;
+  workspaceId: string;
   isFeatureEnabled?: boolean;
 }
 
-export function MyLeave({ 
-  activeRequests = [], 
-  onSubmitRequest,
-  isFeatureEnabled = false
+export function MyLeave({
+  workspaceId,
+  isFeatureEnabled = false,
 }: MyLeaveProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
+  // Fetch data using hooks
+  const { 
+    data: leaveBalances = [], 
+    isLoading: isLoadingBalances 
+  } = useLeaveBalances(workspaceId);
+  
+  const { 
+    data: leaveRequests = [], 
+    isLoading: isLoadingRequests 
+  } = useUserLeaveRequests(workspaceId);
+  
+  const createLeaveRequestMutation = useCreateLeaveRequest(workspaceId);
+
   const handleSubmit = async (data: LeaveRequestSubmissionData) => {
-    setIsSubmitting(true);
     try {
-      if (onSubmitRequest) {
-        await onSubmitRequest(data);
-        toast({
-          title: "Leave request submitted",
-          description: "Your leave request has been submitted for approval.",
-        });
-        setIsDialogOpen(false);
-      } else {
-        // Fallback for demo purposes
-        toast({
-          title: "Leave request submitted",
-          description: "Your leave request has been submitted for approval.",
-        });
-        setIsDialogOpen(false);
-      }
+      await createLeaveRequestMutation.mutateAsync(data);
+      toast({
+        title: "Leave request submitted",
+        description: "Your leave request has been submitted for approval.",
+      });
+      setIsDialogOpen(false);
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to submit leave request. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleCancel = () => {
     setIsDialogOpen(false);
-  };
-
-  const getLeaveTypeLabel = (type: string) => {
-    switch (type) {
-      case "holiday":
-        return "Holiday";
-      case "sick":
-        return "Sick Leave";
-      case "other":
-        return "Other";
-      default:
-        return type;
-    }
   };
 
   const getStatusBadge = (status?: LeaveRequest["status"]) => {
@@ -103,7 +76,7 @@ export function MyLeave({
       'APPROVED': 'bg-green-500/10 text-green-600',
       'REJECTED': 'bg-red-500/10 text-red-600',
       'PENDING': 'bg-yellow-500/10 text-yellow-600',
-      'CANCELLED': 'bg-gray-500/10 text-gray-600',
+      'CANCELED': 'bg-gray-500/10 text-gray-600',
     };
 
     const color = statusColors[status] || 'bg-gray-500/10 text-gray-600';
@@ -137,18 +110,19 @@ export function MyLeave({
             <DialogHeader>
               <DialogTitle>Request Leave</DialogTitle>
             </DialogHeader>
-            
+
+
             <LeaveRequestForm
+              workspaceId={workspaceId}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
-              isSubmitting={isSubmitting}
             />
           </DialogContent>
         </Dialog>
       </CardHeader>
 
       <CardContent>
-        {!isFeatureEnabled && (
+        {!isFeatureEnabled ? (
           <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
             <div className="flex items-center justify-between">
               <p className="text-sm text-blue-700">
@@ -159,66 +133,95 @@ export function MyLeave({
               </div>
             </div>
           </div>
-        )}
-        {activeRequests.length > 0 ? (
-          <div className="space-y-3">
-            {activeRequests.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center justify-between p-3 rounded-lg border bg-muted/50"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{getLeaveTypeLabel(request.type)}</span>
-                    {getStatusBadge(request.status)}
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {request.startDate.getTime() === request.endDate.getTime() ? (
-                      // Single day request
-                      <>
-                        {format(request.startDate, "MMM dd, yyyy")}
-                        {request.duration === "HALF_DAY" && " (Half Day)"}
-                      </>
-                    ) : (
-                      // Multi-day request  
-                      <>
-                        {format(request.startDate, "MMM dd")} - {format(request.endDate, "MMM dd, yyyy")}
-                      </>
-                    )}
-                  </div>
-                  {request.notes && (
-                    <div className="text-sm text-muted-foreground mt-1 truncate">
-                      {request.notes}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <PlaneTakeoff className={`h-12 w-12 mb-3 ${!isFeatureEnabled ? 'text-muted-foreground/50' : 'text-muted-foreground'}`} />
-            {!isFeatureEnabled ? (
-              <>
-                <p className="text-muted-foreground">Leave Management</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  This feature will be available soon
-                </p>
-                <div className="mt-3 px-3 py-1 bg-blue-500/10 text-blue-600 text-xs rounded-full">
-                  Coming Soon
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
+            {/* Left Column - Leave Balance */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Available Balance
+              </h3>
+                <LeaveBalance
+                  balances={leaveBalances}
+                  isLoading={isLoadingBalances}
+                />
+            </div>
+
+            {/* Right Column - Leave Requests */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Recent Requests
+              </h3>
+              {isLoadingRequests ? (
+                <div className="text-sm text-muted-foreground">Loading requests...</div>
+              ) : leaveRequests.length > 0 ? (
+                <div className="space-y-3">
+                  {leaveRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/50"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">
+                            {request.policy?.name || "Unknown Policy"}
+                          </span>
+                          {getStatusBadge(request.status)}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {request.startDate.getTime() ===
+                          request.endDate.getTime() ? (
+                            // Single day request
+                            <>
+                              {format(new Date(request.startDate), "MMM dd, yyyy")}
+                              {request.duration === "HALF_DAY" && " (Half Day)"}
+                            </>
+                          ) : (
+                            // Multi-day request
+                            <>
+                              {format(new Date(request.startDate), "MMM dd")} -{" "}
+                              {format(new Date(request.endDate), "MMM dd, yyyy")}
+                            </>
+                          )}
+                        </div>
+                        {request.notes && (
+                          <div className="text-sm text-muted-foreground mt-1 truncate">
+                            {request.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </>
-            ) : (
-              <>
-                <p className="text-muted-foreground">No active leave requests</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Click "Request Leave" to submit a new request
-                </p>
-              </>
-            )}
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <PlaneTakeoff className="h-12 w-12 mb-3 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    No active leave requests
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Click "Request Leave" to submit a new request
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Coming Soon State for Non-Feature Enabled */}
+        {!isFeatureEnabled && (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <PlaneTakeoff className="h-12 w-12 mb-3 text-muted-foreground/50" />
+            <p className="text-muted-foreground">Leave Management</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              This feature will be available soon
+            </p>
+            <div className="mt-3 px-3 py-1 bg-blue-500/10 text-blue-600 text-xs rounded-full">
+              Coming Soon
+            </div>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+

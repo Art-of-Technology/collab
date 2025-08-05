@@ -12,33 +12,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
-
-export interface LeaveBalanceType {
-  policyId: string;
-  policyName: string;
-  totalAccrued: number;
-  totalUsed: number;
-  balance: number;
-  rollover: number;
-  year: number;
-  trackUnit: "HOURS" | "DAYS";
-  isPaid: boolean;
-  accrualType: "DOES_NOT_ACCRUE" | "HOURLY" | "FIXED" | "REGULAR_WORKING_HOURS";
-}
-
-interface LeaveBalanceProps {
-  balances?: LeaveBalanceType[];
-}
+import { LeaveBalanceProps } from "@/types/leave";
 
 export function LeaveBalance({
   balances = [],
+  isLoading = false,
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0]?.policyId || "");
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
 
-  // Show only the selected leave type
-  const currentBalance = balances.find(
-    (balance) => balance.policyId === selectedLeaveType
-  );
+  // Memoize the check for whether the selected leave type exists in balances
+  const isSelectedLeaveTypeValid = useMemo(() => {
+    return !!selectedLeaveType && balances.some(b => b.policyId === selectedLeaveType);
+  }, [balances, selectedLeaveType]);
+
+  // Update selectedLeaveType when balances change
+  useEffect(() => {
+    if (balances.length > 0 && (!selectedLeaveType || !isSelectedLeaveTypeValid)) {
+      setSelectedLeaveType(balances[0].policyId);
+    }
+  }, [balances, selectedLeaveType, isSelectedLeaveTypeValid]);
+
+  // Memoize the current balance calculation
+  const currentBalance = useMemo(() => {
+    return balances.find((balance) => balance.policyId === selectedLeaveType);
+  }, [balances, selectedLeaveType]);
 
   const formatValue = useCallback((value: number, unit: string) => {
     if (unit === "HOURS") {
@@ -54,17 +51,17 @@ export function LeaveBalance({
     return "#dc2626"; // red-600
   }, []);
 
-  // Handle case when no data is available
-  if (balances.length === 0) {
+  // Handle loading state
+  if (isLoading) {
     return (
       <Card className="w-full">
         <CardContent className="p-6 text-center">
           <div className="flex flex-col items-center gap-4">
-            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full" />
             <div>
-              <h3 className="font-medium text-muted-foreground">No Leave Data Available</h3>
+              <h3 className="font-medium text-muted-foreground">Loading Leave Balances</h3>
               <p className="text-sm text-muted-foreground/70">
-                Leave balance information will appear here when available.
+                Please wait while we fetch your leave information.
               </p>
             </div>
           </div>
@@ -73,8 +70,42 @@ export function LeaveBalance({
     );
   }
 
+  // Handle case when no accrued balances are available
+  if (balances.length === 0) {
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div>
+              <h3 className="font-medium text-muted-foreground">No Accrued Leave Available</h3>
+              <p className="text-sm text-muted-foreground/70">
+                You haven't accrued any leave balances yet. Leave will appear here as you earn it.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // If still no current balance, return empty state
   if (!currentBalance) {
-    return null;
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <CalendarDays className="h-12 w-12 text-muted-foreground/50" />
+            <div>
+              <h3 className="font-medium text-muted-foreground">No Leave Balance Selected</h3>
+              <p className="text-sm text-muted-foreground/70">
+                Please select a leave type from the dropdown.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
