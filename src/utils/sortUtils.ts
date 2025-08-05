@@ -22,17 +22,30 @@ import type { Tag, Note } from '../types/models';
   }
   
   export function sortNotesBySearchTerm(notes: Note[], searchTerm: string): Note[] {
-    if (!searchTerm.trim()) return notes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  
-    const term = searchTerm.toLowerCase();
-    return notes.sort((a, b) => {
-      const aStartsWith = a.title.toLowerCase().startsWith(term);
-      const bStartsWith = b.title.toLowerCase().startsWith(term);
+  // Cache timestamps for all notes
+  const notesWithTimestamps = notes.map(note => ({
+    note,
+    timestamp: new Date(note.updatedAt).getTime()
+  }));
+
+  if (!searchTerm.trim()) {
+    // Sort by updatedAt desc using cached timestamps
+    return notesWithTimestamps
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map(item => item.note);
+  }
+
+  const term = searchTerm.toLowerCase();
+  return notesWithTimestamps
+    .sort((a, b) => {
+      const aStartsWith = a.note.title.toLowerCase().startsWith(term);
+      const bStartsWith = b.note.title.toLowerCase().startsWith(term);
       
       if (aStartsWith && !bStartsWith) return -1;
       if (!aStartsWith && bStartsWith) return 1;
       
       // If both start with or both don't start with, sort by updatedAt desc
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
-  } 
+      return b.timestamp - a.timestamp;
+    })
+    .map(item => item.note);
+} 
