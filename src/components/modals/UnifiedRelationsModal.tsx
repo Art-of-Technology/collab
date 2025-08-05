@@ -100,7 +100,7 @@ export function UnifiedRelationsModal({
     if (searchQuery) {
       setIsSearching(true);
     } else {
-      setIsLoading(true);
+    setIsLoading(true);
     }
     
     try {
@@ -200,15 +200,15 @@ export function UnifiedRelationsModal({
           className="text-sm"
         />
         {(isLoading || isSearching) ? (
-          <div className="text-center py-6 text-muted-foreground text-sm">
+          <div className="text-center py-6 text-muted-foreground text-sm min-h-[28rem] max-h-[60vh] flex items-center justify-center">
             {isSearching ? `Searching ${config.plural}...` : `Loading ${config.plural}...`}
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground text-sm">
+          <div className="text-center py-6 text-muted-foreground text-sm min-h-[28rem] max-h-[60vh] flex items-center justify-center">
             {searchTerm ? config.noSearchMessage : config.noItemsMessage}
           </div>
         ) : (
-          <ScrollArea className="h-[28rem] rounded-md border">
+          <ScrollArea className="h-[28rem] min-h-[28rem] max-h-[60vh] rounded-md border">
             <div className="p-2 space-y-1">
               {displayedItems.map((item) => (
                 <div
@@ -220,14 +220,14 @@ export function UnifiedRelationsModal({
                   }`}
                   onClick={() => toggleSelection(item.id)}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <Badge
                       variant="outline"
                       className="bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 text-xs"
                     >
                       {item.issueKey || config.singular}
                     </Badge>
-                    <span className="truncate max-w-[220px] text-sm">{item.title}</span>
+                    <span className="truncate text-sm flex-1 min-w-0 max-w-[120px] sm:max-w-[180px] md:max-w-[220px] lg:max-w-none">{item.title}</span>
                   </div>
                   {getStatusBadge(item.status)}
                 </div>

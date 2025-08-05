@@ -345,9 +345,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       where: {
         OR: [
           {
-            taskId,
-            relatedItemId,
-            relatedItemType
+        taskId,
+        relatedItemId,
+        relatedItemType
           },
           {
             taskId: relatedItemId,
