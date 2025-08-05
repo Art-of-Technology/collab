@@ -107,6 +107,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
+  const tagDialogContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   // Filter tags based on search term
@@ -157,8 +158,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   // Add keyboard listener when dialog is open
   useEffect(() => {
     if (isTagDropdownOpen) {
-      // Add listener to the dialog content instead of window
-      const dialogElement = document.querySelector('[role="dialog"]');
+      // Add listener to the dialog content using ref instead of window
+      const dialogElement = tagDialogContentRef.current;
       if (dialogElement) {
         const handleKeyDownElement = (e: Event) => {
           const keyboardEvent = e as KeyboardEvent;
@@ -404,7 +405,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="tag-dialog-content">
+              <DialogContent ref={tagDialogContentRef} className="tag-dialog-content">
                 <div className="p-2 sm:p-4 border-b">
                   <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
                   <div className="relative mt-2 mb-1">
