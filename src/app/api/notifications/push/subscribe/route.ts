@@ -15,10 +15,13 @@ export const POST = withCors(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      const { subscription } = body;
+      const { subscription } = body || {};
+      if (!subscription) {
+        return NextResponse.json({ error: "Invalid subscription data" }, { status: 400 });
+      }
 
     // Encrypt the subscription data before storing
-    let encryptedSubscription: string;
+    let encryptedSubscription: string | null = null;
     try {
       encryptedSubscription = EncryptionService.encrypt(subscription);
     } catch (encryptError) {
@@ -67,7 +70,7 @@ export const DELETE = withCors(
     await prisma.notificationPreferences.update({
       where: { userId: user.id },
       data: {
-        pushSubscription: null,
+        pushSubscription: undefined,
         pushNotificationsEnabled: false,
       },
     });
