@@ -12,8 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:init-workspace": "ts-node prisma/scripts/create-default-workspace.ts",
     "prisma:seed": "ts-node prisma/scripts/seed.ts",
-    "email:test-credentials": "ts-node scripts/generate-test-email.ts",
-    "post:test": "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/collab' npx ts-node prisma/scripts/createPostWithNotification.ts cmdpu5qn10002n786cr0cr5v7 cmdpv0m9b0003n77a4k1go3if cmdpuzxp50000n77ax4efp8pb 'hello @erdenizkorkmaz1'"
+    "email:test-credentials": "ts-node scripts/generate-test-email.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.8.0",
