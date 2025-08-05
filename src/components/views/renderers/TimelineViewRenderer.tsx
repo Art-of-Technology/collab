@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,9 +10,15 @@ import {
   Plus,
   MoreHorizontal,
   Flag,
-  User
+  User,
+  Filter,
+  Settings,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ViewFilters from '@/components/views/shared/ViewFilters';
+import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 
 interface Issue {
   id: string;
@@ -43,26 +49,93 @@ interface TimelineViewRendererProps {
   currentUser: any;
   activeFilters?: Record<string, string[]>;
   setActiveFilters?: (filters: Record<string, string[]>) => void;
+  onIssueUpdate?: (issueId: string, updates: any) => void;
 }
 
 export default function TimelineViewRenderer({ 
   view, 
   issues, 
   workspace, 
-  currentUser 
+  currentUser,
+  activeFilters,
+  setActiveFilters,
+  onIssueUpdate
 }: TimelineViewRendererProps) {
+  // State management
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+  const [showSubIssues, setShowSubIssues] = useState(true);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState<{
+    assignees: string[];
+    labels: string[];
+    priority: string[];
+    projects: string[];
+  }>({
+    assignees: [],
+    labels: [],
+    priority: [],
+    projects: []
+  });
 
-  // Group issues by project or assignee based on view grouping
+  // Filter issues based on selected filters
+  const filteredIssues = useMemo(() => {
+    let filtered = [...issues];
+    
+    // Apply assignee filters
+    if (selectedFilters.assignees.length > 0) {
+      filtered = filtered.filter(issue => {
+        const assigneeId = issue.assignee?.id || 'unassigned';
+        return selectedFilters.assignees.includes(assigneeId);
+      });
+    }
+    
+    // Apply label filters
+    if (selectedFilters.labels.length > 0) {
+      filtered = filtered.filter(issue => {
+        if (!issue.labels || issue.labels.length === 0) {
+          return selectedFilters.labels.includes('no-labels');
+        }
+        return issue.labels.some((label: any) => 
+          selectedFilters.labels.includes(label.id)
+        );
+      });
+    }
+    
+    // Apply priority filters
+    if (selectedFilters.priority.length > 0) {
+      filtered = filtered.filter(issue => {
+        const priority = issue.priority || 'no-priority';
+        return selectedFilters.priority.includes(priority);
+      });
+    }
+    
+    // Apply project filters
+    if (selectedFilters.projects.length > 0) {
+      filtered = filtered.filter(issue => {
+        const projectId = issue.project?.id || 'no-project';
+        return selectedFilters.projects.includes(projectId);
+      });
+    }
+    
+    return filtered;
+  }, [issues, selectedFilters]);
+
+  // Issue handlers
+  const handleIssueClick = (issueId: string) => {
+    setSelectedIssueId(issueId);
+  };
+
+  // Group filtered issues by project or assignee based on view grouping
   const groupedIssues = useMemo(() => {
     const groupField = view.grouping?.field || 'none';
     
     if (groupField === 'none') {
-      return [{ name: 'All Issues', issues, color: '#6b7280' }];
+      return [{ name: 'All Issues', issues: filteredIssues, color: '#6b7280' }];
     }
     
     const groups = new Map();
     
-    issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
       let groupKey: string;
       let groupName: string;
       let groupColor: string;
@@ -96,7 +169,7 @@ export default function TimelineViewRenderer({
     });
     
     return Array.from(groups.values());
-  }, [issues, view.grouping]);
+  }, [filteredIssues, view.grouping]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -132,19 +205,42 @@ export default function TimelineViewRenderer({
   };
 
   return (
-    <div className="h-full bg-[#101011] overflow-auto">
-      {issues.length === 0 ? (
-        <div className="flex items-center justify-center h-64 text-[#999]">
-          <div className="text-center">
-            <Calendar className="h-12 w-12 mx-auto mb-4 text-[#666]" />
-            <p className="text-base">No issues found in this timeline</p>
-            <p className="text-sm text-[#666] mt-1">
-              Create a new issue or adjust your filters
-            </p>
+    <div className="h-full bg-[#101011] flex">
+      {/* Main Timeline Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[#101011] border-b border-[#1f1f1f] px-6 py-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold text-white">
+              Timeline • {filteredIssues.length} Issues
+            </h1>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+                className="h-7 px-2 text-xs"
+              >
+                {isRightSidebarOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <span className="ml-1">Filters</span>
+              </Button>
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="p-6">
+
+        {filteredIssues.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-[#999]">
+            <div className="text-center">
+              <Calendar className="h-12 w-12 mx-auto mb-4 text-[#666]" />
+              <p className="text-base">No issues found in this timeline</p>
+              <p className="text-sm text-[#666] mt-1">
+                Create a new issue or adjust your filters
+              </p>
+            </div>
+          </div>
+        ) : (
+        <div className="flex-1 overflow-auto p-6">
           {/* Timeline Header */}
           <div className="mb-6">
             <div className="flex items-center justify-between">
@@ -182,7 +278,8 @@ export default function TimelineViewRenderer({
                     return (
                       <div
                         key={issue.id}
-                        className="group relative flex items-center gap-4 p-4 bg-[#090909] border border-[#1f1f1f] rounded-lg hover:border-[#2a2a2a] transition-all duration-200"
+                        className="group relative flex items-center gap-4 p-4 bg-[#090909] border border-[#1f1f1f] rounded-lg hover:border-[#2a2a2a] transition-all duration-200 cursor-pointer"
+                        onClick={() => handleIssueClick(issue.id)}
                       >
                         {/* Issue Info */}
                         <div className="flex-1 min-w-0">
@@ -320,6 +417,28 @@ export default function TimelineViewRenderer({
             </div>
           </div>
         </div>
+        )}
+      </div>
+
+      {/* View Filters Sidebar */}
+      <ViewFilters
+        issues={issues}
+        workspace={workspace}
+        isOpen={isRightSidebarOpen}
+        onToggle={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+        selectedFilters={selectedFilters}
+        onFiltersChange={setSelectedFilters}
+        showSubIssues={showSubIssues}
+        onSubIssuesToggle={() => setShowSubIssues(!showSubIssues)}
+        viewType="timeline"
+      />
+
+      {/* Issue Detail Modal */}
+      {selectedIssueId && (
+        <IssueDetailModal
+          issueId={selectedIssueId}
+          onClose={() => setSelectedIssueId(null)}
+        />
       )}
     </div>
   );
