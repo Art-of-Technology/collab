@@ -224,7 +224,9 @@ export function withValidation<TBody = any, TQuery = any, TParams = any>(
 
     // Validate params if schema provided and context has params
     if (validations.params && context.params) {
-      const resolvedParams = await context.params;
+      const resolvedParams = (typeof context.params.then === 'function')
+        ? await context.params
+        : context.params;
       const paramsValidation = validateParams(validations.params)(resolvedParams);
       if (paramsValidation.error) return paramsValidation.error;
       validationResults.params = paramsValidation.data;
