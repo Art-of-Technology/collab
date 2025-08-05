@@ -8,11 +8,37 @@ const iterations = 100000;
 const keyLength = 32;
 
 export class EncryptionService {
+  /**
+   * Validates the strength and format of the encryption key.
+   * Throws an error if the key is weak or improperly formatted.
+   * @param key - The key to validate
+   */
+  private static validateKeyStrength(key: string): void {
+    // Require at least 32 characters (for AES-256)
+    if (key.length < 32) {
+      throw new Error('ENCRYPTION_KEY is too short. It must be at least 32 characters long for AES-256.');
+    }
+    // Require a mix of character types (upper, lower, digit, symbol)
+    const hasUpper = /[A-Z]/.test(key);
+    const hasLower = /[a-z]/.test(key);
+    const hasDigit = /[0-9]/.test(key);
+    const hasSymbol = /[^A-Za-z0-9]/.test(key);
+    if (!(hasUpper && hasLower && hasDigit && hasSymbol)) {
+      throw new Error('ENCRYPTION_KEY must contain upper and lower case letters, digits, and symbols.');
+    }
+    // Optionally, check for common weak keys
+    const weakKeys = ['password', '123456', 'qwerty', 'letmein', 'secret', 'admin'];
+    if (weakKeys.some(wk => key.toLowerCase().includes(wk))) {
+      throw new Error('ENCRYPTION_KEY is too weak or contains common words.');
+    }
+  }
+
   private static getKey(): string {
     const key = process.env.ENCRYPTION_KEY;
     if (!key) {
       throw new Error('ENCRYPTION_KEY environment variable is not set');
     }
+    this.validateKeyStrength(key);
     return key;
   }
 
