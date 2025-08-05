@@ -40,7 +40,10 @@ const initializeWebPush = (): boolean => {
 
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY!;
-    const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@example.com';
+    const vapidEmail = process.env.VAPID_EMAIL;
+    if (!vapidEmail) {
+      throw new Error('VAPID_EMAIL environment variable is not set. Please configure a valid contact email.');
+    }
 
     webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey);
     console.log('Web push initialized successfully');
