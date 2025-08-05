@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -32,10 +32,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
-import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { sortTagsBySearchTerm, sortNotesBySearchTerm } from "@/utils/sortUtils";
 
 interface Note {
   id: string;

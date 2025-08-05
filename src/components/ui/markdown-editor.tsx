@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
 import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion";
 import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-suggestion";
+import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
@@ -661,6 +662,11 @@ export function MarkdownEditor({
   const [showTaskMentions, setShowTaskMentions] = useState(false);
   const [taskQuery, setTaskQuery] = useState("");
   const [taskMentionPosition, setTaskMentionPosition] = useState({ top: 0, left: 0 });
+  
+  // Command menu states
+  const [showCommandMenu, setShowCommandMenu] = useState(false);
+  const [commandMenuPosition, setCommandMenuPosition] = useState({ top: 0, left: 0 });
+  
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const { currentWorkspace: workspaceData } = useWorkspace();
 
@@ -903,6 +909,9 @@ export function MarkdownEditor({
   const [taskCaretPosition, setTaskCaretPosition] = useState({ top: 0, left: 0 });
   const taskMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
+  // Add command menu ref
+  const commandMenuRef = useRef<HTMLDivElement>(null);
+  
   const { currentWorkspace } = useWorkspace();
   
   // Track the last time a mention was inserted
@@ -1063,6 +1072,48 @@ export function MarkdownEditor({
       }).insertContent(' ').run();
     }
   }, [editor]);
+
+  // Handle command selection
+  const handleCommandSelect = useCallback((command: CommandOption) => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    
+    // Find and remove the slash trigger
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    const lastSlashIndex = content.lastIndexOf('/');
+    
+    if (lastSlashIndex !== -1) {
+      // Delete the slash and any text after it
+      editor.chain().focus().deleteRange({
+        from: lastSlashIndex,
+        to: currentPosition
+      }).run();
+    }
+    
+    // Close command menu
+    setShowCommandMenu(false);
+    
+    // Execute the command action
+    switch (command.id) {
+      case 'mention-user':
+        // Insert @ to trigger user mention
+        editor.chain().focus().insertContent('@').run();
+        break;
+      case 'mention-task':
+        // Insert # to trigger task mention
+        editor.chain().focus().insertContent('#').run();
+        break;
+      case 'mention-epic':
+      case 'mention-story':
+      case 'mention-milestone':
+        // These will be implemented later when we add epic/story/milestone mentions
+        editor.chain().focus().insertContent(`[${command.label}] `).run();
+        break;
+      default:
+        break;
+    }
+  }, [editor]);
   
   // Check for @ mentions when typing
   const checkForMentionTrigger = useCallback(() => {
@@ -1147,6 +1198,46 @@ export function MarkdownEditor({
     
     setShowTaskMentionSuggestions(false);
   }, [editor]);
+
+  // Check for command trigger (/)
+  const checkForCommandTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Look for slash at the beginning of a line or after a space
+    const lastSlashIndex = content.lastIndexOf('/');
+    
+    if (lastSlashIndex >= 0) {
+      const textBeforeSlash = content.substring(0, lastSlashIndex);
+      const textAfterSlash = content.substring(lastSlashIndex + 1);
+      
+      // Check if slash is at line start or after whitespace
+      const isValidSlashPosition = lastSlashIndex === 0 || 
+        textBeforeSlash.endsWith(' ') || 
+        textBeforeSlash.endsWith('\n');
+      
+      // Check if there's no space after slash (still typing command)
+      const hasSpaceAfterSlash = textAfterSlash.includes(' ') || textAfterSlash.includes('\n');
+      
+      if (isValidSlashPosition && !hasSpaceAfterSlash && textAfterSlash.length <= 20) {
+        // Position the command menu
+        const domPosition = editor.view.coordsAtPos(currentPosition);
+        const editorContainer = editor.view.dom.getBoundingClientRect();
+        
+        setCommandMenuPosition({
+          top: domPosition.bottom - editorContainer.top,
+          left: domPosition.left - editorContainer.left,
+        });
+        
+        setShowCommandMenu(true);
+        return;
+      }
+    }
+    
+    setShowCommandMenu(false);
+  }, [editor]);
   
   // Add mention event handlers
   useEffect(() => {
@@ -1155,12 +1246,14 @@ export function MarkdownEditor({
     // Update the editor
     editor.on('update', checkForMentionTrigger);
     editor.on('update', checkForTaskMentionTrigger);
+    editor.on('update', checkForCommandTrigger);
     
     return () => {
       editor.off('update', checkForMentionTrigger);
       editor.off('update', checkForTaskMentionTrigger);
+      editor.off('update', checkForCommandTrigger);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForCommandTrigger]);
   
   // Close mention suggestions when clicking outside
   useEffect(() => {
@@ -1181,6 +1274,15 @@ export function MarkdownEditor({
         !editor.view.dom.contains(event.target as HTMLElement)
       ) {
         setShowTaskMentionSuggestions(false);
+      }
+      
+      if (
+        commandMenuRef.current &&
+        !commandMenuRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowCommandMenu(false);
       }
     }
     
@@ -1702,6 +1804,25 @@ export function MarkdownEditor({
               onSelect={insertTaskMention}
               workspaceId={currentWorkspace?.id}
               onEscape={() => setShowTaskMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Command Menu */}
+        {showCommandMenu && (
+          <div 
+            ref={commandMenuRef}
+            style={{ 
+              position: "absolute",
+              top: `${commandMenuPosition.top}px`,
+              left: `${commandMenuPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <CommandMenu
+              onSelect={handleCommandSelect}
+              onEscape={() => setShowCommandMenu(false)}
             />
           </div>
         )}
