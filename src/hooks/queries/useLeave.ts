@@ -9,6 +9,12 @@ import {
 } from "@/actions/leave";
 import { LeaveBalanceType } from "@/types/leave";
 
+const isUnauthorizedError = (error: Error) => {
+  return (
+    error.message.includes("Unauthorized") || error.message.includes("401")
+  );
+};
+
 // Function to fetch leave balances
 async function getUserLeaveBalances(
   workspaceId: string,
@@ -36,7 +42,6 @@ async function getUserLeaveBalances(
   const data = await response.json();
   return data;
 }
-
 // Define query keys
 export const leaveKeys = {
   all: ["leave"] as const,
@@ -72,10 +77,7 @@ export const useUserLeaveRequests = (workspaceId: string) => {
     enabled: !!session?.user?.id && !!workspaceId, // Only run query if user is authenticated and workspace is provided
     retry: (failureCount, error) => {
       // Don't retry on authorization errors
-      if (
-        error.message.includes("Unauthorized") ||
-        error.message.includes("401")
-      ) {
+      if (isUnauthorizedError(error)) {
         return false;
       }
       return failureCount < 3;
@@ -94,10 +96,7 @@ export const useLeaveBalances = (workspaceId: string, year?: number) => {
     staleTime: 2 * 60 * 1000, // 2 minutes - balances change less frequently
     retry: (failureCount, error) => {
       // Don't retry on authorization errors
-      if (
-        error.message.includes("Unauthorized") ||
-        error.message.includes("401")
-      ) {
+      if (isUnauthorizedError(error)) {
         return false;
       }
       return failureCount < 3;
