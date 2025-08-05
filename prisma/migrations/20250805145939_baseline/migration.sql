@@ -1,4 +1,22 @@
 -- CreateEnum
+CREATE TYPE "TrackUnit" AS ENUM ('HOURS', 'DAYS');
+
+-- CreateEnum
+CREATE TYPE "ExportMode" AS ENUM ('DO_NOT_EXPORT', 'EXPORT_WITH_PAY_CONDITION', 'EXPORT_WITH_CODE');
+
+-- CreateEnum
+CREATE TYPE "AccrualType" AS ENUM ('DOES_NOT_ACCRUE', 'HOURLY', 'FIXED', 'REGULAR_WORKING_HOURS');
+
+-- CreateEnum
+CREATE TYPE "RolloverType" AS ENUM ('ENTIRE_BALANCE', 'PARTIAL_BALANCE', 'NONE');
+
+-- CreateEnum
+CREATE TYPE "LeaveDuration" AS ENUM ('FULL_DAY', 'HALF_DAY');
+
+-- CreateEnum
+CREATE TYPE "LeaveStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELED');
+
+-- CreateEnum
 CREATE TYPE "EventType" AS ENUM ('TASK_START', 'TASK_PAUSE', 'TASK_STOP', 'TASK_COMPLETE', 'LUNCH_START', 'LUNCH_END', 'BREAK_START', 'BREAK_END', 'MEETING_START', 'MEETING_END', 'TRAVEL_START', 'TRAVEL_END', 'REVIEW_START', 'REVIEW_END', 'RESEARCH_START', 'RESEARCH_END', 'OFFLINE', 'AVAILABLE');
 
 -- CreateEnum
@@ -29,6 +47,9 @@ CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'ADMIN', 'MODERATOR', 'DEVELOPER',
 CREATE TYPE "BoardGenerationStatus" AS ENUM ('PENDING', 'GENERATING_MILESTONES', 'GENERATING_EPICS', 'GENERATING_STORIES', 'GENERATING_TASKS', 'COMPLETED', 'FAILED');
 
 -- CreateEnum
+CREATE TYPE "RelationType" AS ENUM ('EPIC', 'STORY', 'MILESTONE', 'PARENT_TASK');
+
+-- CreateEnum
 CREATE TYPE "Permission" AS ENUM ('CREATE_POST', 'EDIT_SELF_POST', 'EDIT_ANY_POST', 'DELETE_SELF_POST', 'DELETE_ANY_POST', 'COMMENT_ON_POST', 'EDIT_SELF_COMMENT', 'EDIT_ANY_COMMENT', 'DELETE_SELF_COMMENT', 'DELETE_ANY_COMMENT', 'REACT_TO_POST', 'REACT_TO_COMMENT', 'MENTION_USERS', 'VIEW_POSTS', 'BOOKMARK_POST', 'CREATE_TASK', 'EDIT_SELF_TASK', 'EDIT_ANY_TASK', 'DELETE_SELF_TASK', 'DELETE_ANY_TASK', 'ASSIGN_TASK', 'CHANGE_TASK_STATUS', 'COMMENT_ON_TASK', 'VIEW_TASKS', 'CREATE_BOARD', 'EDIT_BOARD', 'DELETE_BOARD', 'MANAGE_BOARD_SETTINGS', 'VIEW_BOARDS', 'CREATE_MILESTONE', 'EDIT_SELF_MILESTONE', 'EDIT_ANY_MILESTONE', 'DELETE_SELF_MILESTONE', 'DELETE_ANY_MILESTONE', 'VIEW_MILESTONES', 'CREATE_EPIC', 'EDIT_SELF_EPIC', 'EDIT_ANY_EPIC', 'DELETE_SELF_EPIC', 'DELETE_ANY_EPIC', 'VIEW_EPICS', 'CREATE_STORY', 'EDIT_SELF_STORY', 'EDIT_ANY_STORY', 'DELETE_SELF_STORY', 'DELETE_ANY_STORY', 'VIEW_STORIES', 'CREATE_FEATURE_REQUEST', 'EDIT_SELF_FEATURE_REQUEST', 'EDIT_ANY_FEATURE_REQUEST', 'DELETE_SELF_FEATURE_REQUEST', 'DELETE_ANY_FEATURE_REQUEST', 'VOTE_ON_FEATURE', 'COMMENT_ON_FEATURE', 'VIEW_FEATURES', 'SEND_MESSAGE', 'VIEW_MESSAGES', 'DELETE_SELF_MESSAGE', 'DELETE_ANY_MESSAGE', 'CREATE_NOTE', 'EDIT_SELF_NOTE', 'EDIT_ANY_NOTE', 'DELETE_SELF_NOTE', 'DELETE_ANY_NOTE', 'VIEW_NOTES', 'MANAGE_WORKSPACE_SETTINGS', 'MANAGE_WORKSPACE_MEMBERS', 'MANAGE_WORKSPACE_PERMISSIONS', 'VIEW_WORKSPACE_ANALYTICS', 'INVITE_MEMBERS', 'REMOVE_MEMBERS', 'CHANGE_MEMBER_ROLES', 'VIEW_MEMBER_LIST', 'MANAGE_INTEGRATIONS', 'EXPORT_DATA', 'IMPORT_DATA', 'VIEW_AUDIT_LOGS', 'MANAGE_NOTIFICATIONS', 'VIEW_REPORTS', 'PIN_POST', 'RESOLVE_BLOCKER');
 
 -- CreateTable
@@ -57,6 +78,37 @@ CREATE TABLE "User" (
     "role" "UserRole" NOT NULL DEFAULT 'DEVELOPER',
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "NotificationPreferences" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "taskCreated" BOOLEAN NOT NULL DEFAULT true,
+    "taskStatusChanged" BOOLEAN NOT NULL DEFAULT true,
+    "taskAssigned" BOOLEAN NOT NULL DEFAULT true,
+    "taskCommentAdded" BOOLEAN NOT NULL DEFAULT true,
+    "taskPriorityChanged" BOOLEAN NOT NULL DEFAULT true,
+    "taskDueDateChanged" BOOLEAN NOT NULL DEFAULT true,
+    "taskColumnMoved" BOOLEAN NOT NULL DEFAULT false,
+    "taskUpdated" BOOLEAN NOT NULL DEFAULT true,
+    "taskDeleted" BOOLEAN NOT NULL DEFAULT true,
+    "taskMentioned" BOOLEAN NOT NULL DEFAULT true,
+    "boardTaskCreated" BOOLEAN NOT NULL DEFAULT true,
+    "boardTaskStatusChanged" BOOLEAN NOT NULL DEFAULT true,
+    "boardTaskAssigned" BOOLEAN NOT NULL DEFAULT false,
+    "boardTaskCompleted" BOOLEAN NOT NULL DEFAULT true,
+    "boardTaskDeleted" BOOLEAN NOT NULL DEFAULT true,
+    "postCommentAdded" BOOLEAN NOT NULL DEFAULT true,
+    "postUpdated" BOOLEAN NOT NULL DEFAULT true,
+    "postResolved" BOOLEAN NOT NULL DEFAULT true,
+    "emailNotificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "pushNotificationsEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "pushSubscription" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "NotificationPreferences_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -637,6 +689,106 @@ CREATE TABLE "BoardGenerationJob" (
 );
 
 -- CreateTable
+CREATE TABLE "TaskFollower" (
+    "id" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TaskFollower_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PostFollower" (
+    "id" TEXT NOT NULL,
+    "postId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PostFollower_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BoardFollower" (
+    "id" TEXT NOT NULL,
+    "boardId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BoardFollower_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "task_relations" (
+    "id" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "relatedItemId" TEXT NOT NULL,
+    "relatedItemType" "RelationType" NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "task_relations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "leave_requests" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "policyId" TEXT NOT NULL,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
+    "duration" "LeaveDuration" NOT NULL,
+    "notes" TEXT NOT NULL,
+    "status" "LeaveStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "leave_requests_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "leave_policies" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "group" TEXT,
+    "isPaid" BOOLEAN NOT NULL,
+    "trackIn" "TrackUnit" NOT NULL,
+    "isHidden" BOOLEAN NOT NULL DEFAULT false,
+    "exportMode" "ExportMode" NOT NULL,
+    "exportCode" TEXT,
+    "workspaceId" TEXT NOT NULL,
+    "accrualType" "AccrualType" NOT NULL,
+    "deductsLeave" BOOLEAN NOT NULL DEFAULT true,
+    "maxBalance" DOUBLE PRECISION,
+    "rolloverType" "RolloverType",
+    "rolloverAmount" DOUBLE PRECISION,
+    "rolloverDate" TIMESTAMP(3),
+    "allowOutsideLeaveYearRequest" BOOLEAN NOT NULL DEFAULT false,
+    "useAverageWorkingHours" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "leave_policies_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "leave_balances" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "policyId" TEXT NOT NULL,
+    "year" INTEGER NOT NULL,
+    "totalAccrued" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "totalUsed" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "balance" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "rollover" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "lastAccruedAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "leave_balances_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_PostToTag" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -694,6 +846,9 @@ CREATE TABLE "_NoteToTag" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "NotificationPreferences_userId_key" ON "NotificationPreferences"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "Account"("provider", "providerAccountId");
@@ -1062,6 +1217,108 @@ CREATE INDEX "BoardGenerationJob_userId_idx" ON "BoardGenerationJob"("userId");
 CREATE INDEX "BoardGenerationJob_status_idx" ON "BoardGenerationJob"("status");
 
 -- CreateIndex
+CREATE INDEX "TaskFollower_taskId_idx" ON "TaskFollower"("taskId");
+
+-- CreateIndex
+CREATE INDEX "TaskFollower_userId_idx" ON "TaskFollower"("userId");
+
+-- CreateIndex
+CREATE INDEX "TaskFollower_createdAt_idx" ON "TaskFollower"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "TaskFollower_taskId_createdAt_idx" ON "TaskFollower"("taskId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TaskFollower_taskId_userId_key" ON "TaskFollower"("taskId", "userId");
+
+-- CreateIndex
+CREATE INDEX "PostFollower_postId_idx" ON "PostFollower"("postId");
+
+-- CreateIndex
+CREATE INDEX "PostFollower_userId_idx" ON "PostFollower"("userId");
+
+-- CreateIndex
+CREATE INDEX "PostFollower_createdAt_idx" ON "PostFollower"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "PostFollower_postId_createdAt_idx" ON "PostFollower"("postId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PostFollower_postId_userId_key" ON "PostFollower"("postId", "userId");
+
+-- CreateIndex
+CREATE INDEX "BoardFollower_boardId_idx" ON "BoardFollower"("boardId");
+
+-- CreateIndex
+CREATE INDEX "BoardFollower_userId_idx" ON "BoardFollower"("userId");
+
+-- CreateIndex
+CREATE INDEX "BoardFollower_createdAt_idx" ON "BoardFollower"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "BoardFollower_boardId_createdAt_idx" ON "BoardFollower"("boardId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BoardFollower_boardId_userId_key" ON "BoardFollower"("boardId", "userId");
+
+-- CreateIndex
+CREATE INDEX "task_relations_taskId_idx" ON "task_relations"("taskId");
+
+-- CreateIndex
+CREATE INDEX "task_relations_relatedItemId_relatedItemType_idx" ON "task_relations"("relatedItemId", "relatedItemType");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "task_relations_taskId_relatedItemId_relatedItemType_key" ON "task_relations"("taskId", "relatedItemId", "relatedItemType");
+
+-- CreateIndex
+CREATE INDEX "leave_requests_userId_idx" ON "leave_requests"("userId");
+
+-- CreateIndex
+CREATE INDEX "leave_requests_policyId_idx" ON "leave_requests"("policyId");
+
+-- CreateIndex
+CREATE INDEX "leave_requests_status_idx" ON "leave_requests"("status");
+
+-- CreateIndex
+CREATE INDEX "leave_requests_startDate_idx" ON "leave_requests"("startDate");
+
+-- CreateIndex
+CREATE INDEX "leave_requests_endDate_idx" ON "leave_requests"("endDate");
+
+-- CreateIndex
+CREATE INDEX "leave_requests_duration_idx" ON "leave_requests"("duration");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_workspaceId_idx" ON "leave_policies"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_name_idx" ON "leave_policies"("name");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_group_idx" ON "leave_policies"("group");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_isPaid_idx" ON "leave_policies"("isPaid");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_trackIn_idx" ON "leave_policies"("trackIn");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_isHidden_idx" ON "leave_policies"("isHidden");
+
+-- CreateIndex
+CREATE INDEX "leave_policies_exportMode_idx" ON "leave_policies"("exportMode");
+
+-- CreateIndex
+CREATE INDEX "leave_balances_userId_idx" ON "leave_balances"("userId");
+
+-- CreateIndex
+CREATE INDEX "leave_balances_policyId_idx" ON "leave_balances"("policyId");
+
+-- CreateIndex
+CREATE INDEX "leave_balances_year_idx" ON "leave_balances"("year");
+
+-- CreateIndex
 CREATE INDEX "_PostToTag_B_index" ON "_PostToTag"("B");
 
 -- CreateIndex
@@ -1083,16 +1340,19 @@ CREATE INDEX "_StoryToLabel_B_index" ON "_StoryToLabel"("B");
 CREATE INDEX "_NoteToTag_B_index" ON "_NoteToTag"("B");
 
 -- AddForeignKey
+ALTER TABLE "NotificationPreferences" ADD CONSTRAINT "NotificationPreferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Post" ADD CONSTRAINT "Post_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Post" ADD CONSTRAINT "Post_resolvedById_fkey" FOREIGN KEY ("resolvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Post" ADD CONSTRAINT "Post_pinnedBy_fkey" FOREIGN KEY ("pinnedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Post" ADD CONSTRAINT "Post_pinnedBy_fkey" FOREIGN KEY ("pinnedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Post" ADD CONSTRAINT "Post_resolvedById_fkey" FOREIGN KEY ("resolvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Post" ADD CONSTRAINT "Post_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -1110,19 +1370,19 @@ ALTER TABLE "Tag" ADD CONSTRAINT "Tag_workspaceId_fkey" FOREIGN KEY ("workspaceI
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_epicId_fkey" FOREIGN KEY ("epicId") REFERENCES "Epic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_milestoneId_fkey" FOREIGN KEY ("milestoneId") REFERENCES "Milestone"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Comment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_epicId_fkey" FOREIGN KEY ("epicId") REFERENCES "Epic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_storyId_fkey" FOREIGN KEY ("storyId") REFERENCES "Story"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_milestoneId_fkey" FOREIGN KEY ("milestoneId") REFERENCES "Milestone"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Reaction" ADD CONSTRAINT "Reaction_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1386,6 +1646,42 @@ ALTER TABLE "BoardGenerationJob" ADD CONSTRAINT "BoardGenerationJob_userId_fkey"
 ALTER TABLE "BoardGenerationJob" ADD CONSTRAINT "BoardGenerationJob_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskFollower" ADD CONSTRAINT "TaskFollower_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaskFollower" ADD CONSTRAINT "TaskFollower_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PostFollower" ADD CONSTRAINT "PostFollower_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PostFollower" ADD CONSTRAINT "PostFollower_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BoardFollower" ADD CONSTRAINT "BoardFollower_boardId_fkey" FOREIGN KEY ("boardId") REFERENCES "TaskBoard"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BoardFollower" ADD CONSTRAINT "BoardFollower_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "task_relations" ADD CONSTRAINT "task_relations_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "leave_requests" ADD CONSTRAINT "leave_requests_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "leave_requests" ADD CONSTRAINT "leave_requests_policyId_fkey" FOREIGN KEY ("policyId") REFERENCES "leave_policies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "leave_policies" ADD CONSTRAINT "leave_policies_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "leave_balances" ADD CONSTRAINT "leave_balances_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "leave_balances" ADD CONSTRAINT "leave_balances_policyId_fkey" FOREIGN KEY ("policyId") REFERENCES "leave_policies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_PostToTag" ADD CONSTRAINT "_PostToTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1426,3 +1722,4 @@ ALTER TABLE "_NoteToTag" ADD CONSTRAINT "_NoteToTag_A_fkey" FOREIGN KEY ("A") RE
 
 -- AddForeignKey
 ALTER TABLE "_NoteToTag" ADD CONSTRAINT "_NoteToTag_B_fkey" FOREIGN KEY ("B") REFERENCES "NoteTag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
