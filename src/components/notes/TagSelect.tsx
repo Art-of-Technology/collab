@@ -175,14 +175,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   };
 
   const filteredTags = useMemo(() => {
-    if (!searchTerm.trim()) return tags;
-    
-    const filtered = tags.filter(tag =>
-      tag.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
-    // Sort: tags starting with search term first, then others
-    return sortTagsBySearchTerm(filtered, searchTerm);
+    return sortTagsBySearchTerm(tags, searchTerm);
   }, [tags, searchTerm]);
 
   const selectedTags = tags.filter(tag => value.includes(tag.id));
