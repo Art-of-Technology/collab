@@ -149,8 +149,8 @@ const ResizableImage = Image.extend({
         handle.style.position = 'absolute';
         handle.style.width = '8px';
         handle.style.height = '8px';
-        handle.style.backgroundColor = 'white';
-        handle.style.border = '1px solid #3b82f6';
+        handle.style.backgroundColor = 'hsl(var(--background))';
+        handle.style.border = '1px solid hsl(var(--primary))';
         handle.style.zIndex = '2';
         
         // Position the handle based on its position code
@@ -363,38 +363,38 @@ const imageCSS = `
   height: auto;
   transition: all 0.25s ease;
   border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.1);
+  border: 1px solid hsl(var(--border) / 0.5);
 }
 .image-resizable-container:hover .resizable-image {
   filter: brightness(0.98);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 8px hsl(var(--foreground) / 0.15);
+  border-color: hsl(var(--primary) / 0.3);
 }
 .resize-handle {
   position: absolute;
   width: 9px;
   height: 9px;
-  background-color: #ffffff;
-  border: 1.5px solid rgba(59, 130, 246, 0.8);
+  background-color: hsl(var(--background));
+  border: 1.5px solid hsl(var(--primary) / 0.8);
   border-radius: 50%;
   z-index: 2;
   opacity: 0;
   transform: scale(0.8);
   transition: opacity 0.2s ease, transform 0.15s ease, background-color 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.1);
 }
 .image-resizable-container:hover .resize-handle {
   opacity: 1;
   transform: scale(1);
 }
 .resize-handle:hover {
-  background-color: rgba(59, 130, 246, 0.9);
-  border-color: white;
+  background-color: hsl(var(--primary) / 0.9);
+  border-color: hsl(var(--background));
   transform: scale(1.2);
 }
 .resize-handle:active {
-  background-color: rgba(59, 130, 246, 1);
+  background-color: hsl(var(--primary));
   transform: scale(1.3);
 }
 .image-tooltip {
@@ -402,10 +402,11 @@ const imageCSS = `
   top: -38px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.75);
-  color: white;
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
   padding: 6px 10px;
   border-radius: 6px;
+  border: 1px solid hsl(var(--border));
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.2px;
@@ -414,7 +415,7 @@ const imageCSS = `
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
   z-index: 3;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px hsl(var(--foreground) / 0.1);
   transform: translateX(-50%) translateY(5px);
 }
 .image-resizable-container:hover .image-tooltip {
@@ -429,7 +430,7 @@ const imageCSS = `
   margin-left: -6px;
   border-width: 6px;
   border-style: solid;
-  border-color: rgba(0, 0, 0, 0.75) transparent transparent transparent;
+  border-color: hsl(var(--popover)) transparent transparent transparent;
 }
 `;
 
@@ -970,11 +971,11 @@ export function MarkdownEditor({
     const style = document.createElement('style');
     style.textContent = `
       .ProseMirror .mention {
-        background-color: rgba(59, 130, 246, 0.1);
+        background-color: hsl(var(--primary) / 0.1);
         border-radius: 0.25rem;
         padding: 0.125rem 0.25rem;
         margin: 0 0.125rem;
-        color: #3b82f6;
+        color: hsl(var(--primary));
         font-weight: 500;
         white-space: nowrap;
         display: inline-flex;
