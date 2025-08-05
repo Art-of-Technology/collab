@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Session: ', session);
+
     const body = await request.json();
     const {
       title,

@@ -19,6 +19,8 @@ export interface NotificationPreferences {
   boardTaskCompleted: boolean;
   boardTaskDeleted: boolean;
   emailNotificationsEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  pushSubscription: any | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -276,7 +276,6 @@ export async function getUserPermissions(
       where: {
         workspaceId,
         role: membership.role as string,
-        enabled: true
       },
       select: { permission: true }
     });

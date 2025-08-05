@@ -107,6 +107,10 @@ model NotificationPreferences {
   // Email notifications
   emailNotificationsEnabled Boolean  @default(true)
   
+  // Push notifications
+  pushNotificationsEnabled  Boolean  @default(false)
+  pushSubscription          Json?    // Stores the push subscription object
+  
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
   user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

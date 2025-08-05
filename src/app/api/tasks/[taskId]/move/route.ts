@@ -203,6 +203,7 @@ export async function PATCH(
       try {
         const content = `Task moved from "${task.column?.name || 'None'}" to "${column.name}"`;
         
+        // Notify task followers
         await NotificationService.notifyTaskFollowers({
           taskId,
           senderId: currentUser.id,
@@ -210,6 +211,36 @@ export async function PATCH(
           content,
           excludeUserIds: []
         });
+        
+        // Get the full task details for the title
+        const fullTask = await prisma.task.findUnique({
+          where: { id: taskId },
+          select: { title: true }
+        });
+        
+        // Notify board followers about status change
+        if (task.taskBoardId && fullTask) {
+          await NotificationService.notifyBoardFollowers({
+            boardId: task.taskBoardId,
+            taskId,
+            senderId: currentUser.id,
+            type: NotificationType.BOARD_TASK_STATUS_CHANGED,
+            content: `Task "${fullTask.title}" moved from "${task.column?.name || 'None'}" to "${column.name}"`,
+            excludeUserIds: []
+          });
+          
+          // Additional notification if task was moved to "Done"
+          if (column.name.toLowerCase() === 'done') {
+            await NotificationService.notifyBoardFollowers({
+              boardId: task.taskBoardId,
+              taskId,
+              senderId: currentUser.id,
+              type: NotificationType.BOARD_TASK_COMPLETED,
+              content: `Task "${fullTask.title}" has been completed`,
+              excludeUserIds: []
+            });
+          }
+        }
       } catch (error) {
         console.error('Failed to send task move notifications:', error);
         // Don't fail the move if notifications fail

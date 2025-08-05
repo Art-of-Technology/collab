@@ -350,6 +350,11 @@ export async function createPost(data: {
   
   // Process mentions and auto-follow mentioned users
   const mentionedUserIds = extractMentionUserIds(html || message);
+
+
+  // Auto-follow mentioned users to the post
+  await NotificationService.autoFollowPost(post.id, [...mentionedUserIds, user.id]);
+
   if (mentionedUserIds.length > 0) {
     try {
       // Create mention notifications
@@ -364,8 +369,6 @@ export async function createPost(data: {
         }))
       });
 
-      // Auto-follow mentioned users to the post
-      await NotificationService.autoFollowPost(post.id, mentionedUserIds);
 
       if(post.type === 'BLOCKER') {
         await NotificationService.notifyPostFollowers({
@@ -420,6 +423,7 @@ export async function createPost(data: {
       });
     }
   }
+  console.log(post);
   
   return post;
 }

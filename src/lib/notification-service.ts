@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { extractMentionUserIds } from "@/utils/mentions";
+import { sendPushNotification, PushNotificationPayload } from "@/lib/push-notifications";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -7,6 +8,7 @@ export interface TaskFollowerNotificationOptions {
   type: NotificationType;
   content: string;
   excludeUserIds?: string[];
+  skipTaskIdReference?: boolean; // Add this to skip setting taskId for deletion notifications
 }
 
 export interface PostFollowerNotificationOptions {
@@ -24,9 +26,11 @@ export interface BoardFollowerNotificationOptions {
   type: NotificationType;
   content: string;
   excludeUserIds?: string[];
+  skipTaskIdReference?: boolean; // Add this to skip setting taskId for deletion notifications
 }
 
 export enum NotificationType {
+  TASK_CREATED = "TASK_CREATED",
   TASK_STATUS_CHANGED = "TASK_STATUS_CHANGED",
   TASK_COMMENT_ADDED = "TASK_COMMENT_ADDED",
   TASK_COMMENT_MENTION = "TASK_COMMENT_MENTION",
@@ -45,6 +49,50 @@ export enum NotificationType {
 }
 
 export class NotificationService {
+  // Helper method to send push notification
+  static async sendPushNotificationForUser(
+    userId: string,
+    notificationType: NotificationType,
+    content: string,
+    taskId?: string,
+    postId?: string
+  ): Promise<void> {
+    try {
+      // Build the URL based on notification type
+      let url = '/';
+      if (taskId) {
+        url = `/tasks/${taskId}`;
+      } else if (postId) {
+        url = `/posts/${postId}`;
+      }
+
+      const payload: PushNotificationPayload = {
+        title: 'Collab Notification',
+        body: content,
+        url,
+        tag: notificationType,
+        icon: '/icon-192x192.png',
+        badge: '/icon-192x192.png',
+        requireInteraction: false,
+        actions: [
+          {
+            action: 'view',
+            title: 'View'
+          },
+          {
+            action: 'dismiss',
+            title: 'Dismiss'
+          }
+        ]
+      };
+
+      await sendPushNotification(userId, payload);
+    } catch (error) {
+      console.error('Error sending push notification:', error);
+      // Don't throw - push notification failure shouldn't break the main flow
+    }
+  }
+
   // Helper method to get user preferences and filter notifications
   static async getUserPreferences(userId: string): Promise<any> {
     try {
@@ -108,6 +156,7 @@ export class NotificationService {
   // Helper method to check if user should receive notification based on type
   static shouldNotifyUser(preferences: any, notificationType: NotificationType): boolean {
     const typeToPreferenceMap = {
+      [NotificationType.TASK_CREATED]: 'taskCreated',
       [NotificationType.TASK_STATUS_CHANGED]: 'taskStatusChanged',
       [NotificationType.TASK_COMMENT_ADDED]: 'taskCommentAdded',
       [NotificationType.TASK_COMMENT_MENTION]: 'taskMentioned',
@@ -130,7 +179,7 @@ export class NotificationService {
   }
 
   static async notifyTaskFollowers(options: TaskFollowerNotificationOptions): Promise<void> {
-    const { taskId, senderId, type, content, excludeUserIds = [] } = options;
+    const { taskId, senderId, type, content, excludeUserIds = [], skipTaskIdReference = false } = options;
 
     try {
       // Get all followers of the task
@@ -155,14 +204,20 @@ export class NotificationService {
       for (const follower of followers) {
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, type)) {
-          validNotifications.push({
+          const notification: any = {
             type: type.toString(),
             content,
             userId: follower.userId,
             senderId,
-            taskId,
             read: false
-          });
+          };
+          
+          // Only include taskId if not skipping the reference (for non-deletion notifications)
+          if (!skipTaskIdReference && taskId) {
+            notification.taskId = taskId;
+          }
+          
+          validNotifications.push(notification);
         }
       }
 
@@ -170,6 +225,17 @@ export class NotificationService {
         await prisma.notification.createMany({
           data: validNotifications
         });
+
+        // Send push notifications to users
+        const pushPromises = validNotifications.map(notification => 
+          this.sendPushNotificationForUser(
+            notification.userId,
+            type,
+            notification.content,
+            taskId
+          )
+        );
+        await Promise.allSettled(pushPromises);
       }
 
       console.log(`Created ${validNotifications.length} notifications for task ${taskId} (type: ${type})`);
@@ -312,6 +378,18 @@ export class NotificationService {
         await prisma.notification.createMany({
           data: validNotifications
         });
+
+        // Send push notifications to users
+        const pushPromises = validNotifications.map(notification => 
+          this.sendPushNotificationForUser(
+            notification.userId,
+            type,
+            notification.content,
+            undefined,
+            postId
+          )
+        );
+        await Promise.allSettled(pushPromises);
       }
 
       console.log(`Created ${validNotifications.length} notifications for post ${postId} (type: ${type})`);
@@ -399,7 +477,9 @@ export class NotificationService {
         postId,
         userId
       }));
-
+      console.log('<<<<<<<<<<<<<<');
+      console.log('Follow data: ', followData);
+      console.log('>>>>>>>>>>>>>>');
       // Use createMany with skipDuplicates to avoid conflicts
       await prisma.postFollower.createMany({
         data: followData,
@@ -444,6 +524,17 @@ export class NotificationService {
           data: notifications
         });
         console.log(`Created ${notifications.length} task comment mention notifications`);
+
+        // Send push notifications for mentions
+        const pushPromises = notifications.map(notification => 
+          this.sendPushNotificationForUser(
+            notification.userId,
+            NotificationType.TASK_COMMENT_MENTION,
+            notification.content,
+            taskId
+          )
+        );
+        await Promise.allSettled(pushPromises);
       }
 
       // Auto-follow mentioned users to the task
@@ -457,7 +548,7 @@ export class NotificationService {
   // === BOARD FOLLOWER METHODS ===
 
   static async notifyBoardFollowers(options: BoardFollowerNotificationOptions): Promise<void> {
-    const { boardId, taskId, senderId, type, content, excludeUserIds = [] } = options;
+    const { boardId, taskId, senderId, type, content, excludeUserIds = [], skipTaskIdReference = false } = options;
 
     try {
       // Get all followers of the board
@@ -482,14 +573,20 @@ export class NotificationService {
       for (const follower of followers) {
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, type)) {
-          validNotifications.push({
+          const notification: any = {
             type: type.toString(),
             content,
             userId: follower.userId,
             senderId,
-            taskId, // Include taskId for board notifications
             read: false
-          });
+          };
+          
+          // Only include taskId if not skipping the reference (for non-deletion notifications)
+          if (!skipTaskIdReference && taskId) {
+            notification.taskId = taskId;
+          }
+          
+          validNotifications.push(notification);
         }
       }
 
@@ -497,6 +594,17 @@ export class NotificationService {
         await prisma.notification.createMany({
           data: validNotifications
         });
+
+        // Send push notifications to users
+        const pushPromises = validNotifications.map(notification => 
+          this.sendPushNotificationForUser(
+            notification.userId,
+            type,
+            notification.content,
+            taskId
+          )
+        );
+        await Promise.allSettled(pushPromises);
       }
 
       console.log(`Created ${validNotifications.length} notifications for board ${boardId} (type: ${type})`);

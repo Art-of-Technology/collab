@@ -450,7 +450,28 @@ export async function reorderItemsInColumn(data: {
   
   const columnName = board.columns[0]?.name;
 
-  // 1. Fetch the types of all items involved
+  // 1. First get the previous state of the moved item for notifications
+  let previousColumnName: string | null = null;
+  let movedTaskTitle: string | null = null;
+  
+  // Check if the moved item is a task and get its previous column
+  const movedTask = await prisma.task.findUnique({
+    where: { id: movedItemId },
+    select: { 
+      title: true,
+      columnId: true,
+      column: {
+        select: { name: true }
+      }
+    }
+  });
+  
+  if (movedTask) {
+    previousColumnName = movedTask.column?.name || null;
+    movedTaskTitle = movedTask.title;
+  }
+
+  // 2. Fetch the types of all items involved
   const itemsWithTypes = await Promise.all([
     prisma.task.findMany({ 
       where: { id: { in: orderedItemIds } }, 
@@ -523,6 +544,54 @@ export async function reorderItemsInColumn(data: {
 
   try {
     await prisma.$transaction(updates);
+    
+    // 4. Send notifications for status changes if it's a task
+    const movedItemType = itemTypeMap.get(movedItemId);
+    if (movedItemType === 'task' && columnName && previousColumnName && columnName !== previousColumnName) {
+      // Import NotificationService at the top of the file
+      const { NotificationService, NotificationType } = await import('@/lib/notification-service');
+      
+      // Get the updated task with board ID
+      const task = await prisma.task.findUnique({
+        where: { id: movedItemId },
+        select: { 
+          taskBoardId: true
+        }
+      });
+      
+      if (task && task.taskBoardId) {
+        // Send notification to task followers
+        await NotificationService.notifyTaskFollowers({
+          taskId: movedItemId,
+          senderId: user.id,
+          type: NotificationType.TASK_STATUS_CHANGED,
+          content: `Task status changed from "${previousColumnName}" to "${columnName}"`,
+          excludeUserIds: []
+        });
+        
+        // Send notification to board followers
+        await NotificationService.notifyBoardFollowers({
+          boardId: task.taskBoardId,
+          taskId: movedItemId,
+          senderId: user.id,
+          type: NotificationType.BOARD_TASK_STATUS_CHANGED,
+          content: `Task "${movedTaskTitle}" status changed from "${previousColumnName}" to "${columnName}"`,
+          excludeUserIds: []
+        });
+        
+        // Additional notification if task was moved to "Done"
+        if (columnName.toLowerCase() === 'done') {
+          await NotificationService.notifyBoardFollowers({
+            boardId: task.taskBoardId,
+            taskId: movedItemId,
+            senderId: user.id,
+            type: NotificationType.BOARD_TASK_COMPLETED,
+            content: `Task "${movedTaskTitle}" has been completed`,
+            excludeUserIds: []
+          });
+        }
+      }
+    }
   } catch (error) {
     console.error("Error reordering items in transaction:", error);
     // More specific error handling can be added based on Prisma error codes

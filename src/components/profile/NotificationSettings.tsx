@@ -18,7 +18,8 @@ import {
   RotateCcw,
   Loader2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Smartphone
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,6 +28,7 @@ import {
   useResetNotificationPreferences,
   type NotificationPreferenceUpdate
 } from "@/hooks/queries/useNotificationPreferences";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface NotificationSetting {
   key: keyof NotificationPreferenceUpdate;
@@ -125,29 +127,6 @@ const settingGroups: SettingGroup[] = [
     ],
   },
   {
-    id: "posts",
-    title: "Post Notifications",
-    description: "Get notified about post and discussion activities",
-    icon: <MessageSquare className="h-5 w-5 text-green-500" />,
-    settings: [
-      {
-        key: "postCommentAdded",
-        label: "Comments",
-        description: "When someone comments on posts you follow",
-      },
-      {
-        key: "postBlockerCreated",
-        label: "Blocker Posts",
-        description: "When someone creates a blocker post",
-      },
-      {
-        key: "postResolved",
-        label: "Posts Resolved",
-        description: "When posts you follow are marked as resolved",
-      },
-    ],
-  },
-  {
     id: "email",
     title: "Email Notifications",
     description: "Control email delivery of notifications",
@@ -160,6 +139,20 @@ const settingGroups: SettingGroup[] = [
       },
     ],
   },
+  {
+    id: "push",
+    title: "Push Notifications",
+    description: "Receive real-time notifications in your browser",
+    icon: <Smartphone className="h-5 w-5 text-indigo-500" />,
+    settings: [
+      {
+        key: "pushNotificationsEnabled",
+        label: "Browser Push Notifications",
+        description: "Get instant notifications even when the app is not open",
+        recommended: true,
+      },
+    ],
+  },
 ];
 
 export default function NotificationSettings() {
@@ -168,8 +161,27 @@ export default function NotificationSettings() {
   const updateMutation = useUpdateNotificationPreferences();
   const resetMutation = useResetNotificationPreferences();
   const [openSections, setOpenSections] = useState<string[]>(["tasks", "boards"]);
+  const {
+    isSupported: isPushSupported,
+    isSubscribed: isPushSubscribed,
+    isLoading: isPushLoading,
+    toggleSubscription: togglePushSubscription,
+  } = usePushNotifications();
 
   const handleToggle = async (key: keyof NotificationPreferenceUpdate, value: boolean) => {
+    // Handle push notifications specially
+    if (key === "pushNotificationsEnabled") {
+      if (value && !isPushSubscribed) {
+        // Enable push notifications - this will handle the subscription
+        await togglePushSubscription();
+      } else if (!value && isPushSubscribed) {
+        // Disable push notifications
+        await togglePushSubscription();
+      }
+      return;
+    }
+
+    // Handle other settings normally
     try {
       await updateMutation.mutateAsync({ [key]: value });
       toast({
@@ -320,15 +332,61 @@ export default function NotificationSettings() {
                             </div>
                             <p className="text-xs text-muted-foreground leading-relaxed">
                               {setting.description}
+                              {setting.key === "pushNotificationsEnabled" && !isPushSupported && (
+                                <span className="block text-amber-600 dark:text-amber-400 mt-1">
+                                  Push notifications are not supported in your browser
+                                </span>
+                              )}
+                              {setting.key === "pushNotificationsEnabled" && isPushSupported && isPushSubscribed && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-2"
+                                  onClick={async () => {
+                                    try {
+                                      const response = await fetch('/api/notifications/push/test', {
+                                        method: 'POST',
+                                      });
+                                      const data = await response.json();
+                                      if (response.ok) {
+                                        toast({
+                                          title: "Test Sent",
+                                          description: "Check your notifications!",
+                                        });
+                                      } else {
+                                        throw new Error(data.error);
+                                      }
+                                    } catch (error) {
+                                      toast({
+                                        title: "Test Failed",
+                                        description: "Could not send test notification",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Send Test Notification
+                                </Button>
+                              )}
                             </p>
                           </div>
-                          <Switch
-                            id={setting.key}
-                            checked={preferences[setting.key] || false}
-                            onCheckedChange={(checked) => handleToggle(setting.key, checked)}
-                            disabled={updateMutation.isPending}
-                            className="mt-1"
-                          />
+                          {setting.key === "pushNotificationsEnabled" ? (
+                            <Switch
+                              id={setting.key}
+                              checked={isPushSubscribed}
+                              onCheckedChange={(checked) => handleToggle(setting.key, checked)}
+                              disabled={isPushLoading || !isPushSupported}
+                              className="mt-1"
+                            />
+                          ) : (
+                            <Switch
+                              id={setting.key}
+                              checked={preferences[setting.key] || false}
+                              onCheckedChange={(checked) => handleToggle(setting.key, checked)}
+                              disabled={updateMutation.isPending}
+                              className="mt-1"
+                            />
+                          )}
                         </div>
                       ))}
                     </div>

@@ -10,7 +10,7 @@ interface StoryGenerationContextType {
 
 const StoryGenerationContext = createContext<StoryGenerationContextType>({
   jobs: [],
-  refreshJobs: () => {},
+  refreshJobs: () => { },
 });
 
 export function useStoryGeneration() {
@@ -23,12 +23,6 @@ export function StoryGenerationProvider({ workspaceId, children }: { workspaceId
   const fetchJobs = async () => {
     if (!workspaceId) return;
     try {
-      const response = await fetch(`/api/ai/jobs?workspaceId=${workspaceId}`);
-      const result = await response.json();
-      if (result.success) {
-        // Use pre-filtered story jobs from unified endpoint
-        setJobs(result.storyJobs || []);
-      }
     } catch (error) {
       // Silently fail - context should not break the app
       console.error('Failed to fetch story generation jobs:', error);

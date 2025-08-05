@@ -909,8 +909,9 @@ export async function updateTask(taskId: string, data: {
             excludeUserIds: []
           });
 
-          // Notify board followers only for status changes
+          // Notify board followers for status changes
           if (change.field === 'status' && task.taskBoardId) {
+            // Standard status change notification
             await NotificationService.notifyBoardFollowers({
               boardId: task.taskBoardId,
               taskId,
@@ -919,6 +920,18 @@ export async function updateTask(taskId: string, data: {
               content: `Task "${task.title}" status changed from "${change.oldValue || 'None'}" to "${change.newValue || 'None'}"`,
               excludeUserIds: []
             });
+            
+            // Additional notification if task was completed (status changed to "Done")
+            if (change.newValue && change.newValue.toLowerCase() === 'done') {
+              await NotificationService.notifyBoardFollowers({
+                boardId: task.taskBoardId,
+                taskId,
+                senderId: user.id,
+                type: NotificationType.BOARD_TASK_COMPLETED,
+                content: `Task "${task.title}" has been completed`,
+                excludeUserIds: []
+              });
+            }
           }
         }
       }
@@ -956,6 +969,13 @@ export async function deleteTask(taskId: string) {
   const task = await prisma.task.findUnique({
     where: {
       id: taskId
+    },
+    select: {
+      id: true,
+      title: true,
+      workspaceId: true,
+      reporterId: true,
+      taskBoardId: true
     }
   });
 
@@ -983,13 +1003,28 @@ export async function deleteTask(taskId: string) {
 
   // Notify followers before deleting the task
   try {
+    // Notify task followers - skip taskId reference to prevent cascade deletion
     await NotificationService.notifyTaskFollowers({
       taskId,
       senderId: user.id,
       type: NotificationType.TASK_DELETED,
       content: `Task "${task.title}" has been deleted`,
-      excludeUserIds: []
+      excludeUserIds: [],
+      skipTaskIdReference: true
     });
+    
+    // Notify board followers if task belongs to a board - skip taskId reference
+    if (task.taskBoardId) {
+      await NotificationService.notifyBoardFollowers({
+        boardId: task.taskBoardId,
+        taskId,
+        senderId: user.id,
+        type: NotificationType.BOARD_TASK_DELETED,
+        content: `Task "${task.title}" has been deleted from the board`,
+        excludeUserIds: [],
+        skipTaskIdReference: true
+      });
+    }
   } catch (error) {
     console.error('Failed to send task deletion notifications:', error);
     // Don't fail the deletion if notifications fail
