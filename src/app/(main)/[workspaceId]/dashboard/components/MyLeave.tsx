@@ -14,20 +14,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  LeaveRequestForm,
-  type LeaveRequestSubmissionData,
-} from "@/components/hr/forms/LeaveRequestForm";
-import {
-  LeaveBalance,
-  type LeaveBalanceType,
-} from "@/components/hr/LeaveBalance";
+import { LeaveRequestForm } from "@/components/hr/forms/LeaveRequestForm";
+import { LeaveBalance } from "@/components/hr/LeaveBalance";
 import { 
   useLeaveBalances, 
   useUserLeaveRequests, 
   useCreateLeaveRequest 
 } from "@/hooks/queries/useLeave";
-import type { LeaveRequest, LeaveStatus } from "@/types/leave";
+import type { LeaveRequest, LeaveRequestSubmissionData } from "@/types/leave";
 
 interface MyLeaveProps {
   workspaceId: string;
@@ -119,8 +113,8 @@ export function MyLeave({
 
 
             <LeaveRequestForm
-                              workspaceId={workspaceId}
-                onSubmit={handleSubmit}
+              workspaceId={workspaceId}
+              onSubmit={handleSubmit}
               onCancel={handleCancel}
             />
           </DialogContent>
