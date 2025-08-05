@@ -89,54 +89,6 @@ export function LeaveBalance({
     );
   }
 
-  // Safety check - if no current balance is found, show the first available one
-  if (!currentBalance && balances.length > 0) {
-    const firstBalance = balances[0];
-    
-    return (
-      <div className="space-y-4">
-        {/* Dropdown for leave type selection */}
-        <div className="space-y-2">
-          <Select value={selectedLeaveType || firstBalance.policyId} onValueChange={setSelectedLeaveType}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select leave type" />
-            </SelectTrigger>
-            <SelectContent>
-              {balances.map((balance) => (
-                <SelectItem key={balance.policyId} value={balance.policyId}>
-                  {balance.policyName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Render first balance as fallback */}
-        <Card className="w-full">
-          <CardHeader className="p-4 min-h-14">
-            <div className="flex justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                {firstBalance.trackUnit === "HOURS" ? (
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="font-medium text-sm truncate">
-                  {firstBalance.policyName}
-                </span>
-                {!firstBalance.isPaid && (
-                  <Badge variant="outline" className="text-xs w-fit">
-                    Unpaid
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
   // If still no current balance, return empty state
   if (!currentBalance) {
     return (
