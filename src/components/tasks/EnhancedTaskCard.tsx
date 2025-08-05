@@ -18,6 +18,7 @@ import {
   Calendar,
   Star,
   BookOpen,
+  CornerDownRight,
 } from 'lucide-react';
 import { useTaskModal } from '@/context/TaskModalContext';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
@@ -77,8 +78,11 @@ export interface EnhancedTaskCardProps {
   dueDate?: Date | string | null;
   _count?: any;
   isHighlighted?: boolean;
-  boardId?: string;
-  showFollowButton?: boolean;
+  parentTask?: {
+    id: string;
+    title: string;
+    issueKey?: string | null;
+  } | null;
 }
 
 export default function EnhancedTaskCard({
@@ -102,8 +106,7 @@ export default function EnhancedTaskCard({
   entityType = 'task',
   _count,
   isHighlighted = false,
-  boardId,
-  showFollowButton = true,
+  parentTask = null,
 }: EnhancedTaskCardProps) {
   const { openTaskModal, openMilestoneModal, openEpicModal, openStoryModal } =
     useTaskModal();
@@ -200,9 +203,8 @@ export default function EnhancedTaskCard({
 
     return (
       <Badge
-        className={`${
-          typeColors[normalizedType] || 'bg-gray-100 text-gray-800'
-        } px-1.5 py-0.5 flex items-center text-xs`}
+        className={`${typeColors[normalizedType] || 'bg-gray-100 text-gray-800'
+          } px-1.5 py-0.5 flex items-center text-xs`}
       >
         {getTypeIcon(normalizedType)}
         <span>{normalizedType}</span>
@@ -234,6 +236,13 @@ export default function EnhancedTaskCard({
           <div className="flex items-center text-xs">
             <CheckSquare className="h-3 w-3 mr-1" />
             {_count.tasks}
+          </div>
+        ) : null;
+      case 'task':
+        return _count.subtasks > 0 ? (
+          <div className="flex items-center text-xs">
+            <CheckSquare className="h-3 w-3 mr-1" />
+            {_count.subtasks}
           </div>
         ) : null;
       default:
@@ -342,11 +351,10 @@ export default function EnhancedTaskCard({
   return (
     <div onClick={handleClick}>
       <Card
-        className={`overflow-hidden transition-all cursor-pointer border-l-4 ${
-          isHighlighted
-            ? 'ring-2 ring-blue-500 ring-opacity-75 shadow-lg shadow-blue-500/25 animate-pulse border-blue-500'
-            : ''
-        }`}
+        className={`overflow-hidden transition-all cursor-pointer border-l-4 ${isHighlighted
+          ? 'ring-2 ring-blue-500 ring-opacity-75 shadow-lg shadow-blue-500/25 animate-pulse border-blue-500'
+          : ''
+          }`}
         style={{
           borderLeftColor: isHighlighted ? '#3B82F6' : cardStyles.borderColor,
           backgroundColor: isHighlighted
@@ -409,6 +417,15 @@ export default function EnhancedTaskCard({
                   >
                     <BookOpen className="h-2.5 w-2.5 mr-0.5" />
                     {storyTitle}
+                  </Badge>
+                )}
+                {parentTask && itemType === 'task' && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] py-0 px-1.5 bg-gray-50 text-gray-700 border-gray-200"
+                  >
+                    <CornerDownRight className="h-2.5 w-2.5 mr-0.5" />
+                    {parentTask.issueKey || parentTask.title}
                   </Badge>
                 )}
               </div>

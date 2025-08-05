@@ -501,7 +501,8 @@ model Task {
   followers     TaskFollower[]
   userEvents    UserEvent[]
   userStatuses  UserStatus[]
-  labels        TaskLabel[]         @relation("TaskToLabel")
+  labels        TaskLabel[]      @relation("TaskToLabel")
+  relations TaskRelations[]
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -951,6 +952,24 @@ model BoardFollower {
   @@index([userId])
 }
 
+model TaskRelations {
+  id              String       @id @default(cuid())
+  taskId          String
+  relatedItemId   String
+  relatedItemType RelationType
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@unique([taskId, relatedItemId, relatedItemType])
+  @@index([taskId])
+  @@index([relatedItemId, relatedItemType])
+  @@map("task_relations")
+}
+
 enum EventType {
   TASK_START
   TASK_PAUSE
@@ -1067,6 +1086,13 @@ enum BoardGenerationStatus {
   GENERATING_TASKS
   COMPLETED
   FAILED
+}
+
+enum RelationType {
+  EPIC
+  STORY
+  MILESTONE
+  PARENT_TASK
 }
 
 enum Permission {

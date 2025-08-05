@@ -195,11 +195,11 @@ export default function Navbar({
     const displayImage = userImage || session?.user?.image;
 
     return (
-      <Avatar>
+      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
         {displayImage ? (
           <AvatarImage src={displayImage} alt={displayName || "User"} />
         ) : (
-          <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+          <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(displayName)}</AvatarFallback>
         )}
       </Avatar>
     );
@@ -212,7 +212,7 @@ export default function Navbar({
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#191919] border-b border-[#2a2929] h-16 shadow-md">
       <div className="h-full px-2 md:px-4 flex items-center justify-between">
         {/* Left section: Mobile menu + search on mobile, Logo on desktop */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-0">
           {/* Mobile menu toggle button - only on mobile */}
           <Button
             variant="ghost"
@@ -230,7 +230,7 @@ export default function Navbar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden hover:bg-[#1c1c1c] text-gray-400"
+                  className="md:hidden hover:bg-[#1c1c1c] text-gray-400 -ml-1"
                 >
                   <MagnifyingGlassIcon className="h-5 w-5" />
                 </Button>
@@ -306,7 +306,7 @@ export default function Navbar({
         </div>
 
         {/* Right section: Notifications, chat, profile */}
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-0">
           {session ? (
             <>
               {hasWorkspaces && (
@@ -422,7 +422,7 @@ export default function Navbar({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="relative hover:bg-[#1c1c1c] text-gray-400"
+                    className="relative hover:bg-[#1c1c1c] text-gray-400 -ml-1"
                     onClick={toggleChat}
                   >
                     <MessageCircle className="h-5 w-5" />
@@ -449,7 +449,7 @@ export default function Navbar({
               {/* Profile dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="rounded-full p-0 h-8 w-8 md:h-10 md:w-10 overflow-hidden">
+                  <Button variant="ghost" size="icon" className="rounded-full overflow-hidden h-6 w-6 sm:h-10 sm:w-10">
                     {renderAvatar()}
                   </Button>
                 </DropdownMenuTrigger>
