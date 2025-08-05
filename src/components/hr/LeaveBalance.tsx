@@ -12,34 +12,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
-
-export interface LeaveBalanceType {
-  policyId: string;
-  policyName: string;
-  totalAccrued: number;
-  totalUsed: number;
-  balance: number;
-  rollover: number;
-  year: number;
-  trackUnit: "HOURS" | "DAYS";
-  isPaid: boolean;
-  accrualType: "DOES_NOT_ACCRUE" | "HOURLY" | "FIXED" | "REGULAR_WORKING_HOURS";
-}
-
-interface LeaveBalanceProps {
-  balances?: LeaveBalanceType[];
-  isLoading?: boolean;
-}
+import { LeaveBalanceProps } from "@/types/leave";
 
 export function LeaveBalance({
   balances = [],
   isLoading = false,
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0]?.policyId || "");
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string | undefined>(balances[0]?.policyId || "");
 
   // Memoize the check for whether the selected leave type exists in balances
   const isSelectedLeaveTypeValid = useMemo(() => {
-    return selectedLeaveType && balances.some(b => b.policyId === selectedLeaveType);
+    return !!selectedLeaveType && balances.some(b => b.policyId === selectedLeaveType);
   }, [balances, selectedLeaveType]);
 
   // Update selectedLeaveType when balances change

@@ -1,29 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
-import { z } from "zod";
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
 
 // Validation schema for creating a leave request
 const createLeaveRequestSchema = z.object({
-  policyId: z.string().min(1, "Policy ID is required"),
+  policyId: z.string().min(1, 'Policy ID is required'),
   startDate: z
     .string()
     .refine((str) => !isNaN(Date.parse(str)), {
-      message: "startDate must be a valid ISO date string",
+      message: 'startDate must be a valid ISO date string',
     })
     .transform((str) => new Date(str)),
   endDate: z
     .string()
     .refine((str) => !isNaN(Date.parse(str)), {
-      message: "endDate must be a valid ISO date string",
+      message: 'endDate must be a valid ISO date string',
     })
     .transform((str) => new Date(str)),
-  duration: z.enum(["FULL_DAY", "HALF_DAY"]),
+  duration: z.enum(['FULL_DAY', 'HALF_DAY']),
   notes: z
     .string()
-    .min(1, "Notes are required")
-    .max(500, "Notes cannot exceed 500 characters"),
+    .min(1, 'Notes are required')
+    .max(500, 'Notes cannot exceed 500 characters'),
 });
 
 /**
@@ -34,15 +34,15 @@ export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const url = new URL(req.url);
-    const workspaceId = url.searchParams.get("workspaceId");
+    const workspaceId = url.searchParams.get('workspaceId');
 
     if (!workspaceId) {
       return NextResponse.json(
-        { error: "workspaceId is required" },
+        { error: 'workspaceId is required' },
         { status: 400 }
       );
     }
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Verify user has access to this workspace (owner or member)
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     if (!workspace) {
       return NextResponse.json(
-        { error: "Workspace not found" },
+        { error: 'Workspace not found' },
         { status: 404 }
       );
     }
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
 
     if (!isOwner && !isMember) {
       return NextResponse.json(
-        { error: "Access denied to workspace" },
+        { error: 'Access denied to workspace' },
         { status: 403 }
       );
     }
@@ -102,15 +102,15 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        createdAt: 'desc',
       },
     });
 
     return NextResponse.json(leaveRequests);
   } catch (error) {
-    console.error("Error fetching leave requests:", error);
+    console.error('Error fetching leave requests:', error);
     return NextResponse.json(
-      { error: "Failed to fetch leave requests" },
+      { error: 'Failed to fetch leave requests' },
       { status: 500 }
     );
   }
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
     if (!validated.success) {
       return NextResponse.json(
         {
-          error: "Invalid request data",
+          error: 'Invalid request data',
           details: validated.error.format(),
         },
         { status: 400 }
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Verify the policy exists and get its workspace
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     if (!policy) {
       return NextResponse.json(
-        { error: "Leave policy not found" },
+        { error: 'Leave policy not found' },
         { status: 404 }
       );
     }
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
 
     if (!policyWorkspace) {
       return NextResponse.json(
-        { error: "Workspace not found" },
+        { error: 'Workspace not found' },
         { status: 404 }
       );
     }
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
 
     if (!isOwner && !isMember) {
       return NextResponse.json(
-        { error: "Access denied to workspace" },
+        { error: 'Access denied to workspace' },
         { status: 403 }
       );
     }
@@ -220,9 +220,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(leaveRequest, { status: 201 });
   } catch (error) {
-    console.error("Error creating leave request:", error);
+    console.error('Error creating leave request:', error);
     return NextResponse.json(
-      { error: "Failed to create leave request" },
+      { error: 'Failed to create leave request' },
       { status: 500 }
     );
   }

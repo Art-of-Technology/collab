@@ -36,6 +36,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { useLeavePolicies, useCreateLeaveRequest } from "@/hooks/queries/useLeave";
+import { LeaveRequestFormProps, LeaveRequestSubmissionData } from "@/types/leave";
 
 // Form schema for leave request
 const leaveRequestSchema = z.object({
@@ -77,31 +78,6 @@ const leaveRequestSchema = z.object({
 });
 
 export type LeaveRequestFormData = z.infer<typeof leaveRequestSchema>;
-
-
-export interface LeaveRequestSubmissionData {
-  policyId: string;
-  startDate: Date;
-  endDate: Date;
-  duration: "FULL_DAY" | "HALF_DAY";
-  notes: string;
-}
-
-// Type for leave policy data
-export interface LeavePolicy {
-  id: string;
-  name: string;
-  group: string | null;
-  isPaid: boolean;
-  trackIn: "HOURS" | "DAYS";
-}
-
-interface LeaveRequestFormProps {
-  workspaceId: string;
-  onSubmit?: (data: LeaveRequestSubmissionData) => Promise<void>;
-  onCancel: () => void;
-  onSuccess?: () => void;
-}
 
 export function LeaveRequestForm({
   workspaceId,

@@ -132,7 +132,6 @@ export interface MyLeaveProps {
 }
 
 export interface LeaveBalanceProps {
-  workspaceId: string;
   balances?: LeaveBalanceType[];
   isLoading?: boolean;
 }
