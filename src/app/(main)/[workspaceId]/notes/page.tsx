@@ -35,6 +35,7 @@ import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { sortTagsBySearchTerm, sortNotesBySearchTerm } from "@/utils/sortUtils";
 
 interface Note {
   id: string;
