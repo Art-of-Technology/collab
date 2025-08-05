@@ -33,7 +33,7 @@ interface LeaveBalanceProps {
 export function LeaveBalance({
   balances = [],
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0].policyId || "");
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>(balances[0]?.policyId || "");
 
   // Show only the selected leave type
   const currentBalance = balances.find(
