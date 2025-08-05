@@ -924,6 +924,8 @@ model TaskFollower {
   @@unique([taskId, userId])
   @@index([taskId])
   @@index([userId])
+  @@index([createdAt])
+  @@index([taskId, createdAt])
 }
 
 model PostFollower {
@@ -937,6 +939,8 @@ model PostFollower {
   @@unique([postId, userId])
   @@index([postId])
   @@index([userId])
+  @@index([createdAt])
+  @@index([postId, createdAt])
 }
 
 model BoardFollower {
@@ -950,6 +954,8 @@ model BoardFollower {
   @@unique([boardId, userId])
   @@index([boardId])
   @@index([userId])
+  @@index([createdAt])
+  @@index([boardId, createdAt])
 }
 
 model TaskRelations {

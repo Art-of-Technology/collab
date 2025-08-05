@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { extractMentionUserIds } from "@/utils/mentions";
 import { sendPushNotification, PushNotificationPayload } from "@/lib/push-notifications";
+import { logger } from "@/lib/logger";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -49,7 +50,86 @@ export enum NotificationType {
 }
 
 export class NotificationService {
-  // Helper method to send push notification
+  /**
+   * Base method for creating notifications with followers
+   * @param followerQuery - Prisma query to get followers
+   * @param notificationType - Type of notification
+   * @param content - Notification content
+   * @param senderId - ID of the user sending the notification
+   * @param excludeUserIds - User IDs to exclude from notifications
+   * @param additionalData - Additional data to include in notification
+   */
+  private static async createFollowerNotifications<T extends { userId: string }>(
+    followerQuery: Promise<T[]>,
+    notificationType: NotificationType,
+    content: string,
+    senderId: string,
+    excludeUserIds: string[] = [],
+    additionalData: Record<string, any> = {}
+  ): Promise<void> {
+    try {
+      const followers = await followerQuery;
+      
+      if (followers.length === 0) {
+        return; // No followers to notify
+      }
+
+      // Filter followers based on their notification preferences
+      const validNotifications = [];
+      for (const follower of followers) {
+        const preferences = await this.getUserPreferences(follower.userId);
+        if (this.shouldNotifyUser(preferences, notificationType)) {
+          validNotifications.push({
+            type: notificationType.toString(),
+            content,
+            userId: follower.userId,
+            senderId,
+            read: false,
+            ...additionalData
+          });
+        }
+      }
+
+      if (validNotifications.length > 0) {
+        await prisma.notification.createMany({
+          data: validNotifications
+        });
+
+        // Send push notifications to users
+        const pushPromises = validNotifications.map(notification => 
+          this.sendPushNotificationForUser(
+            notification.userId,
+            notificationType,
+            notification.content,
+            additionalData.taskId,
+            additionalData.postId
+          )
+        );
+        await Promise.allSettled(pushPromises);
+      }
+
+      logger.info('Follower notifications created', { 
+        count: validNotifications.length, 
+        type: notificationType,
+        ...additionalData
+      });
+    } catch (error) {
+      logger.error('Failed to create follower notifications', error, { 
+        type: notificationType,
+        ...additionalData 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Helper method to send push notification to a user
+   * @param userId - User ID to send notification to
+   * @param notificationType - Type of notification
+   * @param content - Notification content  
+   * @param taskId - Optional task ID for URL generation
+   * @param postId - Optional post ID for URL generation
+   */
   static async sendPushNotificationForUser(
     userId: string,
     notificationType: NotificationType,
@@ -88,12 +168,16 @@ export class NotificationService {
 
       await sendPushNotification(userId, payload);
     } catch (error) {
-      console.error('Error sending push notification:', error);
+      logger.error('Failed to send push notification', error, { userId, notificationType });
       // Don't throw - push notification failure shouldn't break the main flow
     }
   }
 
-  // Helper method to get user preferences and filter notifications
+  /**
+   * Get user notification preferences or return defaults
+   * @param userId - User ID to get preferences for
+   * @returns User notification preferences
+   */
   static async getUserPreferences(userId: string): Promise<any> {
     try {
       const preferences = await prisma.notificationPreferences.findUnique({
@@ -127,7 +211,7 @@ export class NotificationService {
       
       return preferences;
     } catch (error) {
-      console.error("Error getting user preferences:", error);
+      logger.error('Failed to get user preferences', error, { userId });
       // Return defaults on error
       return {
         taskCreated: true,
@@ -153,7 +237,12 @@ export class NotificationService {
     }
   }
 
-  // Helper method to check if user should receive notification based on type
+  /**
+   * Check if user should receive notification based on their preferences
+   * @param preferences - User notification preferences
+   * @param notificationType - Type of notification to check
+   * @returns true if user should receive notification
+   */
   static shouldNotifyUser(preferences: any, notificationType: NotificationType): boolean {
     const typeToPreferenceMap = {
       [NotificationType.TASK_CREATED]: 'taskCreated',
@@ -178,73 +267,42 @@ export class NotificationService {
     return preferenceKey ? preferences[preferenceKey] : true; // Default to true for unknown types
   }
 
+  /**
+   * Notify all followers of a task
+   * @param options - Task follower notification options
+   */
   static async notifyTaskFollowers(options: TaskFollowerNotificationOptions): Promise<void> {
     const { taskId, senderId, type, content, excludeUserIds = [], skipTaskIdReference = false } = options;
 
-    try {
-      // Get all followers of the task
-      const followers = await prisma.taskFollower.findMany({
-        where: {
-          taskId: taskId,
-          userId: {
-            notIn: [senderId, ...excludeUserIds] // Exclude sender and any specified users
-          }
-        },
-        select: {
-          userId: true
+    const followerQuery = prisma.taskFollower.findMany({
+      where: {
+        taskId: taskId,
+        userId: {
+          notIn: [senderId, ...excludeUserIds]
         }
-      });
-
-      if (followers.length === 0) {
-        return; // No followers to notify
+      },
+      select: {
+        userId: true
       }
+    });
 
-      // Filter followers based on their notification preferences
-      const validNotifications = [];
-      for (const follower of followers) {
-        const preferences = await this.getUserPreferences(follower.userId);
-        if (this.shouldNotifyUser(preferences, type)) {
-          const notification: any = {
-            type: type.toString(),
-            content,
-            userId: follower.userId,
-            senderId,
-            read: false
-          };
-          
-          // Only include taskId if not skipping the reference (for non-deletion notifications)
-          if (!skipTaskIdReference && taskId) {
-            notification.taskId = taskId;
-          }
-          
-          validNotifications.push(notification);
-        }
-      }
+    const additionalData = skipTaskIdReference ? {} : { taskId };
 
-      if (validNotifications.length > 0) {
-        await prisma.notification.createMany({
-          data: validNotifications
-        });
-
-        // Send push notifications to users
-        const pushPromises = validNotifications.map(notification => 
-          this.sendPushNotificationForUser(
-            notification.userId,
-            type,
-            notification.content,
-            taskId
-          )
-        );
-        await Promise.allSettled(pushPromises);
-      }
-
-      console.log(`Created ${validNotifications.length} notifications for task ${taskId} (type: ${type})`);
-    } catch (error) {
-      console.error("Error creating task follower notifications:", error);
-      throw error;
-    }
+    await this.createFollowerNotifications(
+      followerQuery,
+      type,
+      content,
+      senderId,
+      excludeUserIds,
+      additionalData
+    );
   }
 
+  /**
+   * Add a user as a follower of a task
+   * @param taskId - Task ID to follow
+   * @param userId - User ID to add as follower
+   */
   static async addTaskFollower(taskId: string, userId: string): Promise<void> {
     try {
       await prisma.taskFollower.upsert({
@@ -261,11 +319,16 @@ export class NotificationService {
         }
       });
     } catch (error) {
-      console.error("Error adding task follower:", error);
+      logger.error('Failed to add task follower', error, { taskId, userId });
       throw error;
     }
   }
 
+  /**
+   * Remove a user as a follower of a task
+   * @param taskId - Task ID to unfollow
+   * @param userId - User ID to remove as follower
+   */
   static async removeTaskFollower(taskId: string, userId: string): Promise<void> {
     try {
       await prisma.taskFollower.deleteMany({
@@ -275,11 +338,16 @@ export class NotificationService {
         }
       });
     } catch (error) {
-      console.error("Error removing task follower:", error);
+      logger.error('Failed to remove task follower', error, { taskId, userId });
       throw error;
     }
   }
 
+  /**
+   * Get all followers of a task
+   * @param taskId - Task ID to get followers for
+   * @returns Array of user IDs following the task
+   */
   static async getTaskFollowers(taskId: string): Promise<string[]> {
     try {
       const followers = await prisma.taskFollower.findMany({
@@ -293,11 +361,17 @@ export class NotificationService {
 
       return followers.map(f => f.userId);
     } catch (error) {
-      console.error("Error getting task followers:", error);
+      logger.error('Failed to get task followers', error, { taskId });
       throw error;
     }
   }
 
+  /**
+   * Check if a user is following a task
+   * @param taskId - Task ID to check
+   * @param userId - User ID to check
+   * @returns true if user is following the task
+   */
   static async isUserFollowingTask(taskId: string, userId: string): Promise<boolean> {
     try {
       const follower = await prisma.taskFollower.findUnique({
@@ -311,12 +385,16 @@ export class NotificationService {
 
       return !!follower;
     } catch (error) {
-      console.error("Error checking if user is following task:", error);
+      logger.error('Failed to check if user is following task', error, { taskId, userId });
       return false;
     }
   }
 
-  // Auto-follow task for certain users
+  /**
+   * Automatically add multiple users as followers of a task
+   * @param taskId - Task ID to follow
+   * @param userIds - Array of user IDs to add as followers
+   */
   static async autoFollowTask(taskId: string, userIds: string[]): Promise<void> {
     try {
       const followData = userIds.map(userId => ({
@@ -330,73 +408,40 @@ export class NotificationService {
         skipDuplicates: true
       });
     } catch (error) {
-      console.error("Error auto-following task:", error);
+      logger.error('Failed to auto-follow task', error, { taskId, userCount: userIds.length });
       throw error;
     }
   }
 
   // === POST FOLLOWER METHODS ===
 
+  /**
+   * Notify all followers of a post
+   * @param options - Post follower notification options
+   */
   static async notifyPostFollowers(options: PostFollowerNotificationOptions): Promise<void> {
     const { postId, senderId, type, content, excludeUserIds = [] } = options;
 
-    try {
-      // Get all followers of the post
-      const followers = await prisma.postFollower.findMany({
-        where: {
-          postId: postId,
-          userId: {
-            notIn: [senderId, ...excludeUserIds] // Exclude sender and any specified users
-          }
-        },
-        select: {
-          userId: true
+    const followerQuery = prisma.postFollower.findMany({
+      where: {
+        postId: postId,
+        userId: {
+          notIn: [senderId, ...excludeUserIds]
         }
-      });
-
-      if (followers.length === 0) {
-        return; // No followers to notify
+      },
+      select: {
+        userId: true
       }
+    });
 
-      // Filter followers based on their notification preferences
-      const validNotifications = [];
-      for (const follower of followers) {
-        const preferences = await this.getUserPreferences(follower.userId);
-        if (this.shouldNotifyUser(preferences, type)) {
-          validNotifications.push({
-            type: type.toString(),
-            content,
-            userId: follower.userId,
-            senderId,
-            postId,
-            read: false
-          });
-        }
-      }
-
-      if (validNotifications.length > 0) {
-        await prisma.notification.createMany({
-          data: validNotifications
-        });
-
-        // Send push notifications to users
-        const pushPromises = validNotifications.map(notification => 
-          this.sendPushNotificationForUser(
-            notification.userId,
-            type,
-            notification.content,
-            undefined,
-            postId
-          )
-        );
-        await Promise.allSettled(pushPromises);
-      }
-
-      console.log(`Created ${validNotifications.length} notifications for post ${postId} (type: ${type})`);
-    } catch (error) {
-      console.error("Error creating post follower notifications:", error);
-      throw error;
-    }
+    await this.createFollowerNotifications(
+      followerQuery,
+      type,
+      content,
+      senderId,
+      excludeUserIds,
+      { postId }
+    );
   }
 
   static async addPostFollower(postId: string, userId: string): Promise<void> {
@@ -415,7 +460,7 @@ export class NotificationService {
         }
       });
     } catch (error) {
-      console.error("Error adding post follower:", error);
+      logger.error('Failed to add post follower', error, { postId, userId });
       throw error;
     }
   }
@@ -429,7 +474,7 @@ export class NotificationService {
         }
       });
     } catch (error) {
-      console.error("Error removing post follower:", error);
+      logger.error('Failed to remove post follower', error, { postId, userId });
       throw error;
     }
   }
@@ -447,7 +492,7 @@ export class NotificationService {
 
       return followers.map(f => f.userId);
     } catch (error) {
-      console.error("Error getting post followers:", error);
+      logger.error('Failed to get post followers', error, { postId });
       throw error;
     }
   }
@@ -465,7 +510,7 @@ export class NotificationService {
 
       return !!follower;
     } catch (error) {
-      console.error("Error checking if user is following post:", error);
+      logger.error('Failed to check if user is following post', error, { postId, userId });
       return false;
     }
   }
@@ -477,16 +522,13 @@ export class NotificationService {
         postId,
         userId
       }));
-      console.log('<<<<<<<<<<<<<<');
-      console.log('Follow data: ', followData);
-      console.log('>>>>>>>>>>>>>>');
       // Use createMany with skipDuplicates to avoid conflicts
       await prisma.postFollower.createMany({
         data: followData,
         skipDuplicates: true
       });
     } catch (error) {
-      console.error("Error auto-following post:", error);
+      logger.error('Failed to auto-follow post', error, { postId, userCount: userIds.length });
       throw error;
     }
   }
@@ -523,7 +565,11 @@ export class NotificationService {
         await prisma.notification.createMany({
           data: notifications
         });
-        console.log(`Created ${notifications.length} task comment mention notifications`);
+        logger.info('Task comment mention notifications created', { 
+          count: notifications.length,
+          taskId,
+          taskCommentId
+        });
 
         // Send push notifications for mentions
         const pushPromises = notifications.map(notification => 
@@ -540,78 +586,46 @@ export class NotificationService {
       // Auto-follow mentioned users to the task
       await this.autoFollowTask(taskId, mentionedUserIds);
     } catch (error) {
-      console.error("Error creating task comment mention notifications:", error);
+      logger.error('Failed to create task comment mention notifications', error, { 
+        taskId, 
+        taskCommentId,
+        mentionedUserCount: mentionedUserIds.length 
+      });
       throw error;
     }
   }
 
   // === BOARD FOLLOWER METHODS ===
 
+  /**
+   * Notify all followers of a board
+   * @param options - Board follower notification options
+   */
   static async notifyBoardFollowers(options: BoardFollowerNotificationOptions): Promise<void> {
     const { boardId, taskId, senderId, type, content, excludeUserIds = [], skipTaskIdReference = false } = options;
 
-    try {
-      // Get all followers of the board
-      const followers = await prisma.boardFollower.findMany({
-        where: {
-          boardId: boardId,
-          userId: {
-            notIn: [senderId, ...excludeUserIds] // Exclude sender and any specified users
-          }
-        },
-        select: {
-          userId: true
+    const followerQuery = prisma.boardFollower.findMany({
+      where: {
+        boardId: boardId,
+        userId: {
+          notIn: [senderId, ...excludeUserIds]
         }
-      });
-
-      if (followers.length === 0) {
-        return; // No followers to notify
+      },
+      select: {
+        userId: true
       }
+    });
 
-      // Filter followers based on their notification preferences
-      const validNotifications = [];
-      for (const follower of followers) {
-        const preferences = await this.getUserPreferences(follower.userId);
-        if (this.shouldNotifyUser(preferences, type)) {
-          const notification: any = {
-            type: type.toString(),
-            content,
-            userId: follower.userId,
-            senderId,
-            read: false
-          };
-          
-          // Only include taskId if not skipping the reference (for non-deletion notifications)
-          if (!skipTaskIdReference && taskId) {
-            notification.taskId = taskId;
-          }
-          
-          validNotifications.push(notification);
-        }
-      }
+    const additionalData = skipTaskIdReference ? {} : { taskId };
 
-      if (validNotifications.length > 0) {
-        await prisma.notification.createMany({
-          data: validNotifications
-        });
-
-        // Send push notifications to users
-        const pushPromises = validNotifications.map(notification => 
-          this.sendPushNotificationForUser(
-            notification.userId,
-            type,
-            notification.content,
-            taskId
-          )
-        );
-        await Promise.allSettled(pushPromises);
-      }
-
-      console.log(`Created ${validNotifications.length} notifications for board ${boardId} (type: ${type})`);
-    } catch (error) {
-      console.error("Error creating board follower notifications:", error);
-      throw error;
-    }
+    await this.createFollowerNotifications(
+      followerQuery,
+      type,
+      content,
+      senderId,
+      excludeUserIds,
+      additionalData
+    );
   }
 
   static async addBoardFollower(boardId: string, userId: string): Promise<void> {
@@ -630,7 +644,7 @@ export class NotificationService {
         }
       });
     } catch (error) {
-      console.error("Error adding board follower:", error);
+      logger.error('Failed to add board follower', error, { boardId, userId });
       throw error;
     }
   }
@@ -644,7 +658,7 @@ export class NotificationService {
         }
       });
     } catch (error) {
-      console.error("Error removing board follower:", error);
+      logger.error('Failed to remove board follower', error, { boardId, userId });
       throw error;
     }
   }
@@ -662,7 +676,7 @@ export class NotificationService {
 
       return followers.map(f => f.userId);
     } catch (error) {
-      console.error("Error getting board followers:", error);
+      logger.error('Failed to get board followers', error, { boardId });
       throw error;
     }
   }
@@ -680,7 +694,7 @@ export class NotificationService {
 
       return !!follower;
     } catch (error) {
-      console.error("Error checking if user is following board:", error);
+      logger.error('Failed to check if user is following board', error, { boardId, userId });
       return false;
     }
   }
@@ -699,7 +713,7 @@ export class NotificationService {
         skipDuplicates: true
       });
     } catch (error) {
-      console.error("Error auto-following board:", error);
+      logger.error('Failed to auto-follow board', error, { boardId, userCount: userIds.length });
       throw error;
     }
   }

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { NotificationService } from "@/lib/notification-service";
+import { withRateLimit, followActionRateLimit } from "@/lib/rate-limit";
 
-export async function POST(
+export const POST = withRateLimit(async function(
   req: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
@@ -41,9 +42,9 @@ export async function POST(
     console.error("Error following task:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+}, followActionRateLimit);
 
-export async function DELETE(
+export const DELETE = withRateLimit(async function(
   req: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
@@ -81,9 +82,9 @@ export async function DELETE(
     console.error("Error unfollowing task:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+}, followActionRateLimit);
 
-export async function GET(
+export const GET = withRateLimit(async function(
   req: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
@@ -149,4 +150,4 @@ export async function GET(
     console.error("Error getting task follow status:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+}, followActionRateLimit);

@@ -1,9 +1,10 @@
 "use client";
 
 import React from 'react';
-import { Eye, EyeOff, Users } from 'lucide-react';
+import { Eye, EyeOff, Users, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTaskFollowStatus, useFollowTask, useUnfollowTask } from '@/hooks/queries/useTaskFollow';
 import { toast } from '@/hooks/use-toast';
 
@@ -60,12 +61,22 @@ export function TaskFollowButton({
   const isPending = followMutation.isPending || unfollowMutation.isPending;
   const isFollowing = followStatus?.isFollowing;
   
+  const getTooltipContent = () => {
+    if (isPending) {
+      return isFollowing ? "Unfollowing task..." : "Following task...";
+    }
+    if (isFollowing) {
+      return "Unfollow this task to stop receiving notifications";
+    }
+    return "Follow this task to receive notifications when it's updated";
+  };
+  
   // Loading state
   if (isLoading) {
     if (variant === 'icon-only') {
       return (
         <Button variant="ghost" size="sm" disabled className={className}>
-          <Eye className="h-3 w-3 opacity-50" />
+          <Loader2 className="h-3 w-3 animate-spin opacity-50" />
         </Button>
       );
     }
@@ -73,7 +84,7 @@ export function TaskFollowButton({
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <Button variant="outline" size={size} disabled>
-          <Eye className="h-4 w-4" />
+          <Loader2 className="h-4 w-4 animate-spin" />
           {variant !== 'compact' && "Loading..."}
         </Button>
       </div>
@@ -83,20 +94,30 @@ export function TaskFollowButton({
   // Icon-only variant for compact task cards
   if (variant === 'icon-only') {
     return (
-      <Button
-        variant={isFollowing ? "default" : "ghost"}
-        size="sm"
-        onClick={handleToggleFollow}
-        disabled={isPending}
-        className={`h-6 w-6 p-0 ${className}`}
-        title={isFollowing ? "Unfollow task" : "Follow task"}
-      >
-        {isFollowing ? (
-          <EyeOff className="h-3 w-3" />
-        ) : (
-          <Eye className="h-3 w-3" />
-        )}
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={isFollowing ? "default" : "ghost"}
+              size="sm"
+              onClick={handleToggleFollow}
+              disabled={isPending}
+              className={`h-6 w-6 p-0 ${className}`}
+            >
+              {isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : isFollowing ? (
+                <EyeOff className="h-3 w-3" />
+              ) : (
+                <Eye className="h-3 w-3" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{getTooltipContent()}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -104,20 +125,31 @@ export function TaskFollowButton({
   if (variant === 'compact') {
     return (
       <div className={`flex items-center gap-1 ${className}`}>
-        <Button
-          variant={isFollowing ? "default" : "ghost"}
-          size="sm"
-          onClick={handleToggleFollow}
-          disabled={isPending}
-          className="h-6 px-2 text-xs"
-        >
-          {isFollowing ? (
-            <EyeOff className="h-3 w-3 mr-1" />
-          ) : (
-            <Eye className="h-3 w-3 mr-1" />
-          )}
-          {isFollowing ? "Following" : "Follow"}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={isFollowing ? "default" : "ghost"}
+                size="sm"
+                onClick={handleToggleFollow}
+                disabled={isPending}
+                className="h-6 px-2 text-xs"
+              >
+                {isPending ? (
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                ) : isFollowing ? (
+                  <EyeOff className="h-3 w-3 mr-1" />
+                ) : (
+                  <Eye className="h-3 w-3 mr-1" />
+                )}
+                {isPending ? "..." : isFollowing ? "Following" : "Follow"}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{getTooltipContent()}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         
         {showFollowerCount && followStatus && followStatus.count > 0 && (
           <Badge variant="secondary" className="h-4 px-1 text-[10px]">
@@ -131,24 +163,38 @@ export function TaskFollowButton({
   // Default variant
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <Button
-        variant={isFollowing ? "default" : "outline"}
-        size={size}
-        onClick={handleToggleFollow}
-        disabled={isPending}
-      >
-        {isFollowing ? (
-          <>
-            <EyeOff className="h-4 w-4 mr-1" />
-            Unfollow
-          </>
-        ) : (
-          <>
-            <Eye className="h-4 w-4 mr-1" />
-            Follow
-          </>
-        )}
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={isFollowing ? "default" : "outline"}
+              size={size}
+              onClick={handleToggleFollow}
+              disabled={isPending}
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  {isFollowing ? "Unfollowing..." : "Following..."}
+                </>
+              ) : isFollowing ? (
+                <>
+                  <EyeOff className="h-4 w-4 mr-1" />
+                  Unfollow
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4 mr-1" />
+                  Follow
+                </>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{getTooltipContent()}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       
       {showFollowerCount && followStatus && followStatus.count > 0 && (
         <Badge variant="secondary" className="flex items-center gap-1">

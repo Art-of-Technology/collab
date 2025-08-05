@@ -1,20 +1,58 @@
 import webpush from 'web-push';
 import { prisma } from '@/lib/prisma';
+import { EncryptionService } from '@/lib/encryption';
 
-// Initialize web-push with VAPID details
-// You'll need to generate VAPID keys and add them to your environment variables
-const initializeWebPush = () => {
+/**
+ * Validates VAPID configuration
+ * @returns true if VAPID keys are valid
+ */
+const validateVapidKeys = (): boolean => {
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-  const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@example.com';
 
-  if (vapidPublicKey && vapidPrivateKey) {
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    console.error('VAPID keys are not configured');
+    return false;
+  }
+
+  // Basic validation - check key format
+  const publicKeyRegex = /^[A-Za-z0-9_-]{87}$/;
+  const privateKeyRegex = /^[A-Za-z0-9_-]{43}$/;
+
+  if (!publicKeyRegex.test(vapidPublicKey) || !privateKeyRegex.test(vapidPrivateKey)) {
+    console.error('VAPID keys have invalid format');
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * Initialize web-push with VAPID details
+ * @returns true if initialization was successful
+ */
+const initializeWebPush = (): boolean => {
+  try {
+    if (!validateVapidKeys()) {
+      console.error('Failed to validate VAPID keys');
+      return false;
+    }
+
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY!;
+    const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@example.com';
+
     webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey);
+    console.log('Web push initialized successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to initialize web push:', error);
+    return false;
   }
 };
 
 // Initialize on module load
-initializeWebPush();
+const isWebPushInitialized = initializeWebPush();
 
 export interface PushNotificationPayload {
   title: string;
@@ -33,11 +71,22 @@ export interface PushNotificationPayload {
   data?: Record<string, any>;
 }
 
+/**
+ * Sends a push notification to a specific user
+ * @param userId - The user ID to send notification to
+ * @param payload - The notification payload
+ * @returns true if notification was sent successfully
+ */
 export async function sendPushNotification(
   userId: string,
   payload: PushNotificationPayload
 ): Promise<boolean> {
   try {
+    if (!isWebPushInitialized) {
+      console.error('Web push is not initialized');
+      return false;
+    }
+
     // Get user's notification preferences
     const preferences = await prisma.notificationPreferences.findUnique({
       where: { userId },
@@ -51,7 +100,26 @@ export async function sendPushNotification(
       return false;
     }
 
-    const subscription = preferences.pushSubscription as any;
+    // Decrypt the subscription data
+    let subscription: any;
+    try {
+      // Check if subscription is encrypted (string) or plain object
+      if (typeof preferences.pushSubscription === 'string') {
+        subscription = EncryptionService.decrypt(preferences.pushSubscription);
+      } else {
+        // For backward compatibility with unencrypted data
+        subscription = preferences.pushSubscription;
+      }
+    } catch (decryptError) {
+      console.error('Failed to decrypt push subscription:', decryptError);
+      return false;
+    }
+
+    // Validate subscription structure
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      console.error('Invalid subscription structure');
+      return false;
+    }
     
     // Send the push notification
     await webpush.sendNotification(
@@ -68,7 +136,7 @@ export async function sendPushNotification(
         await prisma.notificationPreferences.update({
           where: { userId },
           data: {
-            pushSubscription: undefined,
+            pushSubscription: null,
             pushNotificationsEnabled: false,
           },
         });
@@ -79,6 +147,11 @@ export async function sendPushNotification(
   }
 }
 
+/**
+ * Sends push notifications to multiple users
+ * @param userIds - Array of user IDs to send notifications to
+ * @param payload - The notification payload
+ */
 export async function sendPushNotificationToMultipleUsers(
   userIds: string[],
   payload: PushNotificationPayload
@@ -87,7 +160,10 @@ export async function sendPushNotificationToMultipleUsers(
   await Promise.allSettled(promises);
 }
 
-// Generate VAPID keys (run this once to get your keys)
+/**
+ * Generate VAPID keys (run this once to get your keys)
+ * @returns VAPID key pair
+ */
 export function generateVAPIDKeys() {
   const vapidKeys = webpush.generateVAPIDKeys();
   console.log('VAPID Public Key:', vapidKeys.publicKey);
@@ -96,5 +172,18 @@ export function generateVAPIDKeys() {
   console.log(`NEXT_PUBLIC_VAPID_PUBLIC_KEY="${vapidKeys.publicKey}"`);
   console.log(`VAPID_PRIVATE_KEY="${vapidKeys.privateKey}"`);
   console.log(`VAPID_EMAIL="mailto:your-email@example.com"`);
+  console.log(`ENCRYPTION_KEY="${EncryptionService.generateKey()}"`);
   return vapidKeys;
+}
+
+/**
+ * Health check for push notification service
+ * @returns Service health status
+ */
+export function getPushServiceHealth() {
+  return {
+    initialized: isWebPushInitialized,
+    vapidConfigured: validateVapidKeys(),
+    encryptionConfigured: EncryptionService.validateConfiguration(),
+  };
 }

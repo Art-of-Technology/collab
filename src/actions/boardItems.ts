@@ -423,6 +423,7 @@ export async function getBoardItems(boardId: string) {
 
 /**
  * Reorders items within a column or moves an item to a new column and position.
+ * This can work as both a server action and via API endpoint
  */
 export async function reorderItemsInColumn(data: {
   boardId: string; 
@@ -431,6 +432,26 @@ export async function reorderItemsInColumn(data: {
   movedItemId: string; // Keep this to identify the moved item for status updates
   // entityType is no longer needed here as we will determine type per item
 }) {
+  // Check if this is running in a client context (browser)
+  // If so, make an API call instead of running server logic directly
+  if (typeof window !== 'undefined') {
+    const response = await fetch('/api/tasks', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([data]), // Wrap in array as expected by API
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to reorder items');
+    }
+
+    return await response.json();
+  }
+
+  // Server-side execution continues below...
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
