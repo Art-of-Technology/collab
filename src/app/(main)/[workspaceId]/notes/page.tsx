@@ -438,7 +438,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                 <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
                   <div
                     data-tag-index="0"
-                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${selectedIndex === 0 ? 'bg-[#21C45D] dark:bg-[#21C45D]' : 'border-transparent hover:border-[#21C45D] hover:bg-[#21C45D]/10'
+                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${selectedIndex === 0 ? 'bg-primary text-primary-foreground' : 'border-transparent hover:border-primary hover:bg-primary/10'
                       }`}
                     onClick={() => {
                       setSelectedTag(null);
@@ -446,7 +446,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       setIsTagDropdownOpen(false);
                     }}
                   >
-                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: '#D97706' }} />
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-600" />
                     All Tags
                   </div>
                   {filteredTags.map((tag, index) => (
@@ -454,8 +454,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       key={tag.id}
                       data-tag-index={index + 1}
                       className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${selectedIndex === index + 1
-                          ? 'bg-[#21C45D]'
-                          : 'hover:bg-[#21C45D]/10'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-primary/10'
                         }`}
                       onClick={() => {
                         setSelectedTag(tag.id);
