@@ -10,6 +10,21 @@ export function usePushNotifications() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  const parseErrorResponse = async (response: Response): Promise<string> => {
+    try {
+      const contentType = response.headers.get('content-type');
+      if (contentType?.includes('application/json')) {
+        const errorData = await response.json();
+        return errorData.message || errorData.error || `Server error: ${response.status}`;
+      } else {
+        const errorText = await response.text();
+        return errorText || `Server error: ${response.status}`;
+      }
+    } catch {
+      return `Server error: ${response.status} ${response.statusText}`;
+    }
+  };
+
   useEffect(() => {
     // Check if push notifications are supported
     if ("serviceWorker" in navigator && "PushManager" in window) {
@@ -94,7 +109,8 @@ export function usePushNotifications() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save subscription on server");
+        const errorMessage = await parseErrorResponse(response);
+        throw new Error(errorMessage);
       }
 
       setSubscription(subscription);
@@ -106,9 +122,10 @@ export function usePushNotifications() {
       });
     } catch (error) {
       console.error("Error subscribing to push notifications:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to subscribe to push notifications. Please try again.";
       toast({
         title: "Subscription Failed",
-        description: "Failed to subscribe to push notifications. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -131,7 +148,8 @@ export function usePushNotifications() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to remove subscription from server");
+        const errorMessage = await parseErrorResponse(response);
+        throw new Error(errorMessage);
       }
 
       setSubscription(null);
@@ -143,9 +161,10 @@ export function usePushNotifications() {
       });
     } catch (error) {
       console.error("Error unsubscribing from push notifications:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to unsubscribe from push notifications. Please try again.";
       toast({
         title: "Unsubscribe Failed",
-        description: "Failed to unsubscribe from push notifications. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
