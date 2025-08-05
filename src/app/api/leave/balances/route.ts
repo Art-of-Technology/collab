@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const workspaceId = url.searchParams.get("workspaceId");
     const year = url.searchParams.get("year");
-    const currentYear = year ? parseInt(year) : new Date().getFullYear();
+    const currentYear = year ? parseInt(year, 10) : new Date().getFullYear();
 
     if (!workspaceId) {
       return NextResponse.json(
