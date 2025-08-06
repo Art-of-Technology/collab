@@ -1,20 +1,22 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Plus, 
-  Filter, 
-  Star, 
+import {
+  Search,
+  Plus,
+  Filter,
+  Star,
   FileText,
   Tag as TagIcon,
   Edit,
-  Trash2
+  Trash2,
+  Eye,
+  Lock
 } from "lucide-react";
 import {
   Dialog,
@@ -30,10 +32,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { useToast } from "@/hooks/use-toast";
+import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
 
 interface Note {
@@ -94,10 +98,22 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [tagSearchTerm, setTagSearchTerm] = useState("");
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const tagSearchInputRef = useRef<HTMLInputElement>(null);
+  const tagListRef = useRef<HTMLDivElement>(null);
+  const tagDialogContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Filter tags based on search term
+  const filteredTags = useMemo(() => {
+    return sortTagsBySearchTerm(tags, tagSearchTerm);
+  }, [tags, tagSearchTerm]);
 
   // Resolve params first
   useEffect(() => {
@@ -119,7 +135,103 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, searchQuery, selectedTag, showFavorites]);
+  }, [session?.user, searchQuery, selectedTag, showFavorites, visibilityFilter]);
+
+  // Focus search input when dialog opens
+  useEffect(() => {
+    if (isTagDropdownOpen) {
+      setTimeout(() => {
+        tagSearchInputRef.current?.focus();
+      }, 100);
+      setSelectedIndex(-1);
+    } else {
+      setTagSearchTerm("");
+      setSelectedIndex(-1);
+    }
+  }, [isTagDropdownOpen]);
+
+  // Reset selected index when search term changes
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [tagSearchTerm]);
+
+  // Add keyboard listener when dialog is open
+  useEffect(() => {
+    if (isTagDropdownOpen) {
+      // Add listener to the dialog content using ref instead of window
+      const dialogElement = tagDialogContentRef.current;
+      if (dialogElement) {
+        const handleKeyDownElement = (e: Event) => {
+          const keyboardEvent = e as KeyboardEvent;
+          // Only handle keys when the dialog is focused or when specific keys are pressed
+          const isDialogFocused = document.activeElement?.closest('[role="dialog"]');
+          if (!isDialogFocused && !['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(keyboardEvent.key)) {
+            return;
+          }
+
+          const totalItems = filteredTags.length + 1;
+
+          switch (keyboardEvent.key) {
+            case 'ArrowDown':
+              keyboardEvent.preventDefault();
+              setSelectedIndex(prev =>
+                prev < totalItems - 1 ? prev + 1 : 0
+              );
+              break;
+            case 'ArrowUp':
+              keyboardEvent.preventDefault();
+              setSelectedIndex(prev =>
+                prev > 0 ? prev - 1 : totalItems - 1
+              );
+              break;
+            case 'Enter':
+              keyboardEvent.preventDefault();
+              if (selectedIndex === 0) {
+                setSelectedTag(null);
+                setTagSearchTerm("");
+                setIsTagDropdownOpen(false);
+              } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
+                const selectedTagItem = filteredTags[selectedIndex - 1];
+                setSelectedTag(selectedTagItem.id);
+                setTagSearchTerm("");
+                setIsTagDropdownOpen(false);
+              }
+              break;
+            case 'Escape':
+              keyboardEvent.preventDefault();
+              setIsTagDropdownOpen(false);
+              break;
+          }
+        };
+
+        dialogElement.addEventListener('keydown', handleKeyDownElement);
+        return () => dialogElement.removeEventListener('keydown', handleKeyDownElement);
+      }
+    }
+  }, [isTagDropdownOpen, selectedIndex, filteredTags]);
+
+  // Auto-scroll to selected item
+  useEffect(() => {
+    if (selectedIndex >= 0 && tagListRef.current) {
+      const container = tagListRef.current;
+      const items = container.querySelectorAll('[data-tag-index]');
+      const selectedItem = items[selectedIndex] as HTMLElement;
+
+      if (selectedItem) {
+        const containerRect = container.getBoundingClientRect();
+        const itemRect = selectedItem.getBoundingClientRect();
+
+        // Check if item is above the visible area
+        if (itemRect.top < containerRect.top) {
+          container.scrollTop -= (containerRect.top - itemRect.top) + 10;
+        }
+        // Check if item is below the visible area
+        else if (itemRect.bottom > containerRect.bottom) {
+          container.scrollTop += (itemRect.bottom - containerRect.bottom) + 10;
+        }
+      }
+    }
+  }, [selectedIndex]);
 
   const fetchNotes = async () => {
     try {
@@ -127,11 +239,20 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (searchQuery) params.append("search", searchQuery);
       if (selectedTag) params.append("tag", selectedTag);
       if (showFavorites) params.append("favorite", "true");
+      if (visibilityFilter === "public") params.append("public", "true");
+      if (visibilityFilter === "private") params.append("public", "false");
 
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
         const data = await response.json();
-        setNotes(data);
+
+        // Sort notes: titles starting with search term first, then others
+        if (searchQuery.trim()) {
+          const sortedNotes = sortNotesBySearchTerm(data, searchQuery) as Note[];
+          setNotes(sortedNotes);
+        } else {
+          setNotes(data);
+        }
       }
     } catch (error) {
       console.error("Error fetching notes:", error);
@@ -196,7 +317,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
       if (response.ok) {
         const updatedNote = await response.json();
-        setNotes(notes.map(note => 
+        setNotes(notes.map(note =>
           note.id === noteId ? updatedNote : note
         ));
       }
@@ -229,7 +350,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               Create and organize your notes with markdown support
             </p>
           </div>
-          
+
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }}>
@@ -265,7 +386,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               style={{ fontSize: '14px' }}
             />
           </div>
-          
+
           <div className="flex gap-2">
             <Button
               variant={showFavorites ? "default" : "outline"}
@@ -276,36 +397,82 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               <Star className="h-4 w-4" />
               Favorites
             </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+
+            <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
+              <DialogTrigger asChild>
                 <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: '14px' }}>
                   <Filter className="h-4 w-4" />
                   {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setSelectedTag(null)}>
-                  All Tags
-                </DropdownMenuItem>
-                {tags.map((tag) => (
-                  <DropdownMenuItem
-                    key={tag.id}
-                    onClick={() => setSelectedTag(tag.id)}
+              </DialogTrigger>
+              <DialogContent ref={tagDialogContentRef} className="tag-dialog-content">
+                <div className="p-2 sm:p-4 border-b">
+                  <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
+                  <div className="relative mt-2 mb-1">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-3 w-3 sm:h-4 sm:w-4" />
+                    <Input
+                      ref={tagSearchInputRef}
+                      placeholder="Search tags..."
+                      value={tagSearchTerm}
+                      onChange={(e) => setTagSearchTerm(e.target.value)}
+                      className="pl-6 sm:pl-8 text-sm sm:text-base h-8 sm:h-10"
+                    />
+                  </div>
+                </div>
+                <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
+                  <div
+                    data-tag-index="0"
+                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${selectedIndex === 0 ? 'bg-primary text-primary-foreground' : 'border-transparent hover:border-primary hover:bg-primary/10'
+                      }`}
+                    onClick={() => {
+                      setSelectedTag(null);
+                      setTagSearchTerm("");
+                      setIsTagDropdownOpen(false);
+                    }}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-600" />
+                    All Tags
+                  </div>
+                  {filteredTags.map((tag, index) => (
+                    <div
+                      key={tag.id}
+                      data-tag-index={index + 1}
+                      className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${selectedIndex === index + 1
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-primary/10'
+                        }`}
+                      onClick={() => {
+                        setSelectedTag(tag.id);
+                        setTagSearchTerm("");
+                        setIsTagDropdownOpen(false);
+                      }}
+                    >
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="w-2 h-2 sm:w-3 sm:h-3 rounded-full"
                         style={{ backgroundColor: tag.color }}
                       />
                       {tag.name} ({tag._count.notes})
                     </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  ))}
+                  {filteredTags.length === 0 && tagSearchTerm.trim() && (
+                    <div className="px-2 py-2 text-sm sm:text-base text-muted-foreground text-center">
+                      No tags found matching "{tagSearchTerm}"
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
+
+        {/* Visibility Filter Tabs */}
+        <Tabs value={visibilityFilter} onValueChange={(value) => setVisibilityFilter(value as "all" | "public" | "private")}>
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="all">All Notes</TabsTrigger>
+            <TabsTrigger value="public">Public</TabsTrigger>
+            <TabsTrigger value="private">Private</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Notes Grid */}
         {notes.length === 0 ? (
@@ -313,7 +480,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-medium">No notes found</h3>
             <p className="text-muted-foreground">
-              {searchQuery || selectedTag || showFavorites
+              {searchQuery || selectedTag || showFavorites || visibilityFilter !== "all"
                 ? "Try adjusting your filters"
                 : "Get started by creating your first note"}
             </p>
@@ -339,15 +506,14 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                         }}
                       >
                         <Star
-                          className={`h-1 w-1 sm:h-4 sm:w-4 ${
-                            note.isFavorite 
-                              ? "fill-yellow-400 text-yellow-400" 
+                          className={`h-1 w-1 sm:h-4 sm:w-4 ${note.isFavorite
+                              ? "fill-yellow-400 text-yellow-400"
                               : "text-muted-foreground"
-                          }`}
+                            }`}
                         />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
@@ -358,8 +524,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       >
                         <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="h-3 w-3 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
@@ -372,9 +538,22 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       </Button>
                     </div>
                   </div>
-                  
-                  <h3 className="font-semibold line-clamp-1 text-sm sm:text-base mb-2 sm:mb-3">{note.title}</h3>
-                  
+
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="font-semibold line-clamp-1 text-sm sm:text-base flex-1">{note.title}</h3>
+                    <div className="flex items-center gap-1 ml-2">
+                      {note.isPublic ? (
+                        <div title="Public note">
+                          <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
+                        </div>
+                      ) : (
+                        <div title="Private note">
+                          <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
                     <div className="text-muted-foreground text-sm sm:text-sm">
                       {(() => {
@@ -388,7 +567,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       })()}
                     </div>
                   </div>
-                  
+
                   {note.tags.length > 0 && (
                     <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
                       {note.tags.map((tag) => (
@@ -404,7 +583,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       ))}
                     </div>
                   )}
-                  
+
                   <div className="text-sm text-muted-foreground mt-auto">
                     Updated {new Date(note.updatedAt).toLocaleDateString()}
                     {note.workspace && (
