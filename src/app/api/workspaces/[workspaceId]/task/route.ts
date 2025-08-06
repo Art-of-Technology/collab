@@ -41,6 +41,7 @@ export async function GET(
         status: true,
         priority: true,
         dueDate: true,
+        issueKey: true,
         createdAt: true,
         updatedAt: true
       },
