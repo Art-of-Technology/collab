@@ -36,6 +36,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const task = await prisma.task.findFirst({
       where: { id: taskId, workspaceId },
       select: {
+        milestoneId: true,
         epic: {
           select: {
             id: true,
@@ -52,15 +53,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             status: true,
             issueKey: true,
             description: true
-          }
-        },
-        milestone: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            description: true,
-            dueDate: true
           }
         },
         parentTask: {
@@ -88,10 +80,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
+    // Fetch milestone separately if milestoneId exists
+    let milestone = null;
+    if (task.milestoneId) {
+      milestone = await prisma.milestone.findUnique({
+        where: { id: task.milestoneId },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          description: true,
+          dueDate: true
+        }
+      });
+    }
+
     return NextResponse.json({
       epics: task.epic ? [task.epic] : [],
       stories: task.story ? [task.story] : [],
-      milestones: task.milestone ? [task.milestone] : [],
+      milestones: milestone ? [milestone] : [],
       parentTasks: task.parentTask ? [task.parentTask] : [],
       subtasks: task.subtasks
     });
