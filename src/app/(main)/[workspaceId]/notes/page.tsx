@@ -120,6 +120,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   useEffect(() => {
     const resolveParams = async () => {
       const resolvedParams = await params;
+
       setWorkspaceId(resolvedParams.workspaceId);
     };
     resolveParams();
@@ -245,6 +246,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (workspaceId && visibilityFilter !== "all") {
         params.append("workspace", workspaceId);
       }
+
+
 
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {

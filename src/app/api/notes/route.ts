@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const workspaceId = searchParams.get("workspace");
     const isPublic = searchParams.get("public");
 
-    // Build the where clause based on filters
+    // Build the base where clause
     const where: any = {
       ...(search && {
         OR: [
@@ -27,23 +27,43 @@ export async function GET(request: NextRequest) {
         ]
       }),
       ...(isFavorite && { isFavorite: true }),
-      ...(tagId && { tags: { some: { id: tagId } } }),
-      ...(workspaceId && { workspaceId })
+      ...(tagId && { tags: { some: { id: tagId } } })
     };
 
     // Handle visibility filtering
     if (isPublic === "true") {
-      // For public filter, show all public notes in the workspace (from all users)
-      where.isPublic = true;
+      // For public filter, show all public notes
       if (workspaceId) {
-        where.workspaceId = workspaceId;
+        // Show public notes that are either in this workspace OR have no workspace (legacy notes)
+        where.AND = [
+          { isPublic: true },
+          {
+            OR: [
+              { workspaceId: workspaceId },
+              { workspaceId: null }
+            ]
+          }
+        ];
+      } else {
+        where.isPublic = true;
       }
     } else if (isPublic === "false") {
       // For private filter, show only user's private notes
-      where.isPublic = false;
-      where.authorId = session.user.id;
       if (workspaceId) {
-        where.workspaceId = workspaceId;
+        // Show private notes that are either in this workspace OR have no workspace (legacy notes)
+        where.AND = [
+          { isPublic: false },
+          { authorId: session.user.id },
+          {
+            OR: [
+              { workspaceId: workspaceId },
+              { workspaceId: null }
+            ]
+          }
+        ];
+      } else {
+        where.isPublic = false;
+        where.authorId = session.user.id;
       }
     } else {
       // For "all" filter, show user's own notes (both public and private)
@@ -74,6 +94,8 @@ export async function GET(request: NextRequest) {
         updatedAt: "desc"
       }
     });
+
+
 
     return NextResponse.json(notes);
   } catch (error) {
