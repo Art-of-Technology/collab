@@ -168,11 +168,6 @@ export async function processLeaveRequestAction(data: LeaveRequestActionData) {
       });
     }
 
-    // TODO: Add audit trail table to track who approved/rejected requests
-    // TODO: Send notification to employee about approval/rejection
-    // TODO: Create calendar event if approved
-    // TODO: Send email notification
-
     return {
       ...updatedRequest,
       user: {
