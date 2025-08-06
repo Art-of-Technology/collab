@@ -3,6 +3,12 @@
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
+import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
+import {
+  approveLeaveRequestWithBalance,
+  rejectLeaveRequestWithBalance,
+} from "@/lib/leave-service";
+import { checkUserPermission, Permission } from "@/lib/permissions";
 
 /**
  * Get leave policies for a workspace
@@ -216,4 +222,99 @@ export async function getUserLeaveRequests(workspaceId: string) {
   });
 
   return leaveRequests;
+}
+
+/**
+ * Get all leave requests for a workspace (for managers)
+ */
+export async function getWorkspaceLeaveRequests(workspaceSlugOrId: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    throw new Error("Unauthorized");
+  }
+
+  // Resolve workspace slug to ID
+  const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+  if (!workspaceId) {
+    throw new Error("Workspace not found");
+  }
+
+  // Get the current user
+  const user = await prisma.user.findUnique({
+    where: {
+      email: session.user.email,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  // Check if user has permission to manage leave
+  const managePermission = await checkUserPermission(
+    user.id,
+    workspaceId,
+    Permission.MANAGE_LEAVE
+  );
+
+  if (!managePermission.hasPermission) {
+    throw new Error("Insufficient permissions to manage leave requests");
+  }
+
+  const leaveRequests = await prisma.leaveRequest.findMany({
+    where: {
+      policy: {
+        workspaceId: workspaceId,
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+      policy: {
+        select: {
+          name: true,
+          isPaid: true,
+          trackIn: true,
+        },
+      },
+    },
+    orderBy: [
+      {
+        status: "asc", // Show pending first
+      },
+      {
+        createdAt: "desc",
+      },
+    ],
+  });
+
+  // Transform the data to match our component interface
+  return leaveRequests.map((request) => ({
+    ...request,
+    user: {
+      ...request.user,
+      avatar: request.user.image,
+    },
+  }));
+}
+
+/**
+ * Approve a leave request (managers only) - with automatic balance update
+ */
+export async function approveLeaveRequest(requestId: string, notes?: string) {
+  return approveLeaveRequestWithBalance(requestId, notes);
+}
+
+/**
+ * Reject a leave request (managers only)
+ */
+export async function rejectLeaveRequest(requestId: string, notes?: string) {
+  return rejectLeaveRequestWithBalance(requestId, notes);
 }

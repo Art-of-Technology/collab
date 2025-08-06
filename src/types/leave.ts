@@ -65,6 +65,17 @@ export interface LeaveRequest {
   };
 }
 
+// Extended interface for leave requests with user info (for managers)
+export interface LeaveRequestWithUser extends LeaveRequest {
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    avatar?: string | null;
+    image?: string | null;
+  };
+}
+
 // Leave Balance type from Prisma
 export interface LeaveBalance {
   id: string;
