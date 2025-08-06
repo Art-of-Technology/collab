@@ -2659,7 +2659,7 @@ export function MarkdownEditor({
         {showMentionSuggestions && (
           <div 
             style={{ 
-              position: "fixed",
+              position: "absolute",
               top: `${caretPosition.top}px`,
               left: `${caretPosition.left}px`,
               zIndex: 999999,
@@ -2680,7 +2680,7 @@ export function MarkdownEditor({
           <div 
             ref={taskMentionSuggestionRef}
             style={{ 
-              position: "fixed",
+              position: "absolute",
               top: `${taskCaretPosition.top}px`,
               left: `${taskCaretPosition.left}px`,
               zIndex: 999999,
@@ -2701,7 +2701,7 @@ export function MarkdownEditor({
           <div 
             ref={epicMentionSuggestionRef}
             style={{ 
-              position: "fixed",
+              position: "absolute",
               top: `${epicCaretPosition.top}px`,
               left: `${epicCaretPosition.left}px`,
               zIndex: 999999,
@@ -2722,7 +2722,7 @@ export function MarkdownEditor({
           <div 
             ref={storyMentionSuggestionRef}
             style={{ 
-              position: "fixed",
+              position: "absolute",
               top: `${storyCaretPosition.top}px`,
               left: `${storyCaretPosition.left}px`,
               zIndex: 999999,
@@ -2743,7 +2743,7 @@ export function MarkdownEditor({
           <div 
             ref={milestoneMentionSuggestionRef}
             style={{ 
-              position: "fixed",
+              position: "absolute",
               top: `${milestoneCaretPosition.top}px`,
               left: `${milestoneCaretPosition.left}px`,
               zIndex: 999999,
@@ -2764,7 +2764,7 @@ export function MarkdownEditor({
           <div 
             ref={commandMenuRef}
             style={{ 
-              position: "fixed",
+              position: "absolute",
               top: `${commandMenuPosition.top}px`,
               left: `${commandMenuPosition.left}px`,
               zIndex: 999999,
