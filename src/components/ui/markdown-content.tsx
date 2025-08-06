@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from "@/context/WorkspaceContext";
-
+import DOMPurify from 'dompurify';
 interface MarkdownContentProps {
   content?: string;     // Keep for potential fallback/compatibility
   htmlContent: string; // Make this the primary required prop
@@ -67,6 +67,11 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
     
     return processed;
   }, [htmlContent, content]);
+
+  // Sanitize the processed HTML content before rendering
+  const sanitizedHtmlContent = useMemo(() => {
+    return DOMPurify.sanitize(processedHtmlContent);
+  }, [processedHtmlContent]);
 
   // Keep the CSS useEffect for styling the .mention-block class
   useEffect(() => {
@@ -236,7 +241,7 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         className
       )}
       // Render the processed HTML content
-      dangerouslySetInnerHTML={{ __html: processedHtmlContent }} 
+      dangerouslySetInnerHTML={{ __html: sanitizedHtmlContent }} 
       onClick={handleClick}
     />
   );
