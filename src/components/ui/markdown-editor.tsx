@@ -51,6 +51,7 @@ import { uploadImage } from "@/utils/cloudinary";
 import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion";
 import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-suggestion";
 import { type Epic, EpicMentionSuggestion } from "@/components/ui/epic-mention-suggestion";
+import { type Story, StoryMentionSuggestion } from "@/components/ui/story-mention-suggestion";
 import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
@@ -741,6 +742,106 @@ const EpicMention = TiptapNode.create({
   },
 })
 
+// Define a StoryMention extension for TipTap
+const StoryMention = TiptapNode.create({
+  name: 'storyMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-story-mention]',
+        getAttrs: element => {
+          const id = element.getAttribute('data-story-id')
+          const title = element.getAttribute('data-story-title')
+          const issueKey = element.getAttribute('data-story-issue-key')
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-story-mention': true, class: 'story-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '^',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `^[${displayText}](${node.attrs.id})`
+  },
+})
+
 export function MarkdownEditor({
   onChange,
   content = "",
@@ -802,6 +903,7 @@ export function MarkdownEditor({
       Mention, // Add Mention extension
       TaskMention, // Add Task Mention extension
       EpicMention, // Add Epic Mention extension
+      StoryMention, // Add Story Mention extension
     ],
     content: initialContentRef.current,
     editorProps: {
@@ -1016,6 +1118,12 @@ export function MarkdownEditor({
   const [showEpicMentionSuggestions, setShowEpicMentionSuggestions] = useState(false);
   const [epicCaretPosition, setEpicCaretPosition] = useState({ top: 0, left: 0 });
   const epicMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add story mention state
+  const [storyMentionQuery, setStoryMentionQuery] = useState("");
+  const [showStoryMentionSuggestions, setShowStoryMentionSuggestions] = useState(false);
+  const [storyCaretPosition, setStoryCaretPosition] = useState({ top: 0, left: 0 });
+  const storyMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
   // Add command menu ref
   const commandMenuRef = useRef<HTMLDivElement>(null);
@@ -1259,6 +1367,84 @@ export function MarkdownEditor({
     }
   }, [editor]);
 
+  // Insert a story mention at cursor position
+  const insertStoryMention = useCallback((story: Story) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the ^ symbol --- //
+    let caretPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (caretPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeCaretPos = nodeText.lastIndexOf('^', searchFromIndex);
+
+        while (relativeCaretPos !== -1) {
+          const absoluteCaretPos = pos + relativeCaretPos;
+          // Ensure the found ^ is within the search range and before the cursor
+          if (absoluteCaretPos >= searchLimit && absoluteCaretPos < currentPosition) {
+            // Check if there's a space or start of node right after the ^
+            // (to ensure we found the start of the mention query)
+            const textAfterCaret = editor.state.doc.textBetween(absoluteCaretPos + 1, currentPosition, "");
+            if (!textAfterCaret.match(/^\s/) && textAfterCaret.indexOf('^') === -1) { // Ensure no space and no other ^ between trigger and cursor
+              caretPosition = absoluteCaretPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeCaretPos - 1;
+          relativeCaretPos = nodeText.lastIndexOf('^', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowStoryMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if ^ was found
+    if (caretPosition !== -1) {
+      // Delete from the found ^ position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: caretPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the story mention node where the ^ was
+      editor.chain().insertContentAt(caretPosition, {
+        type: 'storyMention',
+        attrs: {
+          id: story.id,
+          title: story.title,
+          issueKey: story.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(caretPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no ^ was found, insert the story mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'storyMention',
+        attrs: {
+          id: story.id,
+          title: story.title,
+          issueKey: story.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
   // Handle command selection
   const handleCommandSelect = useCallback((command: CommandOption) => {
     if (!editor) return;
@@ -1295,8 +1481,8 @@ export function MarkdownEditor({
         editor.chain().focus().insertContent('~').run();
         break;
       case 'mention-story':
-        // For now, insert text indicating story mentions aren't implemented yet
-        editor.chain().focus().insertContent('[Story mention - not implemented yet] ').run();
+        // Insert ^ to trigger story mention
+        editor.chain().focus().insertContent('^').run();
         break;
       case 'mention-milestone':
         // For now, insert text indicating milestone mentions aren't implemented yet
@@ -1430,6 +1616,45 @@ export function MarkdownEditor({
     setShowEpicMentionSuggestions(false);
   }, [editor]);
 
+  // Check for ^ story mentions when typing
+  const checkForStoryMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last ^ character
+    const lastCaretIndex = content.lastIndexOf('^');
+    
+    if (lastCaretIndex >= 0) {
+      // Check if there's a space between the last ^ and the word we're typing
+      const textAfterCaret = content.substring(lastCaretIndex + 1);
+      const hasSpaceAfterCaret = textAfterCaret.match(/^\s/);
+      
+      if (!hasSpaceAfterCaret) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterCaret.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for story mention suggestions
+          setStoryCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setStoryMentionQuery(textAfterCaret);
+          setShowStoryMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowStoryMentionSuggestions(false);
+  }, [editor]);
+
   // Check for command trigger (/)
   const checkForCommandTrigger = useCallback(() => {
     if (!editor) return;
@@ -1478,15 +1703,17 @@ export function MarkdownEditor({
     editor.on('update', checkForMentionTrigger);
     editor.on('update', checkForTaskMentionTrigger);
     editor.on('update', checkForEpicMentionTrigger);
+    editor.on('update', checkForStoryMentionTrigger);
     editor.on('update', checkForCommandTrigger);
     
     return () => {
       editor.off('update', checkForMentionTrigger);
       editor.off('update', checkForTaskMentionTrigger);
       editor.off('update', checkForEpicMentionTrigger);
+      editor.off('update', checkForStoryMentionTrigger);
       editor.off('update', checkForCommandTrigger);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForCommandTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForCommandTrigger]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
@@ -1535,6 +1762,15 @@ export function MarkdownEditor({
         !editor.view.dom.contains(event.target as HTMLElement)
       ) {
         setShowEpicMentionSuggestions(false);
+      }
+      
+      if (
+        storyMentionSuggestionRef.current &&
+        !storyMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowStoryMentionSuggestions(false);
       }
       
       if (
@@ -1600,9 +1836,24 @@ export function MarkdownEditor({
         cursor: pointer;
       }
       
+      .ProseMirror .story-mention {
+        background-color: rgba(34, 197, 94, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #22c55e;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
       .ProseMirror .mention .mention-symbol,
       .ProseMirror .task-mention .mention-symbol,
-      .ProseMirror .epic-mention .mention-symbol {
+      .ProseMirror .epic-mention .mention-symbol,
+      .ProseMirror .story-mention .mention-symbol {
         opacity: 0.7;
         margin-right: 1px;
       }
@@ -2116,6 +2367,27 @@ export function MarkdownEditor({
               onSelect={insertEpicMention}
               workspaceId={currentWorkspace?.id}
               onEscape={() => setShowEpicMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Story Mention Suggestions */}
+        {showStoryMentionSuggestions && (
+          <div 
+            ref={storyMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${storyCaretPosition.top}px`,
+              left: `${storyCaretPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <StoryMentionSuggestion
+              query={storyMentionQuery}
+              onSelect={insertStoryMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowStoryMentionSuggestions(false)}
             />
           </div>
         )}
