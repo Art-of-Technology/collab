@@ -1085,11 +1085,16 @@ export function MarkdownEditor({
   useEffect(() => {
     if (!editor) return;
 
+    let typingTimer: NodeJS.Timeout | null = null;
+
     const handleKeyDown = () => {
       setIsUserTyping(true);
+      // Clear existing timer
+      if (typingTimer) {
+        clearTimeout(typingTimer);
+      }
       // Reset typing flag after a delay
-      const timer = setTimeout(() => setIsUserTyping(false), 500);
-      return () => clearTimeout(timer);
+      typingTimer = setTimeout(() => setIsUserTyping(false), 500);
     };
 
     const handleFocus = () => {
@@ -1103,6 +1108,10 @@ export function MarkdownEditor({
     return () => {
       editorDom.removeEventListener('keydown', handleKeyDown);
       editorDom.removeEventListener('focus', handleFocus);
+      // Clear timer on cleanup
+      if (typingTimer) {
+        clearTimeout(typingTimer);
+      }
     };
   }, [editor]);
 
@@ -1765,7 +1774,7 @@ export function MarkdownEditor({
   
   // Check for @ mentions when typing
   const checkForMentionTrigger = useCallback(() => {
-    if (!editor || !isUserTyping) return;
+    if (!editor) return;
     
     // Skip checking if a mention was just inserted within the last 300ms
     const timeSinceLastMention = Date.now() - lastMentionInsertedRef.current;
@@ -1808,9 +1817,9 @@ export function MarkdownEditor({
     setShowMentionSuggestions(false);
   }, [editor]);
 
-  // Check for # task mentions when typing
+    // Check for # task mentions when typing  
   const checkForTaskMentionTrigger = useCallback(() => {
-    if (!editor || !isUserTyping) return;
+    if (!editor) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1847,9 +1856,9 @@ export function MarkdownEditor({
     setShowTaskMentionSuggestions(false);
   }, [editor]);
 
-  // Check for ~ epic mentions when typing
+    // Check for ~ epic mentions when typing  
   const checkForEpicMentionTrigger = useCallback(() => {
-    if (!editor || !isUserTyping) return;
+    if (!editor) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1886,9 +1895,9 @@ export function MarkdownEditor({
     setShowEpicMentionSuggestions(false);
   }, [editor]);
 
-  // Check for ^ story mentions when typing
+    // Check for ^ story mentions when typing  
   const checkForStoryMentionTrigger = useCallback(() => {
-    if (!editor || !isUserTyping) return;
+    if (!editor) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1925,9 +1934,9 @@ export function MarkdownEditor({
     setShowStoryMentionSuggestions(false);
   }, [editor]);
 
-  // Check for ! milestone mentions when typing
+    // Check for ! milestone mentions when typing  
   const checkForMilestoneMentionTrigger = useCallback(() => {
-    if (!editor || !isUserTyping) return; // Only trigger when user is actively typing
+    if (!editor) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1968,7 +1977,7 @@ export function MarkdownEditor({
 
   // Check for command trigger (/)
   const checkForCommandTrigger = useCallback(() => {
-    if (!editor || !isUserTyping) return;
+    if (!editor) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -2026,7 +2035,7 @@ export function MarkdownEditor({
       editor.off('update', checkForMilestoneMentionTrigger);
       editor.off('update', checkForCommandTrigger);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger, isUserTyping]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
