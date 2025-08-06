@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
 import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion";
 import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-suggestion";
+import { type Epic, EpicMentionSuggestion } from "@/components/ui/epic-mention-suggestion";
 import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
@@ -640,6 +641,106 @@ const TaskMention = TiptapNode.create({
   },
 })
 
+// Define an EpicMention extension for TipTap
+const EpicMention = TiptapNode.create({
+  name: 'epicMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-epic-mention]',
+        getAttrs: element => {
+          const id = element.getAttribute('data-epic-id')
+          const title = element.getAttribute('data-epic-title')
+          const issueKey = element.getAttribute('data-epic-issue-key')
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-epic-mention': true, class: 'epic-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '~',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `~[${displayText}](${node.attrs.id})`
+  },
+})
+
 export function MarkdownEditor({
   onChange,
   content = "",
@@ -700,6 +801,7 @@ export function MarkdownEditor({
       Color,
       Mention, // Add Mention extension
       TaskMention, // Add Task Mention extension
+      EpicMention, // Add Epic Mention extension
     ],
     content: initialContentRef.current,
     editorProps: {
@@ -909,6 +1011,12 @@ export function MarkdownEditor({
   const [taskCaretPosition, setTaskCaretPosition] = useState({ top: 0, left: 0 });
   const taskMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
+  // Add epic mention state
+  const [epicMentionQuery, setEpicMentionQuery] = useState("");
+  const [showEpicMentionSuggestions, setShowEpicMentionSuggestions] = useState(false);
+  const [epicCaretPosition, setEpicCaretPosition] = useState({ top: 0, left: 0 });
+  const epicMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
   // Add command menu ref
   const commandMenuRef = useRef<HTMLDivElement>(null);
   
@@ -1073,6 +1181,84 @@ export function MarkdownEditor({
     }
   }, [editor]);
 
+  // Insert an epic mention at cursor position
+  const insertEpicMention = useCallback((epic: Epic) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the ~ symbol --- //
+    let tildePosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (tildePosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeTildePos = nodeText.lastIndexOf('~', searchFromIndex);
+
+        while (relativeTildePos !== -1) {
+          const absoluteTildePos = pos + relativeTildePos;
+          // Ensure the found ~ is within the search range and before the cursor
+          if (absoluteTildePos >= searchLimit && absoluteTildePos < currentPosition) {
+            // Check if there's a space or start of node right after the ~
+            // (to ensure we found the start of the mention query)
+            const textAfterTilde = editor.state.doc.textBetween(absoluteTildePos + 1, currentPosition, "");
+            if (!textAfterTilde.match(/^\s/) && textAfterTilde.indexOf('~') === -1) { // Ensure no space and no other ~ between trigger and cursor
+              tildePosition = absoluteTildePos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeTildePos - 1;
+          relativeTildePos = nodeText.lastIndexOf('~', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowEpicMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if ~ was found
+    if (tildePosition !== -1) {
+      // Delete from the found ~ position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: tildePosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the epic mention node where the ~ was
+      editor.chain().insertContentAt(tildePosition, {
+        type: 'epicMention',
+        attrs: {
+          id: epic.id,
+          title: epic.title,
+          issueKey: epic.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(tildePosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no ~ was found, insert the epic mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'epicMention',
+        attrs: {
+          id: epic.id,
+          title: epic.title,
+          issueKey: epic.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
   // Handle command selection
   const handleCommandSelect = useCallback((command: CommandOption) => {
     if (!editor) return;
@@ -1105,10 +1291,16 @@ export function MarkdownEditor({
         editor.chain().focus().insertContent('#').run();
         break;
       case 'mention-epic':
+        // Insert ~ to trigger epic mention
+        editor.chain().focus().insertContent('~').run();
+        break;
       case 'mention-story':
+        // For now, insert text indicating story mentions aren't implemented yet
+        editor.chain().focus().insertContent('[Story mention - not implemented yet] ').run();
+        break;
       case 'mention-milestone':
-        // These will be implemented later when we add epic/story/milestone mentions
-        editor.chain().focus().insertContent(`[${command.label}] `).run();
+        // For now, insert text indicating milestone mentions aren't implemented yet
+        editor.chain().focus().insertContent('[Milestone mention - not implemented yet] ').run();
         break;
       default:
         break;
@@ -1199,6 +1391,45 @@ export function MarkdownEditor({
     setShowTaskMentionSuggestions(false);
   }, [editor]);
 
+  // Check for ~ epic mentions when typing
+  const checkForEpicMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last ~ character
+    const lastTildeIndex = content.lastIndexOf('~');
+    
+    if (lastTildeIndex >= 0) {
+      // Check if there's a space between the last ~ and the word we're typing
+      const textAfterTilde = content.substring(lastTildeIndex + 1);
+      const hasSpaceAfterTilde = textAfterTilde.match(/^\s/);
+      
+      if (!hasSpaceAfterTilde) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterTilde.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for epic mention suggestions
+          setEpicCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setEpicMentionQuery(textAfterTilde);
+          setShowEpicMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowEpicMentionSuggestions(false);
+  }, [editor]);
+
   // Check for command trigger (/)
   const checkForCommandTrigger = useCallback(() => {
     if (!editor) return;
@@ -1246,14 +1477,16 @@ export function MarkdownEditor({
     // Update the editor
     editor.on('update', checkForMentionTrigger);
     editor.on('update', checkForTaskMentionTrigger);
+    editor.on('update', checkForEpicMentionTrigger);
     editor.on('update', checkForCommandTrigger);
     
     return () => {
       editor.off('update', checkForMentionTrigger);
       editor.off('update', checkForTaskMentionTrigger);
+      editor.off('update', checkForEpicMentionTrigger);
       editor.off('update', checkForCommandTrigger);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForCommandTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForCommandTrigger]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
@@ -1296,6 +1529,15 @@ export function MarkdownEditor({
       }
       
       if (
+        epicMentionSuggestionRef.current &&
+        !epicMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowEpicMentionSuggestions(false);
+      }
+      
+      if (
         commandMenuRef.current &&
         !commandMenuRef.current.contains(event.target as HTMLElement) &&
         editor &&
@@ -1330,7 +1572,37 @@ export function MarkdownEditor({
         cursor: pointer;
       }
       
-      .ProseMirror .mention .mention-symbol {
+      .ProseMirror .task-mention {
+        background-color: rgba(59, 130, 246, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #3b82f6;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
+      .ProseMirror .epic-mention {
+        background-color: rgba(168, 85, 247, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #a855f7;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
+      .ProseMirror .mention .mention-symbol,
+      .ProseMirror .task-mention .mention-symbol,
+      .ProseMirror .epic-mention .mention-symbol {
         opacity: 0.7;
         margin-right: 1px;
       }
@@ -1823,6 +2095,27 @@ export function MarkdownEditor({
               onSelect={insertTaskMention}
               workspaceId={currentWorkspace?.id}
               onEscape={() => setShowTaskMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Epic Mention Suggestions */}
+        {showEpicMentionSuggestions && (
+          <div 
+            ref={epicMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${epicCaretPosition.top}px`,
+              left: `${epicCaretPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <EpicMentionSuggestion
+              query={epicMentionQuery}
+              onSelect={insertEpicMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowEpicMentionSuggestions(false)}
             />
           </div>
         )}
