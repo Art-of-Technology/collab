@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen, Edit2, Check, X, Trash2, Tag } from "lucide-react";
+
+import { Plus, ChevronDown, ChevronRight, User, Users, Calendar, Star, BookOpen, Tag } from "lucide-react";
 import { Draggable } from "@hello-pangea/dnd";
 import EnhancedTaskCard from "./EnhancedTaskCard";
 import { GroupingOption } from "./KanbanFilters";
@@ -12,7 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { getItemTypeIcon } from "@/lib/item-utils";
-import { useToast } from "@/hooks/use-toast";
+
 
 interface Group {
   id: string;
@@ -53,10 +53,7 @@ export default function GroupedColumn({
   boardId
 }: GroupedColumnProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  const [isEditingColumnName, setIsEditingColumnName] = useState(false);
-  const [editColumnName, setEditColumnName] = useState(columnName);
-  const [isSavingColumnName, setIsSavingColumnName] = useState(false);
-  const { toast } = useToast();
+
 
   const toggleGroup = (groupId: string) => {
     setCollapsedGroups(prev => ({
@@ -65,69 +62,7 @@ export default function GroupedColumn({
     }));
   };
 
-  const handleEditColumnName = () => {
-    setEditColumnName(columnName);
-    setIsEditingColumnName(true);
-  };
 
-  const handleSaveColumnName = async () => {
-    if (!editColumnName.trim() || editColumnName === columnName || !onColumnEdit) {
-      setIsEditingColumnName(false);
-      setEditColumnName(columnName);
-      return;
-    }
-
-    setIsSavingColumnName(true);
-    try {
-      await onColumnEdit(columnId, editColumnName.trim());
-      setIsEditingColumnName(false);
-      toast({
-        title: "Column updated",
-        description: `Column renamed to "${editColumnName.trim()}"`,
-      });
-    } catch (error) {
-      console.error("Error updating column name:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update column name",
-        variant: "destructive",
-      });
-      setEditColumnName(columnName);
-    } finally {
-      setIsSavingColumnName(false);
-    }
-  };
-
-  const handleCancelEditColumnName = () => {
-    setIsEditingColumnName(false);
-    setEditColumnName(columnName);
-  };
-
-  const handleDeleteColumn = async () => {
-    if (!onColumnDelete || tasks.length > 0) return;
-
-    if (!window.confirm(`Are you sure you want to delete the "${columnName}" column?`)) {
-      return;
-    }
-
-    setIsSavingColumnName(true);
-    try {
-      await onColumnDelete(columnId);
-      toast({
-        title: "Column deleted",
-        description: `Column "${columnName}" has been deleted`,
-      });
-    } catch (error) {
-      console.error("Error deleting column:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete column",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSavingColumnName(false);
-    }
-  };
 
   // Create groups based on grouping option
   const getGroups = (): Group[] => {
@@ -274,78 +209,16 @@ export default function GroupedColumn({
     <Card className="border-t-4" style={{ borderTopColor: columnColor || undefined }}>
       <CardHeader className="px-3 py-2" {...(canManageBoard ? dragHandleProps : {})}>
         <div className="flex justify-between items-center">
-          {isEditingColumnName ? (
-            <div className="flex items-center gap-2 flex-1">
-              <Input
-                value={editColumnName}
-                onChange={(e) => setEditColumnName(e.target.value)}
-                className="h-8 text-sm font-medium"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSaveColumnName();
-                  } else if (e.key === 'Escape') {
-                    handleCancelEditColumnName();
-                  }
-                }}
-                disabled={isSavingColumnName}
-              />
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={handleSaveColumnName}
-                  disabled={isSavingColumnName}
-                >
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={handleCancelEditColumnName}
-                  disabled={isSavingColumnName}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
+          <CardTitle className="text-sm font-medium flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <span>{columnName}</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {tasks.length}
+              </span>
             </div>
-          ) : (
-            <CardTitle className="text-sm font-medium flex items-center justify-between w-full">
-              <div className="flex items-center gap-2">
-                <span>{columnName}</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {tasks.length}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                {canManageBoard && onColumnEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={handleEditColumnName}
-                  >
-                    <Edit2 size={8} className="!h-3 !w-3" />
-                  </Button>
-                )}
-                {canManageBoard && onColumnDelete && tasks.length === 0 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 hover:bg-red-500/10 hover:text-red-500"
-                    onClick={handleDeleteColumn}
-                    disabled={isSavingColumnName}
-                  >
-                    <Trash2 size={8} className="!h-3 !w-3" />
-                  </Button>
-                )}
-              </div>
-            </CardTitle>
-          )}
+          </CardTitle>
 
-          {onCreateTask && !isEditingColumnName && (
+          {onCreateTask && (
             <Button
               variant="ghost"
               size="icon"

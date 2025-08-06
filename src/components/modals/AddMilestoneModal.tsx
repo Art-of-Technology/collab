@@ -60,7 +60,11 @@ export function AddMilestoneModal({
     setIsLoadingMilestones(true);
     try {
       const fetchedMilestones = await relationsApi.fetchMilestones();
+      console.log('Fetched milestones:', fetchedMilestones); // Debug log
       setMilestones(fetchedMilestones);
+    } catch (error) {
+      console.error('Failed to fetch milestones:', error);
+      setMilestones([]); // Set empty array on error
     } finally {
       setIsLoadingMilestones(false);
     }

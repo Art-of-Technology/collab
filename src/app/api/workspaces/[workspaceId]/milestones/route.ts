@@ -40,6 +40,7 @@ export async function GET(
         description: true,
         dueDate: true,
         status: true,
+        issueKey: true,
         createdAt: true,
         updatedAt: true
       },
