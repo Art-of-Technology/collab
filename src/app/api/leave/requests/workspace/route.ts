@@ -82,12 +82,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Check if user has permission to manage leave requests
-    const isOwner = workspace.ownerId === user.id;
-    const member = workspace.members[0];
-    const isHROrAdmin =
-      member && ["HR", "ADMIN", "OWNER"].includes(member.role);
+    const hasManageLeavePermission = await checkUserPermission(
+      user.id,
+      workspaceId,
+      Permission.MANAGE_LEAVE
+    );
 
-    if (!isOwner && !isHROrAdmin) {
+    if (!hasManageLeavePermission.hasPermission) {
       return NextResponse.json(
         {
           error:

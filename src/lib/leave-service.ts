@@ -78,10 +78,6 @@ async function updateLeaveBalance(data: LeaveBalanceUpdate): Promise<void> {
       },
     });
   }
-
-  console.log(
-    `✅ Updated leave balance for user ${data.userId}: -${data.daysUsed} days`
-  );
 }
 
 /**
@@ -170,14 +166,6 @@ export async function processLeaveRequestAction(data: LeaveRequestActionData) {
         daysUsed,
         requestId: data.requestId,
       });
-
-      console.log(
-        `✅ Approved leave request ${data.requestId} for ${leaveRequest.user.name} (${daysUsed} days)`
-      );
-    } else {
-      console.log(
-        `❌ Rejected leave request ${data.requestId} for ${leaveRequest.user.name}`
-      );
     }
 
     // TODO: Add audit trail table to track who approved/rejected requests
