@@ -44,23 +44,18 @@ export default function TagsClient({ initialData }: TagsClientProps) {
   
   // Handle keyboard navigation - simple pattern like CommandMenu
   useEffect(() => {
-    console.log('TagsClient useEffect - flatTags.length:', flatTags.length);
     if (!flatTags.length) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
-      console.log('TagsClient keydown:', e.key, 'target:', e.target);
-      
       // Only handle if there are tags and we're not in an input/textarea
       if ((e.target as HTMLElement).tagName === 'INPUT' || 
           (e.target as HTMLElement).tagName === 'TEXTAREA' ||
           (e.target as HTMLElement).contentEditable === 'true') {
-        console.log('TagsClient: Ignoring key - in input/textarea');
         return;
       }
       
       // Arrow keys for navigation
       if (e.key === "ArrowDown") {
-        console.log('TagsClient: ArrowDown pressed');
         e.preventDefault();
         e.stopPropagation();
         setIsKeyboardNavigation(true);
@@ -71,7 +66,6 @@ export default function TagsClient({ initialData }: TagsClientProps) {
           return prev < flatTags.length - 1 ? prev + 1 : prev;
         });
       } else if (e.key === "ArrowUp") {
-        console.log('TagsClient: ArrowUp pressed');
         e.preventDefault();
         e.stopPropagation();
         setIsKeyboardNavigation(true);
@@ -82,7 +76,6 @@ export default function TagsClient({ initialData }: TagsClientProps) {
           return prev > 0 ? prev - 1 : prev;
         });
       } else if (e.key === "Enter" && selectedIndex >= 0 && flatTags[selectedIndex]) {
-        console.log('TagsClient: Enter pressed');
         e.preventDefault();
         e.stopPropagation();
         const selectedTag = flatTags[selectedIndex];
@@ -90,7 +83,6 @@ export default function TagsClient({ initialData }: TagsClientProps) {
           router.push(`/${currentWorkspace.id}/timeline?tag=${encodeURIComponent(selectedTag.name)}`);
         }
       } else if (e.key === "Escape") {
-        console.log('TagsClient: Escape pressed');
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex(-1);
@@ -98,11 +90,9 @@ export default function TagsClient({ initialData }: TagsClientProps) {
       }
     };
     
-    console.log('TagsClient: Adding keyboard event listener');
     // Add event listener to document with capture phase
     document.addEventListener("keydown", handleKeyDown, true);
     return () => {
-      console.log('TagsClient: Removing keyboard event listener');
       document.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [flatTags, selectedIndex, currentWorkspace, router]);
@@ -142,9 +132,6 @@ export default function TagsClient({ initialData }: TagsClientProps) {
           <h1 className="text-2xl font-bold">Tags</h1>
           <p className="text-muted-foreground">
             Browse posts by topic (Use arrow keys to navigate, Enter to select)
-          </p>
-          <p className="text-xs text-gray-500">
-            Debug: selectedIndex={selectedIndex}, isKeyboardNavigation={isKeyboardNavigation.toString()}, flatTags.length={flatTags.length}
           </p>
         </div>
       
