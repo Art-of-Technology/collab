@@ -52,6 +52,7 @@ import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion
 import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-suggestion";
 import { type Epic, EpicMentionSuggestion } from "@/components/ui/epic-mention-suggestion";
 import { type Story, StoryMentionSuggestion } from "@/components/ui/story-mention-suggestion";
+import { type Milestone, MilestoneMentionSuggestion } from "@/components/ui/milestone-mention-suggestion";
 import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
@@ -842,6 +843,106 @@ const StoryMention = TiptapNode.create({
   },
 })
 
+// Define a MilestoneMention extension for TipTap
+const MilestoneMention = TiptapNode.create({
+  name: 'milestoneMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-milestone-mention]',
+        getAttrs: element => {
+          const id = element.getAttribute('data-milestone-id')
+          const title = element.getAttribute('data-milestone-title')
+          const issueKey = element.getAttribute('data-milestone-issue-key')
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-milestone-mention': true, class: 'milestone-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '!',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `![${displayText}](${node.attrs.id})`
+  },
+})
+
 export function MarkdownEditor({
   onChange,
   content = "",
@@ -904,6 +1005,7 @@ export function MarkdownEditor({
       TaskMention, // Add Task Mention extension
       EpicMention, // Add Epic Mention extension
       StoryMention, // Add Story Mention extension
+      MilestoneMention, // Add Milestone Mention extension
     ],
     content: initialContentRef.current,
     editorProps: {
@@ -1124,6 +1226,12 @@ export function MarkdownEditor({
   const [showStoryMentionSuggestions, setShowStoryMentionSuggestions] = useState(false);
   const [storyCaretPosition, setStoryCaretPosition] = useState({ top: 0, left: 0 });
   const storyMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add milestone mention state
+  const [milestoneMentionQuery, setMilestoneMentionQuery] = useState("");
+  const [showMilestoneMentionSuggestions, setShowMilestoneMentionSuggestions] = useState(false);
+  const [milestoneCaretPosition, setMilestoneCaretPosition] = useState({ top: 0, left: 0 });
+  const milestoneMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
   // Add command menu ref
   const commandMenuRef = useRef<HTMLDivElement>(null);
@@ -1445,6 +1553,84 @@ export function MarkdownEditor({
     }
   }, [editor]);
 
+  // Insert a milestone mention at cursor position
+  const insertMilestoneMention = useCallback((milestone: Milestone) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the ! symbol --- //
+    let exclamationPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (exclamationPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeExclamationPos = nodeText.lastIndexOf('!', searchFromIndex);
+
+        while (relativeExclamationPos !== -1) {
+          const absoluteExclamationPos = pos + relativeExclamationPos;
+          // Ensure the found ! is within the search range and before the cursor
+          if (absoluteExclamationPos >= searchLimit && absoluteExclamationPos < currentPosition) {
+            // Check if there's a space or start of node right after the !
+            // (to ensure we found the start of the mention query)
+            const textAfterExclamation = editor.state.doc.textBetween(absoluteExclamationPos + 1, currentPosition, "");
+            if (!textAfterExclamation.match(/^\s/) && textAfterExclamation.indexOf('!') === -1) { // Ensure no space and no other ! between trigger and cursor
+              exclamationPosition = absoluteExclamationPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeExclamationPos - 1;
+          relativeExclamationPos = nodeText.lastIndexOf('!', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowMilestoneMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if ! was found
+    if (exclamationPosition !== -1) {
+      // Delete from the found ! position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: exclamationPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the milestone mention node where the ! was
+      editor.chain().insertContentAt(exclamationPosition, {
+        type: 'milestoneMention',
+        attrs: {
+          id: milestone.id,
+          title: milestone.title,
+          issueKey: milestone.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(exclamationPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no ! was found, insert the milestone mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'milestoneMention',
+        attrs: {
+          id: milestone.id,
+          title: milestone.title,
+          issueKey: milestone.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
   // Handle command selection
   const handleCommandSelect = useCallback((command: CommandOption) => {
     if (!editor) return;
@@ -1485,8 +1671,8 @@ export function MarkdownEditor({
         editor.chain().focus().insertContent('^').run();
         break;
       case 'mention-milestone':
-        // For now, insert text indicating milestone mentions aren't implemented yet
-        editor.chain().focus().insertContent('[Milestone mention - not implemented yet] ').run();
+        // Insert ! to trigger milestone mention
+        editor.chain().focus().insertContent('!').run();
         break;
       default:
         break;
@@ -1655,6 +1841,45 @@ export function MarkdownEditor({
     setShowStoryMentionSuggestions(false);
   }, [editor]);
 
+  // Check for ! milestone mentions when typing
+  const checkForMilestoneMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last ! character
+    const lastExclamationIndex = content.lastIndexOf('!');
+    
+    if (lastExclamationIndex >= 0) {
+      // Check if there's a space between the last ! and the word we're typing
+      const textAfterExclamation = content.substring(lastExclamationIndex + 1);
+      const hasSpaceAfterExclamation = textAfterExclamation.match(/^\s/);
+      
+      if (!hasSpaceAfterExclamation) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterExclamation.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for milestone mention suggestions
+          setMilestoneCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setMilestoneMentionQuery(textAfterExclamation);
+          setShowMilestoneMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowMilestoneMentionSuggestions(false);
+  }, [editor]);
+
   // Check for command trigger (/)
   const checkForCommandTrigger = useCallback(() => {
     if (!editor) return;
@@ -1704,6 +1929,7 @@ export function MarkdownEditor({
     editor.on('update', checkForTaskMentionTrigger);
     editor.on('update', checkForEpicMentionTrigger);
     editor.on('update', checkForStoryMentionTrigger);
+    editor.on('update', checkForMilestoneMentionTrigger);
     editor.on('update', checkForCommandTrigger);
     
     return () => {
@@ -1711,9 +1937,10 @@ export function MarkdownEditor({
       editor.off('update', checkForTaskMentionTrigger);
       editor.off('update', checkForEpicMentionTrigger);
       editor.off('update', checkForStoryMentionTrigger);
+      editor.off('update', checkForMilestoneMentionTrigger);
       editor.off('update', checkForCommandTrigger);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForCommandTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
@@ -1771,6 +1998,15 @@ export function MarkdownEditor({
         !editor.view.dom.contains(event.target as HTMLElement)
       ) {
         setShowStoryMentionSuggestions(false);
+      }
+      
+      if (
+        milestoneMentionSuggestionRef.current &&
+        !milestoneMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowMilestoneMentionSuggestions(false);
       }
       
       if (
@@ -1850,10 +2086,25 @@ export function MarkdownEditor({
         cursor: pointer;
       }
       
+      .ProseMirror .milestone-mention {
+        background-color: rgba(245, 158, 11, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #f59e0b;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
       .ProseMirror .mention .mention-symbol,
       .ProseMirror .task-mention .mention-symbol,
       .ProseMirror .epic-mention .mention-symbol,
-      .ProseMirror .story-mention .mention-symbol {
+      .ProseMirror .story-mention .mention-symbol,
+      .ProseMirror .milestone-mention .mention-symbol {
         opacity: 0.7;
         margin-right: 1px;
       }
@@ -2388,6 +2639,27 @@ export function MarkdownEditor({
               onSelect={insertStoryMention}
               workspaceId={currentWorkspace?.id}
               onEscape={() => setShowStoryMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Milestone Mention Suggestions */}
+        {showMilestoneMentionSuggestions && (
+          <div 
+            ref={milestoneMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${milestoneCaretPosition.top}px`,
+              left: `${milestoneCaretPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <MilestoneMentionSuggestion
+              query={milestoneMentionQuery}
+              onSelect={insertMilestoneMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowMilestoneMentionSuggestions(false)}
             />
           </div>
         )}
