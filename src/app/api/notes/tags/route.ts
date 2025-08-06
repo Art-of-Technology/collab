@@ -14,11 +14,33 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get("workspace");
 
+    // Get all tags that are either:
+    // 1. Created by the current user, OR
+    // 2. Used in public notes in the workspace (when workspace filtering is active)
+    const where: any = {};
+    
+    if (workspaceId) {
+      // When workspace is specified, show tags from current user OR public notes in workspace
+      where.OR = [
+        // Tags created by current user in this workspace
+        { authorId: session.user.id, workspaceId },
+        // Tags used in public notes in the workspace
+        {
+          workspaceId,
+          notes: {
+            some: {
+              isPublic: true
+            }
+          }
+        }
+      ];
+    } else {
+      // When no workspace specified, show only user's own tags
+      where.authorId = session.user.id;
+    }
+
     const tags = await prisma.noteTag.findMany({
-      where: {
-        authorId: session.user.id,
-        ...(workspaceId && { workspaceId })
-      },
+      where,
       include: {
         _count: {
           select: {

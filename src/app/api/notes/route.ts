@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
     const workspaceId = searchParams.get("workspace");
     const isPublic = searchParams.get("public");
 
-    const where = {
-      authorId: session.user.id,
+    // Build the where clause based on filters
+    const where: any = {
       ...(search && {
         OR: [
           { title: { contains: search, mode: "insensitive" as const } },
@@ -28,9 +28,28 @@ export async function GET(request: NextRequest) {
       }),
       ...(isFavorite && { isFavorite: true }),
       ...(tagId && { tags: { some: { id: tagId } } }),
-      ...(workspaceId && { workspaceId }),
-      ...(isPublic && { isPublic: isPublic === "true" })
+      ...(workspaceId && { workspaceId })
     };
+
+    // Handle visibility filtering
+    if (isPublic === "true") {
+      // For public filter, show all public notes in the workspace (from all users)
+      where.isPublic = true;
+      if (workspaceId) {
+        where.workspaceId = workspaceId;
+      }
+    } else if (isPublic === "false") {
+      // For private filter, show only user's private notes
+      where.isPublic = false;
+      where.authorId = session.user.id;
+      if (workspaceId) {
+        where.workspaceId = workspaceId;
+      }
+    } else {
+      // For "all" filter, show user's own notes (both public and private)
+      where.authorId = session.user.id;
+      // Don't filter by workspace for "all" mode - show all user's notes
+    }
 
     const notes = await prisma.note.findMany({
       where,

@@ -136,7 +136,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, searchQuery, selectedTag, showFavorites, visibilityFilter]);
+  }, [session?.user, workspaceId, searchQuery, selectedTag, showFavorites, visibilityFilter]);
 
   // Focus search input when dialog opens
   useEffect(() => {
@@ -241,6 +241,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (showFavorites) params.append("favorite", "true");
       if (visibilityFilter === "public") params.append("public", "true");
       if (visibilityFilter === "private") params.append("public", "false");
+      // Only send workspace for public and private filters, not for "all"
+      if (workspaceId && visibilityFilter !== "all") {
+        params.append("workspace", workspaceId);
+      }
 
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
@@ -268,7 +272,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   const fetchTags = async () => {
     try {
-      const response = await fetch("/api/notes/tags");
+      // Only send workspace parameter when needed (for public/private filtering)
+      const url = (workspaceId && visibilityFilter !== "all") 
+        ? `/api/notes/tags?workspace=${workspaceId}`
+        : "/api/notes/tags";
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setTags(data);
@@ -494,7 +502,13 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                 className="block"
               >
                 <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
-                  <div className="flex items-start justify-end mb-2 sm:mb-2 sm:pt-0">
+                  <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
+                    {/* Author mention on the left */}
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-xs sm:text-sm text-muted-foreground">@{note.author.name}</span>
+                    </div>
+                    
+                    {/* Action buttons on the right */}
                     <div className="flex items-center gap-3 sm:gap-0">
                       <Button
                         variant="ghost"
