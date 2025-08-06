@@ -35,12 +35,6 @@ const editLeaveRequestSchema = z.object({
     .optional(),
 });
 
-// Schema for cancelling a leave request
-const cancelLeaveRequestSchema = z.object({
-  action: z.literal("CANCEL"),
-  notes: z.string().optional(),
-});
-
 /**
  * PATCH /api/leave/requests/[requestId] - Update leave request status (approve/reject)
  */
