@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { trackCreation, compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
 import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
+import { extractMentionUserIds } from '@/utils/mentions';
 
 /**
  * Get tasks for a workspace
@@ -536,6 +537,20 @@ export async function createTask(data: {
     if (autoFollowUsers.length > 0) {
       await NotificationService.autoFollowTask(task.id, autoFollowUsers);
     }
+    
+    // Process mentions in task description
+    if (description) {
+      const mentionedUserIds = extractMentionUserIds(description);
+      if (mentionedUserIds.length > 0) {
+        await NotificationService.createTaskDescriptionMentionNotifications(
+          task.id,
+          mentionedUserIds,
+          user.id,
+          task.title
+        );
+      }
+    }
+    
     if (task.taskBoardId) {
       await NotificationService.notifyBoardFollowers({
         boardId: task.taskBoardId,
@@ -897,6 +912,19 @@ export async function updateTask(taskId: string, data: {
           case 'description':
             notificationType = NotificationType.TASK_UPDATED;
             content = `Task ${change.field} was updated`;
+            
+            // Handle mentions in description updates
+            if (change.field === 'description' && change.newValue) {
+              const mentionedUserIds = extractMentionUserIds(change.newValue);
+              if (mentionedUserIds.length > 0) {
+                await NotificationService.createTaskDescriptionMentionNotifications(
+                  taskId,
+                  mentionedUserIds,
+                  user.id,
+                  updatedTask.title
+                );
+              }
+            }
             break;
         }
 

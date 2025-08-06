@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { extractMentionUserIds } from "@/utils/mentions";
 import { sendPushNotification, PushNotificationPayload } from "@/lib/push-notifications";
 import { logger } from "@/lib/logger";
+import { sendEmail } from "@/lib/email";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -35,6 +36,7 @@ export enum NotificationType {
   TASK_STATUS_CHANGED = "TASK_STATUS_CHANGED",
   TASK_COMMENT_ADDED = "TASK_COMMENT_ADDED",
   TASK_COMMENT_MENTION = "TASK_COMMENT_MENTION",
+  TASK_DESCRIPTION_MENTION = "TASK_DESCRIPTION_MENTION",
   TASK_ASSIGNED = "TASK_ASSIGNED",
   TASK_UPDATED = "TASK_UPDATED",
   TASK_PRIORITY_CHANGED = "TASK_PRIORITY_CHANGED",
@@ -76,6 +78,8 @@ export class NotificationService {
 
       // Filter followers based on their notification preferences
       const validNotifications = [];
+      const emailNotifications = [];
+      
       for (const follower of followers) {
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, notificationType)) {
@@ -87,6 +91,24 @@ export class NotificationService {
             read: false,
             ...additionalData
           });
+          
+          // Check if user has email notifications enabled
+          if (preferences.emailNotificationsEnabled) {
+            const user = await prisma.user.findUnique({
+              where: { id: follower.userId },
+              select: { email: true, name: true }
+            });
+            
+            if (user?.email) {
+              emailNotifications.push({
+                email: user.email,
+                name: user.name || 'User',
+                content,
+                notificationType,
+                ...additionalData
+              });
+            }
+          }
         }
       }
 
@@ -106,10 +128,24 @@ export class NotificationService {
           )
         );
         await Promise.allSettled(pushPromises);
+        
+        // Send email notifications
+        const emailPromises = emailNotifications.map(emailNotif =>
+          this.sendNotificationEmail(
+            emailNotif.email,
+            emailNotif.name,
+            emailNotif.content,
+            emailNotif.notificationType,
+            additionalData.taskId,
+            additionalData.postId
+          )
+        );
+        await Promise.allSettled(emailPromises);
       }
 
       logger.info('Follower notifications created', { 
         count: validNotifications.length, 
+        emailCount: emailNotifications.length,
         type: notificationType,
         ...additionalData
       });
@@ -119,6 +155,62 @@ export class NotificationService {
         ...additionalData 
       });
       throw error;
+    }
+  }
+
+  /**
+   * Helper method to send email notification to a user
+   * @param email - User email address
+   * @param name - User name
+   * @param content - Notification content
+   * @param notificationType - Type of notification
+   * @param taskId - Optional task ID for URL generation
+   * @param postId - Optional post ID for URL generation
+   */
+  static async sendNotificationEmail(
+    email: string,
+    name: string,
+    content: string,
+    notificationType: NotificationType,
+    taskId?: string,
+    postId?: string
+  ): Promise<void> {
+    try {
+      // Build the URL based on notification type
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      let url = appUrl;
+      if (taskId) {
+        url = `${appUrl}/tasks/${taskId}`;
+      } else if (postId) {
+        url = `${appUrl}/posts/${postId}`;
+      }
+
+      const subject = 'New Notification - Collab';
+      
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Hi ${name},</h2>
+          <p>${content}</p>
+          <div style="margin: 30px 0;">
+            <a href="${url}" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              View Details
+            </a>
+          </div>
+          <p style="color: #666; font-size: 14px; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            You received this email because you have email notifications enabled. 
+            You can manage your notification preferences in your profile settings.
+          </p>
+        </div>
+      `;
+
+      await sendEmail({
+        to: email,
+        subject,
+        html,
+      });
+    } catch (error) {
+      logger.error('Failed to send email notification', error, { email, notificationType });
+      // Don't throw - email notification failure shouldn't break the main flow
     }
   }
 
@@ -251,6 +343,7 @@ export class NotificationService {
       [NotificationType.TASK_STATUS_CHANGED]: 'taskStatusChanged',
       [NotificationType.TASK_COMMENT_ADDED]: 'taskCommentAdded',
       [NotificationType.TASK_COMMENT_MENTION]: 'taskMentioned',
+      [NotificationType.TASK_DESCRIPTION_MENTION]: 'taskMentioned',
       [NotificationType.TASK_ASSIGNED]: 'taskAssigned',
       [NotificationType.TASK_UPDATED]: 'taskUpdated',
       [NotificationType.TASK_PRIORITY_CHANGED]: 'taskPriorityChanged',
@@ -538,6 +631,100 @@ export class NotificationService {
   // === TASK MENTION HANDLING ===
 
   /**
+   * Create mention notifications for task descriptions
+   */
+  static async createTaskDescriptionMentionNotifications(
+    taskId: string,
+    mentionedUserIds: string[],
+    senderId: string,
+    taskTitle: string
+  ): Promise<void> {
+    if (mentionedUserIds.length === 0) return;
+
+    try {
+      // Create mention notifications with email preferences
+      const notifications = [];
+      const emailNotifications = [];
+      
+      for (const userId of mentionedUserIds) {
+        if (userId === senderId) continue; // Don't notify the sender
+        
+        const preferences = await this.getUserPreferences(userId);
+        if (this.shouldNotifyUser(preferences, NotificationType.TASK_DESCRIPTION_MENTION)) {
+          notifications.push({
+            type: NotificationType.TASK_DESCRIPTION_MENTION.toString(),
+            content: `mentioned you in task: "${taskTitle}"`,
+            userId,
+            senderId,
+            taskId,
+            read: false
+          });
+          
+          // Check if user has email notifications enabled
+          if (preferences.emailNotificationsEnabled) {
+            const user = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { email: true, name: true }
+            });
+            
+            if (user?.email) {
+              emailNotifications.push({
+                email: user.email,
+                name: user.name || 'User',
+                content: `mentioned you in task: "${taskTitle}"`,
+                userId
+              });
+            }
+          }
+        }
+      }
+
+      if (notifications.length > 0) {
+        await prisma.notification.createMany({
+          data: notifications
+        });
+        logger.info('Task description mention notifications created', { 
+          count: notifications.length,
+          emailCount: emailNotifications.length,
+          taskId
+        });
+
+        // Send push notifications for mentions
+        const pushPromises = notifications.map(notification => 
+          this.sendPushNotificationForUser(
+            notification.userId,
+            NotificationType.TASK_DESCRIPTION_MENTION,
+            notification.content,
+            taskId
+          )
+        );
+        await Promise.allSettled(pushPromises);
+        
+        // Send email notifications for mentions
+        const emailPromises = emailNotifications.map(emailNotif =>
+          this.sendNotificationEmail(
+            emailNotif.email,
+            emailNotif.name,
+            emailNotif.content,
+            NotificationType.TASK_DESCRIPTION_MENTION,
+            taskId
+          )
+        );
+        await Promise.allSettled(emailPromises);
+      }
+
+      // Auto-follow mentioned users to the task
+      await this.autoFollowTask(taskId, mentionedUserIds);
+    } catch (error) {
+      logger.error('Failed to create task description mention notifications', error, { 
+        taskId, 
+        mentionedUserCount: mentionedUserIds.length 
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Create mention notifications for task comments
    */
   static async createTaskCommentMentionNotifications(
@@ -550,18 +737,45 @@ export class NotificationService {
     if (mentionedUserIds.length === 0) return;
 
     try {
-      // Create mention notifications
-      const notifications = mentionedUserIds
-        .filter(userId => userId !== senderId) // Don't notify the sender
-        .map(userId => ({
-          type: NotificationType.TASK_COMMENT_MENTION.toString(),
-          content: `mentioned you in a task comment: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`,
-          userId,
-          senderId,
-          taskId,
-          taskCommentId,
-          read: false
-        }));
+      // Create mention notifications with email preferences
+      const notifications = [];
+      const emailNotifications = [];
+      
+      for (const userId of mentionedUserIds) {
+        if (userId === senderId) continue; // Don't notify the sender
+        
+        const preferences = await this.getUserPreferences(userId);
+        if (this.shouldNotifyUser(preferences, NotificationType.TASK_COMMENT_MENTION)) {
+          const notificationContent = `mentioned you in a task comment: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`;
+          
+          notifications.push({
+            type: NotificationType.TASK_COMMENT_MENTION.toString(),
+            content: notificationContent,
+            userId,
+            senderId,
+            taskId,
+            taskCommentId,
+            read: false
+          });
+          
+          // Check if user has email notifications enabled
+          if (preferences.emailNotificationsEnabled) {
+            const user = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { email: true, name: true }
+            });
+            
+            if (user?.email) {
+              emailNotifications.push({
+                email: user.email,
+                name: user.name || 'User',
+                content: notificationContent,
+                userId
+              });
+            }
+          }
+        }
+      }
 
       if (notifications.length > 0) {
         await prisma.notification.createMany({
@@ -569,6 +783,7 @@ export class NotificationService {
         });
         logger.info('Task comment mention notifications created', { 
           count: notifications.length,
+          emailCount: emailNotifications.length,
           taskId,
           taskCommentId
         });
@@ -583,6 +798,18 @@ export class NotificationService {
           )
         );
         await Promise.allSettled(pushPromises);
+        
+        // Send email notifications for mentions
+        const emailPromises = emailNotifications.map(emailNotif =>
+          this.sendNotificationEmail(
+            emailNotif.email,
+            emailNotif.name,
+            emailNotif.content,
+            NotificationType.TASK_COMMENT_MENTION,
+            taskId
+          )
+        );
+        await Promise.allSettled(emailPromises);
       }
 
       // Auto-follow mentioned users to the task

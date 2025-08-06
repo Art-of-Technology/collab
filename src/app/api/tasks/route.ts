@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation, trackMove } from "@/lib/board-item-activity-service";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { extractMentionUserIds } from "@/utils/mentions";
 
 // POST /api/tasks - Create a new task
 export async function POST(request: NextRequest) {
@@ -184,6 +185,19 @@ export async function POST(request: NextRequest) {
         content: `Task ${task.title} was created`,
         excludeUserIds: [session.user.id],
       });
+      
+      // Process mentions in task description
+      if (description) {
+        const mentionedUserIds = extractMentionUserIds(description);
+        if (mentionedUserIds.length > 0) {
+          await NotificationService.createTaskDescriptionMentionNotifications(
+            task.id,
+            mentionedUserIds,
+            session.user.id,
+            task.title
+          );
+        }
+      }
     } catch (activityError) {
       console.error("Failed to track task creation activity:", activityError);
       // Don't fail the task creation if activity tracking fails
