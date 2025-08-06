@@ -61,11 +61,10 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
   };
 
   // Add relation for any item (task, epic, story, milestone)
-  // Always use /tasks/ endpoint - itemId can be any item type
   const addRelation = async (
     itemId: string,  // Any item ID (task/epic/story/milestone)
     relatedItemId: string, 
-    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK' | 'TASK'
+    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK'
   ) => {
     try {
       console.log(`🔗 Adding relation: ${itemId} -> ${relatedItemId} (${relationType})`);
@@ -79,7 +78,17 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ API Error:', errorText);
-        throw new Error(`Failed to add ${relationType.toLowerCase()} relation`);
+        let errorMessage = `Failed to add ${relationType.toLowerCase()} relation`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.details) {
+            errorMessage += `: ${errorData.details}`;
+          }
+        } catch (e) {
+          // If parsing fails, use the raw error text
+          errorMessage += `: ${errorText}`;
+        }
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();
@@ -95,7 +104,7 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
   const removeRelation = async (
     itemId: string,
     relatedItemId: string, 
-    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK' | 'TASK'
+    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK'
   ) => {
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/tasks/${itemId}/relations`, {
@@ -169,12 +178,12 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
     currentItemType: 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE',
     reloadFunction: () => Promise<void>
   ) => {
-    return async (itemId: string, relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'TASK') => {
+    return async (itemId: string, relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK') => {
       try {
         console.log(`🗑️ Removing ${relationType.toLowerCase()} from ${currentItemType.toLowerCase()}:`, itemId);
         
         // Logic: Task relations are always stored as task->other, others are stored as source->target
-        if (currentItemType === 'TASK' || relationType === 'TASK') {
+        if (currentItemType === 'TASK' || relationType === 'PARENT_TASK') {
           if (currentItemType === 'TASK') {
             await removeRelation(currentItemId, itemId, relationType);
           } else {

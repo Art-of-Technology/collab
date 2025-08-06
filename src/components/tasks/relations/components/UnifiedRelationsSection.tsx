@@ -91,6 +91,8 @@ export function UnifiedRelationsSection({
     try {
       console.log(`➕ Adding ${modalState.relationType.toLowerCase()}s:`, itemIds);
       
+
+      
       for (const itemId of itemIds) {
         await relationsApi.addRelation(item.id, itemId, modalState.relationType);
       }

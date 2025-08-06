@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useRelationsApi } from "@/hooks/useRelationsApi";
 
-export type RelationType = "EPIC" | "STORY" | "MILESTONE" | "PARENT_TASK" | "TASK";
+export type RelationType = "EPIC" | "STORY" | "MILESTONE" | "PARENT_TASK";
 export type TargetType = "TASK" | "EPIC" | "STORY" | "MILESTONE";
 
 interface RelationItem {
@@ -58,14 +58,6 @@ const RELATION_CONFIG = {
   PARENT_TASK: {
     singular: "Parent Task",
     plural: "Parent Tasks",
-    fetchMethod: "fetchTasks",
-    searchPlaceholder: "Search tasks...",
-    noItemsMessage: "No available tasks",
-    noSearchMessage: "No tasks found matching your search"
-  },
-  TASK: {
-    singular: "Task",
-    plural: "Tasks",
     fetchMethod: "fetchTasks",
     searchPlaceholder: "Search tasks...",
     noItemsMessage: "No available tasks",

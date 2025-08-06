@@ -49,7 +49,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Get all task relations
+    // Get all item relations
     const relations = await prisma.taskRelations.findMany({
       where: { taskId },
       select: {
@@ -245,10 +245,8 @@ if (!sourceItem) {
 
     // Create reverse relation for bidirectional support
     // Determine the correct reverse relation type based on the source item type
-    let reverseRelationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK';
-    
-    // Check what type the source item is
     const sourceItemType = await getItemType(taskId, workspaceId);
+    let reverseRelationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK';
     
     switch (sourceItemType) {
       case 'TASK':
@@ -267,13 +265,29 @@ if (!sourceItem) {
         reverseRelationType = 'PARENT_TASK';
     }
 
-    const reverseRelation = await prisma.taskRelations.create({
-      data: {
+    // Check if reverse relation already exists to avoid unique constraint violation
+    const existingReverseRelation = await prisma.taskRelations.findFirst({
+      where: {
         taskId: relatedItemId,
         relatedItemId: taskId,
         relatedItemType: reverseRelationType
       }
     });
+
+    if (!existingReverseRelation) {
+      try {
+        await prisma.taskRelations.create({
+          data: {
+            taskId: relatedItemId,
+            relatedItemId: taskId,
+            relatedItemType: reverseRelationType
+          }
+        });
+      } catch (error) {
+        // If reverse relation creation fails, log it but don't fail the main operation
+        console.warn('Failed to create reverse relation:', error);
+      }
+    }
 
     return NextResponse.json({
       success: true,

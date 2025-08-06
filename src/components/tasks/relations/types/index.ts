@@ -5,8 +5,7 @@ export type RelationType =
   | 'MILESTONE' 
   | 'EPIC' 
   | 'STORY' 
-  | 'PARENT_TASK' 
-  | 'TASK';
+  | 'PARENT_TASK';
 
 export interface Relations {
   epics: any[];
