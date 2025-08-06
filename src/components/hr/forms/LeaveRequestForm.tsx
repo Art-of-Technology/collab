@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
-import { useLeavePolicies, useCreateLeaveRequest } from "@/hooks/queries/useLeave";
+import { useLeavePolicies, useCreateLeaveRequest, useEditLeaveRequest } from "@/hooks/queries/useLeave";
 import { LeaveRequestFormProps, LeaveRequestSubmissionData } from "@/types/leave";
 
 // Form schema for leave request
@@ -84,6 +84,8 @@ export function LeaveRequestForm({
   onSubmit,
   onCancel,
   onSuccess,
+  editingRequest,
+  isEditing = false,
 }: LeaveRequestFormProps) {
   // React Query hooks
   const { 
@@ -94,24 +96,38 @@ export function LeaveRequestForm({
   } = useLeavePolicies(workspaceId);
   
   const createLeaveRequestMutation = useCreateLeaveRequest(workspaceId);
+  const editLeaveRequestMutation = useEditLeaveRequest(workspaceId);
+
+  // Set default values based on whether we're editing or creating
+  const getDefaultValues = () => {
+    if (isEditing && editingRequest) {
+      return {
+        policyId: editingRequest.policyId,
+        dateRange: {
+          from: new Date(editingRequest.startDate),
+          to: editingRequest.startDate.getTime() === editingRequest.endDate.getTime() 
+            ? undefined 
+            : new Date(editingRequest.endDate),
+        },
+        duration: editingRequest.duration,
+        notes: editingRequest.notes,
+      };
+    }
+    return {
+      policyId: "",
+      dateRange: undefined,
+      duration: "FULL_DAY" as const,
+      notes: "",
+    };
+  };
 
   const form = useForm<LeaveRequestFormData>({
     resolver: zodResolver(leaveRequestSchema),
-    defaultValues: {
-      policyId: "",
-      dateRange: undefined,
-      duration: "FULL_DAY",
-      notes: "",
-    },
+    defaultValues: getDefaultValues(),
   });
 
   const resetForm = () => {
-    form.reset({
-      policyId: "",
-      dateRange: undefined,
-      duration: "FULL_DAY",
-      notes: "",
-    });
+    form.reset(getDefaultValues());
   };
 
   const handleSubmit = async (data: LeaveRequestFormData) => {
@@ -125,20 +141,49 @@ export function LeaveRequestForm({
     };
 
     try {
-      // Use custom onSubmit if provided, otherwise use the mutation
-      if (onSubmit) {
-        await onSubmit(submissionData);
+      if (isEditing && editingRequest) {
+        // Editing existing request
+        const editData = {
+          policyId: submissionData.policyId !== editingRequest.policyId ? submissionData.policyId : undefined,
+          startDate: submissionData.startDate.getTime() !== editingRequest.startDate.getTime() ? submissionData.startDate : undefined,
+          endDate: submissionData.endDate.getTime() !== editingRequest.endDate.getTime() ? submissionData.endDate : undefined,
+          duration: submissionData.duration !== editingRequest.duration ? submissionData.duration : undefined,
+          notes: submissionData.notes !== editingRequest.notes ? submissionData.notes : undefined,
+        };
+
+        // Remove undefined values
+        const filteredEditData = Object.fromEntries(
+          Object.entries(editData).filter(([_, value]) => value !== undefined)
+        );
+
+        if (Object.keys(filteredEditData).length === 0) {
+          // No changes made
+          onCancel();
+          return;
+        }
+
+        await editLeaveRequestMutation.mutateAsync({
+          requestId: editingRequest.id,
+          data: filteredEditData,
+        });
       } else {
-        await createLeaveRequestMutation.mutateAsync(submissionData);
+        // Creating new request
+        if (onSubmit) {
+          await onSubmit(submissionData);
+        } else {
+          await createLeaveRequestMutation.mutateAsync(submissionData);
+        }
       }
 
       // Reset form after successful submission
-      resetForm();
+      if (!isEditing) {
+        resetForm();
+      }
       
       // Call onSuccess callback if provided
       onSuccess?.();
     } catch (error) {
-      console.error("Failed to submit leave request:", error);
+      console.error(`Failed to ${isEditing ? 'update' : 'submit'} leave request:`, error);
     }
   };
 
@@ -156,7 +201,7 @@ export function LeaveRequestForm({
   };
 
   // Get loading state - either from mutation or custom submission
-  const isSubmitting = createLeaveRequestMutation.isPending;
+  const isSubmitting = createLeaveRequestMutation.isPending || editLeaveRequestMutation.isPending;
 
   // Show error message if policies failed to load
   if (policiesError) {
@@ -181,10 +226,12 @@ export function LeaveRequestForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        {createLeaveRequestMutation.error && (
+        {(createLeaveRequestMutation.error || editLeaveRequestMutation.error) && (
           <Alert variant="destructive">
             <AlertDescription>
-              {createLeaveRequestMutation.error.message || "Failed to submit leave request. Please try again."}
+              {createLeaveRequestMutation.error?.message || 
+               editLeaveRequestMutation.error?.message || 
+               `Failed to ${isEditing ? 'update' : 'submit'} leave request. Please try again.`}
             </AlertDescription>
           </Alert>
         )}
@@ -362,7 +409,9 @@ export function LeaveRequestForm({
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting..." : "Submit Request"}
+            {isSubmitting 
+              ? `${isEditing ? 'Updating' : 'Submitting'}...` 
+              : `${isEditing ? 'Update' : 'Submit'} Request`}
           </Button>
         </div>
       </form>
