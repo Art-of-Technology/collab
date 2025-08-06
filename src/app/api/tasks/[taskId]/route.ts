@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { getAuthSession } from '@/lib/auth';
+import { NotificationService, NotificationType } from "@/lib/notification-service";
 
 export const dynamic = 'force-dynamic';
 
@@ -305,6 +306,16 @@ export async function DELETE(
     // Delete the task (this will cascade delete related records due to foreign key constraints)
     await prisma.task.delete({
       where: { id: taskId }
+    });
+
+    await NotificationService.notifyBoardFollowers({
+      boardId: task.taskBoard?.id || '',
+      taskId: '',
+      senderId: session.user.id,
+      type: NotificationType.BOARD_TASK_DELETED,
+      content: `Task "${task.title}" has been deleted from the board by ${session.user.name}`,
+      excludeUserIds: [],
+      skipTaskIdReference: true
     });
 
     return NextResponse.json({ 

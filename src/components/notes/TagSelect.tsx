@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Search, X, ChevronsUpDown, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { sortTagsBySearchTerm } from "@/utils/sortUtils";
 
 interface NoteTag {
   id: string;
@@ -173,9 +174,9 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     }
   };
 
-  const filteredTags = tags.filter(tag =>
-    tag.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTags = useMemo(() => {
+    return sortTagsBySearchTerm(tags, searchTerm);
+  }, [tags, searchTerm]);
 
   const selectedTags = tags.filter(tag => value.includes(tag.id));
 
@@ -183,8 +184,8 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <div className="flex-1">
-          <Popover open={isOpen} onOpenChange={handleOpenChange}>
-            <PopoverTrigger asChild>
+          <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
               <Button
                 variant="outline"
                 role="combobox"
@@ -194,10 +195,11 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                 Select tags...
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0">
-              <div className="p-2 border-b">
-                <div className="relative">
+            </DialogTrigger>
+            <DialogContent className="max-w-md p-0">
+              <div className="p-4 border-b">
+                <DialogTitle>Select Tags</DialogTitle>
+                <div className="relative mt-2">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     ref={searchInputRef}
@@ -209,7 +211,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                 </div>
               </div>
               
-              <div className="max-h-60 overflow-y-auto">
+              <div className="max-h-[300px] overflow-y-auto p-2">
                 {filteredTags.map((tag) => (
                   <div
                     key={tag.id}
@@ -255,7 +257,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                 )}
               </div>
 
-              <div className="p-2 border-t">
+              <div className="p-4 border-t">
                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                   <DialogTrigger asChild>
                     <Button
@@ -311,8 +313,8 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                   </DialogContent>
                 </Dialog>
               </div>
-            </PopoverContent>
-          </Popover>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { NotificationService, NotificationType } from '@/lib/notification-service';
+import { extractMentionUserIds } from '@/utils/mentions';
 
 /**
  * Get comments for a task
@@ -111,7 +113,7 @@ export async function getTaskComments(taskId: string) {
 /**
  * Add a comment to a task
  */
-export async function addTaskComment(taskId: string, content: string, parentId?: string) {
+export async function addTaskComment(taskId: string, content: string, parentId?: string, html?: string) {
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.email) {
@@ -182,6 +184,7 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
     const comment = await prisma.taskComment.create({
       data: {
         content,
+        html: html || null,
         taskId,
         authorId: user.id,
         parentId: parentId || null
@@ -206,6 +209,37 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
         reactions: true
       }
     });
+    
+    // Process mentions and create mention notifications
+    const mentionedUserIds = extractMentionUserIds(html || content);
+    
+    try {
+      // Handle mentions first (includes auto-follow)
+      if (mentionedUserIds.length > 0) {
+        await NotificationService.createTaskCommentMentionNotifications(
+          taskId,
+          comment.id,
+          mentionedUserIds,
+          user.id,
+          content
+        );
+      }
+
+      // Send notifications to task followers (excluding mentioned users to avoid duplicates)
+      await NotificationService.notifyTaskFollowers({
+        taskId,
+        senderId: user.id,
+        type: NotificationType.TASK_COMMENT_ADDED,
+        content: `New comment added: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`,
+        excludeUserIds: mentionedUserIds // Exclude mentioned users from general notifications
+      });
+
+      // Auto-follow the commenter if they're not already following
+      await NotificationService.addTaskFollower(taskId, user.id);
+    } catch (error) {
+      console.error('Failed to send comment notifications:', error);
+      // Don't fail the comment creation if notifications fail
+    }
     
     // Revalidate the task page
     revalidatePath(`/${task.workspaceId}/tasks/${taskId}`);
@@ -433,7 +467,7 @@ export async function getTaskCommentLikes(taskId: string, commentId: string) {
 /**
  * Update a comment on a task
  */
-export async function updateTaskComment(taskId: string, commentId: string, content: string) {
+export async function updateTaskComment(taskId: string, commentId: string, content: string, html?: string) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
@@ -477,7 +511,10 @@ export async function updateTaskComment(taskId: string, commentId: string, conte
     // Update the comment
     const updatedComment = await prisma.taskComment.update({
       where: { id: commentId },
-      data: { content },
+      data: { 
+        content,
+        html: html || null
+      },
       include: {
         author: {
           select: {
@@ -510,6 +547,25 @@ export async function updateTaskComment(taskId: string, commentId: string, conte
         parent: true
       }
     });
+
+    // Process mentions in updated comment
+    const mentionedUserIds = extractMentionUserIds(html || content);
+    
+    try {
+      // Handle mentions (includes auto-follow)
+      if (mentionedUserIds.length > 0) {
+        await NotificationService.createTaskCommentMentionNotifications(
+          taskId,
+          commentId,
+          mentionedUserIds,
+          user.id,
+          content
+        );
+      }
+    } catch (error) {
+      console.error('Failed to process mentions for updated comment:', error);
+      // Don't fail the comment update if mention processing fails
+    }
 
     // Revalidate the task page
     revalidatePath(`/${comment.taskId}/tasks/${taskId}`);

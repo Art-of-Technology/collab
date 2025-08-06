@@ -519,6 +519,7 @@ export default function KanbanView() {
                                       onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
                                       highlightedIds={highlightedIds}
                                       placeholder={droppableProvided.placeholder}
+                                      boardId={selectedBoardId}
                                     />
                                   </div>
                                 )}
