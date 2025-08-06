@@ -177,20 +177,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Verify item belongs to workspace (could be task, epic, story, or milestone)
-let sourceItem;
-const itemChecks = [
-  prisma.task.findFirst({ where: { id: taskId, workspaceId } }),
-  prisma.epic.findFirst({ where: { id: taskId, workspaceId } }),
-  prisma.story.findFirst({ where: { id: taskId, workspaceId } }),
-  prisma.milestone.findFirst({ where: { id: taskId, workspaceId } })
-];
+    // Use a single query to check all tables efficiently
+    const sourceItem = await prisma.$queryRaw`
+      SELECT 'TASK' as type, id, title FROM "Task" WHERE id = ${taskId} AND "workspaceId" = ${workspaceId}
+      UNION ALL
+      SELECT 'EPIC' as type, id, title FROM "Epic" WHERE id = ${taskId} AND "workspaceId" = ${workspaceId}
+      UNION ALL
+      SELECT 'STORY' as type, id, title FROM "Story" WHERE id = ${taskId} AND "workspaceId" = ${workspaceId}
+      UNION ALL
+      SELECT 'MILESTONE' as type, id, title FROM "Milestone" WHERE id = ${taskId} AND "workspaceId" = ${workspaceId}
+      LIMIT 1
+    `;
 
-const results = await Promise.all(itemChecks);
-sourceItem = results.find(item => item !== null);
-
-if (!sourceItem) {
-  return NextResponse.json({ error: 'Source item not found' }, { status: 404 });
-}
+    if (!sourceItem || !Array.isArray(sourceItem) || sourceItem.length === 0) {
+      return NextResponse.json({ error: 'Source item not found' }, { status: 404 });
+    }
 
     // Verify related item exists and belongs to workspace
     let relatedItem;
