@@ -158,57 +158,56 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   // Add keyboard listener when dialog is open
   useEffect(() => {
-    if (isTagDropdownOpen) {
-      // Add listener to the dialog content using ref instead of window
-      const dialogElement = tagDialogContentRef.current;
-      if (dialogElement) {
-        const handleKeyDownElement = (e: Event) => {
-          const keyboardEvent = e as KeyboardEvent;
-          // Only handle keys when the dialog is focused or when specific keys are pressed
-          const isDialogFocused = document.activeElement?.closest('[role="dialog"]');
-          if (!isDialogFocused && !['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(keyboardEvent.key)) {
-            return;
-          }
+    if (!isTagDropdownOpen) return;
 
-          const totalItems = filteredTags.length + 1;
-
-          switch (keyboardEvent.key) {
-            case 'ArrowDown':
-              keyboardEvent.preventDefault();
-              setSelectedIndex(prev =>
-                prev < totalItems - 1 ? prev + 1 : 0
-              );
-              break;
-            case 'ArrowUp':
-              keyboardEvent.preventDefault();
-              setSelectedIndex(prev =>
-                prev > 0 ? prev - 1 : totalItems - 1
-              );
-              break;
-            case 'Enter':
-              keyboardEvent.preventDefault();
-              if (selectedIndex === 0) {
-                setSelectedTag(null);
-                setTagSearchTerm("");
-                setIsTagDropdownOpen(false);
-              } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
-                const selectedTagItem = filteredTags[selectedIndex - 1];
-                setSelectedTag(selectedTagItem.id);
-                setTagSearchTerm("");
-                setIsTagDropdownOpen(false);
-              }
-              break;
-            case 'Escape':
-              keyboardEvent.preventDefault();
-              setIsTagDropdownOpen(false);
-              break;
-          }
-        };
-
-        dialogElement.addEventListener('keydown', handleKeyDownElement);
-        return () => dialogElement.removeEventListener('keydown', handleKeyDownElement);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle navigation keys when tag dropdown is open
+      if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
+        return;
       }
-    }
+
+      const totalItems = filteredTags.length + 1;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedIndex(prev =>
+            prev < totalItems - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedIndex(prev =>
+            prev > 0 ? prev - 1 : totalItems - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          e.stopPropagation();
+          if (selectedIndex === 0) {
+            setSelectedTag(null);
+            setTagSearchTerm("");
+            setIsTagDropdownOpen(false);
+          } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
+            const selectedTagItem = filteredTags[selectedIndex - 1];
+            setSelectedTag(selectedTagItem.id);
+            setTagSearchTerm("");
+            setIsTagDropdownOpen(false);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          e.stopPropagation();
+          setIsTagDropdownOpen(false);
+          break;
+      }
+    };
+
+    // Add global event listener with capture phase (like other working components)
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [isTagDropdownOpen, selectedIndex, filteredTags]);
 
   // Auto-scroll to selected item
