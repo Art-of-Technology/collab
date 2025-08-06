@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { format } from "date-fns";
-import { PlaneTakeoff, Plus } from "lucide-react";
+import { PlaneTakeoff, Plus, Edit, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +13,30 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { LeaveRequestForm } from "@/components/hr/forms/LeaveRequestForm";
 import { LeaveBalance } from "@/components/hr/LeaveBalance";
 import { 
   useLeaveBalances, 
   useUserLeaveRequests, 
-  useCreateLeaveRequest 
+  useCreateLeaveRequest,
+  useCancelLeaveRequest 
 } from "@/hooks/queries/useLeave";
 import type { LeaveRequest, LeaveRequestSubmissionData } from "@/types/leave";
 import { LeaveRequestsDashboardContainer } from "@/components/hr/LeaveRequestsDashboardContainer";
@@ -34,6 +51,8 @@ export function MyLeave({
   isFeatureEnabled = false,
 }: MyLeaveProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<LeaveRequest | null>(null);
+  const [cancellingRequest, setCancellingRequest] = useState<LeaveRequest | null>(null);
   const { toast } = useToast();
 
   // Fetch data using hooks
@@ -48,6 +67,7 @@ export function MyLeave({
   } = useUserLeaveRequests(workspaceId);
   
   const createLeaveRequestMutation = useCreateLeaveRequest(workspaceId);
+  const cancelLeaveRequestMutation = useCancelLeaveRequest(workspaceId);
 
   const handleSubmit = async (data: LeaveRequestSubmissionData) => {
     try {
@@ -68,6 +88,54 @@ export function MyLeave({
 
   const handleCancel = () => {
     setIsDialogOpen(false);
+    setEditingRequest(null);
+  };
+
+  const handleEditRequest = (request: LeaveRequest) => {
+    setEditingRequest(request);
+    setIsDialogOpen(true);
+  };
+
+  const handleCancelRequest = async () => {
+    if (!cancellingRequest) return;
+
+    try {
+      await cancelLeaveRequestMutation.mutateAsync({ requestId: cancellingRequest.id });
+      toast({
+        title: "Leave request cancelled",
+        description: "Your leave request has been cancelled successfully.",
+      });
+      setCancellingRequest(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to cancel leave request. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSuccess = () => {
+    setIsDialogOpen(false);
+    setEditingRequest(null);
+    if (editingRequest) {
+      toast({
+        title: "Leave request updated",
+        description: "Your leave request has been updated successfully.",
+      });
+    }
+  };
+
+  // Helper function to check if a request can be edited/cancelled
+  const canEditOrCancel = (request: LeaveRequest) => {
+    if (request.status !== "PENDING") return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startDate = new Date(request.startDate);
+    startDate.setHours(0, 0, 0, 0);
+    
+    return startDate >= today;
   };
 
   const getStatusBadge = (status?: LeaveRequest["status"]) => {
@@ -110,14 +178,18 @@ export function MyLeave({
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Request Leave</DialogTitle>
+                <DialogTitle>
+                  {editingRequest ? "Edit Leave Request" : "Request Leave"}
+                </DialogTitle>
               </DialogHeader>
-
 
               <LeaveRequestForm
                 workspaceId={workspaceId}
-                onSubmit={handleSubmit}
+                onSubmit={editingRequest ? undefined : handleSubmit}
                 onCancel={handleCancel}
+                onSuccess={handleSuccess}
+                editingRequest={editingRequest || undefined}
+                isEditing={!!editingRequest}
               />
             </DialogContent>
           </Dialog>
@@ -160,16 +232,55 @@ export function MyLeave({
                     {leaveRequests.map((request) => (
                       <div
                         key={request.id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/50"
+                        className="p-3 rounded-lg border bg-muted/50"
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between gap-2">
+                        {/* Header with policy name, status, and actions */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
                             <span className="font-medium">
                               {request.policy?.name || "Unknown Policy"}
                             </span>
                             {getStatusBadge(request.status)}
                           </div>
-                          <div className="text-sm text-muted-foreground mt-1">
+                          
+                          {/* Dropdown menu for actions */}
+                          {canEditOrCancel(request) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground bg-gray-500/10 hover:bg-gray-500/20"
+                                  aria-label="Request Actions"
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem 
+                                  onClick={() => handleEditRequest(request)}
+                                  className="text-muted-foreground"
+                                  aria-label="Edit Request"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  Edit Request
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setCancellingRequest(request)}
+                                  className="text-red-600"
+                                  aria-label="Cancel Request"
+                                >
+                                  <X className="h-4 w-4" />
+                                  Cancel Request
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                        
+                        {/* Request details */}
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground">
                             {request.startDate.getTime() ===
                             request.endDate.getTime() ? (
                               // Single day request
@@ -186,7 +297,7 @@ export function MyLeave({
                             )}
                           </div>
                           {request.notes && (
-                            <div className="text-sm text-muted-foreground mt-1 truncate">
+                            <div className="text-sm text-muted-foreground truncate">
                               {request.notes}
                             </div>
                           )}
@@ -227,6 +338,44 @@ export function MyLeave({
 
       {/* Leave Management Section (for managers) */}
       {isFeatureEnabled && <LeaveRequestsDashboardContainer workspaceId={workspaceId} />}
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={!!cancellingRequest} onOpenChange={() => setCancellingRequest(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Leave Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this leave request?
+              {cancellingRequest && (
+                <>
+                  <br />
+                  <br />
+                  <strong>Leave Type:</strong> {cancellingRequest.policy?.name}
+                  <br />
+                  <strong>Dates:</strong> {format(new Date(cancellingRequest.startDate), "MMM dd, yyyy")}
+                  {cancellingRequest.startDate.getTime() !== cancellingRequest.endDate.getTime() && 
+                    ` - ${format(new Date(cancellingRequest.endDate), "MMM dd, yyyy")}`}
+                  <br />
+                  <br />
+                  This action cannot be undone. Any pre-deducted leave balance will be restored.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelLeaveRequestMutation.isPending}>
+              Keep Request
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelRequest}
+              disabled={cancelLeaveRequestMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelLeaveRequestMutation.isPending ? "Cancelling..." : "Cancel Request"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

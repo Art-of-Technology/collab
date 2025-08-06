@@ -152,4 +152,15 @@ export interface LeaveRequestFormProps {
   onSubmit?: (data: LeaveRequestSubmissionData) => Promise<void>;
   onCancel: () => void;
   onSuccess?: () => void;
+  editingRequest?: LeaveRequest; // For editing existing requests
+  isEditing?: boolean;
+}
+
+// Data for editing a leave request
+export interface EditLeaveRequestData {
+  policyId?: string;
+  startDate?: Date;
+  endDate?: Date;
+  duration?: LeaveDuration;
+  notes?: string;
 }
