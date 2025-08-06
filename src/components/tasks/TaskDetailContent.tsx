@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { ShareButton } from "@/components/tasks/ShareButton";
+import { TaskFollowButton } from "@/components/tasks/TaskFollowButton";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
@@ -1115,8 +1116,12 @@ export function TaskDetailContent({
                   </div>
                 )}
               </div>
-                              {/* Share Button */}
-                <ShareButton entityId={task.id} issueKey={task.issueKey || ""} entityType="tasks" />
+              
+              {/* Task Follow Button */}
+              <TaskFollowButton taskId={task.id} boardId={boardId} />
+              
+              {/* Share Button */}
+              <ShareButton entityId={task.id} issueKey={task.issueKey || ""} entityType="tasks" />
             </div>
           </div>
         </div>

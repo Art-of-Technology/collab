@@ -10,7 +10,7 @@ interface TaskGenerationContextType {
 
 const TaskGenerationContext = createContext<TaskGenerationContextType>({
   jobs: [],
-  refreshJobs: () => {},
+  refreshJobs: () => { },
 });
 
 export function useTaskGeneration() {
@@ -23,12 +23,6 @@ export function TaskGenerationProvider({ workspaceId, children }: { workspaceId:
   const fetchJobs = async () => {
     if (!workspaceId) return;
     try {
-      const response = await fetch(`/api/ai/jobs?workspaceId=${workspaceId}`);
-      const result = await response.json();
-      if (result.success) {
-        // Use pre-filtered task jobs from unified endpoint
-        setJobs(result.taskJobs || []);
-      }
     } catch (error) {
       // Silently fail - context should not break the app
       console.error('Failed to fetch task generation jobs:', error);

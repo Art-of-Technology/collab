@@ -34,6 +34,7 @@ interface GroupedColumnProps {
   onColumnDelete?: (columnId: string) => Promise<void>;
   highlightedIds?: string[];
   placeholder?: React.ReactNode;
+  boardId?: string;
 }
 
 export default function GroupedColumn({
@@ -48,7 +49,8 @@ export default function GroupedColumn({
   onColumnEdit,
   onColumnDelete,
   highlightedIds = [],
-  placeholder
+  placeholder,
+  boardId
 }: GroupedColumnProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isEditingColumnName, setIsEditingColumnName] = useState(false);
@@ -422,6 +424,8 @@ export default function GroupedColumn({
                             dueDate={item.dueDate}
                             _count={item._count}
                             isHighlighted={highlightedIds.includes(item.id)}
+                            boardId={boardId}
+                            showFollowButton={true}
                           />
                         </div>
                       )}
@@ -469,6 +473,8 @@ export default function GroupedColumn({
                           dueDate={item.dueDate}
                           _count={item._count}
                           isHighlighted={highlightedIds.includes(item.id)}
+                          boardId={boardId}
+                          showFollowButton={true}
                         />
                       </div>
                     )}

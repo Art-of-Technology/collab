@@ -12,6 +12,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useTaskModal } from "@/context/TaskModalContext";
 import { useSearchParams } from "next/navigation";
 import React from "react";
+import { TaskFollowButton } from "./TaskFollowButton";
 
 // Enhanced BoardItem interface with better type support
 interface BoardItem {
@@ -516,6 +517,7 @@ export default function ListView() {
                 <TableHead className="w-[80px]">Priority</TableHead>
                 <TableHead className="w-[120px]">Assignee</TableHead>
                 <TableHead className="w-[120px]">Reporter</TableHead>
+                <TableHead className="w-[60px]">Follow</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -526,7 +528,7 @@ export default function ListView() {
                       className="bg-muted/50 hover:bg-muted/70 border-b-2 cursor-pointer"
                       onClick={() => toggleGroup(group.id)}
                     >
-                      <TableCell colSpan={10} className="py-3">
+                      <TableCell colSpan={11} className="py-3">
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-2">
                             {collapsedGroups[group.id] ? (
@@ -678,6 +680,16 @@ export default function ListView() {
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {item.entityType === 'task' && (
+                          <TaskFollowButton
+                            taskId={item.id}
+                            boardId={selectedBoardId}
+                            variant="icon-only"
+                            showFollowerCount={false}
+                          />
                         )}
                       </TableCell>
                     </TableRow>
