@@ -16,7 +16,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { 
   Search, 
@@ -27,16 +26,16 @@ import {
   Table,
   Calendar,
   BarChart3,
-  Star,
   Share,
   Edit,
   Trash2,
-  Eye,
   Users,
   Save,
-  RotateCcw
+  RotateCcw,
+  Filter,
+  Eye,
+  EyeOff
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
@@ -44,9 +43,9 @@ import TimelineViewRenderer from './renderers/TimelineViewRenderer';
 import FilterDropdown from './shared/FilterDropdown';
 import DisplayDropdown from './shared/DisplayDropdown';
 import ViewTypeSelector from './shared/ViewTypeSelector';
-import FilterTags from './shared/FilterTags';
+import ViewFilters from './shared/ViewFilters';
 import { useToast } from '@/hooks/use-toast';
-import React from 'react'; // Added missing import for React
+import React from 'react';
 
 interface ViewRendererProps {
   view: {
@@ -112,6 +111,23 @@ export default function ViewRenderer({
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
   const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
+  
+  // ViewFilters state
+  const [isViewFiltersOpen, setIsViewFiltersOpen] = useState(false);
+  const [viewFiltersState, setViewFiltersState] = useState<{
+    assignees: string[];
+    labels: string[];
+    priority: string[];
+    projects: string[];
+  }>({
+    assignees: [],
+    labels: [],
+    priority: [],
+    projects: []
+  });
+
+  // Issue type filtering state
+  const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
 
   // Check if current state differs from view defaults
   const hasChanges = useMemo(() => {
@@ -146,6 +162,26 @@ export default function ViewRenderer({
   const filteredIssues = useMemo(() => {
     let filtered = [...issues];
     
+    // Apply issue type filter (all/active/backlog)
+    switch (issueFilterType) {
+      case 'active':
+        filtered = filtered.filter(issue => 
+          issue.status !== 'Done' && 
+          issue.status !== 'Backlog' && 
+          issue.status !== 'Cancelled'
+        );
+        break;
+      case 'backlog':
+        filtered = filtered.filter(issue => 
+          issue.status === 'Backlog' || 
+          issue.status === 'Todo'
+        );
+        break;
+      default:
+        // 'all' - no filtering
+        break;
+    }
+    
     // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(issue => 
@@ -155,7 +191,7 @@ export default function ViewRenderer({
     );
     }
     
-    // Apply combined filters
+    // Apply combined filters (from view settings and temp filters)
     Object.entries(allFilters).forEach(([filterKey, filterValues]) => {
       if (Array.isArray(filterValues) && filterValues.length > 0) {
         filtered = filtered.filter(issue => {
@@ -176,9 +212,46 @@ export default function ViewRenderer({
         });
       }
     });
+
+    // Apply ViewFilters sidebar filters
+    // Assignee filter
+    if (viewFiltersState.assignees.length > 0) {
+      filtered = filtered.filter(issue => {
+        const assigneeId = issue.assignee?.id || 'unassigned';
+        return viewFiltersState.assignees.includes(assigneeId);
+      });
+    }
+
+    // Labels filter
+    if (viewFiltersState.labels.length > 0) {
+      filtered = filtered.filter(issue => {
+        if (!issue.labels || issue.labels.length === 0) {
+          return viewFiltersState.labels.includes('no-labels');
+        }
+        return issue.labels.some((label: any) => 
+          viewFiltersState.labels.includes(label.id)
+        );
+      });
+    }
+
+    // Priority filter
+    if (viewFiltersState.priority.length > 0) {
+      filtered = filtered.filter(issue => {
+        const priority = issue.priority || 'no-priority';
+        return viewFiltersState.priority.includes(priority);
+      });
+    }
+
+    // Projects filter
+    if (viewFiltersState.projects.length > 0) {
+      filtered = filtered.filter(issue => {
+        const projectId = issue.project?.id || 'no-project';
+        return viewFiltersState.projects.includes(projectId);
+      });
+    }
     
     return filtered;
-  }, [issues, searchQuery, allFilters]);
+  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -312,6 +385,30 @@ export default function ViewRenderer({
     });
   };
 
+  const handleToggleViewFilters = () => {
+    setIsViewFiltersOpen(prev => !prev);
+  };
+
+  // Count issues for filter buttons
+  const issueCounts = useMemo(() => {
+    const allIssuesCount = issues.length;
+    const activeIssuesCount = issues.filter(issue => 
+      issue.status !== 'Done' && 
+      issue.status !== 'Backlog' && 
+      issue.status !== 'Cancelled'
+    ).length;
+    const backlogIssuesCount = issues.filter(issue => 
+      issue.status === 'Backlog' || 
+      issue.status === 'Todo'
+    ).length;
+
+    return {
+      allIssuesCount,
+      activeIssuesCount,
+      backlogIssuesCount
+    };
+  }, [issues]);
+
   const renderViewContent = () => {
     const sharedProps = {
       view: {
@@ -324,6 +421,13 @@ export default function ViewRenderer({
       issues: sortedIssues,
       workspace,
       currentUser,
+      // ViewFilters props - these will be passed but individual renderers can choose to use them or not
+      isViewFiltersOpen,
+      onToggleViewFilters: handleToggleViewFilters,
+      viewFiltersState,
+      onViewFiltersChange: setViewFiltersState,
+      showSubIssues: tempShowSubIssues,
+      onSubIssuesToggle: () => setTempShowSubIssues(prev => !prev),
     };
 
     switch (tempDisplayType) {
@@ -399,6 +503,17 @@ export default function ViewRenderer({
                 className="pl-10 w-64 bg-[#1a1a1a] border-[#2a2a2a] text-white placeholder-[#666] focus:border-[#0969da] h-8"
               />
             </div>
+
+            {/* ViewFilters Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleViewFilters}
+              className="h-8 px-3 text-[#666] hover:text-white border border-[#2a2a2a] hover:border-[#0969da]"
+            >
+              {isViewFiltersOpen ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+              {isViewFiltersOpen ? 'Hide' : 'Show'} Filters
+            </Button>
 
             {/* New Issue */}
             <Button
@@ -484,6 +599,37 @@ export default function ViewRenderer({
         <div className="flex items-center justify-between">
           {/* Left: Filters */}
           <div className="flex items-center gap-2">
+            {/* Issue Type Filter Buttons */}
+            <div className="flex items-center gap-1 mr-4">
+              <Button
+                variant={issueFilterType === 'all' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setIssueFilterType('all')}
+                className="h-7 px-2 text-xs"
+              >
+                All Issues
+                <span className="ml-1 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
+              </Button>
+              <Button
+                variant={issueFilterType === 'active' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setIssueFilterType('active')}
+                className="h-7 px-2 text-xs"
+              >
+                Active
+                <span className="ml-1 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
+              </Button>
+              <Button
+                variant={issueFilterType === 'backlog' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setIssueFilterType('backlog')}
+                className="h-7 px-2 text-xs"
+              >
+                Backlog
+                <span className="ml-1 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
+              </Button>
+            </div>
+
             <FilterDropdown
               selectedFilters={tempFilters}
               onFilterChange={handleFilterChange}
@@ -535,8 +681,28 @@ export default function ViewRenderer({
       </div>
 
       {/* View Content */}
-      <div className="flex-1 overflow-hidden">
-        {renderViewContent()}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Main View Content */}
+        <div className="flex-1 overflow-hidden">
+          {renderViewContent()}
+        </div>
+        
+        {/* ViewFilters Sidebar */}
+        {isViewFiltersOpen && (
+          <div className="flex-shrink-0">
+            <ViewFilters
+              issues={issues}
+              workspace={workspace}
+              isOpen={isViewFiltersOpen}
+              onToggle={handleToggleViewFilters}
+              selectedFilters={viewFiltersState}
+              onFiltersChange={setViewFiltersState}
+              showSubIssues={tempShowSubIssues}
+              onSubIssuesToggle={() => setTempShowSubIssues(prev => !prev)}
+              viewType={tempDisplayType.toLowerCase() as 'kanban' | 'list' | 'timeline'}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -201,7 +201,7 @@ export default function ViewFilters({
   if (!isOpen) return null;
 
   return (
-    <div className="w-80 bg-[#090909] border-l border-[#1f1f1f] overflow-hidden flex flex-col flex-shrink-0">
+    <div className="w-80 bg-[#090909] border-l border-[#1f1f1f] overflow-hidden flex flex-col flex-shrink-0 h-full">
       {/* Compact Sidebar Header */}
       <div className="p-3 border-b border-[#1f1f1f]">
         <div className="flex items-center justify-between mb-3">

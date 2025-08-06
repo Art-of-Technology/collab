@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge, PRIORITY_CONFIG } from "@/utils/issueHelpers";
 import type { IssuePriority, IssueSelectorProps } from "@/types/issue";
@@ -24,6 +25,16 @@ export function IssuePrioritySelector({
   disabled = false,
   placeholder = "Select priority"
 }: IssuePrioritySelectorProps) {
+  // Helper function to render badge
+  const renderBadge = (badgeConfig: { label: string; icon: any; className: string; iconClassName: string }) => {
+    const Icon = badgeConfig.icon;
+    return (
+      <Badge variant="outline" className={badgeConfig.className}>
+        <Icon className={badgeConfig.iconClassName} />
+        {badgeConfig.label}
+      </Badge>
+    );
+  };
   return (
     <Select
       value={value}
@@ -37,7 +48,7 @@ export function IssuePrioritySelector({
         "transition-all duration-200"
       )}>
         <SelectValue placeholder={placeholder}>
-          {value && getIssuePriorityBadge(value)}
+          {value && renderBadge(getIssuePriorityBadge(value))}
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="min-w-[160px]">
@@ -50,7 +61,7 @@ export function IssuePrioritySelector({
               className="py-2.5"
             >
               <div className="flex items-center gap-2 w-full">
-                {getIssuePriorityBadge(priority)}
+                {renderBadge(getIssuePriorityBadge(priority))}
                 <span className="text-xs text-muted-foreground ml-auto">
                   {priority === 'LOW' && 'P4'}
                   {priority === 'MEDIUM' && 'P3'}

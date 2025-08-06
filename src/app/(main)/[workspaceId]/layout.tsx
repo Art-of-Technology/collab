@@ -60,19 +60,7 @@ export default async function WorkspaceLayout({
     redirect("/welcome");
   }
   
-  // Check if user has any workspaces (for layout logic)
-  const userWorkspaces = await prisma.workspace.findMany({
-    where: {
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
-    },
-    select: { id: true },
-    take: 1
-  });
-  
-  const hasWorkspaces = userWorkspaces.length > 0;
+
   
   // Workspace routes should always show sidebar
   console.log('Layout rendering with workspaceId:', workspaceId);
@@ -85,7 +73,6 @@ export default async function WorkspaceLayout({
             <LayoutWithSidebar 
               pathname={`/${workspaceId}`} 
               session={session}
-              hasWorkspaces={hasWorkspaces}
             >
               {children}
               <BoardGenerationStatus />

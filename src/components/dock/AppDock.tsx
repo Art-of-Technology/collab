@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { MessageSquarePlus, NotebookPen } from 'lucide-react';
-import { Dock, DockWidget } from '@/components/magicui/dock';
+import { ModernDock, DockItem } from './ModernDock';
 import { ActivityStatusWidget } from './ActivityStatusWidget';
 import { TimelineWidget } from './TimelineWidget';
 import { QuickNotesWidget } from './QuickNotesWidget';
@@ -25,30 +25,26 @@ export function AppDock({ className }: AppDockProps) {
     return null;
   }
 
-  return (
-    <Dock 
-      expandable 
-      fixed 
-      className={className}
-      iconSize={28}
-      iconMagnification={35}
-      iconDistance={80}
-      leftContent={<ActivityStatusWidget />}
-    >
-      <DockWidget
-        id="quick-notes"
-        title="Quick Notes"
-        icon={<NotebookPen className="h-5 w-5" />}
-        content={<QuickNotesWidget />}
-      />
-      
-      <DockWidget
-        id="timeline"
-        title="Quick Post"
-        icon={<MessageSquarePlus className="h-5 w-5" />}
-        content={<TimelineWidget />}
-      />
+  const dockItems: DockItem[] = [
+    {
+      id: 'quick-notes',
+      title: 'Quick Notes',
+      icon: <NotebookPen className="h-4 w-4" />,
+      content: <QuickNotesWidget />,
+    },
+    {
+      id: 'timeline',
+      title: 'Quick Post',
+      icon: <MessageSquarePlus className="h-4 w-4" />,
+      content: <TimelineWidget />,
+    },
+  ];
 
-    </Dock>
+  return (
+    <ModernDock 
+      items={dockItems}
+      leftContent={<ActivityStatusWidget />}
+      className={className}
+    />
   );
 } 

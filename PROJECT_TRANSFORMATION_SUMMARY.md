@@ -149,6 +149,39 @@
    - ✅ Added `labels` relationship between `Issue` and `TaskLabel`
    - ✅ Proper many-to-many relationship setup
 
+### **Kanban View Layout & Scrolling**
+6. **Viewport Layout Fixes**:
+   - ✅ Fixed horizontal scrolling for wide kanban boards
+   - ✅ Added proper vertical scrolling for individual columns
+   - ✅ ViewFilters now stay fixed and visible (320px width)
+   - ✅ Kanban board dynamically adjusts width based on filter visibility
+   - ✅ Custom scrollbar styling for better UX on Windows
+   - ✅ Proper viewport-constrained layout (ViewFilters + Kanban board)
+
+### **Code Architecture & Refactoring**
+7. **KanbanViewRenderer Modularization**:
+   - ✅ Broke down large 868-line component into smaller, focused modules
+   - ✅ Created structured folder: `KanbanViewRenderer/`
+     - `types.ts` - TypeScript interfaces and types
+     - `constants/` - Color mappings and default configurations
+     - `utils.ts` - Pure utility functions
+     - `hooks/useKanbanState.ts` - State management and business logic
+     - `components/` - Individual UI components (Header, Board, Column, IssueCard)
+     - `index.tsx` - Main orchestrator component
+   - ✅ Improved maintainability and testability
+   - ✅ Better separation of concerns
+   - ✅ Vertical scrollbars only visible on column hover
+   - ✅ Fixed layout so ViewFilters push content instead of overlapping
+
+### **Global Layout Issues**
+8. **LayoutWithSidebar.tsx Bottom Space Fix**:
+   - ✅ Fixed conflicting height constraints (`min-h-screen` + `mt-[4rem]` + `h-[calc(100vh-4rem)]`)
+   - ✅ Changed to proper flexbox layout with `h-screen` and `flex-col`
+   - ✅ Eliminated empty space at bottom across all pages
+   - ✅ Improved responsive sidebar behavior (desktop flexbox, mobile overlay)
+   - ✅ Simplified layout math: exact viewport height instead of 200vh overflow
+   - ✅ Better mobile experience with proper backdrop and slide animations
+
 6. **Migration Constraints**:
    - ✅ Made `projectId` optional in `TaskColumn` for migration
    - ✅ Resolved unique constraint conflicts
