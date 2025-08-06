@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
     const isFavorite = searchParams.get("favorite") === "true";
     const tagId = searchParams.get("tag");
     const workspaceId = searchParams.get("workspace");
+    const isPublic = searchParams.get("public");
 
     const where = {
       authorId: session.user.id,
@@ -27,7 +28,8 @@ export async function GET(request: NextRequest) {
       }),
       ...(isFavorite && { isFavorite: true }),
       ...(tagId && { tags: { some: { id: tagId } } }),
-      ...(workspaceId && { workspaceId })
+      ...(workspaceId && { workspaceId }),
+      ...(isPublic && { isPublic: isPublic === "true" })
     };
 
     const notes = await prisma.note.findMany({

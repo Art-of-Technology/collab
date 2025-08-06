@@ -118,9 +118,10 @@ export default function CreateFeatureRequestButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Feature Request
+        <Button className="gap-1 sm:gap-2 text-xs sm:text-base h-8 sm:h-10 px-2 sm:px-4">
+          <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+          <span className="hidden sm:inline">New Feature Request</span>
+          <span className="sm:hidden">New Feature Request</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">

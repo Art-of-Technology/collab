@@ -96,10 +96,18 @@ export async function getBoardItems(boardId: string) {
           color: true
         }
       },
+      parentTask: {
+        select: {
+          id: true,
+          title: true,
+          issueKey: true,
+        },
+      },
       _count: {
         select: {
           comments: true,
-          attachments: true
+          attachments: true,
+          subtasks: true,
         }
       }
     },

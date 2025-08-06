@@ -81,6 +81,10 @@ model User {
   // New Issue Comment relationships
   issueComments          IssueComment[]          @relation("IssueCommentAuthor")
   issueCommentReactions  IssueCommentReaction[]  @relation("IssueCommentReactions")
+  
+  // Leave management relationships
+  leaveRequest           LeaveRequest[]
+  leaveBalances          LeaveBalance[]
 }
 
 model Account {
@@ -338,6 +342,7 @@ model Workspace {
   customRoles         CustomRole[]
   epics               Epic[]
   featureRequests     FeatureRequest[]
+  leavePolicies       LeavePolicy[]
   milestones          Milestone[]
   notes               Note[]
   noteTags            NoteTag[]
@@ -361,14 +366,14 @@ model Workspace {
 }
 
 model WorkspaceMember {
-  id          String        @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   workspaceId String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  role        String        @default("MEMBER")
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  role        String    @default("MEMBER")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, workspaceId])
 }
@@ -618,12 +623,12 @@ model TaskColumn {
 }
 
 model Task {
-  id            String           @id @default(cuid())
+  id            String              @id @default(cuid())
   title         String
   description   String?
   status        String?
-  priority      String           @default("medium")
-  type          String           @default("task")
+  priority      String              @default("medium")
+  type          String              @default("task")
   storyPoints   Int?
   dueDate       DateTime?
   columnId      String?
@@ -633,31 +638,32 @@ model Task {
   reporterId    String?
   parentTaskId  String?
   postId        String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   issueKey      String?
   position      Int?
   epicId        String?
   milestoneId   String?
   storyId       String?
   notifications Notification[]
-  assignee      User?            @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  column        TaskColumn?      @relation(fields: [columnId], references: [id])
-  epic          Epic?            @relation(fields: [epicId], references: [id])
-  parentTask    Task?            @relation("TaskToSubtasks", fields: [parentTaskId], references: [id])
-  subtasks      Task[]           @relation("TaskToSubtasks")
-  post          Post?            @relation(fields: [postId], references: [id])
-  reporter      User?            @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
-  story         Story?           @relation(fields: [storyId], references: [id])
-  taskBoard     TaskBoard?       @relation(fields: [taskBoardId], references: [id])
-  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee      User?               @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  column        TaskColumn?         @relation(fields: [columnId], references: [id])
+  epic          Epic?               @relation(fields: [epicId], references: [id])
+  parentTask    Task?               @relation("TaskToSubtasks", fields: [parentTaskId], references: [id])
+  subtasks      Task[]              @relation("TaskToSubtasks")
+  post          Post?               @relation(fields: [postId], references: [id])
+  reporter      User?               @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
+  story         Story?              @relation(fields: [storyId], references: [id])
+  taskBoard     TaskBoard?          @relation(fields: [taskBoardId], references: [id])
+  workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   activities    BoardItemActivity[]
   assignees     TaskAssignee[]
   attachments   TaskAttachment[]
   comments      TaskComment[]
   userEvents    UserEvent[]
   userStatuses  UserStatus[]
-  labels        TaskLabel[]      @relation("TaskToLabel")
+  labels        TaskLabel[]         @relation("TaskToLabel")
+  relations     TaskRelations[]
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -742,27 +748,27 @@ model TaskLabel {
 }
 
 model BoardItemActivity {
-  id           String   @id @default(cuid())
-  action       String   // CREATED, UPDATED, MOVED, ASSIGNED, STATUS_CHANGED, etc.
-  details      String?  // JSON string with change details
-  itemType     String   // TASK, MILESTONE, EPIC, STORY
-  itemId       String   // ID of the affected item (taskId, milestoneId, epicId, storyId)
-  userId       String   // User who performed the action
-  workspaceId  String   // For workspace-level filtering
-  boardId      String?  // For board-level filtering
-  createdAt    DateTime @default(now())
-  
+  id          String   @id @default(cuid())
+  action      String // CREATED, UPDATED, MOVED, ASSIGNED, STATUS_CHANGED, etc.
+  details     String? // JSON string with change details
+  itemType    String // TASK, MILESTONE, EPIC, STORY
+  itemId      String // ID of the affected item (taskId, milestoneId, epicId, storyId)
+  userId      String // User who performed the action
+  workspaceId String // For workspace-level filtering
+  boardId     String? // For board-level filtering
+  createdAt   DateTime @default(now())
+
   // Field-specific change tracking
-  fieldName    String?  // Name of the field that changed (title, description, assignee, etc.)
-  oldValue     String?  // Previous value (JSON string for complex values)
-  newValue     String?  // New value (JSON string for complex values)
-  
+  fieldName String? // Name of the field that changed (title, description, assignee, etc.)
+  oldValue  String? // Previous value (JSON string for complex values)
+  newValue  String? // New value (JSON string for complex values)
+
   // Legacy support - keep taskId for backward compatibility
-  taskId       String?  // Deprecated: use itemId + itemType instead
-  
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  task         Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String? // Deprecated: use itemId + itemType instead
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
   @@index([taskId]) // Keep for backward compatibility
@@ -1052,20 +1058,20 @@ model RolePermission {
 }
 
 model BoardGenerationJob {
-  id           String                @id @default(cuid())
-  workspaceId  String
-  userId       String
-  description  String
-  projectType  String?
-  teamSize     String?
-  status       BoardGenerationStatus @default(PENDING)
-  progress     Int                   @default(0)
-  currentStep  String?
-  boardData    Json?
-  boardId      String?
-  error        String?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  id          String                @id @default(cuid())
+  workspaceId String
+  userId      String
+  description String
+  projectType String?
+  teamSize    String?
+  status      BoardGenerationStatus @default(PENDING)
+  progress    Int                   @default(0)
+  currentStep String?
+  boardData   Json?
+  boardId     String?
+  error       String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1073,6 +1079,153 @@ model BoardGenerationJob {
   @@index([workspaceId])
   @@index([userId])
   @@index([status])
+}
+
+model TaskRelations {
+  id              String       @id @default(cuid())
+  taskId          String
+  relatedItemId   String
+  relatedItemType RelationType
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@unique([taskId, relatedItemId, relatedItemType])
+  @@index([taskId])
+  @@index([relatedItemId, relatedItemType])
+  @@map("task_relations")
+}
+
+model LeaveRequest {
+  id        String        @id @default(uuid())
+  userId    String
+  policyId  String
+  startDate DateTime
+  endDate   DateTime
+  duration  LeaveDuration
+  notes     String        @db.Text
+
+  status LeaveStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policy LeavePolicy @relation(fields: [policyId], references: [id], onUpdate: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([policyId])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([duration])
+  @@map("leave_requests")
+}
+
+model LeavePolicy {
+  id          String     @id @default(uuid())
+  name        String
+  group       String? // Null if "No group"
+  isPaid      Boolean
+  trackIn     TrackUnit
+  isHidden    Boolean    @default(false)
+  exportMode  ExportMode
+  exportCode  String? // Used if exportMode is "EXPORT_WITH_CODE"
+  workspaceId String
+
+  accrualType  AccrualType
+  deductsLeave Boolean     @default(true)
+
+  maxBalance     Float? // Null if not set
+  rolloverType   RolloverType?
+  rolloverAmount Float? // Optional, only relevant for partial rollovers
+  rolloverDate   DateTime? // Specific rollover date if set
+
+  allowOutsideLeaveYearRequest Boolean @default(false)
+  useAverageWorkingHours       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leaveRequests LeaveRequest[]
+  leaveBalances LeaveBalance[]
+
+  // Indexes
+  @@index([workspaceId])
+  @@index([name])
+  @@index([group])
+  @@index([isPaid])
+  @@index([trackIn])
+  @@index([isHidden])
+  @@index([exportMode])
+  @@map("leave_policies")
+}
+
+model LeaveBalance {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  policyId String
+  policy   LeavePolicy @relation(fields: [policyId], references: [id])
+
+  year Int // e.g., 2025 — supports annual reset and rollover logic
+
+  totalAccrued Float @default(0) // Total accrued for the year
+  totalUsed    Float @default(0) // Total used/approved leave
+  balance      Float @default(0) // Actual remaining balance
+  rollover     Float @default(0) // From previous year if any
+
+  lastAccruedAt DateTime? // When accrual last updated
+  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([policyId])
+  @@index([year])
+  @@map("leave_balances")
+}
+
+enum TrackUnit {
+  HOURS
+  DAYS
+}
+
+enum ExportMode {
+  DO_NOT_EXPORT
+  EXPORT_WITH_PAY_CONDITION
+  EXPORT_WITH_CODE
+}
+
+enum AccrualType {
+  DOES_NOT_ACCRUE
+  HOURLY
+  FIXED
+  REGULAR_WORKING_HOURS
+}
+
+enum RolloverType {
+  ENTIRE_BALANCE
+  PARTIAL_BALANCE
+  NONE
+}
+
+enum LeaveDuration {
+  FULL_DAY
+  HALF_DAY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
 }
 
 enum EventType {
@@ -1193,6 +1346,13 @@ enum BoardGenerationStatus {
   FAILED
 }
 
+enum RelationType {
+  EPIC
+  STORY
+  MILESTONE
+  PARENT_TASK
+}
+
 enum Permission {
   CREATE_POST
   EDIT_SELF_POST
@@ -1276,7 +1436,6 @@ enum Permission {
   PIN_POST
   RESOLVE_BLOCKER
 }
-
 enum IssueType {
   EPIC
   STORY
@@ -1301,5 +1460,3 @@ enum ViewVisibility {
   WORKSPACE
   SHARED
 }
-
-

@@ -467,3 +467,8 @@ textarea::selection {
 .linear-dock-item {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Tag dialog content styles */
+.tag-dialog-content {
+  @apply max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2;
+}
