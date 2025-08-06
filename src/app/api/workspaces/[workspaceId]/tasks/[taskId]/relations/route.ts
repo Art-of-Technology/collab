@@ -177,7 +177,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Verify item belongs to workspace (could be task, epic, story, or milestone)
-let sourceItem;
 const itemChecks = [
   prisma.task.findFirst({ where: { id: taskId, workspaceId } }),
   prisma.epic.findFirst({ where: { id: taskId, workspaceId } }),
