@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +74,14 @@ export function TaskDetailContent({
   const [savingDescription, setSavingDescription] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [description, setDescription] = useState(task?.description || "");
+  const initialDescriptionRef = useRef(task?.description || "");
+
+  // Update refs when task loads
+  useEffect(() => {
+    if (task?.description && !initialDescriptionRef.current) {
+      initialDescriptionRef.current = task.description;
+    }
+  }, [task?.description]);
   const [savingAssignee, setSavingAssignee] = useState(false);
   const [savingReporter, setSavingReporter] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -1145,7 +1153,7 @@ export function TaskDetailContent({
                     <div className="relative">
                       <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
                         <MarkdownEditor
-                          initialValue={description}
+                          initialValue={initialDescriptionRef.current}
                           onChange={handleDescriptionChange}
                           placeholder="Add a description..."
                           minHeight="150px"

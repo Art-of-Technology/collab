@@ -509,8 +509,11 @@ const Mention = TiptapNode.create({
       {
         tag: 'span[data-mention]',
         getAttrs: element => {
-          const id = element.getAttribute('data-user-id')
-          const name = element.getAttribute('data-user-name')
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
+          const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
+          
+
           
           if (!id || !name) {
             return false
@@ -606,9 +609,10 @@ const TaskMention = TiptapNode.create({
       {
         tag: 'span[data-task-mention]',
         getAttrs: element => {
-          const id = element.getAttribute('data-task-id')
-          const title = element.getAttribute('data-task-title')
-          const issueKey = element.getAttribute('data-task-issue-key')
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-task-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-task-title') || element.getAttribute('data-title') || element.textContent?.replace('#', '')
+          const issueKey = element.getAttribute('data-task-issue-key') || element.getAttribute('data-issue-key') || ''
           
           if (!id || !title) {
             return false
@@ -706,9 +710,10 @@ const EpicMention = TiptapNode.create({
       {
         tag: 'span[data-epic-mention]',
         getAttrs: element => {
-          const id = element.getAttribute('data-epic-id')
-          const title = element.getAttribute('data-epic-title')
-          const issueKey = element.getAttribute('data-epic-issue-key')
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-epic-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-epic-title') || element.getAttribute('data-title') || element.textContent?.replace('~', '')
+          const issueKey = element.getAttribute('data-epic-issue-key') || element.getAttribute('data-issue-key') || ''
           
           if (!id || !title) {
             return false
@@ -806,9 +811,10 @@ const StoryMention = TiptapNode.create({
       {
         tag: 'span[data-story-mention]',
         getAttrs: element => {
-          const id = element.getAttribute('data-story-id')
-          const title = element.getAttribute('data-story-title')
-          const issueKey = element.getAttribute('data-story-issue-key')
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-story-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-story-title') || element.getAttribute('data-title') || element.textContent?.replace('^', '')
+          const issueKey = element.getAttribute('data-story-issue-key') || element.getAttribute('data-issue-key') || ''
           
           if (!id || !title) {
             return false
@@ -906,9 +912,10 @@ const MilestoneMention = TiptapNode.create({
       {
         tag: 'span[data-milestone-mention]',
         getAttrs: element => {
-          const id = element.getAttribute('data-milestone-id')
-          const title = element.getAttribute('data-milestone-title')
-          const issueKey = element.getAttribute('data-milestone-issue-key')
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-milestone-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-milestone-title') || element.getAttribute('data-title') || element.textContent?.replace('!', '')
+          const issueKey = element.getAttribute('data-milestone-issue-key') || element.getAttribute('data-issue-key') || ''
           
           if (!id || !title) {
             return false
@@ -974,6 +981,53 @@ export function MarkdownEditor({
   const { currentWorkspace: workspaceData } = useWorkspace();
 
   // Use a stable reference for initialValue to prevent re-renders
+  // Process initial content to convert text-based mentions to HTML
+  const processInitialContent = useCallback((rawContent: string) => {
+    if (!rawContent) return '';
+    
+    let processed = rawContent;
+    
+    // If content looks like text (contains mention patterns but not HTML), process it
+    if (processed.includes('@[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![') || processed.includes('#[')) {
+      // Convert text-based mentions to HTML spans that Tiptap can parse
+      
+      // User mentions: @[name](id) -> HTML span
+      processed = processed.replace(
+        /@\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span data-mention data-user-id="$2" data-user-name="$1">@$1</span>'
+      );
+      
+      // Epic mentions: ~[name](id) -> HTML span  
+      processed = processed.replace(
+        /~\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span data-epic-mention data-epic-id="$2" data-epic-title="$1" data-epic-issue-key="">~$1</span>'
+      );
+      
+      // Story mentions: ^[name](id) -> HTML span
+      processed = processed.replace(
+        /\^\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span data-story-mention data-story-id="$2" data-story-title="$1" data-story-issue-key="">^$1</span>'
+      );
+      
+      // Milestone mentions: ![name](id) -> HTML span  
+      processed = processed.replace(
+        /!\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span data-milestone-mention data-milestone-id="$2" data-milestone-title="$1" data-milestone-issue-key="">!$1</span>'
+      );
+      
+      // Task mentions: #[name](id) -> HTML span
+      processed = processed.replace(
+        /#\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span data-task-mention data-task-id="$2" data-task-title="$1" data-task-issue-key="">#$1</span>'
+      );
+      
+      // Convert newlines to <br> tags
+      processed = processed.replace(/\n/g, '<br>');
+    }
+    
+    return processed;
+  }, []);
+
   const initialContentRef = useRef(initialValue || content);
 
   const editor = useEditor({
@@ -1026,6 +1080,31 @@ export function MarkdownEditor({
       onChange?.(html, html); // Passing html twice for compatibility, but second arg could be removed if forms are updated
     },
   }, []); // Empty dependency array to ensure editor only initializes once
+
+  // Track user typing activity
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleKeyDown = () => {
+      setIsUserTyping(true);
+      // Reset typing flag after a delay
+      const timer = setTimeout(() => setIsUserTyping(false), 500);
+      return () => clearTimeout(timer);
+    };
+
+    const handleFocus = () => {
+      setIsUserTyping(false); // Reset when editor gains focus
+    };
+
+    const editorDom = editor.view.dom;
+    editorDom.addEventListener('keydown', handleKeyDown);
+    editorDom.addEventListener('focus', handleFocus);
+
+    return () => {
+      editorDom.removeEventListener('keydown', handleKeyDown);
+      editorDom.removeEventListener('focus', handleFocus);
+    };
+  }, [editor]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -1230,6 +1309,11 @@ export function MarkdownEditor({
   // Add milestone mention state
   const [milestoneMentionQuery, setMilestoneMentionQuery] = useState("");
   const [showMilestoneMentionSuggestions, setShowMilestoneMentionSuggestions] = useState(false);
+  
+  // Track if user is actively typing vs content being set programmatically
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  
+
   const [milestoneCaretPosition, setMilestoneCaretPosition] = useState({ top: 0, left: 0 });
   const milestoneMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
@@ -1681,7 +1765,7 @@ export function MarkdownEditor({
   
   // Check for @ mentions when typing
   const checkForMentionTrigger = useCallback(() => {
-    if (!editor) return;
+    if (!editor || !isUserTyping) return;
     
     // Skip checking if a mention was just inserted within the last 300ms
     const timeSinceLastMention = Date.now() - lastMentionInsertedRef.current;
@@ -1726,7 +1810,7 @@ export function MarkdownEditor({
 
   // Check for # task mentions when typing
   const checkForTaskMentionTrigger = useCallback(() => {
-    if (!editor) return;
+    if (!editor || !isUserTyping) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1765,7 +1849,7 @@ export function MarkdownEditor({
 
   // Check for ~ epic mentions when typing
   const checkForEpicMentionTrigger = useCallback(() => {
-    if (!editor) return;
+    if (!editor || !isUserTyping) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1804,7 +1888,7 @@ export function MarkdownEditor({
 
   // Check for ^ story mentions when typing
   const checkForStoryMentionTrigger = useCallback(() => {
-    if (!editor) return;
+    if (!editor || !isUserTyping) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1843,13 +1927,15 @@ export function MarkdownEditor({
 
   // Check for ! milestone mentions when typing
   const checkForMilestoneMentionTrigger = useCallback(() => {
-    if (!editor) return;
+    if (!editor || !isUserTyping) return; // Only trigger when user is actively typing
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
     
     // Find the last ! character
     const lastExclamationIndex = content.lastIndexOf('!');
+    
+
     
     if (lastExclamationIndex >= 0) {
       // Check if there's a space between the last ! and the word we're typing
@@ -1882,7 +1968,7 @@ export function MarkdownEditor({
 
   // Check for command trigger (/)
   const checkForCommandTrigger = useCallback(() => {
-    if (!editor) return;
+    if (!editor || !isUserTyping) return;
     
     const currentPosition = editor.view.state.selection.from;
     const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
@@ -1940,7 +2026,7 @@ export function MarkdownEditor({
       editor.off('update', checkForMilestoneMentionTrigger);
       editor.off('update', checkForCommandTrigger);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger, isUserTyping]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
@@ -2564,10 +2650,10 @@ export function MarkdownEditor({
         {showMentionSuggestions && (
           <div 
             style={{ 
-              position: "absolute",
+              position: "fixed",
               top: `${caretPosition.top}px`,
               left: `${caretPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
@@ -2585,10 +2671,10 @@ export function MarkdownEditor({
           <div 
             ref={taskMentionSuggestionRef}
             style={{ 
-              position: "absolute",
+              position: "fixed",
               top: `${taskCaretPosition.top}px`,
               left: `${taskCaretPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
@@ -2606,10 +2692,10 @@ export function MarkdownEditor({
           <div 
             ref={epicMentionSuggestionRef}
             style={{ 
-              position: "absolute",
+              position: "fixed",
               top: `${epicCaretPosition.top}px`,
               left: `${epicCaretPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
@@ -2627,10 +2713,10 @@ export function MarkdownEditor({
           <div 
             ref={storyMentionSuggestionRef}
             style={{ 
-              position: "absolute",
+              position: "fixed",
               top: `${storyCaretPosition.top}px`,
               left: `${storyCaretPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
@@ -2648,10 +2734,10 @@ export function MarkdownEditor({
           <div 
             ref={milestoneMentionSuggestionRef}
             style={{ 
-              position: "absolute",
+              position: "fixed",
               top: `${milestoneCaretPosition.top}px`,
               left: `${milestoneCaretPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
@@ -2669,10 +2755,10 @@ export function MarkdownEditor({
           <div 
             ref={commandMenuRef}
             style={{ 
-              position: "absolute",
+              position: "fixed",
               top: `${commandMenuPosition.top}px`,
               left: `${commandMenuPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from "@/context/WorkspaceContext";
 
@@ -19,8 +19,54 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
   // Determine the container element type
   const Container = asSpan ? 'span' : 'div';
 
-  // Directly use htmlContent - no useEffect or processing needed here anymore
-  // The mentions and formatting are already in the HTML string
+  // Process htmlContent to convert text-based mentions to HTML if needed
+  const processedHtmlContent = useMemo(() => {
+    if (!htmlContent) return content || '';
+    
+    let processed = htmlContent;
+    
+    // If content looks like text (contains mention patterns but not HTML), process it
+    if (processed.includes('@[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![')) {
+      // Convert text-based mentions to HTML spans
+      
+      // User mentions: @[name](id) -> HTML span
+      processed = processed.replace(
+        /@\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span class="mention-block" data-user-id="$2"><span class="mention-symbol">@</span>$1</span>'
+      );
+      
+      // Epic mentions: ~[name](id) -> HTML span  
+      processed = processed.replace(
+        /~\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span class="epic-mention" data-id="$2"><span class="mention-symbol">~</span>$1</span>'
+      );
+      
+      // Story mentions: ^[name](id) -> HTML span
+      processed = processed.replace(
+        /\^\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span class="story-mention" data-id="$2"><span class="mention-symbol">^</span>$1</span>'
+      );
+      
+      // Milestone mentions: ![name](id) -> HTML span  
+      processed = processed.replace(
+        /!\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span class="milestone-mention" data-id="$2"><span class="mention-symbol">!</span>$1</span>'
+      );
+      
+      // Task mentions: #[name](id) -> HTML span
+      processed = processed.replace(
+        /#\[([^\]]+)\]\(([^)]+)\)/g,
+        '<span class="task-mention" data-id="$2"><span class="mention-symbol">#</span>$1</span>'
+      );
+      
+      // Convert newlines to <br> tags if needed
+      if (processed.includes('\n') && !processed.includes('<br>')) {
+        processed = processed.replace(/\n/g, '<br>');
+      }
+    }
+    
+    return processed;
+  }, [htmlContent, content]);
 
   // Keep the CSS useEffect for styling the .mention-block class
   useEffect(() => {
@@ -48,6 +94,74 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         opacity: 0.7;
         margin-right: 0.125rem;
       }
+      
+      /* Epic, Story, Milestone mentions */
+      .epic-mention {
+        display: inline-flex;
+        align-items: center;
+        background-color: rgba(168, 85, 247, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #a855f7;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      
+      .story-mention {
+        display: inline-flex;
+        align-items: center;
+        background-color: rgba(34, 197, 94, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #22c55e;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      
+      .milestone-mention {
+        display: inline-flex;
+        align-items: center;
+        background-color: rgba(245, 158, 11, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #f59e0b;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      
+      .task-mention {
+        display: inline-flex;
+        align-items: center;
+        background-color: rgba(59, 130, 246, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #3b82f6;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      
+      .epic-mention:hover,
+      .story-mention:hover,
+      .milestone-mention:hover,
+      .task-mention:hover {
+        text-decoration: underline;
+      }
+      
+      .epic-mention .mention-symbol,
+      .story-mention .mention-symbol,
+      .milestone-mention .mention-symbol,
+      .task-mention .mention-symbol {
+        opacity: 0.7;
+        margin-right: 0.125rem;
+      }
     `;
     
     if (!document.querySelector('[data-markdown-content-css]')) {
@@ -64,18 +178,48 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
   // Click handler for event delegation
   const handleClick = (event: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
     const target = event.target as HTMLElement;
-    // Find the closest ancestor (or self) that is a mention block
-    const mentionElement = target.closest('.mention-block');
     
-    if (mentionElement) {
-      const userId = mentionElement.getAttribute('data-user-id');
+    // Check for different types of mentions
+    const userMention = target.closest('.mention-block');
+    const epicMention = target.closest('.epic-mention');
+    const storyMention = target.closest('.story-mention');
+    const milestoneMention = target.closest('.milestone-mention');
+    const taskMention = target.closest('.task-mention');
+    
+    if (userMention) {
+      const userId = userMention.getAttribute('data-user-id');
       if (userId && currentWorkspace) {
-        // Prevent default link behavior if it was accidentally an 'a' tag somehow
         event.preventDefault();
-        // *** Stop the event from bubbling up to parent handlers ***
-        event.stopPropagation(); 
-        // *** End Stop Propagation ***
+        event.stopPropagation();
         router.push(`/${currentWorkspace.id}/profile/${userId}`);
+      }
+    } else if (epicMention) {
+      const epicId = epicMention.getAttribute('data-id');
+      if (epicId && currentWorkspace) {
+        event.preventDefault();
+        event.stopPropagation();
+        router.push(`/${currentWorkspace.id}/epics/${epicId}`);
+      }
+    } else if (storyMention) {
+      const storyId = storyMention.getAttribute('data-id');
+      if (storyId && currentWorkspace) {
+        event.preventDefault();
+        event.stopPropagation();
+        router.push(`/${currentWorkspace.id}/stories/${storyId}`);
+      }
+    } else if (milestoneMention) {
+      const milestoneId = milestoneMention.getAttribute('data-id');
+      if (milestoneId && currentWorkspace) {
+        event.preventDefault();
+        event.stopPropagation();
+        router.push(`/${currentWorkspace.id}/milestones/${milestoneId}`);
+      }
+    } else if (taskMention) {
+      const taskId = taskMention.getAttribute('data-id');
+      if (taskId && currentWorkspace) {
+        event.preventDefault();
+        event.stopPropagation();
+        router.push(`/${currentWorkspace.id}/tasks/${taskId}`);
       }
     }
   };
@@ -91,8 +235,8 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         !asSpan && "prose-blockquote:border-l-2 prose-blockquote:border-primary/40 prose-blockquote:pl-4 prose-blockquote:my-1",
         className
       )}
-      // Directly render the HTML content
-      dangerouslySetInnerHTML={{ __html: htmlContent || content || '' }} 
+      // Render the processed HTML content
+      dangerouslySetInnerHTML={{ __html: processedHtmlContent }} 
       onClick={handleClick}
     />
   );
