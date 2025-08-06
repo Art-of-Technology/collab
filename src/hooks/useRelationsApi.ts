@@ -172,6 +172,25 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
       throw error;
     }
   };
+  // Helper to determine direction of relation removal
+  function getRelationDirection(
+    currentItemId: string,
+    itemId: string,
+    currentItemType: 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE',
+    relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK'
+  ): { sourceId: string; targetId: string; relationType: 'EPIC' | 'STORY' | 'MILESTONE' | 'PARENT_TASK' } {
+    // Task relations are always stored as task->other, others as source->target
+    // If current item is a TASK, it is always the source
+    if (currentItemType === 'TASK') {
+      return { sourceId: currentItemId, targetId: itemId, relationType };
+    }
+    // If removing a parent task relation, the parent (task) is the source
+    if (relationType === 'PARENT_TASK') {
+      return { sourceId: itemId, targetId: currentItemId, relationType: currentItemType };
+    }
+    // Otherwise, use current item as source
+    return { sourceId: currentItemId, targetId: itemId, relationType };
+  }
   // Generic remove handler for any component
   const createRemoveHandler = (
     currentItemId: string,
