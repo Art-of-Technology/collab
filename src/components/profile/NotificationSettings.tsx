@@ -161,13 +161,13 @@ const settingGroups: SettingGroup[] = [
     description:
       "Get notified about leave request activities and status changes",
     icon: <Users className="h-5 w-5 text-green-500" />,
-            settings: [
-          {
-            key: "leaveRequestStatusChanged",
-            label: "Status Updates",
-            description: "When your leave request is approved, rejected, or cancelled",
-            recommended: true,
-          },
+    settings: [
+      {
+        key: "leaveRequestStatusChanged",
+        label: "Status Updates",
+        description: "When your leave request is approved, rejected, or cancelled",
+        recommended: true,
+      },
       {
         key: "leaveRequestEdited",
         label: "Request Edited",
