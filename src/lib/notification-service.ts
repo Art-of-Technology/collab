@@ -944,7 +944,6 @@ export class NotificationService {
   ): string {
     const userName =
       leaveRequest.user.name || leaveRequest.user.email || "Someone";
-    const policyName = leaveRequest.policy.name;
     const dateRange =
       format(leaveRequest.startDate, "MMM dd") ===
       format(leaveRequest.endDate, "MMM dd")
@@ -956,17 +955,17 @@ export class NotificationService {
 
     switch (actionType) {
       case "SUBMITTED":
-        return `${userName} submitted a ${policyName} leave request for ${dateRange}`;
+        return `${userName} submitted a leave request for ${dateRange}`;
       case "APPROVED":
-        return `Your ${policyName} leave request for ${dateRange} has been approved`;
+        return `Your leave request for ${dateRange} has been approved`;
       case "REJECTED":
-        return `Your ${policyName} leave request for ${dateRange} has been rejected`;
+        return `Your leave request for ${dateRange} has been rejected`;
       case "CANCELLED":
-        return `${userName}'s ${policyName} leave request for ${dateRange} has been cancelled`;
+        return `${userName}'s leave request for ${dateRange} has been cancelled`;
       case "EDITED":
-        return `${userName} updated their ${policyName} leave request for ${dateRange}`;
+        return `${userName} updated their leave request for ${dateRange}`;
       default:
-        return `Leave request update: ${policyName} for ${dateRange}`;
+        return `Leave request update: for ${dateRange}`;
     }
   }
 
