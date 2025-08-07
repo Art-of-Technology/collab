@@ -863,9 +863,10 @@ export class NotificationService {
         workspaceId,
         role: {
           in: [
-            WorkspaceRole.PROJECT_MANAGER.toString(),
-            WorkspaceRole.ADMIN.toString(),
-            WorkspaceRole.OWNER.toString(),
+            WorkspaceRole.PROJECT_MANAGER,
+            WorkspaceRole.ADMIN,
+            WorkspaceRole.OWNER,
+            WorkspaceRole.HR,
           ],
         },
       },
