@@ -231,7 +231,9 @@ export function NotionEditor({
       }),
       FloatingToolbar,
     ],
-    content: initialContentRef.current,
+    content: initialValue || content || '<p></p>',
+    editable: true,
+    autofocus: true,
     // New v3 options for better performance
     shouldRerenderOnTransaction: false,
     immediatelyRender: true,
@@ -250,7 +252,25 @@ export function NotionEditor({
       const html = editor.getHTML();
       onChange?.(html);
     },
-  }, []);
+  }, [placeholder, minHeight, maxHeight, onChange]);
+
+  // Handle content updates
+  useEffect(() => {
+    if (editor && content !== undefined && content !== editor.getHTML()) {
+      const contentToSet = content || '<p></p>';
+      editor.commands.setContent(contentToSet, { emitUpdate: false });
+    }
+  }, [editor, content]);
+
+  // Auto-focus editor when it's ready
+  useEffect(() => {
+    if (editor) {
+      // Small delay to ensure the editor is fully rendered
+      setTimeout(() => {
+        editor.commands.focus();
+      }, 100);
+    }
+  }, [editor]);
 
   // Handle slash commands
   useEffect(() => {
@@ -879,7 +899,16 @@ export function NotionEditor({
         </TooltipProvider>
       </div>
 
-      <div className="flex-1 relative" ref={editorContainerRef}>
+      <div 
+        className="flex-1 relative" 
+        ref={editorContainerRef}
+        onClick={() => {
+          if (editor) {
+            editor.chain().focus().run();
+          }
+        }}
+        style={{ cursor: 'text' }}
+      >
         <EditorContent editor={editor} className="w-full" />
         
         {/* Overlay when uploading */}

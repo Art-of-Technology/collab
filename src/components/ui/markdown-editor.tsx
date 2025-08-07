@@ -2595,7 +2595,16 @@ export function MarkdownEditor({
         </TooltipProvider>
       </div>
 
-      <div className="flex-1 relative" ref={editorContainerRef}>
+      <div 
+        className="flex-1 relative" 
+        ref={editorContainerRef}
+        onClick={() => {
+          if (editor) {
+            editor.chain().focus().run();
+          }
+        }}
+        style={{ cursor: 'text' }}
+      >
         <EditorContent editor={editor} className="w-full" />
         
         {/* Overlay when uploading */}

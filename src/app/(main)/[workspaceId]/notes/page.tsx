@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
@@ -92,7 +91,9 @@ const getNotePreview = (content: string, maxLength: number = 100) => {
 };
 
 export default function NotesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
+  const { toast } = useToast();
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,7 +101,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
@@ -109,7 +109,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
 
   // Filter tags based on search term
   const filteredTags = useMemo(() => {
@@ -391,27 +390,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             </p>
           </div>
 
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }}>
-                <Plus className="h-3 w-3 mr-1 sm:h-4 sm:w-4" />
-                <span className="ml-0 sm:ml-0">New Note</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New Note</DialogTitle>
-              </DialogHeader>
-              <NoteCreateForm
-                onSuccess={() => {
-                  setIsCreateOpen(false);
-                  fetchNotes();
-                  fetchTags();
-                }}
-                onCancel={() => setIsCreateOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
+          <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }} onClick={() => router.push(`/${workspaceId}/notes/create`)}>
+            <Plus className="h-3 w-3 mr-1 sm:h-4 sm:w-4" />
+            <span className="ml-0 sm:ml-0">New Note</span>
+          </Button>
         </div>
 
         {/* Filters and Search */}
