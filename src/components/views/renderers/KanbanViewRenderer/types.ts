@@ -53,7 +53,7 @@ export interface KanbanIssueCardProps {
   issue: any;
   index: number;
   displayProperties: string[];
-  onClick: (issueId: string) => void;
+  onCardClick: (issueId: string) => void;
 }
 
 

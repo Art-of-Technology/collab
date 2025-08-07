@@ -14,7 +14,6 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps) {
 
   const {
     // State
-    kanbanState,
     selectedIssueId,
     setSelectedIssueId,
     editingColumnId,

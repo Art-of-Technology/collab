@@ -20,13 +20,13 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   // Find the project by slug
   const project = await prisma.project.findFirst({
     where: {
-      slug: params.projectSlug,
-      workspaceId: params.workspaceId,
+      slug: (await params).projectSlug,
+      workspaceId: (await params).workspaceId,
     },
   });
 
   if (!project) {
-    redirect(`/${params.workspaceId}`);
+    redirect(`/${(await params).workspaceId}`);
   }
 
   // Find or create a default view for this project
@@ -36,7 +36,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         has: project.id
       },
       isDefault: true,
-      workspaceId: params.workspaceId,
+      workspaceId: (await params).workspaceId,  
     },
   });
 
@@ -46,11 +46,11 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       data: {
         name: `${project.name} Board`,
         description: `Default kanban view for ${project.name}`,
-        workspaceId: params.workspaceId,
+        workspaceId: (await params).workspaceId,
         ownerId: session.user.id,
         displayType: 'KANBAN',
         projectIds: [project.id],
-        workspaceIds: [params.workspaceId],
+        workspaceIds: [(await params).workspaceId],
         visibility: 'WORKSPACE',
         isDefault: true,
 
@@ -69,5 +69,5 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   }
 
   // Redirect to the default view
-  redirect(`/${params.workspaceId}/views/${defaultView.id}`);
+  redirect(`/${(await params).workspaceId}/views/${defaultView.id}`);
 }

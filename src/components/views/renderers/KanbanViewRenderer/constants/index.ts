@@ -1,5 +1,5 @@
 export const DEFAULT_COLUMNS = {
-  status: ['Backlog', 'Todo', 'In Progress', 'In Review', 'Done'],
+  status: ['backlog', 'todo', 'in_progress', 'review', 'done'],
   priority: ['Urgent', 'High', 'Medium', 'Low'],
   type: ['Epic', 'Story', 'Task', 'Defect', 'Milestone', 'Subtask'],
 };

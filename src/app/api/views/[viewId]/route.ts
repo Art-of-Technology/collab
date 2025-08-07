@@ -14,7 +14,13 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { viewId } = await params;
+    const { viewId: viewSlug } = await params;
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get('workspaceId');
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
+    }
 
     // Get user
     const user = await prisma.user.findUnique({
@@ -25,10 +31,11 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Fetch view with access control
+    // Fetch view with access control using slug
     const view = await prisma.view.findFirst({
       where: {
-        id: viewId,
+        slug: viewSlug,
+        workspaceId: workspaceId,
         OR: [
           { visibility: 'WORKSPACE' },
           { visibility: 'SHARED', sharedWith: { has: user.id } },
@@ -45,23 +52,18 @@ export async function GET(
         }
       },
       include: {
-        _count: {
-          select: {
-            issues: true
-          }
-        },
-        projects: {
-          select: {
-            id: true,
-            name: true,
-            slug: true
-          }
-        },
         workspace: {
           select: {
             id: true,
             name: true,
             slug: true
+          }
+        },
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true
           }
         }
       }
@@ -74,20 +76,26 @@ export async function GET(
     // Transform the data for the frontend
     const transformedView = {
       id: view.id,
+      slug: view.slug,
       name: view.name,
       description: view.description,
-      type: view.type,
       displayType: view.displayType,
       visibility: view.visibility,
       color: view.color,
-      issueCount: view._count.issues,
       filters: view.filters,
-      projectIds: view.projects.map(p => p.id),
+      sorting: view.sorting,
+      grouping: view.grouping,
+      fields: view.fields,
+      layout: view.layout,
+      projectIds: view.projectIds,
+      workspaceIds: view.workspaceIds,
       isDefault: view.isDefault,
       isFavorite: view.isFavorite,
-      createdBy: view.createdBy,
       sharedWith: view.sharedWith,
       workspace: view.workspace,
+      owner: view.owner,
+      lastAccessedAt: view.lastAccessedAt,
+      accessCount: view.accessCount,
       createdAt: view.createdAt,
       updatedAt: view.updatedAt
     };
@@ -114,8 +122,14 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { viewId } = params;
+    const { viewId: viewSlug } = await params;
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get('workspaceId');
     const body = await request.json();
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
+    }
 
     // Get user
     const user = await prisma.user.findUnique({
@@ -129,7 +143,8 @@ export async function PUT(
     // Check if user can edit this view (only owner can edit personal views)
     const existingView = await prisma.view.findFirst({
       where: {
-        id: viewId,
+        slug: viewSlug,
+        workspaceId: workspaceId,
         OR: [
           { visibility: 'PERSONAL', ownerId: user.id },
           { visibility: 'WORKSPACE' }, // TODO: Add proper workspace admin check
@@ -159,17 +174,31 @@ export async function PUT(
       visibility,
       color,
       filters,
+      sorting,
+      grouping,
+      fields,
+      layout,
       projectIds,
+      workspaceIds,
       sharedWith
     } = body;
 
     // Prepare update data
     const updateData: any = {};
     
-    if (name !== undefined) updateData.name = name;
+    if (name !== undefined) {
+      updateData.name = name;
+      // TODO: Regenerate slug if name changes (would need generateUniqueViewSlug function)
+    }
     if (description !== undefined) updateData.description = description;
     if (color !== undefined) updateData.color = color;
     if (filters !== undefined) updateData.filters = filters;
+    if (sorting !== undefined) updateData.sorting = sorting;
+    if (grouping !== undefined) updateData.grouping = grouping;
+    if (fields !== undefined) updateData.fields = fields;
+    if (layout !== undefined) updateData.layout = layout;
+    if (projectIds !== undefined) updateData.projectIds = projectIds;
+    if (workspaceIds !== undefined) updateData.workspaceIds = workspaceIds;
     if (sharedWith !== undefined) updateData.sharedWith = sharedWith;
 
     // Validate display type if provided
@@ -196,29 +225,23 @@ export async function PUT(
       updateData.visibility = visibility;
     }
 
-    // Handle project connections
-    if (projectIds !== undefined) {
-      updateData.projects = {
-        set: [], // Clear existing connections
-        connect: projectIds.map((id: string) => ({ id }))
-      };
-    }
-
     // Update the view
     const updatedView = await prisma.view.update({
-      where: { id: viewId },
+      where: { id: existingView.id },
       data: updateData,
       include: {
-        _count: {
-          select: {
-            issues: true
-          }
-        },
-        projects: {
+        workspace: {
           select: {
             id: true,
             name: true,
             slug: true
+          }
+        },
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true
           }
         }
       }
@@ -227,19 +250,26 @@ export async function PUT(
     // Transform the data for the frontend
     const transformedView = {
       id: updatedView.id,
+      slug: updatedView.slug,
       name: updatedView.name,
       description: updatedView.description,
-      type: updatedView.type,
       displayType: updatedView.displayType,
       visibility: updatedView.visibility,
       color: updatedView.color,
-      issueCount: updatedView._count.issues,
       filters: updatedView.filters,
-      projectIds: updatedView.projects.map(p => p.id),
+      sorting: updatedView.sorting,
+      grouping: updatedView.grouping,
+      fields: updatedView.fields,
+      layout: updatedView.layout,
+      projectIds: updatedView.projectIds,
+      workspaceIds: updatedView.workspaceIds,
       isDefault: updatedView.isDefault,
       isFavorite: updatedView.isFavorite,
-      createdBy: updatedView.createdBy,
       sharedWith: updatedView.sharedWith,
+      workspace: updatedView.workspace,
+      owner: updatedView.owner,
+      lastAccessedAt: updatedView.lastAccessedAt,
+      accessCount: updatedView.accessCount,
       createdAt: updatedView.createdAt,
       updatedAt: updatedView.updatedAt
     };
@@ -266,7 +296,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { viewId } = params;
+    const { viewId: viewSlug } = await params;
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get('workspaceId');
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
+    }
 
     // Get user
     const user = await prisma.user.findUnique({
@@ -277,11 +313,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Check if user can delete this view (only owner can delete, and can't delete system views)
+    // Check if user can delete this view (only owner can delete)
     const existingView = await prisma.view.findFirst({
       where: {
-        id: viewId,
-        type: { not: 'SYSTEM' }, // Can't delete system views
+        slug: viewSlug,
+        workspaceId: workspaceId,
         ownerId: user.id, // Only creator can delete
         workspace: {
           members: {
@@ -303,7 +339,7 @@ export async function DELETE(
 
     // Delete the view
     await prisma.view.delete({
-      where: { id: viewId }
+      where: { id: existingView.id }
     });
 
     return NextResponse.json({ message: 'View deleted successfully' });

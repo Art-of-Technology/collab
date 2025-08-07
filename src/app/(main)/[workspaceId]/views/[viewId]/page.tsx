@@ -7,7 +7,7 @@ import ViewRenderer from '@/components/views/ViewRenderer';
 interface ViewPageProps {
   params: {
     workspaceId: string;
-    viewId: string;
+    viewId: string; // Now interpreted as viewSlug
   };
 }
 
@@ -19,7 +19,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
   }
 
   const resolvedParams = await params;
-  const { workspaceId, viewId } = resolvedParams;
+  const { workspaceId, viewId: viewSlug } = resolvedParams;
 
   // Get user
   const user = await prisma.user.findUnique({
@@ -58,10 +58,10 @@ export default async function ViewPage({ params }: ViewPageProps) {
     notFound();
   }
 
-  // Fetch view with access control
+  // Fetch view with access control using slug
   const view = await prisma.view.findFirst({
     where: {
-      id: viewId,
+      slug: viewSlug,
       workspaceId: workspace.id,
       OR: [
         { visibility: 'WORKSPACE' },
@@ -216,6 +216,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
   // Transform view data with proper field mapping
   const viewData = {
     id: view.id,
+    slug: view.slug,
     name: view.name,
     description: view.description || '',
     type: 'USER',
@@ -260,7 +261,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
 
 export async function generateMetadata({ params }: ViewPageProps) {
   const resolvedParams = await params;
-  const { workspaceId, viewId } = resolvedParams;
+  const { workspaceId, viewId: viewSlug } = resolvedParams;
   
   // Get workspace by slug or ID first
   const workspace = await prisma.workspace.findFirst({
@@ -280,7 +281,7 @@ export async function generateMetadata({ params }: ViewPageProps) {
 
   const view = await prisma.view.findFirst({
     where: {
-      id: viewId,
+      slug: viewSlug,
       workspaceId: workspace.id
     },
     include: {

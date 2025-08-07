@@ -1029,13 +1029,13 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                         variant="ghost"
                         className={cn(
                           "w-full justify-start h-7 px-2 text-sm transition-colors",
-                          pathname.includes(`/views/${view.id}`)
+                          pathname.includes(`/views/${view.slug || view.id}`)
                             ? "bg-[#1f1f1f] text-white" 
                             : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                         )}
                         asChild
                       >
-                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.id}`}>
+                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.slug || view.id}`}>
                           <div className="flex items-center w-full">
                             {view.isFavorite && <Star className="mr-2 h-3 w-3 text-yellow-500 fill-current" />}
                             <span className="truncate flex-1">{view.name}</span>

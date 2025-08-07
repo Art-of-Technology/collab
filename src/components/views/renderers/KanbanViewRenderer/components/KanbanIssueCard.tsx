@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
@@ -35,18 +36,22 @@ const getPriorityColor = (priority: string) => {
   return colors[priority as keyof typeof colors] || '#6b7280';
 };
 
-export default function KanbanIssueCard({
+const KanbanIssueCard = React.memo(({
   issue,
   index,
   displayProperties,
-  onClick
-}: KanbanIssueCardProps) {
+  onCardClick
+}: KanbanIssueCardProps) => {
   const showAssignee = displayProperties.includes('Assignee');
   const showPriority = displayProperties.includes('Priority');
   const showLabels = displayProperties.includes('Labels');
   const showDueDate = displayProperties.includes('Due Date');
   const showStoryPoints = displayProperties.includes('Story Points');
   const showReporter = displayProperties.includes('Reporter');
+
+  const handleCardClick = useCallback(() => {
+    onCardClick(issue.id);
+  }, [onCardClick, issue.id]);
 
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index}>
@@ -59,7 +64,7 @@ export default function KanbanIssueCard({
             "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-all duration-150 cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
-          onClick={() => onClick(issue.id)}
+          onClick={handleCardClick}
         >
           {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
           <div className="flex items-center justify-between mb-2">
@@ -197,4 +202,8 @@ export default function KanbanIssueCard({
       )}
     </Draggable>
   );
-}
+});
+
+KanbanIssueCard.displayName = 'KanbanIssueCard';
+
+export default KanbanIssueCard;

@@ -148,9 +148,28 @@ export const STATUS_CONFIG = {
 } as const;
 
 // Generate issue type badge configuration
-export function getIssueTypeBadge(type: IssueType) {
-  const config = ISSUE_TYPE_CONFIG[type];
+export function getIssueTypeBadge(type: IssueType | null | undefined | string) {
+  // Normalize type to uppercase to handle database case mismatches
+  const normalizedType = type?.toString().toUpperCase() as IssueType;
   
+  // Handle cases where type is null, undefined, or invalid
+  if (!normalizedType || !ISSUE_TYPE_CONFIG[normalizedType]) {
+    // Fallback to TASK type if the type is invalid
+    const fallbackConfig = ISSUE_TYPE_CONFIG.TASK;
+    return {
+      label: fallbackConfig.label,
+      icon: fallbackConfig.icon,
+      className: `
+        ${fallbackConfig.bgColor} ${fallbackConfig.borderColor} ${fallbackConfig.color}
+        ${fallbackConfig.darkBgColor} ${fallbackConfig.darkBorderColor} ${fallbackConfig.darkColor}
+        flex items-center gap-1.5 px-2.5 py-1 font-medium
+        hover:shadow-sm transition-all duration-200
+      `.replace(/\s+/g, ' ').trim(),
+      iconClassName: "h-3.5 w-3.5"
+    };
+  }
+
+  const config = ISSUE_TYPE_CONFIG[normalizedType];
   return {
     label: config.label,
     icon: config.icon,
@@ -165,9 +184,28 @@ export function getIssueTypeBadge(type: IssueType) {
 }
 
 // Generate priority badge configuration
-export function getIssuePriorityBadge(priority: IssuePriority) {
-  const config = PRIORITY_CONFIG[priority];
+export function getIssuePriorityBadge(priority: IssuePriority | null | undefined | string) {
+  // Normalize priority to uppercase to handle database case mismatches
+  const normalizedPriority = priority?.toString().toUpperCase() as IssuePriority;
+  
+  // Handle cases where priority is null, undefined, or invalid
+  if (!normalizedPriority || !PRIORITY_CONFIG[normalizedPriority]) {
+    // Fallback to LOW priority if the priority is invalid
+    const fallbackConfig = PRIORITY_CONFIG.LOW;
+    return {
+      label: fallbackConfig.label,
+      icon: fallbackConfig.icon,
+      className: `
+        ${fallbackConfig.bgColor} ${fallbackConfig.borderColor} ${fallbackConfig.color}
+        ${fallbackConfig.darkBgColor} ${fallbackConfig.darkColor}
+        flex items-center gap-1.5 px-2.5 py-1 font-medium
+        hover:shadow-sm transition-all duration-200
+      `.replace(/\s+/g, ' ').trim(),
+      iconClassName: "h-3.5 w-3.5"
+    };
+  }
 
+  const config = PRIORITY_CONFIG[normalizedPriority];
   return {
     label: config.label,
     icon: config.icon,

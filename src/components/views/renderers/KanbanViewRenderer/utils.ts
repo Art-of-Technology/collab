@@ -79,31 +79,60 @@ export const filterIssues = (
   return filtered;
 };
 
-export const createColumns = (filteredIssues: any[], view: any): Column[] => {
+export const createColumns = (filteredIssues: any[], view: any, projectStatuses?: any[]): Column[] => {
   const groupField = view.grouping?.field || 'status';
   const columnsMap = new Map(); // Use ID as key to prevent duplicates
   
-  // Get default columns based on grouping field
-  const defaultColumns = DEFAULT_COLUMNS[groupField as keyof typeof DEFAULT_COLUMNS] || ['Todo', 'In Progress', 'Done'];
-  
-  // Initialize default columns using ID as Map key
-  defaultColumns.forEach((column, index) => {
-    const columnId = column.toLowerCase().replace(/\s+/g, '-');
-    columnsMap.set(columnId, {
-      id: columnId,
-      name: column,
-      issues: [],
-      order: index
+  // Handle status grouping with database-driven project statuses
+  if (groupField === 'status' && projectStatuses && projectStatuses.length > 0) {
+    // Initialize columns from project statuses
+    projectStatuses.forEach((status) => {
+      columnsMap.set(status.name, {
+        id: status.name,
+        name: status.displayName,
+        issues: [],
+        order: status.order,
+        color: status.color,
+        iconName: status.iconName
+      });
     });
-  });
+  } else {
+    // Fallback to hardcoded columns for non-status grouping or when project statuses are not available
+    const defaultColumns = DEFAULT_COLUMNS[groupField as keyof typeof DEFAULT_COLUMNS] || ['todo', 'in_progress', 'done'];
+    
+    // Create a mapping for prettier display names
+    const displayNameMap: Record<string, string> = {
+      'backlog': 'Backlog',
+      'todo': 'To Do', 
+      'in_progress': 'In Progress',
+      'review': 'Review',
+      'done': 'Done',
+      'blocked': 'Blocked'
+    };
+    
+    // Initialize default columns using ID as Map key
+    defaultColumns.forEach((column, index) => {
+      const columnId = typeof column === 'string' ? column.toLowerCase().replace(/\s+/g, '_') : column;
+      const displayName = displayNameMap[columnId] || columnId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      columnsMap.set(columnId, {
+        id: columnId,
+        name: displayName,
+        issues: [],
+        order: index
+      });
+    });
+  }
 
   // Group filtered issues
   filteredIssues.forEach((issue: any) => {
     let groupValue: string;
+    let groupKey: string;
     
     switch (groupField) {
       case 'status':
-        groupValue = issue.status || 'Todo';
+        // Use the normalized status value (statusValue) or fall back to legacy status
+        groupValue = issue.statusValue || issue.status || 'todo';
+        groupKey = groupValue;
         break;
       case 'priority':
         groupValue = issue.priority === 'URGENT' ? 'Urgent' :
@@ -111,9 +140,11 @@ export const createColumns = (filteredIssues: any[], view: any): Column[] => {
                     issue.priority === 'MEDIUM' ? 'Medium' :
                     issue.priority === 'LOW' ? 'Low' :
                     'Medium';
+        groupKey = groupValue.toLowerCase();
         break;
       case 'assignee':
         groupValue = issue.assignee?.name || 'Unassigned';
+        groupKey = groupValue.toLowerCase().replace(/\s+/g, '-');
         break;
       case 'type':
         groupValue = issue.type === 'EPIC' ? 'Epic' : 
@@ -123,18 +154,17 @@ export const createColumns = (filteredIssues: any[], view: any): Column[] => {
                     issue.type === 'MILESTONE' ? 'Milestone' :
                     issue.type === 'SUBTASK' ? 'Subtask' :
                     'Task';
+        groupKey = groupValue.toLowerCase();
         break;
       default:
-        groupValue = issue.status || 'Todo';
+        groupValue = issue.statusValue || issue.status || 'todo';
+        groupKey = groupValue;
     }
     
-    // Generate consistent ID for the group value
-    const columnId = groupValue.toLowerCase().replace(/\s+/g, '-');
-    
-    // Create column if it doesn't exist
-    if (!columnsMap.has(columnId)) {
-      columnsMap.set(columnId, {
-        id: columnId,
+    // Create column if it doesn't exist (for dynamic values)
+    if (!columnsMap.has(groupKey)) {
+      columnsMap.set(groupKey, {
+        id: groupKey,
         name: groupValue,
         issues: [],
         order: columnsMap.size
@@ -142,13 +172,27 @@ export const createColumns = (filteredIssues: any[], view: any): Column[] => {
     }
     
     // Add issue to the column
-    const column = columnsMap.get(columnId);
+    const column = columnsMap.get(groupKey);
     if (column) {
       column.issues.push(issue);
     }
   });
 
-  return Array.from(columnsMap.values()).sort((a, b) => a.order - b.order);
+  // Sort issues within each column by view-specific position for proper ordering
+  const sortedColumns = Array.from(columnsMap.values()).map(column => ({
+    ...column,
+    issues: column.issues.sort((a, b) => {
+      // Sort by view-specific position first, fallback to global position, then creation date
+      const posA = a.viewPosition ?? a.position ?? 999999;
+      const posB = b.viewPosition ?? b.position ?? 999999;
+      if (posA !== posB) return posA - posB;
+      
+      // Fallback to creation date if positions are the same
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    })
+  }));
+
+  return sortedColumns.sort((a, b) => a.order - b.order);
 };
 
 export const countIssuesByType = (issues: any[]) => {

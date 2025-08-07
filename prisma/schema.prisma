@@ -398,6 +398,7 @@ model Project {
   name            String
   slug            String
   description     String?
+  color           String?      // Project color for UI
   workspaceId     String
   isDefault       Boolean      @default(false)
   createdAt       DateTime     @default(now())
@@ -406,12 +407,12 @@ model Project {
   nextIssueNumbers Json        @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"DEFECT\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
   
   // Relationships
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  columns         TaskColumn[]
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issues          Issue[]
+  statuses        ProjectStatus[] // New status system
   
   // Legacy relationships for migration (will be removed after migration)
-  // Note: These will be handled through taskBoardId in the existing models during migration
+  columns         TaskColumn[]    // Legacy column system
 
   @@unique([name, workspaceId])
   @@unique([slug, workspaceId])
@@ -447,7 +448,11 @@ model Issue {
   title         String
   description   String?
   type          IssueType   @default(TASK)
-  status        String?
+  
+  // New status system
+  statusId      String?
+  statusValue   String?     // For backward compatibility and migration
+  
   priority      String      @default("medium")
   storyPoints   Int?
   
@@ -461,7 +466,7 @@ model Issue {
   reporterId    String?
   projectId     String
   workspaceId   String
-  columnId      String?
+  columnId      String?     // Legacy field for migration
   
   // Dates and tracking
   dueDate       DateTime?
@@ -479,23 +484,25 @@ model Issue {
   
   // Legacy fields for migration
   postId        String?
+  status        String?     // Legacy field - will be migrated to statusId
   
   // Relationships
   assignee      User?            @relation("AssignedIssues", fields: [assigneeId], references: [id])
   reporter      User?            @relation("ReportedIssues", fields: [reporterId], references: [id])
   project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  column        TaskColumn?      @relation(fields: [columnId], references: [id])
   
-  // Legacy post relationship will be added when Post model is updated
+  // New status relationship
+  projectStatus ProjectStatus?   @relation("IssueStatus", fields: [statusId], references: [id])
+  
+  // Legacy relationships
+  column        TaskColumn?      @relation(fields: [columnId], references: [id])
   
   // Unified relationships
   comments      IssueComment[]
   labels        TaskLabel[]      @relation("IssueToLabel")
+  viewPositions ViewIssuePosition[]
   
-  // Legacy relationships will be migrated gradually as we update corresponding models
-  // activities, assignees, attachments, notifications, userEvents, userStatuses
-
   @@index([projectId])
   @@index([workspaceId])
   @@index([assigneeId])
@@ -504,7 +511,8 @@ model Issue {
   @@index([columnId])
   @@index([issueKey])
   @@index([type])
-  @@index([status])
+  @@index([status])      // Legacy index
+  @@index([statusId])    // New index
   @@index([postId])
   @@unique([issueKey, projectId])
 }
@@ -512,6 +520,7 @@ model Issue {
 model View {
   id            String          @id @default(cuid())
   name          String
+  slug          String?
   description   String?
   workspaceId   String
   ownerId       String
@@ -541,6 +550,9 @@ model View {
   lastAccessedAt DateTime?
   accessCount   Int             @default(0)
   
+  // View-specific issue positions
+  issuePositions ViewIssuePosition[]
+  
   // Relationships
   workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner         User            @relation("OwnedViews", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -550,6 +562,28 @@ model View {
   @@index([visibility])
   @@index([isDefault])
   @@index([isFavorite])
+  @@index([slug])
+  @@unique([slug, workspaceId])
+}
+
+model ViewIssuePosition {
+  id       String @id @default(cuid())
+  viewId   String
+  issueId  String
+  columnId String  // Status/column identifier (e.g., "todo", "in_progress")
+  position Float
+  
+  // Relationships
+  view     View   @relation(fields: [viewId], references: [id], onDelete: Cascade)
+  issue    Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([viewId, issueId, columnId])
+  @@index([viewId, columnId])
+  @@index([issueId])
 }
 
 model IssueComment {
@@ -590,36 +624,101 @@ model IssueCommentReaction {
   @@index([authorId])
 }
 
-model TaskColumn {
-  id          String      @id @default(cuid())
-  name        String
-  order       Int         @default(0)
-  color       String?
-  projectId   String?     // Made optional for migration, will be required after data migration
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+model StatusTemplate {
+  id          String         @id @default(cuid())
+  name        String         @unique // Internal name (e.g., "todo", "in_progress")
+  displayName String         // User-facing name (e.g., "To Do", "In Progress")
   description String?
+  color       String         @default("#6366F1")
+  iconName    String?        // Lucide icon name
+  order       Int
+  category    String         @default("status") // status, priority, type, etc.
+  isDefault   Boolean        @default(false)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relationships
+  projectStatuses ProjectStatus[]
+  taskColumns     TaskColumn[]    // Legacy relationship for migration
+  
+  @@index([category])
+  @@index([isDefault])
+  @@index([order])
+}
+
+model ProjectStatus {
+  id           String         @id @default(cuid())
+  name         String         // Internal name for API/database queries
+  displayName  String         // User-facing name for UI
+  description  String?
+  color        String         @default("#6366F1")
+  iconName     String?        // Lucide icon name
+  order        Int            @default(0)
+  isDefault    Boolean        @default(false) // Default status for new issues
+  isActive     Boolean        @default(true)  // Can be used to soft-delete statuses
+  isFinal      Boolean        @default(false) // Is this a final/completed state
+  
+  // Project relationship
+  projectId    String
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Template relationship (optional)
+  templateId   String?
+  template     StatusTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  
+  // Timestamps
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  
+  // Relationships - issues that use this status
+  issues       Issue[]        @relation("IssueStatus")
+  
+  // Ensure unique status names per project
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@index([projectId, order])
+  @@index([templateId])
+}
+
+model TaskColumn {
+  id              String                @id @default(cuid())
+  name            String                // Internal name for API/database queries
+  displayName     String?               // User-facing name for UI (nullable during migration)
+  order           Int                   @default(0)
+  color           String?
+  description     String?
+  iconName        String?               // Lucide icon name
+  isSystemDefault Boolean               @default(false) // Is this a system default column
+  isActive        Boolean               @default(true)  // Can be used to soft-delete columns
+  projectId       String?               // Made optional for migration, will be required after data migration
+  templateId      String?               // Reference to SystemColumnTemplate
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   
   // New unified relationships
-  issues      Issue[]
+  issues          Issue[]
   
   // Legacy relationships for migration (will be removed after migration)
-  epics       Epic[]
-  milestones  Milestone[]
-  stories     Story[]
-  tasks       Task[]
+  epics           Epic[]
+  milestones      Milestone[]
+  stories         Story[]
+  tasks           Task[]
   
-  project     Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template        StatusTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   
   // Legacy relationship for migration
-  taskBoard   TaskBoard?  @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
-  taskBoardId String?
+  taskBoard       TaskBoard?            @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
+  taskBoardId     String?
 
   // Temporary: unique constraint will be updated after migration
   // @@unique([name, projectId])  
   @@unique([name, taskBoardId])  // Keep existing constraint during migration
   @@index([projectId])
   @@index([taskBoardId]) // Legacy index for migration
+  @@index([templateId])
+  @@index([projectId, order])
 }
 
 model Task {

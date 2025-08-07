@@ -22,8 +22,10 @@ export async function GET(
     const resolvedParams = await params;
     const { issueId } = resolvedParams;
     
-    // Check if issueId is an issue key (e.g., WZB-1) or a regular ID
-    const isIssueKey = /^[A-Z]+-\d+$/.test(issueId);
+    // Check if issueId is an issue key (e.g., WZB-1, MA-T140) or a regular ID
+    const isIssueKey = /^[A-Z]+-[A-Z]+\d+$/.test(issueId);
+    
+    console.log(`API: Resolving issueId: ${issueId}, isIssueKey: ${isIssueKey}`);
   
     // Fetch the issue either by ID or issue key
     const issue = isIssueKey 
@@ -295,13 +297,38 @@ export async function PUT(
       );
     }
 
+    // Handle status updates to work with new ProjectStatus system
+    let updateData = { ...body, updatedAt: new Date() };
+    
+    // If status or statusValue is being updated, find the corresponding ProjectStatus
+    if (body.status || body.statusValue) {
+      const statusValue = body.status || body.statusValue;
+      
+      // Find the ProjectStatus record for this status in this project
+      const projectStatus = await prisma.projectStatus.findFirst({
+        where: {
+          projectId: existingIssue.projectId,
+          name: statusValue,
+          isActive: true
+        }
+      });
+      
+      if (projectStatus) {
+        // Update both statusId and statusValue for the new system
+        updateData.statusId = projectStatus.id;
+        updateData.statusValue = statusValue;
+        updateData.status = statusValue; // Keep legacy field for compatibility
+      } else {
+        // No ProjectStatus found, just update the legacy status field
+        updateData.status = statusValue;
+        updateData.statusValue = statusValue;
+      }
+    }
+
     // Update the issue
     const updatedIssue = await prisma.issue.update({
       where: { id: existingIssue.id },
-      data: {
-        ...body,
-        updatedAt: new Date()
-      },
+      data: updateData,
       include: {
         assignee: {
           select: {
@@ -343,6 +370,16 @@ export async function PUT(
             id: true,
             name: true,
             slug: true
+          }
+        },
+        projectStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+            order: true
           }
         },
         labels: {

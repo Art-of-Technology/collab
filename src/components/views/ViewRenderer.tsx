@@ -45,7 +45,9 @@ import DisplayDropdown from './shared/DisplayDropdown';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import ViewFilters from './shared/ViewFilters';
 import { useToast } from '@/hooks/use-toast';
-import React from 'react';
+import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
+import { useQueryClient } from '@tanstack/react-query';
+import React, { useEffect } from 'react';
 
 interface ViewRendererProps {
   view: {
@@ -101,6 +103,26 @@ export default function ViewRenderer({
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch view-specific issue positions for proper ordering
+  const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(view.id, view.displayType === 'KANBAN');
+
+  // Listen for position invalidation events
+  useEffect(() => {
+    const handleInvalidatePositions = (event: CustomEvent) => {
+      if (event.detail?.viewId === view.id) {
+        // Immediate invalidation and refetch
+        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
+        queryClient.refetchQueries({ queryKey: ['viewPositions', view.id] });
+      }
+    };
+
+    window.addEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
+    return () => {
+      window.removeEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
+    };
+  }, [view.id, queryClient]);
 
   // Temporary state for filters and display (resets on refresh)
   const [tempFilters, setTempFilters] = useState<Record<string, string[]>>({});
@@ -160,7 +182,8 @@ export default function ViewRenderer({
 
   // Apply view filters and search
   const filteredIssues = useMemo(() => {
-    let filtered = [...issues];
+    // Merge issues with view-specific positions first
+    let filtered = mergeIssuesWithViewPositions(issues, viewPositionsData?.positions || []);
     
     // Apply issue type filter (all/active/backlog)
     switch (issueFilterType) {
@@ -251,7 +274,7 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState]);
+  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -392,15 +415,16 @@ export default function ViewRenderer({
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {
     const allIssuesCount = issues.length;
-    const activeIssuesCount = issues.filter(issue => 
-      issue.status !== 'Done' && 
-      issue.status !== 'Backlog' && 
-      issue.status !== 'Cancelled'
-    ).length;
-    const backlogIssuesCount = issues.filter(issue => 
-      issue.status === 'Backlog' || 
-      issue.status === 'Todo'
-    ).length;
+    const activeIssuesCount = issues.filter(issue => {
+      const status = issue.statusValue || issue.status || '';
+      return status !== 'done' && 
+             status !== 'backlog' && 
+             status !== 'cancelled';
+    }).length;
+    const backlogIssuesCount = issues.filter(issue => {
+      const status = issue.statusValue || issue.status || '';
+      return status === 'backlog' || status === 'todo';
+    }).length;
 
     return {
       allIssuesCount,
@@ -408,6 +432,32 @@ export default function ViewRenderer({
       backlogIssuesCount
     };
   }, [issues]);
+
+  // Issue update handler - no page refresh, just API call
+  const handleIssueUpdate = async (issueId: string, updates: any) => {
+    try {
+      const response = await fetch(`/api/issues/${issueId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update issue');
+      }
+      
+      // No page refresh - let React handle the optimistic update
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating issue:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update issue",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
 
   const renderViewContent = () => {
     const sharedProps = {
@@ -428,11 +478,21 @@ export default function ViewRenderer({
       onViewFiltersChange: setViewFiltersState,
       showSubIssues: tempShowSubIssues,
       onSubIssuesToggle: () => setTempShowSubIssues(prev => !prev),
+      // Kanban callbacks
+      onIssueUpdate: handleIssueUpdate,
     };
 
     switch (tempDisplayType) {
       case 'KANBAN':
       case 'BOARD':
+        // Show loading state until view positions are loaded to prevent order flickering
+        if (isLoadingViewPositions) {
+          return (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          );
+        }
         return <KanbanViewRenderer {...sharedProps} />;
       case 'LIST':
         return <ListViewRenderer {...sharedProps} />;

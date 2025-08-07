@@ -153,7 +153,7 @@ export default function KanbanColumn({
                     issue={issue}
                     index={index}
                     displayProperties={displayProperties}
-                    onClick={onIssueClick}
+                    onCardClick={onIssueClick}
                   />
                 ))}
 

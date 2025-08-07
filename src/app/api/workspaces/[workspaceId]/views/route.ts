@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { generateUniqueViewSlug } from '@/lib/utils';
 
 export async function GET(
   request: NextRequest,
@@ -62,6 +63,7 @@ export async function GET(
     // Transform the data for the frontend
     const transformedViews = views.map(view => ({
       id: view.id,
+      slug: view.slug,
       name: view.name,
       description: view.description,
       displayType: view.displayType,
@@ -69,11 +71,18 @@ export async function GET(
       color: view.color || '#3b82f6',
       issueCount: 0, // TODO: Calculate actual issue count
       filters: view.filters,
+      sorting: view.sorting,
+      grouping: view.grouping,
+      fields: view.fields,
+      layout: view.layout,
       projectIds: view.projectIds,
+      workspaceIds: view.workspaceIds,
       isDefault: view.isDefault,
       isFavorite: view.isFavorite,
       ownerId: view.ownerId,
       sharedWith: view.sharedWith,
+      lastAccessedAt: view.lastAccessedAt,
+      accessCount: view.accessCount,
       createdAt: view.createdAt,
       updatedAt: view.updatedAt
     }));
@@ -169,10 +178,21 @@ export async function POST(
       );
     }
 
+    // Generate unique slug for the view
+    const slugChecker = async (slug: string, workspaceId: string) => {
+      const existingView = await prisma.view.findFirst({
+        where: { slug, workspaceId }
+      });
+      return !!existingView;
+    };
+
+    const slug = await generateUniqueViewSlug(name, workspaceId, slugChecker);
+
     // Create the view
     const view = await prisma.view.create({
       data: {
         name,
+        slug,
         description,
         displayType,
         visibility,
@@ -199,6 +219,7 @@ export async function POST(
     // Transform the data for the frontend
     const transformedView = {
       id: view.id,
+      slug: view.slug,
       name: view.name,
       description: view.description,
       displayType: view.displayType,
@@ -206,11 +227,18 @@ export async function POST(
       color: view.color || '#3b82f6',
       issueCount: 0, // TODO: Calculate actual issue count
       filters: view.filters,
+      sorting: view.sorting,
+      grouping: view.grouping,
+      fields: view.fields,
+      layout: view.layout,
       projectIds: view.projectIds,
+      workspaceIds: view.workspaceIds,
       isDefault: view.isDefault,
       isFavorite: view.isFavorite,
       ownerId: view.ownerId,
       sharedWith: view.sharedWith,
+      lastAccessedAt: view.lastAccessedAt,
+      accessCount: view.accessCount,
       createdAt: view.createdAt,
       updatedAt: view.updatedAt
     };

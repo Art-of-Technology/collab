@@ -89,58 +89,15 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
         max-h-[95vh] 
         overflow-hidden flex flex-col
         p-0
+        bg-[#0a0a0a] border-[#1f1f1f]
       `}>
-        <DialogHeader className={`
-          sticky top-0 z-10 
-          bg-background/95 backdrop-blur-sm
-          border-b border-border/50
-          px-6 py-4
-          flex-shrink-0
-        `}>
-          <DialogTitle className="sr-only">
+        <DialogHeader className="sr-only">
+          <DialogTitle>
             {issue ? `${issue.issueKey} - ${issue.title}` : "Issue Details"}
           </DialogTitle>
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {issue && (
-                <>
-                  <span className="font-mono text-sm font-semibold text-muted-foreground">
-                    {issue.issueKey}
-                  </span>
-                  <span className="text-sm text-muted-foreground">•</span>
-                  <span className="text-sm font-medium text-foreground truncate max-w-[300px]">
-                    {issue.title}
-                  </span>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {issue && (
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={handleOpenExternal}
-                  className="gap-2"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span className="hidden sm:inline">View Full</span>
-                </Button>
-              )}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={onClose} 
-                className="h-8 w-8 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0 bg-[#0a0a0a]">
           <IssueDetailContent
             issue={issue}
             error={error}
@@ -148,6 +105,9 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
             onRefresh={handleRefresh}
             onClose={onClose}
             boardId={issue?.project?.id}
+            mode="modal"
+            workspaceId={currentWorkspace?.slug || currentWorkspace?.id}
+            issueId={issueId}
           />
         </div>
       </DialogContent>
