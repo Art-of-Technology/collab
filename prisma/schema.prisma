@@ -8,70 +8,114 @@ datasource db {
 }
 
 model User {
-  id                     String                  @id @default(cuid())
-  name                   String?
-  email                  String?                 @unique
-  emailVerified          DateTime?
-  image                  String?
-  hashedPassword         String?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  team                   String?
-  currentFocus           String?
-  expertise              String[]
-  slackId                String?
-  avatarAccessory        Int?                    @default(0)
-  avatarBrows            Int?                    @default(1)
-  avatarEyes             Int?                    @default(1)
-  avatarEyewear          Int?                    @default(0)
-  avatarHair             Int?                    @default(1)
-  avatarMouth            Int?                    @default(1)
-  avatarNose             Int?                    @default(1)
-  avatarSkinTone         Int?                    @default(1)
-  useCustomAvatar        Boolean                 @default(false)
-  role                   UserRole                @default(DEVELOPER)
-  accounts               Account[]
-  bookmarks              Bookmark[]
-  comments               Comment[]
-  commentLikes           CommentLike[]
-  assignedEpics          Epic[]                  @relation("AssignedEpics")
-  reportedEpics          Epic[]                  @relation("ReportedEpics")
-  featureRequests        FeatureRequest[]
-  featureRequestComments FeatureRequestComment[]
-  featureVotes           FeatureVote[]
-  mentions               Mention[]
-  receivedMessages       Message[]               @relation("ReceivedMessages")
-  sentMessages           Message[]               @relation("SentMessages")
-  assignedMilestones     Milestone[]             @relation("AssignedMilestones")
-  reportedMilestones     Milestone[]             @relation("ReportedMilestones")
-  notes                  Note[]
-  noteTags               NoteTag[]
-  sentNotifications      Notification[]          @relation("NotificationSender")
-  notifications          Notification[]          @relation("NotificationReceiver")
-  posts                  Post[]
-  resolvedPosts          Post[]                  @relation("PostResolvedBy")
-  pinnedPosts            Post[]                  @relation("PostPinnedBy")
-  postActions            PostAction[]            @relation("PostActions")
-  reactions              Reaction[]
-  assignedStories        Story[]                 @relation("AssignedStories")
-  reportedStories        Story[]                 @relation("ReportedStories")
-  assignedTasks          Task[]                  @relation("AssignedTasks")
-  reportedTasks          Task[]                  @relation("ReportedTasks")
-  boardItemActivities    BoardItemActivity[]
-  approvedTaskHelpers    TaskAssignee[]          @relation("TaskAssigneeApprover")
-  taskAssignees          TaskAssignee[]          @relation("TaskAssignee")
-  taskAttachments        TaskAttachment[]
-  taskComments           TaskComment[]
-  taskCommentReactions   TaskCommentReaction[]
-  userEvents             UserEvent[]
-  userStatus             UserStatus?
-  ownedWorkspaces        Workspace[]             @relation("WorkspaceOwner")
-  workspaceInvitations   WorkspaceInvitation[]
-  workspaceMemberships   WorkspaceMember[]
-  conversations          Conversation[]          @relation("UserConversations")
-  boardGenerationJobs    BoardGenerationJob[]
-  leaveRequest           LeaveRequest[]
-  leaveBalances          LeaveBalance[]
+  id                      String                   @id @default(cuid())
+  name                    String?
+  email                   String?                  @unique
+  emailVerified           DateTime?
+  image                   String?
+  hashedPassword          String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  team                    String?
+  currentFocus            String?
+  expertise               String[]
+  slackId                 String?
+  avatarAccessory         Int?                     @default(0)
+  avatarBrows             Int?                     @default(1)
+  avatarEyes              Int?                     @default(1)
+  avatarEyewear           Int?                     @default(0)
+  avatarHair              Int?                     @default(1)
+  avatarMouth             Int?                     @default(1)
+  avatarNose              Int?                     @default(1)
+  avatarSkinTone          Int?                     @default(1)
+  useCustomAvatar         Boolean                  @default(false)
+  role                    UserRole                 @default(DEVELOPER)
+  accounts                Account[]
+  boardFollowers          BoardFollower[]
+  boardGenerationJobs     BoardGenerationJob[]
+  boardItemActivities     BoardItemActivity[]
+  bookmarks               Bookmark[]
+  comments                Comment[]
+  commentLikes            CommentLike[]
+  assignedEpics           Epic[]                   @relation("AssignedEpics")
+  reportedEpics           Epic[]                   @relation("ReportedEpics")
+  featureRequests         FeatureRequest[]
+  featureRequestComments  FeatureRequestComment[]
+  featureVotes            FeatureVote[]
+  mentions                Mention[]
+  receivedMessages        Message[]                @relation("ReceivedMessages")
+  sentMessages            Message[]                @relation("SentMessages")
+  assignedMilestones      Milestone[]              @relation("AssignedMilestones")
+  reportedMilestones      Milestone[]              @relation("ReportedMilestones")
+  notes                   Note[]
+  noteTags                NoteTag[]
+  sentNotifications       Notification[]           @relation("NotificationSender")
+  notifications           Notification[]           @relation("NotificationReceiver")
+  notificationPreferences NotificationPreferences?
+  posts                   Post[]
+  pinnedPosts             Post[]                   @relation("PostPinnedBy")
+  resolvedPosts           Post[]                   @relation("PostResolvedBy")
+  postActions             PostAction[]             @relation("PostActions")
+  postFollowers           PostFollower[]
+  reactions               Reaction[]
+  assignedStories         Story[]                  @relation("AssignedStories")
+  reportedStories         Story[]                  @relation("ReportedStories")
+  assignedTasks           Task[]                   @relation("AssignedTasks")
+  reportedTasks           Task[]                   @relation("ReportedTasks")
+  approvedTaskHelpers     TaskAssignee[]           @relation("TaskAssigneeApprover")
+  taskAssignees           TaskAssignee[]           @relation("TaskAssignee")
+  taskAttachments         TaskAttachment[]
+  taskComments            TaskComment[]
+  taskCommentReactions    TaskCommentReaction[]
+  taskFollowers           TaskFollower[]
+  userEvents              UserEvent[]
+  userStatus              UserStatus?
+  ownedWorkspaces         Workspace[]              @relation("WorkspaceOwner")
+  workspaceInvitations    WorkspaceInvitation[]
+  workspaceMemberships    WorkspaceMember[]
+  conversations           Conversation[]           @relation("UserConversations")
+  leaveRequest            LeaveRequest[]
+  leaveBalances           LeaveBalance[]
+}
+
+model NotificationPreferences {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  
+  // Task notifications
+  taskCreated               Boolean  @default(true)
+  taskStatusChanged         Boolean  @default(true)
+  taskAssigned              Boolean  @default(true)
+  taskCommentAdded          Boolean  @default(true)
+  taskPriorityChanged       Boolean  @default(true)
+  taskDueDateChanged        Boolean  @default(true)
+  taskColumnMoved           Boolean  @default(false)
+  taskUpdated               Boolean  @default(true)
+  taskDeleted               Boolean  @default(true)
+  taskMentioned             Boolean  @default(true)
+  
+  // Board notifications
+  boardTaskCreated          Boolean  @default(true)
+  boardTaskStatusChanged    Boolean  @default(true)
+  boardTaskAssigned         Boolean  @default(false)
+  boardTaskCompleted        Boolean  @default(true)
+  boardTaskDeleted          Boolean  @default(true)
+  
+  // Post notifications
+  postCommentAdded          Boolean  @default(true)
+  postUpdated               Boolean  @default(true)
+  postResolved              Boolean  @default(true)
+  
+  // Email notifications
+  emailNotificationsEnabled Boolean  @default(true)
+  
+  // Push notifications
+  pushNotificationsEnabled  Boolean  @default(false)
+  pushSubscription          Json?    // Stores the push subscription object
+  
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -113,10 +157,11 @@ model Post {
   mentions      Mention[]
   notifications Notification[]
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  resolvedBy    User?          @relation("PostResolvedBy", fields: [resolvedById], references: [id])
   pinnedByUser  User?          @relation("PostPinnedBy", fields: [pinnedBy], references: [id])
+  resolvedBy    User?          @relation("PostResolvedBy", fields: [resolvedById], references: [id])
   workspace     Workspace?     @relation(fields: [workspaceId], references: [id])
   actions       PostAction[]
+  followers     PostFollower[]
   reactions     Reaction[]
   tasks         Task[]
   tags          Tag[]          @relation("PostToTag")
@@ -172,12 +217,12 @@ model Comment {
   milestoneId      String?
   html             String?
   author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   parent           Comment?       @relation("CommentToComment", fields: [parentId], references: [id], onDelete: Cascade)
   children         Comment[]      @relation("CommentToComment")
   post             Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
   story            Story?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   notifications    Notification[]
   reactions        Reaction[]
@@ -326,6 +371,8 @@ model Workspace {
   ownerId             String
   dockEnabled         Boolean               @default(true)
   timeTrackingEnabled Boolean               @default(true)
+  boardGenerationJobs BoardGenerationJob[]
+  boardItemActivities BoardItemActivity[]
   customRoles         CustomRole[]
   epics               Epic[]
   featureRequests     FeatureRequest[]
@@ -343,8 +390,6 @@ model Workspace {
   owner               User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   invitations         WorkspaceInvitation[]
   members             WorkspaceMember[]
-  boardItemActivities BoardItemActivity[]
-  boardGenerationJobs BoardGenerationJob[]
 }
 
 model WorkspaceMember {
@@ -376,21 +421,22 @@ model WorkspaceInvitation {
 }
 
 model TaskBoard {
-  id              String       @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
   slug            String
   description     String?
   workspaceId     String
-  isDefault       Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  isDefault       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   issuePrefix     String
-  nextIssueNumber Int          @default(1)
+  nextIssueNumber Int             @default(1)
+  followers       BoardFollower[]
   epics           Epic[]
   milestones      Milestone[]
   stories         Story[]
   tasks           Task[]
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   columns         TaskColumn[]
 
   @@unique([name, workspaceId])
@@ -440,6 +486,7 @@ model Task {
   epicId        String?
   milestoneId   String?
   storyId       String?
+  activities    BoardItemActivity[]
   notifications Notification[]
   assignee      User?               @relation("AssignedTasks", fields: [assigneeId], references: [id])
   column        TaskColumn?         @relation(fields: [columnId], references: [id])
@@ -451,10 +498,10 @@ model Task {
   story         Story?              @relation(fields: [storyId], references: [id])
   taskBoard     TaskBoard?          @relation(fields: [taskBoardId], references: [id])
   workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  activities    BoardItemActivity[]
   assignees     TaskAssignee[]
   attachments   TaskAttachment[]
   comments      TaskComment[]
+  followers     TaskFollower[]
   userEvents    UserEvent[]
   userStatuses  UserStatus[]
   labels        TaskLabel[]         @relation("TaskToLabel")
@@ -564,7 +611,7 @@ model BoardItemActivity {
   task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
-  @@index([taskId]) // Keep for backward compatibility
+  @@index([taskId])
   @@index([userId])
   @@index([workspaceId])
   @@index([boardId])
@@ -589,6 +636,7 @@ model Milestone {
   issueKey      String?
   assigneeId    String?
   reporterId    String?
+  comments      Comment[]
   epics         Epic[]
   assignee      User?          @relation("AssignedMilestones", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
@@ -597,7 +645,6 @@ model Milestone {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   notifications Notification[]
   labels        TaskLabel[]    @relation("MilestoneToLabel")
-  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -627,6 +674,7 @@ model Epic {
   position      Int?
   assigneeId    String?
   reporterId    String?
+  comments      Comment[]
   assignee      User?          @relation("AssignedEpics", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
   milestone     Milestone?     @relation(fields: [milestoneId], references: [id])
@@ -637,7 +685,6 @@ model Epic {
   stories       Story[]
   tasks         Task[]
   labels        TaskLabel[]    @relation("EpicToLabel")
-  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -669,6 +716,7 @@ model Story {
   position      Int?
   assigneeId    String?
   reporterId    String?
+  comments      Comment[]
   notifications Notification[]
   assignee      User?          @relation("AssignedStories", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
@@ -678,7 +726,6 @@ model Story {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks         Task[]
   labels        TaskLabel[]    @relation("StoryToLabel")
-  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -872,6 +919,51 @@ model BoardGenerationJob {
   @@index([workspaceId])
   @@index([userId])
   @@index([status])
+}
+
+model TaskFollower {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([taskId, createdAt])
+}
+
+model PostFollower {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([postId, createdAt])
+}
+
+model BoardFollower {
+  id        String    @id @default(cuid())
+  boardId   String
+  userId    String
+  createdAt DateTime  @default(now())
+  board     TaskBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@index([boardId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([boardId, createdAt])
 }
 
 model TaskRelations {
@@ -1225,4 +1317,5 @@ enum Permission {
   VIEW_REPORTS
   PIN_POST
   RESOLVE_BLOCKER
+  MANAGE_LEAVE
 }

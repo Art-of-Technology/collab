@@ -24,6 +24,7 @@ import { useTaskModal } from '@/context/TaskModalContext';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
 import React from 'react';
 import { SelectedLabelsDisplay } from '../ui/SelectedLabelsDisplay';
+import { TaskFollowButton } from './TaskFollowButton';
 
 export interface EnhancedTaskCardProps {
   id: string;
@@ -202,9 +203,8 @@ export default function EnhancedTaskCard({
 
     return (
       <Badge
-        className={`${
-          typeColors[normalizedType] || 'bg-gray-100 text-gray-800'
-        } px-1.5 py-0.5 flex items-center text-xs`}
+        className={`${typeColors[normalizedType] || 'bg-gray-100 text-gray-800'
+          } px-1.5 py-0.5 flex items-center text-xs`}
       >
         {getTypeIcon(normalizedType)}
         <span>{normalizedType}</span>
@@ -351,11 +351,10 @@ export default function EnhancedTaskCard({
   return (
     <div onClick={handleClick}>
       <Card
-        className={`overflow-hidden transition-all cursor-pointer border-l-4 ${
-          isHighlighted
-            ? 'ring-2 ring-blue-500 ring-opacity-75 shadow-lg shadow-blue-500/25 animate-pulse border-blue-500'
-            : ''
-        }`}
+        className={`overflow-hidden transition-all cursor-pointer border-l-4 ${isHighlighted
+          ? 'ring-2 ring-blue-500 ring-opacity-75 shadow-lg shadow-blue-500/25 animate-pulse border-blue-500'
+          : ''
+          }`}
         style={{
           borderLeftColor: isHighlighted ? '#3B82F6' : cardStyles.borderColor,
           backgroundColor: isHighlighted
@@ -470,6 +469,7 @@ export default function EnhancedTaskCard({
                 )}
               </div>
             </div>
+
           </div>
         </CardContent>
       </Card>

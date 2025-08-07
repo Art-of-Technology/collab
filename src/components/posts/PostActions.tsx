@@ -15,10 +15,10 @@ import {
   BookmarkIcon as BookmarkSolidIcon,
   HeartIcon as HeartSolidIcon,
 } from "@heroicons/react/24/solid";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogDescription
 } from "@/components/ui/dialog";
@@ -26,11 +26,13 @@ import { Input } from "@/components/ui/input";
 import { useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
 import { useIsPostBookmarked, useAddBookmark, useRemoveBookmark } from "@/hooks/queries/useBookmark";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import PostFollowButton from "./PostFollowButton";
 
 interface PostActionsProps {
   postId: string;
   initialLiked: boolean;
   initialBookmarked: boolean;
+  isFollowing: boolean;
   onLikeChange: (newLikedState: boolean) => void;
   onToggleExpand: () => void;
 }
@@ -39,6 +41,7 @@ export default function PostActions({
   postId,
   initialLiked,
   initialBookmarked,
+  isFollowing,
   onLikeChange,
   onToggleExpand,
 }: PostActionsProps) {
@@ -52,13 +55,13 @@ export default function PostActions({
   const { data: isBookmarked = initialBookmarked } = useIsPostBookmarked(postId);
   const addBookmarkMutation = useAddBookmark();
   const removeBookmarkMutation = useRemoveBookmark();
-  
+
   // TanStack Query hooks for reactions (likes)
   const addReactionMutation = useAddReaction();
   const removeReactionMutation = useRemoveReaction();
 
   const postUrl = typeof window !== 'undefined' && currentWorkspace
-    ? `${window.location.origin}/${currentWorkspace.id}/posts/${postId}` 
+    ? `${window.location.origin}/${currentWorkspace.id}/posts/${postId}`
     : `#`;
 
   const handleLike = async () => {
@@ -78,7 +81,7 @@ export default function PostActions({
       // Update local state
       const newLikedState = !liked;
       setLiked(newLikedState);
-      
+
       // Notify parent component
       onLikeChange(newLikedState);
 
@@ -127,7 +130,7 @@ export default function PostActions({
       toast({
         description: "Link copied to clipboard"
       });
-      
+
       // Reset copied state after 2 seconds
       setTimeout(() => {
         setCopied(false);
@@ -182,6 +185,7 @@ export default function PostActions({
           )}
           <span className="hidden sm:inline">Bookmark</span>
         </Button>
+        <PostFollowButton postId={postId} initialIsFollowing={isFollowing} />
         <Button
           onClick={handleShare}
           variant="ghost"
@@ -192,7 +196,7 @@ export default function PostActions({
           <span className="hidden sm:inline">Share</span>
         </Button>
       </div>
-      
+
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

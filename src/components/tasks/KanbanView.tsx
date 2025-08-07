@@ -106,10 +106,12 @@ export default function KanbanView() {
     if (!tasks?.length) return [];
 
     return tasks.filter(task => {
-      // Filter by search term
-      const matchesSearch = searchTerm.trim() === "" ||
-        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      // Filter by search term (including issueKey/short codes)
+      const searchTermLower = searchTerm.trim().toLowerCase();
+      const matchesSearch = searchTermLower === "" ||
+        task.title.toLowerCase().includes(searchTermLower) ||
+        (task.description && task.description.toLowerCase().includes(searchTermLower)) ||
+        (task.issueKey && task.issueKey.toLowerCase().includes(searchTermLower));
 
       // Filter by selected types
       const matchesType = selectedTypes.length === 0 ||
@@ -519,6 +521,7 @@ export default function KanbanView() {
                                       onColumnDelete={canManageBoard ? handleColumnDelete : undefined}
                                       highlightedIds={highlightedIds}
                                       placeholder={droppableProvided.placeholder}
+                                      boardId={selectedBoardId}
                                     />
                                   </div>
                                 )}

@@ -63,17 +63,17 @@ export default function PostItem({
     (post.reactions || []).filter((reaction: { type: string; }) => reaction.type === "LIKE").length
   );
   const [likesWithAuthor, setLikesWithAuthor] = useState<ReactionWithAuthor[]>([]);
-  
+
   // Dialog states
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLikesDialogOpen, setIsLikesDialogOpen] = useState(false);
-  
+
   // Computed values
   const commentsCount = (post.comments || []).length;
   const isAuthor = post.authorId === currentUserId;
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), { addSuffix: true });
-  
+
   // Get initial liked and bookmarked state
   const initialLiked = (post.reactions || []).some(
     (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "LIKE"
@@ -97,7 +97,7 @@ export default function PostItem({
   // Handle like change
   const handleLikeChange = (newLikedState: boolean) => {
     setLikesCount((prev: number) => newLikedState ? prev + 1 : prev - 1);
-    
+
     // If already loaded likes data, refresh it
     if (likesWithAuthor.length > 0 || isLikesDialogOpen) {
       getLikes();
@@ -108,17 +108,17 @@ export default function PostItem({
   const getLikes = async () => {
     try {
       const response = await fetch(`/api/posts/${post.id}/reactions`);
-      
+
       if (!response.ok) {
         throw new Error("Failed to fetch likes");
       }
-      
+
       const data = await response.json();
       // Filter only LIKE reactions and include author details
-      const likes = data.reactions.filter((reaction: ReactionWithAuthor) => 
+      const likes = data.reactions.filter((reaction: ReactionWithAuthor) =>
         reaction.type === "LIKE"
       );
-      
+
       setLikesWithAuthor(likes);
     } catch (error) {
       console.error("Failed to get likes:", error);
@@ -133,7 +133,7 @@ export default function PostItem({
   return (
     <Card className="mb-4 transition-shadow hover:shadow-lg border-border/50">
       <CardHeader className="pb-2">
-        <PostHeader 
+        <PostHeader
           authorId={post.author.id}
           authorName={post.author.name}
           authorImage={post.author.image}
@@ -151,9 +151,9 @@ export default function PostItem({
           isPinned={post.isPinned}
         />
       </CardHeader>
-      
+
       <CardContent className="pt-2">
-        <PostContent 
+        <PostContent
           message={post.message}
           html={post.html}
           tags={post.tags || []}
@@ -164,12 +164,13 @@ export default function PostItem({
       </CardContent>
 
       <Separator className="bg-border/50" />
-      
+
       <CardFooter className="pt-2 pb-2 px-6 bg-card/50">
-        <PostActions 
+        <PostActions
           postId={post.id}
           initialLiked={initialLiked}
           initialBookmarked={initialBookmarked}
+          isFollowing={post.isFollowing}
           onLikeChange={handleLikeChange}
           onToggleExpand={() => toggleExpand(post.id)}
         />
@@ -179,13 +180,13 @@ export default function PostItem({
         <>
           <Separator />
           <CardContent className="pt-3">
-            <LikesSummary 
+            <LikesSummary
               likesCount={likesCount}
               likesWithAuthor={likesWithAuthor}
               onShowAllLikes={handleOpenLikesDialog}
               postId={post.id}
             />
-            
+
             <CommentsList
               postId={post.id}
               comments={post.comments}
@@ -196,7 +197,7 @@ export default function PostItem({
       )}
 
       {/* Dialogs */}
-      <PostDialogs 
+      <PostDialogs
         postId={post.id}
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
@@ -204,8 +205,8 @@ export default function PostItem({
         setIsEditDialogOpen={setIsEditDialogOpen}
         initialEditData={initialEditData}
       />
-      
-      <LikesModal 
+
+      <LikesModal
         postId={post.id}
         isOpen={isLikesDialogOpen}
         onOpenChange={setIsLikesDialogOpen}

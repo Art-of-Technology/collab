@@ -7,18 +7,21 @@ type WorkspacePermissions = {
   isWorkspaceAdmin: boolean;
   isWorkspaceOwner: boolean;
   canManageBoard: boolean;
+  canManageLeave: boolean;
   isLoading: boolean;
 };
 
 /**
  * Hook to check workspace permissions for the current user
- * 
+ *
  * @returns Workspace permission status for the current user
  */
 export function useWorkspacePermissions(): WorkspacePermissions {
   const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const { data: currentUser } = useCurrentUser();
-  const { checkPermission, isSystemAdmin } = usePermissions(currentWorkspace?.id);
+  const { checkPermission, isSystemAdmin } = usePermissions(
+    currentWorkspace?.id
+  );
 
   const isLoading = workspaceLoading || !currentUser;
 
@@ -33,8 +36,7 @@ export function useWorkspacePermissions(): WorkspacePermissions {
 
   // Check if user is workspace owner specifically
   const isWorkspaceOwner =
-    !isLoading &&
-    (currentWorkspace?.ownerId === currentUser?.id);
+    !isLoading && currentWorkspace?.ownerId === currentUser?.id;
 
   // Check if user can manage boards and columns
   const canManageBoard =
@@ -43,10 +45,18 @@ export function useWorkspacePermissions(): WorkspacePermissions {
       isWorkspaceOwner ||
       checkPermission(Permission.MANAGE_BOARD_SETTINGS).hasPermission);
 
+  // Leave management permission
+  const canManageLeave =
+    !isLoading &&
+    (isWorkspaceAdmin ||
+      isWorkspaceOwner ||
+      checkPermission(Permission.MANAGE_LEAVE).hasPermission);
+
   return {
     isWorkspaceAdmin,
     isWorkspaceOwner,
     canManageBoard,
-    isLoading
+    canManageLeave,
+    isLoading,
   };
-} 
+}

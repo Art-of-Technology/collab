@@ -72,16 +72,16 @@ export default function Navbar({
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  
+
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
   const { currentWorkspace } = useWorkspace();
-  
+
   // Use Mention context for notifications
-  const { 
-    notifications, 
-    unreadCount, 
-    markNotificationAsRead, 
+  const {
+    notifications,
+    unreadCount,
+    markNotificationAsRead,
     markAllNotificationsAsRead,
     loading: notificationsLoading,
     refetchNotifications
@@ -104,21 +104,21 @@ export default function Navbar({
     router.push("/");
     router.refresh();
   };
-  
+
   // Handle notification click - mark as read and navigate if needed
   const handleNotificationClick = async (id: string, url?: string) => {
     await markNotificationAsRead(id);
-    
+
     if (url) {
       router.push(url);
     }
-    
+
     // Close notifications popover on mobile
     if (window.innerWidth < 768) {
       setShowNotifications(false);
     }
   };
-  
+
   // Format notification time
   const formatNotificationTime = (dateString: string): string => {
     try {
@@ -128,7 +128,7 @@ export default function Navbar({
       return 'recently';
     }
   };
-  
+
   // Generate notification URL based on type
   const getNotificationUrl = (notification: any): string => {
     const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
@@ -142,6 +142,7 @@ export default function Navbar({
       case 'post_mention':
       case 'post_comment':
       case 'post_reaction':
+      case 'POST_COMMENT_ADDED':
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
       case 'comment_mention':
       case 'comment_reply':
@@ -151,6 +152,7 @@ export default function Navbar({
         // For now, linking to notifications as a fallback
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`; // Placeholder, needs better logic
       case 'taskComment_mention': // Added this case
+      case 'TASK_STATUS_CHANGED':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'feature_mention':
       case 'feature_comment':
@@ -312,9 +314,9 @@ export default function Navbar({
                   {/* Notification bell with popover */}
                   <Popover open={showNotifications} onOpenChange={setShowNotifications}>
                     <PopoverTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="relative hover:bg-[#1c1c1c] text-gray-400"
                         onClick={() => refetchNotifications()}
                       >
@@ -330,17 +332,17 @@ export default function Navbar({
                       <div className="flex items-center justify-between p-3 border-b border-border/40">
                         <h3 className="font-medium">Notifications</h3>
                         {unreadCount > 0 && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-xs h-7 px-2" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7 px-2"
                             onClick={() => markAllNotificationsAsRead()}
                           >
                             Mark all as read
                           </Button>
                         )}
                       </div>
-                      
+
                       <ScrollArea className="h-80">
                         {notificationsLoading ? (
                           <div className="p-4 text-center text-muted-foreground text-sm">
@@ -355,8 +357,9 @@ export default function Navbar({
                             {notifications.map(notification => {
                               const url = getNotificationUrl(notification);
                               const isHtmlContent = /<[^>]+>/.test(notification.content);
+
                               return (
-                                <div 
+                                <div
                                   key={notification.id}
                                   className={`flex items-start gap-3 p-3 hover:bg-muted/40 cursor-pointer border-b border-border/20 ${!notification.read ? 'bg-primary/5' : ''}`}
                                   onClick={() => handleNotificationClick(notification.id, url)}
@@ -366,16 +369,16 @@ export default function Navbar({
                                     <CustomAvatar user={notification.sender} size="sm" />
                                   ) : (
                                     <Avatar className="h-8 w-8">
-                                      <AvatarImage 
-                                        src={notification.sender.image || undefined} 
-                                        alt={notification.sender.name || "User"} 
+                                      <AvatarImage
+                                        src={notification.sender.image || undefined}
+                                        alt={notification.sender.name || "User"}
                                       />
                                       <AvatarFallback>
                                         {getInitials(notification.sender.name || "U")}
                                       </AvatarFallback>
                                     </Avatar>
                                   )}
-                                  
+
                                   {/* Notification Content */}
                                   <div className="flex-1 space-y-1">
                                     <p className="text-sm">
@@ -401,7 +404,7 @@ export default function Navbar({
                                       {formatNotificationTime(notification.createdAt)}
                                     </p>
                                   </div>
-                                  
+
                                   {/* Read Indicator */}
                                   {!notification.read && (
                                     <div className="h-2 w-2 rounded-full bg-primary mt-1.5" />

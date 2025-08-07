@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import NotificationSettings from "@/components/profile/NotificationSettings";
 
 interface ProfileClientProps {
   initialData: any;
@@ -70,6 +71,7 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
         <TabsList className="bg-card/80 border border-border/40">
           <TabsTrigger value="profile" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Profile Settings</TabsTrigger>
           <TabsTrigger value="posts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Your Posts</TabsTrigger>
+          <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Notification Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
           <ProfileForm user={{
@@ -87,6 +89,9 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationSettings />
         </TabsContent>
       </Tabs>
     </div>

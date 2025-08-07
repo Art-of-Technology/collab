@@ -14,6 +14,7 @@ interface BaseRelationModalProps {
   confirmText?: string;
   cancelText?: string;
   isLoading?: boolean;
+  isConfirmDisabled?: boolean;
 }
 
 export function BaseRelationModal({
@@ -25,7 +26,8 @@ export function BaseRelationModal({
   onCancel,
   confirmText = "Add",
   cancelText = "Cancel",
-  isLoading = false
+  isLoading = false,
+  isConfirmDisabled = false
 }: BaseRelationModalProps) {
   if (!isOpen) return null;
 
