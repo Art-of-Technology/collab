@@ -219,7 +219,7 @@ export function UnifiedRelationsModal({
                     >
                       {item.issueKey || config.singular}
                     </Badge>
-                    <span className="truncate text-sm flex-1 min-w-0 max-w-[120px] sm:max-w-[180px] md:max-w-[220px] lg:max-w-none">{item.title}</span>
+                    <span className="responsive-item-title">{item.title}</span>
                   </div>
                   {getStatusBadge(item.status)}
                 </div>
