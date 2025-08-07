@@ -99,7 +99,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
-  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
+  const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -120,6 +120,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   useEffect(() => {
     const resolveParams = async () => {
       const resolvedParams = await params;
+
       setWorkspaceId(resolvedParams.workspaceId);
     };
     resolveParams();
@@ -136,7 +137,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, searchQuery, selectedTag, showFavorites, visibilityFilter]);
+  }, [session?.user, workspaceId, searchQuery, selectedTag, showFavorites, activeTab]);
 
   // Focus search input when dialog opens
   useEffect(() => {
@@ -158,57 +159,56 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   // Add keyboard listener when dialog is open
   useEffect(() => {
-    if (isTagDropdownOpen) {
-      // Add listener to the dialog content using ref instead of window
-      const dialogElement = tagDialogContentRef.current;
-      if (dialogElement) {
-        const handleKeyDownElement = (e: Event) => {
-          const keyboardEvent = e as KeyboardEvent;
-          // Only handle keys when the dialog is focused or when specific keys are pressed
-          const isDialogFocused = document.activeElement?.closest('[role="dialog"]');
-          if (!isDialogFocused && !['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(keyboardEvent.key)) {
-            return;
-          }
+    if (!isTagDropdownOpen) return;
 
-          const totalItems = filteredTags.length + 1;
-
-          switch (keyboardEvent.key) {
-            case 'ArrowDown':
-              keyboardEvent.preventDefault();
-              setSelectedIndex(prev =>
-                prev < totalItems - 1 ? prev + 1 : 0
-              );
-              break;
-            case 'ArrowUp':
-              keyboardEvent.preventDefault();
-              setSelectedIndex(prev =>
-                prev > 0 ? prev - 1 : totalItems - 1
-              );
-              break;
-            case 'Enter':
-              keyboardEvent.preventDefault();
-              if (selectedIndex === 0) {
-                setSelectedTag(null);
-                setTagSearchTerm("");
-                setIsTagDropdownOpen(false);
-              } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
-                const selectedTagItem = filteredTags[selectedIndex - 1];
-                setSelectedTag(selectedTagItem.id);
-                setTagSearchTerm("");
-                setIsTagDropdownOpen(false);
-              }
-              break;
-            case 'Escape':
-              keyboardEvent.preventDefault();
-              setIsTagDropdownOpen(false);
-              break;
-          }
-        };
-
-        dialogElement.addEventListener('keydown', handleKeyDownElement);
-        return () => dialogElement.removeEventListener('keydown', handleKeyDownElement);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle navigation keys when tag dropdown is open
+      if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
+        return;
       }
-    }
+
+      const totalItems = filteredTags.length + 1;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedIndex(prev =>
+            prev < totalItems - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedIndex(prev =>
+            prev > 0 ? prev - 1 : totalItems - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          e.stopPropagation();
+          if (selectedIndex === 0) {
+            setSelectedTag(null);
+            setTagSearchTerm("");
+            setIsTagDropdownOpen(false);
+          } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
+            const selectedTagItem = filteredTags[selectedIndex - 1];
+            setSelectedTag(selectedTagItem.id);
+            setTagSearchTerm("");
+            setIsTagDropdownOpen(false);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          e.stopPropagation();
+          setIsTagDropdownOpen(false);
+          break;
+      }
+    };
+
+    // Add global event listener with capture phase (like other working components)
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [isTagDropdownOpen, selectedIndex, filteredTags]);
 
   // Auto-scroll to selected item
@@ -240,8 +240,43 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (searchQuery) params.append("search", searchQuery);
       if (selectedTag) params.append("tag", selectedTag);
       if (showFavorites) params.append("favorite", "true");
-      if (visibilityFilter === "public") params.append("public", "true");
-      if (visibilityFilter === "private") params.append("public", "false");
+      
+      // Handle tab-based filtering
+      switch (activeTab) {
+        case "private":
+          // Private: User's private notes only
+          params.append("own", "true");
+          params.append("public", "false");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+        case "public":
+          // Public: User's public notes only
+          params.append("own", "true");
+          params.append("public", "true");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+        case "all":
+          // All: User's all notes (both private and public)
+          params.append("own", "true");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+        case "team-notes":
+          // Team Notes: Public notes from others in workspace
+          params.append("public", "true");
+          params.append("own", "false");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+      }
+
+
 
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
@@ -269,7 +304,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   const fetchTags = async () => {
     try {
-      const response = await fetch("/api/notes/tags");
+      // Always send workspace parameter for My Notes filtering
+      const url = workspaceId 
+        ? `/api/notes/tags?workspace=${workspaceId}`
+        : "/api/notes/tags";
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setTags(data);
@@ -466,14 +505,52 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </div>
         </div>
 
-        {/* Visibility Filter Tabs */}
-        <Tabs value={visibilityFilter} onValueChange={(value) => setVisibilityFilter(value as "all" | "public" | "private")}>
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
-            <TabsTrigger value="all">All Notes</TabsTrigger>
-            <TabsTrigger value="public">Public</TabsTrigger>
-            <TabsTrigger value="private">Private</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Horizontal Tabs */}
+        <div className="max-w-2xl">
+          <div className="flex gap-8 border-b border-border w-fit">
+            <button 
+              onClick={() => setActiveTab("all")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "all" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              All
+            </button>
+            <button 
+              onClick={() => setActiveTab("private")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "private" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              Private
+            </button>
+            <button 
+              onClick={() => setActiveTab("public")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "public" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              Public
+            </button>
+            <div className="border-l border-border h-6 self-end mb-3"></div>
+            <button 
+              onClick={() => setActiveTab("team-notes")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "team-notes" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              Team Notes
+            </button>
+          </div>
+        </div>
 
         {/* Notes Grid */}
         {notes.length === 0 ? (
@@ -481,9 +558,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-medium">No notes found</h3>
             <p className="text-muted-foreground">
-              {searchQuery || selectedTag || showFavorites || visibilityFilter !== "all"
+              {searchQuery || selectedTag || showFavorites
                 ? "Try adjusting your filters"
-                : "Get started by creating your first note"}
+                : activeTab === "private" || activeTab === "public" || activeTab === "all"
+                  ? "Get started by creating your first note"
+                  : "No team notes found"}
             </p>
           </div>
         ) : (
@@ -495,7 +574,13 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                 className="block"
               >
                 <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
-                  <div className="flex items-start justify-end mb-2 sm:mb-2 sm:pt-0">
+                  <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
+                    {/* Author mention on the left */}
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-xs sm:text-sm text-muted-foreground">@{note.author.name}</span>
+                    </div>
+                    
+                    {/* Action buttons on the right */}
                     <div className="flex items-center gap-3 sm:gap-0">
                       <Button
                         variant="ghost"
