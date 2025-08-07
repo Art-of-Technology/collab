@@ -268,7 +268,7 @@ export default function LeavePolicyForm({
                         <SelectValue placeholder="Select accrual type" />
                       </SelectTrigger>
                     </FormControl>
-                                          <SelectContent>
+                    <SelectContent>
                         <SelectItem value="FIXED">Fixed Annual Allocation</SelectItem>
                         <SelectItem value="HOURLY">Hourly Accrual</SelectItem>
                         <SelectItem value="REGULAR_WORKING_HOURS">Regular Working Hours</SelectItem>
