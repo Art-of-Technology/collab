@@ -1,21 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image"
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
-import {
-  BellIcon,
-  MagnifyingGlassIcon,
-  Bars3Icon,
-  /*SparklesIcon*/
-} from "@heroicons/react/24/outline";
-import { MessageCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useSidebar } from "@/components/providers/SidebarProvider";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { CollabText } from "@/components/ui/collab-text";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,29 +21,32 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { useUiContext } from "@/context/UiContext";
-import { useSidebar } from "@/components/providers/SidebarProvider";
-import { useMention } from "@/context/MentionContext";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
-import { useCurrentUser } from "@/hooks/queries/useUser";
-import { formatDistanceToNow } from "date-fns";
-import { CollabText } from "@/components/ui/collab-text";
-import { MarkdownContent } from "@/components/ui/markdown-content";
+import { useMention } from "@/context/MentionContext";
+import { useUiContext } from "@/context/UiContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useCurrentUser } from "@/hooks/queries/useUser";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Bars3Icon,
+  BellIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/react/24/outline";
+import { formatDistanceToNow } from "date-fns";
+import { MessageCircle } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -84,7 +83,9 @@ export default function Navbar({
     markNotificationAsRead,
     markAllNotificationsAsRead,
     loading: notificationsLoading,
-    refetchNotifications
+    refetchNotifications,
+    enableNotificationsFetching,
+    disableNotificationsFetching
   } = useMention();
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -138,6 +139,8 @@ export default function Navbar({
       return '/welcome'; // Fallback if no workspace
     }
 
+    console.log(notification, type)
+
     switch (type) {
       case 'post_mention':
       case 'post_comment':
@@ -151,7 +154,7 @@ export default function Navbar({
         // This might require fetching the comment details to get the post/feature ID
         // For now, linking to notifications as a fallback
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`; // Placeholder, needs better logic
-      case 'taskComment_mention': // Added this case
+      case 'TASK_COMMENT_MENTION': // Added this case
       case 'TASK_STATUS_CHANGED':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'feature_mention':
@@ -312,13 +315,25 @@ export default function Navbar({
               {hasWorkspaces && (
                 <>
                   {/* Notification bell with popover */}
-                  <Popover open={showNotifications} onOpenChange={setShowNotifications}>
+                  <Popover 
+                    open={showNotifications} 
+                    onOpenChange={(open) => {
+                      setShowNotifications(open);
+                      if (open) {
+                        // Enable notifications fetching and refetch when opening
+                        enableNotificationsFetching();
+                        refetchNotifications();
+                      } else {
+                        // Disable notifications fetching when closing to save bandwidth
+                        disableNotificationsFetching();
+                      }
+                    }}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="relative hover:bg-[#1c1c1c] text-gray-400"
-                        onClick={() => refetchNotifications()}
                       >
                         <BellIcon className="h-5 w-5" />
                         {unreadCount > 0 && (
@@ -365,16 +380,16 @@ export default function Navbar({
                                   onClick={() => handleNotificationClick(notification.id, url)}
                                 >
                                   {/* Sender Avatar */}
-                                  {notification.sender.useCustomAvatar ? (
-                                    <CustomAvatar user={notification.sender} size="sm" />
+                                  {notification.sender?.useCustomAvatar ? (
+                                    <CustomAvatar user={notification.sender as any} size="sm" />
                                   ) : (
                                     <Avatar className="h-8 w-8">
                                       <AvatarImage
-                                        src={notification.sender.image || undefined}
-                                        alt={notification.sender.name || "User"}
+                                        src={notification.sender?.image || undefined}
+                                        alt={notification.sender?.name || "User"}
                                       />
                                       <AvatarFallback>
-                                        {getInitials(notification.sender.name || "U")}
+                                        {getInitials(notification.sender?.name || "U")}
                                       </AvatarFallback>
                                     </Avatar>
                                   )}
@@ -382,7 +397,7 @@ export default function Navbar({
                                   {/* Notification Content */}
                                   <div className="flex-1 space-y-1">
                                     <p className="text-sm">
-                                      <span className="font-medium">{notification.sender.name}</span>
+                                      <span className="font-medium">{notification.sender?.name || "Unknown User"}</span>
                                       {' '}
                                       <span className="text-muted-foreground">
                                         {isHtmlContent ? (

@@ -1,16 +1,21 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, memo } from "react";
-import { useForm } from "react-hook-form";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { useToast } from "@/hooks/use-toast";
+import { extractMentionUserIds } from "@/utils/mentions";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { format } from "date-fns";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
-import { extractMentionUserIds } from "@/utils/mentions";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
+import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
+import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
+import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
+import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +33,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { LabelSelector } from "@/components/ui/label-selector";
+import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import {
   Select,
   SelectContent,
@@ -36,14 +42,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
-import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
-import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
-import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
-import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
-import { LabelSelector } from "@/components/ui/label-selector";
 
 // Form schema
 const formSchema = z.object({
@@ -184,7 +184,7 @@ export function CreateStoryDialog({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: "story",
+              sourceType: "STORY",
               sourceId: createdStory.id,
               content: `mentioned you in a story: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
             });

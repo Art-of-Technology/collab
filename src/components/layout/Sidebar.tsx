@@ -10,7 +10,8 @@ import {
   Squares2X2Icon,
   RectangleStackIcon,
   DocumentTextIcon,
-  ClockIcon
+  ClockIcon,
+  BellIcon
 } from "@heroicons/react/24/outline";
 import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
@@ -141,6 +142,12 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         href: getUrl('/messages'),
         icon: EnvelopeIcon,
         current: pathname === getUrl('/messages') || pathname === `/${workspaceId}/messages` || pathname.startsWith(getUrl('/messages') + '/') || pathname.startsWith(`/${workspaceId}/messages/`),
+      },
+      {
+        name: "Notifications",
+        href: getUrl('/notifications'),
+        icon: BellIcon,
+        current: pathname === getUrl('/notifications') || pathname === `/${workspaceId}/notifications`,
       },
       {
         name: "Tags",

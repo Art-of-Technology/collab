@@ -1,8 +1,7 @@
-import { prisma } from "@/lib/prisma";
-import { extractMentionUserIds } from "@/utils/mentions";
-import { sendPushNotification, PushNotificationPayload } from "@/lib/push-notifications";
-import { logger } from "@/lib/logger";
 import { sendEmail } from "@/lib/email";
+import { prisma } from "@/lib/prisma";
+import { PushNotificationPayload, sendPushNotification } from "@/lib/push-notifications";
+import { logger } from "./logger";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -58,7 +57,7 @@ export class NotificationService {
    * @param notificationType - Type of notification
    * @param content - Notification content
    * @param senderId - ID of the user sending the notification
-   * @param excludeUserIds - User IDs to exclude from notifications
+   * @param _excludeUserIds - User IDs to exclude from notifications
    * @param additionalData - Additional data to include in notification
    */
   private static async createFollowerNotifications<T extends { userId: string }>(
@@ -66,7 +65,7 @@ export class NotificationService {
     notificationType: NotificationType,
     content: string,
     senderId: string,
-    excludeUserIds: string[] = [],
+    _excludeUserIds: string[] = [],
     additionalData: Record<string, any> = {}
   ): Promise<void> {
     try {
@@ -298,6 +297,7 @@ export class NotificationService {
           postBlockerCreated: true,
           postResolved: true,
           emailNotificationsEnabled: true,
+          pushNotificationsEnabled: false,
         };
       }
       

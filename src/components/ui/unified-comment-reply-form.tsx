@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { useAddUnifiedComment, UnifiedItemType } from "@/hooks/queries/useUnifiedComments";
+import { UnifiedItemType, useAddUnifiedComment } from "@/hooks/queries/useUnifiedComments";
+import { useToast } from "@/hooks/use-toast";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { useState } from "react";
 
 interface UnifiedCommentReplyFormProps {
   itemType: UnifiedItemType;
@@ -56,7 +56,7 @@ export function UnifiedCommentReplyForm({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: itemType === 'task' ? "taskComment" : "comment",
+              sourceType: itemType === 'task' ? "TASK_COMMENT" : "COMMENT",
               sourceId: newReply.id,
               content: `mentioned you in a ${itemType} comment reply: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
             });

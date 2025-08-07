@@ -1,8 +1,10 @@
 "use client";
 
-import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useLazyNotifications, useMarkAllNotificationsAsRead, useMarkNotificationAsRead, useUnreadNotificationsCount } from '@/hooks/queries/useNotifications';
 import axios from 'axios';
+import { useSession } from 'next-auth/react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
+import { useWorkspace } from './WorkspaceContext';
 
 interface User {
   id: string;
@@ -16,12 +18,26 @@ interface Notification {
   content: string;
   read: boolean;
   createdAt: string;
-  senderId: string;
-  sender: {
+  senderId?: string;
+  taskId?: string;
+  postId?: string;
+  workspaceId?: string;
+  taskCommentId?: string;
+  sender?: {
     id: string;
     name: string | null;
-    image: string | null;
-    useCustomAvatar: boolean;
+    image?: string | null;
+    email?: string;
+    useCustomAvatar?: boolean;
+  };
+  workspace?: {
+    id: string;
+    name: string;
+    color?: string | null;
+  };
+  task?: {
+    id: string;
+    title: string;
   };
 }
 
@@ -33,17 +49,34 @@ interface MentionContextType {
   markAllNotificationsAsRead: () => Promise<void>;
   loading: boolean;
   refetchNotifications: () => Promise<void>;
+  enableNotificationsFetching: () => void;
+  disableNotificationsFetching: () => void;
 }
 
 const MentionContext = createContext<MentionContextType | undefined>(undefined);
 
 export function MentionProvider({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(false);
+  useSession();
+  const { currentWorkspace } = useWorkspace();
 
-  // Calculate unread notifications count
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // State to control when to fetch full notifications
+  const [fetchNotifications, setFetchNotifications] = useState(false);
+
+  // Only fetch unread count regularly (every 10 seconds)
+  const { data: unreadCount = 0 } = useUnreadNotificationsCount(currentWorkspace?.id || null);
+  
+  // Conditionally fetch full notifications only when needed (e.g., popover is open)
+  const { data: notifications = [], isLoading: loading, refetch } = useLazyNotifications(
+    currentWorkspace?.id || '', 
+    {
+      enabled: fetchNotifications,
+      refetchInterval: 10000 // Fast polling when actively viewing notifications
+    }
+  );
+  
+  // Use mutation hooks for marking notifications as read
+  const markAsReadMutation = useMarkNotificationAsRead();
+  const markAllAsReadMutation = useMarkAllNotificationsAsRead();
 
   // Function to search users for mentions
   const searchUsers = useCallback(async (query: string): Promise<User[]> => {
@@ -58,55 +91,46 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Function to fetch notifications
-  const fetchNotifications = useCallback(async () => {
-    if (!session?.user?.id) return;
-
-    setLoading(true);
-    try {
-      const response = await axios.get('/api/notifications');
-      setNotifications(response.data);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [session?.user?.id]);
-
-  // Function to mark a notification as read
+  // Function to mark a notification as read using mutation hook
   const markNotificationAsRead = useCallback(async (id: string) => {
     try {
-      await axios.patch(`/api/notifications/${id}`, { read: true });
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === id 
-            ? { ...notification, read: true } 
-            : notification
-        )
-      );
+      await markAsReadMutation.mutateAsync(id);
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  }, []);
+  }, [markAsReadMutation]);
 
-  // Function to mark all notifications as read
+  // Function to mark all notifications as read using mutation hook
   const markAllNotificationsAsRead = useCallback(async () => {
     try {
-      await axios.post('/api/notifications/read-all');
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, read: true }))
-      );
+      if (currentWorkspace?.id) {
+        await markAllAsReadMutation.mutateAsync(currentWorkspace.id);
+      }
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
+  }, [markAllAsReadMutation, currentWorkspace?.id]);
+
+  // Function to enable notifications fetching (when popover opens)
+  const enableNotificationsFetching = useCallback(() => {
+    setFetchNotifications(true);
   }, []);
 
-  // Fetch notifications on mount and when session changes
-  useEffect(() => {
-    if (session?.user) {
-      fetchNotifications();
+  // Function to disable notifications fetching (when popover closes)
+  const disableNotificationsFetching = useCallback(() => {
+    setFetchNotifications(false);
+  }, []);
+
+  // Function to manually refetch notifications
+  const refetchNotifications = useCallback(async () => {
+    if (fetchNotifications && refetch) {
+      await refetch();
+    } else {
+      // If notifications aren't being fetched, enable them temporarily to get fresh data
+      setFetchNotifications(true);
+      setTimeout(() => refetch?.(), 100);
     }
-  }, [session, fetchNotifications]);
+  }, [fetchNotifications, refetch]);
 
   return (
     <MentionContext.Provider
@@ -117,7 +141,9 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
         markNotificationAsRead,
         markAllNotificationsAsRead,
         loading,
-        refetchNotifications: fetchNotifications
+        refetchNotifications,
+        enableNotificationsFetching,
+        disableNotificationsFetching
       }}
     >
       {children}

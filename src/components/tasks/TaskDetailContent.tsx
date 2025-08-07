@@ -1,57 +1,53 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow, format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock, Copy, Trash2 } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { MarkdownContent } from "@/components/ui/markdown-content";
+import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { ShareButton } from "@/components/tasks/ShareButton";
 import { TaskFollowButton } from "@/components/tasks/TaskFollowButton";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { useToast } from "@/hooks/use-toast";
-import { useTasks } from "@/context/TasksContext";
-import { useActivity } from "@/context/ActivityContext";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
-import React from "react";
-import { AssigneeSelect } from "./selectors/AssigneeSelect";
-import { ReporterSelect } from "./selectors/ReporterSelect";
-import { LabelSelector } from "@/components/ui/label-selector";
-import CreateTaskForm from "@/components/tasks/CreateTaskForm";
-import { extractMentionUserIds } from "@/utils/mentions";
-import axios from "axios";
-import { useSession } from "next-auth/react";
-import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
-import { useUpdateTask } from "@/hooks/queries/useTask";
-import { StatusSelect } from "./selectors/StatusSelect";
-import { useWorkspace } from "@/context/WorkspaceContext";
-import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
 import { TaskTabs } from "@/components/tasks/TaskTabs";
+import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { LabelSelector } from "@/components/ui/label-selector";
+import { MarkdownContent } from "@/components/ui/markdown-content";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useActivity } from "@/context/ActivityContext";
+import { useTasks } from "@/context/TasksContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useUpdateTask } from "@/hooks/queries/useTask";
+import { useToast } from "@/hooks/use-toast";
+import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
+import { cn } from "@/lib/utils";
+import { extractMentionUserIds } from "@/utils/mentions";
+import axios from "axios";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon, Check, Clock, Copy, Loader2, Pause, PenLine, Play, StopCircle, Trash2, X } from "lucide-react";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AssigneeSelect } from "./selectors/AssigneeSelect";
+import { ReporterSelect } from "./selectors/ReporterSelect";
+import { StatusSelect } from "./selectors/StatusSelect";
 
 // Import types and utilities
+import { Button } from "@/components/ui/button";
 import type {
-  Task,
-  TaskComment as TaskCommentType,
-  TaskActivity,
-  PlayTime,
   PlayState,
+  PlayTime,
+  TaskComment as TaskCommentType,
   TaskDetailContentProps
 } from "@/types/task";
 import { formatDate, formatLiveTime, getPriorityBadge, getTypeBadge } from "@/utils/taskHelpers";
@@ -64,7 +60,7 @@ export function TaskDetailContent({
   onClose,
   boardId,
 }: TaskDetailContentProps) {
-  const { currentWorkspace } = useWorkspace();
+  useWorkspace();
   const { data: session } = useSession();
   const { settings } = useWorkspaceSettings();
   const currentUserId = session?.user?.id;
@@ -731,164 +727,6 @@ export function TaskDetailContent({
       </div>
     );
   }
-
-  const renderActivityItem = (activity: TaskActivity) => {
-    let actionText = activity.action.replace("TASK_", "").replace(/_/g, " ").toLowerCase();
-    if (actionText.startsWith("play ")) actionText = actionText.substring(5);
-    else if (actionText === "commented on") actionText = "commented on"; // Keep specific phrases
-    else actionText = actionText.replace("play", "timer"); // Generalize "play" to "timer"
-
-    const activityTime = formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true });
-    
-    // Check if this is a time-related activity that can be edited
-    const isTimeActivity = ["TASK_PLAY_STARTED", "TASK_PLAY_STOPPED", "TIME_ADJUSTED"].includes(activity.action);
-    const canEdit = isTimeActivity && activity.user.id === currentUserId;
-
-    // Parse activity details for time adjustments
-    let activityDetails = null;
-    try {
-      if (activity.details) {
-        activityDetails = JSON.parse(activity.details);
-      }
-    } catch (error) {
-      // Ignore JSON parse errors
-    }
-
-    // Handle time adjustment display
-    if (activity.action === "TIME_ADJUSTED" && activityDetails) {
-      actionText = `adjusted time from ${activityDetails.originalFormatted} to ${activityDetails.newFormatted}`;
-      if (activityDetails.reason) {
-        actionText += ` (${activityDetails.reason})`;
-      }
-    }
-
-    // Handle session edit display
-    if (activity.action === "SESSION_EDITED" && activityDetails) {
-      actionText = "edited a work session for";
-    }
-
-    // Handle help request activities
-    if (activity.action === "HELP_REQUEST_SENT" && activityDetails) {
-      actionText = "requested help for";
-    }
-
-    if (activity.action === "HELP_REQUEST_APPROVED" && activityDetails) {
-      actionText = `approved ${activityDetails.helperName}'s help request for`;
-    }
-
-    if (activity.action === "HELP_REQUEST_REJECTED" && activityDetails) {
-      actionText = `rejected ${activityDetails.helperName}'s help request for`;
-    }
-
-    return (
-      <div key={activity.id} className="group flex items-start space-x-3 py-3 border-b border-border/30 last:border-b-0 hover:bg-muted/20 px-2 rounded">
-        <CustomAvatar user={activity.user} size="sm" />
-        <div className="text-sm flex-1">
-          <p>
-            <span className="font-semibold">{activity.user.name || "Unknown User"}</span>
-            <span className="text-muted-foreground"> {actionText} this task</span>
-          </p>
-          <p className="text-xs text-muted-foreground/80">{activityTime}</p>
-          
-          {/* Show detailed changes for session edits */}
-          {activity.action === "SESSION_EDITED" && activityDetails?.oldValue && activityDetails?.newValue && (
-            <div className="mt-2 p-3 bg-muted/50 rounded-md text-xs border border-border/30">
-              <div className="font-medium mb-2 text-foreground">Session Changes:</div>
-              {(() => {
-                try {
-                  const oldData = JSON.parse(activityDetails.oldValue);
-                  const newData = JSON.parse(activityDetails.newValue);
-                  const changes = activityDetails.changes;
-                  
-                  return (
-                    <div className="space-y-2">
-                      {changes?.startTimeChanged && (
-                        <div>
-                          <div className="text-muted-foreground font-medium">Start Time:</div>
-                          <div className="text-muted-foreground line-through">
-                            {format(new Date(oldData.startTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                          <div className="text-foreground">
-                            {format(new Date(newData.startTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {changes?.endTimeChanged && (
-                        <div>
-                          <div className="text-muted-foreground font-medium">End Time:</div>
-                          <div className="text-muted-foreground line-through">
-                            {format(new Date(oldData.endTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                          <div className="text-foreground">
-                            {format(new Date(newData.endTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div>
-                        <div className="text-muted-foreground font-medium">Duration:</div>
-                        <div className="text-muted-foreground line-through">
-                          {oldData.duration}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-foreground">{newData.duration}</span>
-                          {changes?.durationChange && (
-                            <Badge 
-                              variant={changes.durationChange.isIncrease ? "default" : "secondary"}
-                              className="text-xs"
-                            >
-                              {changes.durationChange.formatted}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {activityDetails.reason && (
-                        <div className="pt-1 border-t border-border/30">
-                          <div className="text-muted-foreground font-medium">Reason:</div>
-                          <div className="text-foreground italic">
-                            &quot;{activityDetails.reason}&quot;
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                } catch (e) {
-                  return (
-                    <div className="text-muted-foreground">
-                      Unable to display change details
-                    </div>
-                  );
-                }
-              })()}
-            </div>
-          )}
-        </div>
-        {canEdit && activity.action !== "TIME_ADJUSTED" && activity.action !== "SESSION_EDITED" && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={() => {
-              if (totalPlayTime) {
-                setTimeAdjustmentData({
-                  taskId: task!.id,
-                  taskTitle: task!.title,
-                  sessionDurationMs: 0, // Not applicable for history editing
-                  totalDurationMs: totalPlayTime.totalTimeMs,
-                });
-                setShowTimeAdjustmentModal(true);
-              }
-            }}
-            title="Adjust time"
-          >
-            <PenLine className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="pt-6 space-y-8">

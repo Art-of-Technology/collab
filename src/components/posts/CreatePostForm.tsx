@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { CollabInput } from "@/components/ui/collab-input";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,23 +19,16 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSession } from "next-auth/react";
-import { Label } from "@/components/ui/label";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useCreatePost } from "@/hooks/queries/usePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
-import { CollabInput } from "@/components/ui/collab-input";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { extractMentions, extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { ChevronDown } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useState } from "react";
 
 export default function CreatePostForm() {
   const { toast } = useToast();
@@ -125,53 +125,6 @@ export default function CreatePostForm() {
   };
 
   // Function to process mentions in the post text
-  const processMentions = async (postId: string, message: string) => {
-    // Extract user IDs directly from the message if using new format
-    const mentionedUserIds = extractMentionUserIds(message);
-
-    // Also extract usernames for backward compatibility (old format)
-    const mentionedUsernames = extractMentions(message);
-
-    // If neither format found, return early
-    if (mentionedUserIds.length === 0 && mentionedUsernames.length === 0) return;
-
-    try {
-      let userIds = [...mentionedUserIds]; // Start with directly extracted IDs
-
-      // If we have usernames that need to be looked up
-      if (mentionedUsernames.length > 0) {
-        // Query users by usernames to get their IDs
-        const response = await axios.post("/api/users/lookup", {
-          usernames: mentionedUsernames,
-          workspaceId: currentWorkspace?.id
-        });
-
-        const mentionedUsers = response.data;
-
-        if (mentionedUsers && mentionedUsers.length > 0) {
-          // Add the looked-up user IDs
-          const lookupUserIds = mentionedUsers.map((user: any) => user.id);
-          userIds = [...userIds, ...lookupUserIds];
-
-          // Remove duplicates
-          userIds = [...new Set(userIds)];
-        }
-      }
-
-      // Create notifications for mentioned users (if any found)
-      if (userIds.length > 0) {
-        await axios.post("/api/mentions", {
-          userIds,
-          sourceType: "post",
-          sourceId: postId,
-          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`
-        });
-      }
-    } catch (error) {
-      console.error("Failed to process mentions:", error);
-      // Don't fail the post creation if mentions fail
-    }
-  };
 
   const handleSubmit = async () => {
     if (!formData.message.trim()) {

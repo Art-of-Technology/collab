@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { useCurrentUser } from "@/hooks/queries/useUser";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { extractMentionUserIds } from "@/utils/mentions";
+import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { UnifiedComment, UnifiedCommentData } from "@/components/ui/unified-comment";
+import { UnifiedItemType, useAddUnifiedComment, useUnifiedComments } from "@/hooks/queries/useUnifiedComments";
+import { useCurrentUser } from "@/hooks/queries/useUser";
+import { useToast } from "@/hooks/use-toast";
+import { extractMentionUserIds } from "@/utils/mentions";
 import { organizeTaskCommentsIntoTree } from "@/utils/taskCommentHelpers";
-import { useUnifiedComments, useAddUnifiedComment, UnifiedItemType } from "@/hooks/queries/useUnifiedComments";
 import axios from "axios";
+import { useMemo, useState } from "react";
 
 // Helper function to normalize comment structure between TaskComment and Comment models
 const normalizeCommentStructure = (comments: any[], itemType: UnifiedItemType): UnifiedCommentData[] => {
@@ -99,7 +99,7 @@ export function UnifiedCommentsSection({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: itemType === 'task' ? "taskComment" : "comment",
+              sourceType: itemType === 'task' ? "TASK_COMMENT" : "COMMENT",
               sourceId: newComment.id,
               content: `mentioned you in a ${itemType} comment: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
             });

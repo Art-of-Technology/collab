@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { useCreateComment } from "@/hooks/queries/useComment";
 import { CollabInput } from "@/components/ui/collab-input";
+import { useCreateComment } from "@/hooks/queries/useComment";
+import { useToast } from "@/hooks/use-toast";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { useState } from "react";
 
 interface CommentReplyFormProps {
   postId: string;
@@ -40,7 +40,7 @@ export default function CommentReplyForm({
             try {
               await axios.post("/api/mentions", {
                 userIds: mentionedUserIds,
-                sourceType: "comment",
+                sourceType: "COMMENT",
                 sourceId: data.id,
                 content: `mentioned you in a comment`
               });

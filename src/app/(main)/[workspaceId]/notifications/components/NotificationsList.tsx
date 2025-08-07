@@ -1,0 +1,90 @@
+"use client";
+
+import { NotificationData } from "@/hooks/queries/useNotifications";
+import React from "react";
+import VirtualNotificationsList from "./VirtualNotificationsList";
+import { Loader2, BellOff } from "lucide-react";
+
+type Notification = NotificationData;
+
+interface NotificationsListProps {
+  notifications: Notification[];
+  groupBy: "date" | "user" | "workspace" | "taskboard";
+  isLoading: boolean;
+  searchQuery: string;
+  selectedNotifications: Set<string>;
+  onSelectionChange: (selected: Set<string>) => void;
+  onSelectAll: () => void;
+}
+
+export default function NotificationsList({
+  notifications,
+  groupBy,
+  isLoading,
+  searchQuery,
+  selectedNotifications,
+  onSelectionChange,
+  onSelectAll,
+}: NotificationsListProps) {
+  const markAsRead = async (notificationId: string) => {
+    try {
+      // This would typically call your mark as read API
+      console.log('Marking notification as read:', notificationId);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification, e: React.MouseEvent) => {
+    // Prevent click if clicking on checkbox
+    if ((e.target as HTMLElement).closest('[data-checkbox]')) {
+      return;
+    }
+
+    // Mark as read if not already read
+    if (!notification.read) {
+      markAsRead(notification.id);
+    }
+
+    // Handle navigation based on notification type
+    // This would typically navigate to the relevant page
+    console.log('Navigating to notification:', notification);
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  // Show empty state
+  if (notifications.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <BellOff className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-medium text-muted-foreground mb-2">
+          No notifications
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {searchQuery ? 'No notifications match your search.' : 'You\'re all caught up!'}
+        </p>
+      </div>
+    );
+  }
+
+  // Use virtual scrolling for better performance
+  return (
+    <VirtualNotificationsList
+      notifications={notifications}
+      groupBy={groupBy}
+      selectedNotifications={selectedNotifications}
+      onSelectionChange={onSelectionChange}
+      onNotificationClick={handleNotificationClick}
+      onSelectAll={onSelectAll}
+      isLoading={isLoading}
+    />
+  );
+}
