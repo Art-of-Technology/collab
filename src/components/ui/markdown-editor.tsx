@@ -7,7 +7,7 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
-import TextStyle from "@tiptap/extension-text-style";
+import { TextStyle } from "@tiptap/extension-text-style";
 import Heading from "@tiptap/extension-heading";
 import Color from "@tiptap/extension-color";
 import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
@@ -269,14 +269,17 @@ const ResizableImage = Image.extend({
           
           // Update the node attributes for persistence
           if (typeof getPos === 'function') {
-            editor.commands.command(({ tr }) => {
-              tr.setNodeMarkup(getPos(), undefined, { 
-                ...node.attrs, 
-                width: Math.round(newWidth),
-                height: Math.round(newHeight),
+            const pos = getPos();
+            if (pos !== undefined) {
+              editor.commands.command(({ tr }) => {
+                tr.setNodeMarkup(pos, undefined, { 
+                  ...node.attrs, 
+                  width: Math.round(newWidth),
+                  height: Math.round(newHeight),
+                });
+                return true;
               });
-              return true;
-            });
+            }
           }
         };
         
@@ -321,14 +324,17 @@ const ResizableImage = Image.extend({
           const originalHeight = img.naturalHeight;
           
           if (typeof getPos === 'function') {
-            editor.commands.command(({ tr }) => {
-              tr.setNodeMarkup(getPos(), undefined, { 
-                ...node.attrs, 
-                originalWidth,
-                originalHeight,
+            const pos = getPos();
+            if (pos !== undefined) {
+              editor.commands.command(({ tr }) => {
+                tr.setNodeMarkup(pos, undefined, { 
+                  ...node.attrs, 
+                  originalWidth,
+                  originalHeight,
+                });
+                return true;
               });
-              return true;
-            });
+            }
           }
         };
       }
@@ -1063,6 +1069,9 @@ export function MarkdownEditor({
       MilestoneMention, // Add Milestone Mention extension
     ],
     content: initialContentRef.current,
+    // New v3 options for better performance
+    shouldRerenderOnTransaction: false,
+    immediatelyRender: true,
     editorProps: {
       attributes: {
         class: cn(
