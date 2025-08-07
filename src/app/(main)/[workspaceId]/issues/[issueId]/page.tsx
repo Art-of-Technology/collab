@@ -1,0 +1,102 @@
+"use client";
+
+import { Suspense, useEffect, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { IssueDetailContent } from "@/components/issue/IssueDetailContent";
+import { getWorkspaceIdFromClient } from "@/lib/client-workspace";
+import { Loader2 } from "lucide-react";
+
+export default function IssuePage() {
+  const router = useRouter();
+  const params = useParams();
+  const issueParam = params?.issueId as string;
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Client-side workspace resolution (fallback to route param if provided)
+    const w = getWorkspaceIdFromClient();
+    setWorkspaceId(w || (params?.workspaceId as string));
+  }, [params]);
+
+  if (!workspaceId || !issueParam) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full w-full overflow-hidden bg-[#0a0a0a]">
+      <Suspense
+        fallback={
+          <div className="flex h-[80vh] items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+          </div>
+        }
+      >
+        <IssuePageContent 
+          issueId={issueParam}
+          workspaceId={workspaceId}
+          onClose={() => router.back()}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+function IssuePageContent({ issueId, workspaceId, onClose }: {
+  issueId: string;
+  workspaceId: string;
+  onClose: () => void;
+}) {
+  const [issue, setIssue] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchIssue = useCallback(async () => {
+    if (!issueId) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/issues/${issueId}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Issue not found");
+        } else if (response.status === 403) {
+          throw new Error("You don't have permission to view this issue");
+        } else {
+          throw new Error(`Failed to load issue (${response.status})`);
+        }
+      }
+
+      const data = await response.json();
+      setIssue(data.issue || data);
+    } catch (err) {
+      console.error("Failed to fetch issue:", err);
+      setError(err instanceof Error ? err.message : "Failed to load issue. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [issueId]);
+
+  useEffect(() => {
+    fetchIssue();
+  }, [fetchIssue]);
+
+  return (
+    <IssueDetailContent
+      issue={issue}
+      error={error}
+      isLoading={isLoading}
+      onRefresh={fetchIssue}
+      onClose={onClose}
+      mode="page"
+      workspaceId={workspaceId}
+      issueId={issueId}
+    />
+  );
+}

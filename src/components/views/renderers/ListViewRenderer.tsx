@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Plus, 
   Circle, 
@@ -11,9 +12,15 @@ import {
   Pause,
   Play,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Filter,
+  Settings,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ViewFilters from '@/components/views/shared/ViewFilters';
+import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 
 interface Issue {
   id: string;
@@ -43,26 +50,95 @@ interface ListViewRendererProps {
   issues: any[];
   workspace: any;
   currentUser: any;
+  activeFilters?: Record<string, string[]>;
+  setActiveFilters?: (filters: Record<string, string[]>) => void;
+  onIssueUpdate?: (issueId: string, updates: any) => void;
 }
 
 export default function ListViewRenderer({ 
   view, 
   issues, 
   workspace, 
-  currentUser 
+  currentUser,
+  activeFilters,
+  setActiveFilters,
+  onIssueUpdate
 }: ListViewRendererProps) {
+  // State management
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+  const [showSubIssues, setShowSubIssues] = useState(true);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState<{
+    assignees: string[];
+    labels: string[];
+    priority: string[];
+    projects: string[];
+  }>({
+    assignees: [],
+    labels: [],
+    priority: [],
+    projects: []
+  });
 
-  // Group issues if grouping is enabled
+  // Filter issues based on selected filters
+  const filteredIssues = useMemo(() => {
+    let filtered = [...issues];
+    
+    // Apply assignee filters
+    if (selectedFilters.assignees.length > 0) {
+      filtered = filtered.filter(issue => {
+        const assigneeId = issue.assignee?.id || 'unassigned';
+        return selectedFilters.assignees.includes(assigneeId);
+      });
+    }
+    
+    // Apply label filters
+    if (selectedFilters.labels.length > 0) {
+      filtered = filtered.filter(issue => {
+        if (!issue.labels || issue.labels.length === 0) {
+          return selectedFilters.labels.includes('no-labels');
+        }
+        return issue.labels.some((label: any) => 
+          selectedFilters.labels.includes(label.id)
+        );
+      });
+    }
+    
+    // Apply priority filters
+    if (selectedFilters.priority.length > 0) {
+      filtered = filtered.filter(issue => {
+        const priority = issue.priority || 'no-priority';
+        return selectedFilters.priority.includes(priority);
+      });
+    }
+    
+    // Apply project filters
+    if (selectedFilters.projects.length > 0) {
+      filtered = filtered.filter(issue => {
+        const projectId = issue.project?.id || 'no-project';
+        return selectedFilters.projects.includes(projectId);
+      });
+    }
+    
+    return filtered;
+  }, [issues, selectedFilters]);
+
+  // Issue handlers
+  const handleIssueClick = (issueId: string) => {
+    setSelectedIssueId(issueId);
+  };
+
+  // Group filtered issues if grouping is enabled
   const groupedIssues = useMemo(() => {
     const groupField = view.grouping?.field;
     
     if (!groupField || groupField === 'none') {
-      return [{ name: null, issues, count: issues.length }];
+      return [{ name: null, issues: filteredIssues, count: filteredIssues.length }];
     }
     
     const groups = new Map();
     
-    issues.forEach(issue => {
+    filteredIssues.forEach(issue => {
       let groupKey: string;
       let groupName: string;
       
@@ -105,7 +181,7 @@ export default function ListViewRenderer({
     });
     
     return Array.from(groups.values());
-  }, [issues, view.grouping]);
+  }, [filteredIssues, view.grouping]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -164,10 +240,7 @@ export default function ListViewRenderer({
   const IssueRow = ({ issue }: { issue: Issue }) => (
     <div 
       className="group flex items-center px-6 py-3 hover:bg-[#0f1011] cursor-pointer transition-colors"
-      onClick={() => {
-        // Handle issue click - open detail modal
-        console.log('Open issue:', issue.issueKey);
-      }}
+      onClick={() => handleIssueClick(issue.id)}
     >
       {/* Priority Indicator */}
       <div className="flex items-center w-6 mr-3">
@@ -254,25 +327,68 @@ export default function ListViewRenderer({
   }
 
   return (
-    <div className="h-full bg-[#101011] overflow-auto">
-      {/* No header row - cleaner like Linear */}
-      
-      {/* Content */}
-      <div className="pb-16">
-        {groupedIssues.map((group, groupIndex) => (
-          <div key={groupIndex}>
-            {/* Group Header (only show if grouping is enabled) */}
-            {group.name && <GroupHeader group={group} />}
+    <div className="h-full bg-[#101011] flex">
+      {/* Main List Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[#101011] border-b border-[#1f1f1f] px-6 py-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold text-white">
+              List • {filteredIssues.length} Issues
+            </h1>
             
-            {/* Issues */}
-            <div>
-              {group.issues.map((issue: Issue) => (
-                <IssueRow key={issue.id} issue={issue} />
-              ))}
-              </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+                className="h-7 px-2 text-xs"
+              >
+                {isRightSidebarOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <span className="ml-1">Filters</span>
+              </Button>
+            </div>
           </div>
-        ))}
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 overflow-auto pb-16">
+          {groupedIssues.map((group, groupIndex) => (
+            <div key={groupIndex}>
+              {/* Group Header (only show if grouping is enabled) */}
+              {group.name && <GroupHeader group={group} />}
+              
+              {/* Issues */}
+              <div>
+                {group.issues.map((issue: Issue) => (
+                  <IssueRow key={issue.id} issue={issue} />
+                ))}
+                </div>
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* View Filters Sidebar */}
+      <ViewFilters
+        issues={issues}
+        workspace={workspace}
+        isOpen={isRightSidebarOpen}
+        onToggle={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+        selectedFilters={selectedFilters}
+        onFiltersChange={setSelectedFilters}
+        showSubIssues={showSubIssues}
+        onSubIssuesToggle={() => setShowSubIssues(!showSubIssues)}
+        viewType="list"
+      />
+
+      {/* Issue Detail Modal */}
+      {selectedIssueId && (
+        <IssueDetailModal
+          issueId={selectedIssueId}
+          onClose={() => setSelectedIssueId(null)}
+        />
+      )}
     </div>
   );
 } 

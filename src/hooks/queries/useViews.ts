@@ -3,6 +3,7 @@ import axios from 'axios';
 
 export interface View {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   workspaceId: string;
@@ -60,16 +61,17 @@ export const useViews = ({
   });
 };
 
-export const useView = (viewId: string | undefined) => {
+export const useView = (viewSlug: string | undefined, workspaceId: string | undefined) => {
   return useQuery({
-    queryKey: ["view", viewId],
+    queryKey: ["view", viewSlug, workspaceId],
     queryFn: async () => {
-      if (!viewId) throw new Error('View ID is required');
+      if (!viewSlug) throw new Error('View slug is required');
+      if (!workspaceId) throw new Error('Workspace ID is required');
       
-      const { data } = await axios.get(`/api/views/${viewId}`);
+      const { data } = await axios.get(`/api/views/${viewSlug}?workspaceId=${workspaceId}`);
       return data.view as View;
     },
-    enabled: !!viewId,
+    enabled: !!viewSlug && !!workspaceId,
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 };

@@ -91,8 +91,8 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
   const personalViews = filteredViews.filter(view => view.visibility === 'PERSONAL' && !view.isFavorite);
   const sharedViews = filteredViews.filter(view => view.visibility === 'SHARED' && !view.isFavorite);
 
-  const handleViewClick = (viewId: string) => {
-    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${viewId}`);
+  const handleViewClick = (viewSlug: string) => {
+    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${viewSlug}`);
   };
 
   const handleCreateView = () => {
@@ -106,7 +106,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     return (
       <div 
         className="group flex items-center px-6 py-3 hover:bg-[#0f1011] cursor-pointer transition-colors"
-        onClick={() => handleViewClick(view.id)}
+        onClick={() => handleViewClick(view.slug || view.id)}
       >
         {/* Favorite Star */}
         <div className="flex items-center w-6 mr-3">

@@ -192,11 +192,11 @@ export default function Navbar({
     const displayImage = userImage || session?.user?.image;
 
     return (
-      <Avatar>
+      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
         {displayImage ? (
           <AvatarImage src={displayImage} alt={displayName || "User"} />
         ) : (
-          <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+          <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(displayName)}</AvatarFallback>
         )}
       </Avatar>
     );
@@ -236,7 +236,7 @@ export default function Navbar({
                 <Button
                   variant="ghost"
                   size="icon"
-                    className="md:hidden hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
+                  className="md:hidden hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
                 >
                     <MagnifyingGlassIcon className="h-4 w-4" />
                 </Button>
@@ -286,9 +286,11 @@ export default function Navbar({
           )}
         </div>
 
-        {/* Right section: Notifications and chat */}
+        {/* Right section: Notifications, chat, profile */}
         <div className="flex items-center gap-1">
-          {session && hasWorkspaces && (
+          {session ? (
+            <>
+              {hasWorkspaces && (
                 <>
                   {/* Notification bell with popover */}
                   <Popover open={showNotifications} onOpenChange={setShowNotifications}>
@@ -400,7 +402,7 @@ export default function Navbar({
                   <Button
                     variant="ghost"
                     size="icon"
-                className="relative hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
+                    className="relative hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
                     onClick={toggleChat}
                   >
                 <MessageCircle className="h-4 w-4" />
@@ -411,14 +413,45 @@ export default function Navbar({
                 </>
               )}
 
-          {!session && (
+              {/* Profile dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-full overflow-hidden h-6 w-6 sm:h-10 sm:w-10">
+                    {renderAvatar()}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-[#090909] border-[#1f1f1f]">
+                  <DropdownMenuLabel className="text-white">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium">{userName || session?.user?.name}</p>
+                      <p className="text-xs text-gray-400">{displayEmail}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                  <DropdownMenuItem asChild className="text-gray-300 hover:text-white hover:bg-[#1f1f1f]">
+                    <Link href="/profile">Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="text-gray-300 hover:text-white hover:bg-[#1f1f1f]">
+                    <Link href="/workspaces">Workspaces</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                  <DropdownMenuItem 
+                    onClick={handleSignOut}
+                    className="text-gray-300 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  >
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : (
             <Button 
               variant="outline" 
               className="border-[#1f1f1f] hover:bg-[#1f1f1f] text-gray-300 hover:text-white h-8 px-3 text-sm"
               asChild
             >
               <Link href="/login">Sign In</Link>
-                  </Button>
+            </Button>
           )}
         </div>
       </div>

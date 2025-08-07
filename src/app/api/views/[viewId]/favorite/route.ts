@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(
@@ -8,13 +8,19 @@ export async function POST(
   { params }: { params: { viewId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authConfig);
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { viewId } = params;
+    const { viewId: viewSlug } = await params;
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get('workspaceId');
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
+    }
 
     // Get user
     const user = await prisma.user.findUnique({
@@ -28,11 +34,12 @@ export async function POST(
     // Check if user has access to this view
     const view = await prisma.view.findFirst({
       where: {
-        id: viewId,
+        slug: viewSlug,
+        workspaceId: workspaceId,
         OR: [
           { visibility: 'WORKSPACE' },
           { visibility: 'SHARED', sharedWith: { has: user.id } },
-          { visibility: 'PERSONAL', createdBy: user.id }
+          { visibility: 'PERSONAL', ownerId: user.id }
         ],
         workspace: {
           members: {
@@ -52,21 +59,23 @@ export async function POST(
 
     // Toggle favorite status
     const updatedView = await prisma.view.update({
-      where: { id: viewId },
+      where: { id: view.id },
       data: {
         isFavorite: !view.isFavorite
       },
       include: {
-        _count: {
-          select: {
-            issues: true
-          }
-        },
-        projects: {
+        workspace: {
           select: {
             id: true,
             name: true,
             slug: true
+          }
+        },
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true
           }
         }
       }
@@ -75,19 +84,26 @@ export async function POST(
     // Transform the data for the frontend
     const transformedView = {
       id: updatedView.id,
+      slug: updatedView.slug,
       name: updatedView.name,
       description: updatedView.description,
-      type: updatedView.type,
       displayType: updatedView.displayType,
       visibility: updatedView.visibility,
       color: updatedView.color,
-      issueCount: updatedView._count.issues,
       filters: updatedView.filters,
-      projectIds: updatedView.projects.map(p => p.id),
+      sorting: updatedView.sorting,
+      grouping: updatedView.grouping,
+      fields: updatedView.fields,
+      layout: updatedView.layout,
+      projectIds: updatedView.projectIds,
+      workspaceIds: updatedView.workspaceIds,
       isDefault: updatedView.isDefault,
       isFavorite: updatedView.isFavorite,
-      createdBy: updatedView.createdBy,
       sharedWith: updatedView.sharedWith,
+      workspace: updatedView.workspace,
+      owner: updatedView.owner,
+      lastAccessedAt: updatedView.lastAccessedAt,
+      accessCount: updatedView.accessCount,
       createdAt: updatedView.createdAt,
       updatedAt: updatedView.updatedAt
     };

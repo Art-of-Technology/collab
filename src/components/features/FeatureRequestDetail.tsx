@@ -18,7 +18,8 @@ import {
   ChevronUp,
   ChevronDown,
   Pencil,
-  Loader2
+  Loader2,
+  ThumbsDown
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -98,7 +99,7 @@ export default function FeatureRequestDetail({
   const updateStatus = useUpdateFeatureStatus();
   const { currentWorkspace } = useWorkspace();
   const { hasPermission: canEditFeatureRequests } = useCanEditFeatureRequests(currentWorkspace?.id);
-  
+
   const [isVoting, setIsVoting] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(featureRequest.status);
   const [voteScore, setVoteScore] = useState(featureRequest.voteScore);
@@ -109,7 +110,7 @@ export default function FeatureRequestDetail({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
-  
+
   // Edit feature request state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(featureRequest.title);
@@ -117,7 +118,7 @@ export default function FeatureRequestDetail({
   const [editDescriptionHtml, setEditDescriptionHtml] = useState(featureRequest.html || "");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
-  
+
   const isAuthor = currentUserId === featureRequest.author.id;
   // Use permission system instead of hardcoded admin check
   const canManageFeatures = canEditFeatureRequests || isAdmin;
@@ -133,7 +134,7 @@ export default function FeatureRequestDetail({
     }
 
     if (isVoting) return;
-    
+
     setIsVoting(true);
     try {
       voteOnFeature.mutate(
@@ -142,7 +143,7 @@ export default function FeatureRequestDetail({
           onSuccess: () => {
             // Since we don't have access to the returned data structure,
             // just update the UI with optimistic updates instead
-            setVoteScore(prev => prev + value); 
+            setVoteScore(prev => prev + value);
             if (value === 1) {
               setUpvotes(prev => prev + 1);
               // If user was previously downvoting, remove that downvote
@@ -156,9 +157,9 @@ export default function FeatureRequestDetail({
                 setUpvotes(prev => Math.max(0, prev - 1));
               }
             }
-            
+
             setCurrentUserVote(value);
-            
+
             toast({
               title: "Success",
               description: "Your vote has been recorded",
@@ -190,7 +191,7 @@ export default function FeatureRequestDetail({
   const handleStatusChange = (status: string) => {
     if (isUpdatingStatus) return;
     setStatusError(null);
-    
+
     setIsUpdatingStatus(true);
     try {
       updateStatus.mutate(
@@ -199,7 +200,7 @@ export default function FeatureRequestDetail({
           onSuccess: () => {
             // Update the local status state
             setCurrentStatus(status);
-            
+
             toast({
               title: "Success",
               description: `Status updated to ${status}`,
@@ -217,12 +218,12 @@ export default function FeatureRequestDetail({
           }
         }
       );
-      
+
       router.refresh();
     } catch (error) {
       console.error("Status update error:", error);
       setStatusError((error as Error).message || "Failed to update the status");
-      
+
       toast({
         title: "Error",
         description: (error as Error).message || "Failed to update the status",
@@ -234,7 +235,7 @@ export default function FeatureRequestDetail({
 
   const deleteFeatureRequest = async () => {
     if (isDeleting) return;
-    
+
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/features/${featureRequest.id}`, {
@@ -247,12 +248,12 @@ export default function FeatureRequestDetail({
 
       // Invalidate queries to update the list
       queryClient.invalidateQueries({ queryKey: featureKeys.lists() });
-      
+
       toast({
         title: "Success",
         description: "Feature request has been deleted",
       });
-      
+
       router.push("/features");
       router.refresh();
     } catch (error) {
@@ -317,20 +318,20 @@ export default function FeatureRequestDetail({
       }
 
       await response.json();
-      
+
       // Invalidate queries to update both the detail and list views
-      queryClient.invalidateQueries({ 
-        queryKey: featureKeys.detail(featureRequest.id) 
+      queryClient.invalidateQueries({
+        queryKey: featureKeys.detail(featureRequest.id)
       });
       queryClient.invalidateQueries({ queryKey: featureKeys.lists() });
-      
+
       // Update UI
       setIsEditDialogOpen(false);
       toast({
         title: "Success",
         description: "Feature request updated successfully"
       });
-      
+
       // Refresh the page to show updated content
       router.refresh();
     } catch (error) {
@@ -347,7 +348,7 @@ export default function FeatureRequestDetail({
 
   // Helper function to get status badge
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "pending":
         return (
           <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 transition-colors">
@@ -382,30 +383,34 @@ export default function FeatureRequestDetail({
   };
 
   return (
-    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-start justify-between pb-2">
+    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm px-1 py-2">
+      <CardHeader className="flex flex-row items-baseline justify-between space-y-1.5 p-3 pb-6">
         <div className="space-y-1">
-          <CardTitle className="text-2xl font-bold">{featureRequest.title}</CardTitle>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span>
-              Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
-            </span>
-            {getStatusBadge(currentStatus)}
+          <CardTitle className="text-lg sm:text-2xl font-bold tracking-tight sm:tracking-tight">{featureRequest.title}</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 pt-3 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+              <span>
+                Submitted {formatDistanceToNow(new Date(featureRequest.createdAt), { addSuffix: true })}
+              </span>
+              <span className="sm:ml-0">
+                {getStatusBadge(currentStatus)}
+              </span>
+            </div>
           </div>
         </div>
-        
+
         {(canManageFeatures || isAuthor) && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-secondary/80 transition-colors">
+                <Button variant="ghost" size="icon" className="h-8 w-8 pl-6 rounded-full hover:bg-secondary/80 transition-colors">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 {canManageFeatures && (
                   <>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => handleStatusChange("pending")}
                       disabled={isUpdatingStatus || currentStatus === "pending"}
                       className="hover:text-yellow-600 cursor-pointer"
@@ -413,7 +418,7 @@ export default function FeatureRequestDetail({
                       <Hourglass className="mr-2 h-4 w-4 text-yellow-500" />
                       <span>Mark as Pending</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => handleStatusChange("accepted")}
                       disabled={isUpdatingStatus || currentStatus === "accepted"}
                       className="hover:text-green-600 cursor-pointer"
@@ -421,7 +426,7 @@ export default function FeatureRequestDetail({
                       <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                       <span>Accept</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => handleStatusChange("rejected")}
                       disabled={isUpdatingStatus || currentStatus === "rejected"}
                       className="hover:text-red-600 cursor-pointer"
@@ -429,7 +434,7 @@ export default function FeatureRequestDetail({
                       <XCircle className="mr-2 h-4 w-4 text-red-500" />
                       <span>Reject</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => handleStatusChange("completed")}
                       disabled={isUpdatingStatus || currentStatus === "completed"}
                       className="hover:text-blue-600 cursor-pointer"
@@ -437,14 +442,14 @@ export default function FeatureRequestDetail({
                       <ThumbsUp className="mr-2 h-4 w-4 text-blue-500" />
                       <span>Mark as Completed</span>
                     </DropdownMenuItem>
-                    
+
                     {isAuthor && <DropdownMenuSeparator />}
                   </>
                 )}
-                
+
                 {isAuthor && (
                   <>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => setIsEditDialogOpen(true)}
                       disabled={isUpdating}
                       className="hover:text-primary cursor-pointer"
@@ -452,8 +457,8 @@ export default function FeatureRequestDetail({
                       <Pencil className="mr-2 h-4 w-4" />
                       <span>Edit Request</span>
                     </DropdownMenuItem>
-                    
-                    <DropdownMenuItem 
+
+                    <DropdownMenuItem
                       onClick={() => setIsDeleteDialogOpen(true)}
                       disabled={isDeleting}
                       className="text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
@@ -468,7 +473,7 @@ export default function FeatureRequestDetail({
           </div>
         )}
       </CardHeader>
-      
+
       {statusError && (
         <div className="mx-6 mt-2 p-2 bg-red-100 border border-red-200 text-red-800 text-sm rounded-md">
           <div className="flex items-center">
@@ -480,43 +485,11 @@ export default function FeatureRequestDetail({
           </div>
         </div>
       )}
-      
-      <CardContent className="pt-4 pb-6">
+
+      <CardContent className="pt-0 sm:pt-1 pb-4 sm:pb-6 px-3 sm:px-6">
         <div className="flex gap-6">
-          {/* Vote controls */}
-          <div className="flex flex-col items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleVote(1)}
-              disabled={isVoting || !currentUserId}
-              className={`rounded-full hover:bg-green-100 transition-all ${currentUserVote === 1 ? 'bg-green-100 text-green-600 shadow-sm' : ''}`}
-            >
-              <ChevronUp className="h-6 w-6" />
-            </Button>
-            
-            <span className={`font-bold text-lg transition-colors ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
-              {voteScore}
-            </span>
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleVote(-1)}
-              disabled={isVoting || !currentUserId}
-              className={`rounded-full hover:bg-red-100 transition-all ${currentUserVote === -1 ? 'bg-red-100 text-red-600 shadow-sm' : ''}`}
-            >
-              <ChevronDown className="h-6 w-6" />
-            </Button>
-            
-            <div className="text-xs text-muted-foreground mt-1">
-              <div className="flex flex-col items-center">
-                <span>{upvotes} up</span>
-                <span>{downvotes} down</span>
-              </div>
-            </div>
-          </div>
-          
+
+
           {/* Feature request content */}
           <div className="flex-1 space-y-4">
             <div>
@@ -527,14 +500,14 @@ export default function FeatureRequestDetail({
                     {featureRequest.author.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="font-medium">{featureRequest.author.name}</span>
+                <span className="font-medium text-sm sm:text-base tracking-tight sm:tracking-normal">{featureRequest.author.name}</span>
               </div>
-              
-              <h3 className="text-lg font-medium">Description</h3>
+
+              <h3 className="text-base sm:text-lg font-medium tracking-tight sm:tracking-normal mt-4">Description</h3>
               {featureRequest.html ? (
-                <MarkdownContent 
+                <MarkdownContent
                   content={featureRequest.description}
-                  htmlContent={featureRequest.html} 
+                  htmlContent={featureRequest.html}
                   className="mt-2"
                 />
               ) : (
@@ -543,8 +516,49 @@ export default function FeatureRequestDetail({
             </div>
           </div>
         </div>
+        {/* Vote controls */}
+        <div className="flex flex-row items-center justify-between gap-0.5 mt-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleVote(1)}
+              disabled={isVoting || !currentUserId}
+              className={`rounded-full bg-green-100 text-green-600 hover:bg-green-600 transition-all h-6 w-6 sm:h-8 sm:w-8 ${currentUserVote === 1 ? 'bg-green-100 text-green-600 shadow-sm' : ''}`}
+            >
+              <ChevronUp className="h-4 w-4 sm:h-6 sm:w-6" />
+            </Button>
+
+            <span className={`font-bold text-sm sm:text-lg transition-colors ${voteScore > 0 ? 'text-green-600' : voteScore < 0 ? 'text-red-600' : ''}`}>
+              {voteScore}
+            </span>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleVote(-1)}
+              disabled={isVoting || !currentUserId}
+              className={`rounded-full bg-red-100 text-red-600 hover:bg-red-600 transition-all h-6 w-6 sm:h-8 sm:w-8 ${currentUserVote === -1 ? 'bg-red-100 text-red-600 shadow-sm' : ''}`}
+            >
+              <ChevronDown className="h-4 w-4 sm:h-6 sm:w-6" />
+            </Button>
+          </div>
+
+          <div className="text-[10px] sm:text-xs text-muted-foreground">
+            <div className="flex flex-row items-center gap-3">
+              <span className="flex items-center gap-1">
+                {upvotes}
+                <ThumbsUp className="ml-1" size={14} />
+              </span>
+              <span className="flex items-center gap-1">
+                {downvotes}
+                <ThumbsDown className="ml-1" size={14} />
+              </span>
+            </div>
+          </div>
+        </div>
       </CardContent>
-      
+
       {/* Delete confirmation dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent className="bg-card/95 backdrop-blur-sm border-border/40">
@@ -556,8 +570,8 @@ export default function FeatureRequestDetail({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="border-border/40 hover:bg-secondary/80 transition-colors">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={deleteFeatureRequest} 
+            <AlertDialogAction
+              onClick={deleteFeatureRequest}
               className="bg-red-500 hover:bg-red-600 transition-colors"
             >
               {isDeleting ? "Deleting..." : "Delete"}
@@ -565,7 +579,7 @@ export default function FeatureRequestDetail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       {/* Edit feature request dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
@@ -575,7 +589,7 @@ export default function FeatureRequestDetail({
               Update your feature request details. Be descriptive so others understand your idea.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="edit-title">Title</Label>
@@ -588,7 +602,7 @@ export default function FeatureRequestDetail({
                 required
               />
             </div>
-            
+
             <div className="grid gap-2">
               <Label htmlFor="edit-description">Description</Label>
               <MarkdownEditor
@@ -603,16 +617,16 @@ export default function FeatureRequestDetail({
               />
             </div>
           </div>
-          
+
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsEditDialogOpen(false)}
               disabled={isUpdating}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleUpdateFeatureRequest}
               disabled={isUpdating}
             >

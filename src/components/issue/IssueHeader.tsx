@@ -21,6 +21,7 @@ import {
   formatIssueDate,
   copyToClipboard
 } from "@/utils/issueHelpers";
+import { Badge } from "@/components/ui/badge";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import type { Issue, IssueUser } from "@/types/issue";
 
@@ -43,6 +44,17 @@ export function IssueHeader({
   const [title, setTitle] = useState(issue.title);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  // Helper function to render badge
+  const renderBadge = (badgeConfig: { label: string; icon: any; className: string; iconClassName: string }) => {
+    const Icon = badgeConfig.icon;
+    return (
+      <Badge variant="outline" className={badgeConfig.className}>
+        <Icon className={badgeConfig.iconClassName} />
+        {badgeConfig.label}
+      </Badge>
+    );
+  };
 
   const handleTitleClick = useCallback(() => {
     setIsEditingTitle(true);
@@ -143,9 +155,9 @@ export function IssueHeader({
           )}
           
           <div className="flex items-center gap-2">
-            {getIssueTypeBadge(issue.type)}
-            {getIssueStatusBadge(issue.status || "Todo")}
-            {getIssuePriorityBadge(issue.priority)}
+            {renderBadge(getIssueTypeBadge(issue.type))}
+            {renderBadge(getIssueStatusBadge(issue.status || "Todo"))}
+            {renderBadge(getIssuePriorityBadge(issue.priority))}
           </div>
         </div>
 

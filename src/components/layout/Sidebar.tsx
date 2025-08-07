@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { 
+import {
   Search, 
   Star, 
   ChevronDown, 
-  ChevronRight, 
-  Filter,
+  ChevronRight,
   Loader2,
   MoreHorizontal,
   Settings,
@@ -17,19 +17,19 @@ import {
   FolderOpen,
   Eye,
   Plus,
-  Hash,
   CheckSquare,
   MessageSquare,
   FileText,
   Clock,
-  Home,
   Bookmark,
   Tag,
   Lightbulb,
-  Calendar,
-  Timer
+  Timer,
+  Bell,
+  Search as SearchIcon,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -46,17 +46,32 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
 import CreateViewModal from "@/components/modals/CreateViewModal";
-import { urls } from "@/lib/url-resolver";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useUiContext } from "@/context/UiContext";
+import { useMention } from "@/context/MentionContext";
+import { CollabText } from "@/components/ui/collab-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface SidebarProps {
   pathname?: string;
@@ -65,10 +80,22 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ pathname = "", isCollapsed = false, toggleSidebar }: SidebarProps) {
+  const { data: session } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
+  const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
-  const { settings } = useWorkspaceSettings();
   const { data: userData } = useCurrentUser();
+
+  // Use Mention context for notifications
+  const { 
+    notifications, 
+    unreadCount, 
+    markNotificationAsRead, 
+    markAllNotificationsAsRead,
+    loading: notificationsLoading,
+    refetchNotifications
+  } = useMention();
 
   // Fetch projects and views using the new hooks
   const { data: projects = [], isLoading: isProjectsLoading } = useProjects({
@@ -89,6 +116,11 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     views: false
   });
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({});
+  
+  // Search and notification state from Navbar
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Filter views for sidebar display - show favorites or latest 3
   const sidebarViews = useMemo(() => {
@@ -117,6 +149,100 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
     
     return filteredViews;
   }, [views, viewSearchQuery]);
+
+  // Handle search from Navbar
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (searchQuery.trim() && currentWorkspace?.id) {
+      router.push(`/${currentWorkspace.id}/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setMobileSearchOpen(false);
+    }
+  };
+
+  // Handle sign out from Navbar
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    toast({
+      title: "Signed out successfully",
+      description: "You have been signed out of your account",
+    });
+    router.push("/");
+    router.refresh();
+  };
+  
+  // Handle notification click - mark as read and navigate if needed
+  const handleNotificationClick = async (id: string, url?: string) => {
+    await markNotificationAsRead(id);
+    
+    if (url) {
+      router.push(url);
+    }
+    
+    // Close notifications popover on mobile
+    if (window.innerWidth < 768) {
+      setShowNotifications(false);
+    }
+  };
+  
+  // Format notification time
+  const formatNotificationTime = (dateString: string): string => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      console.error('Error formatting notification time:', error);
+      return 'recently';
+    }
+  };
+  
+  // Generate notification URL based on type
+  const getNotificationUrl = (notification: any): string => {
+    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
+    const workspaceId = currentWorkspace?.id;
+
+    if (!workspaceId) {
+      return '/welcome'; // Fallback if no workspace
+    }
+
+    switch (type) {
+      case 'post_mention':
+      case 'post_comment':
+      case 'post_reaction':
+        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
+      case 'comment_mention':
+      case 'comment_reply':
+      case 'comment_reaction':
+        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
+      case 'taskComment_mention':
+        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
+      case 'feature_mention':
+      case 'feature_comment':
+      case 'feature_vote':
+        return featureRequestId ? `/${workspaceId}/features/${featureRequestId}` : `/${workspaceId}/features`;
+      case 'task_mention':
+      case 'task_assigned':
+      case 'task_status_change':
+        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
+      case 'epic_mention':
+        return epicId ? `/${workspaceId}/epics/${epicId}` : `/${workspaceId}/tasks`;
+      case 'story_mention':
+        return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`;
+      case 'milestone_mention':
+        return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`;
+      default:
+        return `/${workspaceId}/timeline`;
+    }
+  };
+
+  // Get user initials for avatar
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   // Generate workspace navigation
   const workspaceNavigation = [
@@ -173,13 +299,13 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
       current: pathname.includes("/messages"),
       },
       {
-      name: "Tags",
+        name: "Tags",
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/tags` : "#",
       icon: Tag,
       current: pathname.includes("/tags"),
-    },
-    {
-      name: "Feature Requests",
+      },
+      {
+        name: "Feature Requests",
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/features` : "#",
       icon: Lightbulb,
       current: pathname.includes("/features"),
@@ -248,6 +374,182 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
   if (isCollapsed) {
     return (
       <div className="flex flex-col h-full">
+        {/* Header - Logo and Actions (collapsed) */}
+        <div className="p-2 border-b border-[#1f1f1f] space-y-2">
+          {/* Logo */}
+          <div className="flex justify-center">
+            <Link href="/" className="flex items-center">
+              <Image src="/logo-v2.png" width={32} height={32} alt="Collab" className="h-8 w-auto" />
+            </Link>
+          </div>
+          
+          {/* Actions */}
+          <div className="space-y-1">
+            {/* Search */}
+            <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                  title="Search"
+                >
+                  <SearchIcon className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Search</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSearch} className="mt-2">
+                  <div className="relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      type="search"
+                      placeholder="Search..."
+                      className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
+                  >
+                    Search
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Notifications */}
+            {session && (
+              <Popover open={showNotifications} onOpenChange={setShowNotifications}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="relative w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                    onClick={() => refetchNotifications()}
+                    title="Notifications"
+                  >
+                    <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
+                  <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
+                    <h3 className="font-medium text-white">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]" 
+                        onClick={() => markAllNotificationsAsRead()}
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <ScrollArea className="h-80">
+                    {notificationsLoading ? (
+                      <div className="p-4 text-center text-gray-400 text-sm">
+                        Loading notifications...
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-400 text-sm">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        {notifications.map(notification => {
+                          const url = getNotificationUrl(notification);
+                          const isHtmlContent = /<[^>]+>/.test(notification.content);
+                          return (
+                            <div 
+                              key={notification.id}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? 'bg-[#22c55e]/5' : ''}`}
+                              onClick={() => handleNotificationClick(notification.id, url)}
+                            >
+                              {/* Sender Avatar */}
+                              {notification.sender.useCustomAvatar ? (
+                                <CustomAvatar user={notification.sender} size="sm" />
+                              ) : (
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage 
+                                    src={notification.sender.image || undefined} 
+                                    alt={notification.sender.name || "User"} 
+                                  />
+                                  <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
+                                    {getInitials(notification.sender.name || "U")}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
+                              
+                              {/* Notification Content */}
+                              <div className="flex-1 space-y-1">
+                                <p className="text-sm">
+                                  <span className="font-medium text-white">{notification.sender.name}</span>
+                                  {' '}
+                                  <span className="text-gray-400">
+                                    {isHtmlContent ? (
+                                      <MarkdownContent
+                                        htmlContent={notification.content}
+                                        className="inline text-sm"
+                                        asSpan={true}
+                                      />
+                                    ) : (
+                                      <CollabText
+                                        content={notification.content}
+                                        small
+                                        asSpan
+                                      />
+                                    )}
+                                  </span>
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {formatNotificationTime(notification.createdAt)}
+                                </p>
+                              </div>
+                              
+                              {/* Read Indicator */}
+                              {!notification.read && (
+                                <div className="h-2 w-2 rounded-full bg-[#22c55e] mt-1.5" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Chat */}
+            {session && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                onClick={toggleChat}
+                title="Chat"
+              >
+                <MessageSquare className="h-4 w-4" />
+                {isChatOpen && (
+                  <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+
         {/* Workspace selector - collapsed */}
         <div className="p-3 border-b border-[#1f1f1f]">
           <DropdownMenu>
@@ -314,7 +616,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
               <item.icon className="h-5 w-5" />
               </Button>
             ))}
-        </div>
+          </div>
 
         {/* User - collapsed */}
         <div className="p-3 border-t border-[#1f1f1f]">
@@ -332,11 +634,185 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header - Workspace Selector */}
+      {/* Header - Logo and Actions */}
       <div className="p-3 border-b border-[#1f1f1f]">
-          <WorkspaceSelector />
-      </div>
+        <div className="flex items-center justify-between mb-3">
+          {/* Logo */}
+          <Link href="/" className="flex items-center">
+            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
+          </Link>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1">
+            {/* Search */}
+            <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                  title="Search"
+                >
+                  <SearchIcon className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Search</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSearch} className="mt-2">
+                  <div className="relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      type="search"
+                      placeholder="Search..."
+                      className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
+                  >
+                    Search
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
 
+            {/* Notifications */}
+            {session && (
+              <Popover open={showNotifications} onOpenChange={setShowNotifications}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="relative h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                    onClick={() => refetchNotifications()}
+                    title="Notifications"
+                  >
+                    <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
+                  <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
+                    <h3 className="font-medium text-white">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]" 
+                        onClick={() => markAllNotificationsAsRead()}
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <ScrollArea className="h-80">
+                    {notificationsLoading ? (
+                      <div className="p-4 text-center text-gray-400 text-sm">
+                        Loading notifications...
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-400 text-sm">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        {notifications.map(notification => {
+                          const url = getNotificationUrl(notification);
+                          const isHtmlContent = /<[^>]+>/.test(notification.content);
+                          return (
+                            <div 
+                              key={notification.id}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? 'bg-[#22c55e]/5' : ''}`}
+                              onClick={() => handleNotificationClick(notification.id, url)}
+                            >
+                              {/* Sender Avatar */}
+                              {notification.sender.useCustomAvatar ? (
+                                <CustomAvatar user={notification.sender} size="sm" />
+                              ) : (
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage 
+                                    src={notification.sender.image || undefined} 
+                                    alt={notification.sender.name || "User"} 
+                                  />
+                                  <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
+                                    {getInitials(notification.sender.name || "U")}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
+                              
+                              {/* Notification Content */}
+                              <div className="flex-1 space-y-1">
+                                <p className="text-sm">
+                                  <span className="font-medium text-white">{notification.sender.name}</span>
+                                  {' '}
+                                  <span className="text-gray-400">
+                                    {isHtmlContent ? (
+                                      <MarkdownContent
+                                        htmlContent={notification.content}
+                                        className="inline text-sm"
+                                        asSpan={true}
+                                      />
+                                    ) : (
+                                      <CollabText
+                                        content={notification.content}
+                                        small
+                                        asSpan
+                                      />
+                                    )}
+                                  </span>
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {formatNotificationTime(notification.createdAt)}
+                                </p>
+                              </div>
+                              
+                              {/* Read Indicator */}
+                              {!notification.read && (
+                                <div className="h-2 w-2 rounded-full bg-[#22c55e] mt-1.5" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Chat */}
+            {session && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                onClick={toggleChat}
+                title="Chat"
+              >
+                <MessageSquare className="h-4 w-4" />
+                {isChatOpen && (
+                  <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+        
+        {/* Workspace Selector */}
+        <WorkspaceSelector />
+      </div>
+        
       {/* Main Content */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-6">
@@ -364,7 +840,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-1 mt-1">
                 {/* All workspaces */}
-                <div className="space-y-1">
+        <div className="space-y-1">
                                     {workspaces.map((workspace) => {
                     const isWorkspaceExpanded = collapsedWorkspaces[workspace.id] !== undefined 
                       ? !collapsedWorkspaces[workspace.id] 
@@ -553,13 +1029,13 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                         variant="ghost"
                         className={cn(
                           "w-full justify-start h-7 px-2 text-sm transition-colors",
-                          pathname.includes(`/views/${view.id}`)
+                          pathname.includes(`/views/${view.slug || view.id}`)
                             ? "bg-[#1f1f1f] text-white" 
                             : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                         )}
                         asChild
                       >
-                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.id}`}>
+                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.slug || view.id}`}>
                           <div className="flex items-center w-full">
                             {view.isFavorite && <Star className="mr-2 h-3 w-3 text-yellow-500 fill-current" />}
                             <span className="truncate flex-1">{view.name}</span>
@@ -633,7 +1109,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
               </Link>
             </Button>
           ))}
-          </div>
+        </div>
         </div>
       </ScrollArea>
 
@@ -671,16 +1147,19 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                 >
                   <Settings className="mr-2 h-4 w-4" />
                   Your Profile
-                </Link>
+            </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/workspaces" className="text-gray-300 hover:text-white">
                   <Users className="mr-2 h-4 w-4" />
                   Manage Workspaces
-                </Link>
+            </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-              <DropdownMenuItem className="text-gray-300 hover:text-white">
+              <DropdownMenuItem 
+                className="text-gray-300 hover:text-white cursor-pointer"
+                onClick={handleSignOut}
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>

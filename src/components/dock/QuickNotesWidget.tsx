@@ -111,7 +111,7 @@ export function QuickNotesWidget({ className }: QuickNotesWidgetProps) {
     <div className={`flex items-center gap-3 w-full ${className}`}>
       <NotebookPen className="h-4 w-4 text-white/70 flex-shrink-0" />
       
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 relative pb-4 mt-4">
         <Input
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -120,6 +120,10 @@ export function QuickNotesWidget({ className }: QuickNotesWidgetProps) {
           className="h-8 text-sm bg-white/10 border-white/20 text-white placeholder:text-white/50"
           disabled={isCreating || isImproving}
         />
+        {/* Invisible spacer to match TimelineWidget height */}
+        <div className="absolute top-9 right-0 text-[10px] text-transparent">
+          {content.length > 0 ? '000' : ' '}
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

@@ -2,13 +2,13 @@ import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { Metadata } from "next";
 import { verifyWorkspaceAccess } from "@/lib/workspace-helpers";
-import { 
-  getRecentPostsByType, 
-  getUserPosts, 
-  getPopularTags, 
+import {
+  getRecentPostsByType,
+  getUserPosts,
+  getPopularTags,
   getUnansweredPosts,
   getTeamMetrics,
-  getRecentActivities
+  getRecentActivities,
 } from "@/actions/dashboard";
 
 // Import client components
@@ -18,6 +18,7 @@ import { UserPosts } from "./components/UserPosts";
 import { PostsByType } from "./components/PostsByType";
 import { PopularTags } from "./components/PopularTags";
 import { UnansweredPosts } from "./components/UnansweredPosts";
+import { MyLeave } from "./components/MyLeave";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -33,7 +34,7 @@ export default async function DashboardPage() {
 
   // Verify workspace access and redirect if needed
   const workspaceId = await verifyWorkspaceAccess(session.user);
-  
+
   // Fetch initial data for hydration
   const [
     blockers,
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
     tagsData,
     unansweredPostsData,
     metricsData,
-    activitiesData
+    activitiesData,
   ] = await Promise.all([
     getRecentPostsByType({ workspaceId, type: "BLOCKER" }),
     getRecentPostsByType({ workspaceId, type: "IDEA" }),
@@ -52,7 +53,7 @@ export default async function DashboardPage() {
     getPopularTags({ workspaceId }),
     getUnansweredPosts({ workspaceId }),
     getTeamMetrics({ workspaceId, days: 7 }),
-    getRecentActivities({ workspaceId })
+    getRecentActivities({ workspaceId }),
   ]);
 
   return (
@@ -100,6 +101,8 @@ export default async function DashboardPage() {
           <PostsByType type="QUESTION" workspaceId={workspaceId} initialPosts={questions} />
         </div>
       </div>
+      {/* My Leave */}
+        <MyLeave workspaceId={workspaceId} isFeatureEnabled={false} />
     </div>
   );
 } 
