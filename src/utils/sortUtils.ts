@@ -9,7 +9,7 @@ interface Note {
   updatedAt: string;
 }
 
-export function sortTagsBySearchTerm(tags: Tag[], searchTerm: string): Tag[] {
+export function sortTagsBySearchTerm<T extends Tag>(tags: T[], searchTerm: string): T[] {
   if (!searchTerm.trim()) return tags;
 
   const term = searchTerm.toLowerCase();
