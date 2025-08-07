@@ -99,7 +99,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
-  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
+  const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, workspaceId, searchQuery, selectedTag, showFavorites, visibilityFilter]);
+  }, [session?.user, workspaceId, searchQuery, selectedTag, showFavorites, activeTab]);
 
   // Focus search input when dialog opens
   useEffect(() => {
@@ -240,11 +240,40 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (searchQuery) params.append("search", searchQuery);
       if (selectedTag) params.append("tag", selectedTag);
       if (showFavorites) params.append("favorite", "true");
-      if (visibilityFilter === "public") params.append("public", "true");
-      if (visibilityFilter === "private") params.append("public", "false");
-      // Only send workspace for public and private filters, not for "all"
-      if (workspaceId && visibilityFilter !== "all") {
-        params.append("workspace", workspaceId);
+      
+      // Handle tab-based filtering
+      switch (activeTab) {
+        case "private":
+          // Private: User's private notes only
+          params.append("own", "true");
+          params.append("public", "false");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+        case "public":
+          // Public: User's public notes only
+          params.append("own", "true");
+          params.append("public", "true");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+        case "all":
+          // All: User's all notes (both private and public)
+          params.append("own", "true");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
+        case "team-notes":
+          // Team Notes: Public notes from others in workspace
+          params.append("public", "true");
+          params.append("own", "false");
+          if (workspaceId) {
+            params.append("workspace", workspaceId);
+          }
+          break;
       }
 
 
@@ -275,8 +304,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   const fetchTags = async () => {
     try {
-      // Only send workspace parameter when needed (for public/private filtering)
-      const url = (workspaceId && visibilityFilter !== "all") 
+      // Always send workspace parameter for My Notes filtering
+      const url = workspaceId 
         ? `/api/notes/tags?workspace=${workspaceId}`
         : "/api/notes/tags";
       const response = await fetch(url);
@@ -476,14 +505,52 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </div>
         </div>
 
-        {/* Visibility Filter Tabs */}
-        <Tabs value={visibilityFilter} onValueChange={(value) => setVisibilityFilter(value as "all" | "public" | "private")}>
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
-            <TabsTrigger value="all">All Notes</TabsTrigger>
-            <TabsTrigger value="public">Public</TabsTrigger>
-            <TabsTrigger value="private">Private</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Horizontal Tabs */}
+        <div className="max-w-2xl">
+          <div className="flex gap-8 border-b border-border w-fit">
+            <button 
+              onClick={() => setActiveTab("all")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "all" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              All
+            </button>
+            <button 
+              onClick={() => setActiveTab("private")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "private" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              Private
+            </button>
+            <button 
+              onClick={() => setActiveTab("public")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "public" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              Public
+            </button>
+            <div className="border-l border-border h-6 self-end mb-3"></div>
+            <button 
+              onClick={() => setActiveTab("team-notes")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === "team-notes" 
+                  ? "text-primary border-primary" 
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              }`}
+            >
+              Team Notes
+            </button>
+          </div>
+        </div>
 
         {/* Notes Grid */}
         {notes.length === 0 ? (
@@ -491,9 +558,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-medium">No notes found</h3>
             <p className="text-muted-foreground">
-              {searchQuery || selectedTag || showFavorites || visibilityFilter !== "all"
+              {searchQuery || selectedTag || showFavorites
                 ? "Try adjusting your filters"
-                : "Get started by creating your first note"}
+                : activeTab === "private" || activeTab === "public" || activeTab === "all"
+                  ? "Get started by creating your first note"
+                  : "No team notes found"}
             </p>
           </div>
         ) : (
