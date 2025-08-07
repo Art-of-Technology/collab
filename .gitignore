@@ -40,3 +40,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Flow
+.claude/
+.claude-flow/
+claude-flow*
+.mcp.json
+.hive-mind/
+.swarm/
+memory/
+coordination/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+CLAUDE.md
