@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { processLeaveRequestAction } from "@/lib/leave-service";
+import { NotificationService } from "@/lib/notification-service";
 import { z } from "zod";
 
 const updateLeaveRequestSchema = z.object({
@@ -78,13 +79,32 @@ export async function PATCH(
 
     // Use the centralized service to handle approval/rejection with balance updates
     // This includes all permission checks, validation, and balance updates
-    const updatedRequest = await processLeaveRequestAction({
+    const result = await processLeaveRequestAction({
       requestId,
       action: status,
       notes,
       actionById: user.id,
     });
 
+    // Send notifications
+    try {
+      if (result.notificationData) {
+        await NotificationService.notifyLeaveStatusChange(
+          result.notificationData,
+          status,
+          user.id
+        );
+      }
+    } catch (notificationError) {
+      // Log but don't fail the request
+      console.error(
+        "Failed to send leave request status notifications:",
+        notificationError
+      );
+    }
+
+    // Remove notification data from response
+    const { notificationData, ...updatedRequest } = result;
     return NextResponse.json(updatedRequest);
   } catch (error) {
     console.error("Error updating leave request:", error);
@@ -244,10 +264,46 @@ export async function PUT(
             name: true,
             isPaid: true,
             trackIn: true,
+            workspaceId: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
           },
         },
       },
     });
+
+    // Send edit notifications
+    try {
+      const notificationData = {
+        id: updatedRequest.id,
+        userId: updatedRequest.userId,
+        policyId: updatedRequest.policyId,
+        startDate: updatedRequest.startDate,
+        endDate: updatedRequest.endDate,
+        duration: updatedRequest.duration,
+        notes: updatedRequest.notes,
+        status: updatedRequest.status,
+        user: updatedRequest.user,
+        policy: {
+          name: updatedRequest.policy.name,
+          workspaceId: updatedRequest.policy.workspaceId,
+        },
+      };
+
+      await NotificationService.notifyLeaveEdit(notificationData, user.id);
+    } catch (notificationError) {
+      // Log but don't fail the request
+      console.error(
+        "Failed to send leave request edit notifications:",
+        notificationError
+      );
+    }
 
     return NextResponse.json(updatedRequest);
   } catch (error) {
@@ -343,10 +399,50 @@ export async function DELETE(
             name: true,
             isPaid: true,
             trackIn: true,
+            workspaceId: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
           },
         },
       },
     });
+
+    // Send cancellation notifications
+    try {
+      const notificationData = {
+        id: cancelledRequest.id,
+        userId: cancelledRequest.userId,
+        policyId: cancelledRequest.policyId,
+        startDate: cancelledRequest.startDate,
+        endDate: cancelledRequest.endDate,
+        duration: cancelledRequest.duration,
+        notes: cancelledRequest.notes,
+        status: cancelledRequest.status,
+        user: cancelledRequest.user,
+        policy: {
+          name: cancelledRequest.policy.name,
+          workspaceId: cancelledRequest.policy.workspaceId,
+        },
+      };
+
+      await NotificationService.notifyLeaveStatusChange(
+        notificationData,
+        "CANCELLED",
+        user.id
+      );
+    } catch (notificationError) {
+      // Log but don't fail the request
+      console.error(
+        "Failed to send leave request cancellation notifications:",
+        notificationError
+      );
+    }
 
     // TODO: Release any pre-deducted leave balance (if applicable)
     // This would need to be implemented based on your leave balance logic

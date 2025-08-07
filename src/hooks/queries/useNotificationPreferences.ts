@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export interface NotificationPreferences {
   id: string;
@@ -18,6 +18,10 @@ export interface NotificationPreferences {
   boardTaskAssigned: boolean;
   boardTaskCompleted: boolean;
   boardTaskDeleted: boolean;
+  leaveRequestStatusChanged: boolean;
+  leaveRequestEdited: boolean;
+  leaveRequestManagerAlert: boolean;
+  leaveRequestHRAlert: boolean;
   emailNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   pushSubscription: any | null;
@@ -25,20 +29,22 @@ export interface NotificationPreferences {
   updatedAt: string;
 }
 
-export type NotificationPreferenceUpdate = Partial<Omit<NotificationPreferences, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>;
+export type NotificationPreferenceUpdate = Partial<
+  Omit<NotificationPreferences, "id" | "userId" | "createdAt" | "updatedAt">
+>;
 
 const notificationPreferencesKeys = {
-  all: ['notificationPreferences'] as const,
-  user: () => [...notificationPreferencesKeys.all, 'user'] as const,
+  all: ["notificationPreferences"] as const,
+  user: () => [...notificationPreferencesKeys.all, "user"] as const,
 };
 
 export function useNotificationPreferences() {
   return useQuery<NotificationPreferences>({
     queryKey: notificationPreferencesKeys.user(),
     queryFn: async () => {
-      const response = await fetch('/api/user/notification-preferences');
+      const response = await fetch("/api/user/notification-preferences");
       if (!response.ok) {
-        throw new Error('Failed to get notification preferences');
+        throw new Error("Failed to get notification preferences");
       }
       return response.json();
     },
@@ -50,15 +56,15 @@ export function useUpdateNotificationPreferences() {
 
   return useMutation({
     mutationFn: async (preferences: NotificationPreferenceUpdate) => {
-      const response = await fetch('/api/user/notification-preferences', {
-        method: 'PATCH',
+      const response = await fetch("/api/user/notification-preferences", {
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(preferences),
       });
       if (!response.ok) {
-        throw new Error('Failed to update notification preferences');
+        throw new Error("Failed to update notification preferences");
       }
       return response.json();
     },
@@ -74,11 +80,11 @@ export function useResetNotificationPreferences() {
 
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/user/notification-preferences', {
-        method: 'POST',
+      const response = await fetch("/api/user/notification-preferences", {
+        method: "POST",
       });
       if (!response.ok) {
-        throw new Error('Failed to reset notification preferences');
+        throw new Error("Failed to reset notification preferences");
       }
       return response.json();
     },

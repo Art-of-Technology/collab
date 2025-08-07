@@ -22,6 +22,11 @@ const DEFAULT_PREFERENCES = {
   postCommentAdded: true,
   postUpdated: true,
   postResolved: true,
+  // Leave notifications
+  leaveRequestStatusChanged: true,
+  leaveRequestEdited: true,
+  leaveRequestManagerAlert: true,
+  leaveRequestHRAlert: false,
   emailNotificationsEnabled: true,
 };
 
@@ -34,7 +39,7 @@ export async function GET() {
 
     // First try to get existing preferences
     let preferences = await prisma.notificationPreferences.findUnique({
-      where: { userId: currentUser.id }
+      where: { userId: currentUser.id },
     });
 
     // If no preferences exist, create default ones
@@ -43,8 +48,8 @@ export async function GET() {
         preferences = await prisma.notificationPreferences.create({
           data: {
             userId: currentUser.id,
-            ...DEFAULT_PREFERENCES
-          }
+            ...DEFAULT_PREFERENCES,
+          },
         });
       } catch (createError) {
         console.error("Error creating notification preferences:", createError);
@@ -62,17 +67,20 @@ export async function GET() {
     return NextResponse.json(preferences);
   } catch (error) {
     console.error("Error getting notification preferences:", error);
-    
+
     // Log the specific error for debugging
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
     }
-    
-    return NextResponse.json({ 
-      error: "Internal server error",
-      message: error instanceof Error ? error.message : "Unknown error"
-    }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -84,39 +92,47 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    
+
     // Validate the body contains only expected fields
     const allowedFields = [
-      'taskCreated',
-      'taskStatusChanged', 
-      'taskAssigned',
-      'taskCommentAdded',
-      'taskPriorityChanged',
-      'taskDueDateChanged',
-      'taskColumnMoved',
-      'taskUpdated',
-      'taskDeleted',
-      'taskMentioned',
-      'boardTaskCreated',
-      'boardTaskStatusChanged',
-      'boardTaskAssigned',
-      'boardTaskCompleted',
-      'boardTaskDeleted',
-      'postCommentAdded',
-      'postUpdated',
-      'postResolved',
-      'emailNotificationsEnabled'
+      "taskCreated",
+      "taskStatusChanged",
+      "taskAssigned",
+      "taskCommentAdded",
+      "taskPriorityChanged",
+      "taskDueDateChanged",
+      "taskColumnMoved",
+      "taskUpdated",
+      "taskDeleted",
+      "taskMentioned",
+      "boardTaskCreated",
+      "boardTaskStatusChanged",
+      "boardTaskAssigned",
+      "boardTaskCompleted",
+      "boardTaskDeleted",
+      "postCommentAdded",
+      "postUpdated",
+      "postResolved",
+      // Leave notification fields
+      "leaveRequestStatusChanged",
+      "leaveRequestEdited",
+      "leaveRequestManagerAlert",
+      "leaveRequestHRAlert",
+      "emailNotificationsEnabled",
     ];
 
     const updateData: any = {};
     for (const field of allowedFields) {
-      if (field in body && typeof body[field] === 'boolean') {
+      if (field in body && typeof body[field] === "boolean") {
         updateData[field] = body[field];
       }
     }
 
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No valid fields to update" },
+        { status: 400 }
+      );
     }
 
     // Update or create notification preferences
@@ -126,23 +142,26 @@ export async function PATCH(req: NextRequest) {
       create: {
         userId: currentUser.id,
         ...DEFAULT_PREFERENCES,
-        ...updateData
-      }
+        ...updateData,
+      },
     });
 
     return NextResponse.json(preferences);
   } catch (error) {
     console.error("Error updating notification preferences:", error);
-    
+
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
     }
-    
-    return NextResponse.json({ 
-      error: "Internal server error",
-      message: error instanceof Error ? error.message : "Unknown error"
-    }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -159,22 +178,25 @@ export async function POST(req: NextRequest) {
       update: DEFAULT_PREFERENCES,
       create: {
         userId: currentUser.id,
-        ...DEFAULT_PREFERENCES
-      }
+        ...DEFAULT_PREFERENCES,
+      },
     });
 
     return NextResponse.json(defaultPreferences);
   } catch (error) {
     console.error("Error resetting notification preferences:", error);
-    
+
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
     }
-    
-    return NextResponse.json({ 
-      error: "Internal server error",
-      message: error instanceof Error ? error.message : "Unknown error"
-    }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }

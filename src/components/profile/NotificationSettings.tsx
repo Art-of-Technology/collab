@@ -19,7 +19,8 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
-  Smartphone
+  Smartphone,
+  Users,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -29,6 +30,7 @@ import {
   type NotificationPreferenceUpdate
 } from "@/hooks/queries/useNotificationPreferences";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface NotificationSetting {
   key: keyof NotificationPreferenceUpdate;
@@ -153,6 +155,41 @@ const settingGroups: SettingGroup[] = [
       },
     ],
   },
+  {
+    id: "leave",
+    title: "Leave Request Notifications",
+    description:
+      "Get notified about leave request activities and status changes",
+    icon: <Users className="h-5 w-5 text-green-500" />,
+            settings: [
+          {
+            key: "leaveRequestStatusChanged",
+            label: "Status Updates",
+            description: "When your leave request is approved, rejected, or cancelled",
+            recommended: true,
+          },
+      {
+        key: "leaveRequestEdited",
+        label: "Request Edited",
+        description: "When your leave request is edited",
+        recommended: true,
+      },
+      {
+        key: "leaveRequestManagerAlert",
+        label: "Manager Alerts",
+        description:
+          "When you need to review team leave requests (if you're a manager)",
+        recommended: true,
+      },
+      {
+        key: "leaveRequestHRAlert",
+        label: "HR Alerts",
+        description:
+          "When special leave requests require HR attention (parental, medical, etc.)",
+        recommended: false,
+      },
+    ],
+  },
 ];
 
 export default function NotificationSettings() {
@@ -160,13 +197,14 @@ export default function NotificationSettings() {
   const { data: preferences, isLoading } = useNotificationPreferences();
   const updateMutation = useUpdateNotificationPreferences();
   const resetMutation = useResetNotificationPreferences();
-  const [openSections, setOpenSections] = useState<string[]>(["tasks", "boards"]);
+  const [openSections, setOpenSections] = useState<string[]>(["tasks", "boards", "leave"]);
   const {
     isSupported: isPushSupported,
     isSubscribed: isPushSubscribed,
     isLoading: isPushLoading,
     toggleSubscription: togglePushSubscription,
   } = usePushNotifications();
+  const { canManageLeave } = useWorkspacePermissions();
 
   const handleToggle = async (key: keyof NotificationPreferenceUpdate, value: boolean) => {
     // Handle push notifications specially
@@ -246,8 +284,27 @@ export default function NotificationSettings() {
     );
   }
 
-  const totalEnabled = settingGroups.reduce((sum, group) => sum + getGroupEnabledCount(group), 0);
-  const totalSettings = settingGroups.reduce((sum, group) => sum + group.settings.length, 0);
+  // Filter settings based on permissions
+  const filteredSettingGroups = settingGroups.map(group => {
+    if (group.id === "leave") {
+      // Filter out manager/HR settings if user doesn't have permission
+      const filteredSettings = group.settings.filter(setting => {
+        if (setting.key === "leaveRequestManagerAlert" || setting.key === "leaveRequestHRAlert") {
+          return canManageLeave;
+        }
+        return true;
+      });
+      
+      return {
+        ...group,
+        settings: filteredSettings
+      };
+    }
+    return group;
+  });
+
+  const totalEnabled = filteredSettingGroups.reduce((sum, group) => sum + getGroupEnabledCount(group), 0);
+  const totalSettings = filteredSettingGroups.reduce((sum, group) => sum + group.settings.length, 0);
 
   return (
     <div className="space-y-4">
@@ -281,7 +338,7 @@ export default function NotificationSettings() {
       </div>
 
       <div className="space-y-3">
-        {settingGroups.map((group) => {
+        {filteredSettingGroups.map((group) => {
           const isOpen = openSections.includes(group.id);
           const enabledCount = getGroupEnabledCount(group);
 
