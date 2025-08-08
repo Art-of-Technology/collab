@@ -161,6 +161,7 @@ export default function Navbar({
       case 'task_mention':
       case 'task_assigned':
       case 'task_status_change':
+      case 'TASK_ASSIGNED':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'epic_mention':
         return epicId ? `/${workspaceId}/epics/${epicId}` : `/${workspaceId}/tasks`; // Assuming epic detail page
