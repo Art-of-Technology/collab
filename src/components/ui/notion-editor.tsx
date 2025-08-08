@@ -76,14 +76,8 @@ interface NotionEditorProps {
   maxHeight?: string;
 }
 
-// Simple slash command handler
+// BASIT SLASH COMMAND HANDLER - MANUAL PLACEHOLDER İLE UYUMLU
 const handleSlashCommand = (editor: Editor, command: string) => {
-  // Store current cursor position relative to the current node
-  const { from } = editor.state.selection;
-  const $from = editor.state.doc.resolve(from);
-  const nodeStart = $from.start($from.depth);
-  const relativePos = from - nodeStart;
-  
   let result = false;
   
   switch (command) {
@@ -117,21 +111,6 @@ const handleSlashCommand = (editor: Editor, command: string) => {
       return editor.chain().focus().setColor('rgba(59, 130, 246, 1)').run();
     default:
       return false;
-  }
-  
-  // For commands that change node type, restore relative cursor position
-  if (result && (command === 'paragraph' || command.startsWith('heading') || command === 'blockquote' || command === 'codeBlock')) {
-    setTimeout(() => {
-      try {
-        const newNodeStart = editor.state.doc.resolve(editor.state.selection.from).start(editor.state.doc.resolve(editor.state.selection.from).depth);
-        const newPos = Math.min(newNodeStart + relativePos, editor.state.doc.content.size - 1);
-        editor.commands.setTextSelection(newPos);
-        editor.commands.focus();
-      } catch (error) {
-        // Fallback: just focus
-        editor.commands.focus();
-      }
-    }, 0);
   }
   
   return result;
@@ -232,29 +211,12 @@ export function NotionEditor({
         },
       }),
       Underline,
-      // GÜNCELLENMIŞ PLACEHOLDER KONFIGÜRASYONU
+      // MANUAL PLACEHOLDER - TİPTAP PLACEHOLDER KAPALI
       Placeholder.configure({
-        placeholder: ({ node, pos, hasAnchor }) => {
-          // Her boş paragraf için placeholder göster
-          if (node.type.name === 'paragraph' && node.textContent === '') {
-            return placeholder;
-          }
-          // Boş heading'ler için farklı placeholder'lar
-          if (node.type.name === 'heading' && node.textContent === '') {
-            const level = node.attrs.level;
-            return `Heading ${level}`;
-          }
-          // Liste item'ları için
-          if (node.type.name === 'listItem' && node.textContent === '') {
-            return 'List item';
-          }
-          return '';
-        },
+        placeholder: () => '', // Hiçbir placeholder gösterme
         emptyEditorClass: 'is-editor-empty',
-        emptyNodeClass: 'is-empty', // Bu önemli - her boş node için class ekler
-        includeChildren: true, // Alt elementlerde de placeholder göster
-        showOnlyWhenEditable: true,
-        showOnlyCurrent: false, // Bu da önemli - sadece current değil tüm boş satırlar
+        showOnlyWhenEditable: false,
+        showOnlyCurrent: true,
       }),
       RgbaTextStyle,
       Heading.configure({
@@ -776,70 +738,72 @@ export function NotionEditor({
           outline: 2px solid #3b82f6;
         }
 
-        /* HER BOŞ SATIRDA PLACEHOLDER GÖSTERİMİ */
-        .notion-editor .ProseMirror p.is-empty::before {
-          content: attr(data-placeholder);
-          float: left;
+        /* MANUAL PLACEHOLDER SİSTEMİ - KAYMA YOK */
+        .notion-editor .ProseMirror p:empty::before {
+          content: 'Write, press "/" for commands...';
+          position: absolute;
           color: #9ca3af;
           pointer-events: none;
-          height: 0;
           opacity: 0.6;
           font-style: italic;
+          user-select: none;
         }
 
-        .notion-editor .ProseMirror p.is-empty:first-child::before {
-          content: 'Write, press "/" for commands...';
-          opacity: 0.7;
-        }
-
-        .notion-editor .ProseMirror p.is-empty:not(:first-child)::before {
+        /* İlk paragraf değilse farklı placeholder */
+        .notion-editor .ProseMirror p:not(:first-child):empty::before {
           content: 'Write, press "/" for commands...';
         }
 
-        /* Boş heading'ler için placeholder */
-        .notion-editor .ProseMirror h1.is-empty::before {
+        /* HEADİNG PLACEHOLDER'LARI - MANUAL */
+        .notion-editor .ProseMirror h1:empty::before {
           content: 'Heading 1';
+          position: absolute;
           color: #9ca3af;
           opacity: 0.6;
           font-style: italic;
           font-weight: normal;
           pointer-events: none;
-          float: left;
-          height: 0;
+          user-select: none;
         }
 
-        .notion-editor .ProseMirror h2.is-empty::before {
+        .notion-editor .ProseMirror h2:empty::before {
           content: 'Heading 2';
+          position: absolute;
           color: #9ca3af;
           opacity: 0.6;
           font-style: italic;
           font-weight: normal;
           pointer-events: none;
-          float: left;
-          height: 0;
+          user-select: none;
         }
 
-        .notion-editor .ProseMirror h3.is-empty::before {
+        .notion-editor .ProseMirror h3:empty::before {
           content: 'Heading 3';
+          position: absolute;
           color: #9ca3af;
           opacity: 0.6;
           font-style: italic;
           font-weight: normal;
           pointer-events: none;
-          float: left;
-          height: 0;
+          user-select: none;
         }
 
         /* Liste item'ları için placeholder */
-        .notion-editor .ProseMirror li p.is-empty::before {
+        .notion-editor .ProseMirror li p:empty::before {
           content: 'List item';
           color: #9ca3af;
           opacity: 0.6;
           font-style: italic;
+          position: absolute;
+          pointer-events: none;
+          user-select: none;
         }
 
         /* Focus durumunda placeholder'ları biraz daha soluk göster */
-        .notion-editor .ProseMirror:focus .is-empty::before {
+        .notion-editor .ProseMirror:focus p:empty::before,
+        .notion-editor .ProseMirror:focus h1:empty::before,
+        .notion-editor .ProseMirror:focus h2:empty::before,
+        .notion-editor .ProseMirror:focus h3:empty::before {
           opacity: 0.4;
         }
 
