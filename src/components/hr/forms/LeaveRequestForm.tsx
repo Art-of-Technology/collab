@@ -333,8 +333,6 @@ export function LeaveRequestForm({
           control={form.control}
           name="duration"
           render={({ field }) => {
-            const dateRange = form.watch("dateRange");
-
             return (
               <FormItem className="space-y-3">
                 <FormLabel className="text-base">Leave Duration</FormLabel>
@@ -349,26 +347,8 @@ export function LeaveRequestForm({
                       <Label htmlFor="full-day">Full Day</Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem
-                        value="HALF_DAY"
-                        id="half-day"
-                        disabled={isDateRange(dateRange)}
-                      />
-                      <Label
-                        htmlFor="half-day"
-                        className={
-                          isDateRange(dateRange)
-                            ? "text-muted-foreground cursor-not-allowed"
-                            : ""
-                        }
-                      >
-                        Half Day
-                        {isDateRange(dateRange) && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            (Not available for date ranges)
-                          </span>
-                        )}
-                      </Label>
+                      <RadioGroupItem value="HALF_DAY" id="half-day"/>
+                      <Label htmlFor="half-day">Half Day</Label>
                     </div>
                   </RadioGroup>
                 </FormControl>

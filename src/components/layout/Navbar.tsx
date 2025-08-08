@@ -48,6 +48,7 @@ import { formatDistanceToNow } from "date-fns";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -76,6 +77,7 @@ export default function Navbar({
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
   const { currentWorkspace } = useWorkspace();
+  const { canManageLeave } = useWorkspacePermissions();
 
   // Use Mention context for notifications
   const {
@@ -484,6 +486,11 @@ export default function Navbar({
                         <DropdownMenuItem asChild>
                           <Link href={currentWorkspace ? `/${currentWorkspace.id}/my-posts` : "/my-posts"}>My Posts</Link>
                         </DropdownMenuItem>
+                        {canManageLeave && (
+                          <DropdownMenuItem asChild>
+                            <Link href={currentWorkspace ? `/${currentWorkspace.id}/leave-management` : "/leave-management"}>Leave Management</Link>
+                          </DropdownMenuItem>
+                        )}
                       </>
                     )}
                     <DropdownMenuItem asChild>
