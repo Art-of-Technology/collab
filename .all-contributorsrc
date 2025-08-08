@@ -1,0 +1,26 @@
+{
+  "projectName": "collab",
+  "projectOwner": "Art-of-Technology",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributors": [
+    {
+      "login": "redoh",
+      "name": "Ferit",
+      "avatar_url": "https://avatars.githubusercontent.com/u/38852479?v=4",
+      "profile": "https://github.com/redoh",
+      "contributions": [
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "badgeTemplate": "",
+  "skipCi": true,
+  "commitConvention": "angular"
+}
