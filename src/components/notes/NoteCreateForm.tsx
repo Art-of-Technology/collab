@@ -198,6 +198,25 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
     <div className="h-full flex flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
+          {/* Top action bar - SAĞ ÜSTTE */}
+          <div className="px-6 py-4 border-b flex justify-end items-center">
+            <div className="flex space-x-2">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Note"
+                )}
+              </Button>
+            </div>
+          </div>
+          
           {/* Top section with options */}
           {/* <div className="px-6 py-4 border-b">
             <div className="flex items-center gap-6">
@@ -392,55 +411,10 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
               />
             )}
 
-            {/* Ve CSS'inize bu stilleri ekleyin: */}
-            <style jsx>{`
-  .multi-placeholder-editor .ProseMirror p.is-empty::before {
-    content: 'Write, press "/" for commands';
-    float: left;
-    color: hsl(var(--muted-foreground));
-    pointer-events: none;
-    height: 0;
-    opacity: 0.6;
-    font-style: italic;
-  }
-  
-  /* Focus durumunda placeholder'ı gizle */
-  .multi-placeholder-editor .ProseMirror:focus p.is-empty::before {
-    display: none;
-  }
-  
-  /* Sadece aktif satırda placeholder göster */
-  .multi-placeholder-editor .ProseMirror p.is-empty:not(.has-focus)::before {
-    display: none;
-  }
-  
-  .multi-placeholder-editor .ProseMirror p.is-empty.has-focus::before {
-    display: block;
-  }
-`}</style>
+
           </div>
 
-          {/* Bottom action bar */}
-          <div className="px-6 py-4 border-t bg-background/50 flex justify-between items-center">
-            <div className="text-sm text-muted-foreground">
-              Use markdown formatting or type '/' for commands
-            </div>
-            <div className="flex space-x-2">
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Note"
-                )}
-              </Button>
-            </div>
-          </div>
+
         </form>
       </Form>
     </div>
