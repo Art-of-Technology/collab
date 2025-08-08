@@ -23,7 +23,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 const noteCreateSchema = z.object({
-  title: z.string().min(1, "Title is required"),
   content: z.string().min(1, "Content is required"),
   isPublic: z.boolean().default(false),
   isFavorite: z.boolean().default(false),
@@ -55,7 +54,6 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const form = useForm<NoteCreateFormValues>({
     resolver: zodResolver(noteCreateSchema),
     defaultValues: {
-      title: "",
       content: "",
       isPublic: false,
       isFavorite: false,
@@ -80,16 +78,47 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
     }
   };
 
+  // Extract title from content
+  const extractTitleFromContent = (htmlContent: string) => {
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // Get text content and split by lines
+    const textContent = tempDiv.textContent || tempDiv.innerText || '';
+    const lines = textContent.split('\n').filter(line => line.trim());
+    
+    if (lines.length === 0) {
+      return { title: 'Untitled', content: htmlContent };
+    }
+    
+    // First non-empty line is title, rest is content
+    const title = lines[0].trim() || 'Untitled';
+    
+    return { title, content: htmlContent };
+  };
+
   const onSubmit = async (values: NoteCreateFormValues) => {
     setIsLoading(true);
 
     try {
+      const { title, content } = extractTitleFromContent(values.content);
+      
+      const requestData = {
+        title,
+        content,
+        isPublic: values.isPublic,
+        isFavorite: values.isFavorite,
+        workspaceId: values.workspaceId,
+        tagIds: values.tagIds,
+      };
+
       const response = await fetch("/api/notes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify(requestData),
       });
 
       if (!response.ok) {
@@ -118,27 +147,8 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
     <div className="h-full flex flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-          {/* Top section with title and options */}
-          <div className="px-6 py-4 border-b space-y-4">
-            <div className="border-b pb-4">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter note title..." 
-                        {...field} 
-                        className="text-lg font-medium border-none px-0 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
+          {/* Top section with options */}
+          <div className="px-6 py-4 border-b">
             {/* Compact options row */}
             <div className="flex items-center gap-6">
               <FormField
