@@ -157,11 +157,11 @@ export default function Navbar({
       return '/welcome'; // Fallback if no workspace
     }
 
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'post_mention':
       case 'post_comment':
       case 'post_reaction':
-      case 'POST_COMMENT_ADDED':
+      case 'post_comment_added':
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
       case 'comment_mention':
       case 'comment_reply':
@@ -170,8 +170,8 @@ export default function Navbar({
         // This might require fetching the comment details to get the post/feature ID
         // For now, linking to notifications as a fallback
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`; // Placeholder, needs better logic
-      case 'TASK_COMMENT_MENTION': // Added this case
-      case 'TASK_STATUS_CHANGED':
+      case 'task_comment_mention': // Added this case
+      case 'task_status_changed':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'feature_mention':
       case 'feature_comment':
