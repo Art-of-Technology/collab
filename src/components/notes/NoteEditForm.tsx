@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -63,6 +63,8 @@ interface NoteTag {
 export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
+  const [showEditor, setShowEditor] = useState(true); // Editor hep açık edit'te
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const { toast } = useToast();
 
 
@@ -83,6 +85,16 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   useEffect(() => {
     fetchTags();
   }, []);
+
+  // Sync title ref with form value
+  useEffect(() => {
+    if (titleRef.current) {
+      const currentValue = form.watch('title');
+      if (titleRef.current.textContent !== currentValue) {
+        titleRef.current.textContent = currentValue || '';
+      }
+    }
+  }, [form.watch('title')]);
 
   // Reset form values when note changes
   useEffect(() => {
@@ -140,9 +152,27 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
     <div className="h-full flex flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-          {/* Top section with options */}
+          {/* Top action bar - SAĞ ÜSTTE */}
+          <div className="px-6 py-4 border-b flex justify-end items-center">
+            <div className="flex space-x-2">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Note"
+                )}
+              </Button>
+            </div>
+          </div>
+          
+          {/* Top section with options - COMMENTED OUT FOR NOW
           <div className="px-6 py-4 border-b">
-            {/* Compact options row */}
             <div className="flex items-center gap-6">
               <FormField
                 control={form.control}
@@ -194,23 +224,94 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
               />
             </div>
           </div>
+          */}
 
-          {/* Main editor area - takes full remaining height */}
-          <div className="flex-1 px-6 py-4 overflow-hidden">
+          {/* Main editor area - auto expanding */}
+          <div className="flex-1 px-6 py-4 overflow-auto">
+            {/* Notion-style contenteditable h1 title */}
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem className="mb-4">
+                  <FormControl>
+                    <div className="relative">
+                      <h1
+                        ref={titleRef}
+                        className="notranslate text-3xl font-bold"
+                        spellCheck="true"
+                        contentEditable="true"
+                        data-content-editable-leaf="true"
+                        style={{
+                          maxWidth: '100%',
+                          width: '100%',
+                          whiteSpace: 'break-spaces',
+                          wordBreak: 'break-word',
+                          paddingTop: '3px',
+                          paddingBottom: '0px',
+                          paddingInline: '2px',
+                          fontSize: '2rem',
+                          fontWeight: 'bold',
+                          margin: '0px',
+                          outline: 'none',
+                          border: 'none',
+                          minHeight: '2.5rem'
+                        }}
+                        onInput={(e) => {
+                          const text = e.currentTarget.textContent || '';
+                          field.onChange(text);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Focus on editor
+                            setTimeout(() => {
+                              const editorElement = document.querySelector('.ProseMirror');
+                              if (editorElement) {
+                                (editorElement as HTMLElement).focus();
+                              }
+                            }, 100);
+                          }
+                        }}
+                        suppressContentEditableWarning={true}
+                      />
+                      {/* Fake placeholder */}
+                      {!field.value && (
+                        <div
+                          className="absolute top-0 left-0 text-3xl font-bold text-gray-500 pointer-events-none"
+                          style={{
+                            paddingTop: '3px',
+                            paddingInline: '2px',
+                            fontSize: '2rem'
+                          }}
+                        >
+                          Note Title
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Editor */}
             <FormField
               control={form.control}
               name="content"
               render={({ field }) => (
                 <FormItem className="h-full">
                   <FormControl>
-                    <NotionEditor
-                      content={field.value}
-                      onChange={field.onChange}
-                      placeholder="Enter note title"
-                      minHeight="100%"
-                      maxHeight="100%"
-                      className="h-full"
-                    />
+                    <div className="notion-editor-wrapper h-full">
+                      <NotionEditor
+                        content={field.value}
+                        onChange={field.onChange}
+                        placeholder='Write, press "/" for commands'
+                        minHeight="100%"
+                        maxHeight="100%"
+                        className="h-full"
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -218,27 +319,7 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
             />
           </div>
 
-          {/* Bottom action bar */}
-          <div className="px-6 py-4 border-t bg-background/50 flex justify-between items-center">
-            <div className="text-sm text-muted-foreground">
-              Press Ctrl+S to save
-            </div>
-            <div className="flex space-x-2">
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Update Note"
-                )}
-              </Button>
-            </div>
-          </div>
+
         </form>
       </Form>
     </div>
