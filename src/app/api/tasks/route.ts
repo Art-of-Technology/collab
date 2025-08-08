@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
 import { trackCreation, trackMove } from "@/lib/board-item-activity-service";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { prisma } from "@/lib/prisma";
+import { extractMentionUserIds } from "@/utils/mentions";
+import { getServerSession } from "next-auth";
+import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/tasks - Create a new task
 export async function POST(request: NextRequest) {
@@ -184,6 +185,19 @@ export async function POST(request: NextRequest) {
         content: `Task ${task.title} was created`,
         excludeUserIds: [session.user.id],
       });
+      
+      // Process mentions in task description
+      if (description) {
+        const mentionedUserIds = extractMentionUserIds(description);
+        if (mentionedUserIds.length > 0) {
+          await NotificationService.createTaskDescriptionMentionNotifications(
+            task.id,
+            mentionedUserIds,
+            session.user.id,
+            task.title
+          );
+        }
+      }
     } catch (activityError) {
       console.error("Failed to track task creation activity:", activityError);
       // Don't fail the task creation if activity tracking fails
@@ -404,7 +418,7 @@ export async function PATCH(request: NextRequest) {
               movedItemId,
               session.user.id,
               movedTask.workspaceId,
-              movedTask.column ? { id: movedTask.columnId, name: movedTask.column.name } : null,
+              movedTask.column ? { id: movedTask.columnId as string, name: movedTask.column.name } : null,
               { id: columnId, name: column.name },
               boardId
             );

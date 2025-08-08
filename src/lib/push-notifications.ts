@@ -1,6 +1,6 @@
-import webpush from 'web-push';
-import { prisma } from '@/lib/prisma';
 import { EncryptionService } from '@/lib/encryption';
+import { prisma } from '@/lib/prisma';
+import webpush from 'web-push';
 
 /**
  * Validates VAPID configuration
@@ -139,7 +139,7 @@ export async function sendPushNotification(
         await prisma.notificationPreferences.update({
           where: { userId },
           data: {
-            pushSubscription: null,
+            pushSubscription: undefined,
             pushNotificationsEnabled: false,
           },
         });

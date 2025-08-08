@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useCreateComment } from "@/hooks/queries/useComment";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { useCreateComment } from "@/hooks/queries/useComment";
 import { useCurrentUser } from "@/hooks/queries/useUser";
-import { CollabInput } from "../ui/collab-input";
+import { useToast } from "@/hooks/use-toast";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { useState } from "react";
+import { CollabInput } from "../ui/collab-input";
 
 interface AddCommentFormProps {
   postId: string;
@@ -86,7 +86,7 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: "comment",
+              sourceType: "COMMENT",
               sourceId: newComment.id,
               content: `mentioned you in a post comment: "${commentText.length > 100 ? commentText.substring(0, 97) + '...' : commentText}"`
             });

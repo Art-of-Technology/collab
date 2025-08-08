@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { NextRequest, NextResponse } from "next/server";
 
 // Default preferences that match the schema defaults
 const DEFAULT_PREFERENCES = {
@@ -67,7 +67,6 @@ export async function GET() {
     return NextResponse.json(preferences);
   } catch (error) {
     console.error("Error getting notification preferences:", error);
-
     // Log the specific error for debugging
     if (error instanceof Error) {
       console.error("Error message:", error.message);
@@ -149,7 +148,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json(preferences);
   } catch (error) {
     console.error("Error updating notification preferences:", error);
-
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
@@ -165,7 +163,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const currentUser = await getCurrentUser();
     if (!currentUser?.id) {
@@ -185,7 +183,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(defaultPreferences);
   } catch (error) {
     console.error("Error resetting notification preferences:", error);
-
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);

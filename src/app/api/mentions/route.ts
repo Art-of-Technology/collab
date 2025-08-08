@@ -1,20 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 // Validation schema for mention requests
 const mentionSchema = z.object({
   userIds: z.array(z.string()).min(1, "At least one user ID is required"),
   sourceType: z.enum([
-    "post",
-    "comment",
-    "taskComment",
-    "feature",
-    "task",
-    "epic",
-    "story",
-    "milestone",
+    "POST",
+    "COMMENT",
+    "TASK_COMMENT",
+    "FEATURE",
+    "TASK",
+    "EPIC",
+    "STORY",
+    "MILESTONE",
   ]),
   sourceId: z.string().min(1, "Source ID is required"),
   content: z.string().min(1, "Content is required"),
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       let taskIdForNotification: string | null = null;
       
       // If the mention is from a taskComment, find the parent task ID
-      if (sourceType === "taskComment") {
+      if (sourceType === "TASK_COMMENT") {
         const taskComment = await prisma.taskComment.findUnique({
           where: { id: sourceId },
           select: { taskId: true },
@@ -70,19 +70,19 @@ export async function POST(req: NextRequest) {
           senderId: currentUser.id,
           read: false,
           // Dynamically set the appropriate ID field based on source type
-          ...(sourceType === "post" && { postId: sourceId }),
-          ...(sourceType === "comment" && { commentId: sourceId }),
-          ...(sourceType === "taskComment" && { 
+          ...(sourceType === "POST" && { postId: sourceId }),
+          ...(sourceType === "COMMENT" && { commentId: sourceId }),
+          ...(sourceType === "TASK_COMMENT" && { 
             taskCommentId: sourceId,
             // Also include taskId if we found it
             ...(taskIdForNotification && { taskId: taskIdForNotification })
           }), 
-          ...(sourceType === "feature" && { featureRequestId: sourceId }),
+          ...(sourceType === "FEATURE" && { featureRequestId: sourceId }),
           // Ensure direct task mentions also link taskId
-          ...(sourceType === "task" && { taskId: sourceId }),
-          ...(sourceType === "epic" && { epicId: sourceId }),
-          ...(sourceType === "story" && { storyId: sourceId }),
-          ...(sourceType === "milestone" && { milestoneId: sourceId }),
+          ...(sourceType === "TASK" && { taskId: sourceId }),
+          ...(sourceType === "EPIC" && { epicId: sourceId }),
+          ...(sourceType === "STORY" && { storyId: sourceId }),
+          ...(sourceType === "MILESTONE" && { milestoneId: sourceId }),
         },
       });
     });

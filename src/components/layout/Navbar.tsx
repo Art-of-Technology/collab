@@ -1,21 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image"
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
-import {
-  BellIcon,
-  MagnifyingGlassIcon,
-  Bars3Icon,
-  /*SparklesIcon*/
-} from "@heroicons/react/24/outline";
-import { MessageCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useSidebar } from "@/components/providers/SidebarProvider";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { CollabText } from "@/components/ui/collab-text";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,29 +21,32 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { useUiContext } from "@/context/UiContext";
-import { useSidebar } from "@/components/providers/SidebarProvider";
-import { useMention } from "@/context/MentionContext";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
-import { useCurrentUser } from "@/hooks/queries/useUser";
-import { formatDistanceToNow } from "date-fns";
-import { CollabText } from "@/components/ui/collab-text";
-import { MarkdownContent } from "@/components/ui/markdown-content";
+import { useUiContext } from "@/context/UiContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useMarkAllNotificationsAsRead, useMarkNotificationAsRead, useNotificationsList, useUnreadNotificationsCount } from "@/hooks/queries/useNotifications";
+import { useCurrentUser } from "@/hooks/queries/useUser";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Bars3Icon,
+  BellIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/react/24/outline";
+import { formatDistanceToNow } from "date-fns";
+import { MessageCircle } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -61,9 +60,7 @@ export default function Navbar({
   hasWorkspaces,
   shouldShowSearch,
   userEmail,
-  userName,
-  userImage
-}: NavbarProps) {
+  userName}: NavbarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
@@ -78,14 +75,34 @@ export default function Navbar({
   const { currentWorkspace } = useWorkspace();
 
   // Use Mention context for notifications
-  const {
-    notifications,
-    unreadCount,
-    markNotificationAsRead,
-    markAllNotificationsAsRead,
-    loading: notificationsLoading,
-    refetchNotifications
-  } = useMention();
+  // Notifications hooks
+  const { data: notifications = [], isLoading: notificationsLoading, refetch: refetchNotifications } = useNotificationsList(
+    currentWorkspace?.id || "",
+    { enabled: showNotifications, refetchInterval: 10000 }
+  );
+  // Limit to max 3 items for navbar preview
+  const previewNotifications = notifications.slice(0, 3);
+  const { data: unreadCount = 0 } = useUnreadNotificationsCount(currentWorkspace?.id || null);
+  const markNotificationAsReadMutation = useMarkNotificationAsRead();
+  const markAllNotificationsAsReadMutation = useMarkAllNotificationsAsRead();
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await markNotificationAsReadMutation.mutateAsync(id);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      if (currentWorkspace?.id) {
+        await markAllNotificationsAsReadMutation.mutateAsync(currentWorkspace.id);
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -95,15 +112,6 @@ export default function Navbar({
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    toast({
-      title: "Signed out successfully",
-      description: "You have been signed out of your account",
-    });
-    router.push("/");
-    router.refresh();
-  };
 
   // Handle notification click - mark as read and navigate if needed
   const handleNotificationClick = async (id: string, url?: string) => {
@@ -131,18 +139,18 @@ export default function Navbar({
 
   // Generate notification URL based on type
   const getNotificationUrl = (notification: any): string => {
-    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId, leaveRequestId } = notification;
+    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
     const workspaceId = currentWorkspace?.id;
 
     if (!workspaceId) {
       return '/welcome'; // Fallback if no workspace
     }
 
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'post_mention':
       case 'post_comment':
       case 'post_reaction':
-      case 'POST_COMMENT_ADDED':
+      case 'post_comment_added':
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
       case 'comment_mention':
       case 'comment_reply':
@@ -151,8 +159,8 @@ export default function Navbar({
         // This might require fetching the comment details to get the post/feature ID
         // For now, linking to notifications as a fallback
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`; // Placeholder, needs better logic
-      case 'taskComment_mention': // Added this case
-      case 'TASK_STATUS_CHANGED':
+      case 'task_comment_mention': // Added this case
+      case 'task_status_changed':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'feature_mention':
       case 'feature_comment':
@@ -168,11 +176,11 @@ export default function Navbar({
         return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`; // Assuming story detail page
       case 'milestone_mention':
         return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`; // Assuming milestone detail page
-      case 'LEAVE_REQUEST_STATUS_CHANGED':
-      case 'LEAVE_REQUEST_EDITED':
+      case 'leave_request_status_changed':
+      case 'leave_request_edited':
         return `/${workspaceId}/dashboard`;
-      case 'LEAVE_REQUEST_HR_ALERT':
-      case 'LEAVE_REQUEST_MANAGER_ALERT':
+      case 'leave_request_hr_alert':
+      case 'leave_request_manager_alert':
         return `/${workspaceId}/leave-management`;
       default:
         return `/${workspaceId}/timeline`;
@@ -191,28 +199,8 @@ export default function Navbar({
   };
 
   // Render the avatar based on user data
-  const renderAvatar = () => {
-    if (userData?.useCustomAvatar) {
-      return <CustomAvatar user={userData} size="md" />;
-    }
-
-    // Use server-provided values with fallback to session values for SSR
-    const displayName = userName || session?.user?.name || '';
-    const displayImage = userImage || session?.user?.image;
-
-    return (
-      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
-        {displayImage ? (
-          <AvatarImage src={displayImage} alt={displayName || "User"} />
-        ) : (
-          <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(displayName)}</AvatarFallback>
-        )}
-      </Avatar>
-    );
-  };
 
   // Calculate email to show in dropdown
-  const displayEmail = userEmail || session?.user?.email || '';
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#191919] border-b border-[#2a2929] h-16 shadow-md">
@@ -318,13 +306,21 @@ export default function Navbar({
               {hasWorkspaces && (
                 <>
                   {/* Notification bell with popover */}
-                  <Popover open={showNotifications} onOpenChange={setShowNotifications}>
+                  <Popover 
+                    open={showNotifications} 
+                    onOpenChange={(open) => {
+                      setShowNotifications(open);
+                      if (open) {
+                        // Refetch notifications when opening
+                        refetchNotifications();
+                      }
+                    }}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="relative hover:bg-[#1c1c1c] text-gray-400"
-                        onClick={() => refetchNotifications()}
                       >
                         <BellIcon className="h-5 w-5" />
                         {unreadCount > 0 && (
@@ -349,18 +345,18 @@ export default function Navbar({
                         )}
                       </div>
 
-                      <ScrollArea className="h-80">
+                      <ScrollArea>
                         {notificationsLoading ? (
                           <div className="p-4 text-center text-muted-foreground text-sm">
                             Loading notifications...
                           </div>
-                        ) : notifications.length === 0 ? (
+                        ) : previewNotifications.length === 0 ? (
                           <div className="p-4 text-center text-muted-foreground text-sm">
                             No notifications yet
                           </div>
                         ) : (
-                          <div className="flex flex-col">
-                            {notifications.map(notification => {
+                          <div className="flex flex-col justify-between h-full">
+                            {previewNotifications.map(notification => {
                               const url = getNotificationUrl(notification);
                               const isHtmlContent = /<[^>]+>/.test(notification.content);
 
@@ -371,16 +367,16 @@ export default function Navbar({
                                   onClick={() => handleNotificationClick(notification.id, url)}
                                 >
                                   {/* Sender Avatar */}
-                                  {notification.sender.useCustomAvatar ? (
-                                    <CustomAvatar user={notification.sender} size="sm" />
+                                  {notification.sender?.useCustomAvatar ? (
+                                    <CustomAvatar user={notification.sender as any} size="sm" />
                                   ) : (
                                     <Avatar className="h-8 w-8">
                                       <AvatarImage
-                                        src={notification.sender.image || undefined}
-                                        alt={notification.sender.name || "User"}
+                                        src={notification.sender?.image || undefined}
+                                        alt={notification.sender?.name || "User"}
                                       />
                                       <AvatarFallback>
-                                        {getInitials(notification.sender.name || "U")}
+                                        {getInitials(notification.sender?.name || "U")}
                                       </AvatarFallback>
                                     </Avatar>
                                   )}
@@ -388,7 +384,7 @@ export default function Navbar({
                                   {/* Notification Content */}
                                   <div className="flex-1 space-y-1">
                                     <p className="text-sm">
-                                      <span className="font-medium">{notification.sender.name}</span>
+                                      <span className="font-medium">{notification.sender?.name || "Unknown User"}</span>
                                       {' '}
                                       <span className="text-muted-foreground">
                                         {isHtmlContent ? (
@@ -420,6 +416,14 @@ export default function Navbar({
                             })}
                           </div>
                         )}
+                        <div className="p-1 text-center text-sm">
+                          <Button variant="link" className="text-xs text-foreground" onClick={() => {
+                            setShowNotifications(false);
+                            router.push(`/${currentWorkspace?.id}/notifications`);
+                          }}>
+                            Show more
+                          </Button> 
+                        </div>
                       </ScrollArea>
                     </PopoverContent>
                   </Popover>
@@ -456,7 +460,14 @@ export default function Navbar({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full overflow-hidden h-6 w-6 sm:h-10 sm:w-10">
-                    {renderAvatar()}
+                    {userData?.useCustomAvatar ? (
+                      <CustomAvatar user={userData} size="md" />
+                    ) : (
+                      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
+                        <AvatarImage src={userData?.image || undefined} alt={userData?.name || "User"} />
+                        <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(userData?.name || "U")}</AvatarFallback>
+                      </Avatar>
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 bg-[#1c1c1c] border-[#2a2929] text-gray-200" align="end" forceMount>
@@ -464,7 +475,7 @@ export default function Navbar({
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{userName || session?.user?.name}</p>
                       <p className="text-xs leading-none text-gray-400">
-                        {displayEmail}
+                        {userEmail || session?.user?.email || ''}
                       </p>
                     </div>
                   </DropdownMenuLabel>
@@ -485,7 +496,7 @@ export default function Navbar({
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="bg-[#2a2929]" />
-                  <DropdownMenuItem onClick={handleSignOut}>
+                  <DropdownMenuItem onClick={() => signOut({ redirect: false })}>
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

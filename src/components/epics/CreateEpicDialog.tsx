@@ -1,17 +1,23 @@
 "use client";
 
-import { useState, useEffect, useCallback, memo } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import axios from "axios";
-import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { useToast } from "@/hooks/use-toast";
 import { extractMentionUserIds } from "@/utils/mentions";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
+import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
+import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
+import { MilestoneSelect } from "@/components/tasks/selectors/MilestoneSelect";
+import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +35,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { LabelSelector } from "@/components/ui/label-selector";
+import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -37,21 +49,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
-import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { useBoardColumns } from "@/hooks/queries/useTask";
-import { MilestoneSelect } from "@/components/tasks/selectors/MilestoneSelect";
-import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
-import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
-import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import { cn } from "@/lib/utils";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
-import { LabelSelector } from "@/components/ui/label-selector";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -196,7 +196,7 @@ export function CreateEpicDialog({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: "epic",
+              sourceType: "EPIC",
               sourceId: createdEpic.id,
               content: `mentioned you in an epic: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
             });

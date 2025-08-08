@@ -1,20 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, memo } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import axios from "axios";
-import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
-import { Calendar } from "@/components/ui/calendar";
-import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { AssigneeSelect } from "@/components/tasks/selectors/AssigneeSelect";
+import { BoardSelect } from "@/components/tasks/selectors/BoardSelect";
 import { ReporterSelect } from "@/components/tasks/selectors/ReporterSelect";
-import { useBoardColumns } from "@/hooks/queries/useTask";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -32,17 +22,27 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { LabelSelector } from "@/components/ui/label-selector";
+import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { useBoardColumns } from "@/hooks/queries/useTask";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
 import { extractMentionUserIds } from "@/utils/mentions";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { StatusSelect } from "../tasks/selectors/StatusSelect";
-import { LabelSelector } from "@/components/ui/label-selector";
 
 // Wrap in memo
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -200,7 +200,7 @@ export function CreateMilestoneDialog({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: "milestone",
+              sourceType: "MILESTONE",
               sourceId: createdMilestone.id,
               content: `mentioned you in a milestone: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
             });

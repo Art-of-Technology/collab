@@ -1,16 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
-import React, { useState, useEffect, useCallback, memo } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { useToast } from "@/hooks/use-toast";
-import { useWorkspace } from "@/context/WorkspaceContext";
-import { useCreateTask, useBoardColumns } from "@/hooks/queries/useTask";
+import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
+import { StorySelect } from "@/components/tasks/selectors/StorySelect";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +20,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -33,31 +33,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { CalendarIcon, CheckSquare, Bug, Sparkles, TrendingUp } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { taskKeys, useBoardColumns, useCreateTask } from "@/hooks/queries/useTask";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { extractMentionUserIds } from "@/utils/mentions";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { format } from "date-fns";
+import { Bug, CalendarIcon, CheckSquare, Sparkles, TrendingUp } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import { BoardSelect } from "./selectors/BoardSelect";
-import { EpicSelect } from "@/components/tasks/selectors/EpicSelect";
-import { StorySelect } from "@/components/tasks/selectors/StorySelect";
-import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
-import { taskKeys } from "@/hooks/queries/useTask";
-import { useQueryClient } from "@tanstack/react-query";
-import { extractMentionUserIds } from "@/utils/mentions";
-import axios from "axios";
 
 // Import MarkdownEditor directly instead of dynamically to prevent focus issues
-import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
-import { StatusSelect } from "./selectors/StatusSelect";
-import { ReporterSelect } from "./selectors/ReporterSelect";
 import { LabelSelector } from "@/components/ui/label-selector";
+import { MarkdownEditor as BaseMarkdownEditor } from "@/components/ui/markdown-editor";
+import { ReporterSelect } from "./selectors/ReporterSelect";
+import { StatusSelect } from "./selectors/StatusSelect";
 
 // Wrap in memo to prevent unnecessary re-renders which cause focus loss
 const MarkdownEditor = memo(BaseMarkdownEditor);
@@ -318,7 +317,7 @@ export default function CreateTaskForm({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: "task",
+              sourceType: "TASK",
               sourceId: createdTask.id,
               content: `mentioned you in a task: "${values.title.length > 100 ? values.title.substring(0, 97) + '...' : values.title}"`
             });

@@ -1,36 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Bell,
-  BellOff,
-  CheckSquare,
-  MessageSquare,
-  AlertTriangle,
-  Calendar,
-  Mail,
-  RotateCcw,
-  Loader2,
-  ChevronDown,
-  ChevronRight,
-  Smartphone,
-  Users,
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
 import {
   useNotificationPreferences,
-  useUpdateNotificationPreferences,
   useResetNotificationPreferences,
+  useUpdateNotificationPreferences,
   type NotificationPreferenceUpdate
 } from "@/hooks/queries/useNotificationPreferences";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useToast } from "@/hooks/use-toast";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+import {
+  AlertTriangle,
+  Bell,
+  Calendar,
+  CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Mail,
+  RotateCcw,
+  Smartphone,
+  Users
+} from "lucide-react";
+import { useState } from "react";
 
 interface NotificationSetting {
   key: keyof NotificationPreferenceUpdate;
@@ -284,7 +281,7 @@ export default function NotificationSettings() {
     );
   }
 
-  // Filter settings based on permissions
+    // Filter settings based on permissions
   const filteredSettingGroups = settingGroups.map(group => {
     if (group.id === "leave") {
       // Filter out manager/HR settings if user doesn't have permission
@@ -294,7 +291,7 @@ export default function NotificationSettings() {
         }
         return true;
       });
-      
+
       return {
         ...group,
         settings: filteredSettings
@@ -371,7 +368,7 @@ export default function NotificationSettings() {
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     <div className="space-y-3">
-                      {group.settings.map((setting, settingIndex) => (
+                      {group.settings.map((setting) => (
                         <div key={setting.key} className="flex items-start justify-between gap-4">
                           <div className="space-y-1 flex-1">
                             <div className="flex items-center gap-2">

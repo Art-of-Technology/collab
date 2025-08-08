@@ -1,27 +1,28 @@
 "use client";
 
-import Link from "next/link";
-import {
-  HomeIcon,
-  HashtagIcon,
-  UserGroupIcon,
-  PlusIcon,
-  EnvelopeIcon,
-  Squares2X2Icon,
-  RectangleStackIcon,
-  DocumentTextIcon,
-  ClockIcon
-} from "@heroicons/react/24/outline";
-import { LightBulbIcon, UserIcon } from "@heroicons/react/24/outline";
-import { useSession } from "next-auth/react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
-import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { urls } from "@/lib/url-resolver";
+import {
+  ClockIcon,
+  DocumentTextIcon,
+  EnvelopeIcon,
+  HashtagIcon,
+  HomeIcon,
+  LightBulbIcon,
+  PlusIcon,
+  RectangleStackIcon,
+  Squares2X2Icon,
+  UserGroupIcon,
+  UserIcon
+} from "@heroicons/react/24/outline";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
 
 interface SidebarProps {
   pathname?: string;

@@ -1,14 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
+import { getCorsConfig, withCors } from "@/lib/cors";
 import { EncryptionService } from "@/lib/encryption";
-import { withRateLimit, pushSubscriptionRateLimit } from "@/lib/rate-limit";
-import { withValidation, pushSubscriptionSchema } from "@/lib/validation";
-import { withCors, getCorsConfig } from "@/lib/cors";
+import { prisma } from "@/lib/prisma";
+import { pushSubscriptionRateLimit, withRateLimit } from "@/lib/rate-limit";
+import { getCurrentUser } from "@/lib/session";
+import { pushSubscriptionSchema, withValidation } from "@/lib/validation";
+import { NextRequest, NextResponse } from "next/server";
 
 export const POST = withCors(
   withRateLimit(
-    withValidation(async function(request: NextRequest, { body }) {
+    withValidation(async function(_request: NextRequest, { body }) {
     try {
       const user = await getCurrentUser();
       if (!user) {
@@ -59,7 +59,7 @@ export const POST = withCors(
 );
 
 export const DELETE = withCors(
-  withRateLimit(async function(request: NextRequest) {
+  withRateLimit(async function(_request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {

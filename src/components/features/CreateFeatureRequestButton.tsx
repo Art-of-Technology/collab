@@ -1,9 +1,5 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Plus, Loader2 } from "lucide-react";
-import { useCreateFeatureRequest } from "@/hooks/queries/useFeature";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,8 +13,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { useCreateFeatureRequest } from "@/hooks/queries/useFeature";
+import { useToast } from "@/hooks/use-toast";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { Loader2, Plus } from "lucide-react";
+import { useCallback, useState } from "react";
 
 export default function CreateFeatureRequestButton() {
   const { toast } = useToast();
@@ -60,7 +60,7 @@ export default function CreateFeatureRequestButton() {
               try {
                 await axios.post("/api/mentions", {
                   userIds: mentionedUserIds,
-                  sourceType: "feature",
+                  sourceType: "FEATURE",
                   sourceId: createdFeature.id,
                   content: `mentioned you in a feature request: "${title.length > 100 ? title.substring(0, 97) + '...' : title}"`
                 });

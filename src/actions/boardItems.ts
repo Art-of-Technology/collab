@@ -2,8 +2,8 @@
 
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client'; // Import Prisma
+import { getServerSession } from 'next-auth';
 
 /**
  * Get all items (tasks, milestones, epics, stories) for a board

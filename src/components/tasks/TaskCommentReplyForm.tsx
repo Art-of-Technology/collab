@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { useToast } from "@/hooks/use-toast";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
+import { useState } from "react";
 
 interface TaskCommentReplyFormProps {
   taskId: string;
@@ -53,7 +53,7 @@ export function TaskCommentReplyForm({
           try {
             await axios.post("/api/mentions", {
               userIds: mentionedUserIds,
-              sourceType: "taskComment",
+              sourceType: "TASK_COMMENT",
               sourceId: newReply.id,
               content: `mentioned you in a task comment reply: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
             });
