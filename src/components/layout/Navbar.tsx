@@ -60,9 +60,7 @@ export default function Navbar({
   hasWorkspaces,
   shouldShowSearch,
   userEmail,
-  userName,
-  userImage
-}: NavbarProps) {
+  userName}: NavbarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
@@ -114,15 +112,6 @@ export default function Navbar({
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    toast({
-      title: "Signed out successfully",
-      description: "You have been signed out of your account",
-    });
-    router.push("/");
-    router.refresh();
-  };
 
   // Handle notification click - mark as read and navigate if needed
   const handleNotificationClick = async (id: string, url?: string) => {
@@ -187,6 +176,12 @@ export default function Navbar({
         return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`; // Assuming story detail page
       case 'milestone_mention':
         return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`; // Assuming milestone detail page
+      case 'leave_request_status_changed':
+      case 'leave_request_edited':
+        return `/${workspaceId}/dashboard`;
+      case 'leave_request_hr_alert':
+      case 'leave_request_manager_alert':
+        return `/${workspaceId}/leave-management`;
       default:
         return `/${workspaceId}/timeline`;
     }
@@ -204,28 +199,8 @@ export default function Navbar({
   };
 
   // Render the avatar based on user data
-  const renderAvatar = () => {
-    if (userData?.useCustomAvatar) {
-      return <CustomAvatar user={userData} size="md" />;
-    }
-
-    // Use server-provided values with fallback to session values for SSR
-    const displayName = userName || session?.user?.name || '';
-    const displayImage = userImage || session?.user?.image;
-
-    return (
-      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
-        {displayImage ? (
-          <AvatarImage src={displayImage} alt={displayName || "User"} />
-        ) : (
-          <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(displayName)}</AvatarFallback>
-        )}
-      </Avatar>
-    );
-  };
 
   // Calculate email to show in dropdown
-  const displayEmail = userEmail || session?.user?.email || '';
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#191919] border-b border-[#2a2929] h-16 shadow-md">
@@ -485,7 +460,14 @@ export default function Navbar({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full overflow-hidden h-6 w-6 sm:h-10 sm:w-10">
-                    {renderAvatar()}
+                    {userData?.useCustomAvatar ? (
+                      <CustomAvatar user={userData} size="md" />
+                    ) : (
+                      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
+                        <AvatarImage src={userData?.image || undefined} alt={userData?.name || "User"} />
+                        <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(userData?.name || "U")}</AvatarFallback>
+                      </Avatar>
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56 bg-[#1c1c1c] border-[#2a2929] text-gray-200" align="end" forceMount>
@@ -493,7 +475,7 @@ export default function Navbar({
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{userName || session?.user?.name}</p>
                       <p className="text-xs leading-none text-gray-400">
-                        {displayEmail}
+                        {userEmail || session?.user?.email || ''}
                       </p>
                     </div>
                   </DropdownMenuLabel>
@@ -514,7 +496,7 @@ export default function Navbar({
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="bg-[#2a2929]" />
-                  <DropdownMenuItem onClick={handleSignOut}>
+                  <DropdownMenuItem onClick={() => signOut({ redirect: false })}>
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

@@ -1,7 +1,10 @@
 import { sendEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
-import { PushNotificationPayload, sendPushNotification } from "@/lib/push-notifications";
-import { logger } from "./logger";
+
+import {
+  PushNotificationPayload,
+  sendPushNotification,
+} from "@/lib/push-notifications";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -30,6 +33,35 @@ export interface BoardFollowerNotificationOptions {
   skipTaskIdReference?: boolean; // Add this to skip setting taskId for deletion notifications
 }
 
+export interface LeaveRequestNotificationData {
+  id: string;
+  userId: string;
+  policyId: string;
+  startDate: Date;
+  endDate: Date;
+  duration: string;
+  notes: string;
+  status: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image?: string | null;
+  };
+  policy: {
+    name: string;
+    workspaceId: string;
+  };
+}
+
+export interface LeaveRequestActionContext {
+  requestId: string;
+  actionById: string;
+  actionType: "SUBMITTED" | "APPROVED" | "REJECTED" | "EDITED" | "CANCELLED";
+  previousStatus?: string;
+  notes?: string;
+}
+
 export enum NotificationType {
   TASK_CREATED = "TASK_CREATED",
   TASK_STATUS_CHANGED = "TASK_STATUS_CHANGED",
@@ -48,6 +80,10 @@ export enum NotificationType {
   BOARD_TASK_STATUS_CHANGED = "BOARD_TASK_STATUS_CHANGED",
   BOARD_TASK_COMPLETED = "BOARD_TASK_COMPLETED",
   BOARD_TASK_DELETED = "BOARD_TASK_DELETED",
+  LEAVE_REQUEST_STATUS_CHANGED = "LEAVE_REQUEST_STATUS_CHANGED",
+  LEAVE_REQUEST_EDITED = "LEAVE_REQUEST_EDITED",
+  LEAVE_REQUEST_MANAGER_ALERT = "LEAVE_REQUEST_MANAGER_ALERT",
+  LEAVE_REQUEST_HR_ALERT = "LEAVE_REQUEST_HR_ALERT",
 }
 
 export class NotificationService {
@@ -354,25 +390,36 @@ export class NotificationService {
    * @param notificationType - Type of notification to check
    * @returns true if user should receive notification
    */
-  static shouldNotifyUser(preferences: any, notificationType: NotificationType): boolean {
+  static shouldNotifyUser(
+    preferences: any,
+    notificationType: NotificationType
+  ): boolean {
     const typeToPreferenceMap = {
-      [NotificationType.TASK_CREATED]: 'taskCreated',
-      [NotificationType.TASK_STATUS_CHANGED]: 'taskStatusChanged',
-      [NotificationType.TASK_COMMENT_ADDED]: 'taskCommentAdded',
-      [NotificationType.TASK_COMMENT_MENTION]: 'taskMentioned',
+      [NotificationType.TASK_CREATED]: "taskCreated",
+      [NotificationType.TASK_STATUS_CHANGED]: "taskStatusChanged",
+      [NotificationType.TASK_COMMENT_ADDED]: "taskCommentAdded",
+      [NotificationType.TASK_COMMENT_MENTION]: "taskMentioned",
       [NotificationType.TASK_DESCRIPTION_MENTION]: 'taskMentioned',
-      [NotificationType.TASK_ASSIGNED]: 'taskAssigned',
-      [NotificationType.TASK_UPDATED]: 'taskUpdated',
-      [NotificationType.TASK_PRIORITY_CHANGED]: 'taskPriorityChanged',
-      [NotificationType.TASK_DUE_DATE_CHANGED]: 'taskDueDateChanged',
-      [NotificationType.TASK_DELETED]: 'taskDeleted',
-      [NotificationType.POST_COMMENT_ADDED]: 'postCommentAdded',
-      [NotificationType.POST_BLOCKER_CREATED]: 'postBlockerCreated',
-      [NotificationType.POST_RESOLVED]: 'postResolved',
-      [NotificationType.BOARD_TASK_CREATED]: 'boardTaskCreated',
-      [NotificationType.BOARD_TASK_STATUS_CHANGED]: 'boardTaskStatusChanged',
-      [NotificationType.BOARD_TASK_COMPLETED]: 'boardTaskCompleted',
-      [NotificationType.BOARD_TASK_DELETED]: 'boardTaskDeleted',
+      [NotificationType.TASK_ASSIGNED]: "taskAssigned",
+      [NotificationType.TASK_UPDATED]: "taskUpdated",
+      [NotificationType.TASK_PRIORITY_CHANGED]: "taskPriorityChanged",
+      [NotificationType.TASK_DUE_DATE_CHANGED]: "taskDueDateChanged",
+      [NotificationType.TASK_DELETED]: "taskDeleted",
+      [NotificationType.POST_COMMENT_ADDED]: "postCommentAdded",
+      [NotificationType.POST_BLOCKER_CREATED]: "postBlockerCreated",
+      [NotificationType.POST_RESOLVED]: "postResolved",
+      [NotificationType.BOARD_TASK_CREATED]: "boardTaskCreated",
+      [NotificationType.BOARD_TASK_STATUS_CHANGED]: "boardTaskStatusChanged",
+      [NotificationType.BOARD_TASK_COMPLETED]: "boardTaskCompleted",
+      [NotificationType.BOARD_TASK_DELETED]: "boardTaskDeleted",
+
+      // Leave request notification mappings
+      [NotificationType.LEAVE_REQUEST_STATUS_CHANGED]:
+        "leaveRequestStatusChanged",
+      [NotificationType.LEAVE_REQUEST_EDITED]: "leaveRequestEdited",
+      [NotificationType.LEAVE_REQUEST_MANAGER_ALERT]:
+        "leaveRequestManagerAlert",
+      [NotificationType.LEAVE_REQUEST_HR_ALERT]: "leaveRequestHRAlert",
     };
 
     const preferenceKey = typeToPreferenceMap[notificationType];

@@ -608,6 +608,7 @@ export async function reorderItemsInColumn(data: {
           excludeUserIds: []
         });
         
+        // Additional notification if task was moved to "Done"
         if (columnName.toLowerCase() === 'done') {
           await NotificationService.notifyBoardFollowers({
             boardId: task.taskBoardId,

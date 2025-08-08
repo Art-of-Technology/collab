@@ -18,6 +18,10 @@ export interface NotificationPreferences {
   boardTaskAssigned: boolean;
   boardTaskCompleted: boolean;
   boardTaskDeleted: boolean;
+  leaveRequestStatusChanged: boolean;
+  leaveRequestEdited: boolean;
+  leaveRequestManagerAlert: boolean;
+  leaveRequestHRAlert: boolean;
   emailNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   pushSubscription: any | null;

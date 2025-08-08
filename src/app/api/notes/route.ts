@@ -16,9 +16,11 @@ export async function GET(request: NextRequest) {
     const isFavorite = searchParams.get("favorite") === "true";
     const tagId = searchParams.get("tag");
     const workspaceId = searchParams.get("workspace");
+    const isPublic = searchParams.get("public");
+    const own = searchParams.get("own");
 
-    const where = {
-      authorId: session.user.id,
+    // Build the base where clause
+    const where: any = {
       ...(search && {
         OR: [
           { title: { contains: search, mode: "insensitive" as const } },
@@ -26,9 +28,60 @@ export async function GET(request: NextRequest) {
         ]
       }),
       ...(isFavorite && { isFavorite: true }),
-      ...(tagId && { tags: { some: { id: tagId } } }),
-      ...(workspaceId && { workspaceId })
+      ...(tagId && { tags: { some: { id: tagId } } })
     };
+
+    // Handle the new 5-category filtering system
+    if (own === "true") {
+      // User wants only their own notes
+      where.authorId = session.user.id;
+      
+      if (isPublic === "true") {
+        // My Public notes
+        where.isPublic = true;
+      } else if (isPublic === "false") {
+        // My Private notes  
+        where.isPublic = false;
+      }
+      // If no isPublic specified, show both (My Notes)
+      
+      // Apply workspace filter if specified
+      if (workspaceId) {
+        if (!where.AND) where.AND = [];
+        where.AND.push({
+          OR: [
+            { workspaceId: workspaceId },
+            { workspaceId: null } // Include legacy notes
+          ]
+        });
+      }
+    } else if (own === "false") {
+      // Team Public - only public notes from others in the workspace
+      if (workspaceId) {
+        where.AND = [
+          { isPublic: true },
+          { authorId: { not: session.user.id } }, // Exclude user's own notes
+          {
+            OR: [
+              { workspaceId: workspaceId },
+              { workspaceId: null }
+            ]
+          }
+        ];
+      } else {
+        // If no workspace, show all public notes from others
+        where.isPublic = true;
+        where.authorId = { not: session.user.id };
+      }
+    } else {
+      // All Notes - everything user has access to (own notes + others' public)
+      where.OR = [
+        { authorId: session.user.id }, // User's own notes (both public and private)
+        { isPublic: true } // Others' public notes
+      ];
+      
+      // Don't apply workspace filter for "all" mode to show everything
+    }
 
     const notes = await prisma.note.findMany({
       where,
@@ -53,6 +106,8 @@ export async function GET(request: NextRequest) {
         updatedAt: "desc"
       }
     });
+
+
 
     return NextResponse.json(notes);
   } catch (error) {

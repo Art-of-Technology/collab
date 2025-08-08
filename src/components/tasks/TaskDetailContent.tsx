@@ -37,7 +37,7 @@ import { format } from "date-fns";
 import { Calendar as CalendarIcon, Check, Clock, Copy, Loader2, Pause, PenLine, Play, StopCircle, Trash2, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AssigneeSelect } from "./selectors/AssigneeSelect";
 import { ReporterSelect } from "./selectors/ReporterSelect";
 import { StatusSelect } from "./selectors/StatusSelect";
@@ -71,6 +71,14 @@ export function TaskDetailContent({
   const [savingDescription, setSavingDescription] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [description, setDescription] = useState(task?.description || "");
+  const initialDescriptionRef = useRef(task?.description || "");
+
+  // Update refs when task loads
+  useEffect(() => {
+    if (task?.description && !initialDescriptionRef.current) {
+      initialDescriptionRef.current = task.description;
+    }
+  }, [task?.description]);
   const [savingAssignee, setSavingAssignee] = useState(false);
   const [savingReporter, setSavingReporter] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -988,7 +996,7 @@ export function TaskDetailContent({
                     <div className="relative">
                       <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
                         <MarkdownEditor
-                          initialValue={description}
+                          initialValue={initialDescriptionRef.current}
                           onChange={handleDescriptionChange}
                           placeholder="Add a description..."
                           minHeight="150px"

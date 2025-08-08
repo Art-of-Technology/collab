@@ -1,12 +1,12 @@
 'use server';
 
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { trackCreation, compareObjects, trackAssignment, createActivity } from '@/lib/board-item-activity-service';
-import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
+import { compareObjects, createActivity, trackAssignment, trackCreation } from '@/lib/board-item-activity-service';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
+import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
+import { prisma } from '@/lib/prisma';
 import { extractMentionUserIds } from '@/utils/mentions';
+import { getServerSession } from 'next-auth';
 
 /**
  * Get tasks for a workspace

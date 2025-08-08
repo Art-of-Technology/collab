@@ -79,43 +79,49 @@ model User {
 }
 
 model NotificationPreferences {
-  id                        String   @id @default(cuid())
-  userId                    String   @unique
-  
+  id     String @id @default(cuid())
+  userId String @unique
+
   // Task notifications
-  taskCreated               Boolean  @default(true)
-  taskStatusChanged         Boolean  @default(true)
-  taskAssigned              Boolean  @default(true)
-  taskCommentAdded          Boolean  @default(true)
-  taskPriorityChanged       Boolean  @default(true)
-  taskDueDateChanged        Boolean  @default(true)
-  taskColumnMoved           Boolean  @default(false)
-  taskUpdated               Boolean  @default(true)
-  taskDeleted               Boolean  @default(true)
-  taskMentioned             Boolean  @default(true)
-  
+  taskCreated         Boolean @default(true)
+  taskStatusChanged   Boolean @default(true)
+  taskAssigned        Boolean @default(true)
+  taskCommentAdded    Boolean @default(true)
+  taskPriorityChanged Boolean @default(true)
+  taskDueDateChanged  Boolean @default(true)
+  taskColumnMoved     Boolean @default(false)
+  taskUpdated         Boolean @default(true)
+  taskDeleted         Boolean @default(true)
+  taskMentioned       Boolean @default(true)
+
   // Board notifications
-  boardTaskCreated          Boolean  @default(true)
-  boardTaskStatusChanged    Boolean  @default(true)
-  boardTaskAssigned         Boolean  @default(false)
-  boardTaskCompleted        Boolean  @default(true)
-  boardTaskDeleted          Boolean  @default(true)
-  
+  boardTaskCreated       Boolean @default(true)
+  boardTaskStatusChanged Boolean @default(true)
+  boardTaskAssigned      Boolean @default(false)
+  boardTaskCompleted     Boolean @default(true)
+  boardTaskDeleted       Boolean @default(true)
+
   // Post notifications
-  postCommentAdded          Boolean  @default(true)
-  postUpdated               Boolean  @default(true)
-  postResolved              Boolean  @default(true)
-  
+  postCommentAdded Boolean @default(true)
+  postUpdated      Boolean @default(true)
+  postResolved     Boolean @default(true)
+
+  // Leave notifications
+  leaveRequestStatusChanged Boolean @default(true)
+  leaveRequestEdited        Boolean @default(true)
+  leaveRequestManagerAlert  Boolean @default(true)
+  leaveRequestHRAlert       Boolean @default(false)
+
   // Email notifications
-  emailNotificationsEnabled Boolean  @default(true)
-  
+  emailNotificationsEnabled Boolean @default(true)
+
   // Push notifications
-  pushNotificationsEnabled  Boolean  @default(false)
-  pushSubscription          Json?    // Stores the push subscription object
-  
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
-  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushNotificationsEnabled Boolean @default(false)
+  pushSubscription         Json? // Stores the push subscription object
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -753,7 +759,9 @@ model Notification {
   storyId          String?
   milestoneId      String?
   taskCommentId    String?
+  leaveRequestId   String?
   comment          Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  leaveRequest     LeaveRequest?   @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   epic             Epic?           @relation(fields: [epicId], references: [id], onDelete: Cascade)
   featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
   milestone        Milestone?      @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
@@ -773,6 +781,7 @@ model Notification {
   @@index([epicId])
   @@index([storyId])
   @@index([milestoneId])
+  @@index([leaveRequestId])
 }
 
 model UserEvent {
@@ -999,8 +1008,9 @@ model LeaveRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  policy LeavePolicy @relation(fields: [policyId], references: [id], onUpdate: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policy        LeavePolicy    @relation(fields: [policyId], references: [id], onUpdate: Cascade)
+  notifications Notification[]
 
   // Indexes
   @@index([userId])
@@ -1321,4 +1331,5 @@ enum Permission {
   VIEW_REPORTS
   PIN_POST
   RESOLVE_BLOCKER
+  MANAGE_LEAVE
 }

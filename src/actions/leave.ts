@@ -3,6 +3,13 @@
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
+import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
+import {
+  approveLeaveRequestWithBalance,
+  rejectLeaveRequestWithBalance,
+} from "@/lib/leave-service";
+import { checkUserPermission, Permission } from "@/lib/permissions";
+import { NotificationService } from "@/lib/notification-service";
 
 /**
  * Get leave policies for a workspace
@@ -144,10 +151,44 @@ export async function createLeaveRequest(data: {
           name: true,
           isPaid: true,
           trackIn: true,
+          workspaceId: true,
+        },
+      },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
         },
       },
     },
   });
+
+  // Send notifications
+  try {
+    await NotificationService.notifyLeaveSubmission({
+      id: leaveRequest.id,
+      userId: leaveRequest.userId,
+      policyId: leaveRequest.policyId,
+      startDate: leaveRequest.startDate,
+      endDate: leaveRequest.endDate,
+      duration: leaveRequest.duration,
+      notes: leaveRequest.notes,
+      status: leaveRequest.status,
+      user: leaveRequest.user,
+      policy: {
+        name: leaveRequest.policy.name,
+        workspaceId: leaveRequest.policy.workspaceId,
+      },
+    });
+  } catch (notificationError) {
+    // Log but don't fail the request creation
+    console.error(
+      "Failed to send leave request notifications:",
+      notificationError
+    );
+  }
 
   return leaveRequest;
 }
@@ -216,4 +257,171 @@ export async function getUserLeaveRequests(workspaceId: string) {
   });
 
   return leaveRequests;
+}
+
+/**
+ * Get all leave requests for a workspace (for managers)
+ */
+export async function getWorkspaceLeaveRequests(workspaceSlugOrId: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    throw new Error("Unauthorized");
+  }
+
+  // Resolve workspace slug to ID
+  const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+  if (!workspaceId) {
+    throw new Error("Workspace not found");
+  }
+
+  // Get the current user
+  const user = await prisma.user.findUnique({
+    where: {
+      email: session.user.email,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  // Check if user has permission to manage leave
+  const managePermission = await checkUserPermission(
+    user.id,
+    workspaceId,
+    Permission.MANAGE_LEAVE
+  );
+
+  if (!managePermission.hasPermission) {
+    throw new Error("Insufficient permissions to manage leave requests");
+  }
+
+  const leaveRequests = await prisma.leaveRequest.findMany({
+    where: {
+      policy: {
+        workspaceId: workspaceId,
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+      policy: {
+        select: {
+          name: true,
+          isPaid: true,
+          trackIn: true,
+        },
+      },
+    },
+    orderBy: [
+      {
+        status: "asc", // Show pending first
+      },
+      {
+        createdAt: "desc",
+      },
+    ],
+  });
+
+  // Transform the data to match our component interface
+  return leaveRequests.map((request) => ({
+    ...request,
+    user: {
+      ...request.user,
+      avatar: request.user.image,
+    },
+  }));
+}
+
+/**
+ * Approve a leave request (managers only) - with automatic balance update
+ */
+export async function approveLeaveRequest(requestId: string, notes?: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    throw new Error("Unauthorized");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const result = await approveLeaveRequestWithBalance(requestId, notes);
+
+  // Send notifications
+  try {
+    if (result.notificationData) {
+      await NotificationService.notifyLeaveStatusChange(
+        result.notificationData,
+        "APPROVED",
+        user.id
+      );
+    }
+  } catch (notificationError) {
+    // Log but don't fail the request
+    console.error(
+      "Failed to send leave request approval notifications:",
+      notificationError
+    );
+  }
+
+  // Remove notification data from response
+  const { notificationData, ...updatedRequest } = result;
+  return updatedRequest;
+}
+
+/**
+ * Reject a leave request (managers only)
+ */
+export async function rejectLeaveRequest(requestId: string, notes?: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    throw new Error("Unauthorized");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const result = await rejectLeaveRequestWithBalance(requestId, notes);
+
+  // Send notifications
+  try {
+    if (result.notificationData) {
+      await NotificationService.notifyLeaveStatusChange(
+        result.notificationData,
+        "REJECTED",
+        user.id
+      );
+    }
+  } catch (notificationError) {
+    // Log but don't fail the request
+    console.error(
+      "Failed to send leave request rejection notifications:",
+      notificationError
+    );
+  }
+
+  // Remove notification data from response
+  const { notificationData, ...updatedRequest } = result;
+  return updatedRequest;
 }

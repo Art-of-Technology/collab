@@ -1,34 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Bell,
-  BellOff,
-  CheckSquare,
-  MessageSquare,
-  AlertTriangle,
-  Calendar,
-  Mail,
-  RotateCcw,
-  Loader2,
-  ChevronDown,
-  ChevronRight,
-  Smartphone
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
 import {
   useNotificationPreferences,
-  useUpdateNotificationPreferences,
   useResetNotificationPreferences,
+  useUpdateNotificationPreferences,
   type NotificationPreferenceUpdate
 } from "@/hooks/queries/useNotificationPreferences";
+import { useToast } from "@/hooks/use-toast";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import {
+  AlertTriangle,
+  Bell,
+  Calendar,
+  CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Mail,
+  RotateCcw,
+  Smartphone,
+  Users
+} from "lucide-react";
+import { useState } from "react";
 
 interface NotificationSetting {
   key: keyof NotificationPreferenceUpdate;
@@ -153,6 +152,41 @@ const settingGroups: SettingGroup[] = [
       },
     ],
   },
+  {
+    id: "leave",
+    title: "Leave Request Notifications",
+    description:
+      "Get notified about leave request activities and status changes",
+    icon: <Users className="h-5 w-5 text-green-500" />,
+    settings: [
+      {
+        key: "leaveRequestStatusChanged",
+        label: "Status Updates",
+        description: "When your leave request is approved, rejected, or cancelled",
+        recommended: true,
+      },
+      {
+        key: "leaveRequestEdited",
+        label: "Request Edited",
+        description: "When your leave request is edited",
+        recommended: true,
+      },
+      {
+        key: "leaveRequestManagerAlert",
+        label: "Manager Alerts",
+        description:
+          "When you need to review team leave requests (if you're a manager)",
+        recommended: true,
+      },
+      {
+        key: "leaveRequestHRAlert",
+        label: "HR Alerts",
+        description:
+          "When special leave requests require HR attention (parental, medical, etc.)",
+        recommended: false,
+      },
+    ],
+  },
 ];
 
 export default function NotificationSettings() {
@@ -160,13 +194,14 @@ export default function NotificationSettings() {
   const { data: preferences, isLoading } = useNotificationPreferences();
   const updateMutation = useUpdateNotificationPreferences();
   const resetMutation = useResetNotificationPreferences();
-  const [openSections, setOpenSections] = useState<string[]>(["tasks", "boards"]);
+  const [openSections, setOpenSections] = useState<string[]>(["tasks", "boards", "leave"]);
   const {
     isSupported: isPushSupported,
     isSubscribed: isPushSubscribed,
     isLoading: isPushLoading,
     toggleSubscription: togglePushSubscription,
   } = usePushNotifications();
+  const { canManageLeave } = useWorkspacePermissions();
 
   const handleToggle = async (key: keyof NotificationPreferenceUpdate, value: boolean) => {
     // Handle push notifications specially

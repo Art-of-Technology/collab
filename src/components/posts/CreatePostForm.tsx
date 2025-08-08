@@ -24,11 +24,8 @@ import { useCreatePost } from "@/hooks/queries/usePost";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { extractMentions, extractMentionUserIds } from "@/utils/mentions";
-import axios from "axios";
 import { ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useState } from "react";
 
 export default function CreatePostForm() {
   const { toast } = useToast();
@@ -123,8 +120,6 @@ export default function CreatePostForm() {
       setIsImproving(false);
     }
   };
-
-  // Function to process mentions in the post text
 
   const handleSubmit = async () => {
     if (!formData.message.trim()) {

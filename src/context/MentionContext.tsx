@@ -17,11 +17,14 @@ const MentionContext = createContext<MentionContextType | undefined>(undefined);
 
 export function MentionProvider({ children }: { children: React.ReactNode }) {
   // Function to search users for mentions
-  const searchUsers = useCallback(async (query: string): Promise<User[]> => {
-    if (!query || query.length < 1) return [];
-
+  const searchUsers = useCallback(async (query: string, workspaceId?: string): Promise<User[]> => {
     try {
-      const response = await axios.get(`/api/users/search?q=${encodeURIComponent(query)}`);
+      // Send the query as-is, empty query will return all workspace users
+      let url = `/api/users/search?q=${encodeURIComponent(query || '')}`;
+      if (workspaceId) {
+        url += `&workspace=${encodeURIComponent(workspaceId)}`;
+      }
+      const response = await axios.get(url);
       return response.data;
     } catch (error) {
       console.error('Error searching users:', error);
