@@ -13,12 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Client-side filtering and searching capabilities
   - Grouping options by date, user, or taskboard
   - Bulk actions for managing multiple notifications
-  - Virtual scrolling for performance optimization
-  - Sidebar navigation for notification categories
   - Enhanced notification types with task details support
-- **Notification Navigation**: Added "View All" link to Navbar notifications dropdown
-  - Users can now easily navigate to the full notifications page from the header
-  - Improved notification system accessibility and user experience
+- **Notification Navigation**: Added "View All" link under the notifications dropdown
+  - Users can now easily navigate to the full notifications page from the header 
 
 ### Technical
 - Added NotificationsClient, NotificationsList, NotificationsSidebar, and VirtualNotificationsList components
