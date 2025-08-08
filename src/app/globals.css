@@ -421,3 +421,15 @@ textarea::selection {
 .dark .ProseMirror p.is-editor-empty:first-child::before {
   color: #6b7280;
 }
+
+/* Align NotionEditor with H1 title padding */
+.ProseMirror {
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+
+/* Override any conflicting padding from the editor */
+.notion-editor .ProseMirror {
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
