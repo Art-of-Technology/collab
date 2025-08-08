@@ -60,6 +60,10 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   const [tags, setTags] = useState<NoteTag[]>([]);
   const { toast } = useToast();
 
+  // Debug: Log the note content
+  console.log('NoteEditForm - note:', note);
+  console.log('NoteEditForm - note.content:', note.content);
+
   const form = useForm<NoteEditFormValues>({
     resolver: zodResolver(noteEditSchema),
     defaultValues: {
@@ -74,6 +78,18 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   useEffect(() => {
     fetchTags();
   }, []);
+
+  // Reset form values when note changes
+  useEffect(() => {
+    console.log('Resetting form with note:', note);
+    form.reset({
+      title: note.title,
+      content: note.content,
+      isPublic: note.isPublic,
+      isFavorite: note.isFavorite,
+      tagIds: note.tags.map((tag) => tag.id),
+    });
+  }, [note, form]);
 
   const fetchTags = async () => {
     try {
@@ -141,21 +157,24 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
         <FormField
           control={form.control}
           name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Content</FormLabel>
-              <FormControl>
-                <NotionEditor
-                  initialValue={field.value}
-                  onChange={field.onChange}
-                  placeholder="Type '/' for commands or start writing..."
-                  minHeight="300px"
-                  maxHeight="500px"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            console.log('FormField render - field.value:', field.value);
+            return (
+              <FormItem>
+                <FormLabel>Content</FormLabel>
+                <FormControl>
+                  <NotionEditor
+                    content={field.value}
+                    onChange={field.onChange}
+                    placeholder="Type '/' for commands or start writing..."
+                    minHeight="300px"
+                    maxHeight="500px"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -164,6 +164,10 @@ export function NotionEditor({
   minHeight = "150px",
   maxHeight = "400px",
 }: NotionEditorProps) {
+  
+  // Debug: Log the content
+  console.log('NotionEditor - content:', content);
+  console.log('NotionEditor - initialValue:', initialValue);
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
