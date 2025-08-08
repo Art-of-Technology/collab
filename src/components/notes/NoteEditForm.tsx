@@ -140,120 +140,129 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="title"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Title</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter note title..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <div className="h-full flex flex-col">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
+          {/* Top section with title and options */}
+          <div className="px-6 py-4 border-b space-y-4">
+            <div className="border-b pb-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input 
+                        placeholder="Enter note title..." 
+                        {...field} 
+                        className="text-lg font-medium border-none px-0 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-        <FormField
-          control={form.control}
-          name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Content</FormLabel>
-              <FormControl>
-                <NotionEditor
-                  content={field.value}
-                  onChange={field.onChange}
-                  placeholder="Type '/' for commands or start writing..."
-                  minHeight="300px"
-                  maxHeight="500px"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            {/* Compact options row */}
+            <div className="flex items-center gap-6">
+              <FormField
+                control={form.control}
+                name="isPublic"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="text-sm font-normal">Public Note</FormLabel>
+                  </FormItem>
+                )}
+              />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="isPublic"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Public Note</FormLabel>
-                  <div className="text-sm text-muted-foreground">
-                    Make this note visible to others
-                  </div>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+              <FormField
+                control={form.control}
+                name="isFavorite"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="text-sm font-normal">Favorite</FormLabel>
+                  </FormItem>
+                )}
+              />
 
-          <FormField
-            control={form.control}
-            name="isFavorite"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Favorite</FormLabel>
-                  <div className="text-sm text-muted-foreground">
-                    Add to favorites
-                  </div>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
+              <FormField
+                control={form.control}
+                name="tagIds"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormLabel className="text-sm font-normal whitespace-nowrap">Tags:</FormLabel>
+                    <FormControl>
+                      <TagSelect
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        workspaceId={note.workspace?.id}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
 
-        <FormField
-          control={form.control}
-          name="tagIds"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tags</FormLabel>
-              <FormControl>
-                <TagSelect
-                  value={field.value || []}
-                  onChange={field.onChange}
-                  workspaceId={note.workspace?.id}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          {/* Main editor area - takes full remaining height */}
+          <div className="flex-1 px-6 py-4 overflow-hidden">
+            <FormField
+              control={form.control}
+              name="content"
+              render={({ field }) => (
+                <FormItem className="h-full">
+                  <FormControl>
+                    <NotionEditor
+                      content={field.value}
+                      onChange={field.onChange}
+                      placeholder="Type '/' for commands or start writing..."
+                      minHeight="100%"
+                      maxHeight="100%"
+                      className="h-full"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
-        <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              "Update Note"
-            )}
-          </Button>
-        </div>
-      </form>
-    </Form>
+          {/* Bottom action bar */}
+          <div className="px-6 py-4 border-t bg-background/50 flex justify-between items-center">
+            <div className="text-sm text-muted-foreground">
+              Press Ctrl+S to save
+            </div>
+            <div className="flex space-x-2">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Note"
+                )}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Form>
+    </div>
   );
 } 

@@ -81,8 +81,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, color, workspaceId } = body;
     
-    console.log('POST /api/notes/tags - workspaceId (from body):', workspaceId);
-    console.log('POST /api/notes/tags - body:', body);
+
 
     if (!name) {
       return NextResponse.json(

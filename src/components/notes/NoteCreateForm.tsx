@@ -50,8 +50,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const { toast } = useToast();
   const { workspaceId } = useParams<{ workspaceId: string }>();
   
-  // Debug: Check if workspaceId is available
-  console.log('NoteCreateForm - workspaceId:', workspaceId);
+
 
   const form = useForm<NoteCreateFormValues>({
     resolver: zodResolver(noteCreateSchema),

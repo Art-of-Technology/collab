@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NoteEditForm } from "@/components/notes/NoteEditForm";
+
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
@@ -101,7 +101,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
+
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
@@ -587,7 +587,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setEditingNote(note);
+                          router.push(`/${workspaceId}/notes/${note.id}/edit`);
                         }}
                       >
                         <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
@@ -665,25 +665,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         )}
       </div>
 
-      {/* Edit Note Dialog */}
-      {editingNote && (
-        <Dialog open={!!editingNote} onOpenChange={() => setEditingNote(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Note</DialogTitle>
-            </DialogHeader>
-            <NoteEditForm
-              note={editingNote}
-              onSuccess={() => {
-                setEditingNote(null);
-                fetchNotes();
-                fetchTags();
-              }}
-              onCancel={() => setEditingNote(null)}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+
     </div>
   );
 } 

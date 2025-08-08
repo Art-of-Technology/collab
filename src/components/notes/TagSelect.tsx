@@ -82,7 +82,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
 
     setIsCreatingTag(true);
     try {
-      console.log('TagSelect - creating tag with workspaceId:', workspaceId);
+
       const response = await fetch("/api/notes/tags", {
         method: "POST",
         headers: {
