@@ -333,7 +333,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                             fontSize: '2rem'
                           }}
                         >
-                          New note
+                          Note Title
                         </div>
                       )}
                     </div>

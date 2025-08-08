@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
@@ -77,32 +78,63 @@ interface NotionEditorProps {
 
 // Simple slash command handler
 const handleSlashCommand = (editor: Editor, command: string) => {
+  // Store current cursor position relative to the current node
+  const { from } = editor.state.selection;
+  const $from = editor.state.doc.resolve(from);
+  const nodeStart = $from.start($from.depth);
+  const relativePos = from - nodeStart;
+  
+  let result = false;
+  
   switch (command) {
     case 'paragraph':
-      return editor.chain().focus().setNode('paragraph').run()
+      result = editor.chain().focus().setNode('paragraph').run();
+      break;
     case 'heading1':
-      return editor.chain().focus().setNode('heading', { level: 1 }).run()
+      result = editor.chain().focus().setNode('heading', { level: 1 }).run();
+      break;
     case 'heading2':
-      return editor.chain().focus().setNode('heading', { level: 2 }).run()
+      result = editor.chain().focus().setNode('heading', { level: 2 }).run();
+      break;
     case 'heading3':
-      return editor.chain().focus().setNode('heading', { level: 3 }).run()
+      result = editor.chain().focus().setNode('heading', { level: 3 }).run();
+      break;
     case 'bulletList':
-      return editor.chain().focus().toggleBulletList().run()
+      return editor.chain().focus().toggleBulletList().run();
     case 'orderedList':
-      return editor.chain().focus().toggleOrderedList().run()
+      return editor.chain().focus().toggleOrderedList().run();
     case 'blockquote':
-      return editor.chain().focus().toggleBlockquote().run()
+      result = editor.chain().focus().toggleBlockquote().run();
+      break;
     case 'codeBlock':
-      return editor.chain().focus().toggleCodeBlock().run()
+      result = editor.chain().focus().toggleCodeBlock().run();
+      break;
     case 'horizontalRule':
-      return editor.chain().focus().setHorizontalRule().run()
+      return editor.chain().focus().setHorizontalRule().run();
     case 'table':
-      return editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()
+      return editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run();
     case 'color':
-      return editor.chain().focus().setColor('rgba(59, 130, 246, 1)').run()
+      return editor.chain().focus().setColor('rgba(59, 130, 246, 1)').run();
     default:
-      return false
+      return false;
   }
+  
+  // For commands that change node type, restore relative cursor position
+  if (result && (command === 'paragraph' || command.startsWith('heading') || command === 'blockquote' || command === 'codeBlock')) {
+    setTimeout(() => {
+      try {
+        const newNodeStart = editor.state.doc.resolve(editor.state.selection.from).start(editor.state.doc.resolve(editor.state.selection.from).depth);
+        const newPos = Math.min(newNodeStart + relativePos, editor.state.doc.content.size - 1);
+        editor.commands.setTextSelection(newPos);
+        editor.commands.focus();
+      } catch (error) {
+        // Fallback: just focus
+        editor.commands.focus();
+      }
+    }, 0);
+  }
+  
+  return result;
 }
 
 // Floating toolbar extension
@@ -127,6 +159,8 @@ const FloatingToolbar = Extension.create({
     }
   }
 })
+
+
 
 // Custom Image extension with resize functionality (simplified version)
 const ResizableImage = Image.extend({
@@ -253,7 +287,8 @@ export function NotionEditor({
           "notion-editor"
         ),
         style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
-      }
+      },
+
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
@@ -279,24 +314,36 @@ export function NotionEditor({
     }
   }, [editor]);
 
+
+
   // Handle slash commands
   useEffect(() => {
     if (!editor) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === '/') {
+        // Only show slash commands at the start of a line or after whitespace
         const { from } = editor.state.selection;
-        const domPosition = editor.view.coordsAtPos(from);
-        const editorContainer = editor.view.dom.getBoundingClientRect();
+        const $from = editor.state.doc.resolve(from);
+        const beforeChar = $from.nodeBefore?.textContent?.slice(-1) || '';
+        const isAtLineStart = from === $from.start($from.depth);
         
-        setSlashPosition({
-          top: domPosition.bottom - editorContainer.top,
-          left: domPosition.left - editorContainer.left,
-        });
-        setShowSlashCommands(true);
-        setSlashQuery('');
-        setSelectedCommandIndex(-1);
-        setIsKeyboardNavigation(false);
+        if (isAtLineStart || beforeChar === ' ' || beforeChar === '\n') {
+          // Prevent the slash from being inserted into the editor
+          event.preventDefault();
+          
+          const domPosition = editor.view.coordsAtPos(from);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          setSlashPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          setShowSlashCommands(true);
+          setSlashQuery('');
+          setSelectedCommandIndex(-1);
+          setIsKeyboardNavigation(false);
+        }
       } else if (showSlashCommands) {
         if (event.key === 'Escape') {
           setShowSlashCommands(false);
@@ -322,6 +369,9 @@ export function NotionEditor({
           );
         } else if (event.key === 'Enter') {
           event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          
           const filteredCommands = slashCommands.filter(cmd => 
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
@@ -332,24 +382,35 @@ export function NotionEditor({
           }
           setSelectedCommandIndex(-1);
           setIsKeyboardNavigation(false);
-        } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-          // Update query as user types (but not for shortcuts)
-          setSlashQuery(prev => prev + event.key);
-          setSelectedCommandIndex(-1);
-          setIsKeyboardNavigation(false);
+          
+          return false; // Prevent any further processing
+        } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          // Only allow alphanumeric characters for query
+          if (/[a-zA-Z0-9]/.test(event.key)) {
+            setSlashQuery(prev => prev + event.key);
+            setSelectedCommandIndex(-1);
+            setIsKeyboardNavigation(false);
+          }
         } else if (event.key === 'Backspace') {
-          // Handle backspace
-          setSlashQuery(prev => prev.slice(0, -1));
-          setSelectedCommandIndex(-1);
-          setIsKeyboardNavigation(false);
+          if (slashQuery.length > 0) {
+            // Handle backspace in query
+            setSlashQuery(prev => prev.slice(0, -1));
+            setSelectedCommandIndex(-1);
+            setIsKeyboardNavigation(false);
+          } else {
+            // If query is empty, close slash commands
+            setShowSlashCommands(false);
+            setSelectedCommandIndex(-1);
+            setIsKeyboardNavigation(false);
+          }
         }
       }
     };
 
-    editor.view.dom.addEventListener('keydown', handleKeyDown);
+    editor.view.dom.addEventListener('keydown', handleKeyDown, true); // Use capture phase
     
     return () => {
-      editor.view.dom.removeEventListener('keydown', handleKeyDown);
+      editor.view.dom.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [editor, showSlashCommands, slashQuery, selectedCommandIndex]);
 
@@ -467,25 +528,30 @@ export function NotionEditor({
     setShowImagePopover(false);
   }, [editor, imageUrl]);
 
-  const executeSlashCommand = useCallback((command: string) => {
+    const executeSlashCommand = useCallback((command: string) => {
     if (!editor) return;
     
-    // Remove the slash and command text
-    const { from } = editor.state.selection;
-    const content = editor.state.doc.textBetween(0, from, ' ', ' ');
-    const lastSlashIndex = content.lastIndexOf('/');
+    setShowSlashCommands(false);
     
-    if (lastSlashIndex >= 0) {
+    // Since we prevented the slash from being inserted, we just need to
+    // delete any query text that was typed after the slash
+    if (slashQuery && slashQuery.length > 0) {
+      const { from } = editor.state.selection;
+      const queryLength = slashQuery.length;
+      
+      // Delete the query text
       editor.chain()
         .focus()
-        .deleteRange({ from: lastSlashIndex, to: from })
+        .deleteRange({ from: from - queryLength, to: from })
         .run();
     }
     
-    // Execute the command
+    // Execute the command immediately
     handleSlashCommand(editor, command);
-    setShowSlashCommands(false);
-  }, [editor]);
+    
+    // Reset query
+    setSlashQuery('');
+  }, [editor, slashQuery]);
 
   if (!editor) {
     return null;

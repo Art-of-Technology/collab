@@ -433,3 +433,36 @@ textarea::selection {
   padding-left: 2px !important;
   padding-right: 2px !important;
 }
+
+/* Reduce spacing between elements in NotionEditor */
+.ProseMirror p {
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.ProseMirror h1 {
+  margin-top: 0 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.ProseMirror h2 {
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.ProseMirror h3 {
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+/* Tighter spacing for consecutive paragraphs */
+.ProseMirror p + p {
+  margin-top: 0.125rem !important;
+}
+
+/* Remove extra spacing after headings */
+.ProseMirror h1 + p,
+.ProseMirror h2 + p,
+.ProseMirror h3 + p {
+  margin-top: 0.125rem !important;
+}
