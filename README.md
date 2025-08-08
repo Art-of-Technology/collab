@@ -91,7 +91,7 @@ Collab is designed to streamline internal communication and work tracking by off
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/collab.git
+   git clone https://github.com/Art-of-Technology/collab.git
    cd collab
    ```
 2. Install dependencies:
@@ -160,15 +160,8 @@ This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By parti
 
 Thanks goes to these wonderful people:
 
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="http://www.scrivt.com"><img src="https://avatars.githubusercontent.com/u/36661336?v=4?s=100" width="50px;" alt="Erkan DOGAN"/><br /><sub><b>Erkan DOGAN</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=erkandogan" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Documentation">📖</a> <a href="#design-erkandogan" title="Design">🎨</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/redoh"><img src="https://avatars.githubusercontent.com/u/38852479?v=4?s=100" width="50px;" alt="Neo"/><br /><sub><b>Neo</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Documentation">📖</a> <a href="#design-redoh" title="Design">🎨</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/utku-weezboo"><img src="https://avatars.githubusercontent.com/u/173268231?v=4?s=100" width="50px;" alt="utku-weezboo"/><br /><sub><b>utku-weezboo</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=utku-weezboo" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=utku-weezboo" title="Documentation">📖</a> <a href="#design-utku-weezboo" title="Design">🎨</a></td>
-    </tr>
-  </tbody>
-</table>
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## License
 
@@ -187,8 +180,8 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contact-email]: utku@weezboo.com
-[security-email]: utku@weezboo.com
+[contact-email]: hello@weezboo.com
+[security-email]: hello@weezboo.com
 [documentation-url]: https://github.com/Art-of-Technology/collab/wiki
 [contributors-shield]: https://img.shields.io/github/contributors/Art-of-Technology/collab.svg?style=for-the-badge
 [contributors-url]: https://github.com/Art-of-Technology/collab/graphs/contributors
