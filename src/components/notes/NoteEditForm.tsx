@@ -121,11 +121,6 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
         throw new Error("Failed to update note");
       }
 
-      toast({
-        title: "Success",
-        description: "Note updated successfully",
-      });
-
       onSuccess();
     } catch (error) {
       console.error("Error updating note:", error);
