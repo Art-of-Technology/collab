@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +13,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get("workspace");
+    const workspaceSlugOrId = searchParams.get("workspace");
+
+    // Resolve workspace slug to actual ID if needed
+    let workspaceId: string | null = null;
+    if (workspaceSlugOrId) {
+      workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+    }
 
     // Get all tags that are either:
     // 1. Created by the current user, OR
@@ -73,6 +80,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { name, color, workspaceId } = body;
+    
+    console.log('POST /api/notes/tags - workspaceId (from body):', workspaceId);
+    console.log('POST /api/notes/tags - body:', body);
 
     if (!name) {
       return NextResponse.json(
@@ -81,12 +91,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve workspace slug to actual ID if needed
+    let actualWorkspaceId: string | null = null;
+    if (workspaceId) {
+      actualWorkspaceId = await resolveWorkspaceSlug(workspaceId);
+      console.log('POST /api/notes/tags - resolved workspace ID:', actualWorkspaceId);
+      
+      if (!actualWorkspaceId) {
+        console.log('POST /api/notes/tags - Workspace not found for slug/ID:', workspaceId);
+        return NextResponse.json(
+          { error: "Workspace not found" },
+          { status: 400 }
+        );
+      }
+    }
+
     const tag = await prisma.noteTag.create({
       data: {
         name,
         color: color || "#6366F1",
         authorId: session.user.id,
-        workspaceId: workspaceId || null
+        workspaceId: actualWorkspaceId || null
       },
       include: {
         _count: {

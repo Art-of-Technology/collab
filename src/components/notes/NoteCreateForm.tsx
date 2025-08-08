@@ -49,6 +49,9 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const [tags, setTags] = useState<NoteTag[]>([]);
   const { toast } = useToast();
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  
+  // Debug: Check if workspaceId is available
+  console.log('NoteCreateForm - workspaceId:', workspaceId);
 
   const form = useForm<NoteCreateFormValues>({
     resolver: zodResolver(noteCreateSchema),
@@ -199,7 +202,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                 <FormItem className="h-full">
                   <FormControl>
                     <NotionEditor
-                      initialValue={field.value}
+                      content={field.value}
                       onChange={field.onChange}
                       placeholder="Type '/' for commands or start writing..."
                       minHeight="100%"

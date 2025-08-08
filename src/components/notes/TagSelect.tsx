@@ -44,9 +44,11 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
 
   const fetchTags = useCallback(async () => {
     try {
+      console.log('TagSelect - workspaceId:', workspaceId);
       const url = workspaceId 
         ? `/api/notes/tags?workspace=${workspaceId}`
         : "/api/notes/tags";
+      console.log('TagSelect - fetching URL:', url);
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -80,6 +82,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
 
     setIsCreatingTag(true);
     try {
+      console.log('TagSelect - creating tag with workspaceId:', workspaceId);
       const response = await fetch("/api/notes/tags", {
         method: "POST",
         headers: {
