@@ -1,10 +1,13 @@
 import { sendEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 
+import { logger } from "@/lib/logger";
+import { WorkspaceRole } from "@/lib/permissions";
 import {
   PushNotificationPayload,
   sendPushNotification,
 } from "@/lib/push-notifications";
+import { format } from "date-fns";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -1008,6 +1011,487 @@ export class NotificationService {
     } catch (error) {
       logger.error('Failed to auto-follow board', error, { boardId, userCount: userIds.length });
       throw error;
+    }
+  }
+
+
+  // ====== LEAVE REQUEST NOTIFICATION METHODS ======
+
+  /**
+   * Find managers in a workspace
+   * @param workspaceId - The workspace ID
+   * @returns Array of user IDs who are managers
+   */
+  static async findManagersInWorkspace(workspaceId: string): Promise<string[]> {
+    const managers = await prisma.workspaceMember.findMany({
+      where: {
+        workspaceId,
+        role: {
+          in: [
+            WorkspaceRole.PROJECT_MANAGER,
+            WorkspaceRole.ADMIN,
+            WorkspaceRole.OWNER,
+            WorkspaceRole.HR,
+          ],
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    // Also include the workspace owner
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { ownerId: true },
+    });
+
+    const managerIds = managers.map((m) => m.userId);
+    if (workspace?.ownerId && !managerIds.includes(workspace.ownerId)) {
+      managerIds.push(workspace.ownerId);
+    }
+
+    return managerIds;
+  }
+
+  /**
+   * Find HR personnel in a workspace
+   * @param workspaceId - The workspace ID
+   * @returns Array of user IDs who are HR
+   */
+  static async findHRInWorkspace(workspaceId: string): Promise<string[]> {
+    const hrPersonnel = await prisma.workspaceMember.findMany({
+      where: {
+        workspaceId,
+        role: WorkspaceRole.HR.toString(),
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    return hrPersonnel.map((hr) => hr.userId);
+  }
+
+  /**
+   * Check if a leave policy requires HR notifications
+   * @param policyName - The leave policy name
+   * @returns true if HR should be notified
+   */
+  static shouldNotifyHR(policyName: string): boolean {
+    const hrRequiredPolicies = [
+      "parental",
+      "maternity",
+      "paternity",
+      "bereavement",
+      "medical",
+      "family medical",
+      "disability",
+      "sabbatical",
+    ];
+
+    const lowerPolicyName = policyName.toLowerCase();
+    return hrRequiredPolicies.some((policy) =>
+      lowerPolicyName.includes(policy)
+    );
+  }
+
+  /**
+   * Create notification content for leave requests
+   * @param leaveRequest - The leave request data
+   * @param actionType - The type of action
+   * @param actionById - User ID who performed the action
+   * @returns Notification content string
+   */
+  static createLeaveNotificationContent(
+    leaveRequest: LeaveRequestNotificationData,
+    actionType: string
+  ): string {
+    const userName =
+      leaveRequest.user.name || leaveRequest.user.email || "Someone";
+    const dateRange =
+      format(leaveRequest.startDate, "MMM dd") ===
+      format(leaveRequest.endDate, "MMM dd")
+        ? format(leaveRequest.startDate, "MMM dd, yyyy")
+        : `${format(leaveRequest.startDate, "MMM dd")} - ${format(
+            leaveRequest.endDate,
+            "MMM dd, yyyy"
+          )}`;
+
+    switch (actionType) {
+      case "SUBMITTED":
+        return `${userName} submitted a leave request for ${dateRange}`;
+      case "APPROVED":
+        return `Your leave request for ${dateRange} has been approved`;
+      case "REJECTED":
+        return `Your leave request for ${dateRange} has been rejected`;
+      case "CANCELLED":
+        return `${userName}'s leave request for ${dateRange} has been cancelled`;
+      case "EDITED":
+        return `${userName} updated their leave request for ${dateRange}`;
+      default:
+        return `Leave request update: for ${dateRange}`;
+    }
+  }
+
+  /**
+   * Send notifications when a leave request is submitted (managers and HR only)
+   * Employee gets toast notification instead of in-app notification
+   * @param leaveRequest - The leave request data
+   */
+  static async notifyLeaveSubmission(
+    leaveRequest: LeaveRequestNotificationData
+  ): Promise<void> {
+    try {
+      const workspaceId = leaveRequest.policy.workspaceId;
+
+      // 1. Notify managers
+      await this.sendLeaveManagerNotifications(
+        leaveRequest,
+        NotificationType.LEAVE_REQUEST_MANAGER_ALERT,
+        "SUBMITTED"
+      );
+
+      // 2. Notify HR if policy requires it
+      if (this.shouldNotifyHR(leaveRequest.policy.name)) {
+        await this.sendLeaveHRNotifications(
+          leaveRequest,
+          NotificationType.LEAVE_REQUEST_HR_ALERT,
+          "SUBMITTED"
+        );
+      }
+
+      logger.info("Leave request submission notifications sent", {
+        requestId: leaveRequest.id,
+        userId: leaveRequest.userId,
+        workspaceId,
+      });
+    } catch (error) {
+      logger.error(
+        "Failed to send leave request submission notifications",
+        error,
+        {
+          requestId: leaveRequest.id,
+        }
+      );
+    }
+  }
+
+  /**
+   * Send notifications when a leave request status changes (approved, rejected, cancelled)
+   * @param leaveRequest - The leave request data
+   * @param status - The new status (APPROVED, REJECTED, CANCELLED)
+   * @param actionById - User ID who changed the status
+   */
+  static async notifyLeaveStatusChange(
+    leaveRequest: LeaveRequestNotificationData,
+    status: string,
+    actionById: string
+  ): Promise<void> {
+    try {
+      const actionType = status.toUpperCase();
+
+      // Determine notification behavior based on status and who performed the action
+      if (status === "CANCELLED") {
+        // Handle cancellation logic
+        if (actionById === leaveRequest.userId) {
+          // Employee cancelled their own request - notify managers
+          await this.sendLeaveManagerNotifications(
+            leaveRequest,
+            NotificationType.LEAVE_REQUEST_MANAGER_ALERT,
+            actionType
+          );
+        } else {
+          // Manager/HR cancelled - notify employee
+          await this.sendLeaveEmployeeNotification(
+            leaveRequest,
+            NotificationType.LEAVE_REQUEST_STATUS_CHANGED,
+            actionType,
+            actionById
+          );
+        }
+      } else {
+        // For approved/rejected - always notify the employee
+        await this.sendLeaveEmployeeNotification(
+          leaveRequest,
+          NotificationType.LEAVE_REQUEST_STATUS_CHANGED,
+          actionType,
+          actionById
+        );
+      }
+
+      // Always notify HR if policy requires it
+      if (this.shouldNotifyHR(leaveRequest.policy.name)) {
+        await this.sendLeaveHRNotifications(
+          leaveRequest,
+          NotificationType.LEAVE_REQUEST_HR_ALERT,
+          actionType
+        );
+      }
+
+      logger.info(`Leave request ${status.toLowerCase()} notification sent`, {
+        requestId: leaveRequest.id,
+        userId: leaveRequest.userId,
+        status,
+        actionById,
+      });
+    } catch (error) {
+      logger.error(
+        `Failed to send leave request ${status.toLowerCase()} notification`,
+        error,
+        {
+          requestId: leaveRequest.id,
+          status,
+        }
+      );
+    }
+  }
+
+  /**
+   * Send notifications when a leave request is edited
+   * @param leaveRequest - The leave request data
+   * @param actionById - User ID who edited the request
+   */
+  static async notifyLeaveEdit(
+    leaveRequest: LeaveRequestNotificationData,
+    actionById: string
+  ): Promise<void> {
+    try {
+      const workspaceId = leaveRequest.policy.workspaceId;
+
+      // If edited by the employee themselves
+      if (actionById === leaveRequest.userId) {
+        // Notify managers about the edit
+        await this.sendLeaveManagerNotifications(
+          leaveRequest,
+          NotificationType.LEAVE_REQUEST_MANAGER_ALERT,
+          "EDITED"
+        );
+      } else {
+        // If edited by HR/manager, notify the employee
+        await this.sendLeaveEmployeeNotification(
+          leaveRequest,
+          NotificationType.LEAVE_REQUEST_EDITED,
+          "EDITED",
+          actionById
+        );
+      }
+
+      // Always notify HR if policy requires it
+      if (this.shouldNotifyHR(leaveRequest.policy.name)) {
+        await this.sendLeaveHRNotifications(
+          leaveRequest,
+          NotificationType.LEAVE_REQUEST_HR_ALERT,
+          "EDITED"
+        );
+      }
+
+      logger.info("Leave request edit notifications sent", {
+        requestId: leaveRequest.id,
+        userId: leaveRequest.userId,
+        actionById,
+        workspaceId,
+      });
+    } catch (error) {
+      logger.error("Failed to send leave request edit notifications", error, {
+        requestId: leaveRequest.id,
+      });
+    }
+  }
+
+  /**
+   * Send notification to the employee
+   * @param leaveRequest - The leave request data
+   * @param notificationType - Type of notification
+   * @param actionType - The action type
+   * @param actionById - Optional user ID who performed the action
+   */
+  private static async sendLeaveEmployeeNotification(
+    leaveRequest: LeaveRequestNotificationData,
+    notificationType: NotificationType,
+    actionType: string,
+    actionById?: string
+  ): Promise<void> {
+    const preferences = await NotificationService.getUserPreferences(
+      leaveRequest.userId
+    );
+
+    if (!NotificationService.shouldNotifyUser(preferences, notificationType)) {
+      return;
+    }
+
+    const content = this.createLeaveNotificationContent(
+      leaveRequest,
+      actionType
+    );
+
+    // Create in-app notification
+    await prisma.notification.create({
+      data: {
+        userId: leaveRequest.userId,
+        senderId: actionById || leaveRequest.userId,
+        type: notificationType,
+        content,
+        leaveRequestId: leaveRequest.id,
+      },
+    });
+
+    // Send push notification if enabled
+    if (preferences.pushNotificationsEnabled && preferences.pushSubscription) {
+      try {
+        await sendPushNotification(preferences.pushSubscription, {
+          title: "Leave Request Update",
+          body: content,
+          icon: "/icon-192x192.png",
+          badge: "/icon-192x192.png",
+          data: {
+            url: `/leave-management`,
+            notificationType,
+          },
+        });
+      } catch (pushError) {
+        logger.error("Failed to send push notification", pushError, {
+          userId: leaveRequest.userId,
+          notificationType,
+        });
+      }
+    }
+  }
+
+  /**
+   * Send notifications to managers
+   * @param leaveRequest - The leave request data
+   * @param notificationType - Type of notification
+   * @param actionType - The action type
+   */
+  private static async sendLeaveManagerNotifications(
+    leaveRequest: LeaveRequestNotificationData,
+    notificationType: NotificationType,
+    actionType: string
+  ): Promise<void> {
+    const managerIds = await this.findManagersInWorkspace(
+      leaveRequest.policy.workspaceId
+    );
+
+    // Exclude the person who performed the action
+    const recipientIds = managerIds.filter((id) => id !== leaveRequest.userId);
+
+    if (recipientIds.length === 0) return;
+
+    const content = this.createLeaveNotificationContent(
+      leaveRequest,
+      actionType
+    );
+
+    // Create notifications for each manager
+    const notifications = recipientIds.map((managerId) => ({
+      userId: managerId,
+      senderId: leaveRequest.userId,
+      type: notificationType,
+      content,
+      leaveRequestId: leaveRequest.id,
+    }));
+
+    await prisma.notification.createMany({
+      data: notifications,
+    });
+
+    // Send push notifications
+    for (const managerId of recipientIds) {
+      const preferences = await NotificationService.getUserPreferences(
+        managerId
+      );
+
+      if (
+        NotificationService.shouldNotifyUser(preferences, notificationType) &&
+        preferences.pushNotificationsEnabled &&
+        preferences.pushSubscription
+      ) {
+        try {
+          await sendPushNotification(preferences.pushSubscription, {
+            title: "Leave Request Alert",
+            body: content,
+            icon: "/icon-192x192.png",
+            badge: "/icon-192x192.png",
+            data: {
+              url: `/leave-management`,
+              notificationType,
+            },
+          });
+        } catch (pushError) {
+          logger.error(
+            "Failed to send push notification to manager",
+            pushError,
+            {
+              managerId,
+              notificationType,
+            }
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Send notifications to HR personnel
+   * @param leaveRequest - The leave request data
+   * @param notificationType - Type of notification
+   * @param actionType - The action type
+   */
+  private static async sendLeaveHRNotifications(
+    leaveRequest: LeaveRequestNotificationData,
+    notificationType: NotificationType,
+    actionType: string
+  ): Promise<void> {
+    const hrIds = await this.findHRInWorkspace(leaveRequest.policy.workspaceId);
+
+    if (hrIds.length === 0) return;
+
+    const content = this.createLeaveNotificationContent(
+      leaveRequest,
+      actionType
+    );
+
+    // Create notifications for each HR person
+    const notifications = hrIds.map((hrId) => ({
+      userId: hrId,
+      senderId: leaveRequest.userId,
+      type: notificationType,
+      content,
+      leaveRequestId: leaveRequest.id,
+    }));
+
+    await prisma.notification.createMany({
+      data: notifications,
+    });
+
+    // Send push notifications
+    for (const hrId of hrIds) {
+      const preferences = await NotificationService.getUserPreferences(hrId);
+
+      if (
+        NotificationService.shouldNotifyUser(preferences, notificationType) &&
+        preferences.pushNotificationsEnabled &&
+        preferences.pushSubscription
+      ) {
+        try {
+          await sendPushNotification(preferences.pushSubscription, {
+            title: "Leave Request - HR Alert",
+            body: content,
+            icon: "/icon-192x192.png",
+            badge: "/icon-192x192.png",
+            data: {
+              url: `/leave-management`,
+              notificationType,
+            },
+          });
+        } catch (pushError) {
+          logger.error("Failed to send push notification to HR", pushError, {
+            hrId,
+            notificationType,
+          });
+        }
+      }
     }
   }
 }

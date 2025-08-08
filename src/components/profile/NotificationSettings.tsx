@@ -281,8 +281,27 @@ export default function NotificationSettings() {
     );
   }
 
-  const totalEnabled = settingGroups.reduce((sum, group) => sum + getGroupEnabledCount(group), 0);
-  const totalSettings = settingGroups.reduce((sum, group) => sum + group.settings.length, 0);
+    // Filter settings based on permissions
+  const filteredSettingGroups = settingGroups.map(group => {
+    if (group.id === "leave") {
+      // Filter out manager/HR settings if user doesn't have permission
+      const filteredSettings = group.settings.filter(setting => {
+        if (setting.key === "leaveRequestManagerAlert" || setting.key === "leaveRequestHRAlert") {
+          return canManageLeave;
+        }
+        return true;
+      });
+
+      return {
+        ...group,
+        settings: filteredSettings
+      };
+    }
+    return group;
+  });
+
+  const totalEnabled = filteredSettingGroups.reduce((sum, group) => sum + getGroupEnabledCount(group), 0);
+  const totalSettings = filteredSettingGroups.reduce((sum, group) => sum + group.settings.length, 0);
 
   return (
     <div className="space-y-4">
@@ -316,7 +335,7 @@ export default function NotificationSettings() {
       </div>
 
       <div className="space-y-3">
-        {settingGroups.map((group) => {
+        {filteredSettingGroups.map((group) => {
           const isOpen = openSections.includes(group.id);
           const enabledCount = getGroupEnabledCount(group);
 
@@ -349,7 +368,7 @@ export default function NotificationSettings() {
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     <div className="space-y-3">
-                      {group.settings.map((setting, settingIndex) => (
+                      {group.settings.map((setting) => (
                         <div key={setting.key} className="flex items-start justify-between gap-4">
                           <div className="space-y-1 flex-1">
                             <div className="flex items-center gap-2">
