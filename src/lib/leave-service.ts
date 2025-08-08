@@ -144,7 +144,12 @@ export async function processLeaveRequestAction(data: LeaveRequestActionData) {
           select: { id: true, name: true, email: true, image: true },
         },
         policy: {
-          select: { name: true, isPaid: true, trackIn: true },
+          select: {
+            name: true,
+            isPaid: true,
+            trackIn: true,
+            workspaceId: true,
+          },
         },
       },
     });
@@ -168,12 +173,30 @@ export async function processLeaveRequestAction(data: LeaveRequestActionData) {
       });
     }
 
+    // Send notifications after the transaction
+    const notificationData = {
+      id: updatedRequest.id,
+      userId: updatedRequest.userId,
+      policyId: updatedRequest.policyId,
+      startDate: updatedRequest.startDate,
+      endDate: updatedRequest.endDate,
+      duration: updatedRequest.duration,
+      notes: updatedRequest.notes,
+      status: updatedRequest.status,
+      user: updatedRequest.user,
+      policy: {
+        name: updatedRequest.policy.name,
+        workspaceId: updatedRequest.policy.workspaceId,
+      },
+    };
+
     return {
       ...updatedRequest,
       user: {
         ...updatedRequest.user,
         avatar: updatedRequest.user.image,
       },
+      notificationData, // Include this for the caller to send notifications
     };
   });
 }

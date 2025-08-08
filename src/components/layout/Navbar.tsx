@@ -131,7 +131,7 @@ export default function Navbar({
 
   // Generate notification URL based on type
   const getNotificationUrl = (notification: any): string => {
-    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
+    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId, leaveRequestId } = notification;
     const workspaceId = currentWorkspace?.id;
 
     if (!workspaceId) {
@@ -168,6 +168,12 @@ export default function Navbar({
         return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`; // Assuming story detail page
       case 'milestone_mention':
         return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`; // Assuming milestone detail page
+      case 'LEAVE_REQUEST_STATUS_CHANGED':
+      case 'LEAVE_REQUEST_EDITED':
+        return `/${workspaceId}/dashboard`;
+      case 'LEAVE_REQUEST_HR_ALERT':
+      case 'LEAVE_REQUEST_MANAGER_ALERT':
+        return `/${workspaceId}/leave-management`;
       default:
         return `/${workspaceId}/timeline`;
     }

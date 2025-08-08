@@ -17,11 +17,28 @@ interface Notification {
   read: boolean;
   createdAt: string;
   senderId: string;
+  postId?: string;
+  featureRequestId?: string;
+  taskId?: string;
+  epicId?: string;
+  storyId?: string;
+  milestoneId?: string;
+  leaveRequestId?: string;
   sender: {
     id: string;
     name: string | null;
     image: string | null;
     useCustomAvatar: boolean;
+  };
+  leaveRequest?: {
+    id: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+    duration: string;
+    policy: {
+      name: string;
+    };
   };
 }
 
@@ -63,7 +80,9 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
 
   // Function to fetch notifications
   const fetchNotifications = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user) {
+      return;
+    }
 
     setLoading(true);
     try {
@@ -74,7 +93,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user]);
 
   // Function to mark a notification as read
   const markNotificationAsRead = useCallback(async (id: string) => {
