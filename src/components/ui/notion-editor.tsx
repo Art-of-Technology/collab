@@ -185,7 +185,9 @@ export function NotionEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        heading: false, // We'll add our own heading config
+      }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -200,10 +202,14 @@ export function NotionEditor({
       Underline,
       Placeholder.configure({
         placeholder,
+        emptyEditorClass: 'is-editor-empty',
       }),
       RgbaTextStyle,
       Heading.configure({
         levels: [1, 2, 3],
+        HTMLAttributes: {
+          class: 'notion-heading',
+        },
       }),
       RgbaColor,
       Table.configure({

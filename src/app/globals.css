@@ -393,3 +393,31 @@ textarea::selection {
 .dark .task-mention {
   @apply bg-blue-900 text-blue-200;
 }
+
+/* TipTap Placeholder Styles */
+.ProseMirror .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+  font-weight: 400;
+}
+
+.dark .ProseMirror .is-editor-empty:first-child::before {
+  color: #6b7280;
+}
+
+/* Alternative placeholder styling */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+  font-weight: 400;
+}
+
+.dark .ProseMirror p.is-editor-empty:first-child::before {
+  color: #6b7280;
+}
