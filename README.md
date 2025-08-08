@@ -171,8 +171,7 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 
 ## Contact
 
-[contact-email]
-
+[https://weezboo.com](https://weezboo.com)
 [https://github.com/Art-of-Technology/collab](https://github.com/Art-of-Technology/collab)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
