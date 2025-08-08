@@ -9,7 +9,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   add-contributor:
@@ -88,10 +88,15 @@ jobs:
           npx all-contributors add "$AUTHOR_LOGIN" "$TYPES" || true
           npx all-contributors generate
 
-      - name: Commit & push changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md .all-contributorsrc || true
-          git commit -m "docs: add @${{ github.event.pull_request.user.login }} as contributor [skip ci]" || echo "No changes to commit"
-          git push || true
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: add @${{ github.event.pull_request.user.login }} as contributor [skip ci]"
+          branch: ci/all-contrib/pr-${{ github.event.pull_request.number }}
+          title: "docs: add @${{ github.event.pull_request.user.login }} as contributor"
+          body: |
+            Automated by GitHub Actions after merging #${{ github.event.pull_request.number }}.
+            This PR updates README.md and .all-contributorsrc.
+          labels: automation, documentation
+
