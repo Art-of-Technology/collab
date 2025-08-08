@@ -504,8 +504,8 @@ export function NotionEditor({
   );
 
   return (
-    <div className={cn("flex flex-col rounded-md border bg-background", className)}>
-      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
+    <div className={cn("flex flex-col rounded-md p-0", className)}>
+      {/* <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -898,7 +898,7 @@ export function NotionEditor({
             </PopoverContent>
           </Popover>
         </TooltipProvider>
-      </div>
+      </div> */}
 
       <div 
         className="flex-1 relative" 

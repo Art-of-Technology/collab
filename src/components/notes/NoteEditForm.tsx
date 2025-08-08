@@ -67,6 +67,8 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
 
 
 
+
+
   const form = useForm<NoteEditFormValues>({
     resolver: zodResolver(noteEditSchema),
     defaultValues: {
@@ -138,27 +140,8 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
     <div className="h-full flex flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-          {/* Top section with title and options */}
-          <div className="px-6 py-4 border-b space-y-4">
-            <div className="border-b pb-4">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter note title..." 
-                        {...field} 
-                        className="text-lg font-medium border-none px-0 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/60"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
+          {/* Top section with options */}
+          <div className="px-6 py-4 border-b">
             {/* Compact options row */}
             <div className="flex items-center gap-6">
               <FormField
@@ -223,7 +206,7 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
                     <NotionEditor
                       content={field.value}
                       onChange={field.onChange}
-                      placeholder="Type '/' for commands or start writing..."
+                      placeholder="Enter note title"
                       minHeight="100%"
                       maxHeight="100%"
                       className="h-full"

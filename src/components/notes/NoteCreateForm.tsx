@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -48,6 +48,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [showEditor, setShowEditor] = useState(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const { toast } = useToast();
   const { workspaceId } = useParams<{ workspaceId: string }>();
   
@@ -68,6 +69,75 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   useEffect(() => {
     fetchTags();
   }, []);
+
+  // Sync title ref with form value
+  useEffect(() => {
+    if (titleRef.current) {
+      const currentValue = form.watch('title');
+      if (titleRef.current.textContent !== currentValue) {
+        titleRef.current.textContent = currentValue || '';
+      }
+    }
+  }, [form.watch('title')]);
+
+  // Auto focus on title when component mounts
+  useEffect(() => {
+    setTimeout(() => {
+      if (titleRef.current) {
+        titleRef.current.focus();
+        // Place cursor at the beginning
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(titleRef.current, 0);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }, 100);
+  }, []);
+
+  // Handle backspace in editor to go back to title
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Backspace' && showEditor) {
+        const activeElement = document.activeElement;
+        const proseMirror = document.querySelector('.ProseMirror');
+        
+        // Check if we're in the editor and at the beginning
+        if (activeElement === proseMirror || proseMirror?.contains(activeElement)) {
+          const selection = window.getSelection();
+          const range = selection?.getRangeAt(0);
+          
+          // If cursor is at very beginning and content is empty
+          if (range && range.startOffset === 0 && range.collapsed) {
+            const textContent = proseMirror?.textContent || '';
+            if (textContent.trim() === '' || textContent === '') {
+              e.preventDefault();
+              setShowEditor(false);
+              // Focus back to title
+              setTimeout(() => {
+                if (titleRef.current) {
+                  titleRef.current.focus();
+                  // Place cursor at end of title
+                  const titleRange = document.createRange();
+                  const sel = window.getSelection();
+                  titleRange.selectNodeContents(titleRef.current);
+                  titleRange.collapse(false);
+                  sel?.removeAllRanges();
+                  sel?.addRange(titleRange);
+                }
+              }, 10);
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showEditor]);
 
   const fetchTags = async () => {
     try {
@@ -129,8 +199,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
           {/* Top section with options */}
-          <div className="px-6 py-4 border-b">
-            {/* Compact options row */}
+          {/* <div className="px-6 py-4 border-b">
             <div className="flex items-center gap-6">
               <FormField
                 control={form.control}
@@ -181,51 +250,100 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                 )}
               />
             </div>
-          </div>
+          </div> */}
 
           {/* Main editor area - takes full remaining height */}
           <div className="flex-1 px-6 py-4 overflow-hidden">
-            {/* Invisible title input - looks like H1 */}
-            {!showEditor && (
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem className="h-full">
-                    <FormControl>
-                      <input
-                        {...field}
-                        placeholder="Enter new note"
-                        className="w-full bg-transparent border-none outline-none text-3xl font-bold placeholder:text-gray-500 placeholder:font-normal placeholder:opacity-100 p-0 resize-none focus:ring-0 focus:outline-none focus:border-none focus:shadow-none"
-                        style={{ 
-                          border: 'none',
+            {/* Notion-style contenteditable h1 title */}
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem className="mb-4">
+                  <FormControl>
+                    <div className="relative">
+                      <h1
+                        ref={titleRef}
+                        className="notranslate text-3xl font-bold"
+                        spellCheck="true"
+                        contentEditable="true"
+                        data-content-editable-leaf="true"
+                        style={{
+                          maxWidth: '100%',
+                          width: '100%',
+                          whiteSpace: 'break-spaces',
+                          wordBreak: 'break-word',
+                          paddingTop: '3px',
+                          paddingBottom: '0px',
+                          paddingInline: '2px',
+                          fontSize: '2rem',
+                          fontWeight: 'bold',
+                          margin: '0px',
                           outline: 'none',
-                          boxShadow: 'none',
-                          background: 'transparent'
+                          border: 'none',
+                          minHeight: '2.5rem'
+                        }}
+                        onInput={(e) => {
+                          const text = e.currentTarget.textContent || '';
+                          field.onChange(text);
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && field.value.trim()) {
+                          if (e.key === 'Enter') {
                             e.preventDefault();
                             setShowEditor(true);
-                            // Focus on editor after a brief delay
+                            // Focus on editor
                             setTimeout(() => {
                               const editorElement = document.querySelector('.ProseMirror');
                               if (editorElement) {
                                 (editorElement as HTMLElement).focus();
                               }
                             }, 100);
+                          } else if (e.key === 'ArrowDown' && showEditor) {
+                            // Arrow down to go to editor only if editor is visible
+                            setTimeout(() => {
+                              const editorElement = document.querySelector('.ProseMirror');
+                              if (editorElement) {
+                                (editorElement as HTMLElement).focus();
+                                // Place cursor at beginning of editor
+                                const range = document.createRange();
+                                const sel = window.getSelection();
+                                if (editorElement.firstChild) {
+                                  range.setStart(editorElement.firstChild, 0);
+                                  range.collapse(true);
+                                  sel?.removeAllRanges();
+                                  sel?.addRange(range);
+                                }
+                              }
+                            }, 10);
+                          } else if (e.key === 'Backspace' && field.value === '') {
+                            // Allow deleting title when empty
+                            e.preventDefault();
+                            setShowEditor(false);
                           }
                         }}
-                        autoFocus
+                        suppressContentEditableWarning={true}
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+                      {/* Fake placeholder */}
+                      {!field.value && (
+                        <div 
+                          className="absolute top-0 left-0 text-3xl font-bold text-gray-500 pointer-events-none"
+                          style={{
+                            paddingTop: '3px',
+                            paddingInline: '2px',
+                            fontSize: '2rem'
+                          }}
+                        >
+                          New note
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
-            {/* Editor - only show after title is entered */}
+            {/* Editor */}
             {showEditor && (
               <FormField
                 control={form.control}
@@ -236,7 +354,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                       <NotionEditor
                         content={field.value}
                         onChange={field.onChange}
-                        placeholder="Type '/' for commands or start writing..."
+                        placeholder='Write, press "/" for commands'
                         minHeight="100%"
                         maxHeight="100%"
                         className="h-full"

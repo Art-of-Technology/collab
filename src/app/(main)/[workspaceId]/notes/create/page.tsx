@@ -32,7 +32,6 @@ export default function CreateNotePage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Notes
         </Button>
-        <h1 className="text-xl font-semibold bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 rounded-md">Create New Note</h1>
       </div>
 
       {/* Note Creation Form - Full Height */}
