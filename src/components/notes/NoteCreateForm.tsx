@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 const noteCreateSchema = z.object({
+  title: z.string().min(1, "Title is required"),
   content: z.string().min(1, "Content is required"),
   isPublic: z.boolean().default(false),
   isFavorite: z.boolean().default(false),
@@ -46,6 +47,7 @@ interface NoteTag {
 export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
   const { toast } = useToast();
   const { workspaceId } = useParams<{ workspaceId: string }>();
   
@@ -54,6 +56,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const form = useForm<NoteCreateFormValues>({
     resolver: zodResolver(noteCreateSchema),
     defaultValues: {
+      title: "",
       content: "",
       isPublic: false,
       isFavorite: false,
@@ -78,35 +81,13 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
     }
   };
 
-  // Extract title from content
-  const extractTitleFromContent = (htmlContent: string) => {
-    // Create a temporary div to parse HTML
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent;
-    
-    // Get text content and split by lines
-    const textContent = tempDiv.textContent || tempDiv.innerText || '';
-    const lines = textContent.split('\n').filter(line => line.trim());
-    
-    if (lines.length === 0) {
-      return { title: 'Untitled', content: htmlContent };
-    }
-    
-    // First non-empty line is title, rest is content
-    const title = lines[0].trim() || 'Untitled';
-    
-    return { title, content: htmlContent };
-  };
-
   const onSubmit = async (values: NoteCreateFormValues) => {
     setIsLoading(true);
 
     try {
-      const { title, content } = extractTitleFromContent(values.content);
-      
       const requestData = {
-        title,
-        content,
+        title: values.title,
+        content: values.content,
         isPublic: values.isPublic,
         isFavorite: values.isFavorite,
         workspaceId: values.workspaceId,
@@ -204,25 +185,68 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
 
           {/* Main editor area - takes full remaining height */}
           <div className="flex-1 px-6 py-4 overflow-hidden">
-            <FormField
-              control={form.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem className="h-full">
-                  <FormControl>
-                    <NotionEditor
-                      content={field.value}
-                      onChange={field.onChange}
-                      placeholder="Type '/' for commands or start writing..."
-                      minHeight="100%"
-                      maxHeight="100%"
-                      className="h-full"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Invisible title input - looks like H1 */}
+            {!showEditor && (
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem className="h-full">
+                    <FormControl>
+                      <input
+                        {...field}
+                        placeholder="Enter new note"
+                        className="w-full bg-transparent border-none outline-none text-3xl font-bold placeholder:text-gray-500 placeholder:font-normal placeholder:opacity-100 p-0 resize-none focus:ring-0 focus:outline-none focus:border-none focus:shadow-none"
+                        style={{ 
+                          border: 'none',
+                          outline: 'none',
+                          boxShadow: 'none',
+                          background: 'transparent'
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && field.value.trim()) {
+                            e.preventDefault();
+                            setShowEditor(true);
+                            // Focus on editor after a brief delay
+                            setTimeout(() => {
+                              const editorElement = document.querySelector('.ProseMirror');
+                              if (editorElement) {
+                                (editorElement as HTMLElement).focus();
+                              }
+                            }, 100);
+                          }
+                        }}
+                        autoFocus
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {/* Editor - only show after title is entered */}
+            {showEditor && (
+              <FormField
+                control={form.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem className="h-full">
+                    <FormControl>
+                      <NotionEditor
+                        content={field.value}
+                        onChange={field.onChange}
+                        placeholder="Type '/' for commands or start writing..."
+                        minHeight="100%"
+                        maxHeight="100%"
+                        className="h-full"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </div>
 
           {/* Bottom action bar */}
