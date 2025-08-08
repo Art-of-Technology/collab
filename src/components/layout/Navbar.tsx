@@ -30,9 +30,9 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
-import { useMention } from "@/context/MentionContext";
 import { useUiContext } from "@/context/UiContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useMarkAllNotificationsAsRead, useMarkNotificationAsRead, useNotificationsList, useUnreadNotificationsCount } from "@/hooks/queries/useNotifications";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -77,16 +77,34 @@ export default function Navbar({
   const { currentWorkspace } = useWorkspace();
 
   // Use Mention context for notifications
-  const {
-    notifications,
-    unreadCount,
-    markNotificationAsRead,
-    markAllNotificationsAsRead,
-    loading: notificationsLoading,
-    refetchNotifications,
-    enableNotificationsFetching,
-    disableNotificationsFetching
-  } = useMention();
+  // Notifications hooks
+  const { data: notifications = [], isLoading: notificationsLoading, refetch: refetchNotifications } = useNotificationsList(
+    currentWorkspace?.id || "",
+    { enabled: showNotifications, refetchInterval: 10000 }
+  );
+  // Limit to max 3 items for navbar preview
+  const previewNotifications = notifications.slice(0, 3);
+  const { data: unreadCount = 0 } = useUnreadNotificationsCount(currentWorkspace?.id || null);
+  const markNotificationAsReadMutation = useMarkNotificationAsRead();
+  const markAllNotificationsAsReadMutation = useMarkAllNotificationsAsRead();
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await markNotificationAsReadMutation.mutateAsync(id);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      if (currentWorkspace?.id) {
+        await markAllNotificationsAsReadMutation.mutateAsync(currentWorkspace.id);
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -138,8 +156,6 @@ export default function Navbar({
     if (!workspaceId) {
       return '/welcome'; // Fallback if no workspace
     }
-
-    console.log(notification, type)
 
     switch (type) {
       case 'post_mention':
@@ -320,12 +336,8 @@ export default function Navbar({
                     onOpenChange={(open) => {
                       setShowNotifications(open);
                       if (open) {
-                        // Enable notifications fetching and refetch when opening
-                        enableNotificationsFetching();
+                        // Refetch notifications when opening
                         refetchNotifications();
-                      } else {
-                        // Disable notifications fetching when closing to save bandwidth
-                        disableNotificationsFetching();
                       }
                     }}
                   >
@@ -358,18 +370,18 @@ export default function Navbar({
                         )}
                       </div>
 
-                      <ScrollArea className="h-80">
+                      <ScrollArea>
                         {notificationsLoading ? (
                           <div className="p-4 text-center text-muted-foreground text-sm">
                             Loading notifications...
                           </div>
-                        ) : notifications.length === 0 ? (
+                        ) : previewNotifications.length === 0 ? (
                           <div className="p-4 text-center text-muted-foreground text-sm">
                             No notifications yet
                           </div>
                         ) : (
-                          <div className="flex flex-col">
-                            {notifications.map(notification => {
+                          <div className="flex flex-col justify-between h-full">
+                            {previewNotifications.map(notification => {
                               const url = getNotificationUrl(notification);
                               const isHtmlContent = /<[^>]+>/.test(notification.content);
 
@@ -429,6 +441,14 @@ export default function Navbar({
                             })}
                           </div>
                         )}
+                        <div className="p-1 text-center text-sm">
+                          <Button variant="link" className="text-xs text-foreground" onClick={() => {
+                            setShowNotifications(false);
+                            router.push(`/${currentWorkspace?.id}/notifications`);
+                          }}>
+                            Show more
+                          </Button> 
+                        </div>
                       </ScrollArea>
                     </PopoverContent>
                   </Popover>

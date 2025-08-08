@@ -1,16 +1,11 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { NotificationData } from "@/hooks/queries/useNotifications";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow } from "date-fns";
-import {
-  Bell,
-  CheckSquare,
-  GitPullRequest,
-  Loader2,
-  MessageSquare
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import React, { useMemo, useRef } from 'react';
 
 type Notification = NotificationData;
@@ -128,26 +123,6 @@ export default function VirtualNotificationsList({
     });
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'TASK_ASSIGNED':
-      case 'TASK_STATUS_CHANGED':
-        return <CheckSquare className="h-4 w-4" />;
-      case 'POST_COMMENT_ADDED':
-      case 'comment_mention':
-      case 'comment_reply':
-        return <MessageSquare className="h-4 w-4" />;
-      case 'BOARD_ITEM_CREATED':
-      case 'BOARD_ITEM_UPDATED':
-        return <GitPullRequest className="h-4 w-4" />;
-      case 'post_mention':
-      case 'feature_mention':
-      case 'task_mention':
-        return <Bell className="h-4 w-4" />;
-      default:
-        return <Bell className="h-4 w-4" />;
-    }
-  };
 
   const handleCheckboxChange = (notificationId: string, checked: boolean) => {
     const newSelected = new Set(selectedNotifications);
@@ -221,7 +196,7 @@ export default function VirtualNotificationsList({
       if (item.type === 'group-header') {
         return item.groupKey === 'select-all' ? 48 : 40; // Select all header is taller
       }
-      return 80; // Estimated height for notification items
+      return 62; // Estimated height for notification items
     },
     overscan: 10,
   });
@@ -266,11 +241,10 @@ export default function VirtualNotificationsList({
                   // Select all header
                   <div className="sticky top-0 bg-background border-b border-border/50 px-4 py-2 z-10">
                     <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedNotifications.size === notifications.length && notifications.length > 0}
-                        onChange={onSelectAll}
-                        className="rounded border-border/50 w-4 h-4"
+                        onCheckedChange={() => onSelectAll()}
+                        className="w-4 h-4"
                         data-checkbox
                       />
                       <span className="text-sm text-muted-foreground">
@@ -298,44 +272,29 @@ export default function VirtualNotificationsList({
                 // Notification item
                 <div
                   className={cn(
-                    "flex items-start gap-3 px-4 py-3 hover:bg-muted/30 cursor-pointer border-l-2 transition-colors",
+                    "flex gap-4 items-center px-4 py-3 hover:bg-muted/30 cursor-pointer border-l-2  transition-colors",
                     item.notification!.read 
                       ? "border-l-transparent" 
-                      : "border-l-green-500"
+                      : "border-l-green-500 bg-primary/5"
                   )}
                   onClick={(e) => onNotificationClick(item.notification!, e)}
                 >
                   {/* Checkbox */}
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selectedNotifications.has(item.notification!.id)}
-                    onChange={(e) => handleCheckboxChange(item.notification!.id, e.target.checked)}
-                    className="mt-1 rounded border-border/50 w-4 h-4"
+                    onCheckedChange={(checked) => handleCheckboxChange(item.notification!.id, checked === true)}
+                    className="mt-1 w-4 h-4"
                     data-checkbox
                     onClick={(e) => e.stopPropagation()}
                   />
-                  
-                  {/* Unread indicator */}
-                  <div className="mt-2">
-                    {!item.notification!.read ? (
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                    ) : (
-                      <div className="w-2 h-2" />
-                    )}
-                  </div>
-                  
-                  {/* Notification Icon */}
-                  <div className="mt-1 text-muted-foreground">
-                    {getNotificationIcon(item.notification!.type)}
-                  </div>
                   
                   {/* Content */}
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-start gap-2">
                       <p className={cn(
-                        "text-sm leading-relaxed flex-1",
+                        "flex flex-row items-center gap-2 text-sm leading-relaxed flex-1",
                         item.notification!.read ? "text-muted-foreground" : "text-foreground"
-                      )}>
+                      )}>     
                         {item.notification!.content?.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')}
                       </p>
                       
@@ -347,8 +306,8 @@ export default function VirtualNotificationsList({
                     
                     {/* Task/Post info */}
                     {(item.notification!.task || item.notification!.postId) && (
-                      <div className="text-xs text-muted-foreground">
-                        {item.notification!.task?.title || `Post at Timeline`}
+                      <div className="text-xs text-muted-foreground leading-none">
+                        {item.notification!.task?.title ? `Task ${item.notification!.task?.title}` : `Post at Timeline`}
                       </div>
                     )}
                   </div>

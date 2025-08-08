@@ -80,6 +80,23 @@ export class NotificationService {
       const emailNotifications = [];
       
       for (const follower of followers) {
+        // Check if a current task notification already exists
+        if (additionalData.taskId) {
+          const existingNotification = await prisma.notification.findFirst({
+            where: {
+              userId: follower.userId,
+              taskId: additionalData.taskId,
+              createdAt: {
+                gte: new Date(Date.now() - 1000 * 10) // 10 seconds ago
+              }
+            }
+          });
+
+          if (existingNotification) {
+            continue;
+          }
+        }
+        
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, notificationType)) {
           validNotifications.push({

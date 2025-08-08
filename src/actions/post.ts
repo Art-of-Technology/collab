@@ -1,10 +1,10 @@
 'use server';
 
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
+import { prisma } from '@/lib/prisma';
+import { extractMentionUserIds } from '@/utils/mentions';
+import { getServerSession } from 'next-auth';
 
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED';
 type PostPriority = 'normal' | 'high' | 'critical';

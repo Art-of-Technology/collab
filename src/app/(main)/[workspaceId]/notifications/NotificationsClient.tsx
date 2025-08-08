@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useOptimizedNotifications } from "@/hooks/queries/useNotifications";
+import {
+  useMarkAllNotificationsAsRead,
+  useMarkNotificationAsRead,
+  useNotificationsList,
+} from "@/hooks/queries/useNotifications";
 import {
   Check,
   CheckCheck,
@@ -22,51 +26,42 @@ export default function NotificationsClient() {
   const { currentWorkspace } = useWorkspace();
   
   // State for filters and search
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("inbox");
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("all");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("date");
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   
-  // Use optimized notifications hook
-  const { 
-    notifications, 
-    unreadCount, 
-    isLoading, 
-    markAsRead, 
-    markAllAsRead 
-  } = useOptimizedNotifications({
-    workspaceId: currentWorkspace?.id || "",
-    refetchInterval: 30000, // 30 seconds
-    staleTime: 10000, // 10 seconds
-  });
-  
-  // Mutation hooks for marking notifications as read (fallback)
+  // Fetch notifications via unified hook
+  const { data: notifications = [], isLoading } = useNotificationsList(
+    currentWorkspace?.id || "",
+    { refetchInterval: 30000, staleTime: 10000, cacheTime: 5 * 60 * 1000 }
+  );
+
+  // Mutations
+  const markNotificationAsReadMutation = useMarkNotificationAsRead();
+  const markAllNotificationsAsReadMutation = useMarkAllNotificationsAsRead();
   
   // Filter logic with memoization for better performance
   const filteredNotifications = useMemo(() => {
     let filtered = [...notifications];
-    
-    // Apply category filters
-    if (selectedFilters.length > 0) {
+    // Apply category filter
+    if (selectedCategory && selectedCategory !== "inbox") {
       filtered = filtered.filter(notification => {
-        if (selectedFilters.includes("mentioned")) {
-          return notification.type?.includes("MENTION") || notification.content?.includes("mentioned you");
+        switch (selectedCategory) {
+          case "mentioned":
+            return notification.type?.toLowerCase().includes("mention");
+          case "task-related":
+            return notification.type?.toLowerCase().startsWith("task_");
+          case "board-related":
+            return notification.type?.toLowerCase().startsWith("board_");
+          case "team-mentions":
+            return notification.type?.toLowerCase().includes("team_");
+          default:
+            return true;
         }
-        if (selectedFilters.includes("task-related")) {
-          return notification.type?.startsWith("TASK_");
-        }
-        if (selectedFilters.includes("board-related")) {
-          return notification.type?.startsWith("BOARD_");
-        }
-        return false;
       });
-    }
-    
-    // Apply workspace filter (if multi-workspace)
-    if (selectedWorkspace !== "all") {
-      filtered = filtered.filter(notification => notification.workspaceId === selectedWorkspace);
     }
     
     // Apply quick filter (all/unread)
@@ -84,20 +79,17 @@ export default function NotificationsClient() {
     }
     
     return filtered;
-  }, [notifications, selectedFilters, selectedWorkspace, quickFilter, searchQuery]);
+  }, [notifications, selectedCategory, selectedWorkspace, quickFilter, searchQuery]);
   
-  const handleFilterChange = (filterId: string, checked: boolean) => {
-    setSelectedFilters(prev => 
-      checked 
-        ? [...prev, filterId]
-        : prev.filter(id => id !== filterId)
-    );
+  const handleCategoryChange = (categoryId: string) => {
+    setSelectedCategory(categoryId);
   };
   
   const handleMarkAllAsRead = async () => {
     try {
-      // Use optimized hook function
-      await markAllAsRead();
+      if (currentWorkspace?.id) {
+        await markAllNotificationsAsReadMutation.mutateAsync(currentWorkspace.id);
+      }
     } catch (error) {
       console.error("Failed to mark all as read:", error);
     }
@@ -117,7 +109,7 @@ export default function NotificationsClient() {
       
       // Use optimized hook function for each notification
       await Promise.all(
-        selectedIds.map(id => markAsRead(id))
+        selectedIds.map(id => markNotificationAsReadMutation.mutateAsync(id))
       );
       
       // Clear selection after marking as read
@@ -127,14 +119,20 @@ export default function NotificationsClient() {
     }
   };
 
+  // Unread count derived locally from fetched list
+  const unreadCount = useMemo(
+    () => notifications.filter(n => !n.read).length,
+    [notifications]
+  );
+
   return (
     <div className="flex">
       {/* Left Sidebar - Filters */}
       <div className="w-64 border-r border-border/50">
         <NotificationsSidebar
-          selectedFilters={selectedFilters}
+          selectedCategory={selectedCategory}
           selectedWorkspace={selectedWorkspace}
-          onFilterChange={handleFilterChange}
+          onCategoryChange={handleCategoryChange}
           onWorkspaceChange={setSelectedWorkspace}
           workspaceId={currentWorkspace?.id || ""}
         />
@@ -240,6 +238,7 @@ export default function NotificationsClient() {
             selectedNotifications={selectedNotifications}
             onSelectionChange={setSelectedNotifications}
             onSelectAll={handleSelectAll}
+            onMarkAsRead={(id) => markNotificationAsReadMutation.mutateAsync(id)}
           />
         </div>
       </div>

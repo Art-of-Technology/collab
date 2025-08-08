@@ -3,23 +3,20 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { useUserWorkspaces } from "@/hooks/queries/useWorkspace";
 import { cn } from "@/lib/utils";
-import {
-  AtSign,
-  Briefcase,
-  CheckSquare,
-  Inbox,
-  Users
-} from "lucide-react";
+import { AtSign, Briefcase, CheckSquare, Inbox, Settings } from "lucide-react";
+import Link from "next/link";
 
 interface NotificationsSidebarProps {
-  selectedFilters: string[];
+  selectedCategory: string;
   selectedWorkspace: string;
-  onFilterChange: (filterId: string, checked: boolean) => void;
+  onCategoryChange: (categoryId: string) => void;
   onWorkspaceChange: (workspaceId: string) => void;
   workspaceId: string;
 }
+
 
 interface FilterCategory {
   id: string;
@@ -51,20 +48,16 @@ const filterCategories: FilterCategory[] = [
     label: "Board notifications", 
     icon: <Briefcase className="h-4 w-4" />,
   },
-  {
-    id: "team-mentions",
-    label: "Team mentions",
-    icon: <Users className="h-4 w-4" />,
-  },
 ];
 
 export default function NotificationsSidebar({
-  selectedFilters,
+  selectedCategory,
   selectedWorkspace,
-  onFilterChange,
+  onCategoryChange,
   onWorkspaceChange,
 }: NotificationsSidebarProps) {
   const { data: workspaces = { all: [] } } = useUserWorkspaces();
+  const { currentWorkspace } = useWorkspace();
   const hasMultipleWorkspaces = workspaces.all.length > 1;
 
   return (
@@ -72,18 +65,18 @@ export default function NotificationsSidebar({
       {/* Main Navigation */}
       <div className="p-4 space-y-1">
         {filterCategories.map((category) => {
-          const isSelected = selectedFilters.includes(category.id);
-          
+          const isSelected = selectedCategory === category.id;
           return (
             <Button
               key={category.id}
-              variant={isSelected ? "secondary" : "ghost"}
+              variant={"ghost"}
               size="sm"
               className={cn(
                 "w-full justify-start gap-3 h-8 px-3 text-sm font-normal",
-                isSelected && "bg-muted"
+                !isSelected && "hover:text-primary hover:bg-transparent",
+                isSelected && "text-primary hover:text-primary hover:bg-transparent"
               )}
-              onClick={() => onFilterChange(category.id, !isSelected)}
+              onClick={() => onCategoryChange(category.id)}
             >
               {category.icon}
               <span className="flex-1 text-left">{category.label}</span>
@@ -99,7 +92,7 @@ export default function NotificationsSidebar({
 
       
       {hasMultipleWorkspaces && (
-        <>
+        <div className="hidden">
           <Separator className="mx-4" />
           
           {/* Workspaces */}
@@ -138,20 +131,20 @@ export default function NotificationsSidebar({
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
 
 
       
       {/* Manage notifications */}
       <div className="p-4 border-t border-border/50">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start h-7 px-3 text-sm font-normal text-muted-foreground"
+        <Link
+          href={`/${currentWorkspace?.id}/profile`}
+          className="flex flex-row gap-2 w-full text-center h-7 px-3 text-sm font-normal text-muted-foreground"
         >
+          <Settings className="h-4 w-4 relative top-0.5" />
           Manage notifications
-        </Button>
+        </Link>
       </div>
     </div>
   );

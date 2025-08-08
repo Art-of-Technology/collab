@@ -1,9 +1,9 @@
 "use client";
 
 import { NotificationData } from "@/hooks/queries/useNotifications";
+import { BellOff, Loader2 } from "lucide-react";
 import React from "react";
 import VirtualNotificationsList from "./VirtualNotificationsList";
-import { Loader2, BellOff } from "lucide-react";
 
 type Notification = NotificationData;
 
@@ -15,6 +15,7 @@ interface NotificationsListProps {
   selectedNotifications: Set<string>;
   onSelectionChange: (selected: Set<string>) => void;
   onSelectAll: () => void;
+  onMarkAsRead: (notificationId: string) => Promise<void>;
 }
 
 export default function NotificationsList({
@@ -25,15 +26,8 @@ export default function NotificationsList({
   selectedNotifications,
   onSelectionChange,
   onSelectAll,
+  onMarkAsRead,
 }: NotificationsListProps) {
-  const markAsRead = async (notificationId: string) => {
-    try {
-      // This would typically call your mark as read API
-      console.log('Marking notification as read:', notificationId);
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
-  };
 
   const handleNotificationClick = (notification: Notification, e: React.MouseEvent) => {
     // Prevent click if clicking on checkbox
@@ -43,7 +37,9 @@ export default function NotificationsList({
 
     // Mark as read if not already read
     if (!notification.read) {
-      markAsRead(notification.id);
+      onMarkAsRead(notification.id).catch((error) => {
+        console.error('Failed to mark notification as read:', error);
+      });
     }
 
     // Handle navigation based on notification type
