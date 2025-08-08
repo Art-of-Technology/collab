@@ -43,12 +43,10 @@ import { LeaveRequestsDashboardContainer } from "@/components/hr/LeaveRequestsDa
 
 interface MyLeaveProps {
   workspaceId: string;
-  isFeatureEnabled?: boolean;
 }
 
 export function MyLeave({
   workspaceId,
-  isFeatureEnabled = false,
 }: MyLeaveProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<LeaveRequest | null>(null);
@@ -159,7 +157,7 @@ export function MyLeave({
 
   return (
     <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
-      <Card className={`h-full relative ${!isFeatureEnabled ? 'opacity-80' : ''}`}>
+      <Card className="h-full relative">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div className="flex items-center space-x-2">
             <PlaneTakeoff className="h-5 w-5 text-blue-600" />
@@ -170,7 +168,6 @@ export function MyLeave({
               <Button 
                 size="sm" 
                 className="flex items-center gap-2"
-                disabled={!isFeatureEnabled}
               >
                 <Plus className="h-4 w-4" />
                 Request Leave
@@ -196,19 +193,7 @@ export function MyLeave({
         </CardHeader>
 
         <CardContent>
-          {!isFeatureEnabled ? (
-            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-blue-700">
-                  Leave management is coming soon
-                </p>
-                <div className="px-2 py-1 bg-blue-500/20 text-blue-700 text-xs rounded-full">
-                  Coming Soon
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
               {/* Left Column - Leave Balance */}
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-muted-foreground">
@@ -318,26 +303,11 @@ export function MyLeave({
                 )}
               </div>
             </div>
-          )}
-
-          {/* Coming Soon State for Non-Feature Enabled */}
-          {!isFeatureEnabled && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <PlaneTakeoff className="h-12 w-12 mb-3 text-muted-foreground/50" />
-              <p className="text-muted-foreground">Leave Management</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                This feature will be available soon
-              </p>
-              <div className="mt-3 px-3 py-1 bg-blue-500/10 text-blue-600 text-xs rounded-full">
-                Coming Soon
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
       {/* Leave Management Section (for managers) */}
-      {isFeatureEnabled && <LeaveRequestsDashboardContainer workspaceId={workspaceId} />}
+      <LeaveRequestsDashboardContainer workspaceId={workspaceId} />
 
       {/* Cancel Confirmation Dialog */}
       <AlertDialog open={!!cancellingRequest} onOpenChange={() => setCancellingRequest(null)}>

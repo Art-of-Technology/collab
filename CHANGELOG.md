@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
  
+## [0.2.1] - 2025-01-27
+
+### Added
+- **Leave Management UI Enhancement**: Fully enabled leave management interface
+  - Removed feature flag restrictions from leave management dashboard
+  - Always display leave balance and request functionality
+  - Enabled leave request creation, editing, and cancellation for all users
+
+### Changed  
+- **Leave Balance Display**: Updated leave balance component to show minimum value of 0
+  - Negative leave balances now display as 0 instead of negative values
+  - Maintains accurate color coding based on actual balance values
+  - Improved user experience by preventing confusion from negative displays
+
+### Fixed
+- **Leave Balance Negative Display**: Fixed issue where negative leave balances were shown to users
+
+### Technical
+- Removed `isFeatureEnabled` prop and related conditional logic from MyLeave component
+- Added `getDisplayBalance` helper function to ensure non-negative balance display
+- Simplified component structure by removing feature flag complexity
+
 ## [0.2.0] - 2025-08-07
 
 ### Added

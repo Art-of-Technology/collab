@@ -51,6 +51,11 @@ export function LeaveBalance({
     return "#dc2626"; // red-600
   }, []);
 
+  // Helper function to ensure balance is never negative for display
+  const getDisplayBalance = useCallback((balance: number) => {
+    return Math.max(0, balance);
+  }, []);
+
   // Handle loading state
   if (isLoading) {
     return (
@@ -173,7 +178,7 @@ export function LeaveBalance({
                     className={`text-lg font-bold`}
                   >
                     {formatValue(
-                      currentBalance.balance,
+                      getDisplayBalance(currentBalance.balance),
                       currentBalance.trackUnit
                     )}
                   </div>
@@ -206,7 +211,7 @@ export function LeaveBalance({
                     ),
                   }}
                 ></div>
-                <span>Remaining: {currentBalance.balance}</span>
+                <span>Remaining: {getDisplayBalance(currentBalance.balance)}</span>
               </div>
             </div>
           </div>
