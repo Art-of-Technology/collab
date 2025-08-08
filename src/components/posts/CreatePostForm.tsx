@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useState } from "react";
 
 export default function CreatePostForm() {
   const { toast } = useToast();
