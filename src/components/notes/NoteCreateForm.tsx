@@ -51,7 +51,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const { toast } = useToast();
   const { workspaceId } = useParams<{ workspaceId: string }>();
-  
+
 
 
   const form = useForm<NoteCreateFormValues>({
@@ -102,12 +102,12 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
       if (e.key === 'Backspace' && showEditor) {
         const activeElement = document.activeElement;
         const proseMirror = document.querySelector('.ProseMirror');
-        
+
         // Check if we're in the editor and at the beginning
         if (activeElement === proseMirror || proseMirror?.contains(activeElement)) {
           const selection = window.getSelection();
           const range = selection?.getRangeAt(0);
-          
+
           // If cursor is at very beginning and content is empty
           if (range && range.startOffset === 0 && range.collapsed) {
             const textContent = proseMirror?.textContent || '';
@@ -325,7 +325,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                       />
                       {/* Fake placeholder */}
                       {!field.value && (
-                        <div 
+                        <div
                           className="absolute top-0 left-0 text-3xl font-bold text-gray-500 pointer-events-none"
                           style={{
                             paddingTop: '3px',
@@ -342,9 +342,9 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                 </FormItem>
               )}
             />
-            
+
             {/* Editor */}
-            {showEditor && (
+            {/* {showEditor && (
               <FormField
                 control={form.control}
                 name="content"
@@ -364,7 +364,60 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                   </FormItem>
                 )}
               />
+            )} */}
+            {/* Editor bölümünü şu şekilde güncelleyin: */}
+
+            {/* Editor */}
+            {showEditor && (
+              <FormField
+                control={form.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem className="h-full">
+                    <FormControl>
+                      <div className="notion-editor-wrapper h-full">
+                        <NotionEditor
+                          content={field.value}
+                          onChange={field.onChange}
+                          placeholder='Write, press "/" for commands'
+                          minHeight="100%"
+                          maxHeight="100%"
+                          className="h-full multi-placeholder-editor"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
+
+            {/* Ve CSS'inize bu stilleri ekleyin: */}
+            <style jsx>{`
+  .multi-placeholder-editor .ProseMirror p.is-empty::before {
+    content: 'Write, press "/" for commands';
+    float: left;
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+    height: 0;
+    opacity: 0.6;
+    font-style: italic;
+  }
+  
+  /* Focus durumunda placeholder'ı gizle */
+  .multi-placeholder-editor .ProseMirror:focus p.is-empty::before {
+    display: none;
+  }
+  
+  /* Sadece aktif satırda placeholder göster */
+  .multi-placeholder-editor .ProseMirror p.is-empty:not(.has-focus)::before {
+    display: none;
+  }
+  
+  .multi-placeholder-editor .ProseMirror p.is-empty.has-focus::before {
+    display: block;
+  }
+`}</style>
           </div>
 
           {/* Bottom action bar */}

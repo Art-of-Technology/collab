@@ -160,8 +160,6 @@ const FloatingToolbar = Extension.create({
   }
 })
 
-
-
 // Custom Image extension with resize functionality (simplified version)
 const ResizableImage = Image.extend({
   addAttributes() {
@@ -193,7 +191,7 @@ export function NotionEditor({
   onChange,
   content = "",
   initialValue = "",
-  placeholder = "Type '/' for commands...",
+  placeholder = "Write, press '/' for commands...",
   className = "",
   minHeight = "150px",
   maxHeight = "400px",
@@ -234,9 +232,29 @@ export function NotionEditor({
         },
       }),
       Underline,
+      // GÜNCELLENMIŞ PLACEHOLDER KONFIGÜRASYONU
       Placeholder.configure({
-        placeholder,
+        placeholder: ({ node, pos, hasAnchor }) => {
+          // Her boş paragraf için placeholder göster
+          if (node.type.name === 'paragraph' && node.textContent === '') {
+            return placeholder;
+          }
+          // Boş heading'ler için farklı placeholder'lar
+          if (node.type.name === 'heading' && node.textContent === '') {
+            const level = node.attrs.level;
+            return `Heading ${level}`;
+          }
+          // Liste item'ları için
+          if (node.type.name === 'listItem' && node.textContent === '') {
+            return 'List item';
+          }
+          return '';
+        },
         emptyEditorClass: 'is-editor-empty',
+        emptyNodeClass: 'is-empty', // Bu önemli - her boş node için class ekler
+        includeChildren: true, // Alt elementlerde de placeholder göster
+        showOnlyWhenEditable: true,
+        showOnlyCurrent: false, // Bu da önemli - sadece current değil tüm boş satırlar
       }),
       RgbaTextStyle,
       Heading.configure({
@@ -313,8 +331,6 @@ export function NotionEditor({
       }, 100);
     }
   }, [editor]);
-
-
 
   // Handle slash commands
   useEffect(() => {
@@ -577,401 +593,6 @@ export function NotionEditor({
 
   return (
     <div className={cn("flex flex-col rounded-md p-0", className)}>
-      {/* <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                data-active={editor.isActive('bold')}
-              >
-                <Bold size={16} className={editor.isActive('bold') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Bold</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                data-active={editor.isActive('italic')}
-              >
-                <Italic size={16} className={editor.isActive('italic') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Italic</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleUnderline().run()}
-                data-active={editor.isActive('underline')}
-              >
-                <UnderlineIcon size={16} className={editor.isActive('underline') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Underline</TooltipContent>
-          </Tooltip>
-
-          <Separator orientation="vertical" className="mx-1 h-6" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                data-active={editor.isActive('heading', { level: 1 })}
-              >
-                <Heading1 size={16} className={editor.isActive('heading', { level: 1 }) ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Heading 1</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                data-active={editor.isActive('heading', { level: 2 })}
-              >
-                <Heading2 size={16} className={editor.isActive('heading', { level: 2 }) ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Heading 2</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                data-active={editor.isActive('heading', { level: 3 })}
-              >
-                <Heading3 size={16} className={editor.isActive('heading', { level: 3 }) ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Heading 3</TooltipContent>
-          </Tooltip>
-
-          <Separator orientation="vertical" className="mx-1 h-6" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleBulletList().run()}
-                data-active={editor.isActive('bulletList')}
-              >
-                <List size={16} className={editor.isActive('bulletList') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Bullet List</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                data-active={editor.isActive('orderedList')}
-              >
-                <ListOrdered size={16} className={editor.isActive('orderedList') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Ordered List</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                data-active={editor.isActive('blockquote')}
-              >
-                <Quote size={16} className={editor.isActive('blockquote') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Quote</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().toggleCode().run()}
-                data-active={editor.isActive('code')}
-              >
-                <Code size={16} className={editor.isActive('code') ? "text-primary" : ""} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Code</TooltipContent>
-          </Tooltip>
-
-          <Separator orientation="vertical" className="mx-1 h-6" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()}
-              >
-                <TableIcon size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Insert Table</TooltipContent>
-          </Tooltip>
-
-          <Separator orientation="vertical" className="mx-1 h-6" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ColorPalette
-                value={selectedColor}
-                onChange={(color) => {
-                  try {
-                    setSelectedColor(color);
-                    // Apply color immediately
-                    if (editor && editor.isDestroyed === false) {
-                      editor.chain().focus().setColor(color).run();
-                    }
-                  } catch (error) {
-                    console.error('Error applying color:', error);
-                  }
-                }}
-              />
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Text Color</TooltipContent>
-          </Tooltip>
-
-          {editor.isActive('table') && (
-            <>
-              <Separator orientation="vertical" className="mx-1 h-6" />
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().addColumnBefore().run()}
-                  >
-                    <Columns size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Add Column Before</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().addColumnAfter().run()}
-                  >
-                    <Columns size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Add Column After</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().deleteColumn().run()}
-                  >
-                    <Minus size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Delete Column</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().addRowBefore().run()}
-                  >
-                    <Rows size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Add Row Before</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().addRowAfter().run()}
-                  >
-                    <Rows size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Add Row After</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().deleteRow().run()}
-                  >
-                    <Minus size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Delete Row</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => editor.chain().focus().deleteTable().run()}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Delete Table</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-
-          <Popover open={showLinkPopover} onOpenChange={setShowLinkPopover}>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                    >
-                      <LinkIcon size={16} />
-                    </Button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Link</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <PopoverContent className="w-80 p-3">
-              <div className="flex flex-col gap-2">
-                <div className="text-sm font-medium">Insert Link</div>
-                <div className="flex gap-2">
-                  <Input
-                    type="url"
-                    placeholder="https://example.com"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button onClick={addLink} disabled={!linkUrl}>Add</Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Popover open={showImagePopover} onOpenChange={setShowImagePopover}>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={isUploadingImage}
-                    >
-                      {isUploadingImage ? (
-                        <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                      ) : (
-                        <ImageIcon size={16} />
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {isUploadingImage ? "Uploading image..." : "Image"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <PopoverContent className="w-80 p-3">
-              <div className="flex flex-col gap-2">
-                <div className="text-sm font-medium">Insert Image</div>
-                <div className="flex gap-2">
-                  <Input
-                    type="url"
-                    placeholder="https://example.com/image.jpg"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button onClick={addImage} disabled={!imageUrl}>Add</Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </TooltipProvider>
-      </div> */}
-
       <div 
         className="flex-1 relative" 
         ref={editorContainerRef}
@@ -1154,7 +775,111 @@ export function NotionEditor({
         .notion-editor .ProseMirror-selectednode {
           outline: 2px solid #3b82f6;
         }
+
+        /* HER BOŞ SATIRDA PLACEHOLDER GÖSTERİMİ */
+        .notion-editor .ProseMirror p.is-empty::before {
+          content: attr(data-placeholder);
+          float: left;
+          color: #9ca3af;
+          pointer-events: none;
+          height: 0;
+          opacity: 0.6;
+          font-style: italic;
+        }
+
+        .notion-editor .ProseMirror p.is-empty:first-child::before {
+          content: 'Write, press "/" for commands...';
+          opacity: 0.7;
+        }
+
+        .notion-editor .ProseMirror p.is-empty:not(:first-child)::before {
+          content: 'Write, press "/" for commands...';
+        }
+
+        /* Boş heading'ler için placeholder */
+        .notion-editor .ProseMirror h1.is-empty::before {
+          content: 'Heading 1';
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: italic;
+          font-weight: normal;
+          pointer-events: none;
+          float: left;
+          height: 0;
+        }
+
+        .notion-editor .ProseMirror h2.is-empty::before {
+          content: 'Heading 2';
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: italic;
+          font-weight: normal;
+          pointer-events: none;
+          float: left;
+          height: 0;
+        }
+
+        .notion-editor .ProseMirror h3.is-empty::before {
+          content: 'Heading 3';
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: italic;
+          font-weight: normal;
+          pointer-events: none;
+          float: left;
+          height: 0;
+        }
+
+        /* Liste item'ları için placeholder */
+        .notion-editor .ProseMirror li p.is-empty::before {
+          content: 'List item';
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: italic;
+        }
+
+        /* Focus durumunda placeholder'ları biraz daha soluk göster */
+        .notion-editor .ProseMirror:focus .is-empty::before {
+          opacity: 0.4;
+        }
+
+        /* Dark mode için */
+        @media (prefers-color-scheme: dark) {
+          .notion-editor .ProseMirror .is-empty::before {
+            color: #6b7280;
+          }
+          
+          .notion-editor blockquote {
+            border-left-color: #374151;
+            color: #9ca3af;
+          }
+          
+          .notion-editor code {
+            background-color: #374151;
+          }
+          
+          .notion-editor pre {
+            background-color: #374151;
+          }
+          
+          .notion-editor th,
+          .notion-editor td {
+            border-color: #374151;
+          }
+          
+          .notion-editor th {
+            background-color: #374151;
+          }
+          
+          .notion-editor tr:nth-child(even) {
+            background-color: #1f2937;
+          }
+          
+          .notion-editor tr:hover {
+            background-color: #374151;
+          }
+        }
       `}</style>
     </div>
   );
-} 
+}
