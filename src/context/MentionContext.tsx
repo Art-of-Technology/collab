@@ -10,7 +10,7 @@ interface User {
   image: string | null;
 }
 
-interface Notification {
+export interface Notification {
   id: string;
   type: string;
   content: string;
@@ -29,6 +29,10 @@ interface Notification {
     name: string | null;
     image: string | null;
     useCustomAvatar: boolean;
+  };
+  task?: {
+    id: string;
+    title: string;
   };
   leaveRequest?: {
     id: string;

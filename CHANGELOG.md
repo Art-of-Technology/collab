@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
  
+
+## [0.2.2] - 2025-01-27
+
+### Added
+- **Comprehensive Notifications UI**: Complete notifications management system with advanced features
+  - Client-side filtering and searching capabilities
+  - Grouping options by date, user, or taskboard
+  - Bulk actions for managing multiple notifications
+  - Virtual scrolling for performance optimization
+  - Sidebar navigation for notification categories
+  - Enhanced notification types with task details support
+- **Notification Navigation**: Added "View All" link to Navbar notifications dropdown
+  - Users can now easily navigate to the full notifications page from the header
+  - Improved notification system accessibility and user experience
+
+### Technical
+- Added NotificationsClient, NotificationsList, NotificationsSidebar, and VirtualNotificationsList components
+- Updated Notification type in MentionContext to support task details
+- Implemented client-side state management for notification filtering and grouping
+
 ## [0.2.1] - 2025-01-27
 
 ### Added
