@@ -436,8 +436,8 @@ textarea::selection {
 
 /* Reduce spacing between elements in NotionEditor */
 .ProseMirror p {
-  margin-top: 0.5rem !important;
-  margin-bottom: 0.5rem !important;
+  margin-top: 0.1rem !important;
+  margin-bottom: 0.1rem !important;
 }
 
 .ProseMirror h1 {
@@ -465,46 +465,4 @@ textarea::selection {
 .ProseMirror h2 + p,
 .ProseMirror h3 + p {
   margin-top: 0.125rem !important;
-}
-
-
-
-
-/* CSS'inize bu stilleri ekleyin */
-
-/* Her boş paragraf için placeholder */
-.ProseMirror p.is-empty::before {
-  content: 'Write, press "/" for commands';
-  float: left;
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
-  height: 0;
-  opacity: 0.5;
-  font-style: italic;
-}
-
-/* İlk boş paragraf için farklı placeholder (opsiyonel) */
-.ProseMirror p.is-empty:first-child::before {
-  content: 'Write, press "/" for commands';
-}
-
-/* Placeholder'ları daha görünür hale getirin */
-.ProseMirror .is-empty::before {
-  content: attr(data-placeholder);
-  float: left;
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
-  height: 0;
-  opacity: 0.6;
-  font-style: normal;
-}
-
-/* Alternatif yaklaşım - her boş node için */
-.ProseMirror .is-node-empty::before {
-  content: 'Write, press "/" for commands';
-  position: absolute;
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
-  opacity: 0.5;
-  font-style: italic;
 }
