@@ -422,6 +422,11 @@ export default function Navbar({
                           </div>
                         )}
                       </ScrollArea>
+                      <div className="p-3 border-t border-border/40 flex justify-center">
+                        <Link href={`/${currentWorkspace?.id}/notifications`} className="w-full text-center">
+                          View all notifications
+                        </Link>
+                      </div>
                     </PopoverContent>
                   </Popover>
 
