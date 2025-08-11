@@ -1,12 +1,10 @@
 "use client";
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge, PRIORITY_CONFIG } from "@/utils/issueHelpers";
@@ -23,6 +21,7 @@ export function IssuePrioritySelector({
   value,
   onChange,
   disabled = false,
+  readonly = false,
   placeholder = "Select priority"
 }: IssuePrioritySelectorProps) {
   // Helper function to render badge
@@ -35,44 +34,89 @@ export function IssuePrioritySelector({
       </Badge>
     );
   };
+
+  // If readonly, just return the same styling as the button but non-interactive
+  if (readonly) {
+    const badge = getIssuePriorityBadge(value);
+    const Icon = badge.icon;
+    return (
+      <div
+        className={cn(
+          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
+          "border border-[#2d2d30] bg-[#181818]",
+          "text-[#cccccc]"
+        )}
+      >
+        <Icon className={cn("h-3 w-3", badge.iconClassName)} />
+        <span className="text-[#cccccc] text-xs">{badge.label}</span>
+      </div>
+    );
+  }
+
   return (
-    <Select
-      value={value}
-      onValueChange={onChange}
-      disabled={disabled}
-    >
-      <SelectTrigger className={cn(
-        "w-full border-border/50 bg-background/50",
-        "hover:border-border/80 hover:bg-background/80",
-        "focus:border-primary/50 focus:bg-background",
-        "transition-all duration-200"
-      )}>
-        <SelectValue placeholder={placeholder}>
-          {value && renderBadge(getIssuePriorityBadge(value))}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent className="min-w-[160px]">
-        {PRIORITY_OPTIONS.map((priority) => {
-          const config = PRIORITY_CONFIG[priority];
-          return (
-            <SelectItem
-              key={priority}
-              value={priority}
-              className="py-2.5"
-            >
-              <div className="flex items-center gap-2 w-full">
-                {renderBadge(getIssuePriorityBadge(priority))}
-                <span className="text-xs text-muted-foreground ml-auto">
+    <Popover modal={true}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled || readonly}
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
+            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
+            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            (disabled || readonly) && "opacity-50 cursor-not-allowed"
+          )}
+        >
+          {(() => {
+            const badge = getIssuePriorityBadge(value);
+            const Icon = badge.icon;
+            return (
+              <>
+                <Icon className={cn("h-3 w-3", badge.iconClassName)} />
+                <span className="text-[#cccccc] text-xs">{badge.label}</span>
+              </>
+            );
+          })()}
+        </button>
+      </PopoverTrigger>
+      
+      <PopoverContent 
+        className="w-56 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        align="start"
+        side="bottom"
+        sideOffset={4}
+      >
+        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
+          Set priority
+        </div>
+        
+        <div className="space-y-0.5">
+          {PRIORITY_OPTIONS.map((priority) => {
+            const badge = getIssuePriorityBadge(priority);
+            const Icon = badge.icon;
+            
+            return (
+              <button
+                key={priority}
+                type="button"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                onClick={() => onChange(priority)}
+              >
+                <Icon className={cn("h-3.5 w-3.5", badge.iconClassName)} />
+                <span className="text-[#cccccc] flex-1">{badge.label}</span>
+                <span className="text-xs text-[#6e7681]">
                   {priority === 'LOW' && 'P4'}
                   {priority === 'MEDIUM' && 'P3'}
                   {priority === 'HIGH' && 'P2'}
                   {priority === 'URGENT' && 'P1'}
                 </span>
-              </div>
-            </SelectItem>
-          );
-        })}
-      </SelectContent>
-    </Select>
+                {value === priority && (
+                  <span className="text-xs text-[#6e7681]">✓</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 } 

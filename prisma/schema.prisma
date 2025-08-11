@@ -74,6 +74,8 @@ model User {
   // New unified Issue relationships
   assignedIssues         Issue[]                 @relation("AssignedIssues")
   reportedIssues         Issue[]                 @relation("ReportedIssues")
+  issueAssignees         IssueAssignee[]         @relation("IssueAssignee")
+  approvedIssueHelpers   IssueAssignee[]         @relation("IssueAssigneeApprover")
   
   // New View relationships
   ownedViews             View[]                  @relation("OwnedViews")
@@ -502,6 +504,7 @@ model Issue {
   comments      IssueComment[]
   labels        TaskLabel[]      @relation("IssueToLabel")
   viewPositions ViewIssuePosition[]
+  helpers       IssueAssignee[]
   
   @@index([projectId])
   @@index([workspaceId])
@@ -1130,6 +1133,28 @@ model TaskAssignee {
   @@index([status])
 }
 
+model IssueAssignee {
+  id              String             @id @default(cuid())
+  issueId         String
+  userId          String
+  role            IssueAssigneeRole  @default(HELPER)
+  status          IssueAssigneeStatus @default(PENDING)
+  assignedAt      DateTime           @default(now())
+  approvedAt      DateTime?
+  approvedBy      String?
+  totalTimeWorked Int                @default(0)
+  lastWorkedAt    DateTime?
+  approver        User?              @relation("IssueAssigneeApprover", fields: [approvedBy], references: [id])
+  issue           Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user            User               @relation("IssueAssignee", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@index([issueId])
+  @@index([userId])
+  @@index([role])
+  @@index([status])
+}
+
 model CustomRole {
   id          String    @id @default(cuid())
   name        String
@@ -1366,6 +1391,17 @@ enum TaskAssigneeRole {
 }
 
 enum TaskAssigneeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum IssueAssigneeRole {
+  ASSIGNEE
+  HELPER
+}
+
+enum IssueAssigneeStatus {
   PENDING
   APPROVED
   REJECTED

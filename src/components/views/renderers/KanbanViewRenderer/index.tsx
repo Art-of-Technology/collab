@@ -1,21 +1,27 @@
 "use client";
 
-import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 import KanbanBoard from './components/KanbanBoard';
 import { useKanbanState } from './hooks/useKanbanState';
 import type { KanbanViewRendererProps } from './types';
 
-export default function KanbanViewRenderer(props: KanbanViewRendererProps) {
+export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
+  projectId?: string;
+  workspaceId?: string;
+  currentUserId?: string;
+  onIssueCreated?: (issue: any) => void;
+}) {
   const {
     view, 
     issues, 
     workspace,
+    projectId,
+    workspaceId,
+    currentUserId,
+    onIssueCreated,
   } = props;
 
   const {
     // State
-    selectedIssueId,
-    setSelectedIssueId,
     editingColumnId,
     newColumnName,
     setNewColumnName,
@@ -24,6 +30,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps) {
     setNewIssueTitle,
     
     // Computed values
+    filteredIssues,
     columns,
     issueCounts,
     displayProperties,
@@ -50,13 +57,16 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps) {
         <div className="h-full p-6 overflow-hidden w-full">
           <KanbanBoard
             columns={columns}
-            issues={issues}
+            issues={filteredIssues}
             displayProperties={displayProperties}
             groupField={view.grouping?.field || 'status'}
             isCreatingIssue={isCreatingIssue}
             newIssueTitle={newIssueTitle}
             editingColumnId={editingColumnId}
             newColumnName={newColumnName}
+            projectId={projectId || view.projects?.[0]?.id || ''}
+            workspaceId={workspaceId || workspace?.id || ''}
+            currentUserId={currentUserId || ''}
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
             onIssueClick={handleIssueClick}
@@ -70,17 +80,10 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps) {
             onCancelEditingColumn={handleCancelEditingColumn}
             onColumnKeyDown={handleColumnKeyDown}
             onColumnNameChange={setNewColumnName}
+            onIssueCreated={onIssueCreated || (() => {})}
           />
         </div>
       </div>
-
-      {/* Issue Detail Modal */}
-      {selectedIssueId && (
-        <IssueDetailModal
-          issueId={selectedIssueId}
-          onClose={() => setSelectedIssueId(null)}
-        />
-      )}
     </div>
   );
 }

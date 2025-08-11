@@ -48,6 +48,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect } from 'react';
+import { NewIssueModal } from '@/components/issue';
+import { useRouter } from 'next/navigation';
+import { useIssuesByWorkspace } from '@/hooks/queries/useIssues';
 
 interface ViewRendererProps {
   view: {
@@ -95,7 +98,7 @@ const VIEW_TYPE_ICONS = {
 
 export default function ViewRenderer({ 
   view, 
-  issues, 
+  issues: initialIssues, 
   workspace, 
   currentUser 
 }: ViewRendererProps) {
@@ -104,6 +107,18 @@ export default function ViewRenderer({
   const [newViewName, setNewViewName] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
+
+  // Use TanStack Query for real-time issue data
+  const { data: issuesData, isLoading: isLoadingIssues } = useIssuesByWorkspace(
+    workspace.id, 
+    view.projects?.map(p => p.id)
+  );
+  
+  // Use TanStack Query issues if available, fallback to initial SSR data
+  // Prefer fresh data only if it's actually different (to avoid overriding optimistic updates)
+  const issues = issuesData?.issues || initialIssues;
 
   // Fetch view-specific issue positions for proper ordering
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(view.id, view.displayType === 'KANBAN');
@@ -134,6 +149,26 @@ export default function ViewRenderer({
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
   const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
   
+  // Track the last saved state to properly detect changes
+  const [lastSavedState, setLastSavedState] = useState({
+    displayType: view.displayType,
+    grouping: view.grouping?.field || 'none',
+    ordering: view.sorting?.field || 'manual',
+    displayProperties: view.fields || [],
+    filters: view.filters || {}
+  });
+
+  // Update lastSavedState when view changes (e.g., switching views or data refetch)
+  useEffect(() => {
+    setLastSavedState({
+      displayType: view.displayType,
+      grouping: view.grouping?.field || 'none',
+      ordering: view.sorting?.field || 'manual',
+      displayProperties: view.fields || [],
+      filters: view.filters || {}
+    });
+  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters]);
+  
   // ViewFilters state
   const [isViewFiltersOpen, setIsViewFiltersOpen] = useState(false);
   const [viewFiltersState, setViewFiltersState] = useState<{
@@ -151,24 +186,24 @@ export default function ViewRenderer({
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
 
-  // Check if current state differs from view defaults
+  // Check if current state differs from last saved state
   const hasChanges = useMemo(() => {
     return (
       Object.keys(tempFilters).length > 0 ||
-      tempDisplayType !== view.displayType ||
-      tempGrouping !== (view.grouping?.field || 'none') ||
-      tempOrdering !== (view.sorting?.field || 'manual') ||
-      JSON.stringify(tempDisplayProperties) !== JSON.stringify(view.fields || [])
+      tempDisplayType !== lastSavedState.displayType ||
+      tempGrouping !== lastSavedState.grouping ||
+      tempOrdering !== lastSavedState.ordering ||
+      JSON.stringify(tempDisplayProperties) !== JSON.stringify(lastSavedState.displayProperties)
     );
-  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, view]);
+  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, lastSavedState]);
 
   // Reset to view defaults
   const resetToDefaults = () => {
     setTempFilters({});
-    setTempDisplayType(view.displayType);
-    setTempGrouping(view.grouping?.field || 'none');
-    setTempOrdering(view.sorting?.field || 'manual');
-    setTempDisplayProperties(view.fields || []);
+    setTempDisplayType(lastSavedState.displayType);
+    setTempGrouping(lastSavedState.grouping);
+    setTempOrdering(lastSavedState.ordering);
+    setTempDisplayProperties(lastSavedState.displayProperties);
     setTempShowSubIssues(true);
     setTempShowEmptyGroups(true);
     setTempCompletedIssues('all');
@@ -188,17 +223,19 @@ export default function ViewRenderer({
     // Apply issue type filter (all/active/backlog)
     switch (issueFilterType) {
       case 'active':
-        filtered = filtered.filter(issue => 
-          issue.status !== 'Done' && 
-          issue.status !== 'Backlog' && 
-          issue.status !== 'Cancelled'
-        );
+        filtered = filtered.filter(issue => {
+          const status = (issue.statusValue || issue.status || '').toLowerCase();
+          return status !== 'done' && 
+                 status !== 'backlog' && 
+                 status !== 'cancelled' &&
+                 status !== 'todo'; // Todo items should be in backlog, not active
+        });
         break;
       case 'backlog':
-        filtered = filtered.filter(issue => 
-          issue.status === 'Backlog' || 
-          issue.status === 'Todo'
-        );
+        filtered = filtered.filter(issue => {
+          const status = (issue.statusValue || issue.status || '').toLowerCase();
+          return status === 'backlog' || status === 'todo';
+        });
         break;
       default:
         // 'all' - no filtering
@@ -334,6 +371,54 @@ export default function ViewRenderer({
     }
   };
 
+  const handleUpdateView = async () => {
+    try {
+      const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          displayType: tempDisplayType,
+          filters: allFilters,
+          sorting: { field: tempOrdering, direction: 'desc' },
+          grouping: { field: tempGrouping },
+          fields: tempDisplayProperties,
+        })
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Success',
+          description: 'View updated successfully'
+        });
+        
+        // Update the last saved state to reflect what we just saved
+        setLastSavedState({
+          displayType: tempDisplayType,
+          grouping: tempGrouping,
+          ordering: tempOrdering,
+          displayProperties: tempDisplayProperties,
+          filters: allFilters
+        });
+        
+        // Reset temporary filters since they're now saved
+        setTempFilters({});
+        
+        // Now hasChanges will be false and buttons will disappear
+        
+        // Invalidate and refetch views to get updated data
+        queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
+        queryClient.refetchQueries({ queryKey: ['views', workspace.id] });
+      }
+    } catch (error) {
+      console.error('Error updating view:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update view',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const handleSaveAsNewView = async () => {
     if (!newViewName.trim()) {
       toast({
@@ -415,14 +500,15 @@ export default function ViewRenderer({
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {
     const allIssuesCount = issues.length;
-    const activeIssuesCount = issues.filter(issue => {
-      const status = issue.statusValue || issue.status || '';
+    const activeIssuesCount = issues.filter((issue: any) => {
+      const status = (issue.statusValue || issue.status || '').toLowerCase();
       return status !== 'done' && 
              status !== 'backlog' && 
-             status !== 'cancelled';
+             status !== 'cancelled' &&
+             status !== 'todo'; // Todo items should be in backlog, not active
     }).length;
-    const backlogIssuesCount = issues.filter(issue => {
-      const status = issue.statusValue || issue.status || '';
+    const backlogIssuesCount = issues.filter((issue: any) => {
+      const status = (issue.statusValue || issue.status || '').toLowerCase();
       return status === 'backlog' || status === 'todo';
     }).length;
 
@@ -471,6 +557,14 @@ export default function ViewRenderer({
       issues: sortedIssues,
       workspace,
       currentUser,
+      // Additional props needed by KanbanViewRenderer
+      projectId: view.projects?.[0]?.id || '',
+      workspaceId: workspace.id,
+      currentUserId: currentUser.id,
+      onIssueCreated: () => {
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({ queryKey: ['issues'] });
+      },
       // ViewFilters props - these will be passed but individual renderers can choose to use them or not
       isViewFiltersOpen,
       onToggleViewFilters: handleToggleViewFilters,
@@ -535,18 +629,28 @@ export default function ViewRenderer({
                   variant="ghost"
                   size="sm"
                   onClick={resetToDefaults}
-                  className="h-7 px-2 text-[#666] hover:text-white text-xs"
+                  className="h-6 px-2 text-[#666] hover:text-[#999] text-xs border border-transparent hover:border-[#333]"
                 >
                   <RotateCcw className="h-3 w-3 mr-1" />
                   Reset
                 </Button>
-                      <Button
+                <Button
+                  variant="ghost"
                   size="sm"
-                  onClick={() => setShowSaveDialog(true)}
-                  className="h-7 px-3 bg-[#0969da] hover:bg-[#0860ca] text-xs"
+                  onClick={handleUpdateView}
+                  className="h-6 px-2 text-[#8cc8ff] hover:text-[#58a6ff] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
                 >
                   <Save className="h-3 w-3 mr-1" />
-                  Save as new view
+                  Update
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSaveDialog(true)}
+                  className="h-6 px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+                >
+                  <Save className="h-3 w-3 mr-1" />
+                  Save as new
                 </Button>
               </div>
             )}
@@ -555,69 +659,38 @@ export default function ViewRenderer({
           <div className="flex items-center gap-3">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#666]" />
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-[#666]" />
               <Input
                 placeholder="Search issues..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64 bg-[#1a1a1a] border-[#2a2a2a] text-white placeholder-[#666] focus:border-[#0969da] h-8"
+                className="pl-7 w-48 bg-[#0d1117] border-[#21262d] text-white placeholder-[#666] focus:border-[#58a6ff] h-6 text-xs"
               />
             </div>
 
-            {/* ViewFilters Toggle */}
+            {/* View Options Toggle */}
             <Button
               variant="ghost"
               size="sm"
               onClick={handleToggleViewFilters}
-              className="h-8 px-3 text-[#666] hover:text-white border border-[#2a2a2a] hover:border-[#0969da]"
+              className="h-6 px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
             >
-              {isViewFiltersOpen ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-              {isViewFiltersOpen ? 'Hide' : 'Show'} Filters
+              {isViewFiltersOpen ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+              View Options
             </Button>
 
             {/* New Issue */}
             <Button
+              variant="ghost"
               size="sm"
-              className="h-8 px-3 bg-[#0969da] hover:bg-[#0860ca] text-white"
+              className="h-6 px-2 text-[#238636] hover:text-[#2ea043] text-xs border border-[#21262d] hover:border-[#238636] bg-[#0d1117] hover:bg-[#0d1721]"
+              onClick={() => setIsNewIssueOpen(true)}
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-3 w-3 mr-1" />
               New Issue
             </Button>
 
-            {/* View Actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-                  className="h-8 w-8 text-[#666] hover:text-white"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                align="end"
-                className="bg-[#090909] border-[#1f1f1f] text-white"
-              >
-                <DropdownMenuItem className="hover:bg-[#1f1f1f]">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit View
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#1f1f1f]">
-                  <Share className="h-4 w-4 mr-2" />
-                  Share View
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#1f1f1f]">
-                  <Users className="h-4 w-4 mr-2" />
-                  Manage Access
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-                <DropdownMenuItem className="hover:bg-[#1f1f1f] text-red-400">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete View
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+
           </div>
         </div>
       </div>
@@ -654,6 +727,19 @@ export default function ViewRenderer({
         </DialogContent>
       </Dialog>
 
+      {/* New Issue Modal */}
+      <NewIssueModal
+        open={isNewIssueOpen}
+        onOpenChange={setIsNewIssueOpen}
+        workspaceId={workspace.id}
+        projectId={view.projects?.length === 1 ? view.projects[0].id : undefined}
+        onCreated={() => {
+          setIsNewIssueOpen(false);
+          queryClient.invalidateQueries();
+          router.refresh();
+        }}
+      />
+
       {/* Filters and Display Controls Bar */}
       <div className="border-b border-[#1a1a1a] bg-[#101011] px-6 py-2">
         <div className="flex items-center justify-between">
@@ -662,28 +748,40 @@ export default function ViewRenderer({
             {/* Issue Type Filter Buttons */}
             <div className="flex items-center gap-1 mr-4">
               <Button
-                variant={issueFilterType === 'all' ? 'default' : 'ghost'}
+                variant="ghost"
                 size="sm"
                 onClick={() => setIssueFilterType('all')}
-                className="h-7 px-2 text-xs"
+                className={`h-6 px-2 text-xs border ${
+                  issueFilterType === 'all' 
+                    ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
+                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+                }`}
               >
                 All Issues
                 <span className="ml-1 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
               </Button>
               <Button
-                variant={issueFilterType === 'active' ? 'default' : 'ghost'}
+                variant="ghost"
                 size="sm"
                 onClick={() => setIssueFilterType('active')}
-                className="h-7 px-2 text-xs"
+                className={`h-6 px-2 text-xs border ${
+                  issueFilterType === 'active' 
+                    ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]' 
+                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+                }`}
               >
                 Active
                 <span className="ml-1 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
               </Button>
               <Button
-                variant={issueFilterType === 'backlog' ? 'default' : 'ghost'}
+                variant="ghost"
                 size="sm"
                 onClick={() => setIssueFilterType('backlog')}
-                className="h-7 px-2 text-xs"
+                className={`h-6 px-2 text-xs border ${
+                  issueFilterType === 'backlog' 
+                    ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
+                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+                }`}
               >
                 Backlog
                 <span className="ml-1 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
@@ -753,6 +851,8 @@ export default function ViewRenderer({
             <ViewFilters
               issues={issues}
               workspace={workspace}
+              view={view}
+              currentUser={currentUser}
               isOpen={isViewFiltersOpen}
               onToggle={handleToggleViewFilters}
               selectedFilters={viewFiltersState}
@@ -760,6 +860,127 @@ export default function ViewRenderer({
               showSubIssues={tempShowSubIssues}
               onSubIssuesToggle={() => setTempShowSubIssues(prev => !prev)}
               viewType={tempDisplayType.toLowerCase() as 'kanban' | 'list' | 'timeline'}
+              onVisibilityChange={async (visibility) => {
+                try {
+                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      visibility
+                    })
+                  });
+
+                  if (response.ok) {
+                    toast({
+                      title: 'Success',
+                      description: 'View visibility updated successfully'
+                    });
+                    
+                    // Refresh the page to reflect changes
+                    window.location.reload();
+                  } else {
+                    throw new Error('Failed to update visibility');
+                  }
+                } catch (error) {
+                  console.error('Error updating visibility:', error);
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to update view visibility',
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              onOwnerChange={async (ownerId) => {
+                try {
+                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      ownerId
+                    })
+                  });
+
+                  if (response.ok) {
+                    toast({
+                      title: 'Success',
+                      description: 'View owner updated successfully'
+                    });
+                    
+                    // Refresh the page to reflect changes
+                    window.location.reload();
+                  } else {
+                    throw new Error('Failed to update owner');
+                  }
+                } catch (error) {
+                  console.error('Error updating owner:', error);
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to update view owner',
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              onDeleteView={async () => {
+                if (!confirm('Are you sure you want to delete this view? This action cannot be undone.')) {
+                  return;
+                }
+                
+                try {
+                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+                    method: 'DELETE'
+                  });
+
+                  if (response.ok) {
+                    toast({
+                      title: 'Success',
+                      description: 'View deleted successfully'
+                    });
+                    
+                    // Navigate back to views list
+                    router.push(`/${workspace.slug || workspace.id}/views`);
+                  } else {
+                    throw new Error('Failed to delete view');
+                  }
+                } catch (error) {
+                  console.error('Error deleting view:', error);
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to delete view',
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              onNameChange={async (name) => {
+                try {
+                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name
+                    })
+                  });
+
+                  if (response.ok) {
+                    toast({
+                      title: 'Success',
+                      description: 'View name updated successfully'
+                    });
+                    
+                    // Refresh the page to reflect changes
+                    window.location.reload();
+                  } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to update name');
+                  }
+                } catch (error) {
+                  console.error('Error updating name:', error);
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to update view name',
+                    variant: 'destructive'
+                  });
+                }
+              }}
             />
           </div>
         )}

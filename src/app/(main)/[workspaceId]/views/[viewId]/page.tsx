@@ -155,6 +155,16 @@ export default async function ViewPage({ params }: ViewPageProps) {
           order: true
         }
       },
+      projectStatus: {
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          color: true,
+          order: true,
+          isDefault: true
+        }
+      },
       _count: {
         select: {
           children: true,

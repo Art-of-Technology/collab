@@ -36,6 +36,9 @@ export interface KanbanColumnProps {
   newIssueTitle: string;
   editingColumnId: string | null;
   newColumnName: string;
+  projectId: string;
+  workspaceId: string;
+  currentUserId: string;
   onIssueClick: (issueId: string) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
@@ -47,6 +50,7 @@ export interface KanbanColumnProps {
   onCancelEditingColumn: () => void;
   onColumnKeyDown: (e: React.KeyboardEvent) => void;
   onColumnNameChange: (value: string) => void;
+  onIssueCreated: (issue: any) => void;
 }
 
 export interface KanbanIssueCardProps {
@@ -67,6 +71,9 @@ export interface KanbanBoardProps {
   newIssueTitle: string;
   editingColumnId: string | null;
   newColumnName: string;
+  projectId: string;
+  workspaceId: string;
+  currentUserId: string;
   onDragEnd: (result: any) => void;
   onDragStart: () => void;
   onIssueClick: (issueId: string) => void;
@@ -80,4 +87,5 @@ export interface KanbanBoardProps {
   onCancelEditingColumn: () => void;
   onColumnKeyDown: (e: React.KeyboardEvent) => void;
   onColumnNameChange: (value: string) => void;
+  onIssueCreated: (issue: any) => void;
 }

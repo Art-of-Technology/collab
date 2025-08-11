@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { trackFieldChanges, createActivity } from "@/lib/board-item-activity-service";
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function GET(
     const { issueId } = resolvedParams;
     
     // Check if issueId is an issue key (e.g., WZB-1, MA-T140) or a regular ID
-    const isIssueKey = /^[A-Z]+-[A-Z]+\d+$/.test(issueId);
+    const isIssueKey = /^[A-Z]+-[A-Z]*\d+$/.test(issueId);
     
     console.log(`API: Resolving issueId: ${issueId}, isIssueKey: ${isIssueKey}`);
   
@@ -268,7 +269,8 @@ export async function PUT(
     const body = await req.json();
 
     // Check if issueId is an issue key or ID
-    const isIssueKey = /^[A-Z]+-\d+$/.test(issueId);
+    // Pattern matches formats like: ABC-123, ABC-T123, CHAT-T1, etc.
+    const isIssueKey = /^[A-Z]+-[A-Z]*\d+$/.test(issueId);
     
     // Find the issue first
     const existingIssue = isIssueKey 
@@ -276,7 +278,10 @@ export async function PUT(
       : await prisma.issue.findUnique({ where: { id: issueId } });
 
     if (!existingIssue) {
-      return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+      return NextResponse.json({ 
+        error: "Issue not found", 
+        message: `Issue ${issueId} not found` 
+      }, { status: 404 });
     }
 
     // Check workspace access
@@ -299,6 +304,20 @@ export async function PUT(
 
     // Handle status updates to work with new ProjectStatus system
     let updateData = { ...body, updatedAt: new Date() };
+    
+    // Handle labels relation updates
+    let relationalUpdates: any = {};
+    if (Array.isArray(body.labels)) {
+      // Handle both arrays of IDs and arrays of label objects
+      const labelIds = body.labels.map((label: any) => 
+        typeof label === 'string' ? label : label.id
+      ).filter(Boolean);
+      
+      relationalUpdates.labels = {
+        set: labelIds.map((id: string) => ({ id }))
+      };
+      delete (updateData as any).labels;
+    }
     
     // If status or statusValue is being updated, find the corresponding ProjectStatus
     if (body.status || body.statusValue) {
@@ -325,11 +344,22 @@ export async function PUT(
       }
     }
 
-    // Update the issue
-    const updatedIssue = await prisma.issue.update({
-      where: { id: existingIssue.id },
-      data: updateData,
-      include: {
+    // Capture old issue for activity comparison
+    const oldIssue = existingIssue;
+
+    // Handle assignee changes - create/update IssueAssignee record
+    const assigneeChanged = body.assigneeId !== undefined && body.assigneeId !== oldIssue.assigneeId;
+    
+    // Update the issue and handle assignee changes in a transaction
+    const updatedIssue = await prisma.$transaction(async (tx) => {
+      // Update the issue
+      const issue = await tx.issue.update({
+        where: { id: existingIssue.id },
+        data: {
+          ...updateData,
+          ...(Object.keys(relationalUpdates).length > 0 ? relationalUpdates : {}),
+        },
+        include: {
         assignee: {
           select: {
             id: true,
@@ -406,15 +436,93 @@ export async function PUT(
             status: true
           }
         }
+      }});
+
+      // Handle assignee changes - create/update IssueAssignee records
+      if (assigneeChanged) {
+        // Remove old assignee record if exists
+        if (oldIssue.assigneeId) {
+          await tx.issueAssignee.deleteMany({
+            where: {
+              issueId: existingIssue.id,
+              userId: oldIssue.assigneeId,
+              role: "ASSIGNEE"
+            }
+          });
+        }
+
+        // Create new assignee record if assigned to someone
+        if (issue.assigneeId) {
+          await tx.issueAssignee.upsert({
+            where: {
+              issueId_userId: {
+                issueId: existingIssue.id,
+                userId: issue.assigneeId
+              }
+            },
+            create: {
+              issueId: existingIssue.id,
+              userId: issue.assigneeId,
+              role: "ASSIGNEE",
+              status: "APPROVED", // Assignees are automatically approved
+              assignedAt: new Date(),
+              approvedAt: new Date(),
+              approvedBy: currentUser.id
+            },
+            update: {
+              role: "ASSIGNEE", // If they were a helper, promote them to assignee
+              status: "APPROVED",
+              approvedAt: new Date(),
+              approvedBy: currentUser.id
+            }
+          });
+        }
       }
+
+      return issue;
     });
+
+    // Track activities for changed fields (Issue-centric)
+    try {
+      const fieldsToTrack = [
+        'title',
+        'description',
+        'assigneeId',
+        'reporterId',
+        'status',
+        'priority',
+        'columnId',
+        'dueDate',
+        'storyPoints',
+        'type',
+        'color',
+        'parentId'
+      ];
+      await trackFieldChanges(
+        'ISSUE',
+        updatedIssue.id,
+        currentUser.id,
+        updatedIssue.workspaceId,
+        // Use raw values for old/new comparison
+        fieldsToTrack.map((field) => ({
+          field,
+          oldValue: (oldIssue as any)[field],
+          newValue: (updatedIssue as any)[field],
+        }))
+      );
+    } catch (e) {
+      console.warn('Issue activity tracking failed:', e);
+    }
 
     return NextResponse.json({ issue: updatedIssue });
 
   } catch (error) {
     console.error("Error updating issue:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      },
       { status: 500 }
     );
   }
@@ -435,7 +543,7 @@ export async function DELETE(
     const { issueId } = resolvedParams;
 
     // Check if issueId is an issue key or ID
-    const isIssueKey = /^[A-Z]+-\d+$/.test(issueId);
+    const isIssueKey = /^[A-Z]+-[A-Z]*\d+$/.test(issueId);
     
     // Find the issue first
     const existingIssue = isIssueKey 
