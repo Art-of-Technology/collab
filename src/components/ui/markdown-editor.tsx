@@ -1073,6 +1073,7 @@ export function MarkdownEditor({
         style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
       }
     },
+    immediatelyRender: false,
     onUpdate: ({ editor }) => {
       // Get the full HTML content for rendering
       const html = editor.getHTML();
@@ -1081,6 +1082,17 @@ export function MarkdownEditor({
       onChange?.(html, html); // Passing html twice for compatibility, but second arg could be removed if forms are updated
     },
   }, []); // Empty dependency array to ensure editor only initializes once
+
+  // Update editor content when content prop changes
+  useEffect(() => {
+    if (editor && content !== undefined) {
+      const currentContent = editor.getHTML();
+      // Only update if the content is actually different to avoid unnecessary updates
+      if (currentContent !== content) {
+        editor.commands.setContent(content || '');
+      }
+    }
+  }, [editor, content]);
 
   // Track user typing activity
   useEffect(() => {
