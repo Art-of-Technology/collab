@@ -50,8 +50,9 @@ const KanbanIssueCard = React.memo(({
   const showReporter = displayProperties.includes('Reporter');
 
   const handleCardClick = useCallback(() => {
-    onCardClick(issue.id);
-  }, [onCardClick, issue.id]);
+    const keyOrId = issue.issueKey || issue.id;
+    onCardClick(keyOrId);
+  }, [onCardClick, issue.issueKey, issue.id]);
 
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index}>

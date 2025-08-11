@@ -130,9 +130,37 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
     
     switch (groupField) {
       case 'status':
-        // Use the normalized status value (statusValue) or fall back to legacy status
-        groupValue = issue.statusValue || issue.status || 'todo';
-        groupKey = groupValue;
+        // For status grouping, use the projectStatus relationship if available
+        if (issue.projectStatus?.name) {
+          groupKey = issue.projectStatus.name;
+          groupValue = issue.projectStatus.displayName || issue.projectStatus.name;
+        } else {
+          // Fallback to statusValue/status for backward compatibility
+          const statusVal = issue.statusValue || issue.status || 'todo';
+          
+          // Try to find matching project status by displayName or name
+          const matchingStatus = projectStatuses?.find(ps => 
+            ps.name === statusVal || 
+            ps.displayName === statusVal ||
+            ps.name.toLowerCase().replace(/\s+/g, '_') === statusVal.toLowerCase().replace(/\s+/g, '_')
+          );
+          
+          if (matchingStatus) {
+            groupKey = matchingStatus.name;
+            groupValue = matchingStatus.displayName || matchingStatus.name;
+          } else {
+            // Only create dynamic column if no project statuses are defined
+            if (!projectStatuses || projectStatuses.length === 0) {
+              groupKey = statusVal.toLowerCase().replace(/\s+/g, '_');
+              groupValue = statusVal;
+            } else {
+              // Default to first project status if mismatch
+              const defaultStatus = projectStatuses.find(ps => ps.isDefault) || projectStatuses[0];
+              groupKey = defaultStatus.name;
+              groupValue = defaultStatus.displayName || defaultStatus.name;
+            }
+          }
+        }
         break;
       case 'priority':
         groupValue = issue.priority === 'URGENT' ? 'Urgent' :
@@ -162,13 +190,21 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
     }
     
     // Create column if it doesn't exist (for dynamic values)
+    // Only create dynamic columns for non-status grouping or when no project statuses exist
     if (!columnsMap.has(groupKey)) {
-      columnsMap.set(groupKey, {
-        id: groupKey,
-        name: groupValue,
-        issues: [],
-        order: columnsMap.size
-      });
+      if (groupField !== 'status' || !projectStatuses || projectStatuses.length === 0) {
+        columnsMap.set(groupKey, {
+          id: groupKey,
+          name: groupValue,
+          issues: [],
+          order: columnsMap.size
+        });
+      } else {
+        // For status grouping with project statuses, the column should already exist
+        // This is a fallback that shouldn't normally happen
+        console.warn(`Issue with status "${groupValue}" does not match any project status. Skipping.`);
+        return; // Skip this issue
+      }
     }
     
     // Add issue to the column

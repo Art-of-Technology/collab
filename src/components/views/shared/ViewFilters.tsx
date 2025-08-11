@@ -1,21 +1,43 @@
 "use client";
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { 
   Settings,
   X,
   User,
+  UserX,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronDown,
+  Globe,
+  Lock,
+  Trash2,
+  Search,
+  Check,
+  X as XIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface ViewFiltersProps {
   issues: any[];
   workspace: any;
+  view?: {
+    id: string;
+    name: string;
+    visibility: string;
+    createdBy: string;
+    owner?: any;
+  };
+  currentUser: any;
   isOpen: boolean;
   onToggle: () => void;
   selectedFilters: {
@@ -33,6 +55,10 @@ export interface ViewFiltersProps {
   showSubIssues: boolean;
   onSubIssuesToggle: () => void;
   viewType: 'kanban' | 'list' | 'timeline';
+  onVisibilityChange?: (visibility: string) => void;
+  onOwnerChange?: (ownerId: string) => void;
+  onDeleteView?: () => void;
+  onNameChange?: (name: string) => void;
 }
 
 type FilterTab = 'assignees' | 'labels' | 'priority' | 'projects';
@@ -40,15 +66,79 @@ type FilterTab = 'assignees' | 'labels' | 'priority' | 'projects';
 export default function ViewFilters({
   issues,
   workspace,
+  view,
+  currentUser,
   isOpen,
   onToggle,
   selectedFilters,
   onFiltersChange,
   showSubIssues,
   onSubIssuesToggle,
-  viewType
+  viewType,
+  onVisibilityChange,
+  onOwnerChange,
+  onDeleteView,
+  onNameChange
 }: ViewFiltersProps) {
   const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('assignees');
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(view?.name || '');
+
+  // Fetch workspace members for owner selector
+  const fetchWorkspaceMembers = useCallback(async () => {
+    if (!workspace?.id) return;
+    
+    try {
+      const response = await fetch(`/api/workspaces/${workspace.id}/members`);
+      if (response.ok) {
+        const data = await response.json();
+        const membersArray: any[] = Array.isArray(data) ? data : (data.members || []);
+        setWorkspaceMembers(membersArray.map((m: any) => m.user ?? m));
+      }
+    } catch (error) {
+      console.error('Error fetching workspace members:', error);
+    }
+  }, [workspace?.id]);
+
+  // Load workspace members on mount
+  useEffect(() => {
+    fetchWorkspaceMembers();
+  }, [fetchWorkspaceMembers]);
+
+  // Update editedName when view name changes
+  useEffect(() => {
+    setEditedName(view?.name || '');
+  }, [view?.name]);
+
+  // Name editing handlers
+  const handleNameSave = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    if (editedName.trim() && editedName !== view?.name) {
+      onNameChange?.(editedName.trim());
+    }
+    setIsEditingName(false);
+  }, [editedName, view?.name, onNameChange]);
+
+  const handleNameDiscard = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    setEditedName(view?.name || '');
+    setIsEditingName(false);
+  }, [view?.name]);
+
+  const handleNameKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleNameSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleNameDiscard();
+    }
+  }, [handleNameSave, handleNameDiscard]);
 
   // Filter handlers
   const handleFilterToggle = useCallback((filterType: keyof typeof selectedFilters, filterId: string) => {
@@ -205,7 +295,7 @@ export default function ViewFilters({
       {/* Compact Sidebar Header */}
       <div className="p-3 border-b border-[#1f1f1f]">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-white">Filters</h3>
+          <h3 className="text-sm font-medium text-white">View Options</h3>
           <Button 
             variant="ghost" 
             size="sm"
@@ -216,14 +306,139 @@ export default function ViewFilters({
           </Button>
         </div>
         
-        {/* Compact Workspace Info */}
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-4 h-4 bg-purple-500 rounded flex items-center justify-center">
-            <span className="text-white text-xs font-bold">
-              {workspace?.name?.charAt(0) || 'W'}
-            </span>
+        {/* Editable View Name */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-[#9ca3af]">Name</div>
+            {isEditingName ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  onKeyDown={handleNameKeyDown}
+                  onBlur={(e) => {
+                    // Prevent blur when clicking save/discard buttons
+                    const relatedTarget = e.relatedTarget as HTMLElement;
+                    if (relatedTarget?.closest('[data-name-action]')) {
+                      return;
+                    }
+                    setTimeout(() => handleNameDiscard(), 0);
+                  }}
+                  className="h-5 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc] px-2 w-24"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  data-name-action="save"
+                  onClick={handleNameSave}
+                  disabled={!editedName.trim() || editedName === view?.name}
+                  className="h-5 w-5 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/10 disabled:opacity-30 rounded flex items-center justify-center transition-colors"
+                >
+                  <Check className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  data-name-action="discard"
+                  onClick={handleNameDiscard}
+                  className="h-5 w-5 p-0 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded flex items-center justify-center transition-colors"
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsEditingName(true)}
+                className={cn(
+                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
+                  "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
+                  "text-[#cccccc] focus:outline-none bg-[#181818]"
+                )}
+              >
+                <span className="text-[#cccccc] text-xs truncate max-w-[120px]">{view?.name || 'Unnamed View'}</span>
+              </button>
+            )}
           </div>
-          <span className="text-white text-sm font-medium">{workspace?.name || 'Workspace'}</span>
+        </div>
+        
+        {/* Visibility and Owner Selectors */}
+        <div className="space-y-2 mb-3">
+          {/* Visibility Selector */}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-[#9ca3af]">Visibility</div>
+            <Popover modal={true}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
+                    "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
+                    "text-[#cccccc] focus:outline-none bg-[#181818]"
+                  )}
+                >
+                  {view?.visibility === 'WORKSPACE' ? (
+                    <>
+                      <Globe className="h-3 w-3 text-[#6e7681]" />
+                      <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{workspace?.name || 'Workspace'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-3 w-3 text-[#6e7681]" />
+                      <span className="text-[#cccccc] text-xs">Personal</span>
+                    </>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent 
+                className="w-56 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+                align="start"
+                side="bottom"
+                sideOffset={4}
+              >
+                <div className="p-3 border-b border-[#2d2d30]">
+                  <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+                    Change visibility
+                  </div>
+                </div>
+                
+                <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                    onClick={() => onVisibilityChange?.('WORKSPACE')}
+                  >
+                    <Globe className="h-3 w-3 text-[#6e7681]" />
+                    <span className="text-[#cccccc] flex-1">{workspace?.name || 'Workspace'}</span>
+                    {view?.visibility === 'WORKSPACE' && (
+                      <span className="text-xs text-[#6e7681]">✓</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                    onClick={() => onVisibilityChange?.('PERSONAL')}
+                  >
+                    <Lock className="h-3 w-3 text-[#6e7681]" />
+                    <span className="text-[#cccccc] flex-1">Personal</span>
+                    {view?.visibility === 'PERSONAL' && (
+                      <span className="text-xs text-[#6e7681]">✓</span>
+                    )}
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Owner Selector */}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-[#9ca3af]">Owner</div>
+            <OwnerSelector
+              value={view?.owner?.id}
+              onChange={onOwnerChange}
+              workspaceMembers={workspaceMembers}
+              currentOwner={view?.owner}
+            />
+          </div>
         </div>
         
         {/* Clear Filters */}
@@ -431,7 +646,6 @@ export default function ViewFilters({
           </div>
         )}
         
-        
         {viewType === 'timeline' && (
           <div className="mt-2 pt-2 border-t border-[#1f1f1f]">
             <div className="text-xs text-[#666] text-center">
@@ -439,7 +653,139 @@ export default function ViewFilters({
             </div>
           </div>
         )}
+
+        {/* Delete View Button - Only show if user is the owner */}
+        {view && currentUser && view.createdBy === currentUser.id && onDeleteView && (
+          <div className="mt-3 pt-3 border-t border-[#1f1f1f]">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteView}
+              className="w-full h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 className="h-3 w-3 mr-2" />
+              Delete View
+            </Button>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Owner Selector Component - exact copy of IssueAssigneeSelector logic
+interface OwnerSelectorProps {
+  value?: string;
+  onChange?: (ownerId: string) => void;
+  workspaceMembers: any[];
+  currentOwner?: any;
+}
+
+function OwnerSelector({
+  value,
+  onChange,
+  workspaceMembers,
+  currentOwner
+}: OwnerSelectorProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const selectedUser = workspaceMembers.find(member => member.id === value) || currentOwner;
+
+  // Filter users based on search query
+  const filteredUsers = workspaceMembers.filter(member =>
+    member.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    member.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <Popover modal={true}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
+            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
+            "text-[#cccccc] focus:outline-none bg-[#181818]"
+          )}
+        >
+          {selectedUser ? (
+            <>
+              <Avatar className="h-3.5 w-3.5">
+                <AvatarImage src={selectedUser.image} alt={selectedUser.name} />
+                <AvatarFallback className="text-xs font-medium">
+                  {selectedUser.name?.charAt(0) || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{selectedUser.name}</span>
+            </>
+          ) : (
+            <>
+              <UserX className="h-3 w-3 text-[#6e7681]" />
+              <span className="text-[#6e7681] text-xs">Owner</span>
+            </>
+          )}
+        </button>
+      </PopoverTrigger>
+      
+      <PopoverContent 
+        className="w-72 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        align="start"
+        side="bottom"
+        sideOffset={4}
+      >
+        <div className="p-3 border-b border-[#2d2d30]">
+          <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+            Change owner
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
+            <Input
+              placeholder="Search people..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
+            />
+          </div>
+        </div>
+        
+        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
+          {filteredUsers.length > 0 && (
+            <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
+          )}
+          
+          {filteredUsers.map((member) => (
+            <button
+              key={member.id}
+              type="button"
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              onClick={() => onChange?.(member.id)}
+            >
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={member.image} alt={member.name} />
+                <AvatarFallback className="text-xs font-medium">
+                  {member.name?.charAt(0) || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-[#cccccc] flex-1">{member.name}</span>
+              {value === member.id && (
+                <span className="text-xs text-[#6e7681]">✓</span>
+              )}
+            </button>
+          ))}
+          
+          {!filteredUsers.length && workspaceMembers.length > 0 && (
+            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+              No people match your search
+            </div>
+          )}
+          
+          {workspaceMembers.length === 0 && (
+            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+              No members found
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

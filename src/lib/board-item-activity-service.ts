@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 
-export type BoardItemType = 'TASK' | 'MILESTONE' | 'EPIC' | 'STORY';
+export type BoardItemType = 'ISSUE' | 'TASK' | 'MILESTONE' | 'EPIC' | 'STORY';
 export type ActivityAction = 
   | 'CREATED' 
   | 'UPDATED' 

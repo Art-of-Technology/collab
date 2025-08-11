@@ -60,26 +60,35 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
 import CreateViewModal from "@/components/modals/CreateViewModal";
+import NewIssueModal from "@/components/issue/NewIssueModal";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useUiContext } from "@/context/UiContext";
 import { useMention } from "@/context/MentionContext";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { CommandMenu } from "@/components/ui/command-menu";
 
 interface SidebarProps {
   pathname?: string;
   isCollapsed?: boolean;
   toggleSidebar?: () => void;
+  commandMenuOpen?: boolean;
+  setCommandMenuOpen?: (open: boolean) => void;
 }
 
-export default function Sidebar({ pathname = "", isCollapsed = false, toggleSidebar }: SidebarProps) {
+export default function Sidebar({ 
+  pathname = "", 
+  isCollapsed = false, 
+  toggleSidebar,
+  commandMenuOpen = false,
+  setCommandMenuOpen
+}: SidebarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
@@ -110,6 +119,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
 
   // Local state for Linear-style sidebar
   const [viewSearchQuery, setViewSearchQuery] = useState("");
+  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     teams: false,
@@ -117,12 +127,11 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
   });
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({});
   
-  // Search and notification state from Navbar
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  // Notification and modal state
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showNewIssueModal, setShowNewIssueModal] = useState(false);
 
-  // Filter views for sidebar display - show favorites or latest 3
+  // Filter views for sidebar display - show favorites or latest 4
   const sidebarViews = useMemo(() => {
     if (!views.length) return [];
     
@@ -132,31 +141,43 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
       filteredViews = views.filter(view => 
         view.name.toLowerCase().includes(viewSearchQuery.toLowerCase())
       );
+      // Limit search results to 4 items
+      return filteredViews.slice(0, 4);
     }
     
-    // If no search, show favorites or latest 3
-    if (!viewSearchQuery.trim()) {
-      const favoriteViews = views.filter(view => view.isFavorite);
-      if (favoriteViews.length > 0) {
-        return favoriteViews;
-      } else {
-        // Show latest 3 views by updatedAt
-        return [...views]
-          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-          .slice(0, 3);
-      }
+    // If no search, show favorites or latest 4
+    const favoriteViews = views.filter(view => view.isFavorite);
+    if (favoriteViews.length > 0) {
+      return favoriteViews.slice(0, 4);
+    } else {
+      // Show latest 4 views by updatedAt
+      return [...views]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 4);
     }
-    
-    return filteredViews;
   }, [views, viewSearchQuery]);
 
-  // Handle search from Navbar
-  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (searchQuery.trim() && currentWorkspace?.id) {
-      router.push(`/${currentWorkspace.id}/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      setMobileSearchOpen(false);
+  // Filter workspaces for sidebar display - show maximum 4
+  const sidebarWorkspaces = useMemo(() => {
+    if (!workspaces.length) return [];
+    
+    // Filter by search query first
+    let filteredWorkspaces = workspaces;
+    if (workspaceSearchQuery.trim()) {
+      filteredWorkspaces = workspaces.filter(workspace => 
+        workspace.name.toLowerCase().includes(workspaceSearchQuery.toLowerCase())
+      );
+      // Limit search results to 4 items
+      return filteredWorkspaces.slice(0, 4);
     }
+    
+    // If no search, show maximum 4 workspaces
+    return workspaces.slice(0, 4);
+  }, [workspaces, workspaceSearchQuery]);
+
+  // Handle opening command menu
+  const handleOpenCommandMenu = () => {
+    setCommandMenuOpen?.(true);
   };
 
   // Handle sign out from Navbar
@@ -385,43 +406,16 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
           
           {/* Actions */}
           <div className="space-y-1">
-            {/* Search */}
-            <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                  title="Search"
-                >
-                  <SearchIcon className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
-                <DialogHeader>
-                  <DialogTitle className="text-white">Search</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSearch} className="mt-2">
-                  <div className="relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      type="search"
-                      placeholder="Search..."
-                      className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
-                  >
-                    Search
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            {/* Command Menu */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+              onClick={handleOpenCommandMenu}
+              title="Command Menu (Cmd+K)"
+            >
+              <SearchIcon className="h-4 w-4" />
+            </Button>
 
             {/* Notifications */}
             {session && (
@@ -442,7 +436,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
+                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="start" alignOffset={0} forceMount>
                   <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
                     <h3 className="font-medium text-white">Notifications</h3>
                     {unreadCount > 0 && (
@@ -557,7 +551,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
               <Button variant="ghost" className="w-full h-8 p-0">
                 <div className="flex items-center justify-center">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={currentWorkspace?.logoUrl || ""} />
+                    {currentWorkspace?.logoUrl && <AvatarImage src={currentWorkspace.logoUrl} />}
                     <AvatarFallback className="bg-[#1f1f1f] text-white text-xs font-semibold">
                       {currentWorkspace?.name?.charAt(0)?.toUpperCase() || "W"}
                     </AvatarFallback>
@@ -579,7 +573,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                 >
                   <div className="flex items-center">
                     <Avatar className="h-4 w-4 mr-2">
-                      <AvatarImage src={workspace.logoUrl || ""} />
+                      {workspace.logoUrl && <AvatarImage src={workspace.logoUrl} />}
                       <AvatarFallback className="bg-[#1f1f1f] text-white text-[10px] font-semibold">
                         {workspace.name?.charAt(0)?.toUpperCase() || "W"}
                       </AvatarFallback>
@@ -644,43 +638,16 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
           
           {/* Action Buttons */}
           <div className="flex items-center gap-1">
-            {/* Search */}
-            <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                  title="Search"
-                >
-                  <SearchIcon className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
-                <DialogHeader>
-                  <DialogTitle className="text-white">Search</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSearch} className="mt-2">
-                  <div className="relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      type="search"
-                      placeholder="Search..."
-                      className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
-                  >
-                    Search
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            {/* Command Menu */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+              onClick={handleOpenCommandMenu}
+              title="Command Menu (Cmd+K)"
+            >
+              <SearchIcon className="h-4 w-4" />
+            </Button>
 
             {/* Notifications */}
             {session && (
@@ -701,7 +668,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
+                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="start" alignOffset={0} forceMount>
                   <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
                     <h3 className="font-medium text-white">Notifications</h3>
                     {unreadCount > 0 && (
@@ -808,9 +775,6 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
             )}
           </div>
         </div>
-        
-        {/* Workspace Selector */}
-        <WorkspaceSelector />
       </div>
         
       {/* Main Content */}
@@ -839,9 +803,22 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-1 mt-1">
+                {/* Workspaces search */}
+                <div className="px-2 mb-2">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                    <Input
+                      placeholder="Search workspaces..."
+                      value={workspaceSearchQuery}
+                      onChange={(e) => setWorkspaceSearchQuery(e.target.value)}
+                      className="h-7 pl-7 text-xs bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
+                    />
+                  </div>
+                </div>
+
                 {/* All workspaces */}
         <div className="space-y-1">
-                                    {workspaces.map((workspace) => {
+                                    {sidebarWorkspaces.map((workspace) => {
                     const isWorkspaceExpanded = collapsedWorkspaces[workspace.id] !== undefined 
                       ? !collapsedWorkspaces[workspace.id] 
                       : workspace.id === currentWorkspace?.id;
@@ -863,7 +840,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                                   isWorkspaceExpanded && "rotate-90"
                                 )} />
                               <Avatar className="h-4 w-4 mr-2">
-                                <AvatarImage src={workspace.logoUrl || ""} />
+                                {workspace.logoUrl && <AvatarImage src={workspace.logoUrl} />}
                                 <AvatarFallback className="bg-[#1f1f1f] text-white text-[10px] font-semibold">
                                   {workspace.name?.charAt(0)?.toUpperCase() || "W"}
                                 </AvatarFallback>
@@ -969,6 +946,30 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                           );
                         })}
                       </div>
+
+                  {/* Create workspace and see all workspaces */}
+                  <div className="pt-1 space-y-0.5">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      asChild
+                    >
+                      <Link href="/create-workspace">
+                        <Plus className="mr-2 h-3 w-3" />
+                        Create workspace
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      asChild
+                    >
+                      <Link href="/workspaces">
+                        <Users className="mr-2 h-3 w-3" />
+                        All workspaces
+                      </Link>
+                    </Button>
+                  </div>
               </CollapsibleContent>
             </Collapsible>
           </div>
@@ -1037,7 +1038,8 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                       >
                         <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.slug || view.id}`}>
                           <div className="flex items-center w-full">
-                            {view.isFavorite && <Star className="mr-2 h-3 w-3 text-yellow-500 fill-current" />}
+                            <Eye className="mr-2 h-3 w-3 opacity-60" />
+                            {view.isFavorite && <Star className="mr-1 h-3 w-3 text-yellow-500 fill-current" />}
                             <span className="truncate flex-1">{view.name}</span>
                             {view._count?.issues && (
                               <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
@@ -1129,7 +1131,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                  />
                ) : (
                 <Avatar className="mr-2 h-5 w-5">
-                  <AvatarImage src={userData?.image || ""} />
+                  {userData?.image && <AvatarImage src={userData.image} />}
                   <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
                     {userData?.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>
@@ -1174,6 +1176,36 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         onClose={() => setShowCreateViewModal(false)}
         workspaceId={currentWorkspace?.id || ''}
           projects={projects}
+      />
+      )}
+      
+      {/* New Issue Modal */}
+      <NewIssueModal
+        open={showNewIssueModal}
+        onOpenChange={setShowNewIssueModal}
+        workspaceId={currentWorkspace?.id || ''}
+        currentUserId={userData?.id}
+        onCreated={(issueId) => {
+          console.log('Issue created:', issueId);
+          // Optionally navigate to the new issue
+          // router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueId}`);
+        }}
+      />
+      
+      {/* Command Menu */}
+      {setCommandMenuOpen && (
+      <CommandMenu
+        open={commandMenuOpen}
+        onOpenChange={setCommandMenuOpen}
+        onCreateIssue={() => setShowNewIssueModal(true)}
+        onCreateView={() => setShowCreateViewModal(true)}
+        onCreateProject={() => {
+          // TODO: Implement new project modal trigger
+          toast({
+            title: "Coming soon", 
+            description: "Create project functionality will be available soon",
+          });
+        }}
       />
       )}
     </div>

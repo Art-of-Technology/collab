@@ -27,7 +27,7 @@ export default function IssuePage() {
   }
 
   return (
-    <div className="h-full w-full overflow-hidden bg-[#0a0a0a]">
+    <div className="min-h-screen w-full overflow-y-auto bg-[#0a0a0a]">
       <Suspense
         fallback={
           <div className="flex h-[80vh] items-center justify-center">

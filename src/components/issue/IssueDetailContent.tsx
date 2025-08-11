@@ -12,36 +12,18 @@ import {
   X, 
   Check, 
   PenLine, 
-  Calendar as CalendarIcon,
   MessageSquare,
   Copy,
   ExternalLink,
   MoreHorizontal,
   Trash2,
-  Archive,
   Star,
-  Eye,
+  Command,
   Clock,
-  ArrowRight,
-  User,
-  Circle,
-  ChevronDown,
   Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow, format } from "date-fns";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { formatDistanceToNow } from "date-fns";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,14 +31,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Calendar } from "@/components/ui/calendar";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { MarkdownContent } from "@/components/ui/markdown-content";
+
+import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHistory";
+import { IssueTabs } from "./sections/IssueTabs";
+import { IssueDescriptionEditor } from "@/components/issue";
+import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
+import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
+import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
+import { IssueReporterSelector } from "@/components/issue/selectors/IssueReporterSelector";
+import { IssueLabelSelector } from "@/components/issue/selectors/IssueLabelSelector";
+import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
+import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
+import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
 
 // Import types
 import type { Issue, IssueDetailProps, IssueFieldUpdate } from "@/types/issue";
 
-// Helper functions for styling (matching KanbanIssueCard)
+// Helper function for getting type color (still used for the type indicator dot)
 const getTypeColor = (type: string) => {
   const colors = {
     'EPIC': '#8b5cf6',
@@ -67,27 +58,6 @@ const getTypeColor = (type: string) => {
     'SUBTASK': '#6b7280'
   };
   return colors[type as keyof typeof colors] || '#6b7280';
-};
-
-const getPriorityColor = (priority: string) => {
-  const colors = {
-    'URGENT': '#ef4444',
-    'HIGH': '#f97316', 
-    'MEDIUM': '#eab308',
-    'LOW': '#22c55e'
-  };
-  return colors[priority as keyof typeof colors] || '#6b7280';
-};
-
-const getStatusColor = (status: string) => {
-  const colors = {
-    'TODO': '#6b7280',
-    'IN_PROGRESS': '#3b82f6',
-    'IN_REVIEW': '#f59e0b',
-    'DONE': '#10b981',
-    'CANCELLED': '#ef4444'
-  };
-  return colors[status as keyof typeof colors] || '#6b7280';
 };
 
 interface IssueDetailContentProps extends IssueDetailProps {
@@ -109,9 +79,11 @@ export function IssueDetailContent({
 }: IssueDetailContentProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionHasChanges, setDescriptionHasChanges] = useState(false);
+  const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
+  const [labels, setLabels] = useState<any[]>([]);
   const { toast } = useToast();
 
   // Initialize local state from issue data
@@ -119,8 +91,30 @@ export function IssueDetailContent({
     if (issue) {
       setTitle(issue.title || '');
       setDescription(issue.description || '');
+      setDescriptionHasChanges(false);
+
     }
   }, [issue]);
+
+  // Fetch labels for the workspace
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    const fetchLabels = async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/labels`);
+        if (response.ok) {
+          const data = await response.json();
+          setLabels(data.labels || []);
+        }
+      } catch (error) {
+        console.error('Error fetching labels:', error);
+        setLabels([]);
+      }
+    };
+
+    fetchLabels();
+  }, [workspaceId]);
 
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
@@ -128,8 +122,8 @@ export function IssueDetailContent({
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/issues/${issue.id}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/issues/${issue.issueKey || issue.id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -137,8 +131,13 @@ export function IssueDetailContent({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update issue');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(errorData.message || errorData.error || `Failed to update issue (${response.status})`);
       }
 
       toast({
@@ -182,13 +181,58 @@ export function IssueDetailContent({
 
   // Handle description save
   const handleSaveDescription = useCallback(async () => {
+    if (!descriptionHasChanges) return;
+    
+    setIsDescriptionSaving(true);
     try {
       await handleUpdate({ description });
-      setEditingDescription(false);
+      setDescriptionHasChanges(false);
+      toast({
+        title: "Description saved",
+        description: "Issue description has been updated",
+      });
     } catch (error) {
       // Error already handled in handleUpdate
+    } finally {
+      setIsDescriptionSaving(false);
     }
-  }, [description, handleUpdate]);
+  }, [description, handleUpdate, descriptionHasChanges, toast]);
+
+  // Handle description change and detect changes
+  const handleDescriptionChange = useCallback((newDescription: string) => {
+    setDescription(newDescription);
+    setDescriptionHasChanges(newDescription !== (issue?.description || ''));
+  }, [issue?.description]);
+
+  // AI Improve function for description editor
+  const handleAiImprove = useCallback(async (text: string): Promise<string> => {
+    try {
+      const response = await fetch('/api/ai/improve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to improve text');
+      }
+      
+      const data = await response.json();
+      return data.improvedText || text;
+    } catch (error) {
+      console.error('Error improving text:', error);
+      toast({
+        title: "Error",
+        description: "Failed to improve text with AI",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [toast]);
+
+
 
   // Handle copy link
   const handleCopyLink = useCallback(() => {
@@ -223,18 +267,21 @@ export function IssueDetailContent({
       if (event.metaKey || event.ctrlKey) {
         switch (event.key) {
           case 'c':
-            if (!editingTitle && !editingDescription) {
+            if (!editingTitle) {
               event.preventDefault();
               handleCopyLink();
+            }
+            break;
+          case 's':
+            if (descriptionHasChanges && !isDescriptionSaving) {
+              event.preventDefault();
+              handleSaveDescription();
             }
             break;
           case 'Enter':
             if (editingTitle) {
               event.preventDefault();
               handleSaveTitle();
-            } else if (editingDescription) {
-              event.preventDefault();
-              handleSaveDescription();
             }
             break;
         }
@@ -244,9 +291,6 @@ export function IssueDetailContent({
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
-        } else if (editingDescription) {
-          setEditingDescription(false);
-          setDescription(issue?.description || '');
         } else if (mode === 'modal') {
           onClose?.();
         }
@@ -255,7 +299,7 @@ export function IssueDetailContent({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingTitle, editingDescription, handleSaveTitle, handleSaveDescription, handleCopyLink, issue, mode, onClose]);
+  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, mode, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription]);
 
   // Loading state
   if (isLoading) {
@@ -330,7 +374,8 @@ export function IssueDetailContent({
 
   return (
     <div className={cn(
-      "h-full flex flex-col",
+      mode === 'modal' ? "h-full" : "min-h-screen",
+      "flex flex-col",
       mode === 'page' ? "max-w-7xl mx-auto p-6" : "p-6",
       "bg-[#0a0a0a] text-white transition-opacity duration-200",
       isUpdating && "opacity-60"
@@ -469,126 +514,72 @@ export function IssueDetailContent({
             </div>
           )}
 
-          {/* Properties Row */}
+          {/* Properties Row - Using New Selectors */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Status Badge */}
-            <Select
+            {/* Status Selector */}
+            <IssueStatusSelector
               value={issue.status}
-              onValueChange={(value) => handleUpdate({ status: value })}
-            >
-              <SelectTrigger className="h-6 w-auto min-w-0 border-0 bg-transparent p-0 focus:ring-0">
-                <Badge 
-                  className="h-5 px-2 text-xs font-medium border-0 rounded-sm cursor-pointer"
-                  style={{ 
-                    backgroundColor: getStatusColor(issue.status || 'TODO') + '25',
-                    color: getStatusColor(issue.status || 'TODO')
-                  }}
-                >
-                  {issue.status?.replace('_', ' ')}
-                  <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
-                </Badge>
-              </SelectTrigger>
-              <SelectContent className="bg-[#1f1f1f] border-[#333]">
-                <SelectItem value="TODO" className="text-[#8b949e] hover:text-white">Todo</SelectItem>
-                <SelectItem value="IN_PROGRESS" className="text-[#8b949e] hover:text-white">In Progress</SelectItem>
-                <SelectItem value="IN_REVIEW" className="text-[#8b949e] hover:text-white">In Review</SelectItem>
-                <SelectItem value="DONE" className="text-[#8b949e] hover:text-white">Done</SelectItem>
-              </SelectContent>
-            </Select>
+              onChange={(value) => handleUpdate({ status: value })}
+              projectId={issue.projectId}
+              disabled={isUpdating}
+            />
 
-            {/* Priority Badge */}
-            {issue.priority && issue.priority !== 'MEDIUM' && (
-              <Select
-                value={issue.priority}
-                onValueChange={(value) => handleUpdate({ priority: value as any })}
-              >
-                <SelectTrigger className="h-6 w-auto min-w-0 border-0 bg-transparent p-0 focus:ring-0">
-                  <Badge 
-                    className="h-5 px-2 text-xs font-medium border-0 rounded-sm cursor-pointer"
-                    style={{ 
-                      backgroundColor: getPriorityColor(issue.priority) + '25',
-                      color: getPriorityColor(issue.priority)
-                    }}
-                  >
-                    {issue.priority}
-                    <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
-                  </Badge>
-                </SelectTrigger>
-                <SelectContent className="bg-[#1f1f1f] border-[#333]">
-                  <SelectItem value="LOW" className="text-[#8b949e] hover:text-white">Low</SelectItem>
-                  <SelectItem value="MEDIUM" className="text-[#8b949e] hover:text-white">Medium</SelectItem>
-                  <SelectItem value="HIGH" className="text-[#8b949e] hover:text-white">High</SelectItem>
-                  <SelectItem value="URGENT" className="text-[#8b949e] hover:text-white">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+            {/* Priority Selector */}
+            <IssuePrioritySelector
+              value={issue.priority || 'MEDIUM'}
+              onChange={(value) => handleUpdate({ priority: value })}
+              disabled={isUpdating}
+            />
 
-            {/* Assignee */}
-            {issue.assignee && (
-              <div className="flex items-center gap-1 bg-[#1f1f1f] hover:bg-[#333] px-2 py-1 rounded-sm cursor-pointer transition-colors">
-                <Avatar className="h-4 w-4">
-                  <AvatarImage src={issue.assignee.image} />
-                  <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
-                    {issue.assignee.name?.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-xs text-[#8b949e]">{issue.assignee.name}</span>
-              </div>
-            )}
+            {/* Type Selector */}
+            <IssueTypeSelector
+              value={issue.type}
+              onChange={(value) => handleUpdate({ type: value })}
+              disabled={isUpdating}
+            />
 
-            {/* Labels */}
-            {issue.labels && issue.labels.length > 0 && (
-              <>
-                {issue.labels.slice(0, 3).map((label: any) => (
-                  <Badge 
-                    key={label.id}
-                    className="h-5 px-2 text-xs font-medium border-0 rounded-sm cursor-pointer"
-                    style={{ 
-                      backgroundColor: label.color + '25',
-                      color: label.color || '#8b949e'
-                    }}
-                  >
-                    {label.name}
-                  </Badge>
-                ))}
-                {issue.labels.length > 3 && (
-                  <span className="text-xs text-[#6e7681] px-1">+{issue.labels.length - 3}</span>
-                )}
-              </>
-            )}
+            {/* Assignee Selector */}
+            <IssueAssigneeSelector
+              value={issue.assigneeId}
+              onChange={(value) => handleUpdate({ assigneeId: value })}
+              workspaceId={workspaceId}
+              disabled={isUpdating}
+            />
 
-            {/* Due Date */}
-            {issue.dueDate && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Badge className="h-5 px-2 text-xs font-medium bg-orange-500/20 text-orange-400 border-0 rounded-sm cursor-pointer">
-                    <CalendarIcon className="h-3 w-3 mr-1" />
-                    {new Date(issue.dueDate).toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric' 
-                    })}
-                  </Badge>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-[#1f1f1f] border-[#333]" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={new Date(issue.dueDate)}
-                    onSelect={(date) => handleUpdate({ dueDate: date })}
-                    className="text-white"
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
+            {/* Reporter Selector */}
+            <IssueReporterSelector
+              value={issue.reporterId}
+              onChange={(value) => handleUpdate({ reporterId: value })}
+              workspaceId={workspaceId}
+              disabled={isUpdating}
+            />
 
-            {/* Add property button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-5 px-2 text-xs text-[#6e7681] hover:text-white hover:bg-[#1f1f1f] border border-dashed border-[#333] hover:border-[#58a6ff]"
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              Add
-            </Button>
+            {/* Labels Selector */}
+            <IssueLabelSelector
+              value={issue.labels?.map(l => l.id) || []}
+              onChange={(labelIds) => {
+                // Convert label IDs back to label objects for the update
+                const labelObjects = labels.filter(label => labelIds.includes(label.id));
+                handleUpdate({ labels: labelObjects });
+              }}
+              workspaceId={workspaceId}
+              disabled={isUpdating}
+            />
+
+            {/* Project Selector */}
+            <IssueProjectSelector
+              value={issue.projectId}
+              onChange={(value) => handleUpdate({ projectId: value })}
+              workspaceId={workspaceId || ''}
+              disabled={isUpdating}
+            />
+
+            {/* Due Date Selector */}
+            <IssueDateSelector
+              value={issue.dueDate}
+              onChange={(value) => handleUpdate({ dueDate: value })}
+              disabled={isUpdating}
+            />
           </div>
 
           {/* Created info */}
@@ -612,128 +603,81 @@ export function IssueDetailContent({
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        <div className={cn(
-          "h-full",
-          mode === 'page' ? "grid grid-cols-1 lg:grid-cols-4 gap-6" : "space-y-6"
-        )}>
-          {/* Description */}
-          <div className={cn(mode === 'page' ? "lg:col-span-3" : "")}>
-            <div className="space-y-4">
-              <div className="border border-[#1f1f1f] rounded-lg bg-[#0a0a0a] hover:border-[#333] transition-colors">
-                <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
-                  <h3 className="text-sm font-medium text-white">Description</h3>
-                  {!editingDescription && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingDescription(true)}
-                      className="h-6 w-6 p-0 text-[#6e7681] hover:text-white"
-                    >
-                      <PenLine className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-                
-                <div className="p-4">
-                  {editingDescription ? (
-                    <div className="space-y-3">
-                      <MarkdownEditor
-                        initialValue={description}
-                        onChange={setDescription}
-                        placeholder="Add a description..."
-                        minHeight="150px"
-                        className="bg-[#0a0a0a] border-[#1f1f1f] text-white"
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={handleSaveDescription}
-                          disabled={isUpdating}
-                          className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-                        >
-                          {isUpdating ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <Check className="h-3 w-3 mr-1" />
-                          )}
-                          Save
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setEditingDescription(false);
-                            setDescription(issue.description || '');
-                          }}
-                          disabled={isUpdating}
-                          className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
-                        >
-                          <X className="h-3 w-3 mr-1" />
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className="min-h-[100px] cursor-pointer hover:bg-[#1f1f1f]/50 p-2 -m-2 rounded transition-colors"
-                      onClick={() => setEditingDescription(true)}
-                    >
-                      {issue.description ? (
-                        <MarkdownContent 
-                          content={issue.description} 
-                          htmlContent={issue.description}
-                          className="prose prose-sm prose-invert max-w-none"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-20 border border-dashed border-[#333] rounded text-[#6e7681]">
-                          <div className="text-center">
-                            <PenLine className="h-4 w-4 mx-auto mb-1 opacity-60" />
-                            <p className="text-xs">Click to add description</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+      {/* Main Content - Full Width Notion-like Experience */}
+      <div className={cn(
+        "flex-1",
+        mode === 'modal' ? "overflow-y-auto" : "overflow-visible"
+      )}>
+        <div className="space-y-6 pb-8">
+                  {/* Seamless Description Editor - Full Width */}
+        <div className="w-full relative">
+          {/* Save Changes Button - Positioned at top right of editor */}
+          {descriptionHasChanges && (
+            <div className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#21262d] rounded-md shadow-sm">
+              <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
+                <div className="h-1.5 w-1.5 bg-orange-400 rounded-full" />
+                <span>Unsaved</span>
               </div>
-
-              {/* Comments section placeholder */}
-              <div className="border border-[#1f1f1f] rounded-lg bg-[#0a0a0a]">
-                <div className="p-3 border-b border-[#1f1f1f]">
-                  <h3 className="text-sm font-medium text-white flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Comments
-                  </h3>
-                </div>
-                <div className="p-6 text-center text-[#6e7681]">
-                  <p className="text-sm">No comments yet</p>
-                  <p className="text-xs mt-1">Start a conversation...</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar for page mode */}
-          {mode === 'page' && (
-            <div className="lg:col-span-1">
-              <div className="space-y-4">
-                {/* Activity/History placeholder */}
-                <div className="border border-[#1f1f1f] rounded-lg bg-[#0a0a0a]">
-                  <div className="p-3 border-b border-[#1f1f1f]">
-                    <h3 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Activity
-                    </h3>
-                  </div>
-                  <div className="p-4 text-center text-[#6e7681]">
-                    <p className="text-xs">Activity will appear here</p>
-                  </div>
-                </div>
+              <div className="flex gap-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDescription(issue?.description || '');
+                    setDescriptionHasChanges(false);
+                  }}
+                  disabled={isDescriptionSaving}
+                  className="h-6 px-2 text-xs text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3] pointer-events-auto"
+                >
+                  Discard
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveDescription}
+                  disabled={isDescriptionSaving}
+                  className="h-6 px-2 text-xs bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] pointer-events-auto"
+                >
+                                     {isDescriptionSaving ? (
+                     <Loader2 className="h-3 w-3 animate-spin" />
+                   ) : (
+                     <div className="flex items-center gap-2">
+                       <span className="text-xs">Save</span>
+                       <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded text-[10px] text-[#8b949e]">
+                         {typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? (
+                           <>
+                             <Command className="h-2.5 w-2.5" />
+                             <span>S</span>
+                           </>
+                         ) : (
+                           <span className="font-mono">Ctrl+S</span>
+                         )}
+                       </div>
+                     </div>
+                   )}
+                </Button>
               </div>
             </div>
           )}
+          
+          <IssueDescriptionEditor
+            value={description}
+            onChange={handleDescriptionChange}
+            placeholder="Add a description..."
+            onAiImprove={handleAiImprove}
+            className="min-h-[400px] w-full"
+          />
+        </div>
+
+
+
+          {/* Issue Tabs Section - Relations, Sub-issues, Time, Team, Activity, Comments */}
+          <IssueTabs
+            issue={issue}
+            initialComments={issue.comments || []}
+            currentUserId={workspaceId || ""} // TODO: Replace with actual current user ID
+            workspaceId={workspaceId || ""}
+            onRefresh={onRefresh}
+          />
         </div>
       </div>
     </div>

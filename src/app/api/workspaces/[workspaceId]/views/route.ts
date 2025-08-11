@@ -54,6 +54,16 @@ export async function GET(
           { visibility: 'PERSONAL', ownerId: user.id }
         ]
       },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true
+          }
+        }
+      },
       orderBy: [
         { isDefault: 'desc' }, // Default views first
         { updatedAt: 'desc' }
@@ -80,6 +90,8 @@ export async function GET(
       isDefault: view.isDefault,
       isFavorite: view.isFavorite,
       ownerId: view.ownerId,
+      owner: view.owner,
+      createdBy: view.ownerId,
       sharedWith: view.sharedWith,
       lastAccessedAt: view.lastAccessedAt,
       accessCount: view.accessCount,
@@ -149,6 +161,7 @@ export async function POST(
       filters = {},
       sorting = { field: 'updatedAt', direction: 'desc' },
       grouping = { field: 'status' },
+      fields = [],
       projectIds = [],
       sharedWith = []
     } = body;
@@ -200,7 +213,7 @@ export async function POST(
         filters,
         sorting,
         grouping,
-        fields: ['title', 'status', 'priority', 'assignee', 'dueDate'],
+        fields: fields,
         layout: {
           showSubtasks: true,
           showLabels: true,

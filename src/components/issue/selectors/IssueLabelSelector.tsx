@@ -9,7 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { Tags, Search, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { IssueSelectorProps, IssueLabel } from "@/types/issue";
@@ -73,126 +73,114 @@ export function IssueLabelSelector({
     onChange(value.filter(id => id !== labelId));
   };
 
-  // Label display component
-  const LabelBadge = ({ 
-    label, 
-    showRemove = false, 
-    onRemove 
-  }: { 
-    label: IssueLabel; 
-    showRemove?: boolean;
-    onRemove?: (e: React.MouseEvent) => void;
-  }) => (
-    <Badge
-      variant="outline"
-      className={cn(
-        "flex items-center gap-1.5 font-medium border-current/20",
-        "transition-all duration-200"
-      )}
-      style={{
-        backgroundColor: `${label.color}15`,
-        borderColor: `${label.color}40`,
-        color: label.color
-      }}
-    >
-      <div 
-        className="h-2 w-2 rounded-full"
-        style={{ backgroundColor: label.color }}
-      />
-      <span className="text-xs">{label.name}</span>
-      {showRemove && onRemove && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-3 w-3 p-0 hover:bg-current/20 ml-1"
-          onClick={onRemove}
-        >
-          <X className="h-2 w-2" />
-        </Button>
-      )}
-    </Badge>
-  );
+
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            "w-full justify-start text-left font-normal min-h-[40px] h-auto py-2",
-            "border-border/50 bg-background/50",
-            "hover:border-border/80 hover:bg-background/80",
-            "focus:border-primary/50 focus:bg-background",
-            "transition-all duration-200"
-          )}
+        <button
+          type="button"
           disabled={disabled}
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
+            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
+            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            disabled && "opacity-50 cursor-not-allowed"
+          )}
         >
-          <Tags className="mr-2 h-4 w-4 flex-shrink-0" />
-          <div className="flex-1 flex flex-wrap gap-1">
-            {selectedLabels.length > 0 ? (
-              selectedLabels.map((label) => (
-                <LabelBadge
-                  key={label.id}
-                  label={label}
-                  showRemove={true}
-                  onRemove={(e) => handleRemoveLabel(label.id, e)}
-                />
-              ))
-            ) : (
-              <span className="text-muted-foreground text-sm">No labels</span>
-            )}
-          </div>
-        </Button>
+          {selectedLabels.length === 0 ? (
+            <>
+              <Tags className="h-3 w-3 text-[#6e7681]" />
+              <span className="text-[#6e7681] text-xs">Labels</span>
+            </>
+          ) : selectedLabels.length === 1 ? (
+            <>
+              <div 
+                className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: selectedLabels[0].color }}
+              />
+              <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{selectedLabels[0].name}</span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center -space-x-1">
+                {selectedLabels.slice(0, 3).map((label, index) => (
+                  <div 
+                    key={label.id}
+                    className="h-2.5 w-2.5 rounded-full border border-[#181818] flex-shrink-0"
+                    style={{ 
+                      backgroundColor: label.color,
+                      zIndex: 3 - index
+                    }}
+                  />
+                ))}
+                {selectedLabels.length > 3 && (
+                  <div className="h-2.5 w-2.5 rounded-full bg-[#404040] border border-[#181818] flex items-center justify-center">
+                    <span className="text-[8px] text-white font-medium">+</span>
+                  </div>
+                )}
+              </div>
+              <span className="text-[#cccccc] text-xs">{selectedLabels.length} labels</span>
+            </>
+          )}
+        </button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-80 p-0 shadow-lg border-border/50" 
+        className="w-80 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl" 
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="p-3 border-b border-border/50">
+        <div className="p-3 border-b border-[#2d2d30]">
+          <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+            Labels
+          </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
             <Input
               placeholder="Search labels..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 border-border/50 focus:border-primary/50"
+              className="pl-9 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
             />
           </div>
         </div>
 
-        <div className="max-h-60 overflow-y-auto">
+        <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
           {isLoading ? (
-            <div className="p-4 text-center text-muted-foreground">
+            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
               Loading labels...
             </div>
           ) : filteredLabels.length > 0 ? (
-            <div className="p-2">
+            <div className="space-y-0.5">
               {filteredLabels.map((label) => (
                 <div
                   key={label.id}
-                  className="flex items-center space-x-3 rounded-md p-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] cursor-pointer transition-colors group"
                   onClick={() => handleLabelToggle(label.id)}
                 >
-                  <Checkbox
-                    checked={value.includes(label.id)}
-                    onChange={() => handleLabelToggle(label.id)}
-                  />
-                  <LabelBadge label={label} />
+                  <div className="flex items-center gap-2 flex-1">
+                    <div 
+                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: label.color }}
+                    />
+                    <span className="text-[#cccccc]">{label.name}</span>
+                  </div>
+                  {value.includes(label.id) && (
+                    <span className="text-xs text-[#6e7681]">✓</span>
+                  )}
                 </div>
               ))}
             </div>
           ) : searchQuery ? (
-            <div className="p-4 text-center text-muted-foreground">
+            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
               <div className="space-y-2">
                 <p>No labels found for "{searchQuery}"</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
                   onClick={() => {
-                    // TODO: Implement create label functionality
                     console.log("Create label:", searchQuery);
                   }}
                 >
@@ -202,15 +190,14 @@ export function IssueLabelSelector({
               </div>
             </div>
           ) : (
-            <div className="p-4 text-center text-muted-foreground">
+            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
               <div className="space-y-2">
                 <p>No labels available</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
                   onClick={() => {
-                    // TODO: Implement create label functionality
                     console.log("Create first label");
                   }}
                 >
@@ -223,11 +210,11 @@ export function IssueLabelSelector({
         </div>
 
         {selectedLabels.length > 0 && (
-          <div className="border-t border-border/50 p-3">
+          <div className="border-t border-[#2d2d30] p-2">
             <Button
               variant="ghost"
               size="sm"
-              className="w-full text-muted-foreground hover:text-foreground"
+              className="w-full text-[#6e7681] hover:text-[#cccccc] hover:bg-[#2a2a2a] h-7 text-xs"
               onClick={() => onChange([])}
             >
               <X className="h-3 w-3 mr-2" />

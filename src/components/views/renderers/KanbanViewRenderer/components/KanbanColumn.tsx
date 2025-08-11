@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Draggable, Droppable } from "@hello-pangea/dnd";
 import { getColumnColor } from '../utils';
 import KanbanIssueCard from './KanbanIssueCard';
+import QuickIssueCreate from './QuickIssueCreate';
 import type { KanbanColumnProps } from '../types';
 
 export default function KanbanColumn({
@@ -24,6 +25,9 @@ export default function KanbanColumn({
   newIssueTitle,
   editingColumnId,
   newColumnName,
+  projectId,
+  workspaceId,
+  currentUserId,
   onIssueClick,
   onCreateIssue,
   onStartCreatingIssue,
@@ -34,7 +38,8 @@ export default function KanbanColumn({
   onColumnEdit,
   onCancelEditingColumn,
   onColumnKeyDown,
-  onColumnNameChange
+  onColumnNameChange,
+  onIssueCreated
 }: KanbanColumnProps) {
   return (
     <Draggable key={column.id} draggableId={column.id} index={index}>
@@ -112,38 +117,21 @@ export default function KanbanColumn({
                 ref={provided.innerRef}
                 {...provided.droppableProps}
                 className={cn(
-                  "flex-1 space-y-2 min-h-[200px] rounded-lg transition-colors overflow-y-auto kanban-column-scroll",
+                  "flex-1 space-y-2 min-h-[200px] rounded-lg transition-colors",
                   snapshot.isDraggingOver && "bg-[#1a1a1a]"
                 )}
               >
                 {/* Create Issue Input */}
                 {isCreatingIssue && (
-                  <div className="p-3 bg-[#1f1f1f] rounded-lg border border-[#2a2a2a]">
-                    <Input
-                      value={newIssueTitle}
-                      onChange={(e) => onIssueInputChange(e.target.value)}
-                      placeholder="Issue title..."
-                      onKeyDown={onIssueKeyDown}
-                      className="mb-2"
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => onCreateIssue(column.id)}
-                        disabled={!newIssueTitle.trim()}
-                      >
-                        Create
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={onCancelCreatingIssue}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
+                  <QuickIssueCreate
+                    columnId={column.id}
+                    columnStatus={column.name}
+                    projectId={projectId}
+                    workspaceId={workspaceId}
+                    currentUserId={currentUserId}
+                    onCancel={onCancelCreatingIssue}
+                    onCreated={onIssueCreated}
+                  />
                 )}
 
                 {/* Issues */}

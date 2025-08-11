@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
 export async function GET(
   request: NextRequest,
@@ -14,7 +15,13 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { workspaceId } = await params;
+    const { workspaceId: workspaceSlugOrId } = await params;
+    
+    // Resolve workspace slug/ID to actual workspace ID
+    const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
     
     // Verify user has access to workspace
     const workspace = await prisma.workspace.findFirst({
@@ -89,8 +96,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { workspaceId } = await params;
+    const { workspaceId: workspaceSlugOrId } = await params;
     const body = await request.json();
+    
+    // Resolve workspace slug/ID to actual workspace ID
+    const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
     
     // Verify user has access to workspace
     const workspace = await prisma.workspace.findFirst({

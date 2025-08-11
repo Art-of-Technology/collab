@@ -18,8 +18,9 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
-    // Validate item type
+    // Validate item type (include ISSUE for unified model)
     const validItemTypes: Record<string, BoardItemType> = {
+      'issue': 'ISSUE',
       'task': 'TASK',
       'milestone': 'MILESTONE', 
       'epic': 'EPIC',
@@ -39,6 +40,13 @@ export async function GET(
     let workspaceId = null;
 
     switch (boardItemType) {
+      case 'ISSUE':
+        item = await prisma.issue.findUnique({
+          where: { id: itemId },
+          select: { id: true, workspaceId: true },
+        });
+        workspaceId = item?.workspaceId;
+        break;
       case 'TASK':
         item = await prisma.task.findUnique({
           where: { id: itemId },

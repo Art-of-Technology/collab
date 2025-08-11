@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import AssistantWrapper from "@/components/layout/AssistantWrapper";
 import ChatboxWrapper from "./ChatboxWrapper";
 import { AppDock } from "@/components/dock";
+import { useCommandMenu } from "@/components/ui/command-menu";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -21,6 +22,7 @@ export default function LayoutWithSidebar({
   session,
 }: LayoutWithSidebarProps) {
   const { isCollapsed, toggleSidebar } = useSidebar();
+  const { open: commandMenuOpen, setOpen: setCommandMenuOpen } = useCommandMenu();
 
   return (
     <div className="h-screen bg-[#101011] flex">
@@ -36,6 +38,8 @@ export default function LayoutWithSidebar({
               pathname={pathname}
               isCollapsed={isCollapsed}
               toggleSidebar={toggleSidebar}
+              commandMenuOpen={commandMenuOpen}
+              setCommandMenuOpen={setCommandMenuOpen}
             />
           </div>
         </div>
@@ -50,6 +54,8 @@ export default function LayoutWithSidebar({
               pathname={pathname}
               isCollapsed={false}
               toggleSidebar={toggleSidebar}
+              commandMenuOpen={commandMenuOpen}
+              setCommandMenuOpen={setCommandMenuOpen}
             />
           </div>
         </div>

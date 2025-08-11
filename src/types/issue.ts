@@ -130,6 +130,7 @@ export interface IssueSelectorProps {
   value?: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  readonly?: boolean;
   placeholder?: string;
   workspaceId?: string;
   projectId?: string;

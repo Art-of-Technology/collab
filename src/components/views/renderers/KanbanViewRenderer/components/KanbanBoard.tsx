@@ -14,6 +14,9 @@ export default function KanbanBoard({
   newIssueTitle,
   editingColumnId,
   newColumnName,
+  projectId,
+  workspaceId,
+  currentUserId,
   onDragEnd,
   onDragStart,
   onIssueClick,
@@ -26,7 +29,8 @@ export default function KanbanBoard({
   onColumnEdit,
   onCancelEditingColumn,
   onColumnKeyDown,
-  onColumnNameChange
+  onColumnNameChange,
+  onIssueCreated
 }: KanbanBoardProps) {
   if (issues.length === 0) {
     return (
@@ -47,9 +51,11 @@ export default function KanbanBoard({
       <Droppable droppableId="board" direction="horizontal" type="column">
         {(provided) => (
           <div
-            className="flex gap-6 h-full w-full overflow-x-auto overflow-y-hidden kanban-horizontal-scroll"
+            className="flex gap-6 h-full w-full overflow-x-auto kanban-horizontal-scroll"
             style={{ 
-              paddingBottom: '1rem' // Prevent horizontal scrollbar from cutting off content
+              paddingBottom: '1rem', // Prevent horizontal scrollbar from cutting off content
+              maxHeight: 'calc(100vh - 200px)', // Allow vertical scrolling
+              overflowY: 'auto'
             }}
             ref={provided.innerRef}
             {...provided.droppableProps}
@@ -65,6 +71,9 @@ export default function KanbanBoard({
                 newIssueTitle={newIssueTitle}
                 editingColumnId={editingColumnId}
                 newColumnName={newColumnName}
+                projectId={projectId}
+                workspaceId={workspaceId}
+                currentUserId={currentUserId}
                 onIssueClick={onIssueClick}
                 onCreateIssue={onCreateIssue}
                 onStartCreatingIssue={onStartCreatingIssue}
@@ -76,6 +85,7 @@ export default function KanbanBoard({
                 onCancelEditingColumn={onCancelEditingColumn}
                 onColumnKeyDown={onColumnKeyDown}
                 onColumnNameChange={onColumnNameChange}
+                onIssueCreated={onIssueCreated}
               />
             ))}
             {provided.placeholder}
