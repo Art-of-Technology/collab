@@ -1083,12 +1083,16 @@ export function MarkdownEditor({
     },
   }, []); // Empty dependency array to ensure editor only initializes once
 
-  // Update editor content when content prop changes
+  function normalizeHTML(html: string): string {
+    return html.replace(/\s+/g, ' ').trim();
+  }
+
   useEffect(() => {
     if (editor && content !== undefined) {
       const currentContent = editor.getHTML();
       // Only update if the content is actually different to avoid unnecessary updates
-      if (currentContent !== content) {
+      // Normalize both current and incoming content before comparison
+      if (normalizeHTML(currentContent) !== normalizeHTML(content)) {
         editor.commands.setContent(content || '');
       }
     }
