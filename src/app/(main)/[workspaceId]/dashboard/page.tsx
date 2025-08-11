@@ -19,6 +19,7 @@ import { PostsByType } from "./components/PostsByType";
 import { PopularTags } from "./components/PopularTags";
 import { UnansweredPosts } from "./components/UnansweredPosts";
 import { MyLeave } from "./components/MyLeave";
+import { LeaveRequestsDashboardContainer } from "@/components/hr/LeaveRequestsDashboardContainer";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -101,8 +102,12 @@ export default async function DashboardPage() {
           <PostsByType type="QUESTION" workspaceId={workspaceId} initialPosts={questions} />
         </div>
       </div>
-      {/* My Leave */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* My Leave */}
         <MyLeave workspaceId={workspaceId} />
+        {/* Leave Management Section (for managers) */}
+        <LeaveRequestsDashboardContainer workspaceId={workspaceId} />
+      </div>
     </div>
   );
 } 

@@ -156,7 +156,7 @@ export function MyLeave({
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+    <div>
       <Card className="h-full relative">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div className="flex items-center space-x-2">
@@ -305,10 +305,7 @@ export function MyLeave({
             </div>
         </CardContent>
       </Card>
-
-      {/* Leave Management Section (for managers) */}
-      <LeaveRequestsDashboardContainer workspaceId={workspaceId} />
-
+      
       {/* Cancel Confirmation Dialog */}
       <AlertDialog open={!!cancellingRequest} onOpenChange={() => setCancellingRequest(null)}>
         <AlertDialogContent>
