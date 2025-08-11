@@ -1,50 +1,35 @@
 {
+  "projectName": "collab",
+  "projectOwner": "Art-of-Technology",
+  "repoType": "github",
+  "repoHost": "https://github.com",
   "files": [
     "README.md"
   ],
   "imageSize": 100,
   "commit": false,
-  "commitType": "docs",
-  "commitConvention": "angular",
   "contributors": [
-  {
-    "login": "erkandogan",
-    "name": "Erkan DOGAN",
-    "avatar_url": "https://avatars.githubusercontent.com/u/36661336?v=4",
-    "profile": "http://www.scrivt.com",
-    "contributions": [
-      "code",
-      "doc",
-      "design"
-    ]
-  },
-   {
+    {
       "login": "redoh",
-      "name": "Neo",
+      "name": "Ferit",
       "avatar_url": "https://avatars.githubusercontent.com/u/38852479?v=4",
       "profile": "https://github.com/redoh",
       "contributions": [
-        "code",
-        "doc",
-        "design"
+        "code"
       ]
     },
-  {
-    "login": "utku-weezboo",
-    "name": "utku-weezboo",
-    "avatar_url": "https://avatars.githubusercontent.com/u/173268231?v=4",
-    "profile": "https://github.com/utku-weezboo",
-    "contributions": [
-      "code",
-      "doc",
-      "design"
-    ]
-  }
-],
+    {
+      "login": "ozngnr",
+      "name": "Ozan Guner",
+      "avatar_url": "https://avatars.githubusercontent.com/u/67223977?v=4",
+      "profile": "https://github.com/ozngnr",
+      "contributions": [
+        "code"
+      ]
+    }
+  ],
   "contributorsPerLine": 7,
+  "badgeTemplate": "",
   "skipCi": true,
-  "repoType": "github",
-  "repoHost": "https://github.com",
-  "projectName": "collab",
-  "projectOwner": "Art-of-Technology"
+  "commitConvention": "angular"
 }

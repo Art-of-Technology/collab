@@ -6,7 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
  
 
-## [0.2.2] - 2025-01-27
+## [Unreleased]
+
+### Added
+- GitHub Actions workflow to automatically add merged PR authors to `README.md` using the All Contributors specification
+  - Creates a default `.all-contributorsrc` when missing
+  - Regenerates the contributors list in `README.md` on merge
+
+### Changed
+- Updated `README.md` to include Contributors anchors compatible with All Contributors
+- Refreshed documentation for clarity and consistency: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+
+### Removed
+- Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
+
+## [0.2.3] - 2025-08-11
+
+### Fixed
+- **Task Detail Display**: Improved task description rendering and state management
+  - Removed unused initialDescriptionRef and related useEffect from TaskDetailContent to simplify state management
+  - Updated MarkdownEditor to immediately render content changes and synchronize editor content with the content prop
+  - Ensures accurate display of task descriptions in real-time
+
+### Technical
+- Refactored TaskDetailContent component to remove unnecessary state management complexity
+- Enhanced MarkdownEditor component with better content synchronization using useEffect
+
+## [0.2.2] - 2025-08-08
 
 ### Added
 - **Comprehensive Notifications UI**: Complete notifications management system with advanced features
@@ -22,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Notification type in MentionContext to support task details
 - Implemented client-side state management for notification filtering and grouping
 
-## [0.2.1] - 2025-01-27
+## [0.2.1] - 2025-08-08
 
 ### Added
 - **Leave Management UI Enhancement**: Fully enabled leave management interface
