@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
 
+## [0.2.4] - 2025-08-11
+
+### Changed
+- **Sidebar Navigation**: Removed Messages navigation item from the main sidebar
+  - Streamlined navigation by removing the Messages link and related routing logic
+  - Users can still access messages through other navigation paths
+
 ## [0.2.3] - 2025-08-11
 
 ### Fixed

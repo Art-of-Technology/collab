@@ -63,8 +63,6 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
             return urls.workspace({ workspaceSlug, path: '/bookmarks' });
           case '/profile':
             return urls.workspaceProfile({ workspaceSlug });
-          case '/messages':
-            return urls.messages(workspaceSlug);
           case '/tags':
             return urls.workspace({ workspaceSlug, path: '/tags' });
           case '/features':
@@ -135,12 +133,6 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         href: getUrl('/profile'),
         icon: UserIcon,
         current: pathname === getUrl('/profile') || pathname === `/${workspaceId}/profile`,
-      },
-      {
-        name: "Messages",
-        href: getUrl('/messages'),
-        icon: EnvelopeIcon,
-        current: pathname === getUrl('/messages') || pathname === `/${workspaceId}/messages` || pathname.startsWith(getUrl('/messages') + '/') || pathname.startsWith(`/${workspaceId}/messages/`),
       },
       {
         name: "Tags",
