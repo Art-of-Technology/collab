@@ -16,7 +16,6 @@ interface UserPermissions {
 
 export function usePermissions(workspaceId?: string) {
   const { data: session } = useSession();
-
   const {
     data: userPermissions,
     isLoading,
@@ -27,9 +26,9 @@ export function usePermissions(workspaceId?: string) {
       if (!session?.user?.id || !workspaceId) {
         throw new Error("User or workspace not found");
       }
-
       const response = await fetch(
-        `/api/workspaces/${workspaceId}/permissions?userId=${session.user.id}`
+        `/api/workspaces/${workspaceId}/permissions?userId=${session.user.id}`,
+        { cache: "no-store" as RequestCache }
       );
 
       if (!response.ok) {
@@ -39,6 +38,10 @@ export function usePermissions(workspaceId?: string) {
       return response.json();
     },
     enabled: !!session?.user?.id && !!workspaceId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
   });
 
   const checkPermission = (permission: Permission): PermissionCheckResult => {
