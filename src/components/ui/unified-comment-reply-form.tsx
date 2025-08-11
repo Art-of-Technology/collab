@@ -48,25 +48,6 @@ export function UnifiedCommentReplyForm({
         parentId: parentCommentId
       });
 
-      // Process mentions if there are any in the reply
-      if (newReply?.id) {
-        const mentionedUserIds = extractMentionUserIds(content);
-        
-        if (mentionedUserIds.length > 0) {
-          try {
-            await axios.post("/api/mentions", {
-              userIds: mentionedUserIds,
-              sourceType: itemType === 'task' ? "taskComment" : "comment",
-              sourceId: newReply.id,
-              content: `mentioned you in a ${itemType} comment reply: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
-            });
-          } catch (error) {
-            console.error("Failed to process mentions:", error);
-            // Don't fail the reply submission if mentions fail
-          }
-        }
-      }
-
       setContent("");
       onCancel();
     } catch (error) {
