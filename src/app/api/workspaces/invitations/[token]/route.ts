@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { defaultRolePermissions } from '@/lib/role-permission-defaults';
 
 // GET /api/workspaces/invitations/[token] - Get invitation details
 export async function GET(
@@ -126,7 +127,7 @@ export async function POST(
         data: {
           userId: session.user.id,
           workspaceId: invitation.workspaceId,
-          role: 'MEMBER'
+          role: 'MEMBER',
         }
       }),
       prisma.workspaceInvitation.update({
