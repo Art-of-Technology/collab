@@ -102,7 +102,7 @@ export default async function DashboardPage() {
           <PostsByType type="QUESTION" workspaceId={workspaceId} initialPosts={questions} />
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
         {/* My Leave */}
         <MyLeave workspaceId={workspaceId} />
         {/* Leave Management Section (for managers) */}
