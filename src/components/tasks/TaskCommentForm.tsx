@@ -10,7 +10,6 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
-import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 interface TaskCommentFormProps {
   taskId: string;
