@@ -7,6 +7,7 @@ import {
 import { WorkspaceRole } from "@/lib/permissions";
 import { format } from "date-fns";
 import { logger } from "@/lib/logger";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export interface TaskFollowerNotificationOptions {
   taskId: string;
@@ -643,13 +644,14 @@ export class NotificationService {
     if (mentionedUserIds.length === 0) return;
 
     try {
+      const safeContent = sanitizeHtmlToPlainText(content);
       // Create mention notifications
       const notifications = mentionedUserIds
         .filter((userId) => userId !== senderId) // Don't notify the sender
         .map((userId) => ({
           type: NotificationType.TASK_COMMENT_MENTION.toString(),
           content: `mentioned you in a task comment: "${
-            content.length > 100 ? content.substring(0, 97) + "..." : content
+            safeContent.length > 100 ? safeContent.substring(0, 97) + "..." : safeContent
           }"`,
           userId,
           senderId,

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService } from "@/lib/notification-service";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authConfig);
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
 
   try {
     const { content, workspaceId } = await req.json();
+    const sanitizedContent = sanitizeHtmlToPlainText(content || "");
 
     if (!content || !content.trim()) {
       return new NextResponse("Content is required", { status: 400 });
@@ -48,14 +50,14 @@ export async function POST(req: Request) {
     });
 
     // Process mentions if any exist in the content
-    const mentionedUserIds = extractMentionUserIds(content.trim());
+    const mentionedUserIds = extractMentionUserIds((content || "").trim());
     if (mentionedUserIds.length > 0) {
       try {
         // Create notifications for mentioned users
         await prisma.notification.createMany({
           data: mentionedUserIds.map(userId => ({
             type: "post_mention",
-            content: `mentioned you in a post: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`,
+            content: `mentioned you in a post: "${sanitizedContent.length > 100 ? sanitizedContent.substring(0, 97) + '...' : sanitizedContent}"`,
             userId: userId,
             senderId: session.user.id,
             read: false,

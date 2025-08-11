@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
+import { sanitizeHtmlToPlainText } from '@/lib/html-sanitizer';
 import { extractMentionUserIds } from '@/utils/mentions';
 
 /**
@@ -212,6 +213,7 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
     
     // Process mentions and create mention notifications
     const mentionedUserIds = extractMentionUserIds(html || content);
+    const previewBase = sanitizeHtmlToPlainText(html || content);
     
     try {
       // Handle mentions first (includes auto-follow)
@@ -221,7 +223,7 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
           comment.id,
           mentionedUserIds,
           user.id,
-          content
+          previewBase
         );
       }
 
@@ -230,7 +232,7 @@ export async function addTaskComment(taskId: string, content: string, parentId?:
         taskId,
         senderId: user.id,
         type: NotificationType.TASK_COMMENT_ADDED,
-        content: `New comment added: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`,
+        content: `New comment added: ${previewBase.substring(0, 100)}${previewBase.length > 100 ? '...' : ''}`,
         excludeUserIds: mentionedUserIds // Exclude mentioned users from general notifications
       });
 
@@ -550,6 +552,7 @@ export async function updateTaskComment(taskId: string, commentId: string, conte
 
     // Process mentions in updated comment
     const mentionedUserIds = extractMentionUserIds(html || content);
+    const previewBase = sanitizeHtmlToPlainText(html || content);
     
     try {
       // Handle mentions (includes auto-follow)
@@ -559,7 +562,7 @@ export async function updateTaskComment(taskId: string, commentId: string, conte
           commentId,
           mentionedUserIds,
           user.id,
-          content
+          previewBase
         );
       }
     } catch (error) {
