@@ -16,7 +16,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -55,30 +54,67 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationButton,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { format, differenceInDays } from "date-fns";
-import { LeaveStatus, LeaveDuration, LeaveRequestWithUser } from "@/types/leave";
+import {
+  LeaveStatus,
+  LeaveDuration,
+  LeaveRequestWithUser,
+} from "@/types/leave";
 import { Skeleton } from "../ui/skeleton";
 
 interface LeaveRequestsManagerProps {
-  requests?: LeaveRequestWithUser[];
+  data?: {
+    data: LeaveRequestWithUser[];
+    pagination: {
+      total: number;
+      take: number;
+      skip: number;
+      hasMore: boolean;
+      totalPages: number;
+      currentPage: number;
+    };
+  };
+  summaryData?: {
+    pending: number;
+    approved: number;
+    rejected: number;
+    canceled: number;
+    total: number;
+  };
   isLoading?: boolean;
   onApprove?: (requestId: string, notes?: string) => Promise<void>;
   onReject?: (requestId: string, notes?: string) => Promise<void>;
+  onPageChange?: (page: number) => void;
+  onStatusFilterChange?: (
+    status: "all" | "pending" | "approved" | "rejected"
+  ) => void;
+  currentStatusFilter?: "all" | "pending" | "approved" | "rejected";
 }
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 export function LeaveRequestsManager({
-  requests = [],
+  data,
+  summaryData,
   isLoading = false,
   onApprove,
   onReject,
+  onPageChange,
+  onStatusFilterChange,
+  currentStatusFilter = "all",
 }: LeaveRequestsManagerProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequestWithUser | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
@@ -86,26 +122,23 @@ export function LeaveRequestsManager({
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filter requests based on search term and status
-  const filteredRequests = requests.filter((request) => {
-    const matchesSearch = 
-      request.user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.policy?.name.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === "all" || request.status.toLowerCase() === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  // Extract data from the server response
+  const requests = data?.data || [];
+  const pagination = data?.pagination;
 
-  // Group requests by status for summary
-  const requestSummary = requests.reduce(
-    (acc, request) => {
-      acc[request.status.toLowerCase() as keyof typeof acc]++;
-      return acc;
-    },
-    { pending: 0, approved: 0, rejected: 0, canceled: 0 }
-  );
+  // Handle status filter changes
+  const handleStatusFilterChange = (value: string) => {
+    const newStatus = value as StatusFilter;
+    onStatusFilterChange?.(newStatus);
+  };
+
+  // Handle page changes
+  const handlePageChange = (page: number) => {
+    onPageChange?.(page);
+  };
+
+  // Use summary data from server (total counts across all pages)
+  const requestSummary = summaryData || { pending: 0, approved: 0, rejected: 0, canceled: 0, total: 0 };
 
   const getStatusBadge = (status?: LeaveStatus) => {
     if (!status) return null;
@@ -267,7 +300,7 @@ export function LeaveRequestsManager({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold">{requests.length}</p>
+                <p className="text-2xl font-bold">{requestSummary.total}</p>
               </div>
               <Calendar className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -275,29 +308,15 @@ export function LeaveRequestsManager({
         </Card>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Leave Requests
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Search by employee name, email, or leave type..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            
-            <Select value={statusFilter} onValueChange={(value: StatusFilter) => setStatusFilter(value)}>
+          <div className="flex flex-col sm:flex-row gap-4 justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Leave Requests
+            </CardTitle>
+            <Select value={currentStatusFilter} onValueChange={handleStatusFilterChange}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -309,7 +328,8 @@ export function LeaveRequestsManager({
               </SelectContent>
             </Select>
           </div>
-
+        </CardHeader>
+        <CardContent>
           {/* Requests Table */}
           <div className="rounded-md border">
             <Table>
@@ -325,16 +345,16 @@ export function LeaveRequestsManager({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.length === 0 ? (
+                {requests.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {searchTerm || statusFilter !== "all" 
-                        ? "No requests match your filters." 
+                      {currentStatusFilter !== "all"
+                        ? "No requests match your filters."
                         : "No leave requests found."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredRequests.map((request) => {
+                  requests.map((request) => {
                     const priority = getRequestPriority(request);
                     const daysCount = getDaysCount(
                       new Date(request.startDate), 
@@ -445,6 +465,106 @@ export function LeaveRequestsManager({
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-between px-2 py-4 gap-2">
+              <div className="text-xs text-muted-foreground">
+                Showing {pagination.skip + 1} to{" "}
+                {Math.min(pagination.skip + pagination.take, pagination.total)}{" "}
+                of {pagination.total} requests
+              </div>
+
+              <Pagination className="flex-1 flex sm:justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() =>
+                        handlePageChange(pagination.currentPage - 1)
+                      }
+                      className={
+                        pagination.currentPage <= 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                      aria-disabled={pagination.currentPage <= 1}
+                      size="sm"
+                    />
+                  </PaginationItem>
+
+                  {/* Page numbers */}
+                  {Array.from(
+                    { length: Math.min(5, pagination.totalPages) },
+                    (_, i) => {
+                      let pageNum;
+                      if (pagination.totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (pagination.currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (
+                        pagination.currentPage >=
+                        pagination.totalPages - 2
+                      ) {
+                        pageNum = pagination.totalPages - 4 + i;
+                      } else {
+                        pageNum = pagination.currentPage - 2 + i;
+                      }
+
+                      return (
+                        <PaginationItem key={pageNum}>
+                          <PaginationButton
+                            onClick={() => handlePageChange(pageNum)}
+                            isActive={pagination.currentPage === pageNum}
+                            className="cursor-pointer"
+                            size="sm"
+                          >
+                            {pageNum}
+                          </PaginationButton>
+                        </PaginationItem>
+                      );
+                    }
+                  )}
+
+                  {pagination.totalPages > 5 &&
+                    pagination.currentPage < pagination.totalPages - 2 && (
+                      <>
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                        <PaginationItem>
+                          <PaginationButton
+                            onClick={() =>
+                              handlePageChange(pagination.totalPages)
+                            }
+                            className="cursor-pointer"
+                            size="sm"
+                          >
+                            {pagination.totalPages}
+                          </PaginationButton>
+                        </PaginationItem>
+                      </>
+                    )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() =>
+                        handlePageChange(pagination.currentPage + 1)
+                      }
+                      className={
+                        pagination.currentPage >= pagination.totalPages
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                      aria-disabled={
+                        pagination.currentPage >= pagination.totalPages
+                      }
+                      size="sm"
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
 

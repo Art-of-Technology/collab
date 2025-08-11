@@ -1,23 +1,35 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { useApproveLeaveRequest, useRejectLeaveRequest } from "@/hooks/queries/useLeave";
+import {
+  useApproveLeaveRequest,
+  useRejectLeaveRequest,
+  usePaginatedWorkspaceLeaveRequests,
+  useWorkspaceLeaveRequestsSummary,
+} from "@/hooks/queries/useLeave";
 import { LeaveRequestsManager } from "@/components/hr/LeaveRequestsManager";
-import { LeaveRequestWithUser } from "@/types/leave";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, FileText } from "lucide-react";
+import { Settings} from "lucide-react";
 
 interface LeaveManagementClientProps {
   workspaceId: string;
-  initialRequests: LeaveRequestWithUser[];
 }
 
-export default function LeaveManagementClient({
-  workspaceId,
-  initialRequests,
-}: LeaveManagementClientProps) {
+export default function LeaveManagementClient({ workspaceId }: LeaveManagementClientProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const pageSize = 10;
+
+  // Use the paginated hook and summary hook
+  const { data: paginatedData, isLoading } = usePaginatedWorkspaceLeaveRequests(workspaceId, {
+    page: currentPage,
+    pageSize,
+    status: statusFilter === "all" ? undefined : (statusFilter.toUpperCase() as "PENDING" | "APPROVED" | "REJECTED"),
+  });
+
+  const { data: summaryData, isLoading: isLoadingSummary } = useWorkspaceLeaveRequestsSummary(workspaceId);
+
   const approveMutation = useApproveLeaveRequest(workspaceId);
   const rejectMutation = useRejectLeaveRequest(workspaceId);
 
@@ -29,50 +41,44 @@ export default function LeaveManagementClient({
     await rejectMutation.mutateAsync({ requestId, notes });
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleStatusFilterChange = (status: "all" | "pending" | "approved" | "rejected") => {
+    setStatusFilter(status);
+    setCurrentPage(1); // Reset to first page when changing filters
+  };
+
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Leave Management</h1>
-          <p className="text-gray-600 mt-2">
-            Review and manage leave requests from your team members.
-          </p>
+          <p className="text-gray-600 mt-2">Review and manage leave requests from your team members.</p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 mt-1">
           <Link href={`/${workspaceId}/leave-management/policies`}>
             <Button variant="outline">
-              <Settings className="h-4 w-4 mr-2" />
-              Manage Policies
+              <Settings className="h-4 w-4" />
+              <span className="hidden md:inline ml-2">
+                Manage Policies
+              </span>
             </Button>
           </Link>
         </div>
       </div>
 
-      <Tabs defaultValue="requests" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="requests">
-            <FileText className="h-4 w-4 mr-2" />
-            Leave Requests
-          </TabsTrigger>
-          <TabsTrigger value="policies" asChild>
-            <Link href={`/${workspaceId}/leave-management/policies`}>
-              <span className="flex items-center">
-                <Settings className="h-4 w-4 mr-2" />
-                Policies
-              </span>
-            </Link>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="requests">
-          <LeaveRequestsManager
-            requests={initialRequests}
-            isLoading={false}
-            onApprove={handleApprove}
-            onReject={handleReject}
-          />
-        </TabsContent>
-      </Tabs>
+      <LeaveRequestsManager
+        data={paginatedData}
+        summaryData={summaryData}
+        isLoading={isLoading || isLoadingSummary}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onPageChange={handlePageChange}
+        onStatusFilterChange={handleStatusFilterChange}
+        currentStatusFilter={statusFilter}
+      />
     </div>
   );
 }
