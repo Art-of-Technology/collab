@@ -10,6 +10,7 @@ const mentionSchema = z.object({
   sourceType: z.enum([
     "post",
     "comment",
+    "taskComment",
     "feature",
     "task",
     "epic",

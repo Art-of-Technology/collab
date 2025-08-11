@@ -41,7 +41,7 @@ export function UnifiedCommentReplyForm({
     }
 
     try {
-      const newReply = await addCommentMutation.mutateAsync({
+      await addCommentMutation.mutateAsync({
         itemType,
         itemId,
         content,
