@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
 
+## [0.2.3] - 2025-08-11
+
+### Fixed
+- **Task Detail Display**: Improved task description rendering and state management
+  - Removed unused initialDescriptionRef and related useEffect from TaskDetailContent to simplify state management
+  - Updated MarkdownEditor to immediately render content changes and synchronize editor content with the content prop
+  - Ensures accurate display of task descriptions in real-time
+
+### Technical
+- Refactored TaskDetailContent component to remove unnecessary state management complexity
+- Enhanced MarkdownEditor component with better content synchronization using useEffect
+
 ## [0.2.2] - 2025-08-08
 
 ### Added
