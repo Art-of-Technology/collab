@@ -27,11 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved session synchronization across browser tabs and windows
 - Updated `README.md` to include Contributors anchors compatible with All Contributors
 - Refreshed documentation for clarity and consistency: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+ - **Board Items Refresh**: Enhanced query invalidation to keep Kanban data in sync
+   - `EpicDetailContent`, `MilestoneDetailContent`, and `StoryDetailContent` now invalidate board items when user-visible fields change (status, assignee, reporter, labels, title, description)
+   - `TaskDetailContent` triggers immediate refresh on task deletion and movement
 
 ### Technical
 - Added comprehensive permission validation to workspace invitation acceptance
 - Enhanced workspace member role management with automatic permission updates
 - Improved session provider architecture for better state synchronization
+ - Improved task creation and deletion hooks to refresh relevant board queries and assigned tasks widgets, ensuring consistent state across the application
 
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
