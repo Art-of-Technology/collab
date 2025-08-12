@@ -14,6 +14,8 @@ interface NotificationsListProps {
   onSelectionChange: (selected: Set<string>) => void;
   onSelectAll: () => void;
   onMarkAsRead: (notificationId: string) => Promise<void>;
+  onMarkAllRead?: () => Promise<void>;
+  unreadCount?: number;
 }
 
 export default function NotificationsList({
@@ -25,6 +27,8 @@ export default function NotificationsList({
   onSelectionChange,
   onSelectAll,
   onMarkAsRead,
+  onMarkAllRead,
+  unreadCount,
 }: NotificationsListProps) {
 
   const handleNotificationClick = (notification: Notification, e: React.MouseEvent) => {
@@ -71,14 +75,18 @@ export default function NotificationsList({
 
   // Use virtual scrolling for better performance
   return (
-    <VirtualNotificationsList
-      notifications={notifications}
-      groupBy={groupBy}
-      selectedNotifications={selectedNotifications}
-      onSelectionChange={onSelectionChange}
-      onNotificationClick={handleNotificationClick}
-      onSelectAll={onSelectAll}
-      isLoading={isLoading}
-    />
+    <div className="h-full flex flex-col">
+      <div className="flex-1 min-h-0">
+        <VirtualNotificationsList
+          notifications={notifications}
+          groupBy={groupBy}
+          selectedNotifications={selectedNotifications}
+          onSelectionChange={onSelectionChange}
+          onNotificationClick={handleNotificationClick}
+          onSelectAll={onSelectAll}
+          isLoading={isLoading}
+        />
+      </div>
+    </div>
   );
 }
