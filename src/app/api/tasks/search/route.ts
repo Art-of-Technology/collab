@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
     if (!currentUser?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
     // Get the search query from URL params
     const url = new URL(req.url);
     const query = url.searchParams.get("q");
@@ -22,10 +21,11 @@ export async function GET(req: NextRequest) {
     
     // Basic search query to search by title or issueKey
     let tasks;
-    
+    let whereCondition: any = {};
+
     if (workspaceId) {
       // If we have a workspace ID, only search for tasks within that workspace
-      const whereCondition: any = {
+      whereCondition = {
         AND: [
           { workspaceId },
           { 
@@ -35,38 +35,9 @@ export async function GET(req: NextRequest) {
           }
         ]
       };
-
-      // Add search conditions only if we have a search query
-      if (searchQuery.length > 0) {
-        whereCondition.OR = [
-          { title: { contains: searchQuery, mode: 'insensitive' } },
-          { issueKey: { contains: searchQuery, mode: 'insensitive' } },
-        ];
-      }
-
-      tasks = await prisma.task.findMany({
-        where: whereCondition,
-        select: {
-          id: true,
-          title: true,
-          issueKey: true,
-          status: true,
-          priority: true,
-          taskBoard: {
-            select: {
-              id: true,
-              name: true,
-            }
-          }
-        },
-        take: 10,
-        orderBy: [
-          { updatedAt: 'desc' }
-        ]
-      });
     } else {
       // If no workspace is specified, search all tasks user has access to
-      const whereCondition: any = {
+      whereCondition = {
         AND: [
           {
             OR: [
@@ -87,35 +58,35 @@ export async function GET(req: NextRequest) {
         ]
       };
 
-      // Add search conditions only if we have a search query
-      if (searchQuery.length > 0) {
-        whereCondition.OR = [
-          { title: { contains: searchQuery, mode: 'insensitive' } },
-          { issueKey: { contains: searchQuery, mode: 'insensitive' } },
-        ];
-      }
-
-      tasks = await prisma.task.findMany({
-        where: whereCondition,
-        select: {
-          id: true,
-          title: true,
-          issueKey: true,
-          status: true,
-          priority: true,
-          taskBoard: {
-            select: {
-              id: true,
-              name: true,
-            }
-          }
-        },
-        take: 10,
-        orderBy: [
-          { updatedAt: 'desc' }
-        ]
-      });
     }
+    // Add search conditions only if we have a search query
+    if (searchQuery.length > 0) {
+      whereCondition.OR = [
+        { title: { contains: searchQuery, mode: 'insensitive' } },
+        { issueKey: { contains: searchQuery, mode: 'insensitive' } },
+      ];
+    }
+
+    tasks = await prisma.task.findMany({
+      where: whereCondition,
+      select: {
+        id: true,
+        title: true,
+        issueKey: true,
+        status: true,
+        priority: true,
+        taskBoard: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      },
+      take: 10,
+      orderBy: [
+        { updatedAt: 'desc' }
+      ]
+    });
     
     return NextResponse.json(tasks);
   } catch (error) {
