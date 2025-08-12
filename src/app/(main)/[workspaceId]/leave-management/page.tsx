@@ -56,30 +56,7 @@ export default async function LeaveManagementPage() {
     );
   }
 
-  // Fetch leave requests data server-side
-  let initialRequests;
-  try {
-    initialRequests = await getWorkspaceLeaveRequests(workspaceId);
-  } catch (error) {
-    // Handle errors gracefully - show empty state with error message
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    
-    return (
-      <div className="container mx-auto p-6">
-        <Alert variant="destructive">
-          <AlertDescription>
-            Failed to load leave requests: {errorMessage}
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
-  // Pass data to client component
   return (
-    <LeaveManagementClient
-      workspaceId={workspaceId}
-      initialRequests={initialRequests}
-    />
+    <LeaveManagementClient workspaceId={workspaceId} />
   );
 }

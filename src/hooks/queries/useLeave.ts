@@ -8,6 +8,8 @@ import {
   getUserLeaveRequests,
   approveLeaveRequest,
   rejectLeaveRequest,
+  getPaginatedWorkspaceLeaveRequests,
+  getWorkspaceLeaveRequestsSummary,
 } from "@/actions/leave";
 import { LeaveBalanceType } from "@/types/leave";
 
@@ -111,6 +113,8 @@ export const leaveKeys = {
     [...leaveKeys.requests(workspaceId), "user", userId] as const,
   workspaceRequests: (workspaceId: string) =>
     [...leaveKeys.requests(workspaceId), "workspace"] as const,
+  workspaceRequestsSummary: (workspaceId: string) =>
+    [...leaveKeys.requests(workspaceId), "summary"] as const,
   balances: (workspaceId: string) =>
     [...leaveKeys.all, "balances", workspaceId] as const,
   userBalances: (workspaceId: string, year?: number) =>
@@ -216,6 +220,86 @@ export const useWorkspaceLeaveRequests = (workspaceId: string) => {
   });
 };
 
+// Get workspace leave requests summary hook (for managers)
+export const useWorkspaceLeaveRequestsSummary = (workspaceId: string) => {
+  const { data: session } = useSession();
+
+  return useQuery({
+    queryKey: leaveKeys.workspaceRequestsSummary(workspaceId),
+    queryFn: async () => {
+      if (!workspaceId) {
+        throw new Error("Workspace ID is required");
+      }
+
+      return await getWorkspaceLeaveRequestsSummary(workspaceId);
+    },
+    enabled: !!session?.user?.id && !!workspaceId,
+    staleTime: 2 * 60 * 1000, // 2 minutes - summary doesn't change as frequently
+    retry: (failureCount, error) => {
+      // Don't retry on authorization errors
+      if (
+        error.message.includes("Unauthorized") ||
+        error.message.includes("Insufficient permissions") ||
+        error.message.includes("401") ||
+        error.message.includes("403") ||
+        error.message.includes("Workspace not found")
+      ) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+};
+
+// Get paginated workspace leave requests hook (for managers)
+export const usePaginatedWorkspaceLeaveRequests = (
+  workspaceId: string,
+  options: {
+    page?: number;
+    pageSize?: number;
+    status?: "PENDING" | "APPROVED" | "REJECTED";
+  } = {}
+) => {
+  const { data: session } = useSession();
+  const { page = 1, pageSize = 10, status } = options;
+  const skip = (page - 1) * pageSize;
+
+  return useQuery({
+    queryKey: [
+      ...leaveKeys.workspaceRequests(workspaceId),
+      "paginated",
+      page,
+      pageSize,
+      status,
+    ],
+    queryFn: async () => {
+      if (!workspaceId) {
+        throw new Error("Workspace ID is required");
+      }
+
+      return await getPaginatedWorkspaceLeaveRequests(workspaceId, {
+        take: pageSize,
+        skip: skip,
+        status: status,
+      });
+    },
+    enabled: !!session?.user?.id && !!workspaceId,
+    retry: (failureCount, error) => {
+      // Don't retry on authorization errors
+      if (
+        error.message.includes("Unauthorized") ||
+        error.message.includes("Insufficient permissions") ||
+        error.message.includes("401") ||
+        error.message.includes("403") ||
+        error.message.includes("Workspace not found")
+      ) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+};
+
 // Create leave request mutation
 export const useCreateLeaveRequest = (workspaceId: string) => {
   const queryClient = useQueryClient();
@@ -232,6 +316,9 @@ export const useCreateLeaveRequest = (workspaceId: string) => {
       });
       queryClient.invalidateQueries({
         queryKey: leaveKeys.workspaceRequests(workspaceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: leaveKeys.workspaceRequestsSummary(workspaceId),
       });
       // Also invalidate balances since they might be affected
       queryClient.invalidateQueries({
@@ -254,6 +341,9 @@ export const useApproveLeaveRequest = (workspaceId: string) => {
         queryKey: leaveKeys.workspaceRequests(workspaceId),
       });
       queryClient.invalidateQueries({
+        queryKey: leaveKeys.workspaceRequestsSummary(workspaceId),
+      });
+      queryClient.invalidateQueries({
         queryKey: leaveKeys.requests(workspaceId),
       });
       queryClient.invalidateQueries({
@@ -274,6 +364,9 @@ export const useRejectLeaveRequest = (workspaceId: string) => {
       // Invalidate all leave-related queries to refresh the data
       queryClient.invalidateQueries({
         queryKey: leaveKeys.workspaceRequests(workspaceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: leaveKeys.workspaceRequestsSummary(workspaceId),
       });
       queryClient.invalidateQueries({
         queryKey: leaveKeys.requests(workspaceId),
@@ -314,6 +407,9 @@ export const useEditLeaveRequest = (workspaceId: string) => {
         queryKey: leaveKeys.workspaceRequests(workspaceId),
       });
       queryClient.invalidateQueries({
+        queryKey: leaveKeys.workspaceRequestsSummary(workspaceId),
+      });
+      queryClient.invalidateQueries({
         queryKey: leaveKeys.balances(workspaceId),
       });
     },
@@ -336,6 +432,9 @@ export const useCancelLeaveRequest = (workspaceId: string) => {
       });
       queryClient.invalidateQueries({
         queryKey: leaveKeys.workspaceRequests(workspaceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: leaveKeys.workspaceRequestsSummary(workspaceId),
       });
       queryClient.invalidateQueries({
         queryKey: leaveKeys.balances(workspaceId),
