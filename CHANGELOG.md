@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
 
+## [0.2.6] - 2025-08-12
+
+### Changed
+- **Task Search API**: Refactored task search functionality for improved maintainability
+  - Consolidated search query handling into a single `whereCondition` object
+  - Enhanced code readability and simplified conditional logic
+  - Improved task filtering based on workspace context
+- **Task Mention System**: Enhanced task mention suggestion component
+  - Introduced configurable constant for controlling task mention behavior across workspaces
+  - Improved workspace filtering logic for better task accessibility
+  - Enhanced code clarity and maintainability
+
+### Technical
+- Refactored task search API endpoint to use unified search condition handling
+- Updated TaskMentionSuggestion component with cleaner conditional logic for workspace filtering
+
 ## [0.2.4] - 2025-08-11
 
 ### Changed
