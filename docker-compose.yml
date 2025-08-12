@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  hocuspocus:
+    build:
+      context: .
+      dockerfile: Dockerfile.hocuspocus
+    ports:
+      - "1234:1234"
+    environment:
+      - HOCUSPOCUS_PORT=1234
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/collab
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1234"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

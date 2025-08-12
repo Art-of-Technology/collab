@@ -557,6 +557,7 @@ export function MilestoneDetailContent({
                                                     minHeight="150px"
                                                     maxHeight="400px"
                                                     onAiImprove={handleAiImproveDescription}
+                                                    collabDocumentId={`milestone:${milestone.id}:description`}
                                                 />
                                             </div>
                                             {savingDescription && (

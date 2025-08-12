@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef, useEffect, useMemo, useImperativeHandle, forwardRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -13,6 +13,7 @@ import Color from "@tiptap/extension-color";
 import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
+import { useSession } from "next-auth/react";
 import {
   Bold,
   Italic,
@@ -57,6 +58,16 @@ import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
+import * as Y from 'yjs'
+import { HocuspocusProvider as HPProvider } from '@hocuspocus/provider'
+import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import { useCurrentUser } from "@/hooks/queries/useUser";
+
+export interface MarkdownEditorRef {
+  getContent: () => string;
+}
 
 interface MarkdownEditorProps {
   onChange?: (markdown: string, html: string) => void;
@@ -68,6 +79,12 @@ interface MarkdownEditorProps {
   maxHeight?: string;
   compact?: boolean;
   onAiImprove?: (text: string) => Promise<string>;
+  // Enable collaborative editing when provided. The value should be a unique, stable ID for the document.
+  collabDocumentId?: string;
+  // Optionally override the provider URL; defaults to ws://127.0.0.1:1234 in dev
+  collabServerUrl?: string;
+  // Render in read-only mode but stay connected to Yjs/Hocuspocus for live updates
+  readOnly?: boolean;
 }
 
 // Custom Image extension with resize functionality
@@ -951,7 +968,30 @@ const MilestoneMention = TiptapNode.create({
   },
 })
 
-export function MarkdownEditor({
+// Generate a consistent color based on user ID
+function getUserColor(userId: string): string {
+  const colors = [
+    '#ef4444', // red
+    '#f97316', // orange
+    '#eab308', // yellow
+    '#22c55e', // green
+    '#14b8a6', // teal
+    '#3b82f6', // blue
+    '#8b5cf6', // violet
+    '#ec4899', // pink
+    '#f43f5e', // rose
+    '#06b6d4', // cyan
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+}
+
+export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>(({
   onChange,
   content = "",
   initialValue = "",
@@ -961,7 +1001,10 @@ export function MarkdownEditor({
   maxHeight = "400px",
   compact = false,
   onAiImprove,
-}: MarkdownEditorProps) {
+  collabDocumentId,
+  collabServerUrl,
+  readOnly = false,
+}: MarkdownEditorProps, ref) => {
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
@@ -970,124 +1013,323 @@ export function MarkdownEditor({
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [showTaskMentions, setShowTaskMentions] = useState(false);
-  const [taskQuery, setTaskQuery] = useState("");
-  const [taskMentionPosition, setTaskMentionPosition] = useState({ top: 0, left: 0 });
   
   // Command menu states
   const [showCommandMenu, setShowCommandMenu] = useState(false);
   const [commandMenuPosition, setCommandMenuPosition] = useState({ top: 0, left: 0 });
   
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const { currentWorkspace: workspaceData } = useWorkspace();
+  const { currentWorkspace } = useWorkspace();
 
-  // Use a stable reference for initialValue to prevent re-renders
-  // Process initial content to convert text-based mentions to HTML
-  const processInitialContent = useCallback((rawContent: string) => {
-    if (!rawContent) return '';
-    
-    let processed = rawContent;
-    
-    // If content looks like text (contains mention patterns but not HTML), process it
-    if (processed.includes('@[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![') || processed.includes('#[')) {
-      // Convert text-based mentions to HTML spans that Tiptap can parse
-      
-      // User mentions: @[name](id) -> HTML span
-      processed = processed.replace(
-        /@\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-mention data-user-id="$2" data-user-name="$1">@$1</span>'
-      );
-      
-      // Epic mentions: ~[name](id) -> HTML span  
-      processed = processed.replace(
-        /~\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-epic-mention data-epic-id="$2" data-epic-title="$1" data-epic-issue-key="">~$1</span>'
-      );
-      
-      // Story mentions: ^[name](id) -> HTML span
-      processed = processed.replace(
-        /\^\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-story-mention data-story-id="$2" data-story-title="$1" data-story-issue-key="">^$1</span>'
-      );
-      
-      // Milestone mentions: ![name](id) -> HTML span  
-      processed = processed.replace(
-        /!\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-milestone-mention data-milestone-id="$2" data-milestone-title="$1" data-milestone-issue-key="">!$1</span>'
-      );
-      
-      // Task mentions: #[name](id) -> HTML span
-      processed = processed.replace(
-        /#\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-task-mention data-task-id="$2" data-task-title="$1" data-task-issue-key="">#$1</span>'
-      );
-      
-      // Convert newlines to <br> tags
-      processed = processed.replace(/\n/g, '<br>');
-    }
-    
-    return processed;
-  }, []);
 
   const initialContentRef = useRef(initialValue || content);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-primary underline cursor-pointer',
-        },
-      }),
-      // Replace Image with ResizableImage
-      ResizableImage.configure({
-        HTMLAttributes: {
-          class: 'resizable-image',
-        },
-      }),
-      CustomCSS.configure({ css: imageCSS }),
-      Underline,
-      Placeholder.configure({
-        placeholder,
-      }),
-      TextStyle,
-      Heading.configure({
-        levels: [1, 2, 3],
-      }),
-      Color,
-      Mention, // Add Mention extension
-      TaskMention, // Add Task Mention extension
-      EpicMention, // Add Epic Mention extension
-      StoryMention, // Add Story Mention extension
-      MilestoneMention, // Add Milestone Mention extension
-    ],
-    content: initialContentRef.current,
-    editorProps: {
-      attributes: {
-        class: cn(
-          "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
-          "min-h-[80px] p-3 rounded-md border-0",
-          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border"
-        ),
-        style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
-      }
+  // Collab: create ydoc/provider optionally
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const providerRef = useRef<HPProvider | null>(null);
+  const indexeddbRef = useRef<IndexeddbPersistence | null>(null);
+  const [collabReady, setCollabReady] = useState(0);
+  const { data: session } = useSession();
+  const { data: currentUser } = useCurrentUser();
+  
+  // Get user info for collaboration
+  const collaborationUser = useMemo(() => {
+    if (!session?.user) {
+      return {
+        name: 'Anonymous',
+        color: '#94a3b8',
+        avatar: null,
+        initials: 'AN',
+      };
+    }
+    
+    // Generate initials from name
+    const name = session.user.name || 'User';
+    const initials = name
+      .split(' ')
+      .map(word => word[0]?.toUpperCase() || '')
+      .join('')
+      .slice(0, 2) || 'U';
+    
+    // Ensure avatar URL is absolute
+    let avatarUrl = currentUser?.image || undefined;
+    if (avatarUrl && !avatarUrl.startsWith('http')) {
+      // If it's a relative URL, make it absolute
+      avatarUrl = `${window.location.origin}${avatarUrl}`;
+    }
+    
+    return {
+      name,
+      color: getUserColor(session.user.id || 'default'),
+      avatar: avatarUrl,
+      initials,
+      id: session.user.id,
+    };
+  }, [session, currentUser?.image]);
+
+  function computeHocuspocusUrl(overriddenUrl?: string): string {
+    if (overriddenUrl && overriddenUrl.trim().length > 0) return overriddenUrl;
+    if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_HOCUSPOCUS_URL || 'ws://127.0.0.1:1234';
+
+    const envUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
+    if (envUrl && envUrl.trim().length > 0) return envUrl;
+
+    const isSecure = window.location.protocol === 'https:';
+    const scheme = isSecure ? 'wss' : 'ws';
+    const host = window.location.hostname || '127.0.0.1';
+    const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '1234';
+    return `${scheme}://${host}:${port}`;
+  }
+
+  useEffect(() => {
+    if (!collabDocumentId) return;
+
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
+
+    // Offline persistence for resilience
+    indexeddbRef.current = new IndexeddbPersistence(collabDocumentId, ydoc);
+
+    const url = computeHocuspocusUrl(collabServerUrl);
+
+    providerRef.current = new HPProvider({
+      url,
+      name: collabDocumentId,
+      document: ydoc,
+    });
+    // Ensure connection attempt even if defaults change in provider
+    try {
+      (providerRef.current as unknown as { connect?: () => void })?.connect?.();
+    } catch {}
+    setCollabReady((v) => v + 1);
+
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        // Best-effort runtime diagnostics without relying on types
+        const anyProvider: any = providerRef.current;
+        anyProvider?.on?.('status', (event: any) => {
+          console.log('[Hocuspocus] status:', event?.status, 'url:', url, 'doc:', collabDocumentId);
+        });
+        anyProvider?.on?.('synced', () => {
+          console.log('[Hocuspocus] synced for', collabDocumentId);
+        });
+      } catch {}
+    }
+
+    return () => {
+      providerRef.current?.destroy();
+      providerRef.current = null;
+      indexeddbRef.current?.destroy();
+      indexeddbRef.current = null;
+      ydocRef.current?.destroy();
+      ydocRef.current = null;
+    };
+  }, [collabDocumentId, collabServerUrl]);
+
+  const editor = useEditor(
+    {
+      extensions: (
+        () => {
+          const base = [
+            StarterKit,
+            Link.configure({
+              openOnClick: false,
+              HTMLAttributes: {
+                class: 'text-primary underline cursor-pointer',
+              },
+            }),
+            // Replace Image with ResizableImage
+            ResizableImage.configure({
+              HTMLAttributes: {
+                class: 'resizable-image',
+              },
+            }),
+            CustomCSS.configure({ css: imageCSS }),
+            Underline,
+            Placeholder.configure({
+              placeholder,
+            }),
+            TextStyle,
+            Heading.configure({
+              levels: [1, 2, 3],
+            }),
+            Color,
+            Mention,
+            TaskMention,
+            EpicMention,
+            StoryMention,
+            MilestoneMention,
+          ];
+
+          if (collabDocumentId && ydocRef.current) {
+            base.push(
+              Collaboration.configure({ 
+                document: ydocRef.current,
+                fragment: ydocRef.current.getXmlFragment('prosemirror'),
+              }),
+              CollaborationCursor.configure({
+                provider: providerRef.current!,
+                user: collaborationUser,
+                render: (user: any) => {
+                  const cursor = document.createElement('span');
+                  cursor.classList.add('collaboration-cursor__caret');
+                  cursor.style.borderColor = user.color;
+                  
+                  const label = document.createElement('div');
+                  label.classList.add('collaboration-cursor__label');
+                  label.style.backgroundColor = user.color;
+                  
+                  // Helper function to create initials fallback
+                  const createFallback = () => {
+                    const fallback = document.createElement('div');
+                    fallback.classList.add('collaboration-cursor__avatar-fallback');
+                    fallback.style.backgroundColor = user.color;
+                    fallback.textContent = user.initials || user.name?.slice(0, 2).toUpperCase() || 'U';
+                    return fallback;
+                  };
+                  
+                  // Create avatar element if user has an image
+                  if (user.avatar && user.avatar.trim() !== '') {
+                    const avatarWrapper = document.createElement('div');
+                    avatarWrapper.classList.add('collaboration-cursor__avatar-wrapper');
+                    avatarWrapper.style.border = `2px solid ${user.color}`;
+                    
+                    const avatar = document.createElement('img');
+                    // Ensure we're using a valid URL
+                    avatar.src = user.avatar;
+                    avatar.classList.add('collaboration-cursor__avatar');
+                    // Add crossorigin attribute to handle CORS
+                    avatar.crossOrigin = 'anonymous';
+                    
+                    // Log for debugging
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.log('[Collab] Loading avatar for', user.name, ':', user.avatar);
+                    }
+                    
+                    // Handle avatar loading errors with fallback to initials
+                    avatar.onerror = () => {
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.log('[Collab] Failed to load avatar for', user.name, ', using fallback');
+                      }
+                      // Replace image with initials fallback
+                      avatarWrapper.innerHTML = '';
+                      avatarWrapper.appendChild(createFallback());
+                    };
+                    
+                    // Also add load handler to ensure image loaded
+                    avatar.onload = () => {
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.log('[Collab] Successfully loaded avatar for', user.name);
+                      }
+                    };
+                    
+                    avatarWrapper.appendChild(avatar);
+                    label.appendChild(avatarWrapper);
+                  } else {
+                    // Show initials in a circle if no avatar
+                    const fallbackWrapper = document.createElement('div');
+                    fallbackWrapper.classList.add('collaboration-cursor__avatar-wrapper');
+                    fallbackWrapper.style.border = `2px solid ${user.color}`;
+                    fallbackWrapper.appendChild(createFallback());
+                    label.appendChild(fallbackWrapper);
+                  }
+                  
+                  cursor.appendChild(label);
+                  return cursor;
+                },
+              })
+            );
+          }
+
+          return base;
+        }
+      )(),
+      content: initialContentRef.current,
+      editorProps: {
+        attributes: {
+          class: cn(
+            "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
+            "min-h-[80px] p-3 rounded-md border-0",
+            "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border"
+          ),
+          style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
+        }
+      },
+      editable: !readOnly,
+      immediatelyRender: false,
+      onUpdate: ({ editor }) => {
+        // With collab enabled, Yjs handles syncing. We still emit HTML for server persistence when user clicks Save.
+        const html = editor.getHTML();
+        onChange?.(html, html);
+        
+        // Trigger auto-save for collaborative documents
+        if (collabDocumentId && !readOnly) {
+          debouncedAutoSave();
+        }
+      },
     },
-    immediatelyRender: false,
-    onUpdate: ({ editor }) => {
-      // Get the full HTML content for rendering
-      const html = editor.getHTML();
-      
-      // Only pass HTML to the onChange handler
-      onChange?.(html, html); // Passing html twice for compatibility, but second arg could be removed if forms are updated
-    },
-  }, []); // Empty dependency array to ensure editor only initializes once
+    [collabDocumentId, readOnly, collabReady, collaborationUser]
+  );
 
   function normalizeHTML(html: string): string {
     return html.replace(/\s+/g, ' ').trim();
   }
 
+  // State for autosave functionality
+  const [isSaving, setIsSaving] = useState(false);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Autosave function for collaborative documents
+  const autoSave = useCallback(async () => {
+    if (!collabDocumentId || !editor || isSaving) return;
+    
+    try {
+      setIsSaving(true);
+      const content = editor.getHTML();
+      
+      const response = await fetch('/api/collab/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId: collabDocumentId,
+          content: content,
+        }),
+      });
+      
+      if (response.ok) {
+        console.log(`[MarkdownEditor] Auto-saved: ${collabDocumentId}`);
+      }
+    } catch (error) {
+      console.error('Auto-save error:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [collabDocumentId, editor, isSaving]);
+  
+  // Debounced auto-save
+  const debouncedAutoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSave();
+    }, 2000); // Auto-save after 2 seconds of inactivity
+  }, [autoSave]);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    getContent: () => {
+      return editor?.getHTML() || '';
+    },
+  }), [editor]);
+
   useEffect(() => {
+    // Skip content updates when using collaboration to prevent duplication
+    if (collabDocumentId) return;
+    
     if (editor && content !== undefined) {
       const currentContent = editor.getHTML();
       // Only update if the content is actually different to avoid unnecessary updates
@@ -1096,41 +1338,8 @@ export function MarkdownEditor({
         editor.commands.setContent(content || '');
       }
     }
-  }, [editor, content]);
+  }, [editor, content, collabDocumentId]);
 
-  // Track user typing activity
-  useEffect(() => {
-    if (!editor) return;
-
-    let typingTimer: NodeJS.Timeout | null = null;
-
-    const handleKeyDown = () => {
-      setIsUserTyping(true);
-      // Clear existing timer
-      if (typingTimer) {
-        clearTimeout(typingTimer);
-      }
-      // Reset typing flag after a delay
-      typingTimer = setTimeout(() => setIsUserTyping(false), 500);
-    };
-
-    const handleFocus = () => {
-      setIsUserTyping(false); // Reset when editor gains focus
-    };
-
-    const editorDom = editor.view.dom;
-    editorDom.addEventListener('keydown', handleKeyDown);
-    editorDom.addEventListener('focus', handleFocus);
-
-    return () => {
-      editorDom.removeEventListener('keydown', handleKeyDown);
-      editorDom.removeEventListener('focus', handleFocus);
-      // Clear timer on cleanup
-      if (typingTimer) {
-        clearTimeout(typingTimer);
-      }
-    };
-  }, [editor]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -1336,17 +1545,11 @@ export function MarkdownEditor({
   const [milestoneMentionQuery, setMilestoneMentionQuery] = useState("");
   const [showMilestoneMentionSuggestions, setShowMilestoneMentionSuggestions] = useState(false);
   
-  // Track if user is actively typing vs content being set programmatically
-  const [isUserTyping, setIsUserTyping] = useState(false);
-  
-
   const [milestoneCaretPosition, setMilestoneCaretPosition] = useState({ top: 0, left: 0 });
   const milestoneMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
   // Add command menu ref
   const commandMenuRef = useRef<HTMLDivElement>(null);
-  
-  const { currentWorkspace } = useWorkspace();
   
   // Track the last time a mention was inserted
   const lastMentionInsertedRef = useRef<number>(0);
@@ -2238,6 +2441,7 @@ export function MarkdownEditor({
 
   return (
     <div className={cn("flex flex-col rounded-md border", className)}>
+      {!readOnly && (
       <div className="flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/30">
         <TooltipProvider delayDuration={200}>
           <Tooltip>
@@ -2601,9 +2805,29 @@ export function MarkdownEditor({
           </Tooltip>
         </TooltipProvider>
       </div>
+      )}
 
       <div className="flex-1 relative" ref={editorContainerRef}>
         <EditorContent editor={editor} className="w-full" />
+        
+        {/* Autosave indicator for collaborative editing */}
+        {collabDocumentId && !readOnly && (
+          <div className="absolute bottom-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded border backdrop-blur-sm">
+            <div className="flex items-center gap-1.5">
+              {isSaving ? (
+                <>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  <span>Edits are saved automatically</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         
         {/* Overlay when uploading */}
         {isUploadingImage && (
@@ -2797,4 +3021,6 @@ export function MarkdownEditor({
       </div>
     </div>
   );
-} 
+});
+
+MarkdownEditor.displayName = 'MarkdownEditor'; 

@@ -652,6 +652,7 @@ export function EpicDetailContent({
                                                     minHeight="150px"
                                                     maxHeight="400px"
                                                     onAiImprove={handleAiImproveDescription}
+                                                    collabDocumentId={`epic:${epic.id}:description`}
                                                 />
                                             </div>
                                             {savingDescription && (

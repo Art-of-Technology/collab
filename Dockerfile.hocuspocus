@@ -1,0 +1,30 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install netcat for healthcheck
+RUN apk add --no-cache netcat-openbsd
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies including devDependencies (needed for ts-node and @hocuspocus/server)
+RUN npm install
+
+# Copy necessary files
+COPY scripts/hocuspocus-server.ts ./scripts/
+COPY tsconfig.json ./
+COPY prisma ./prisma
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Expose the port (default 1234)
+EXPOSE 1234
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV HOCUSPOCUS_PORT=1234
+
+# Start the Hocuspocus server
+CMD ["npx", "ts-node", "scripts/hocuspocus-server.ts"]

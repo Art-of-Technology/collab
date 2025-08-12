@@ -14,7 +14,7 @@ import { ShareButton } from "@/components/tasks/ShareButton";
 import { TaskFollowButton } from "@/components/tasks/TaskFollowButton";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { MarkdownEditor, type MarkdownEditorRef } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
 import { useActivity } from "@/context/ActivityContext";
@@ -109,6 +109,9 @@ export function TaskDetailContent({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Ref for markdown editor to handle cancel
+  const markdownEditorRef = useRef<MarkdownEditorRef>(null);
+
   // Copy to clipboard function
   const copyToClipboard = async (text: string) => {
     try {
@@ -182,6 +185,7 @@ export function TaskDetailContent({
   }, [task?.comments]);
 
   const handleDescriptionChange = useCallback((md: string) => {
+    // Only update local state, don't trigger save until user clicks Save button
     setDescription(md);
   }, []);
 
@@ -518,43 +522,26 @@ export function TaskDetailContent({
     setEditingTitle(false);
   };
 
-  // Save description changes
-  const handleSaveDescription = async () => {
-    setSavingDescription(true);
-    try {
-      const success = await saveTaskField('description', description);
-      if (success) {
-        // Process mentions in the updated description
-        if (task?.id && description) {
-          const mentionedUserIds = extractMentionUserIds(description);
+  // Handle description change (now just for mention processing)
+  const handleDescriptionSave = useCallback(async (finalDescription: string) => {
+    if (task?.id && finalDescription) {
+      const mentionedUserIds = extractMentionUserIds(finalDescription);
 
-          if (mentionedUserIds.length > 0) {
-            try {
-              await axios.post("/api/mentions", {
-                userIds: mentionedUserIds,
-                sourceType: "task",
-                sourceId: task.id,
-                content: `mentioned you in a task: "${task.title.length > 100 ? task.title.substring(0, 97) + '...' : task.title}"`
-              });
-            } catch (error) {
-              console.error("Failed to process mentions:", error);
-              // Don't block UI if mentions fail
-            }
-          }
+      if (mentionedUserIds.length > 0) {
+        try {
+          await axios.post("/api/mentions", {
+            userIds: mentionedUserIds,
+            sourceType: "task",
+            sourceId: task.id,
+            content: `mentioned you in a task: "${task.title.length > 100 ? task.title.substring(0, 97) + '...' : task.title}"`
+          });
+        } catch (error) {
+          console.error("Failed to process mentions:", error);
+          // Don't block UI if mentions fail
         }
-
-        setEditingDescription(false);
       }
-    } finally {
-      setSavingDescription(false);
     }
-  };
-
-  // Cancel description editing
-  const handleCancelDescription = () => {
-    setDescription(task?.description || "");
-    setEditingDescription(false);
-  };
+  }, [task?.id, task?.title]);
 
   // Handle assignee change
   const handleAssigneeChange = async (userId: string) => {
@@ -975,76 +962,45 @@ export function TaskDetailContent({
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between py-3 bg-muted/30 border-b">
               <CardTitle className="text-md">Description</CardTitle>
-              {!editingDescription && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingDescription(true)}
-                  className="h-8 w-8 p-0 rounded-full"
-                >
-                  <PenLine className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingDescription(!editingDescription)}
+                className="h-8 w-8 p-0 rounded-full"
+              >
+                <PenLine className="h-3.5 w-3.5" />
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <div>
                 {editingDescription ? (
-                  <div className="p-4 space-y-3 bg-muted/10">
-                    <div className="relative">
-                      <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
-                        <MarkdownEditor
-                          content={description}
-                          onChange={handleDescriptionChange}
-                          placeholder="Add a description..."
-                          minHeight="150px"
-                          maxHeight="400px"
-                          onAiImprove={handleAiImproveDescription}
-                        />
-                      </div>
-                      {savingDescription && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelDescription}
-                        disabled={savingDescription}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveDescription}
-                        disabled={savingDescription}
-                      >
-                        {savingDescription ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-4 w-4 mr-1" />
-                            Save
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                  <div className="p-4">
+                    <MarkdownEditor
+                      ref={markdownEditorRef}
+                      onChange={handleDescriptionChange}
+                      placeholder="Add a description..."
+                      minHeight="150px"
+                      maxHeight="400px"
+                      onAiImprove={handleAiImproveDescription}
+                      collabDocumentId={`task:${task.id}:description`}
+                      key={`edit-${task.id}`}
+                    />
                   </div>
                 ) : (
-                  <div
-                    className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
-                    onClick={() => setEditingDescription(true)}
-                  >
+                  <div className="p-4 min-h-[120px]">
                     {task.description ? (
-                      <MarkdownContent content={task.description} htmlContent={task.description} />
+                      <MarkdownEditor
+                        readOnly
+                        className="border-0"
+                        collabDocumentId={`task:${task.id}:description`}
+                        minHeight="120px"
+                        maxHeight="100%"
+                      />
                     ) : (
-                      <div className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5">
+                      <div
+                        className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5 cursor-pointer"
+                        onClick={() => setEditingDescription(true)}
+                      >
                         <div className="text-center">
                           <PenLine className="h-5 w-5 mx-auto mb-2 opacity-70" />
                           <p className="italic text-muted-foreground">Click to add a description</p>

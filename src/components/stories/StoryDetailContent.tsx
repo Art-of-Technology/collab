@@ -705,6 +705,7 @@ export function StoryDetailContent({
                           minHeight="150px"
                           maxHeight="400px"
                           onAiImprove={handleAiImproveDescription}
+                          collabDocumentId={`story:${story.id}:description`}
                         />
                       </div>
                       {savingDescription && (
