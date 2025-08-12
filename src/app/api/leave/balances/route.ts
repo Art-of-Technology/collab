@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
             isPaid: true,
             trackIn: true,
             accrualType: true,
+            maxBalance: true,
           },
         },
       },
@@ -102,6 +103,7 @@ export async function GET(req: NextRequest) {
       trackUnit: balance.policy.trackIn,
       isPaid: balance.policy.isPaid,
       accrualType: balance.policy.accrualType,
+      maxBalance: balance.policy.maxBalance,
     }));
 
     return NextResponse.json(transformedBalances);
