@@ -152,7 +152,7 @@ export function useRelationsApi({ workspaceId }: UseRelationsApiProps) {
   const fetchTasks = async (search?: string): Promise<Task[]> => {
     try {
       const params = search ? `?search=${encodeURIComponent(search)}` : '';
-      const response = await fetch(`/api/workspaces/${workspaceId}/task${params}`);
+      const response = await fetch(`/api/workspaces/${workspaceId}/tasks${params}`);
       if (!response.ok) throw new Error('Failed to fetch tasks');
       return await response.json();
     } catch (error) {
