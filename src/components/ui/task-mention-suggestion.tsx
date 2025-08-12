@@ -121,7 +121,8 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
           // Fetch tasks with the query (empty query will return all workspace tasks)
           const params = new URLSearchParams({ q: query || '' });
 
-          if (workspaceId && !CAN_MENTION_ALL_TASKS) {
+          // If we can't mention all tasks, we need to filter by workspace
+          if (!CAN_MENTION_ALL_TASKS && workspaceId) {
             params.append('workspace', workspaceId);
           }
 

@@ -19,8 +19,7 @@ export async function GET(req: NextRequest) {
     // Get the workspace context if available
     const workspaceId = url.searchParams.get("workspace");
     
-    // Basic search query to search by title or issueKey
-    let tasks;
+
     let whereCondition: any = {};
 
     if (workspaceId) {
@@ -57,8 +56,8 @@ export async function GET(req: NextRequest) {
           }
         ]
       };
-
-    }
+    };
+  
     // Add search conditions only if we have a search query
     if (searchQuery.length > 0) {
       whereCondition.OR = [
@@ -67,7 +66,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    tasks = await prisma.task.findMany({
+    const tasks = await prisma.task.findMany({
       where: whereCondition,
       select: {
         id: true,
