@@ -17,6 +17,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
+import DragHandle from "@tiptap/extension-drag-handle-react";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -565,6 +566,18 @@ export function NotionEditor({
         }}
         style={{ cursor: 'text' }}
       >
+        <DragHandle editor={editor}>
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            strokeWidth="1.5" 
+            stroke="currentColor"
+            className="w-4 h-4"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+          </svg>
+        </DragHandle>
         <EditorContent editor={editor} className="w-full" />
         
         {/* Overlay when uploading */}
