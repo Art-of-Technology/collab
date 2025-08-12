@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useQueryClient } from "@tanstack/react-query";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
 import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
@@ -210,14 +211,12 @@ export function MilestoneDetailContent({
                 onRefresh();
             }, 100);
 
-            // Invalidate TanStack Query cache for board items if status, assignee, or reporter changed
-            if ((field === 'status' || field === 'assigneeId' || field === 'reporterId') && effectiveBoardId) {
-                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
-            }
-
-            // Also invalidate board items when labels are updated
-            if (field === 'labels' && effectiveBoardId) {
-                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
+            // Invalidate Kanban board items when any user-visible board field changes
+            if (
+                effectiveBoardId &&
+                (field === 'status' || field === 'assigneeId' || field === 'reporterId' || field === 'labels' || field === 'title' || field === 'description')
+            ) {
+                queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(effectiveBoardId) });
             }
 
             return true;
@@ -505,7 +504,7 @@ export function MilestoneDetailContent({
                                     onClick={() => setEditingTitle(true)}
                                 >
                                     <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
-                                        {milestone.title}
+                                        {title}
                                     </h1>
                                     <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
                                 </div>

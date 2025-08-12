@@ -25,6 +25,8 @@ interface TaskMentionSuggestionProps {
   onEscape?: () => void;
 }
 
+const CAN_MENTION_ALL_TASKS = true;
+
 export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSuggestionProps>(
   ({ query, onSelect, workspaceId, onEscape }, ref) => {
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -51,7 +53,7 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
     // Function to get status color
     const getStatusColor = (status: string | null): string => {
       if (!status) return 'bg-gray-100 text-gray-700';
-      
+
       switch (status.toLowerCase()) {
         case 'done':
         case 'completed':
@@ -118,10 +120,12 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
         try {
           // Fetch tasks with the query (empty query will return all workspace tasks)
           const params = new URLSearchParams({ q: query || '' });
-          if (workspaceId) {
+
+          // If we can't mention all tasks, we need to filter by workspace
+          if (!CAN_MENTION_ALL_TASKS && workspaceId) {
             params.append('workspace', workspaceId);
           }
-          
+
           const response = await fetch(`/api/tasks/search?${params}`);
           if (response.ok) {
             const searchedTasks = await response.json();
@@ -140,7 +144,7 @@ export const TaskMentionSuggestion = forwardRef<HTMLDivElement, TaskMentionSugge
           setLoading(false);
         }
       };
-      
+
       fetchTasks();
     }, [query, workspaceId]);
 

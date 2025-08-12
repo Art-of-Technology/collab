@@ -48,14 +48,14 @@ export function BaseRelationModal({
       />
       
       {/* Modal */}
-      <div className="relative bg-background rounded-lg shadow-lg w-full max-w-md mx-4">
+      <div className="relative bg-background rounded-lg shadow-lg w-full max-w-3xl mx-2 sm:mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b">
+          <h2 className="text-base sm:text-lg font-semibold truncate pr-2 min-w-0 max-w-[200px] sm:max-w-[300px] md:max-w-[400px] lg:max-w-none">{title}</h2>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 p-0"
+            className="h-8 w-8 p-0 flex-shrink-0"
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -63,24 +63,28 @@ export function BaseRelationModal({
         </div>
 
         {/* Content */}
-        <div className="p-4">
+        <div className="p-3 sm:p-4">
           {children}
         </div>
 
         {/* Footer */}
         {(onConfirm || onCancel) && (
-          <div className="flex justify-end gap-2 p-4 border-t">
+          <div className="flex justify-end gap-2 p-3 sm:p-4 border-t">
             <Button
               variant="outline"
               onClick={handleCancel}
               disabled={isLoading}
+              size="sm"
+              className="text-sm"
             >
               {cancelText}
             </Button>
             {onConfirm && (
               <Button
                 onClick={onConfirm}
-                disabled={isLoading || !onConfirm || isConfirmDisabled}
+                disabled={isLoading || !onConfirm}
+                size="sm"
+                className="text-sm"
               >
                 {isLoading ? "Loading..." : confirmText}
               </Button>

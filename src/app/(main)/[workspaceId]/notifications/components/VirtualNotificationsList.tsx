@@ -234,12 +234,12 @@ export default function VirtualNotificationsList({
               {item.type === 'group-header' ? (
                 item.groupKey === 'select-all' ? (
                   // Select all header
-                  <div className="sticky top-0 bg-background border-b border-border/50 px-4 py-2 z-10">
+                  <div className="block sticky top-0 bg-background border-b border-border/50 px-3 md:px-4 py-2 z-10">
                     <div className="flex items-center gap-3">
                       <Checkbox
                         checked={selectedNotifications.size === notifications.length && notifications.length > 0}
                         onCheckedChange={() => onSelectAll()}
-                        className="w-4 h-4"
+                        className="w-4 h-4 self-center"
                         data-checkbox
                       />
                       <span className="text-sm text-muted-foreground">
@@ -249,12 +249,12 @@ export default function VirtualNotificationsList({
                   </div>
                 ) : (
                   // Group header
-                  <div className="px-4 py-2 bg-muted/30">
+                  <div className="px-3 md:px-4 py-2 bg-muted/30">
                     <button
                       onClick={() => toggleGroup(item.groupKey!)}
                       className="flex items-center justify-between w-full text-left"
                     >
-                      <h3 className="text-sm font-medium text-muted-foreground">
+                      <h3 className="text-sm font-medium text-muted-foreground truncate">
                         {item.groupKey} ({item.groupNotifications!.length})
                       </h3>
                       <span className="text-muted-foreground">
@@ -267,7 +267,7 @@ export default function VirtualNotificationsList({
                 // Notification item
                 <div
                   className={cn(
-                    "flex gap-4 items-center px-4 py-3 hover:bg-muted/30 cursor-pointer border-l-2  transition-colors",
+                    "flex gap-3 md:gap-4 items-center px-3 md:px-4 py-3 hover:bg-muted/30 cursor-pointer border-l-2  transition-colors",
                     item.notification!.read 
                       ? "border-l-transparent" 
                       : "border-l-green-500 bg-primary/5"
@@ -278,7 +278,7 @@ export default function VirtualNotificationsList({
                   <Checkbox
                     checked={selectedNotifications.has(item.notification!.id)}
                     onCheckedChange={(checked) => handleCheckboxChange(item.notification!.id, checked === true)}
-                    className="mt-1 w-4 h-4"
+                    className="-mt-4 w-4 h-4 md:mt-1"
                     data-checkbox
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -294,17 +294,17 @@ export default function VirtualNotificationsList({
                       </p>
                       
                       {/* Time next to content */}
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                      <span className="text-[11px] md:text-xs text-muted-foreground flex-shrink-0 ml-2">
                         {formatDistanceToNow(new Date(item.notification!.createdAt), { addSuffix: true })}
                       </span>
                     </div>
                     
                     {/* Task/Post info */}
-                      {(item.notification!.taskId || item.notification!.postId) && (
-                      <div className="text-xs text-muted-foreground leading-none">
-                        {item.notification!.task?.title ? `Task ${item.notification!.task?.title}` : `Post at Timeline`}
-                      </div>
-                    )}
+                    {(item.notification!.taskId || item.notification!.postId) && (
+                    <div className="text-[11px] md:text-xs text-muted-foreground leading-none truncate">
+                      {item.notification!.task?.title ? `Task ${item.notification!.task?.title}` : `Post at Timeline`}
+                    </div>
+                  )}
                   </div>
                 </div>
               )}

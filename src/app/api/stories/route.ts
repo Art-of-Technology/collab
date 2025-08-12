@@ -243,6 +243,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Create TaskRelations entry for epic if provided
+    if (epicId) {
+      await prisma.taskRelations.create({
+        data: {
+          taskId: story.id,
+          relatedItemId: epicId,
+          relatedItemType: 'EPIC' as const
+        }
+      });
+    }
+
     return NextResponse.json(story, { status: 201 });
   } catch (error) {
     console.error("Error creating story:", error);
