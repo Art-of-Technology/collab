@@ -9,13 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Default Role Permissions System**: Comprehensive role permission management for workspace security
+  - Introduced `role-permission-defaults.ts` to define and ensure default permissions for workspace roles
+  - Automatic permission sync when member roles are updated
+  - Enhanced permission validation for workspace operations
 - GitHub Actions workflow to automatically add merged PR authors to `README.md` using the All Contributors specification
   - Creates a default `.all-contributorsrc` when missing
   - Regenerates the contributors list in `README.md` on merge
 
 ### Changed
+- **Enhanced Permission Management**: Improved permission sync and cache control
+  - Updated API routes to enforce dynamic revalidation for permissions endpoints
+  - Enhanced workspace member role update process with permission synchronization
+  - Improved cache control headers for permission-related API routes
+- **Session Management**: Enhanced authentication state management
+  - Session providers now support window focus updates to keep authentication state in sync
+  - Improved session synchronization across browser tabs and windows
 - Updated `README.md` to include Contributors anchors compatible with All Contributors
 - Refreshed documentation for clarity and consistency: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+
+### Technical
+- Added comprehensive permission validation to workspace invitation acceptance
+- Enhanced workspace member role management with automatic permission updates
+- Improved session provider architecture for better state synchronization
 
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
@@ -51,6 +67,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code Cleanup**: Removed unused HTML sanitizer and role permission defaults files
 - **Provider Restructuring**: Reorganized authentication providers for better maintainability
 - **Notification Service Updates**: Enhanced notification service with improved functionality
+
+## [0.2.5] - 2025-08-12
+
+### Added
+- **Pagination Component**: New reusable pagination component for navigating through large datasets
+- **Leave Request Dashboard Integration**: Integrated leave requests dashboard into main workspace dashboard
+- **Paginated Leave Requests**: Added pagination support for workspace leave request management with summary counts
+- **NextAuth Session Provider**: Added new NextAuth session provider for improved authentication handling
+
+## Changed
+- **Enhanced Leave Management UI**: Improved leave management interface with better layout and user experience
+  - Updated LeaveManagementClient to utilize paginated data and summary information
+  - Enhanced LeaveRequestsManager with status filtering and pagination support
+  - Added scrollable leave request list with gradient overlay to indicate more content
+- **Dashboard Layout Improvements**: Updated dashboard page grid layout for improved responsiveness
+- **Leave Request Form**: Enhanced leave request form with better validation and user experience
+- **Calendar Component**: Updated calendar component with improved styling and functionality
+- **Comment System Enhancements**: Improved comment and reply forms across tasks and unified components
+- **Permission System Updates**: Enhanced workspace permission management and role handling
+- **Session Management**: Improved session provider with better error handling and state management
+
+## Fixed
+- **Navigation Styling**: Removed unused navbar styles from globals.css
+- **Leave Request Display**: Fixed layout issues in MyLeave component for better content organization
+- **API Endpoint Improvements**: Enhanced various API endpoints for better error handling and data consistency
+
+## Technical
+- **Enhanced Leave Actions**: Extended leave management actions with new functions for paginated requests and summaries
+- **Improved Query Hooks**: Added new React Query hooks for leave management with pagination support
+- **Code Cleanup**: Removed unused HTML sanitizer and role permission defaults files
+- **Provider Restructuring**: Reorganized authentication providers for better maintainability
+- **Notification Service Updates**: Enhanced notification service with improved functionality
+
+## [0.2.4] - 2025-08-11
+
+### Changed
+- **Sidebar Navigation**: Removed Messages navigation item from the main sidebar
+  - Streamlined navigation by removing the Messages link and related routing logic
+  - Users can still access messages through other navigation paths
 
 ## [0.2.3] - 2025-08-11
 

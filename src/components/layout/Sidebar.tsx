@@ -22,6 +22,8 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { urls } from "@/lib/url-resolver";
+import { usePermissions } from "@/hooks/use-permissions";
+import { getRoleDisplayName } from "@/lib/permissions";
 
 interface SidebarProps {
   pathname?: string;
@@ -36,6 +38,19 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
   
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
+  const { userPermissions } = usePermissions(currentWorkspace?.id);
+
+  const formatGlobalRole = (role?: string) =>
+    role
+      ? role
+          .toString()
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      : "";
+
+
+  const displayRole = userPermissions?.role ? getRoleDisplayName(userPermissions.role as any) : formatGlobalRole(session?.user?.role) || "Member";
 
   // Generate navigation based on current workspace
   const getNavigation = () => {
@@ -63,8 +78,6 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
             return urls.workspace({ workspaceSlug, path: '/bookmarks' });
           case '/profile':
             return urls.workspaceProfile({ workspaceSlug });
-          case '/messages':
-            return urls.messages(workspaceSlug);
           case '/tags':
             return urls.workspace({ workspaceSlug, path: '/tags' });
           case '/features':
@@ -135,12 +148,6 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
         href: getUrl('/profile'),
         icon: UserIcon,
         current: pathname === getUrl('/profile') || pathname === `/${workspaceId}/profile`,
-      },
-      {
-        name: "Messages",
-        href: getUrl('/messages'),
-        icon: EnvelopeIcon,
-        current: pathname === getUrl('/messages') || pathname === `/${workspaceId}/messages` || pathname.startsWith(getUrl('/messages') + '/') || pathname.startsWith(`/${workspaceId}/messages/`),
       },
       {
         name: "Tags",
@@ -298,7 +305,7 @@ export default function Sidebar({ pathname = "", isCollapsed = false, toggleSide
                   {session.user.name}
                 </p>
                 <p className="text-xs text-gray-400 truncate">
-                  {session.user.role || "Developer"}
+                  {displayRole}
                 </p>
               </div>
             </div>

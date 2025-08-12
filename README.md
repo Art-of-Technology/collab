@@ -168,6 +168,7 @@ Thanks goes to these wonderful people:
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/redoh"><img src="https://avatars.githubusercontent.com/u/38852479?v=4?s=100" width="100px;" alt="Ferit"/><br /><sub><b>Ferit</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/ozngnr"><img src="https://avatars.githubusercontent.com/u/67223977?v=4?s=100" width="100px;" alt="Ozan Guner"/><br /><sub><b>Ozan Guner</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=ozngnr" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/erdenizko"><img src="https://avatars.githubusercontent.com/u/168836048?v=4?s=100" width="100px;" alt="Erdeniz Korkmaz"/><br /><sub><b>Erdeniz Korkmaz</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=erdenizko" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
