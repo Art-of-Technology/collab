@@ -77,33 +77,25 @@ interface NotionEditorProps {
   maxHeight?: string;
 }
 
-// BASIT SLASH COMMAND HANDLER - MANUAL PLACEHOLDER İLE UYUMLU
+// BASIT SLASH COMMAND HANDLER
 const handleSlashCommand = (editor: Editor, command: string) => {
-  let result = false;
-  
   switch (command) {
     case 'paragraph':
-      result = editor.chain().focus().setNode('paragraph').run();
-      break;
+      return editor.chain().focus().setNode('paragraph').run();
     case 'heading1':
-      result = editor.chain().focus().setNode('heading', { level: 1 }).run();
-      break;
+      return editor.chain().focus().setNode('heading', { level: 1 }).run();
     case 'heading2':
-      result = editor.chain().focus().setNode('heading', { level: 2 }).run();
-      break;
+      return editor.chain().focus().setNode('heading', { level: 2 }).run();
     case 'heading3':
-      result = editor.chain().focus().setNode('heading', { level: 3 }).run();
-      break;
+      return editor.chain().focus().setNode('heading', { level: 3 }).run();
     case 'bulletList':
       return editor.chain().focus().toggleBulletList().run();
     case 'orderedList':
       return editor.chain().focus().toggleOrderedList().run();
     case 'blockquote':
-      result = editor.chain().focus().toggleBlockquote().run();
-      break;
+      return editor.chain().focus().toggleBlockquote().run();
     case 'codeBlock':
-      result = editor.chain().focus().toggleCodeBlock().run();
-      break;
+      return editor.chain().focus().toggleCodeBlock().run();
     case 'horizontalRule':
       return editor.chain().focus().setHorizontalRule().run();
     case 'table':
@@ -113,8 +105,6 @@ const handleSlashCommand = (editor: Editor, command: string) => {
     default:
       return false;
   }
-  
-  return result;
 }
 
 // Floating toolbar extension
@@ -528,6 +518,50 @@ export function NotionEditor({
     // Execute the command immediately
     handleSlashCommand(editor, command);
     
+    // Add placeholder text based on command type
+    setTimeout(() => {
+      if (editor && !editor.isDestroyed) {
+        let placeholderText = '';
+        
+        switch (command) {
+          case 'paragraph':
+            placeholderText = 'Text';
+            break;
+          case 'heading1':
+            placeholderText = 'Heading 1';
+            break;
+          case 'heading2':
+            placeholderText = 'Heading 2';
+            break;
+          case 'heading3':
+            placeholderText = 'Heading 3';
+            break;
+          case 'bulletList':
+            placeholderText = 'Bullet List';
+            break;
+          case 'orderedList':
+            placeholderText = 'Numbered List';
+            break;
+          case 'blockquote':
+            placeholderText = 'Quote';
+            break;
+          case 'codeBlock':
+            placeholderText = 'Code Block';
+            break;
+          default:
+            placeholderText = '';
+        }
+        
+        if (placeholderText) {
+          const { from } = editor.state.selection;
+          editor.commands.insertContent(placeholderText);
+          // Select only the placeholder text we just inserted
+          const to = from + placeholderText.length;
+          editor.commands.setTextSelection({ from, to });
+        }
+      }
+    }, 10);
+    
     // Reset query
     setSlashQuery('');
   }, [editor, slashQuery]);
@@ -756,73 +790,15 @@ export function NotionEditor({
           outline: 2px solid #3b82f6;
         }
 
-        /* MANUAL PLACEHOLDER SİSTEMİ - KAYMA YOK */
-        .notion-editor .ProseMirror p:empty::before {
-          content: 'Write, press "/" for commands...';
-          position: absolute;
+        /* TipTap built-in placeholder styling */
+        .notion-editor .ProseMirror .is-empty::before {
+          content: attr(data-placeholder);
+          float: left;
           color: #9ca3af;
           pointer-events: none;
+          height: 0;
           opacity: 0.6;
           font-style: italic;
-          user-select: none;
-        }
-
-        /* İlk paragraf değilse farklı placeholder */
-        .notion-editor .ProseMirror p:not(:first-child):empty::before {
-          content: 'Write, press "/" for commands...';
-        }
-
-        /* HEADİNG PLACEHOLDER'LARI - MANUAL */
-        .notion-editor .ProseMirror h1:empty::before {
-          content: 'Heading 1';
-          position: absolute;
-          color: #9ca3af;
-          opacity: 0.6;
-          font-style: italic;
-          font-weight: normal;
-          pointer-events: none;
-          user-select: none;
-        }
-
-        .notion-editor .ProseMirror h2:empty::before {
-          content: 'Heading 2';
-          position: absolute;
-          color: #9ca3af;
-          opacity: 0.6;
-          font-style: italic;
-          font-weight: normal;
-          pointer-events: none;
-          user-select: none;
-        }
-
-        .notion-editor .ProseMirror h3:empty::before {
-          content: 'Heading 3';
-          position: absolute;
-          color: #9ca3af;
-          opacity: 0.6;
-          font-style: italic;
-          font-weight: normal;
-          pointer-events: none;
-          user-select: none;
-        }
-
-        /* Liste item'ları için placeholder */
-        .notion-editor .ProseMirror li p:empty::before {
-          content: 'List item';
-          color: #9ca3af;
-          opacity: 0.6;
-          font-style: italic;
-          position: absolute;
-          pointer-events: none;
-          user-select: none;
-        }
-
-        /* Focus durumunda placeholder'ları biraz daha soluk göster */
-        .notion-editor .ProseMirror:focus p:empty::before,
-        .notion-editor .ProseMirror:focus h1:empty::before,
-        .notion-editor .ProseMirror:focus h2:empty::before,
-        .notion-editor .ProseMirror:focus h3:empty::before {
-          opacity: 0.4;
         }
 
         /* Dark mode için */
