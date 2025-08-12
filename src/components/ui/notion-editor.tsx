@@ -212,11 +212,11 @@ export function NotionEditor({
         },
       }),
       Underline,
-      // MANUAL PLACEHOLDER - TİPTAP PLACEHOLDER KAPALI
+      // PLACEHOLDER - Show on empty lines, hide when typing
       Placeholder.configure({
-        placeholder: () => '', // Hiçbir placeholder gösterme
-        emptyEditorClass: 'is-editor-empty',
-        showOnlyWhenEditable: false,
+        placeholder: placeholder || "Write, press '/' for commands...",
+        emptyEditorClass: 'is-empty',
+        showOnlyWhenEditable: true,
         showOnlyCurrent: true,
       }),
       RgbaTextStyle,
@@ -578,7 +578,12 @@ export function NotionEditor({
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
           </svg>
         </DragHandle>
-        <EditorContent editor={editor} className="w-full" />
+        <EditorContent 
+          editor={editor} 
+          className={cn("w-full", {
+            "has-slash-menu": showSlashCommands
+          })} 
+        />
         
         {/* Overlay when uploading */}
         {isUploadingImage && (

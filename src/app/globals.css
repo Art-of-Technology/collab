@@ -394,33 +394,62 @@ textarea::selection {
   @apply bg-blue-900 text-blue-200;
 }
 
-/* TipTap Placeholder Styles */
-.ProseMirror .is-editor-empty:first-child::before {
+/* TipTap Placeholder - Fixed positioning */
+.ProseMirror .is-empty::before {
   content: attr(data-placeholder);
-  float: left;
   color: #9ca3af;
   pointer-events: none;
-  height: 0;
   font-weight: 400;
+  font-size: 14px !important;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  line-height: normal !important;
 }
 
-.dark .ProseMirror .is-editor-empty:first-child::before {
+.dark .ProseMirror .is-empty::before {
   color: #6b7280;
 }
 
-/* Alternative placeholder styling */
-.ProseMirror p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  color: #9ca3af;
-  pointer-events: none;
-  height: 0;
-  font-weight: 400;
+/* Hide duplicate placeholders - only when there are multiple in same container */
+.ProseMirror .is-empty ~ .is-empty::before {
+  display: none !important;
 }
 
-.dark .ProseMirror p.is-editor-empty:first-child::before {
-  color: #6b7280;
+/* Hide placeholder when slash command menu is visible */
+.ProseMirror.has-slash-menu .is-empty::before {
+  display: none !important;
 }
+
+/* Hide placeholder when element is focused and empty (for slash command results) */
+.ProseMirror .is-empty:focus-within::before {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* Force hide placeholder after slash command execution */
+.ProseMirror .is-empty.ProseMirror-selectednode::before,
+.ProseMirror .is-empty:focus::before {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+/* Ensure parent elements have relative positioning for absolute placeholder */
+.ProseMirror .is-empty {
+  position: relative;
+}
+
+/* Prevent placeholder inheritance of parent element styles */
+.ProseMirror h1.is-empty::before,
+.ProseMirror h2.is-empty::before,
+.ProseMirror h3.is-empty::before {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: normal !important;
+}
+
+
 
 /* Align NotionEditor with H1 title padding */
 .ProseMirror {
