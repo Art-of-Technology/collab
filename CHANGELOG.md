@@ -36,38 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
 
-## [0.2.4] - 2025-08-12
-
-### Added
-- **Pagination Component**: New reusable pagination component for navigating through large datasets
-- **Leave Request Dashboard Integration**: Integrated leave requests dashboard into main workspace dashboard
-- **Paginated Leave Requests**: Added pagination support for workspace leave request management with summary counts
-- **NextAuth Session Provider**: Added new NextAuth session provider for improved authentication handling
-
-## Changed
-- **Enhanced Leave Management UI**: Improved leave management interface with better layout and user experience
-  - Updated LeaveManagementClient to utilize paginated data and summary information
-  - Enhanced LeaveRequestsManager with status filtering and pagination support
-  - Added scrollable leave request list with gradient overlay to indicate more content
-- **Dashboard Layout Improvements**: Updated dashboard page grid layout for improved responsiveness
-- **Leave Request Form**: Enhanced leave request form with better validation and user experience
-- **Calendar Component**: Updated calendar component with improved styling and functionality
-- **Comment System Enhancements**: Improved comment and reply forms across tasks and unified components
-- **Permission System Updates**: Enhanced workspace permission management and role handling
-- **Session Management**: Improved session provider with better error handling and state management
-
-## Fixed
-- **Navigation Styling**: Removed unused navbar styles from globals.css
-- **Leave Request Display**: Fixed layout issues in MyLeave component for better content organization
-- **API Endpoint Improvements**: Enhanced various API endpoints for better error handling and data consistency
-
-## Technical
-- **Enhanced Leave Actions**: Extended leave management actions with new functions for paginated requests and summaries
-- **Improved Query Hooks**: Added new React Query hooks for leave management with pagination support
-- **Code Cleanup**: Removed unused HTML sanitizer and role permission defaults files
-- **Provider Restructuring**: Reorganized authentication providers for better maintainability
-- **Notification Service Updates**: Enhanced notification service with improved functionality
-
 ## [0.2.5] - 2025-08-12
 
 ### Added
