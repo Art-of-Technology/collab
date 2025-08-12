@@ -49,17 +49,17 @@ export default function PostFollowButton({
       variant={variant}
       size={size}
       disabled={isProcessing}
-      className="flex items-center gap-1 hover-effect"
+      className="flex items-center gap-1 hover-effect min-w-0 px-1 sm:px-2 py-2 h-8 sm:h-9"
     >
       {isFollowing ? (
         <>
-          <BellSlashIcon className="h-4 w-4 text-orange-500" />
-          {showText && <span className="hidden sm:inline">Unfollow</span>}
+          <BellSlashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500 flex-shrink-0" />
+          {showText && <span className="hidden lg:inline text-xs sm:text-sm">Unfollow</span>}
         </>
       ) : (
         <>
-          <BellIcon className="h-4 w-4" />
-          {showText && <span className="hidden sm:inline">Follow</span>}
+          <BellIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+          {showText && <span className="hidden lg:inline text-xs sm:text-sm">Follow</span>}
         </>
       )}
     </Button>

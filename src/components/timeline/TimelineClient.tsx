@@ -40,44 +40,47 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
   const displayPosts = posts || initialPosts;
 
   return (
-    <div className="max-w-4xl mx-auto overflow-x-hidden">
-      {tag && (
-        <div className="mb-6 flex items-center">
-          <p className="mr-2">Showing posts tagged:</p>
-          <div className="flex items-center">
-            <Badge variant="secondary" className="px-3 py-1">
-              #{tag}
-            </Badge>
-            <Link
-              href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}
-              className="ml-2 text-muted-foreground hover:text-foreground"
-              aria-label="Clear tag filter"
-            >
-              <XCircleIcon className="h-5 w-5" />
-            </Link>
+    <div className="w-full max-w-4xl mx-auto overflow-x-hidden">
+      {/* Mobile-first container with proper padding */}
+      <div className="px-3 sm:px-4 lg:px-6">
+        {tag && (
+          <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0">
+            <p className="text-sm sm:text-base text-muted-foreground sm:mr-2">Showing posts tagged:</p>
+            <div className="flex items-center">
+              <Badge variant="secondary" className="px-2 sm:px-3 py-1 text-xs sm:text-sm">
+                #{tag}
+              </Badge>
+              <Link
+                href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}
+                className="ml-2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                aria-label="Clear tag filter"
+              >
+                <XCircleIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Link>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="mb-6">
-        <CreatePostForm />
+        <div className="mb-4 sm:mb-6">
+          <CreatePostForm />
+        </div>
+
+        <div className="mb-4 sm:mb-6">
+          <FilterTabs />
+        </div>
+
+        {isLoading && initialPosts.length === 0 ? (
+          <div className="flex justify-center py-8 sm:py-12">
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
+          </div>
+        ) : isError ? (
+          <div className="text-center py-8 sm:py-12 text-destructive">
+            <p className="text-sm sm:text-base">Something went wrong loading posts.</p>
+          </div>
+        ) : (
+          <PostList posts={displayPosts} currentUserId={currentUserId} />
+        )}
       </div>
-
-      <div className="mb-6">
-        <FilterTabs />
-      </div>
-
-      {isLoading && initialPosts.length === 0 ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : isError ? (
-        <div className="text-center py-12 text-destructive">
-          <p>Something went wrong loading posts.</p>
-        </div>
-      ) : (
-        <PostList posts={displayPosts} currentUserId={currentUserId} />
-      )}
     </div>
   );
 } 

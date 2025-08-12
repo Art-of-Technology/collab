@@ -147,61 +147,77 @@ export default function PostActions({
 
   return (
     <>
-      <div className="w-full flex justify-between gap-2">
+      <div className="w-full flex justify-center items-center gap-2">
+        {/* Like Button */}
         <Button
           onClick={handleLike}
           variant="ghost"
           size="sm"
-          className="flex items-center gap-1 hover-effect"
+          className="flex items-center gap-1 hover-effect min-w-0 flex-1 justify-center lg:justify-start lg:flex-initial px-1 sm:px-2 py-2 h-8 sm:h-9"
           disabled={addReactionMutation.isPending || removeReactionMutation.isPending}
         >
           {liked ? (
-            <HeartSolidIcon className="h-4 w-4 text-rose-500" />
+            <HeartSolidIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-500 flex-shrink-0" />
           ) : (
-            <HeartIcon className="h-4 w-4" />
+            <HeartIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
           )}
-          <span className="hidden sm:inline">Like</span>
+          <span className="hidden lg:inline text-xs sm:text-sm">Like</span>
         </Button>
+
+        {/* Comment Button */}
         <Button
           onClick={onToggleExpand}
           variant="ghost"
           size="sm"
-          className="flex items-center gap-1 hover-effect"
+          className="flex items-center gap-1 hover-effect min-w-0 flex-1 justify-center lg:justify-start lg:flex-initial px-1 sm:px-2 py-2 h-8 sm:h-9"
         >
-          <ChatBubbleLeftIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">Comment</span>
+          <ChatBubbleLeftIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+          <span className="hidden lg:inline text-xs sm:text-sm">Comment</span>
         </Button>
+
+        {/* Bookmark Button */}
         <Button
           onClick={handleBookmark}
           variant="ghost"
           size="sm"
-          className="flex items-center gap-1 hover-effect"
+          className="flex items-center gap-1 hover-effect min-w-0 flex-1 justify-center lg:justify-start lg:flex-initial px-1 sm:px-2 py-2 h-8 sm:h-9"
           disabled={addBookmarkMutation.isPending || removeBookmarkMutation.isPending}
         >
           {isBookmarked ? (
-            <BookmarkSolidIcon className="h-4 w-4 text-indigo-500" />
+            <BookmarkSolidIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-500 flex-shrink-0" />
           ) : (
-            <BookmarkIcon className="h-4 w-4" />
+            <BookmarkIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
           )}
-          <span className="hidden sm:inline">Bookmark</span>
+          <span className="hidden lg:inline text-xs sm:text-sm">Bookmark</span>
         </Button>
-        <PostFollowButton postId={postId} initialIsFollowing={isFollowing} />
+
+        {/* Follow Button */}
+        <div className="flex-shrink-0">
+          <PostFollowButton 
+            postId={postId} 
+            initialIsFollowing={isFollowing}
+            size="sm"
+            variant="ghost"
+          />
+        </div>
+
+        {/* Share Button*/}
         <Button
           onClick={handleShare}
           variant="ghost"
           size="sm"
-          className="flex items-center gap-1 hover-effect"
+          className="flex items-center gap-1 hover-effect min-w-0 flex-1 justify-center lg:justify-start lg:flex-initial px-1 sm:px-2 py-2 h-8 sm:h-9"
         >
-          <ShareIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">Share</span>
+          <ShareIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+          <span className="hidden lg:inline text-xs sm:text-sm">Share</span>
         </Button>
       </div>
 
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Share Post</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Share Post</DialogTitle>
+            <DialogDescription className="text-sm">
               Copy the link below to share this post with others
             </DialogDescription>
           </DialogHeader>
@@ -210,21 +226,21 @@ export default function PostActions({
               <Input
                 value={postUrl}
                 readOnly
-                className="bg-background/50"
+                className="bg-background/50 text-xs sm:text-sm"
               />
             </div>
             <Button
               type="button"
               size="sm"
-              className="px-3 transition-all duration-300"
+              className="px-2 sm:px-3 transition-all duration-300 h-8 sm:h-9"
               onClick={copyToClipboard}
             >
               {copied ? (
-                <CheckIcon className="h-4 w-4 text-white" />
+                <CheckIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
               ) : (
-                <ClipboardDocumentIcon className="h-4 w-4" />
+                <ClipboardDocumentIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               )}
-              <span className="hidden sm:inline">Copy</span>
+              <span className="hidden sm:inline ml-1 text-xs">Copy</span>
             </Button>
           </div>
         </DialogContent>
