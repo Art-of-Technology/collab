@@ -213,82 +213,86 @@ export function MyLeave({
                 {isLoadingRequests ? (
                   <div className="text-sm text-muted-foreground">Loading requests...</div>
                 ) : leaveRequests.length > 0 ? (
-                  <div className="space-y-3">
-                    {leaveRequests.map((request) => (
-                      <div
-                        key={request.id}
-                        className="p-3 rounded-lg border bg-muted/50"
-                      >
-                        {/* Header with policy name, status, and actions */}
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {request.policy?.name || "Unknown Policy"}
-                            </span>
-                            {getStatusBadge(request.status)}
-                          </div>
-                          
-                          {/* Dropdown menu for actions */}
-                          {canEditOrCancel(request) && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button 
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground bg-gray-500/10 hover:bg-gray-500/20"
-                                  aria-label="Request Actions"
-                                >
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => handleEditRequest(request)}
-                                  className="text-muted-foreground"
-                                  aria-label="Edit Request"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                  Edit Request
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => setCancellingRequest(request)}
-                                  className="text-red-600"
-                                  aria-label="Cancel Request"
-                                >
-                                  <X className="h-4 w-4" />
-                                  Cancel Request
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                        
-                        {/* Request details */}
-                        <div className="space-y-1">
-                          <div className="text-sm text-muted-foreground">
-                            {request.startDate.getTime() ===
-                            request.endDate.getTime() ? (
-                              // Single day request
-                              <>
-                                {format(new Date(request.startDate), "MMM dd, yyyy")}
-                                {request.duration === "HALF_DAY" && " (Half Day)"}
-                              </>
-                            ) : (
-                              // Multi-day request
-                              <>
-                                {format(new Date(request.startDate), "MMM dd")} -{" "}
-                                {format(new Date(request.endDate), "MMM dd, yyyy")}
-                              </>
+                  <div className="relative">
+                    <div className="space-y-3 max-h-[400px] overflow-auto">
+                      {leaveRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="p-3 rounded-lg border bg-muted/50"
+                        >
+                          {/* Header with policy name, status, and actions */}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {request.policy?.name || "Unknown Policy"}
+                              </span>
+                              {getStatusBadge(request.status)}
+                            </div>
+                      
+                            {/* Dropdown menu for actions */}
+                            {canEditOrCancel(request) && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 text-muted-foreground bg-gray-500/10 hover:bg-gray-500/20"
+                                    aria-label="Request Actions"
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => handleEditRequest(request)}
+                                    className="text-muted-foreground"
+                                    aria-label="Edit Request"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                    Edit Request
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setCancellingRequest(request)}
+                                    className="text-red-600"
+                                    aria-label="Cancel Request"
+                                  >
+                                    <X className="h-4 w-4" />
+                                    Cancel Request
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             )}
                           </div>
-                          {request.notes && (
-                            <div className="text-sm text-muted-foreground truncate">
-                              {request.notes}
+                      
+                          {/* Request details */}
+                          <div className="space-y-1">
+                            <div className="text-sm text-muted-foreground">
+                              {request.startDate.getTime() ===
+                              request.endDate.getTime() ? (
+                                // Single day request
+                                <>
+                                  {format(new Date(request.startDate), "MMM dd, yyyy")}
+                                  {request.duration === "HALF_DAY" && " (Half Day)"}
+                                </>
+                              ) : (
+                                // Multi-day request
+                                <>
+                                  {format(new Date(request.startDate), "MMM dd")} -{" "}
+                                  {format(new Date(request.endDate), "MMM dd, yyyy")}
+                                </>
+                              )}
                             </div>
-                          )}
+                            {request.notes && (
+                              <div className="text-sm text-muted-foreground truncate">
+                                {request.notes}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                    {/* Gradient overlay to indicate more content below */}
+                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none z-10" />
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
