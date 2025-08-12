@@ -1,20 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Palette } from "lucide-react";
+import React from "react";
 
-interface ColorPaletteProps {
+interface InlineColorPaletteProps {
   value?: string;
   onChange?: (color: string) => void;
-  disabled?: boolean;
+  onClose?: () => void;
 }
 
 const PRESET_COLORS = [
@@ -63,77 +54,53 @@ const PRESET_COLORS = [
   { name: "Stone", value: "#78716c", rgba: "rgba(120, 113, 108, 1)" },
 ];
 
-export function ColorPalette({ value = "#3b82f6", onChange, disabled = false }: ColorPaletteProps) {
-  const [open, setOpen] = useState(false);
-  const [customColor, setCustomColor] = useState(value);
-
-  const handleColorSelect = (color: string) => {
-    setCustomColor(color);
-    onChange?.(color);
-  };
-
-  const handleColorChange = (color: string) => {
-    // Convert hex to rgba format
-    const hexToRgba = (hex: string) => {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, 1)`;
-    };
-
-    const rgbaColor = hexToRgba(color);
-    setCustomColor(rgbaColor);
-    onChange?.(rgbaColor);
-  };
-
-  const getCurrentColor = () => {
-    return customColor;
+export function InlineColorPalette({ 
+  value = "rgba(59, 130, 246, 1)", 
+  onChange, 
+  onClose 
+}: InlineColorPaletteProps) {
+  
+  const handleColorSelect = (colorRgba: string) => {
+    onChange?.(colorRgba);
+    onClose?.();
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          disabled={disabled}
-        >
-          <Palette size={16} className={open ? "text-primary" : ""} />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-4">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">Color Palette</Label>
-          </div>
-
-          {/* Preset Colors */}
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground mb-2 block">
-              Preset Colors
-            </Label>
-            <div className="grid grid-cols-6 gap-2">
-              {PRESET_COLORS.map((color) => (
-                <button
-                  key={color.value}
-                  className="w-8 h-8 rounded border-2 transition-all hover:scale-110"
-                  style={{
-                    backgroundColor: color.value,
-                    borderColor: customColor === color.rgba ? '#3b82f6' : '#e5e7eb'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleColorSelect(color.rgba);
-                  }}
-                  title={color.name}
-                />
-              ))}
-            </div>
-          </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium">Select Color</label>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground text-lg leading-none"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      
+      <div>
+        <label className="text-xs font-medium text-muted-foreground mb-2 block">
+          Preset Colors
+        </label>
+        <div className="grid grid-cols-6 gap-2">
+          {PRESET_COLORS.map((color) => (
+            <button
+              key={color.rgba}
+              className="w-9 h-9 rounded border-2 transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
+              style={{
+                backgroundColor: color.value,
+                borderColor: value === color.rgba ? '#3b82f6' : '#e5e7eb',
+                boxShadow: value === color.rgba ? '0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none'
+              }}
+              onClick={() => handleColorSelect(color.rgba)}
+              title={color.name}
+              aria-label={`Select ${color.name} color`}
+            />
+          ))}
         </div>
-      </PopoverContent>
-    </Popover>
+      </div>
+    </div>
   );
-} 
+}

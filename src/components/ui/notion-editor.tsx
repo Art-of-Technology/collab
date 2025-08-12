@@ -64,7 +64,7 @@ import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
-import { ColorPalette } from "@/components/ui/color-palette";
+import { InlineColorPalette } from "@/components/ui/color-palette";
 import { RgbaColor, RgbaTextStyle } from "@/components/ui/rgba-color-extension";
 
 interface NotionEditorProps {
@@ -101,7 +101,8 @@ const handleSlashCommand = (editor: Editor, command: string) => {
     case 'table':
       return editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run();
     case 'color':
-      return editor.chain().focus().setColor('rgba(59, 130, 246, 1)').run();
+      // Color is handled specially in executeSlashCommand
+      return true;
     default:
       return false;
   }
@@ -176,6 +177,9 @@ export function NotionEditor({
   const [slashQuery, setSlashQuery] = useState('');
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 });
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
+  const [isSlashCommandExecuting, setIsSlashCommandExecuting] = useState(false);
+  const [showColorPalette, setShowColorPalette] = useState(false);
+  const [colorPalettePosition, setColorPalettePosition] = useState({ top: 0, left: 0 });
   
   // Keyboard navigation for slash commands
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(-1);
@@ -202,12 +206,40 @@ export function NotionEditor({
         },
       }),
       Underline,
-      // PLACEHOLDER - Show on empty lines, hide when typing
+      // ENHANCED PLACEHOLDER - Shows on every empty node
       Placeholder.configure({
-        placeholder: placeholder || "Write, press '/' for commands...",
-        emptyEditorClass: 'is-empty',
+        placeholder: ({ node, pos, editor }) => {
+          // Don't show placeholder during slash command execution
+          if (isSlashCommandExecuting) return '';
+          
+          // Show placeholder only for empty paragraphs
+          if (node.type.name === 'paragraph') {
+            return placeholder || "Write, press '/' for commands...";
+          }
+          
+          // Show specific placeholders for headings
+          if (node.type.name === 'heading') {
+            const level = node.attrs.level;
+            return `Heading ${level}`;
+          }
+          
+          // Show placeholder for list items
+          if (node.type.name === 'listItem') {
+            return 'List item';
+          }
+          
+          // Show placeholder for blockquotes
+          if (node.type.name === 'blockquote') {
+            return 'Quote';
+          }
+          
+          return '';
+        },
+        emptyEditorClass: 'is-editor-empty',
+        emptyNodeClass: 'is-empty',
         showOnlyWhenEditable: true,
-        showOnlyCurrent: true,
+        showOnlyCurrent: false, // Show on all empty nodes, not just the current one
+        includeChildren: true, // Include child nodes
       }),
       RgbaTextStyle,
       Heading.configure({
@@ -259,13 +291,19 @@ export function NotionEditor({
         ),
         style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
       },
-
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       onChange?.(html);
+      
+      // Reset slash command executing state after content update
+      if (isSlashCommandExecuting) {
+        setTimeout(() => {
+          setIsSlashCommandExecuting(false);
+        }, 100);
+      }
     },
-  }, [placeholder, minHeight, maxHeight, onChange]);
+  }, [placeholder, minHeight, maxHeight, onChange, isSlashCommandExecuting]);
 
   // Handle content updates
   useEffect(() => {
@@ -277,19 +315,29 @@ export function NotionEditor({
 
   // Auto-focus editor when it's ready
   useEffect(() => {
-    if (editor) {
+    if (editor && !editor.isDestroyed) {
       // Small delay to ensure the editor is fully rendered
-      setTimeout(() => {
-        editor.commands.focus();
+      const timer = setTimeout(() => {
+        if (editor && !editor.isDestroyed) {
+          editor.commands.focus();
+        }
       }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [editor]);
 
   // Handle slash commands
   useEffect(() => {
     if (!editor) return;
+    
+    // Wait for the editor view to be available
+    if (!editor.view) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Additional safety check
+      if (!editor || !editor.view) return;
+      
       if (event.key === '/') {
         // Only show slash commands at the start of a line or after whitespace
         const { from } = editor.state.selection;
@@ -302,7 +350,10 @@ export function NotionEditor({
           event.preventDefault();
           
           const domPosition = editor.view.coordsAtPos(from);
-          const editorContainer = editor.view.dom.getBoundingClientRect();
+          const editorDom = editor.view.dom;
+          if (!editorDom) return;
+          
+          const editorContainer = editorDom.getBoundingClientRect();
           
           setSlashPosition({
             top: domPosition.bottom - editorContainer.top,
@@ -376,11 +427,39 @@ export function NotionEditor({
       }
     };
 
-    editor.view.dom.addEventListener('keydown', handleKeyDown, true); // Use capture phase
-    
-    return () => {
-      editor.view.dom.removeEventListener('keydown', handleKeyDown, true);
+    // Use a timeout to ensure the view is ready
+    const setupListener = () => {
+      try {
+        const editorDom = editor.view?.dom;
+        if (editorDom) {
+          editorDom.addEventListener('keydown', handleKeyDown, true);
+          return () => {
+            editorDom.removeEventListener('keydown', handleKeyDown, true);
+          };
+        }
+      } catch (e) {
+        // Editor view not ready yet, will retry
+        console.debug('Editor view not ready yet');
+      }
+      return undefined;
     };
+
+    // Try to set up the listener immediately
+    let cleanup = setupListener();
+    
+    // If it didn't work, retry after a short delay
+    if (!cleanup) {
+      const timer = setTimeout(() => {
+        cleanup = setupListener();
+      }, 100);
+      
+      return () => {
+        clearTimeout(timer);
+        if (cleanup) cleanup();
+      };
+    }
+    
+    return cleanup;
   }, [editor, showSlashCommands, slashQuery, selectedCommandIndex]);
 
   // Auto-scroll to selected command
@@ -497,9 +576,11 @@ export function NotionEditor({
     setShowImagePopover(false);
   }, [editor, imageUrl]);
 
-    const executeSlashCommand = useCallback((command: string) => {
+  const executeSlashCommand = useCallback((command: string) => {
     if (!editor) return;
     
+    // Set executing state to hide placeholders temporarily
+    setIsSlashCommandExecuting(true);
     setShowSlashCommands(false);
     
     // Since we prevented the slash from being inserted, we just need to
@@ -515,55 +596,43 @@ export function NotionEditor({
         .run();
     }
     
+         // Special handling for color command
+     if (command === 'color') {
+       // Calculate position fresh for color palette (fixed positioning)
+       const { from } = editor.state.selection;
+       const domPosition = editor.view.coordsAtPos(from);
+       
+       setColorPalettePosition({
+         top: domPosition.top + 30,
+         left: domPosition.left,
+       });
+       
+       console.log('Color palette fixed position:', {
+         domPosition,
+         calculated: {
+           top: domPosition.top + 30,
+           left: domPosition.left,
+         }
+       });
+       
+       setShowColorPalette(true);
+       setIsSlashCommandExecuting(false);
+       setSlashQuery('');
+       return;
+     }
+    
     // Execute the command immediately
     handleSlashCommand(editor, command);
     
-    // Add placeholder text based on command type
-    setTimeout(() => {
-      if (editor && !editor.isDestroyed) {
-        let placeholderText = '';
-        
-        switch (command) {
-          case 'paragraph':
-            placeholderText = 'Text';
-            break;
-          case 'heading1':
-            placeholderText = 'Heading 1';
-            break;
-          case 'heading2':
-            placeholderText = 'Heading 2';
-            break;
-          case 'heading3':
-            placeholderText = 'Heading 3';
-            break;
-          case 'bulletList':
-            placeholderText = 'Bullet List';
-            break;
-          case 'orderedList':
-            placeholderText = 'Numbered List';
-            break;
-          case 'blockquote':
-            placeholderText = 'Quote';
-            break;
-          case 'codeBlock':
-            placeholderText = 'Code Block';
-            break;
-          default:
-            placeholderText = '';
-        }
-        
-        if (placeholderText) {
-          const { from } = editor.state.selection;
-          editor.commands.insertContent(placeholderText);
-          // Select only the placeholder text we just inserted
-          const to = from + placeholderText.length;
-          editor.commands.setTextSelection({ from, to });
-        }
-      }
-    }, 10);
-    
     // Reset query
     setSlashQuery('');
+    
+    // Focus the editor to trigger cursor positioning using the editor's focus command
+    setTimeout(() => {
+      if (editor && !editor.isDestroyed) {
+        editor.commands.focus();
+      }
+    }, 10);
   }, [editor, slashQuery]);
 
   if (!editor) {
@@ -790,18 +859,75 @@ export function NotionEditor({
           outline: 2px solid #3b82f6;
         }
 
-        /* TipTap built-in placeholder styling */
-        .notion-editor .ProseMirror .is-empty::before {
+        /* Enhanced Placeholder Styles - Shows on every empty block */
+        .notion-editor .ProseMirror p.is-empty::before {
           content: attr(data-placeholder);
-          float: left;
+          position: absolute;
           color: #9ca3af;
           pointer-events: none;
-          height: 0;
           opacity: 0.6;
-          font-style: italic;
+          font-style: normal;
+          user-select: none;
+          top: 0;
+          left: 0;
         }
 
-        /* Dark mode için */
+        /* Heading placeholders */
+        .notion-editor .ProseMirror h1.is-empty::before,
+        .notion-editor .ProseMirror h2.is-empty::before,
+        .notion-editor .ProseMirror h3.is-empty::before {
+          content: attr(data-placeholder);
+          position: absolute;
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: normal;
+          font-weight: normal;
+          font-size: 14px !important;
+          pointer-events: none;
+          user-select: none;
+          top: 0;
+          left: 0;
+        }
+
+        /* List item placeholders */
+        .notion-editor .ProseMirror li p.is-empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: normal;
+          position: absolute;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        /* Blockquote placeholders */
+        .notion-editor .ProseMirror blockquote p.is-empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: normal;
+          position: absolute;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        /* Make sure empty nodes have relative positioning */
+        .notion-editor .ProseMirror .is-empty {
+          position: relative;
+          min-height: 1.5em;
+        }
+
+        /* Hide placeholder when slash command menu is visible */
+        .notion-editor.has-slash-menu .ProseMirror .is-empty::before {
+          opacity: 0;
+        }
+
+        /* Focus state - slightly dimmer placeholder */
+        .notion-editor .ProseMirror:focus .is-empty::before {
+          opacity: 0.4;
+        }
+
+        /* Dark mode adjustments */
         @media (prefers-color-scheme: dark) {
           .notion-editor .ProseMirror .is-empty::before {
             color: #6b7280;
@@ -838,6 +964,31 @@ export function NotionEditor({
           }
         }
       `}</style>
+             {/* Color Palette Fixed */}
+       {showColorPalette && (
+         <div 
+           style={{ 
+             position: "fixed",
+             top: `${colorPalettePosition.top}px`,
+             left: `${colorPalettePosition.left}px`,
+             zIndex: 9999,
+           }}
+           className="bg-neutral-800 border rounded-lg shadow-lg p-4 w-[320px]"
+           onMouseDown={(e) => e.preventDefault()}
+         >
+          <InlineColorPalette
+            value={selectedColor}
+            onChange={(color: string) => {
+              setSelectedColor(color);
+              if (editor) {
+                editor.chain().focus().setColor(color).run();
+              }
+              setShowColorPalette(false);
+            }}
+            onClose={() => setShowColorPalette(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }
