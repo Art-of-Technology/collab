@@ -33,13 +33,14 @@ export default async function LeavePolicyManagementPage({
   params: { workspaceId: string };
 }) {
   const session = await getAuthSession();
+  const { workspaceId: id } = await params;
 
   if (!session?.user) {
     redirect("/login");
   }
 
   // Verify workspace access and redirect if needed
-  const workspaceId = await verifyWorkspaceAccess(session.user, !!params.workspaceId);
+  const workspaceId = await verifyWorkspaceAccess(session.user, !!id);
 
   // Check permissions for leave policy management
   const { hasAccess } = await checkPolicyManagementPermissions(
