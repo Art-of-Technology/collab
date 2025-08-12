@@ -24,6 +24,7 @@ import {
 import { storyPriorityOptions } from "@/constants/task";
 import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { entityKeys } from "@/hooks/queries/useEntityDetails";
 import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
 import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
@@ -260,6 +261,17 @@ export function StoryDetailContent({
         (field === 'status' || field === 'assigneeId' || field === 'reporterId' || field === 'labels' || field === 'title' || field === 'description')
       ) {
         queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(effectiveBoardId) });
+      }
+
+      // Invalidate stories cache to ensure StorySelect and other story lists update
+      if (story?.workspaceId) {
+        queryClient.invalidateQueries({ queryKey: entityKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: entityKeys.list(story.workspaceId, 'stories') });
+        if (story.taskBoard?.id) {
+          queryClient.invalidateQueries({ queryKey: entityKeys.list(story.workspaceId, 'stories', story.taskBoard.id) });
+        }
+        // Invalidate specific story detail cache
+        queryClient.invalidateQueries({ queryKey: entityKeys.detail(story.id) });
       }
 
       return true;
@@ -503,6 +515,7 @@ export function StoryDetailContent({
     );
   }
 
+
   // Calculate priority badge
   const getPriorityBadge = (priority: string | null) => {
     const currentPriority = storyPriorityOptions.find(opt => opt.value === priority);
@@ -698,7 +711,7 @@ export function StoryDetailContent({
                     <div className="relative">
                       <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
                         <MarkdownEditor
-                          initialValue={description}
+                          content={description}
                           onChange={handleDescriptionChange}
                           placeholder="Add a description..."
                           minHeight="150px"
@@ -1000,7 +1013,7 @@ export function StoryDetailContent({
                   {isGenerating ? 'Generating Tasks...' : 'Generate Tasks with AI'}
                 </Button>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {!effectiveBoardId 
+                  {!effectiveBoardId
                     ? 'No board assigned to this story'
                     : 'AI will generate and create tasks in the background'
                   }
