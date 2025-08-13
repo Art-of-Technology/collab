@@ -1024,7 +1024,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const { currentWorkspace } = useWorkspace();
 
 
-  const initialContentRef = useRef(initialValue || content);
+  const initialContentRef = useRef('');
 
   // Collab: create ydoc/provider optionally
   const ydocRef = useRef<Y.Doc | null>(null);
@@ -1089,8 +1089,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
 
-    // Offline persistence for resilience
-    indexeddbRef.current = new IndexeddbPersistence(collabDocumentId, ydoc);
+    // Offline persistence disabled for collaboration to avoid duplicate merges
 
     const url = computeHocuspocusUrl(collabServerUrl);
 
@@ -1246,7 +1245,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
           return base;
         }
       )(),
-      content: content,
+      content: collabDocumentId ? '' : content,
       editorProps: {
         attributes: {
           class: cn(
