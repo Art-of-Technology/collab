@@ -982,6 +982,7 @@ export function TaskDetailContent({
                       minHeight="150px"
                       maxHeight="400px"
                       onAiImprove={handleAiImproveDescription}
+                       content={task.description || ''}
                       collabDocumentId={`task:${task.id}:description`}
                       key={`edit-${task.id}`}
                     />

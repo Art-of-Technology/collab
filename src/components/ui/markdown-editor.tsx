@@ -1104,18 +1104,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     } catch {}
     setCollabReady((v) => v + 1);
 
-    if (process.env.NODE_ENV !== 'production') {
-      try {
-        // Best-effort runtime diagnostics without relying on types
-        const anyProvider: any = providerRef.current;
-        anyProvider?.on?.('status', (event: any) => {
-          console.log('[Hocuspocus] status:', event?.status, 'url:', url, 'doc:', collabDocumentId);
-        });
-        anyProvider?.on?.('synced', () => {
-          console.log('[Hocuspocus] synced for', collabDocumentId);
-        });
-      } catch {}
-    }
+    // We can't safely normalize here because the editor instance is created after this effect.
 
     return () => {
       providerRef.current?.destroy();
@@ -1166,7 +1155,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             base.push(
               Collaboration.configure({ 
                 document: ydocRef.current,
-                fragment: ydocRef.current.getXmlFragment('prosemirror'),
+                field: 'prosemirror',
               }),
               CollaborationCursor.configure({
                 provider: providerRef.current!,
@@ -1261,6 +1250,34 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     },
     [collabDocumentId, readOnly, collabReady, collaborationUser]
   );
+
+  // Normalize accidental literal HTML text after collab sync
+  const hasNormalizedOnEditRef = useRef(false);
+  useEffect(() => {
+    if (!editor || !collabDocumentId || readOnly || hasNormalizedOnEditRef.current) return;
+    // Defer a tick to let Collaboration apply server content
+    const t = setTimeout(() => {
+      try {
+        console.log('[Editor] collab sync text:', editor.getText().slice(0, 200));
+        console.log('[Editor] collab sync html:', editor.getHTML().slice(0, 200));
+      } catch {}
+      const text = editor.getText().trim();
+      const startsWithTag = text.startsWith('<');
+      const looksEscaped = /&lt;\/?[a-z]+&gt;/i.test(text);
+      if (startsWithTag || looksEscaped) {
+        const normalized = text
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/^<p>/i, '')
+          .replace(/<\/p>$/i, '')
+          .trim();
+        console.log('[Editor] normalized to:', normalized);
+        editor.commands.setContent(normalized || '');
+      }
+      hasNormalizedOnEditRef.current = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, [editor, collabDocumentId, readOnly, collabReady]);
 
   function normalizeHTML(html: string): string {
     return html.replace(/\s+/g, ' ').trim();
