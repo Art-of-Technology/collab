@@ -503,21 +503,21 @@ export default function ListView() {
           />
         </div>
 
-        <div className="border rounded-md shadow-sm bg-card relative">
+        <div className="border rounded-md shadow-sm bg-card relative overflow-auto">
           <Table>
             <TableHeader className="bg-card/95 backdrop-blur-sm sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
               <TableRow>
-                <TableHead className="w-[100px]">Type</TableHead>
-                <TableHead className="w-[70px]">ID</TableHead>
-                <TableHead className="w-[280px]">Title</TableHead>
-                <TableHead className="w-[120px]">Labels</TableHead>
+                <TableHead className="w-[80px]">Type</TableHead>
+                <TableHead className="w-[60px]">ID</TableHead>
+                <TableHead className="w-[200px] sm:w-[280px]">Title</TableHead>
+                <TableHead className="hidden md:table-cell w-[120px]">Labels</TableHead>
                 <TableHead className="w-[80px]">Status</TableHead>
-                <TableHead className="w-[120px]">Parent</TableHead>
-                <TableHead className="w-[80px]">Stats</TableHead>
-                <TableHead className="w-[80px]">Priority</TableHead>
-                <TableHead className="w-[120px]">Assignee</TableHead>
-                <TableHead className="w-[120px]">Reporter</TableHead>
-                <TableHead className="w-[60px]">Follow</TableHead>
+                <TableHead className="hidden lg:table-cell w-[120px]">Parent</TableHead>
+                <TableHead className="hidden lg:table-cell w-[80px]">Stats</TableHead>
+                <TableHead className="hidden lg:table-cell w-[80px]">Priority</TableHead>
+                <TableHead className="w-[100px] sm:w-[120px]">Assignee</TableHead>
+                <TableHead className="hidden xl:table-cell w-[120px]">Reporter</TableHead>
+                <TableHead className="hidden lg:table-cell w-[60px]">Follow</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -573,7 +573,7 @@ export default function ListView() {
                           {item.title}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         <div className="flex flex-wrap gap-1">
                           {item.labels && item.labels.length > 0 ? (
                             item.labels.map((label: any) => (
@@ -599,7 +599,7 @@ export default function ListView() {
                           {item.status || item.column?.name || "New"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {item.entityType === 'epic' && item.milestone && (
                           <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
                             {item.milestone.title}
@@ -616,7 +616,7 @@ export default function ListView() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1.5">
                           {item.entityType === 'milestone' && item._count?.epics !== undefined && (
                             <Badge variant="outline" className="text-xs">
@@ -640,7 +640,7 @@ export default function ListView() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {item.entityType === 'task' && item.priority && (
                           <Badge
                             variant="outline"
@@ -669,7 +669,7 @@ export default function ListView() {
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden xl:table-cell">
                         {item.reporter ? (
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
@@ -682,7 +682,7 @@ export default function ListView() {
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {item.entityType === 'task' && (
                           <TaskFollowButton
                             taskId={item.id}

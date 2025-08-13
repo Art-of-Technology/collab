@@ -159,30 +159,30 @@ export function ProjectCalendar({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
         <div>
           <h2 className="text-lg font-medium flex items-center gap-2">Project Calendar <small className="text-xs text-muted-foreground">({format(currentMonth, 'MMMM yyyy')})</small></h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 hidden sm:block">
             Manage your project&apos;s milestones, epics, and stories
           </p>
         </div>
 
-        <div className="flex space-x-2">
+        <div className="flex space-x-1 sm:space-x-2">
           <Button variant="outline" size="sm" onClick={previousMonth}>
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
+            <ChevronLeft className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Previous</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCurrentMonth(new Date())}
           >
-            <CalendarIcon className="h-4 w-4 mr-1" />
-            Today
+            <CalendarIcon className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Today</span>
           </Button>
           <Button variant="outline" size="sm" onClick={nextMonth}>
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="h-4 w-4 sm:ml-1" />
           </Button>
         </div>
       </div>

@@ -164,15 +164,17 @@ export function LabelSelector({
             role="combobox"
             aria-expanded={open}
             className={cn(
-              "w-full justify-between",
+              "w-full justify-between min-w-0 px-2",
               selectedLabels.length === 0 && "text-muted-foreground"
             )}
             disabled={disabled}
           >
-            {selectedLabels.length > 0
-              ? `${selectedLabels.length} label${selectedLabels.length > 1 ? 's' : ''} selected`
-              : placeholder}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <span className="truncate">
+              {selectedLabels.length > 0
+                ? `${selectedLabels.length} label${selectedLabels.length > 1 ? 's' : ''} selected`
+                : placeholder}
+            </span>
+            <ChevronsUpDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0" align="start">

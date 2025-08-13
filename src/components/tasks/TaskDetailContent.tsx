@@ -753,27 +753,27 @@ export function TaskDetailContent({
 
 
   return (
-    <div className="pt-6 space-y-8">
+    <div className="pt-3 sm:pt-6 space-y-4 sm:space-y-8">
       {showHeader && (
-        <div className="space-y-4 bg-gradient-to-r from-background to-muted/30 p-6 rounded-xl border border-border/50 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
+        <div className="space-y-4 bg-gradient-to-r from-background to-muted/30 p-3 sm:p-6 rounded-xl border border-border/50 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="space-y-2 flex-1">
               {editingTitle ? (
                 <div className="flex flex-col gap-2 w-full">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <div
-                      className="group relative font-mono px-3 py-1.5 text-sm bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 text-primary/80 cursor-pointer hover:bg-gradient-to-r hover:from-primary/10 hover:to-primary/15 hover:border-primary/40 hover:text-primary transition-all duration-200 rounded-lg flex items-center h-8 shadow-sm hover:shadow-md overflow-hidden"
+                      className="group relative font-mono px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 text-primary/80 cursor-pointer hover:bg-gradient-to-r hover:from-primary/10 hover:to-primary/15 hover:border-primary/40 hover:text-primary transition-all duration-200 rounded-lg flex items-center h-7 sm:h-8 shadow-sm hover:shadow-md overflow-hidden w-fit"
                       onClick={() => copyToClipboard(task.issueKey || '')}
                       title="Click to copy"
                     >
                       <span className="font-semibold tracking-wide whitespace-nowrap">{task.issueKey}</span>
-                      <Copy className="h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-primary/60 w-0 p-0 group-hover:w-3.5" />
+                      <Copy className="h-3 sm:h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-primary/60 w-0 group-hover:w-3 sm:group-hover:w-3.5" />
                     </div>
                     <div className="relative flex-1">
                       <Input
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        className="text-2xl font-bold py-2 px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
+                        className="text-lg sm:text-2xl font-bold py-2 px-2 sm:px-3 h-auto border-primary/20 focus-visible:ring-primary/30"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
@@ -825,23 +825,23 @@ export function TaskDetailContent({
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                   <div
-                    className="group relative font-mono px-3 py-1.5 text-sm bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 text-primary/80 cursor-pointer hover:bg-gradient-to-r hover:from-primary/10 hover:to-primary/15 hover:border-primary/40 hover:text-primary transition-all duration-200 rounded-lg flex items-center h-8 shadow-sm hover:shadow-md overflow-hidden"
+                    className="group relative font-mono px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 text-primary/80 cursor-pointer hover:bg-gradient-to-r hover:from-primary/10 hover:to-primary/15 hover:border-primary/40 hover:text-primary transition-all duration-200 rounded-lg flex items-center h-7 sm:h-8 shadow-sm hover:shadow-md overflow-hidden w-fit"
                     onClick={() => copyToClipboard(task.issueKey || '')}
                     title="Click to copy"
                   >
                     <span className="font-semibold tracking-wide whitespace-nowrap">{task.issueKey}</span>
-                    <Copy className="h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-primary/60 w-0 group-hover:w-3.5" />
+                    <Copy className="h-3 sm:h-3.5 ml-0 group-hover:ml-2 opacity-0 group-hover:opacity-100 transition-all duration-200 text-primary/60 w-0 group-hover:w-3 sm:group-hover:w-3.5" />
                   </div>
                   <div
                     className="group relative cursor-pointer flex-1"
                     onClick={() => setEditingTitle(true)}
                   >
-                    <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
+                    <h1 className="text-xl sm:text-2xl font-bold group-hover:text-primary transition-colors pr-6 sm:pr-8">
                       {task.title}
                     </h1>
-                    <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
+                    <PenLine className="h-3.5 sm:h-4 w-3.5 sm:w-4 absolute right-0 top-1 sm:top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
                   </div>
                 </div>
               )}
@@ -870,10 +870,10 @@ export function TaskDetailContent({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Play/Pause/Stop Controls & Total Playtime - Only show if time tracking is enabled */}
               {settings?.timeTrackingEnabled && (
-                <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm">
+                <div className="flex items-center gap-1 bg-muted/30 px-1.5 sm:px-2 py-1 rounded-md border border-border/50 shadow-sm">
                   {currentPlayState === "stopped" && (
                     <Button
                       variant="ghost"
@@ -952,7 +952,7 @@ export function TaskDetailContent({
                   onValueChange={handleTypeChange}
                   disabled={savingType}
                 >
-                  <SelectTrigger className="min-w-[130px] h-10 border-dashed hover:border-primary hover:text-primary transition-colors">
+                  <SelectTrigger className="min-w-[100px] sm:min-w-[130px] h-9 sm:h-10 border-dashed hover:border-primary hover:text-primary transition-colors">
                     <SelectValue>
                       {getTypeBadge(task.type)}
                     </SelectValue>
@@ -989,8 +989,8 @@ export function TaskDetailContent({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="lg:col-span-3 space-y-4 sm:space-y-6">
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between py-3 bg-muted/30 border-b">
               <CardTitle className="text-md">Description</CardTitle>
@@ -1008,7 +1008,7 @@ export function TaskDetailContent({
             <CardContent className="p-0">
               <div>
                 {editingDescription ? (
-                  <div className="p-4 space-y-3 bg-muted/10">
+                  <div className="p-3 sm:p-4 space-y-3 bg-muted/10">
                     <div className="relative">
                       <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
                         <MarkdownEditor
@@ -1057,7 +1057,7 @@ export function TaskDetailContent({
                   </div>
                 ) : (
                   <div
-                    className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
+                    className="p-3 sm:p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[100px] sm:min-h-[120px]"
                     onClick={() => setEditingDescription(true)}
                   >
                     {task.description ? (
@@ -1091,12 +1091,12 @@ export function TaskDetailContent({
           />
         </div>
 
-        <div className="space-y-6">
-          <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
+        <div className="space-y-4 sm:space-y-6 min-w-0">
+          <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md min-w-0">
             <CardHeader className="py-3 bg-muted/30 border-b">
               <CardTitle className="text-md">Details</CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-4">
+            <CardContent className="p-3 sm:p-4 space-y-3 sm:space-y-4">
               <div>
                 <p className="text-sm font-medium mb-1">Status</p>
                 <div className="relative">
@@ -1122,8 +1122,10 @@ export function TaskDetailContent({
                     onValueChange={handlePriorityChange}
                     disabled={savingPriority}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
+                    <SelectTrigger className="w-full pl-1">
+                      <SelectValue>
+                        {getPriorityBadge(task.priority || "MEDIUM")}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="LOW">{getPriorityBadge("LOW")}</SelectItem>
@@ -1182,13 +1184,15 @@ export function TaskDetailContent({
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-start text-left font-normal",
+                          "w-full justify-start text-left font-normal min-w-0",
                           !dueDate && "text-muted-foreground"
                         )}
                         disabled={savingDueDate}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dueDate ? format(dueDate, "MMM d, yyyy") : "Set due date"}
+                        <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {dueDate ? format(dueDate, "MMM d, yyyy") : "Set due date"}
+                        </span>
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -1246,20 +1250,22 @@ export function TaskDetailContent({
           </Card>
 
           {task.attachments && task.attachments.length > 0 && (
-            <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
+            <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md min-w-0">
               <CardHeader className="py-3 bg-muted/30 border-b">
                 <CardTitle className="text-md">Attachments</CardTitle>
               </CardHeader>
-              <CardContent className="p-4">
-                <ul className="space-y-2">
+              <CardContent className="p-3 sm:p-4">
+                <ul className="space-y-1.5 sm:space-y-2">
                   {task.attachments.map((attachment) => (
                     <li key={attachment.id}>
                       <Link
                         href={attachment.url}
                         target="_blank"
-                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                        className="text-sm text-primary hover:underline flex items-center gap-1 min-w-0"
                       >
-                        {attachment.name || "File"}
+                        <span className="truncate">
+                          {attachment.name || "File"}
+                        </span>
                       </Link>
                     </li>
                   ))}

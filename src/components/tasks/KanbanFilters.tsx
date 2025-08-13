@@ -137,12 +137,12 @@ export default function KanbanFilters({
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative grow max-w-md">
+    <div className="flex items-center flex-wrap gap-1 sm:gap-1.5 md:gap-2">
+      <div className="relative grow max-w-40 sm:max-w-sm md:max-w-md">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search tasks, epics, stories..."
-          className="pl-9"
+          className="pl-9 placeholder:text-xs sm:placeholder:text-sm placeholder:text-muted-foreground placeholder:truncate"
           value={search}
           onChange={handleSearchChange}
         />
@@ -153,7 +153,7 @@ export default function KanbanFilters({
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1">
             <Filter className="h-4 w-4" />
-            <span>Type</span>
+            <span className="hidden sm:inline">Type</span>
             {getTypeFilterCount() > 0 && (
               <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
                 {getTypeFilterCount()}
@@ -239,7 +239,7 @@ export default function KanbanFilters({
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1">
             <Tag className="h-4 w-4" />
-            <span>Labels</span>
+            <span className="hidden sm:inline">Labels</span>
             {getLabelFilterCount() > 0 && (
               <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
                 {getLabelFilterCount()}
@@ -289,7 +289,7 @@ export default function KanbanFilters({
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1">
               <Circle className="h-4 w-4" />
-              <span>Status</span>
+              <span className="hidden sm:inline">Status</span>
               {getStatusFilterCount() > 0 && (
                 <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
                   {getStatusFilterCount()}
@@ -342,8 +342,8 @@ export default function KanbanFilters({
         value={selectedGrouping}
         onValueChange={(value) => onGroupingChange(value as GroupingOption)}
       >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Group by" />
+        <SelectTrigger className="w-[140px] sm:w-[160px] md:w-[180px]">
+          <SelectValue placeholder="Group" className="text-sm truncate" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">No Grouping</SelectItem>
@@ -360,9 +360,8 @@ export default function KanbanFilters({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1">
-              <ArrowUpDown className="h-4 w-4 mr-1" />
-              <span>Sort by: {selectedSort}</span>
-              <Badge variant="secondary" className="ml-1 px-1">
+              <ArrowUpDown className="h-4 w-4" />
+              <Badge variant="secondary" className="px-1">
                 {sortDirection === 'asc' ? '↑' : '↓'}
               </Badge>
             </Button>

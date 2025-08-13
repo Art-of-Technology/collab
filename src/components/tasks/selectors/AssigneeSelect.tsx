@@ -152,18 +152,18 @@ export function AssigneeSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={`flex justify-between w-full ${className}`}
+          className={`flex justify-between w-full min-w-0 px-2 ${className}`}
           disabled={disabled}
         >
           {selectedUser ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               {renderAvatar(selectedUser)}
-              <span>{selectedUser.name}</span>
+              <span className="truncate">{selectedUser.name}</span>
             </div>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       {/* 

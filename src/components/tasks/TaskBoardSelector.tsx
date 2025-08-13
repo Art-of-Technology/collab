@@ -45,7 +45,7 @@ export default function TaskBoardSelector() {
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-[250px] justify-between"
+            className="w-full sm:w-[250px] justify-between"
           >
             <span className="truncate mr-1">
               {selectedBoardId
@@ -55,7 +55,7 @@ export default function TaskBoardSelector() {
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 flex-none" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[250px] p-0">
+        <PopoverContent className="w-full sm:w-[250px] p-0">
           <Command>
             <CommandInput placeholder="Search board..." className="border-none focus:ring-0" />
             <CommandEmpty>No board found.</CommandEmpty>

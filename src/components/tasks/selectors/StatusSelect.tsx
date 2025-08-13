@@ -127,7 +127,7 @@ export function StatusSelect({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="flex justify-between w-full"
+            className="flex justify-between w-full min-w-0 px-2"
             disabled={isDisabled}
           >
             {columnsLoading ? (
@@ -142,7 +142,7 @@ export function StatusSelect({
                 {!boardId ? "Select board first" : placeholder}
               </span>
             )}
-            {!columnsLoading && <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
+            {!columnsLoading && <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0 border-none bg-transparent shadow-none" align="start" sideOffset={4} forceMount>
