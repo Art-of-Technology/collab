@@ -1,6 +1,11 @@
 import { Server } from '@hocuspocus/server';
 import { PrismaClient } from '@prisma/client';
 import * as Y from 'yjs';
+import { TiptapTransformer } from '@hocuspocus/transformer';
+import { generateJSON } from '@tiptap/html';
+import Document from '@tiptap/extension-document';
+import Paragraph from '@tiptap/extension-paragraph';
+import Text from '@tiptap/extension-text';
 
 // Optimized Hocuspocus server for collaborative editing
 // Usage: ts-node scripts/hocuspocus-server.ts
@@ -117,28 +122,25 @@ async function loadDocumentFromDatabase(documentName: string): Promise<string | 
 // Convert HTML content to proper ProseMirror YJS structure
 function initializeDocumentContent(ydoc: Y.Doc, content: string) {
   const fragment = ydoc.getXmlFragment('prosemirror');
-  
-  if (!content.trim()) {
-    // Create empty paragraph if no content
+  if (fragment.length > 0) return;
+
+  if (!content || !content.trim()) {
     const paragraph = new Y.XmlElement('paragraph');
     fragment.insert(0, [paragraph]);
     return;
   }
-  
-  // Simple HTML parsing - in production you might want to use a proper HTML parser
-  const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim());
-  
-  paragraphs.forEach((paragraphText, index) => {
+
+  try {
+    const json = generateJSON(content, [Document, Paragraph, Text]);
+    const parsed = TiptapTransformer.toYdoc(json as any, 'prosemirror', [Document, Paragraph, Text]);
+    const update = Y.encodeStateAsUpdate(parsed);
+    Y.applyUpdate(ydoc, update);
+  } catch (e) {
+    // Fallback: insert plain text if parsing fails
     const paragraph = new Y.XmlElement('paragraph');
-    
-    // Handle basic formatting (bold, italic, links)
-    const textContent = paragraphText.trim();
-    if (textContent) {
-      paragraph.insert(0, [new Y.XmlText(textContent)]);
-    }
-    
-    fragment.insert(index, [paragraph]);
-  });
+    paragraph.insert(0, [new Y.XmlText(content)]);
+    fragment.insert(0, [paragraph]);
+  }
 }
 
 // Cleanup cache periodically

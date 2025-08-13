@@ -1019,7 +1019,7 @@ export function TaskDetailContent({
                       <MarkdownEditor
                         readOnly
                         className="border-0"
-                        collabDocumentId={`task:${task.id}:description`}
+                        content={task.description || ''}
                         minHeight="120px"
                         maxHeight="100%"
                       />
