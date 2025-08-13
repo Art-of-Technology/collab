@@ -2,6 +2,7 @@ import { Server } from '@hocuspocus/server';
 import { PrismaClient } from '@prisma/client';
 import * as Y from 'yjs';
 import { TiptapTransformer } from '@hocuspocus/transformer';
+import { Node as TiptapNode } from '@tiptap/core';
 import { generateJSON } from '@tiptap/html';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -116,6 +117,27 @@ async function loadDocumentFromDatabase(documentName: string): Promise<string | 
 }
 
 // Convert HTML content to proper ProseMirror YJS structure
+const ServerMention = TiptapNode.create({
+  name: 'mention',
+  inline: true,
+  group: 'inline',
+  atom: true,
+  addAttributes() {
+    return {
+      id: { default: null },
+      name: { default: null },
+    };
+  },
+  parseHTML() {
+    return [
+      { tag: 'span.mention[data-mention]' },
+    ];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', { class: 'mention', 'data-mention': 'true', 'data-id': HTMLAttributes.id, 'data-name': HTMLAttributes.name }, 0];
+  },
+});
+
 const tiptapExtensions = [
   Document,
   Paragraph,
@@ -129,7 +151,7 @@ const tiptapExtensions = [
   Link,
   Code,
   CodeBlock,
-  Image,
+  Image.configure({ allowBase64: true }),
   ListItem,
   BulletList,
   OrderedList,
@@ -139,6 +161,7 @@ const tiptapExtensions = [
   TableRow,
   TableCell,
   TableHeader,
+  ServerMention,
 ];
 
 function initializeDocumentContent(ydoc: Y.Doc, content: string) {
@@ -150,7 +173,9 @@ function initializeDocumentContent(ydoc: Y.Doc, content: string) {
   }
 
   try {
-    const json = generateJSON(content, tiptapExtensions);
+    // Wrap top-level <img> tags into paragraphs to fit schema
+    const normalizedHtml = content.replace(/(^|\n|>)(\s*<img\b[^>]*>)/gi, '$1<p>$2</p>');
+    const json = generateJSON(normalizedHtml, tiptapExtensions);
     const parsed = TiptapTransformer.toYdoc(json as any, 'prosemirror', tiptapExtensions);
     const update = Y.encodeStateAsUpdate(parsed);
     Y.applyUpdate(ydoc, update);
