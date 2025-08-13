@@ -985,6 +985,33 @@ export function TaskDetailContent({
                       collabDocumentId={`task:${task.id}:description`}
                       key={`edit-${task.id}`}
                     />
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          // Reset Hocuspocus by toggling key; read-only viewer will rehydrate from DB
+                          setEditingDescription(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={async () => {
+                          // Save button: take current editor HTML and persist it via existing mutation
+                          const html = markdownEditorRef.current?.getContent() || '';
+                          const ok = await saveTaskField('description', html);
+                          if (ok) {
+                            setEditingDescription(false);
+                            await handleDescriptionSave(html);
+                          }
+                        }}
+                      >
+                        Save
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="p-4 min-h-[120px]">

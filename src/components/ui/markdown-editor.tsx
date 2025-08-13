@@ -67,6 +67,8 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 
 export interface MarkdownEditorRef {
   getContent: () => string;
+  saveFromCollab?: () => Promise<void>;
+  resetFromSource?: (html: string) => void;
 }
 
 interface MarkdownEditorProps {
@@ -1244,7 +1246,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
           return base;
         }
       )(),
-      content: initialContentRef.current,
+      content: content,
       editorProps: {
         attributes: {
           class: cn(
@@ -1256,17 +1258,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
         }
       },
       editable: !readOnly,
-      immediatelyRender: false,
-      onUpdate: ({ editor }) => {
-        // With collab enabled, Yjs handles syncing. We still emit HTML for server persistence when user clicks Save.
-        const html = editor.getHTML();
-        onChange?.(html, html);
-        
-        // Trigger auto-save for collaborative documents
-        if (collabDocumentId && !readOnly) {
-          debouncedAutoSave();
-        }
-      },
+      immediatelyRender: true,
     },
     [collabDocumentId, readOnly, collabReady, collaborationUser]
   );
@@ -1279,9 +1271,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const [isSaving, setIsSaving] = useState(false);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Autosave function for collaborative documents
+  // Autosave function for non-collaborative documents
   const autoSave = useCallback(async () => {
-    if (!collabDocumentId || !editor || isSaving) return;
+    if (collabDocumentId || !editor || isSaving) return;
     
     try {
       setIsSaving(true);
@@ -1293,13 +1285,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          documentId: collabDocumentId,
+          documentId: undefined,
           content: content,
         }),
       });
       
       if (response.ok) {
-        console.log(`[MarkdownEditor] Auto-saved: ${collabDocumentId}`);
+        console.log('[MarkdownEditor] Auto-saved (non-collab)');
       }
     } catch (error) {
       console.error('Auto-save error:', error);
@@ -1324,7 +1316,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     getContent: () => {
       return editor?.getHTML() || '';
     },
-  }), [editor]);
+    saveFromCollab: async () => {
+      // no-op here; parent can trigger REST save using current HTML
+    },
+    resetFromSource: (html: string) => {
+      if (editor && !collabDocumentId) {
+        editor.commands.setContent(html || '');
+      }
+    },
+  }), [editor, collabDocumentId]);
 
   useEffect(() => {
     // Skip content updates when using collaboration to prevent duplication

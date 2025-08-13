@@ -2,16 +2,19 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install netcat for healthcheck
+# Install system dependencies for healthcheck and performance
 RUN apk add --no-cache netcat-openbsd
 
-# Copy package files
+# Copy package files first for better layer caching
 COPY package*.json ./
 
-# Install all dependencies including devDependencies (needed for ts-node and @hocuspocus/server)
-RUN npm install
+# Install production dependencies first
+RUN npm ci --omit=dev
 
-# Copy necessary files
+# Install dev dependencies needed for ts-node and compilation
+RUN npm install -D typescript ts-node @types/node
+
+# Copy necessary application files
 COPY scripts/hocuspocus-server.ts ./scripts/
 COPY tsconfig.json ./
 COPY prisma ./prisma
@@ -19,12 +22,25 @@ COPY prisma ./prisma
 # Generate Prisma client
 RUN npx prisma generate
 
-# Expose the port (default 1234)
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S hocuspocus -u 1001
+
+# Change ownership of the app directory
+RUN chown -R hocuspocus:nodejs /app
+USER hocuspocus
+
+# Expose the port
 EXPOSE 1234
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV HOCUSPOCUS_PORT=1234
+ENV NODE_OPTIONS="--max-old-space-size=256"
 
-# Start the Hocuspocus server
-CMD ["npx", "ts-node", "scripts/hocuspocus-server.ts"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD nc -z localhost 1234 || exit 1
+
+# Start the Hocuspocus server with optimized Node.js flags
+CMD ["node", "--loader", "ts-node/esm", "scripts/hocuspocus-server.ts"]
