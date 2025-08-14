@@ -2477,17 +2477,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       }
       
       .ProseMirror .task-mention {
-        background-color: rgba(59, 130, 246, 0.1);
+        background-color: transparent;
         border-radius: 0.25rem;
         padding: 0.125rem 0.25rem;
         margin: 0 0.125rem;
-        color: #3b82f6;
+        color: hsl(var(--primary));
         font-weight: 500;
+        text-decoration: underline;
+        text-transform: uppercase;
         white-space: nowrap;
         display: inline-flex;
         align-items: center;
         user-select: all;
         cursor: pointer;
+      }
+
+      .ProseMirror .task-mention .mention-symbol {
+        display:none;
       }
       
       .ProseMirror .epic-mention {
@@ -2537,8 +2543,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       .ProseMirror .epic-mention .mention-symbol,
       .ProseMirror .story-mention .mention-symbol,
       .ProseMirror .milestone-mention .mention-symbol {
-        opacity: 0.7;
-        margin-right: 1px;
+        display:none;
       }
     `;
     document.head.appendChild(style);

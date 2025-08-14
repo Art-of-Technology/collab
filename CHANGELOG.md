@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions workflow to automatically add merged PR authors to `README.md` using the All Contributors specification
   - Creates a default `.all-contributorsrc` when missing
   - Regenerates the contributors list in `README.md` on merge
+ - **Collaborative Descriptions**: Real-time collaboration in description editors for tasks, epics, stories, and milestones
+   - Live change awareness: updates appear immediately when other users make edits
+   - Automatic synchronization across all open sessions
 
 ### Changed
 - **Enhanced Permission Management**: Improved permission sync and cache control
