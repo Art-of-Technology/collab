@@ -48,17 +48,17 @@ export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsPr
 
   if (isLoading && !initialPosts?.length) {
     return (
-      <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <HelpCircle className="h-5 w-5 text-amber-500" />
+      <Card className="border border-border/40 bg-card/50">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="flex items-center gap-2 text-base font-medium">
+            <HelpCircle className="h-4 w-4 text-muted-foreground" />
             Unanswered Posts
           </CardTitle>
-          <CardDescription>Help your teammates with these posts</CardDescription>
+          <CardDescription className="text-xs">Help your teammates with these posts</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="px-4 pb-4">
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </CardContent>
       </Card>
@@ -66,40 +66,40 @@ export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsPr
   }
 
   return (
-    <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <HelpCircle className="h-5 w-5 text-amber-500" />
+    <Card className="border border-border/40 bg-card/50">
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="flex items-center gap-2 text-base font-medium">
+          <HelpCircle className="h-4 w-4 text-muted-foreground" />
           Unanswered Posts
         </CardTitle>
-        <CardDescription>Help your teammates with these posts</CardDescription>
+        <CardDescription className="text-xs">Help your teammates with these posts</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         {unansweredPosts.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {unansweredPosts.map((post) => (
               <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} key={post.id} className="block">
-                <div className="border rounded-md p-3 hover:bg-accent/50 transition-colors">
+                <div className="border rounded p-2 hover:bg-muted/30 transition-colors border-border/20">
                   <div className="flex justify-between items-start mb-1">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
+                    <div className="flex items-center gap-1.5">
+                      <Avatar className="h-5 w-5">
                         <AvatarImage src={post.author.image || ''} alt={post.author.name || ''} />
-                        <AvatarFallback>{post.author.name?.substring(0, 2).toUpperCase() || ''}</AvatarFallback>
+                        <AvatarFallback className="text-xs">{post.author.name?.substring(0, 2).toUpperCase() || ''}</AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">{post.author.name}</span>
+                      <span className="text-xs font-medium">{post.author.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
                       </span>
                     </div>
-                    <Badge variant={post.type === 'BLOCKER' ? 'destructive' : post.type === 'IDEA' ? 'default' : 'secondary'}>
+                    <Badge variant={post.type === 'BLOCKER' ? 'destructive' : post.type === 'IDEA' ? 'default' : 'secondary'} className="h-4 px-1.5 text-xs">
                       {post.type.charAt(0) + post.type.slice(1).toLowerCase()}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{truncateText(post.message)}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{truncateText(post.message)}</p>
                   {post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-1">
                       {post.tags.map((tag: Tag) => (
-                        <Badge variant="outline" key={tag.id} className="text-xs px-1.5 py-0">
+                        <Badge variant="outline" key={tag.id} className="text-xs px-1.5 h-4">
                           {tag.name}
                         </Badge>
                       ))}
@@ -110,7 +110,7 @@ export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsPr
             ))}
           </div>
         ) : (
-          <div className="py-4 text-center text-muted-foreground">
+          <div className="py-3 text-center text-muted-foreground text-sm">
             No unanswered posts at the moment
           </div>
         )}

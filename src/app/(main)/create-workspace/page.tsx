@@ -1,54 +1,70 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getCurrentUser } from '@/lib/session';
-import { redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
 import { WorkspaceLimitClient } from './WorkspaceLimitClient';
-import { checkWorkspaceLimit } from '@/actions/workspace';
+import { useWorkspaceLimit } from '@/hooks/queries/useWorkspace';
+import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
 
-export default async function CreateWorkspacePage() {
-  const user = await getCurrentUser();
+export default function CreateWorkspacePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { data: workspaceLimit, isLoading } = useWorkspaceLimit();
+  
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
 
-  if (!user) {
-    redirect('/login');
+  if (status === 'loading' || isLoading) {
+    return (
+      <div className="h-full bg-[#101011] flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+      </div>
+    );
   }
 
-  // Check if user has reached their workspace limit using server action
-  const { canCreateWorkspace } = await checkWorkspaceLimit();
+  if (!session?.user) {
+    return null;
+  }
+
+  const canCreateWorkspace = workspaceLimit?.canCreateWorkspace ?? true;
 
   return (
-    <div className="container max-w-3xl py-8">
-      <div className="mb-6">
-        <Link href="/workspaces">
-          <Button variant="ghost" className="pl-0">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to workspaces
-          </Button>
-        </Link>
-      </div>
+    <div className="h-full bg-[#101011] flex flex-col overflow-hidden">
+      {/* Header */}
+      <PageHeader
+        icon={Building2}
+        title="Create Workspace"
+        subtitle="Create a workspace to collaborate with your team"
+        actions={
+          <Link href="/workspaces">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={pageHeaderButtonStyles.ghost}
+            >
+              <ArrowLeft className="h-3 w-3 mr-1" />
+              Back to Workspaces
+            </Button>
+          </Link>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Create a new workspace</CardTitle>
-          <CardDescription>
-            Create a workspace to collaborate with your team. Free accounts can create up to 3 workspaces.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      {/* Content */}
+      <div className="flex-1 overflow-auto px-6 py-6">
+        <div className="max-w-2xl">
           <WorkspaceLimitClient initialCanCreate={canCreateWorkspace} />
           
           {canCreateWorkspace && <CreateWorkspaceForm />}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 } 

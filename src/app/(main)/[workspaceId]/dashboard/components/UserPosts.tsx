@@ -39,22 +39,22 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
 
   if (isLoading && !initialUserPosts?.length) {
     return (
-      <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <User className="h-5 w-5 text-primary" />
+      <Card className="border border-border/40 bg-card/50">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="flex items-center gap-2 text-base font-medium">
+            <User className="h-4 w-4 text-muted-foreground" />
             Your Recent Activity
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             Posts you&apos;ve created recently
-            <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-2 text-primary hover:underline">
+            <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-1 text-foreground hover:underline">
               View all
             </Link>
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="px-4 pb-4">
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </CardContent>
       </Card>
@@ -62,37 +62,37 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
   }
 
   return (
-    <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <User className="h-5 w-5 text-primary" />
+    <Card className="border border-border/40 bg-card/50">
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="flex items-center gap-2 text-base font-medium">
+          <User className="h-4 w-4 text-muted-foreground" />
           Your Recent Activity
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           Posts you&apos;ve created recently
-          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-2 text-primary hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-1 text-foreground hover:underline">
             View all
           </Link>
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
+      <CardContent className="px-4 pb-4">
+        <div className="space-y-2">
           {userPosts.length > 0 ? (
             userPosts.map((post) => (
-              <div key={post.id} className="flex items-start gap-3 py-3 border-b border-border/30 last:border-0 group hover:bg-muted/50 rounded-lg p-2 transition-colors">
-                <div className="flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <div key={post.id} className="flex items-start gap-2 py-2 border-b border-border/20 last:border-0 group hover:bg-muted/30 rounded px-2 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5">
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
                     </span>
                     <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?filter=${post.type.toLowerCase()}s` : '#'}>
-                      <Badge variant={getPostBadgeVariant(post.type)} className="text-xs cursor-pointer hover:bg-muted">
+                      <Badge variant={getPostBadgeVariant(post.type)} className="text-xs cursor-pointer hover:bg-muted h-4 px-1.5">
                         {post.type}
                       </Badge>
                     </Link>
                   </div>
-                  <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-1 hover:underline">
-                    <p className="text-sm">
+                  <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-0.5 hover:underline">
+                    <p className="text-xs text-muted-foreground">
                       <CollabText
                         content={post.message}
                         small
@@ -100,7 +100,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
                       />
                     </p>
                   </Link>
-                  <div className="flex gap-4 mt-2">
+                  <div className="flex gap-3 mt-1">
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
                       <MessageSquare className="h-3 w-3" />
                       {post._count.comments}
@@ -114,9 +114,9 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
               </div>
             ))
           ) : (
-            <div className="py-4 text-center text-muted-foreground">
-              <p>You haven&apos;t created any posts yet</p>
-              <Button className="mt-2">
+            <div className="py-3 text-center text-muted-foreground">
+              <p className="text-sm">You haven&apos;t created any posts yet</p>
+              <Button size="sm" className="mt-2">
                 <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}>Create your first post</Link>
               </Button>
             </div>

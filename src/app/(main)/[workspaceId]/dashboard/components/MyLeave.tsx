@@ -89,11 +89,11 @@ export function MyLeave({
   };
 
   return (
-    <Card className={`h-full relative ${!isFeatureEnabled ? 'opacity-80' : ''}`}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+    <Card className={`border border-border/40 bg-card/50 h-full relative ${!isFeatureEnabled ? 'opacity-80' : ''}`}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-4 px-4">
         <div className="flex items-center space-x-2">
-          <PlaneTakeoff className="h-5 w-5 text-blue-600" />
-          <CardTitle className="text-lg font-semibold">My Leave</CardTitle>
+          <PlaneTakeoff className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base font-medium">My Leave</CardTitle>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -121,7 +121,7 @@ export function MyLeave({
         </Dialog>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         {!isFeatureEnabled ? (
           <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
             <div className="flex items-center justify-between">

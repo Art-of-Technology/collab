@@ -255,12 +255,16 @@ export const useKanbanState = ({
     // Use workspace slug if available, else id; fallback to issue's workspaceId
     const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
     const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
+    
+    // Build URL with view context for proper back navigation
+    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
+    
     if (workspaceSegment) {
-      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}`);
+      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
     } else {
-      router.push(`/issues/${issueIdOrKey}`);
+      router.push(`/issues/${issueIdOrKey}${viewParams}`);
     }
-  }, [issues, router, view]);
+  }, [issues, router, view, workspace]);
 
   const handleCreateIssue = useCallback(async (columnId: string) => {
     if (!newIssueTitle.trim()) return;

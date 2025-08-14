@@ -20,17 +20,29 @@ import {
   Star,
   Command,
   Clock,
-  Plus
+  Plus,
+  ArrowLeft,
+  Play,
+  Pause,
+  StopCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
+import { useDeleteIssue } from "@/hooks/queries/useIssues";
+import PageHeader from "@/components/layout/PageHeader";
+import { useSession } from "next-auth/react";
+import { useActivity } from "@/context/ActivityContext";
+import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
+import { formatLiveTime } from "@/utils/taskHelpers";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHistory";
 import { IssueTabs } from "./sections/IssueTabs";
@@ -45,7 +57,7 @@ import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectS
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
 
 // Import types
-import type { Issue, IssueDetailProps, IssueFieldUpdate } from "@/types/issue";
+import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime, PlayState } from "@/types/issue";
 
 // Helper function for getting type color (still used for the type indicator dot)
 const getTypeColor = (type: string) => {
@@ -64,6 +76,8 @@ interface IssueDetailContentProps extends IssueDetailProps {
   mode?: 'modal' | 'page';
   workspaceId?: string;
   issueId?: string;
+  viewName?: string;
+  viewSlug?: string;
 }
 
 export function IssueDetailContent({
@@ -75,8 +89,12 @@ export function IssueDetailContent({
   boardId,
   mode = 'modal',
   workspaceId,
-  issueId
+  issueId,
+  viewName,
+  viewSlug
 }: IssueDetailContentProps) {
+  const router = useRouter();
+  const deleteIssueMutation = useDeleteIssue();
   const [isUpdating, setIsUpdating] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
@@ -85,6 +103,133 @@ export function IssueDetailContent({
   const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
   const [labels, setLabels] = useState<any[]>([]);
   const { toast } = useToast();
+  
+  // Session and activity hooks
+  const { data: session } = useSession();
+  const { userStatus, handleTaskAction } = useActivity();
+  const { settings } = useWorkspaceSettings();
+  const currentUserId = session?.user?.id;
+  
+  // Time tracking state
+  const [totalPlayTime, setTotalPlayTime] = useState<PlayTime | null>(null);
+  const [isTimerLoading, setIsTimerLoading] = useState(false);
+  const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
+  const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
+  const [showHelperModal, setShowHelperModal] = useState(false);
+
+  // Time tracking utilities
+  const canControlTimer = useMemo(() => {
+    if (!issue || !currentUserId) return false;
+    // Allow assignee, reporter, or any user to control their own timer
+    return true;
+  }, [issue, currentUserId]);
+
+  // Get current play state from user activity status
+  const currentPlayState: PlayState = useMemo(() => {
+    if (!userStatus || !issue?.id) return "stopped";
+    
+    const isMyIssue = userStatus.currentTaskId === issue.id;
+    if (!isMyIssue) return "stopped";
+    
+    return userStatus.currentTaskPlayState || "stopped";
+  }, [userStatus, issue?.id]);
+
+  // Fetch total play time for the issue
+  const fetchTotalPlayTime = useCallback(async () => {
+    if (!issue?.id) return;
+    setIsLoadingPlayTime(true);
+    try {
+      const response = await fetch(`/api/issues/${issue.id}/playtime`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch total play time");
+      }
+      const data: PlayTime = await response.json();
+      setTotalPlayTime(data);
+    } catch (err) {
+      console.error("Error fetching total play time:", err);
+    } finally {
+      setIsLoadingPlayTime(false);
+    }
+  }, [issue?.id]);
+
+  // Handle play/pause/stop actions
+  const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
+    if (!issue?.id) return;
+
+    // Check if user is assigned to this issue before starting
+    if (action === "play") {
+      const isAssignedToMe = issue.assigneeId === currentUserId;
+      
+      if (!isAssignedToMe) {
+        // User is not assigned, show helper modal
+        setShowHelperModal(true);
+        return;
+      }
+    }
+
+    setIsTimerLoading(true);
+    try {
+      // Use the ActivityContext for proper state management
+      await handleTaskAction(action, issue.id);
+
+      // Fetch updated play time
+      await fetchTotalPlayTime();
+
+    } catch (err: any) {
+      console.error(`Error ${action} issue:`, err);
+    } finally {
+      setIsTimerLoading(false);
+    }
+  };
+
+  const handleHelperConfirm = async () => {
+    if (!issue?.id) return;
+
+    try {
+      // First, send help request
+      const helpResponse = await fetch(`/api/issues/${issue.id}/request-help`, {
+        method: 'POST',
+      });
+
+      if (!helpResponse.ok) {
+        const error = await helpResponse.json();
+        throw new Error(error.message || 'Failed to request help');
+      }
+
+      const helpData = await helpResponse.json();
+
+      // Then, start working on the issue as a helper
+      setIsTimerLoading(true);
+      await handleTaskAction("play", issue.id);
+
+      if (helpData.status === "approved") {
+        toast({
+          title: "Started as Helper",
+          description: "You are already approved! Timer started and your time will be tracked separately.",
+        });
+      } else {
+        toast({
+          title: "Started as Helper",
+          description: "Help request sent and timer started. Your time will be tracked separately.",
+        });
+      }
+
+      setShowHelperModal(false);
+      await fetchTotalPlayTime();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start as helper",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTimerLoading(false);
+    }
+  };
+
+  const handleHelperCancel = () => {
+    setShowHelperModal(false);
+  };
 
   // Initialize local state from issue data
   useEffect(() => {
@@ -115,6 +260,53 @@ export function IssueDetailContent({
 
     fetchLabels();
   }, [workspaceId]);
+
+  // Effect for live timer when issue is playing
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    // Wait for play time to be loaded before starting timer
+    if (isLoadingPlayTime) {
+      return;
+    }
+
+    if (userStatus?.statusStartedAt && issue?.id) {
+      const isMyIssue = userStatus.currentTaskId === issue.id;
+      const isPlaying = userStatus.currentTaskPlayState === "playing";
+
+      if (isMyIssue && isPlaying) {
+        const tick = () => {
+          const start = new Date(userStatus.statusStartedAt);
+          const now = new Date();
+          const sessionElapsed = now.getTime() - start.getTime();
+
+          // Use the totalTimeMs from the API if available, otherwise 0
+          const baseTime = totalPlayTime?.totalTimeMs || 0;
+          const currentTotalMs = baseTime + sessionElapsed;
+          const formatted = formatLiveTime(currentTotalMs);
+          setLiveTimeDisplay(formatted);
+        };
+
+        tick();
+        intervalId = setInterval(tick, 1000);
+      } else if (!isPlaying && totalPlayTime) {
+        setLiveTimeDisplay(totalPlayTime.formattedTime);
+      }
+    } else if (totalPlayTime && userStatus?.currentTaskId !== issue?.id) {
+      setLiveTimeDisplay(totalPlayTime.formattedTime);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, userStatus?.statusStartedAt, issue?.id, totalPlayTime, isLoadingPlayTime]);
+
+  // Fetch playtime when issue ID changes or onRefresh is called
+  useEffect(() => {
+    if (issue?.id) {
+      fetchTotalPlayTime();
+    }
+  }, [issue?.id, fetchTotalPlayTime, onRefresh]);
 
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
@@ -253,13 +445,85 @@ export function IssueDetailContent({
     });
   }, [issue, workspaceId, toast]);
 
-  // Handle open in new tab
-  const handleOpenInNewTab = useCallback(() => {
-    if (!issue?.issueKey || !workspaceId) return;
+  // Handle delete issue
+  const handleDeleteIssue = useCallback(async () => {
+    if (!issue?.issueKey && !issue?.id) return;
     
-    const url = `/${workspaceId}/issues/${issue.issueKey}`;
-    window.open(url, '_blank');
-  }, [issue, workspaceId]);
+    const confirmed = window.confirm('Are you sure you want to delete this issue? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      await deleteIssueMutation.mutateAsync(issue.issueKey || issue.id);
+      
+      toast({
+        title: "Issue deleted",
+        description: "The issue has been deleted successfully",
+      });
+
+      // Navigate back based on context
+      if (viewSlug && workspaceId) {
+        router.push(`/${workspaceId}/views/${viewSlug}`);
+      } else {
+        // Try to detect if we came from a view by checking referrer
+        const referrer = document.referrer;
+        if (referrer && workspaceId) {
+          const url = new URL(referrer);
+          const pathSegments = url.pathname.split('/').filter(Boolean);
+          
+          // Check if referrer is a view page: /workspace/views/viewSlug
+          if (pathSegments.length >= 3 && pathSegments[1] === 'views') {
+            router.push(referrer);
+            return;
+          }
+        }
+        
+        // Fallback based on issue context
+        if (issue.projectId && workspaceId) {
+          router.push(`/${workspaceId}/projects/${issue.projectId}`);
+        } else if (workspaceId) {
+          router.push(`/${workspaceId}/issues`);
+        } else {
+          router.push('/dashboard');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete issue:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete issue. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [issue, deleteIssueMutation, toast, router, viewSlug, workspaceId]);
+
+  // Handle back navigation
+  const handleBackNavigation = useCallback(() => {
+    if (viewSlug && workspaceId) {
+      router.push(`/${workspaceId}/views/${viewSlug}`);
+    } else {
+      // Try to detect if we came from a view by checking referrer
+      const referrer = document.referrer;
+      if (referrer && workspaceId) {
+        const url = new URL(referrer);
+        const pathSegments = url.pathname.split('/').filter(Boolean);
+        
+        // Check if referrer is a view page: /workspace/views/viewSlug
+        if (pathSegments.length >= 3 && pathSegments[1] === 'views') {
+          router.push(referrer);
+          return;
+        }
+      }
+      
+      // Fallback based on issue context
+      if (issue?.projectId && workspaceId) {
+        router.push(`/${workspaceId}/projects/${issue.projectId}`);
+      } else if (workspaceId) {
+        router.push(`/${workspaceId}/issues`);
+      } else {
+        router.back();
+      }
+    }
+  }, [router, viewSlug, workspaceId, issue]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -376,31 +640,135 @@ export function IssueDetailContent({
     <div className={cn(
       mode === 'modal' ? "h-full" : "min-h-screen",
       "flex flex-col",
-      mode === 'page' ? "max-w-7xl mx-auto p-6" : "p-6",
       "bg-[#0a0a0a] text-white transition-opacity duration-200",
       isUpdating && "opacity-60"
     )}>
+      {/* Page Header for page mode */}
+      {mode === 'page' && (
+        <PageHeader
+          title={
+            <button
+              onClick={handleBackNavigation}
+              className="flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] transition-colors text-sm"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              <span>Back to {viewName || 'View'}</span>
+            </button>
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              {/* Time tracking controls - Only show if time tracking is enabled */}
+              {settings?.timeTrackingEnabled && (
+                <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm mr-2">
+                  {currentPlayState === "stopped" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("play")}
+                      disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Start Timer"
+                    >
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  {currentPlayState === "playing" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("pause")}
+                      disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Pause Timer"
+                    >
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  {currentPlayState === "paused" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("play")}
+                      disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Resume Timer"
+                    >
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  {(currentPlayState === "playing" || currentPlayState === "paused") && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePlayPauseStop("stop")}
+                      disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                      className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Stop Timer"
+                    >
+                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                    </Button>
+                  )}
+
+                  <div className="border-l h-5 border-border/70 mx-1"></div>
+
+                  {isLoadingPlayTime ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : userStatus?.currentTaskId === issue?.id && userStatus?.currentTaskPlayState === "playing" ? (
+                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
+                      <Clock className="h-3.5 w-3.5 text-green-500" />
+                      <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
+                    </div>
+                  ) : totalPlayTime ? (
+                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>{totalPlayTime.formattedTime}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>0h 0m 0s</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyLink}
+                className="h-6 px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                Copy Link
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteIssue}
+                disabled={deleteIssueMutation.isPending}
+                className="h-6 px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+              >
+                {deleteIssueMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1" />
+                )}
+                Delete
+              </Button>
+            </div>
+          }
+        />
+      )}
+
+      <div className={cn(
+        "flex-1",
+        mode === 'page' ? "max-w-7xl mx-auto p-6 w-full" : "p-6"
+      )}>
       {/* Header */}
       <div className="flex-none space-y-4 mb-6">
-        {/* Top action bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* Issue Key */}
-            <Badge 
-              className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer"
-              onClick={handleCopyLink}
-            >
-              {issue.issueKey}
-            </Badge>
-            
-            {/* Type Indicator */}
-            <div 
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: getTypeColor(issue.type) }}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
+        {/* Modal actions for modal mode only */}
+        {mode === 'modal' && (
+          <div className="flex items-center justify-end gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -409,38 +777,8 @@ export function IssueDetailContent({
             >
               <Copy className="h-4 w-4" />
             </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-[#8b949e] hover:text-white hover:bg-[#1f1f1f]"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-[#1f1f1f] border-[#333]">
-                <DropdownMenuItem 
-                  className="text-[#8b949e] hover:text-white hover:bg-[#333]"
-                  onClick={handleOpenInNewTab}
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open in new tab
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-[#8b949e] hover:text-white hover:bg-[#333]">
-                  <Star className="h-4 w-4 mr-2" />
-                  Add to favorites
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#333]" />
-                <DropdownMenuItem className="text-red-400 hover:text-red-300 hover:bg-[#333]">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete issue
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
 
-            {mode === 'modal' && onClose && (
+            {onClose && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -451,28 +789,37 @@ export function IssueDetailContent({
               </Button>
             )}
           </div>
-        </div>
+        )}
 
         {/* Title */}
         <div className="space-y-3">
           {editingTitle ? (
             <div className="space-y-3">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] focus:border-[#58a6ff] h-auto py-2"
-                placeholder="Issue title"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSaveTitle();
-                  } else if (e.key === 'Escape') {
-                    setEditingTitle(false);
-                    setTitle(issue.title);
-                  }
-                }}
-              />
+              <div className="flex items-center gap-3">
+                {/* Issue Key Badge */}
+                <Badge 
+                  className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
+                  onClick={handleCopyLink}
+                >
+                  {issue.issueKey}
+                </Badge>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] focus:border-[#58a6ff] h-auto py-2 flex-1"
+                  placeholder="Issue title"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSaveTitle();
+                    } else if (e.key === 'Escape') {
+                      setEditingTitle(false);
+                      setTitle(issue.title);
+                    }
+                  }}
+                />
+              </div>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -504,13 +851,23 @@ export function IssueDetailContent({
             </div>
           ) : (
             <div
-              className="group cursor-pointer flex items-center gap-2"
+              className="group cursor-pointer flex items-center gap-3"
               onClick={() => setEditingTitle(true)}
             >
-              <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors">
+              {/* Issue Key Badge */}
+              <Badge 
+                className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCopyLink();
+                }}
+              >
+                {issue.issueKey}
+              </Badge>
+              <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1">
                 {issue.title}
               </h1>
-              <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681]" />
+              <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
             </div>
           )}
 
@@ -680,6 +1037,61 @@ export function IssueDetailContent({
           />
         </div>
       </div>
+      </div>
+
+      {/* Helper Confirmation Modal */}
+      <Dialog open={showHelperModal} onOpenChange={setShowHelperModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Work as Helper</DialogTitle>
+            <DialogDescription>
+              You are not assigned to this issue. You will be added as a helper and your time will be tracked separately.
+              {issue?.assigneeId && (
+                <span className="block mt-2 text-sm">
+                  This issue is assigned to someone else.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {issue && (
+            <div className="py-4">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <Play className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{issue.title}</p>
+                  {issue.issueKey && (
+                    <p className="text-xs text-muted-foreground font-mono">{issue.issueKey}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handleHelperCancel}
+              disabled={isTimerLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHelperConfirm}
+              disabled={isTimerLoading}
+            >
+              {isTimerLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                "Yes, Start as Helper"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

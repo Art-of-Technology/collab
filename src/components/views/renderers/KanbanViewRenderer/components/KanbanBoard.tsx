@@ -1,9 +1,9 @@
 "use client";
 
-import { Plus } from 'lucide-react';
+import { Plus } from "lucide-react";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
-import KanbanColumn from './KanbanColumn';
-import type { KanbanBoardProps } from '../types';
+import KanbanColumn from "./KanbanColumn";
+import type { KanbanBoardProps } from "../types";
 
 export default function KanbanBoard({
   columns,
@@ -30,7 +30,7 @@ export default function KanbanBoard({
   onCancelEditingColumn,
   onColumnKeyDown,
   onColumnNameChange,
-  onIssueCreated
+  onIssueCreated,
 }: KanbanBoardProps) {
   if (issues.length === 0) {
     return (
@@ -38,9 +38,7 @@ export default function KanbanBoard({
         <div className="text-center">
           <Plus className="h-12 w-12 mx-auto mb-4 text-[#666]" />
           <p className="text-base">No issues found in this board</p>
-          <p className="text-sm text-[#666] mt-1">
-            Create a new issue or adjust your filters
-          </p>
+          <p className="text-sm text-[#666] mt-1">Create a new issue or adjust your filters</p>
         </div>
       </div>
     );
@@ -51,12 +49,7 @@ export default function KanbanBoard({
       <Droppable droppableId="board" direction="horizontal" type="column">
         {(provided) => (
           <div
-            className="flex gap-6 h-full w-full overflow-x-auto kanban-horizontal-scroll"
-            style={{ 
-              paddingBottom: '1rem', // Prevent horizontal scrollbar from cutting off content
-              maxHeight: 'calc(100vh - 200px)', // Allow vertical scrolling
-              overflowY: 'auto'
-            }}
+            className="flex gap-6 h-full min-w-0 overflow-x-auto kanban-horizontal-scroll"
             ref={provided.innerRef}
             {...provided.droppableProps}
           >

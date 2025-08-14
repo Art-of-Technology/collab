@@ -57,10 +57,10 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold">Welcome back, {session.user.name}</h1>
-        <p className="text-muted-foreground">
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold text-foreground">Welcome back, {session.user.name}</h1>
+        <p className="text-sm text-muted-foreground">
           Here&apos;s what&apos;s happening in your development world today
         </p>
       </div>
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
       {/* Quick metrics section */}
       <TeamMetrics workspaceId={workspaceId} initialMetrics={metricsData} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Team Activity Section */}
         <TeamActivity workspaceId={workspaceId} initialActivities={activitiesData} />
         
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Your activity and unanswered questions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Blockers Section */}
         <PostsByType type="BLOCKER" workspaceId={workspaceId} initialPosts={blockers} />
 
@@ -89,11 +89,11 @@ export default async function DashboardPage() {
         <UnansweredPosts workspaceId={workspaceId} initialPosts={unansweredPostsData} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Ideas Section */}
         <PostsByType type="IDEA" workspaceId={workspaceId} initialPosts={ideas} />
 
-        <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-4">
           {/* Popular Tags Section */}
           <PopularTags workspaceId={workspaceId} initialTags={tagsData} />
 

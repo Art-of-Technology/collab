@@ -53,33 +53,33 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
     switch (type) {
       case 'BLOCKER':
         return {
-          icon: <AlertTriangle className="h-5 w-5 text-destructive" />,
+          icon: <AlertTriangle className="h-4 w-4 text-muted-foreground" />,
           title: 'Active Blockers',
           description: 'Issues that need attention from the team',
           linkHref: `${baseUrl}/timeline?filter=blockers`,
-          cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
+          cardClass: 'border border-border/40 bg-card/50',
           badge: null
         };
       case 'IDEA':
         return {
-          icon: <Lightbulb className="h-5 w-5 text-yellow-500" />,
+          icon: <Lightbulb className="h-4 w-4 text-muted-foreground" />,
           title: 'Recent Ideas',
           description: 'Creative suggestions from the team',
           linkHref: `${baseUrl}/timeline?filter=ideas`,
-          cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
-          badge: <Badge variant="secondary" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-secondary/80">
+          cardClass: 'border border-border/40 bg-card/50',
+          badge: <Badge variant="secondary" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-secondary/80 h-4 px-1.5">
             <Lightbulb className="h-3 w-3" />
             IDEA
           </Badge>
         };
       case 'QUESTION':
         return {
-          icon: <HelpCircle className="h-5 w-5 text-blue-500" />,
+          icon: <HelpCircle className="h-4 w-4 text-muted-foreground" />,
           title: 'Recent Questions',
           description: 'Questions that need answers from the team',
           linkHref: `${baseUrl}/timeline?filter=questions`,
-          cardClass: 'bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300',
-          badge: <Badge variant="outline" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-muted">
+          cardClass: 'border border-border/40 bg-card/50',
+          badge: <Badge variant="outline" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-muted h-4 px-1.5">
             <HelpCircle className="h-3 w-3" />
             QUESTION
           </Badge>
@@ -99,28 +99,28 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
   const { icon, title, description, linkHref, cardClass, badge } = getTypeDetails();
 
   const renderBlockerPost = (post: any) => (
-    <div key={post.id} className="relative w-full rounded-lg border p-3 border-destructive/30 text-destructive bg-destructive/5 mb-3 hover:bg-destructive/10 transition-colors">
+    <div key={post.id} className="relative w-full rounded-lg border p-2.5 border-destructive/30 text-destructive bg-destructive/5 mb-2 hover:bg-destructive/10 transition-colors">
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-2">
-          <Avatar className="h-6 w-6 border border-border/40">
+          <Avatar className="h-5 w-5 border border-border/40">
             <AvatarImage src={post.author.image || undefined} alt={post.author.name || "User"} />
-            <AvatarFallback className="bg-primary/10 text-primary">
+            <AvatarFallback className="bg-muted/50 text-muted-foreground text-xs">
               {post.author.name?.charAt(0).toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
-          <h5 className="text-sm font-medium leading-none">
+          <h5 className="text-xs font-medium leading-none">
             {post.author.name} • {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
           </h5>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          {post.priority === "high" && <Badge variant="outline" className="bg-red-500/10">High Priority</Badge>}
+        <div className="flex items-center gap-1.5 text-xs">
+          {post.priority === "high" && <Badge variant="outline" className="bg-red-500/10 h-4 px-1.5">High Priority</Badge>}
           {canResolveBlocker(post) && (
             <Button
               size="sm"
               variant="outline"
               onClick={() => handleResolve(post.id)}
               disabled={resolvePostMutation.isPending}
-              className="h-6 px-2 text-xs bg-green-50 border-green-200 text-green-800 hover:bg-green-100 hover:border-green-300 hover:text-green-900"
+              className="h-5 px-1.5 text-xs bg-green-50 border-green-200 text-green-800 hover:bg-green-100 hover:border-green-300 hover:text-green-900"
             >
               <CheckCircle className="h-3 w-3 mr-1" />
               {resolvePostMutation.isPending ? 'Resolving...' : 'Mark Resolved'}
@@ -128,9 +128,9 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           )}
         </div>
       </div>
-      <div className="text-sm mt-2">
+      <div className="text-xs mt-1.5">
         <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block hover:underline">
-          <p className="text-sm">
+          <p className="text-xs">
             <CollabText
               content={post.message}
               small
@@ -138,7 +138,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             />
           </p>
         </Link>
-        <div className="flex gap-4 mt-2">
+        <div className="flex gap-3 mt-1.5">
           <span className="text-xs flex items-center gap-1">
             <MessageSquare className="h-3 w-3" />
             {post._count.comments}
@@ -147,7 +147,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             <div className="flex gap-1 flex-wrap">
               {post.tags.map((tag: any) => (
                 <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
-                  <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer">
+                  <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer h-4 px-1.5">
                     {tag.name}
                   </Badge>
                 </Link>
@@ -160,16 +160,16 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
   );
 
   const renderStandardPost = (post: any) => (
-    <div key={post.id} className="flex items-start gap-3 py-3 border-b border-border/30 last:border-0 group hover:bg-muted/50 rounded-lg p-2 transition-colors">
-      <Avatar className="h-8 w-8 border border-border/40">
+    <div key={post.id} className="flex items-start gap-2 py-2 border-b border-border/20 last:border-0 group hover:bg-muted/30 rounded px-2 transition-colors">
+      <Avatar className="h-6 w-6 border border-border/30">
         <AvatarImage src={post.author.image || undefined} alt={post.author.name || "User"} />
-        <AvatarFallback className="bg-primary/10 text-primary">
+        <AvatarFallback className="bg-muted/50 text-muted-foreground text-xs">
           {post.author.name?.charAt(0).toUpperCase() || "U"}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${post.author.id}` : '#'} className="font-semibold text-sm hover:underline">
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5">
+          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${post.author.id}` : '#'} className="font-medium text-xs hover:underline">
             {post.author.name}
           </Link>
           <span className="text-xs text-muted-foreground">
@@ -179,8 +179,8 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             {badge}
           </Link>
         </div>
-        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-1 hover:underline">
-          <p className="text-sm">
+        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-0.5 hover:underline">
+          <p className="text-xs text-muted-foreground">
             <CollabText
               content={post.message}
               small
@@ -188,7 +188,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             />
           </p>
         </Link>
-        <div className="flex gap-4 mt-2">
+        <div className="flex gap-3 mt-1">
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             <MessageSquare className="h-3 w-3" />
             {post._count.comments}
@@ -201,7 +201,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             <div className="flex gap-1 flex-wrap">
               {post.tags.map((tag: any) => (
                 <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
-                  <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer">
+                  <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer h-4 px-1.5">
                     {tag.name}
                   </Badge>
                 </Link>
@@ -216,21 +216,21 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
   if (isLoading && !initialPosts?.length) {
     return (
       <Card className={cardClass}>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-xl">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="flex items-center gap-2 text-base font-medium">
             {icon}
             {title}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             {description}
-            <Link href={linkHref} className="ml-2 text-primary hover:underline">
+            <Link href={linkHref} className="ml-1 text-foreground hover:underline">
               View all
             </Link>
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="px-4 pb-4">
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </CardContent>
       </Card>
@@ -239,26 +239,26 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
 
   return (
     <Card className={cardClass}>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-xl">
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="flex items-center gap-2 text-base font-medium">
           {icon}
           {title}
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           {description}
-          <Link href={linkHref} className="ml-2 text-primary hover:underline">
+          <Link href={linkHref} className="ml-1 text-foreground hover:underline">
             View all
           </Link>
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
+      <CardContent className="px-4 pb-4">
+        <div className="space-y-2">
           {posts.length > 0 ? (
             type === 'BLOCKER'
               ? posts.map(renderBlockerPost)
               : posts.map(renderStandardPost)
           ) : (
-            <div className="py-4 text-center text-muted-foreground">
+            <div className="py-3 text-center text-muted-foreground text-sm">
               No {type.toLowerCase()}s to show
             </div>
           )}

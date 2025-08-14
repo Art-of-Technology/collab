@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { trackFieldChanges, createActivity } from "@/lib/board-item-activity-service";
+import { trackFieldChanges, createActivity, compareObjects } from "@/lib/board-item-activity-service";
 
 export const dynamic = 'force-dynamic';
 
@@ -440,17 +440,6 @@ export async function PUT(
 
       // Handle assignee changes - create/update IssueAssignee records
       if (assigneeChanged) {
-        // Remove old assignee record if exists
-        if (oldIssue.assigneeId) {
-          await tx.issueAssignee.deleteMany({
-            where: {
-              issueId: existingIssue.id,
-              userId: oldIssue.assigneeId,
-              role: "ASSIGNEE"
-            }
-          });
-        }
-
         // Create new assignee record if assigned to someone
         if (issue.assigneeId) {
           await tx.issueAssignee.upsert({
@@ -498,18 +487,19 @@ export async function PUT(
         'color',
         'parentId'
       ];
-      await trackFieldChanges(
-        'ISSUE',
-        updatedIssue.id,
-        currentUser.id,
-        updatedIssue.workspaceId,
-        // Use raw values for old/new comparison
-        fieldsToTrack.map((field) => ({
-          field,
-          oldValue: (oldIssue as any)[field],
-          newValue: (updatedIssue as any)[field],
-        }))
-      );
+      
+      // Use the existing compareObjects function to detect changes
+      const changes = compareObjects(oldIssue, updatedIssue, fieldsToTrack);
+
+      if (changes.length > 0) {
+        await trackFieldChanges(
+          'ISSUE',
+          updatedIssue.id,
+          currentUser.id,
+          updatedIssue.workspaceId,
+          changes
+        );
+      }
     } catch (e) {
       console.warn('Issue activity tracking failed:', e);
     }

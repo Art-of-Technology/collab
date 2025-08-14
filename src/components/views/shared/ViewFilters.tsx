@@ -15,8 +15,6 @@ import {
   X,
   User,
   UserX,
-  Eye,
-  EyeOff,
   ChevronDown,
   Globe,
   Lock,
@@ -26,6 +24,7 @@ import {
   X as XIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useWorkspaceMembers } from '@/hooks/queries/useWorkspaceMembers';
 
 export interface ViewFiltersProps {
   issues: any[];
@@ -52,8 +51,6 @@ export interface ViewFiltersProps {
     priority: string[];
     projects: string[];
   }) => void;
-  showSubIssues: boolean;
-  onSubIssuesToggle: () => void;
   viewType: 'kanban' | 'list' | 'timeline';
   onVisibilityChange?: (visibility: string) => void;
   onOwnerChange?: (ownerId: string) => void;
@@ -72,8 +69,6 @@ export default function ViewFilters({
   onToggle,
   selectedFilters,
   onFiltersChange,
-  showSubIssues,
-  onSubIssuesToggle,
   viewType,
   onVisibilityChange,
   onOwnerChange,
@@ -81,30 +76,13 @@ export default function ViewFilters({
   onNameChange
 }: ViewFiltersProps) {
   const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('assignees');
-  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(view?.name || '');
+  
+  // Use TanStack Query for workspace members with caching
+  const { data: workspaceMembers = [], isLoading: isLoadingMembers } = useWorkspaceMembers(workspace?.id);
 
-  // Fetch workspace members for owner selector
-  const fetchWorkspaceMembers = useCallback(async () => {
-    if (!workspace?.id) return;
-    
-    try {
-      const response = await fetch(`/api/workspaces/${workspace.id}/members`);
-      if (response.ok) {
-        const data = await response.json();
-        const membersArray: any[] = Array.isArray(data) ? data : (data.members || []);
-        setWorkspaceMembers(membersArray.map((m: any) => m.user ?? m));
-      }
-    } catch (error) {
-      console.error('Error fetching workspace members:', error);
-    }
-  }, [workspace?.id]);
-
-  // Load workspace members on mount
-  useEffect(() => {
-    fetchWorkspaceMembers();
-  }, [fetchWorkspaceMembers]);
+  // No need for manual fetching anymore - using TanStack Query
 
   // Update editedName when view name changes
   useEffect(() => {
@@ -291,7 +269,7 @@ export default function ViewFilters({
   if (!isOpen) return null;
 
   return (
-    <div className="w-80 bg-[#090909] border-l border-[#1f1f1f] overflow-hidden flex flex-col flex-shrink-0 h-full">
+    <div className="w-full bg-[#0a0a0a] overflow-hidden flex flex-col h-full">
       {/* Compact Sidebar Header */}
       <div className="p-3 border-b border-[#1f1f1f]">
         <div className="flex items-center justify-between mb-3">
@@ -437,6 +415,7 @@ export default function ViewFilters({
               onChange={onOwnerChange}
               workspaceMembers={workspaceMembers}
               currentOwner={view?.owner}
+              isLoading={isLoadingMembers}
             />
           </div>
         </div>
@@ -613,44 +592,22 @@ export default function ViewFilters({
       
       {/* Compact Display Options Footer */}
       <div className="border-t border-[#1f1f1f] p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-[#999]">Show sub-issues</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onSubIssuesToggle}
-            className="h-6 w-6 p-0"
-          >
-            {showSubIssues ? (
-              <Eye className="h-3 w-3 text-[#0969da]" />
-            ) : (
-              <EyeOff className="h-3 w-3 text-[#666]" />
-            )}
-          </Button>
-        </div>
-        
         {/* View-specific options */}
         {viewType === 'kanban' && (
-          <div className="mt-2 pt-2 border-t border-[#1f1f1f]">
-            <div className="text-xs text-[#666] text-center">
-              Drag & drop to reorganize
-            </div>
+          <div className="text-xs text-[#666] text-center">
+            Drag & drop to reorganize
           </div>
         )}
         
         {viewType === 'list' && (
-          <div className="mt-2 pt-2 border-t border-[#1f1f1f]">
-            <div className="text-xs text-[#666] text-center">
-              Click to view details
-            </div>
+          <div className="text-xs text-[#666] text-center">
+            Click to view details
           </div>
         )}
         
         {viewType === 'timeline' && (
-          <div className="mt-2 pt-2 border-t border-[#1f1f1f]">
-            <div className="text-xs text-[#666] text-center">
-              Timeline view
-            </div>
+          <div className="text-xs text-[#666] text-center">
+            Timeline view
           </div>
         )}
 
@@ -679,13 +636,15 @@ interface OwnerSelectorProps {
   onChange?: (ownerId: string) => void;
   workspaceMembers: any[];
   currentOwner?: any;
+  isLoading?: boolean;
 }
 
 function OwnerSelector({
   value,
   onChange,
   workspaceMembers,
-  currentOwner
+  currentOwner,
+  isLoading = false
 }: OwnerSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -749,11 +708,17 @@ function OwnerSelector({
         </div>
         
         <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
-          {filteredUsers.length > 0 && (
-            <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
-          )}
-          
-          {filteredUsers.map((member) => (
+          {isLoading ? (
+            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+              Loading members...
+            </div>
+          ) : (
+            <>
+              {filteredUsers.length > 0 && (
+                <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
+              )}
+              
+              {filteredUsers.map((member) => (
             <button
               key={member.id}
               type="button"
@@ -771,18 +736,20 @@ function OwnerSelector({
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
             </button>
-          ))}
-          
-          {!filteredUsers.length && workspaceMembers.length > 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
-              No people match your search
-            </div>
-          )}
-          
-          {workspaceMembers.length === 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
-              No members found
-            </div>
+              ))}
+              
+              {!filteredUsers.length && workspaceMembers.length > 0 && (
+                <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+                  No people match your search
+                </div>
+              )}
+              
+              {!isLoading && workspaceMembers.length === 0 && (
+                <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+                  No members found
+                </div>
+              )}
+            </>
           )}
         </div>
       </PopoverContent>

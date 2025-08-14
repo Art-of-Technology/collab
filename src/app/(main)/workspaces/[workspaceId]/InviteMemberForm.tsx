@@ -98,31 +98,36 @@ export default function InviteMemberForm({ workspaceId, onInviteSent }: InviteMe
   return (
     <div>
       {errorMessage && (
-        <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md flex items-center mb-4">
-          <AlertCircle className="h-4 w-4 mr-2" />
+        <div className="bg-destructive/10 text-destructive text-xs p-2.5 rounded flex items-center mb-3">
+          <AlertCircle className="h-3 w-3 mr-1.5" />
           {errorMessage}
         </div>
       )}
       
       {successMessage && (
-        <div className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 text-sm p-3 rounded-md flex items-center mb-4">
-          <CheckCircle className="h-4 w-4 mr-2" />
+        <div className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 text-xs p-2.5 rounded flex items-center mb-3">
+          <CheckCircle className="h-3 w-3 mr-1.5" />
           {successMessage}
         </div>
       )}
       
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
           <FormField
             control={form.control}
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email Address</FormLabel>
+                <FormLabel className="text-sm font-medium">Email Address</FormLabel>
                 <FormControl>
-                  <Input placeholder="colleague@example.com" {...field} disabled={isLoading} />
+                  <Input 
+                    placeholder="colleague@example.com" 
+                    className="text-sm" 
+                    {...field} 
+                    disabled={isLoading} 
+                  />
                 </FormControl>
-                <FormDescription>
+                <FormDescription className="text-xs">
                   Enter the email address of the person you want to invite.
                 </FormDescription>
                 <FormMessage />
@@ -130,15 +135,15 @@ export default function InviteMemberForm({ workspaceId, onInviteSent }: InviteMe
             )}
           />
           
-          <Button type="submit" disabled={isLoading} className="w-full">
+          <Button type="submit" disabled={isLoading} size="sm" className="w-full text-sm">
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                 Sending Invitation...
               </>
             ) : (
               <>
-                <Send className="mr-2 h-4 w-4" />
+                <Send className="mr-1.5 h-3 w-3" />
                 Send Invitation
               </>
             )}

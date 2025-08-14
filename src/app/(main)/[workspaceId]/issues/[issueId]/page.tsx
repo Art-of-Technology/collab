@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { IssueDetailContent } from "@/components/issue/IssueDetailContent";
 import { getWorkspaceIdFromClient } from "@/lib/client-workspace";
 import { Loader2 } from "lucide-react";
@@ -9,8 +9,13 @@ import { Loader2 } from "lucide-react";
 export default function IssuePage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const issueParam = params?.issueId as string;
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  
+  // Extract view context from URL params or referrer
+  const viewSlug = searchParams.get('view');
+  const viewName = searchParams.get('viewName');
 
   useEffect(() => {
     // Client-side workspace resolution (fallback to route param if provided)
@@ -38,6 +43,8 @@ export default function IssuePage() {
         <IssuePageContent 
           issueId={issueParam}
           workspaceId={workspaceId}
+          viewSlug={viewSlug}
+          viewName={viewName}
           onClose={() => router.back()}
         />
       </Suspense>
@@ -45,9 +52,11 @@ export default function IssuePage() {
   );
 }
 
-function IssuePageContent({ issueId, workspaceId, onClose }: {
+function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }: {
   issueId: string;
   workspaceId: string;
+  viewSlug: string | null;
+  viewName: string | null;
   onClose: () => void;
 }) {
   const [issue, setIssue] = useState<any>(null);
@@ -97,6 +106,8 @@ function IssuePageContent({ issueId, workspaceId, onClose }: {
       mode="page"
       workspaceId={workspaceId}
       issueId={issueId}
+      viewSlug={viewSlug || undefined}
+      viewName={viewName || undefined}
     />
   );
 }

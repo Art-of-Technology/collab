@@ -51,6 +51,8 @@ import React, { useEffect } from 'react';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
 import { useIssuesByWorkspace } from '@/hooks/queries/useIssues';
+import { useViewFilters } from '@/context/ViewFiltersContext';
+import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
 
 interface ViewRendererProps {
   view: {
@@ -109,6 +111,19 @@ export default function ViewRenderer({
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
+  
+  // ViewFilters context
+  const {
+    isOpen: isViewFiltersOpen,
+    setIsOpen: setIsViewFiltersOpen,
+    toggleOpen: toggleViewFilters,
+    filters: viewFiltersState,
+    setFilters: setViewFiltersState,
+    setCurrentView,
+    setIssues,
+    setWorkspace,
+    setCurrentUser
+  } = useViewFilters();
 
   // Use TanStack Query for real-time issue data
   const { data: issuesData, isLoading: isLoadingIssues } = useIssuesByWorkspace(
@@ -169,19 +184,13 @@ export default function ViewRenderer({
     });
   }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters]);
   
-  // ViewFilters state
-  const [isViewFiltersOpen, setIsViewFiltersOpen] = useState(false);
-  const [viewFiltersState, setViewFiltersState] = useState<{
-    assignees: string[];
-    labels: string[];
-    priority: string[];
-    projects: string[];
-  }>({
-    assignees: [],
-    labels: [],
-    priority: [],
-    projects: []
-  });
+  // Update ViewFilters context with current data
+  useEffect(() => {
+    setCurrentView(view);
+    setIssues(issues);
+    setWorkspace(workspace);
+    setCurrentUser(currentUser);
+  }, [view, issues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
 
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
@@ -494,7 +503,7 @@ export default function ViewRenderer({
   };
 
   const handleToggleViewFilters = () => {
-    setIsViewFiltersOpen(prev => !prev);
+    toggleViewFilters();
   };
 
   // Count issues for filter buttons
@@ -602,98 +611,77 @@ export default function ViewRenderer({
   return (
     <div className="h-full flex flex-col bg-[#101011]">
       {/* Header */}
-      <div className="border-b border-[#1a1a1a] bg-[#101011] px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-              {/* View Icon and Name */}
-              <div className="flex items-center gap-2">
-                {React.createElement(VIEW_TYPE_ICONS[view.type as keyof typeof VIEW_TYPE_ICONS] || List, {
-                  className: "h-5 w-5 text-[#9ca3af]"
-                })}
-                <h1 className="text-xl font-semibold text-white">
-                  {view.name}
-                </h1>
-              </div>
-              
-              {/* Issue Count */}
-              <span className="text-[#666] text-sm">
-                {sortedIssues.length} {sortedIssues.length === 1 ? 'issue' : 'issues'}
-              </span>
+      <PageHeader
+        icon={VIEW_TYPE_ICONS[view.type as keyof typeof VIEW_TYPE_ICONS] || List}
+        title={view.name}
+        subtitle={`${sortedIssues.length} ${sortedIssues.length === 1 ? 'issue' : 'issues'}`}
+        leftContent={
+          hasChanges && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetToDefaults}
+                className={pageHeaderButtonStyles.reset}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleUpdateView}
+                className={pageHeaderButtonStyles.update}
+              >
+                <Save className="h-3 w-3 mr-1" />
+                Update
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSaveDialog(true)}
+                className={pageHeaderButtonStyles.danger}
+              >
+                <Save className="h-3 w-3 mr-1" />
+                Save as new
+              </Button>
             </div>
-
-            {/* Changes Indicator */}
-            {hasChanges && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetToDefaults}
-                  className="h-6 px-2 text-[#666] hover:text-[#999] text-xs border border-transparent hover:border-[#333]"
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Reset
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleUpdateView}
-                  className="h-6 px-2 text-[#8cc8ff] hover:text-[#58a6ff] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
-                >
-                  <Save className="h-3 w-3 mr-1" />
-                  Update
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSaveDialog(true)}
-                  className="h-6 px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
-                >
-                  <Save className="h-3 w-3 mr-1" />
-                  Save as new
-                </Button>
-              </div>
-            )}
+          )
+        }
+        search={
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-[#666]" />
+            <Input
+              placeholder="Search issues..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={pageHeaderSearchStyles}
+            />
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-[#666]" />
-              <Input
-                placeholder="Search issues..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-7 w-48 bg-[#0d1117] border-[#21262d] text-white placeholder-[#666] focus:border-[#58a6ff] h-6 text-xs"
-              />
-            </div>
-
-            {/* View Options Toggle */}
+        }
+        actions={
+          <>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleToggleViewFilters}
-              className="h-6 px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+              className={pageHeaderButtonStyles.ghost}
             >
               {isViewFiltersOpen ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
               View Options
             </Button>
-
-            {/* New Issue */}
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[#238636] hover:text-[#2ea043] text-xs border border-[#21262d] hover:border-[#238636] bg-[#0d1117] hover:bg-[#0d1721]"
+              className={pageHeaderButtonStyles.primary}
               onClick={() => setIsNewIssueOpen(true)}
             >
               <Plus className="h-3 w-3 mr-1" />
               New Issue
             </Button>
-
-
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Save Dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
@@ -839,152 +827,9 @@ export default function ViewRenderer({
       </div>
 
       {/* View Content */}
-      <div className="flex-1 overflow-hidden flex">
-        {/* Main View Content */}
-        <div className="flex-1 overflow-hidden">
-          {renderViewContent()}
-        </div>
-        
-        {/* ViewFilters Sidebar */}
-        {isViewFiltersOpen && (
-          <div className="flex-shrink-0">
-            <ViewFilters
-              issues={issues}
-              workspace={workspace}
-              view={view}
-              currentUser={currentUser}
-              isOpen={isViewFiltersOpen}
-              onToggle={handleToggleViewFilters}
-              selectedFilters={viewFiltersState}
-              onFiltersChange={setViewFiltersState}
-              showSubIssues={tempShowSubIssues}
-              onSubIssuesToggle={() => setTempShowSubIssues(prev => !prev)}
-              viewType={tempDisplayType.toLowerCase() as 'kanban' | 'list' | 'timeline'}
-              onVisibilityChange={async (visibility) => {
-                try {
-                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      visibility
-                    })
-                  });
-
-                  if (response.ok) {
-                    toast({
-                      title: 'Success',
-                      description: 'View visibility updated successfully'
-                    });
-                    
-                    // Refresh the page to reflect changes
-                    window.location.reload();
-                  } else {
-                    throw new Error('Failed to update visibility');
-                  }
-                } catch (error) {
-                  console.error('Error updating visibility:', error);
-                  toast({
-                    title: 'Error',
-                    description: 'Failed to update view visibility',
-                    variant: 'destructive'
-                  });
-                }
-              }}
-              onOwnerChange={async (ownerId) => {
-                try {
-                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      ownerId
-                    })
-                  });
-
-                  if (response.ok) {
-                    toast({
-                      title: 'Success',
-                      description: 'View owner updated successfully'
-                    });
-                    
-                    // Refresh the page to reflect changes
-                    window.location.reload();
-                  } else {
-                    throw new Error('Failed to update owner');
-                  }
-                } catch (error) {
-                  console.error('Error updating owner:', error);
-                  toast({
-                    title: 'Error',
-                    description: 'Failed to update view owner',
-                    variant: 'destructive'
-                  });
-                }
-              }}
-              onDeleteView={async () => {
-                if (!confirm('Are you sure you want to delete this view? This action cannot be undone.')) {
-                  return;
-                }
-                
-                try {
-                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
-                    method: 'DELETE'
-                  });
-
-                  if (response.ok) {
-                    toast({
-                      title: 'Success',
-                      description: 'View deleted successfully'
-                    });
-                    
-                    // Navigate back to views list
-                    router.push(`/${workspace.slug || workspace.id}/views`);
-                  } else {
-                    throw new Error('Failed to delete view');
-                  }
-                } catch (error) {
-                  console.error('Error deleting view:', error);
-                  toast({
-                    title: 'Error',
-                    description: 'Failed to delete view',
-                    variant: 'destructive'
-                  });
-                }
-              }}
-              onNameChange={async (name) => {
-                try {
-                  const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      name
-                    })
-                  });
-
-                  if (response.ok) {
-                    toast({
-                      title: 'Success',
-                      description: 'View name updated successfully'
-                    });
-                    
-                    // Refresh the page to reflect changes
-                    window.location.reload();
-                  } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to update name');
-                  }
-                } catch (error) {
-                  console.error('Error updating name:', error);
-                  toast({
-                    title: 'Error',
-                    description: 'Failed to update view name',
-                    variant: 'destructive'
-                  });
-                }
-              }}
-            />
-          </div>
-        )}
+      <div className="flex-1 overflow-hidden">
+        {renderViewContent()}
       </div>
     </div>
   );
-} 
+}
