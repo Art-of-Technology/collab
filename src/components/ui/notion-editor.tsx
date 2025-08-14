@@ -142,13 +142,19 @@ export function NotionEditor({
           
           // Show placeholder only for empty paragraphs
           if (node.type.name === 'paragraph') {
-            // Check if this paragraph is inside a list item
+            // Check if this paragraph is inside a list item or blockquote
             const $pos = editor.state.doc.resolve(pos);
             const isInsideListItem = $pos.parent?.type.name === 'listItem';
+            const isInsideBlockquote = $pos.parent?.type.name === 'blockquote';
             
             // If inside a list item, show list item placeholder
             if (isInsideListItem) {
               return 'List item';
+            }
+            
+            // If inside a blockquote, show quote placeholder
+            if (isInsideBlockquote) {
+              return 'Quote';
             }
             
             return placeholder || "Write, press '/' for commands...";
@@ -166,9 +172,9 @@ export function NotionEditor({
             return '';
           }
 
-          // Show placeholder for blockquotes
+          // Don't show placeholder for blockquotes (handled by paragraph inside)
           if (node.type.name === 'blockquote') {
-            return 'Quote';
+            return '';
           }
 
           return '';
