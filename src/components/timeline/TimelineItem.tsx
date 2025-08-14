@@ -73,15 +73,22 @@ export function TimelineItem({
     }
   };
 
+
+
+
+
   const { start, end } = getItemPosition(item.startDate, item.dueDate);
   const isVisible = end > 0 && start < totalDays;
   
   if (!isVisible) return null;
   
+
+  
   return (
     <>
+      {/* Mobile-first responsive item label */}
       <div 
-        className="p-2 text-xs font-medium border-r sticky left-0 z-10 bg-card"
+        className="p-1 sm:p-2 text-xs font-medium border-r sticky left-0 z-10 bg-card"
         style={{
           position: "absolute",
           top: 0,
@@ -89,12 +96,15 @@ export function TimelineItem({
           width: "150px",
           height: "100%",
           display: "flex",
-          alignItems: "center"
+          alignItems: "center",
+          minWidth: "80px"
         }}
       >
-        <div className="flex items-center gap-1.5">
-          {typeStyles.icon}
-          <span className="truncate">{item.title}</span>
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-hidden">
+          <div className="flex-shrink-0 scale-75 sm:scale-100">
+            {typeStyles.icon}
+          </div>
+          <span className="truncate text-xs leading-tight">{item.title}</span>
         </div>
       </div>
 
@@ -103,15 +113,18 @@ export function TimelineItem({
           <TooltipTrigger asChild>
             <div
               className={cn(
-                "absolute h-8 rounded-md flex items-center justify-start px-2 cursor-pointer border text-xs shadow-sm",
+                "absolute rounded-md flex items-center justify-start cursor-pointer border shadow-sm",
+                "h-6 sm:h-8", // Mobile-first height
+                "px-1 sm:px-2", // Mobile-first padding
+                "text-xs", // Mobile-first text size
                 typeStyles.hover,
                 typeStyles.border,
               )}
               style={{
-                left: `calc(150px + ${start * dayWidth}px)`,
-                width: `${(end - start) * dayWidth}px`,
-                top: "4px", // Centered in the row
-                minWidth: '40px',
+                left: `calc(150px + ${start * 25}px)`,
+                width: `${Math.max((end - start) * 25, 30)}px`, // Minimum width for mobile
+                top: "2px sm:4px",
+                minWidth: '30px', // Increased minimum width for better mobile touch
                 zIndex: 5,
                 backgroundColor: item.color ? `${item.color}20` : typeStyles.bg.replace("bg-", "var(--"),
                 borderColor: item.color || undefined
@@ -120,7 +133,7 @@ export function TimelineItem({
               <span className="truncate leading-tight">{item.title}</span>
               {item.progress !== undefined && (
                 <div
-                  className="absolute bottom-0 left-0 h-1.5 rounded-b-md transition-all duration-500"
+                  className="absolute bottom-0 left-0 h-1 sm:h-1.5 rounded-b-md transition-all duration-500"
                   style={{ 
                     width: `${item.progress}%`,
                     backgroundColor: item.color || "var(--green-500)"
@@ -129,17 +142,17 @@ export function TimelineItem({
               )}
             </div>
           </TooltipTrigger>
-          <TooltipContent className="p-0 overflow-hidden w-72">
-            <div className="p-3 space-y-2">
-              <div className="flex items-center gap-2">
+          <TooltipContent className="p-0 overflow-hidden w-64 sm:w-72">
+            <div className="p-2 sm:p-3 space-y-1.5 sm:space-y-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <span 
-                  className="w-3 h-3 rounded-full border"
+                  className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border"
                   style={{ 
                     backgroundColor: item.color || getStatusColorValue(item.status),
                     borderColor: item.color ? `${item.color}40` : undefined
                   }}
                 ></span>
-                <p className="font-medium">{item.title}</p>
+                <p className="font-medium text-xs sm:text-sm">{item.title}</p>
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span>
@@ -147,7 +160,7 @@ export function TimelineItem({
               </div>
               <div className="text-xs pt-1 border-t">
                 {item.startDate && item.dueDate ? (
-                  <p>
+                  <p className="break-words">
                     <span className="font-medium">Timeline:</span> {format(new Date(item.startDate), 'MMM d, yyyy')} - {format(new Date(item.dueDate), 'MMM d, yyyy')}
                     <span className="ml-1 text-muted-foreground">({differenceInDays(new Date(item.dueDate), new Date(item.startDate))} days)</span>
                   </p>
@@ -163,9 +176,9 @@ export function TimelineItem({
                     <p className="text-xs font-medium">Progress</p>
                     <p className="text-xs font-medium">{item.progress}%</p>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-1.5 sm:h-2">
                     <div 
-                      className="h-2 rounded-full transition-all duration-500"
+                      className="h-1.5 sm:h-2 rounded-full transition-all duration-500"
                       style={{ 
                         width: `${item.progress}%`,
                         backgroundColor: item.color || 

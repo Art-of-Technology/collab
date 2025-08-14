@@ -34,18 +34,18 @@ export default function FilterTabs() {
   );
 
   return (
-    <div className="mb-6">
+    <div className="mb-4 sm:mb-6">
       <Tabs 
         defaultValue={currentFilter} 
         onValueChange={handleFilterChange}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-5 w-full h-auto p-1 gap-0.5 sm:gap-1 bg-muted/50">
           {filters.map((filter) => (
             <TabsTrigger 
               key={filter.key}
               value={filter.key}
-              className="px-1 sm:px-3 text-xs sm:text-sm"
+              className="px-0.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-[9px] sm:text-xs md:text-sm font-medium min-h-[32px] sm:min-h-[36px] flex items-center justify-center hover:bg-background/80 data-[state=active]:bg-background data-[state=active]:shadow-sm"
             >
               {filter.label}
             </TabsTrigger>

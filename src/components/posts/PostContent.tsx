@@ -61,17 +61,17 @@ export default function PostContent({
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-        <div className="flex gap-4">
+      <div className="flex items-center justify-between mt-3 sm:mt-4 text-xs sm:text-sm text-muted-foreground">
+        <div className="flex gap-2 sm:gap-4">
           <span onClick={onToggleExpand}
-            className="flex items-center gap-1 hover-effect px-2 py-1 rounded-md -ml-2 cursor-pointer select-none">
-            <HeartIcon className="h-4 w-4" />
-            {likesCount} {likesCount === 1 ? "like" : "likes"}
+            className="flex items-center gap-1 hover-effect px-1 sm:px-2 py-1 rounded-md -ml-1 sm:-ml-2 cursor-pointer select-none transition-colors">
+            <HeartIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="whitespace-nowrap">{likesCount} {likesCount === 1 ? "like" : "likes"}</span>
           </span>
           <span onClick={onToggleExpand}
-            className="flex items-center gap-1 hover-effect px-2 py-1 rounded-md -ml-2 cursor-pointer select-none">
-            <ChatBubbleLeftIcon className="h-4 w-4" />
-            {commentsCount} {commentsCount === 1 ? "comment" : "comments"}
+            className="flex items-center gap-1 hover-effect px-1 sm:px-2 py-1 rounded-md -ml-1 sm:-ml-2 cursor-pointer select-none transition-colors">
+            <ChatBubbleLeftIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="whitespace-nowrap">{commentsCount} {commentsCount === 1 ? "comment" : "comments"}</span>
           </span>
         </div>
       </div>
