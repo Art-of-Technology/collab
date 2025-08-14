@@ -69,6 +69,7 @@ export interface MarkdownEditorRef {
   getContent: () => string;
   saveFromCollab?: () => Promise<void>;
   resetFromSource?: (html: string) => void;
+  resetTo?: (html: string) => void;
 }
 
 interface MarkdownEditorProps {
@@ -1313,7 +1314,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
           return base;
         }
       )(),
-      content: collabDocumentId ? '' : content,
+      content: collabDocumentId ? '' : (content || initialValue),
       editorProps: {
         attributes: {
           class: cn(
@@ -1418,6 +1419,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       if (editor && !collabDocumentId) {
         editor.commands.setContent(html || '');
       }
+    },
+    // Forcefully reset content (works for both collab and non-collab)
+    resetTo: (html: string) => {
+      if (!editor) return;
+      // Emit update so collaborators receive the change
+      editor.commands.setContent(html || '', true);
     },
   }), [editor, collabDocumentId]);
 
@@ -2330,6 +2337,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     setShowCommandMenu(false);
   }, [editor]);
   
+  // Add mention event handlers and change propagation to parent
+  const emitChangeToParent = useCallback(() => {
+    if (!editor || !onChange) return;
+    try {
+      const html = editor.getHTML();
+      onChange(html, html);
+    } catch {}
+  }, [editor, onChange]);
+
   // Add mention event handlers
   useEffect(() => {
     if (!editor) return;
@@ -2341,6 +2357,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     editor.on('update', checkForStoryMentionTrigger);
     editor.on('update', checkForMilestoneMentionTrigger);
     editor.on('update', checkForCommandTrigger);
+    editor.on('update', emitChangeToParent);
     
     return () => {
       editor.off('update', checkForMentionTrigger);
@@ -2349,8 +2366,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       editor.off('update', checkForStoryMentionTrigger);
       editor.off('update', checkForMilestoneMentionTrigger);
       editor.off('update', checkForCommandTrigger);
+      editor.off('update', emitChangeToParent);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger, emitChangeToParent]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
@@ -2443,15 +2461,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       .ProseMirror .mention {
         background-color: hsl(var(--primary) / 0.1);
         border-radius: 0.25rem;
-        padding: 0.125rem 0.25rem;
-        margin: 0 0.125rem;
+        padding: 0 0.rem;
+        margin: 0;
         color: hsl(var(--primary));
+        line-height: 1.2;
+        border-radius: 0.5rem;
         font-weight: 500;
         white-space: nowrap;
         display: inline-flex;
         align-items: center;
         user-select: all;
         cursor: pointer;
+        position: relative;
+        top: -0.1rem;
       }
       
       .ProseMirror .task-mention {
@@ -2904,25 +2926,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
 
       <div className="flex-1 relative" ref={editorContainerRef}>
         <EditorContent editor={editor} className="w-full" />
-        
-        {/* Autosave indicator for collaborative editing */}
-        {collabDocumentId && !readOnly && (
-          <div className="absolute bottom-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded border backdrop-blur-sm">
-            <div className="flex items-center gap-1.5">
-              {isSaving ? (
-                <>
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <span>Edits are saved automatically</span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
         
         {/* Overlay when uploading */}
         {isUploadingImage && (

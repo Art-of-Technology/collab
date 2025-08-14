@@ -318,7 +318,12 @@ export function StoryDetailContent({
 
   // Cancel description editing
   const handleCancelDescription = () => {
-    setDescription(story?.description || "");
+    // Restore last persisted description and broadcast to collaborators
+    const original = story?.description || "";
+    try {
+      (markdownEditorRef.current as any)?.resetTo?.(original);
+    } catch {}
+    setDescription(original);
     setEditingDescription(false);
   };
 

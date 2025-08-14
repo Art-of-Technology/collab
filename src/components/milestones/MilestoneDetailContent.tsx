@@ -275,7 +275,11 @@ export function MilestoneDetailContent({
 
     // Cancel description editing
     const handleCancelDescription = () => {
-        setDescription(milestone?.description || "");
+        const original = milestone?.description || "";
+        try {
+            (markdownEditorRef.current as any)?.resetTo?.(original);
+        } catch {}
+        setDescription(original);
         setEditingDescription(false);
     };
 

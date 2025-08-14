@@ -991,7 +991,9 @@ export function TaskDetailContent({
                         variant="secondary"
                         size="sm"
                         onClick={() => {
-                          // Reset Hocuspocus by toggling key; read-only viewer will rehydrate from DB
+                          // Broadcast reset to collaborators by restoring last persisted description
+                          const original = task.description || '';
+                          markdownEditorRef.current?.resetTo?.(original);
                           setEditingDescription(false);
                         }}
                       >
