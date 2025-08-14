@@ -2491,10 +2491,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
         user-select: all;
         cursor: pointer;
       }
-
-      .ProseMirror .task-mention .mention-symbol {
-        display:none;
-      }
       
       .ProseMirror .epic-mention {
         background-color: rgba(168, 85, 247, 0.1);
@@ -2543,7 +2539,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       .ProseMirror .epic-mention .mention-symbol,
       .ProseMirror .story-mention .mention-symbol,
       .ProseMirror .milestone-mention .mention-symbol {
-        display:none;
+        opacity: 0.7;
+        margin-right: 1px;
       }
     `;
     document.head.appendChild(style);
