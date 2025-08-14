@@ -93,7 +93,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
   return (
     <div className="space-y-6">
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -168,12 +168,12 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
                 const percentage = totalTime > 0 ? (time / totalTime) * 100 : 0;
                 return (
                   <div key={activity} className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${getActivityColor(activity)}`} />
                         <span className="font-medium capitalize">{activity}</span>
                       </div>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <div className="font-medium">{formatDurationUI(time)}</div>
                         <div className="text-xs text-muted-foreground">
                           {percentage.toFixed(1)}%
@@ -206,9 +206,9 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
                   const percentage = workTime > 0 ? (time / workTime) * 100 : 0;
                   return (
                     <div key={board} className="space-y-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <span className="font-medium">{board}</span>
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                           <div className="font-medium">{formatDurationUI(time)}</div>
                           <div className="text-xs text-muted-foreground">
                             {percentage.toFixed(1)}% of work time
@@ -243,7 +243,7 @@ export function TimesheetAnalytics({ data, filters }: TimesheetAnalyticsProps) {
                   
                   return (
                     <div key={date} className="space-y-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
                         <span className="font-medium">
                           {format(parseISO(date), 'EEE, MMM d')}
                         </span>

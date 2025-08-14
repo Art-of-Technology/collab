@@ -333,19 +333,19 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
 
               {/* Quick Stats */}
               {timesheetData && (
-                <div className="hidden md:flex items-center gap-6 pl-6 border-l border-gray-200 dark:border-gray-700">
+                <div className="flex flex-wrap items-center gap-3 md:gap-6 md:pl-6 md:border-l border-gray-200 dark:border-gray-700">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    <div className="text-lg md:text-2xl font-bold text-green-600 dark:text-green-400">
                       {timesheetData.summary.formattedTotalWorkTime}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Work Time</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{timesheetData.summary.productivityScore}%</div>
+                    <div className="text-lg md:text-xl font-bold text-blue-600 dark:text-blue-400">{timesheetData.summary.productivityScore}%</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Productivity</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{timesheetData.summary.totalActiveTasks}</div>
+                    <div className="text-lg md:text-xl font-bold text-purple-600 dark:text-purple-400">{timesheetData.summary.totalActiveTasks}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Active</div>
                   </div>
                 </div>
@@ -357,16 +357,16 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
               <Tabs value={filters.view} onValueChange={handleViewChange}>
                 <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
                   <TabsTrigger value="daily" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <Sun className="h-4 w-4 mr-2" />
-                    Daily
+                    <Sun className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Daily</span>
                   </TabsTrigger>
                   <TabsTrigger value="weekly" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <CalendarDays className="h-4 w-4 mr-2" />
-                    Weekly
+                    <CalendarDays className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Weekly</span>
                   </TabsTrigger>
                   <TabsTrigger value="monthly" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Monthly
+                    <Calendar className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Monthly</span>
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -374,7 +374,7 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
           </div>
 
           {/* Navigation and Actions */}
-          <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center mt-6">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mt-6">
             {/* Date Navigation */}
             <div className="flex items-center gap-2">
               <Button
@@ -390,7 +390,7 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => setFilters((prev) => ({ ...prev, date: new Date().toISOString() }))}
-                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 min-w-[120px]"
+                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
               >
                 <Target className="h-4 w-4 mr-2" />
                 Today
@@ -407,9 +407,9 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
             </div>
 
             {/* Filters and Actions */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-2 xl:flex xl:flex-row xl:gap-2">
               <Select value={filters.boardId || "all"} onValueChange={handleBoardFilter}>
-                <SelectTrigger className="w-[140px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
+                <SelectTrigger className="w-full xl:w-auto xl:min-w-[90px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Board" />
                 </SelectTrigger>
@@ -427,7 +427,7 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                 value={localFilters.activityType}
                 onValueChange={(value) => setLocalFilters((prev) => ({ ...prev, activityType: value }))}
               >
-                <SelectTrigger className="w-[140px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
+                <SelectTrigger className="w-full xl:w-auto xl:min-w-[90px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
                   <Activity className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
@@ -479,7 +479,7 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
               </Select>
 
               <Select value={localFilters.status} onValueChange={(value) => setLocalFilters((prev) => ({ ...prev, status: value }))}>
-                <SelectTrigger className="w-[140px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
+                <SelectTrigger className="w-full xl:w-auto xl:min-w-[90px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
                   <Timer className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
@@ -511,7 +511,7 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20 hover:bg-white dark:hover:bg-gray-700"
+                    className="w-full xl:w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20 hover:bg-white dark:hover:bg-gray-700"
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Export
@@ -534,7 +534,7 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                 size="sm"
                 onClick={() => refetch()}
                 disabled={isLoading}
-                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
+                className="w-full xl:w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
               >
                 <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               </Button>
