@@ -534,7 +534,7 @@ function initializeDocumentContent(ydoc: Y.Doc, content: string) {
     Y.applyUpdate(ydoc, update);
   } catch (e) {
     // Fallback: insert plain text if parsing fails
-    const stripTags = (html: string) => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const stripTags = (html: string) => html.replace(/<|>/g, '').replace(/\s+/g, ' ').trim();
     const plain = stripTags(content);
     const fragment = ydoc.getXmlFragment('prosemirror');
     const paragraph = new Y.XmlElement('paragraph');
