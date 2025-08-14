@@ -73,33 +73,27 @@ export function TimelineItem({
     }
   };
 
-  // Responsive column width matching TimelineHeader
-  const getResponsiveColumnWidth = () => {
-    return `clamp(80px, 15vw, 150px)`;
-  };
 
-  // Responsive day width
-  const getResponsiveDayWidth = () => {
-    return Math.max(dayWidth, 20);
-  };
+
+
 
   const { start, end } = getItemPosition(item.startDate, item.dueDate);
   const isVisible = end > 0 && start < totalDays;
   
   if (!isVisible) return null;
   
-  const responsiveDayWidth = getResponsiveDayWidth();
+
   
   return (
     <>
       {/* Mobile-first responsive item label */}
       <div 
-        className="p-1 sm:p-2 text-[10px] sm:text-xs font-medium border-r sticky left-0 z-10 bg-card"
+        className="p-1 sm:p-2 text-xs font-medium border-r sticky left-0 z-10 bg-card"
         style={{
           position: "absolute",
           top: 0,
           left: 0,
-          width: getResponsiveColumnWidth(),
+          width: "150px",
           height: "100%",
           display: "flex",
           alignItems: "center",
@@ -110,7 +104,7 @@ export function TimelineItem({
           <div className="flex-shrink-0 scale-75 sm:scale-100">
             {typeStyles.icon}
           </div>
-          <span className="truncate text-[9px] sm:text-xs leading-tight">{item.title}</span>
+          <span className="truncate text-xs leading-tight">{item.title}</span>
         </div>
       </div>
 
@@ -122,13 +116,13 @@ export function TimelineItem({
                 "absolute rounded-md flex items-center justify-start cursor-pointer border shadow-sm",
                 "h-6 sm:h-8", // Mobile-first height
                 "px-1 sm:px-2", // Mobile-first padding
-                "text-[9px] sm:text-xs", // Mobile-first text size
+                "text-xs", // Mobile-first text size
                 typeStyles.hover,
                 typeStyles.border,
               )}
               style={{
-                left: `calc(${getResponsiveColumnWidth()} + ${start * responsiveDayWidth}px)`,
-                width: `${Math.max((end - start) * responsiveDayWidth, 30)}px`, // Minimum width for mobile
+                left: `calc(150px + ${start * 25}px)`,
+                width: `${Math.max((end - start) * 25, 30)}px`, // Minimum width for mobile
                 top: "2px sm:4px",
                 minWidth: '30px', // Increased minimum width for better mobile touch
                 zIndex: 5,
@@ -160,11 +154,11 @@ export function TimelineItem({
                 ></span>
                 <p className="font-medium text-xs sm:text-sm">{item.title}</p>
               </div>
-              <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span>
                 <span>Status: {item.status}</span>
               </div>
-              <div className="text-[10px] sm:text-xs pt-1 border-t">
+              <div className="text-xs pt-1 border-t">
                 {item.startDate && item.dueDate ? (
                   <p className="break-words">
                     <span className="font-medium">Timeline:</span> {format(new Date(item.startDate), 'MMM d, yyyy')} - {format(new Date(item.dueDate), 'MMM d, yyyy')}
@@ -179,8 +173,8 @@ export function TimelineItem({
               {item.progress !== undefined && (
                 <div className="space-y-1 pt-1">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] sm:text-xs font-medium">Progress</p>
-                    <p className="text-[10px] sm:text-xs font-medium">{item.progress}%</p>
+                    <p className="text-xs font-medium">Progress</p>
+                    <p className="text-xs font-medium">{item.progress}%</p>
                   </div>
                   <div className="w-full bg-muted rounded-full h-1.5 sm:h-2">
                     <div 

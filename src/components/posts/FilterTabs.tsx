@@ -10,11 +10,11 @@ export default function FilterTabs() {
   const currentFilter = searchParams.get("filter") || "all";
 
   const filters = [
-    { key: "all", label: "All", mobileLabel: "All" },
-    { key: "updates", label: "Updates", mobileLabel: "Updates" },
-    { key: "blockers", label: "Blockers", mobileLabel: "Blockers" },
-    { key: "ideas", label: "Ideas", mobileLabel: "Ideas" },
-    { key: "questions", label: "Questions", mobileLabel: "Questions" },
+    { key: "all", label: "All" },
+    { key: "updates", label: "Updates" },
+    { key: "blockers", label: "Blockers" },
+    { key: "ideas", label: "Ideas" },
+    { key: "questions", label: "Questions" },
   ];
 
   const handleFilterChange = useCallback(
