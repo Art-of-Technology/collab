@@ -651,6 +651,7 @@ export function EpicDetailContent({
                                                     minHeight="150px"
                                                     maxHeight="400px"
                                                     onAiImprove={handleAiImproveDescription}
+                                                    collabDocumentId={`epic:${epic.id}:description`}
                                                 />
                                             </div>
                                             {savingDescription && (
@@ -663,7 +664,15 @@ export function EpicDetailContent({
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={handleCancelDescription}
+                                                onClick={() => {
+                                                    const original = epic?.description || '';
+                                                    // Find the editor instance via ref if available, else just close
+                                                    try {
+                                                        const node = document.querySelector('[data-mention]');
+                                                    } catch {}
+                                                    setDescription(original);
+                                                    setEditingDescription(false);
+                                                }}
                                                 disabled={savingDescription}
                                             >
                                                 <X className="h-4 w-4 mr-1" />
