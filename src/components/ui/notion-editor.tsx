@@ -250,25 +250,53 @@ export function NotionEditor({
     event.stopPropagation();
     
     if (!editor) return;
-    
-    const { from } = editor.state.selection;
-    slashStartPosRef.current = from;
-    
-    const domPosition = editor.view.coordsAtPos(from);
-    const editorDom = editor.view.dom;
-    if (!editorDom) return;
-    
-    const editorContainer = editorDom.getBoundingClientRect();
-    
-    setSlashPosition({
-      top: domPosition.bottom - editorContainer.top,
-      left: domPosition.left - editorContainer.left,
-    });
-    setShowSlashCommands(true);
-    setSlashQuery('');
-    setSelectedCommandIndex(-1);
-    setIsKeyboardNavigation(false);
-  }, [editor]);
+
+  // Get the button element and its position
+  const buttonElement = event.currentTarget as HTMLElement;
+  const buttonRect = buttonElement.getBoundingClientRect();
+  
+  // Find which line/block this button belongs to by its vertical position
+  // Get the position at the button's vertical center
+  const viewPos = editor.view.posAtCoords({
+    left: buttonRect.right + 50, // A bit to the right of the button
+    top: buttonRect.top + (buttonRect.height / 2) // Vertical center of button
+  });
+  
+  if (!viewPos) return;
+  
+  // Get the resolved position
+  const $pos = editor.state.doc.resolve(viewPos.pos);
+  
+  // Find the start of the current line/block
+  const lineStart = $pos.start($pos.depth);
+  
+  // Move cursor to the end of current line's content
+  const lineEnd = $pos.end($pos.depth);
+  
+  // Set cursor to the end of the line
+  editor.chain()
+    .focus()
+    .setTextSelection(lineEnd)
+    .run();
+  
+  // Store the position for slash command
+  slashStartPosRef.current = lineEnd;
+  
+  // Get coordinates at the cursor position
+  const domPosition = editor.view.coordsAtPos(lineEnd);
+  const editorContainer = editor.view.dom.getBoundingClientRect();
+  
+  // Set slash menu position
+  setSlashPosition({
+    top: domPosition.bottom - editorContainer.top,
+    left: domPosition.left - editorContainer.left,
+  });
+  
+  setShowSlashCommands(true);
+  setSlashQuery('');
+  setSelectedCommandIndex(-1);
+  setIsKeyboardNavigation(false);
+}, [editor]);
 
   // Handle content updates
   useEffect(() => {

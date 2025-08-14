@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { NotionEditor } from "@/components/ui/notion-editor";
 import { TagSelect } from "@/components/notes/TagSelect";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 const noteCreateSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -36,6 +36,7 @@ type NoteCreateFormValues = z.infer<typeof noteCreateSchema>;
 interface NoteCreateFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  showBackButton?: boolean;
 }
 
 interface NoteTag {
@@ -44,15 +45,12 @@ interface NoteTag {
   color: string;
 }
 
-export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
+export function NoteCreateForm({ onSuccess, onCancel, showBackButton = false }: NoteCreateFormProps) {
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const { toast } = useToast();
   const { workspaceId } = useParams<{ workspaceId: string }>();
-
-
 
   const form = useForm<NoteCreateFormValues>({
     resolver: zodResolver(noteCreateSchema),
@@ -152,8 +150,6 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   };
 
   const onSubmit = async (values: NoteCreateFormValues) => {
-    setIsLoading(true);
-
     try {
       const requestData = {
         title: values.title,
@@ -176,11 +172,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
         throw new Error("Failed to create note");
       }
 
-      toast({
-        title: "Success",
-        description: "Note created successfully",
-      });
-
+      // Directly navigate to notes page without showing loading state
       onSuccess();
     } catch (error) {
       console.error("Error creating note:", error);
@@ -189,8 +181,6 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
         description: "Failed to create note. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -198,78 +188,30 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
     <div className="h-full flex flex-col">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-          {/* Top action bar - SAĞ ÜSTTE */}
-          <div className="px-6 py-4 border-b flex justify-end items-center">
-            <div className="flex space-x-2">
+          {/* Top action bar - Back button on left, action buttons on right */}
+          <div className="px-6 py-4 border-b flex items-center justify-between">
+            {showBackButton && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Notes
+              </Button>
+            )}
+            
+            <div className="flex space-x-2 ml-auto">
               <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Note"
-                )}
+              <Button type="submit">
+                Save
               </Button>
             </div>
           </div>
-          
-          {/* Top section with options */}
-          {/* <div className="px-6 py-4 border-b">
-            <div className="flex items-center gap-6">
-              <FormField
-                control={form.control}
-                name="isPublic"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="text-sm font-normal">Public Note</FormLabel>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="isFavorite"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="text-sm font-normal">Favorite</FormLabel>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="tagIds"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                    <FormLabel className="text-sm font-normal whitespace-nowrap">Tags:</FormLabel>
-                    <FormControl>
-                      <TagSelect
-                        value={field.value || []}
-                        onChange={field.onChange}
-                        workspaceId={workspaceId}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div> */}
 
           {/* Main editor area - takes full remaining height */}
           <div className="flex-1 px-6 py-4 overflow-hidden">
@@ -363,30 +305,6 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
             />
 
             {/* Editor */}
-            {/* {showEditor && (
-              <FormField
-                control={form.control}
-                name="content"
-                render={({ field }) => (
-                  <FormItem className="h-full">
-                    <FormControl>
-                      <NotionEditor
-                        content={field.value}
-                        onChange={field.onChange}
-                        placeholder='Write, press "/" for commands'
-                        minHeight="100%"
-                        maxHeight="100%"
-                        className="h-full"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )} */}
-            {/* Editor bölümünü şu şekilde güncelleyin: */}
-
-            {/* Editor */}
             {showEditor && (
               <FormField
                 control={form.control}
@@ -410,13 +328,9 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
                 )}
               />
             )}
-
-
           </div>
-
-
         </form>
       </Form>
     </div>
   );
-} 
+}

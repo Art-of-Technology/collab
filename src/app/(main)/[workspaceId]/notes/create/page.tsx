@@ -21,26 +21,12 @@ export default function CreateNotePage() {
 
   return (
     <div className="h-screen flex flex-col">
-      {/* Header with back button */}
-      <div className="px-6 py-4 border-b">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCancel}
-          className="flex items-center gap-2 mb-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Notes
-        </Button>
-      </div>
-
-      {/* Note Creation Form - Full Height */}
-      <div className="flex-1 overflow-hidden">
-        <NoteCreateForm
-          onSuccess={handleSuccess}
-          onCancel={handleCancel}
-        />
-      </div>
+      {/* Note Creation Form - Full Height with integrated header */}
+      <NoteCreateForm
+        onSuccess={handleSuccess}
+        onCancel={handleCancel}
+        showBackButton={true}
+      />
     </div>
   );
 } 
