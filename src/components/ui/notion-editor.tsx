@@ -1,30 +1,21 @@
 "use client";
 
 import React, { useCallback, useState, useRef, useEffect } from "react";
-import { useEditor, EditorContent, Editor } from "@tiptap/react";
-import { TextSelection } from "@tiptap/pm/state";
+import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
-import { TextStyle } from "@tiptap/extension-text-style";
 import Heading from "@tiptap/extension-heading";
-import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import DragHandle from "@tiptap/extension-drag-handle-react";
 import { cn } from "@/lib/utils";
 import {
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Link as LinkIcon,
-  Image as ImageIcon,
   Heading1,
   Heading2,
   Heading3,
@@ -32,38 +23,12 @@ import {
   ListOrdered,
   Quote,
   Code,
-  CheckSquare,
   Table as TableIcon,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Type,
-  Hash,
   Minus,
-  Plus,
-  MoreHorizontal,
-  Columns,
-  Rows,
-  Trash2,
   Palette,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
-import { 
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
-import { mergeAttributes } from '@tiptap/core'
-import { Node as TiptapNode } from '@tiptap/core'
 import { InlineColorPalette } from "@/components/ui/color-palette";
 import { RgbaColor, RgbaTextStyle } from "@/components/ui/rgba-color-extension";
 
@@ -75,37 +40,6 @@ interface NotionEditorProps {
   className?: string;
   minHeight?: string;
   maxHeight?: string;
-}
-
-// BASIT SLASH COMMAND HANDLER
-const handleSlashCommand = (editor: Editor, command: string) => {
-  switch (command) {
-    case 'paragraph':
-      return editor.chain().focus().setNode('paragraph').run();
-    case 'heading1':
-      return editor.chain().focus().setNode('heading', { level: 1 }).run();
-    case 'heading2':
-      return editor.chain().focus().setNode('heading', { level: 2 }).run();
-    case 'heading3':
-      return editor.chain().focus().setNode('heading', { level: 3 }).run();
-    case 'bulletList':
-      return editor.chain().focus().toggleBulletList().run();
-    case 'orderedList':
-      return editor.chain().focus().toggleOrderedList().run();
-    case 'blockquote':
-      return editor.chain().focus().toggleBlockquote().run();
-    case 'codeBlock':
-      return editor.chain().focus().toggleCodeBlock().run();
-    case 'horizontalRule':
-      return editor.chain().focus().setHorizontalRule().run();
-    case 'table':
-      return editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run();
-    case 'color':
-      // Color is handled specially in executeSlashCommand
-      return true;
-    default:
-      return false;
-  }
 }
 
 // Floating toolbar extension
@@ -162,22 +96,17 @@ export function NotionEditor({
   onChange,
   content = "",
   initialValue = "",
-  placeholder = "Write, press '/' for commands...",
+  placeholder = "",
   className = "",
   minHeight = "150px",
   maxHeight = "400px",
 }: NotionEditorProps) {
 
-  const [linkUrl, setLinkUrl] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [showLinkPopover, setShowLinkPopover] = useState(false);
-  const [showImagePopover, setShowImagePopover] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 });
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
-  const [isSlashCommandExecuting, setIsSlashCommandExecuting] = useState(false);
   const [showColorPalette, setShowColorPalette] = useState(false);
   const [colorPalettePosition, setColorPalettePosition] = useState({ top: 0, left: 0 });
   
@@ -186,13 +115,14 @@ export function NotionEditor({
   const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
   
   const editorContainerRef = useRef<HTMLDivElement>(null);
-
-  const initialContentRef = useRef(initialValue || content);
+  const slashStartPosRef = useRef<number | null>(null);
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false, // We'll add our own heading config
+        heading: false,
+        link: false,
+        underline: false,
       }),
       Link.configure({
         openOnClick: false,
@@ -209,36 +139,35 @@ export function NotionEditor({
       // ENHANCED PLACEHOLDER - Shows on every empty node
       Placeholder.configure({
         placeholder: ({ node, pos, editor }) => {
-          // Don't show placeholder during slash command execution
-          if (isSlashCommandExecuting) return '';
           
           // Show placeholder only for empty paragraphs
           if (node.type.name === 'paragraph') {
             return placeholder || "Write, press '/' for commands...";
           }
-          
+
           // Show specific placeholders for headings
           if (node.type.name === 'heading') {
+            console.log('heading', node.attrs.level);
             const level = node.attrs.level;
             return `Heading ${level}`;
           }
-          
+
           // Show placeholder for list items
           if (node.type.name === 'listItem') {
             return 'List item';
           }
-          
+
           // Show placeholder for blockquotes
           if (node.type.name === 'blockquote') {
             return 'Quote';
           }
-          
+
           return '';
         },
         emptyEditorClass: 'is-editor-empty',
         emptyNodeClass: 'is-empty',
         showOnlyWhenEditable: true,
-        showOnlyCurrent: false, // Show on all empty nodes, not just the current one
+        showOnlyCurrent: true, // Show only on the current focused node
         includeChildren: true, // Include child nodes
       }),
       RgbaTextStyle,
@@ -295,15 +224,8 @@ export function NotionEditor({
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       onChange?.(html);
-      
-      // Reset slash command executing state after content update
-      if (isSlashCommandExecuting) {
-        setTimeout(() => {
-          setIsSlashCommandExecuting(false);
-        }, 100);
-      }
     },
-  }, [placeholder, minHeight, maxHeight, onChange, isSlashCommandExecuting]);
+  }, [placeholder, minHeight, maxHeight, onChange]);
 
   // Handle content updates
   useEffect(() => {
@@ -344,17 +266,20 @@ export function NotionEditor({
         const $from = editor.state.doc.resolve(from);
         const beforeChar = $from.nodeBefore?.textContent?.slice(-1) || '';
         const isAtLineStart = from === $from.start($from.depth);
-        
+
         if (isAtLineStart || beforeChar === ' ' || beforeChar === '\n') {
           // Prevent the slash from being inserted into the editor
           event.preventDefault();
-          
+          // Remember caret position where slash menu was invoked
+          slashStartPosRef.current = from;
+          debugSelection('slash-open');
+
           const domPosition = editor.view.coordsAtPos(from);
           const editorDom = editor.view.dom;
           if (!editorDom) return;
-          
+
           const editorContainer = editorDom.getBoundingClientRect();
-          
+
           setSlashPosition({
             top: domPosition.bottom - editorContainer.top,
             left: domPosition.left - editorContainer.left,
@@ -407,6 +332,7 @@ export function NotionEditor({
         } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
           // Only allow alphanumeric characters for query
           if (/[a-zA-Z0-9]/.test(event.key)) {
+            event.preventDefault();
             setSlashQuery(prev => prev + event.key);
             setSelectedCommandIndex(-1);
             setIsKeyboardNavigation(false);
@@ -424,6 +350,14 @@ export function NotionEditor({
             setIsKeyboardNavigation(false);
           }
         }
+      } else if (event.key === 'Enter') {
+        debugSelection('enter-before');
+        debugAround('enter-before-around');
+        // Let TipTap handle Enter behavior
+        setTimeout(() => {
+          debugAround('enter-after-around');
+          debugSelection('enter-after');
+        }, 0);
       }
     };
 
@@ -549,90 +483,131 @@ export function NotionEditor({
     }
   }, [editor]);
 
-  const addLink = useCallback(() => {
-    if (!editor || !linkUrl) return;
-    
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange('link')
-      .setLink({ href: linkUrl })
-      .run();
-    
-    setLinkUrl('');
-    setShowLinkPopover(false);
-  }, [editor, linkUrl]);
+  // Debug helper to log current selection and surrounding text
+  const debugSelection = (label: string) => {
+    try {
+      if (!editor) return;
+      const { from, to } = editor.state.selection;
+      const $from = editor.state.doc.resolve(from);
+      const parent = $from.parent?.type?.name;
+      const before = editor.state.doc.textBetween(Math.max(0, from - 30), from, "\n");
+      console.log('[SlashDebug]', label, { from, to, parent, before });
+    } catch (e) {
+      console.warn('[SlashDebug] log error', e);
+    }
+  };
 
-  const addImage = useCallback(() => {
-    if (!editor || !imageUrl) return;
-    
-    editor
-      .chain()
-      .focus()
-      .setImage({ src: imageUrl })
-      .run();
-    
-    setImageUrl('');
-    setShowImagePopover(false);
-  }, [editor, imageUrl]);
+  const debugAround = (label: string) => {
+    try {
+      if (!editor) return;
+      const { from } = editor.state.selection;
+      const $from = editor.state.doc.resolve(from);
+      const depth = $from.depth;
+      const start = $from.start(depth);
+      const end = $from.end(depth);
+      const parentName = $from.parent?.type?.name;
+      const parentText = editor.state.doc.textBetween(start, end, '\n');
+      console.log('[SlashDebug]', label, { from, depth, start, end, parentName, parentText });
+    } catch (e) {
+      console.warn('[SlashDebug] around error', e);
+    }
+  };
+
+  const debugOutline = (label: string) => {
+    try {
+      if (!editor) return;
+      const doc = editor.state.doc;
+      const blocks: Array<{ index: number; type: string; text: string }> = [];
+      for (let i = 0; i < doc.childCount; i++) {
+        const node = doc.child(i);
+        blocks.push({ index: i, type: node.type.name, text: node.textContent });
+      }
+      console.log('[SlashDebug] outline', label, blocks);
+    } catch (e) {
+      console.warn('[SlashDebug] outline error', e);
+    }
+  };
 
   const executeSlashCommand = useCallback((command: string) => {
     if (!editor) return;
-    
-    // Set executing state to hide placeholders temporarily
-    setIsSlashCommandExecuting(true);
+  
     setShowSlashCommands(false);
-    
-    // Since we prevented the slash from being inserted, we just need to
-    // delete any query text that was typed after the slash
-    if (slashQuery && slashQuery.length > 0) {
+
+    debugSelection('before-delete-query');
+    debugOutline('before-apply');
+
+    // Save current position before any deletions
+    const currentPos = editor.state.selection.from;
+  
+    // Remove the literal "/<query>" only if it actually exists before the cursor
+    if (slashQuery?.length) {
       const { from } = editor.state.selection;
-      const queryLength = slashQuery.length;
-      
-      // Delete the query text
-      editor.chain()
-        .focus()
-        .deleteRange({ from: from - queryLength, to: from })
-        .run();
-    }
-    
-         // Special handling for color command
-     if (command === 'color') {
-       // Calculate position fresh for color palette (fixed positioning)
-       const { from } = editor.state.selection;
-       const domPosition = editor.view.coordsAtPos(from);
-       
-       setColorPalettePosition({
-         top: domPosition.top + 30,
-         left: domPosition.left,
-       });
-       
-       console.log('Color palette fixed position:', {
-         domPosition,
-         calculated: {
-           top: domPosition.top + 30,
-           left: domPosition.left,
-         }
-       });
-       
-       setShowColorPalette(true);
-       setIsSlashCommandExecuting(false);
-       setSlashQuery('');
-       return;
-     }
-    
-    // Execute the command immediately
-    handleSlashCommand(editor, command);
-    
-    // Reset query
-    setSlashQuery('');
-    
-    // Focus the editor to trigger cursor positioning using the editor's focus command
-    setTimeout(() => {
-      if (editor && !editor.isDestroyed) {
-        editor.commands.focus();
+      const start = Math.max(0, from - (slashQuery.length + 1));
+      const preceding = editor.state.doc.textBetween(start, from, "\n");
+      if (preceding === `/${slashQuery}`) {
+        editor.chain().deleteRange({ from: start, to: from }).run();
+        debugSelection('after-delete-query');
       }
-    }, 10);
+    }
+  
+    // color: open palette and exit
+    if (command === 'color') {
+      const { from } = editor.state.selection;
+      const pos = editor.view.coordsAtPos(from);
+      setColorPalettePosition({ top: pos.top + 30, left: pos.left });
+      setShowColorPalette(true);
+      setSlashQuery('');
+      return;
+    }
+  
+    // Apply command at current selection
+    const chain = editor.chain();
+    debugSelection(`before-apply-${command}`);
+  
+    switch (command) {
+      case 'paragraph':
+        chain.setParagraph().run();
+        break;
+      case 'heading1': {
+        chain.setHeading({ level: 1 }).run();
+        break;
+      }
+      case 'heading2': {
+        chain.setHeading({ level: 2 }).run();
+        break;
+      }
+      case 'heading3': {
+        chain.setHeading({ level: 3 }).run();
+        break;
+      }
+      case 'bulletList':
+        chain.toggleBulletList().run();
+        break;
+      case 'orderedList':
+        chain.toggleOrderedList().run();
+        break;
+      case 'blockquote':
+        chain.toggleBlockquote().run();
+        break;
+      case 'codeBlock':
+        chain.toggleCodeBlock().run();
+        break;
+      case 'horizontalRule':
+        chain.setHorizontalRule().run();
+        break;
+      case 'table':
+        chain.insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run();
+        break;
+      default:
+        break;
+    }
+
+    // Keep TipTap's mapped selection logs for debugging
+    debugSelection(`after-apply-${command}`);
+    debugOutline('after-apply');
+
+    setSlashQuery('');
+    slashStartPosRef.current = null;
   }, [editor, slashQuery]);
 
   if (!editor) {
@@ -708,6 +683,7 @@ export function NotionEditor({
               zIndex: 9999,
             }}
             className="bg-background border rounded-lg shadow-lg p-2 min-w-[200px] max-h-[300px] overflow-y-auto"
+            onMouseDown={(e) => e.preventDefault()}
           >
             <div className="text-xs text-muted-foreground mb-2 px-2 font-medium">Commands</div>
             {filteredCommands.length > 0 ? (
@@ -716,6 +692,7 @@ export function NotionEditor({
                   key={cmd.command}
                   onClick={() => executeSlashCommand(cmd.command)}
                   onMouseEnter={() => setIsKeyboardNavigation(false)}
+                  onMouseDown={(e) => e.preventDefault()}
                   className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${
                     selectedCommandIndex === index && isKeyboardNavigation
                       ? 'bg-primary text-primary-foreground'
@@ -964,18 +941,19 @@ export function NotionEditor({
           }
         }
       `}</style>
-             {/* Color Palette Fixed */}
-       {showColorPalette && (
-         <div 
-           style={{ 
-             position: "fixed",
-             top: `${colorPalettePosition.top}px`,
-             left: `${colorPalettePosition.left}px`,
-             zIndex: 9999,
-           }}
-           className="bg-neutral-800 border rounded-lg shadow-lg p-4 w-[320px]"
-           onMouseDown={(e) => e.preventDefault()}
-         >
+      
+      {/* Color Palette Fixed */}
+      {showColorPalette && (
+        <div 
+          style={{ 
+            position: "fixed",
+            top: `${colorPalettePosition.top}px`,
+            left: `${colorPalettePosition.left}px`,
+            zIndex: 9999,
+          }}
+          className="bg-neutral-800 border rounded-lg shadow-lg p-4 w-[320px]"
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <InlineColorPalette
             value={selectedColor}
             onChange={(color: string) => {

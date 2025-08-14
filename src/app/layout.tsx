@@ -39,14 +39,8 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Preload critical CSS */}
-        <link rel="preload" href="/globals.css" as="style" />
-        
         {/* Preload Logo */}
         <link rel="preload" href="/logo-v2.png" as="image" />
-        
-        {/* Preload common assets */}
-        <link rel="preload" href="/icons/search.svg" as="image" />
         
         <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
