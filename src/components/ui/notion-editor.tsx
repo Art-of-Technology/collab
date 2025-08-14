@@ -13,7 +13,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { Extension } from "@tiptap/core";
-import DragHandle from "@tiptap/extension-drag-handle-react";
+import { DragHandle } from "@tiptap/extension-drag-handle-react";
 import { cn } from "@/lib/utils";
 import {
   Heading1,
@@ -219,6 +219,7 @@ export function NotionEditor({
         },
       }),
       FloatingToolbar,
+      // DragHandle extension kaldırıldı - component olarak kullanacağız
     ],
     content: initialValue || content || '<p></p>',
     editable: true,
@@ -242,6 +243,32 @@ export function NotionEditor({
       onChange?.(html);
     },
   }, [placeholder, minHeight, maxHeight, onChange]);
+
+  // Handle plus button clicks
+  const handlePlusClick = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (!editor) return;
+    
+    const { from } = editor.state.selection;
+    slashStartPosRef.current = from;
+    
+    const domPosition = editor.view.coordsAtPos(from);
+    const editorDom = editor.view.dom;
+    if (!editorDom) return;
+    
+    const editorContainer = editorDom.getBoundingClientRect();
+    
+    setSlashPosition({
+      top: domPosition.bottom - editorContainer.top,
+      left: domPosition.left - editorContainer.left,
+    });
+    setShowSlashCommands(true);
+    setSlashQuery('');
+    setSelectedCommandIndex(-1);
+    setIsKeyboardNavigation(false);
+  }, [editor]);
 
   // Handle content updates
   useEffect(() => {
@@ -288,7 +315,6 @@ export function NotionEditor({
           event.preventDefault();
           // Remember caret position where slash menu was invoked
           slashStartPosRef.current = from;
-          debugSelection('slash-open');
 
           const domPosition = editor.view.coordsAtPos(from);
           const editorDom = editor.view.dom;
@@ -366,14 +392,6 @@ export function NotionEditor({
             setIsKeyboardNavigation(false);
           }
         }
-      } else if (event.key === 'Enter') {
-        debugSelection('enter-before');
-        debugAround('enter-before-around');
-        // Let TipTap handle Enter behavior
-        setTimeout(() => {
-          debugAround('enter-after-around');
-          debugSelection('enter-after');
-        }, 0);
       }
     };
 
@@ -499,58 +517,10 @@ export function NotionEditor({
     }
   }, [editor]);
 
-  // Debug helper to log current selection and surrounding text
-  const debugSelection = (label: string) => {
-    try {
-      if (!editor) return;
-      const { from, to } = editor.state.selection;
-      const $from = editor.state.doc.resolve(from);
-      const parent = $from.parent?.type?.name;
-      const before = editor.state.doc.textBetween(Math.max(0, from - 30), from, "\n");
-      console.log('[SlashDebug]', label, { from, to, parent, before });
-    } catch (e) {
-      console.warn('[SlashDebug] log error', e);
-    }
-  };
-
-  const debugAround = (label: string) => {
-    try {
-      if (!editor) return;
-      const { from } = editor.state.selection;
-      const $from = editor.state.doc.resolve(from);
-      const depth = $from.depth;
-      const start = $from.start(depth);
-      const end = $from.end(depth);
-      const parentName = $from.parent?.type?.name;
-      const parentText = editor.state.doc.textBetween(start, end, '\n');
-      console.log('[SlashDebug]', label, { from, depth, start, end, parentName, parentText });
-    } catch (e) {
-      console.warn('[SlashDebug] around error', e);
-    }
-  };
-
-  const debugOutline = (label: string) => {
-    try {
-      if (!editor) return;
-      const doc = editor.state.doc;
-      const blocks: Array<{ index: number; type: string; text: string }> = [];
-      for (let i = 0; i < doc.childCount; i++) {
-        const node = doc.child(i);
-        blocks.push({ index: i, type: node.type.name, text: node.textContent });
-      }
-      console.log('[SlashDebug] outline', label, blocks);
-    } catch (e) {
-      console.warn('[SlashDebug] outline error', e);
-    }
-  };
-
   const executeSlashCommand = useCallback((command: string) => {
     if (!editor) return;
   
     setShowSlashCommands(false);
-
-    debugSelection('before-delete-query');
-    debugOutline('before-apply');
 
     // Save current position before any deletions
     const currentPos = editor.state.selection.from;
@@ -562,7 +532,6 @@ export function NotionEditor({
       const preceding = editor.state.doc.textBetween(start, from, "\n");
       if (preceding === `/${slashQuery}`) {
         editor.chain().deleteRange({ from: start, to: from }).run();
-        debugSelection('after-delete-query');
       }
     }
   
@@ -578,7 +547,6 @@ export function NotionEditor({
   
     // Apply command at current selection
     const chain = editor.chain();
-    debugSelection(`before-apply-${command}`);
   
     switch (command) {
       case 'paragraph':
@@ -618,39 +586,9 @@ export function NotionEditor({
         break;
     }
 
-    // Keep TipTap's mapped selection logs for debugging
-    debugSelection(`after-apply-${command}`);
-    debugOutline('after-apply');
-
     setSlashQuery('');
     slashStartPosRef.current = null;
   }, [editor, slashQuery]);
-
-  // Handle plus button click to open slash menu
-  const handlePlusClick = useCallback((event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    if (!editor) return;
-    
-    const { from } = editor.state.selection;
-    slashStartPosRef.current = from;
-    
-    const domPosition = editor.view.coordsAtPos(from);
-    const editorDom = editor.view.dom;
-    if (!editorDom) return;
-    
-    const editorContainer = editorDom.getBoundingClientRect();
-    
-    setSlashPosition({
-      top: domPosition.bottom - editorContainer.top,
-      left: domPosition.left - editorContainer.left,
-    });
-    setShowSlashCommands(true);
-    setSlashQuery('');
-    setSelectedCommandIndex(-1);
-    setIsKeyboardNavigation(false);
-  }, [editor]);
 
   if (!editor) {
     return null;
@@ -684,27 +622,28 @@ export function NotionEditor({
             editor.chain().focus().run();
           }
         }}
-        style={{ cursor: 'text' }}
+        style={{ paddingLeft: '80px' }}
       >
         <DragHandle editor={editor}>
-          <div className="flex items-center gap-1">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              strokeWidth="1.5" 
-              stroke="currentColor"
-              className="w-4 h-4"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-            </svg>
+          <div className="drag-handle-container">
             <button
               onClick={handlePlusClick}
               onMouseDown={(e) => e.preventDefault()}
-              className="hover:bg-muted rounded p-0.5 transition-colors"
+              className="drag-handle-plus"
+              title="Add block"
             >
-              <Plus size={14} className="text-muted-foreground hover:text-foreground" />
+              <Plus size={20} />
             </button>
+            <div className="drag-handle-dots ml-12" data-drag-handle>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <circle cx="9" cy="6" r="1.5"/>
+                <circle cx="15" cy="6" r="1.5"/>
+                <circle cx="9" cy="12" r="1.5"/>
+                <circle cx="15" cy="12" r="1.5"/>
+                <circle cx="9" cy="18" r="1.5"/>
+                <circle cx="15" cy="18" r="1.5"/>
+              </svg>
+            </div>
           </div>
         </DragHandle>
         <EditorContent 
@@ -768,6 +707,94 @@ export function NotionEditor({
         .notion-editor {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
           line-height: 1.6;
+        }
+
+        /* DragHandle Container Styles */
+        .drag-handle-container {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        /* Plus Button */
+        .drag-handle-plus {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          background: transparent;
+          border: none;
+          color: #9ca3af;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .drag-handle-plus:hover {
+          background-color: #f3f4f6;
+          color: #6b7280;
+        }
+
+        /* Drag Dots */
+        .drag-handle-dots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          color: #9ca3af;
+          cursor: grab;
+          border-radius: 4px;
+          transition: all 0.15s;
+        }
+
+        .drag-handle-dots:hover {
+          background-color: #f3f4f6;
+          color: #6b7280;
+        }
+
+        .drag-handle-dots:active {
+          cursor: grabbing;
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+          .drag-handle-plus,
+          .drag-handle-dots {
+            color: #6b7280;
+          }
+
+          .drag-handle-plus:hover,
+          .drag-handle-dots:hover {
+            background-color: #374151;
+            color: #d1d5db;
+          }
+        }
+
+        /* Position adjustments for different elements */
+        .ProseMirror p .drag-handle-container {
+          top: 0;
+        }
+
+        .ProseMirror h1 .drag-handle-container {
+          top: 4px;
+        }
+
+        .ProseMirror h2 .drag-handle-container {
+          top: 2px;
+        }
+
+        .ProseMirror h3 .drag-handle-container {
+          top: 1px;
+        }
+
+        .ProseMirror li .drag-handle-container {
+          top: 0;
+        }
+
+        .ProseMirror blockquote .drag-handle-container {
+          top: 0;
         }
         
         .notion-editor p {
