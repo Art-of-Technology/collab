@@ -31,16 +31,16 @@ RUN chown -R hocuspocus:nodejs /app
 USER hocuspocus
 
 # Expose the port
-EXPOSE 1234
+EXPOSE 5020
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV HOCUSPOCUS_PORT=1234
+ENV HOCUSPOCUS_PORT=5020
 ENV NODE_OPTIONS="--max-old-space-size=256"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD nc -z localhost 1234 || exit 1
+  CMD nc -z localhost 5020 || exit 1
 
 # Start the Hocuspocus server with optimized Node.js flags
 CMD ["node", "--loader", "ts-node/esm", "scripts/hocuspocus-server.ts"]

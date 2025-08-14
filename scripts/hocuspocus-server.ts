@@ -31,7 +31,7 @@ import { Node as TiptapNode, mergeAttributes } from '@tiptap/core';
 // Optimized Hocuspocus server for collaborative editing
 // Usage: ts-node scripts/hocuspocus-server.ts
 
-const port = Number(process.env.HOCUSPOCUS_PORT || 1234);
+const port = Number(process.env.HOCUSPOCUS_PORT || 5020);
 const prisma = new PrismaClient();
 
 // Document cache to prevent redundant database queries

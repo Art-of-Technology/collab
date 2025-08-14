@@ -125,9 +125,9 @@ To enable the collaborative editor locally, run the Hocuspocus WebSocket server 
 1. Add the client URL to your `.env.local` (pick one):
    ```bash
    # Explicit URL (recommended)
-   NEXT_PUBLIC_HOCUSPOCUS_URL=ws://127.0.0.1:1234
+   NEXT_PUBLIC_HOCUSPOCUS_URL=ws://127.0.0.1:5020
    # or set only the port (falls back to current host)
-   NEXT_PUBLIC_HOCUSPOCUS_PORT=1234
+   NEXT_PUBLIC_HOCUSPOCUS_PORT=5020
    ```
 2. Start the Hocuspocus server (choose one):
    - Node (in a separate terminal):
@@ -138,7 +138,7 @@ To enable the collaborative editor locally, run the Hocuspocus WebSocket server 
      ```bash
      docker compose up -d hocuspocus
      ```
-   By default it listens on port 1234. You can change it with `HOCUSPOCUS_PORT=1234`.
+   By default it listens on port 1234. You can change it with `HOCUSPOCUS_PORT=5020`.
 3. Ensure your `DATABASE_URL` is set and migrations are applied (Hocuspocus reads from the same database).
 4. Keep the Hocuspocus server running while you work, and run the app with:
    ```bash

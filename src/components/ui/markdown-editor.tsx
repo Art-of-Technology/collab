@@ -1149,7 +1149,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     const isSecure = window.location.protocol === 'https:';
     const scheme = isSecure ? 'wss' : 'ws';
     const host = window.location.hostname || '127.0.0.1';
-    const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '1234';
+    const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '5020';
     return `${scheme}://${host}:${port}`;
   }
 
