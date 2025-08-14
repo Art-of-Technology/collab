@@ -490,7 +490,13 @@ const Mention = TiptapNode.create({
   
   selectable: false,
   
-  atom: true,
+  atom: false,
+
+  renderLabel({ node }: { node: any }) {
+    console.log('[Editor] renderLabel node:', node);
+    const username = node.attrs?.name || node.attrs?.label || node.text || '';
+    return `<span class="mention">@${username}</span>`;
+  },
   
   addAttributes() {
     return {
@@ -533,12 +539,23 @@ const Mention = TiptapNode.create({
           const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
           const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
           
-
           
           if (!id || !name) {
             return false
           }
           
+          return { id, name }
+        },
+      },
+      // Backward compatibility: support <span class="mention" data-user-id="...">
+      {
+        tag: 'span.mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
+          const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
+          if (!id || !name) {
+            return false
+          }
           return { id, name }
         },
       },
@@ -638,6 +655,19 @@ const TaskMention = TiptapNode.create({
             return false
           }
           
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="task-mention" data-id="...">
+      {
+        tag: 'span.task-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('#', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
           return { id, title, issueKey }
         },
       },
@@ -742,6 +772,19 @@ const EpicMention = TiptapNode.create({
           return { id, title, issueKey }
         },
       },
+      // Backward compatibility: support <span class="epic-mention" data-id="...">
+      {
+        tag: 'span.epic-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('~', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
     ]
   },
   
@@ -843,6 +886,19 @@ const StoryMention = TiptapNode.create({
           return { id, title, issueKey }
         },
       },
+      // Backward compatibility: support <span class="story-mention" data-id="...">
+      {
+        tag: 'span.story-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('^', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
     ]
   },
   
@@ -941,6 +997,19 @@ const MilestoneMention = TiptapNode.create({
             return false
           }
           
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="milestone-mention" data-id="...">
+      {
+        tag: 'span.milestone-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('!', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
           return { id, title, issueKey }
         },
       },
@@ -1144,7 +1213,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
               levels: [1, 2, 3],
             }),
             Color,
-            Mention,
+            Mention.configure({
+              renderLabel({ node }: { node: any }) {
+                console.log('[Editor] renderLabel node:', node);
+                const username = node.attrs?.name || node.attrs?.label || node.text || '';
+                return `<span class="mention">@${username}</span>`;
+              },
+              HTMLAttributes: {
+                class: 'mention',
+                'data-mention': 'true',
+              },
+            }),
             TaskMention,
             EpicMention,
             StoryMention,

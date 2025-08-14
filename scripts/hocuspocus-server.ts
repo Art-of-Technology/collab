@@ -2,7 +2,6 @@ import { Server } from '@hocuspocus/server';
 import { PrismaClient } from '@prisma/client';
 import * as Y from 'yjs';
 import { TiptapTransformer } from '@hocuspocus/transformer';
-import { Node as TiptapNode } from '@tiptap/core';
 import { generateJSON } from '@tiptap/html';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -26,6 +25,8 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
+import { Extension } from '@tiptap/react';
+import { Node as TiptapNode, mergeAttributes } from '@tiptap/core';
 
 // Optimized Hocuspocus server for collaborative editing
 // Usage: ts-node scripts/hocuspocus-server.ts
@@ -117,24 +118,371 @@ async function loadDocumentFromDatabase(documentName: string): Promise<string | 
 }
 
 // Convert HTML content to proper ProseMirror YJS structure
-const ServerMention = TiptapNode.create({
-  name: 'mention',
-  inline: true,
-  group: 'inline',
-  atom: true,
+// Custom Mention nodes to ensure mentions in stored HTML are preserved when initializing Yjs
+// Minimal ResizableImage to preserve width/height set by the client editor
+const ResizableImage = Image.extend({
   addAttributes() {
     return {
-      id: { default: null },
-      name: { default: null },
+      ...this.parent?.(),
+      width: {
+        default: null,
+        renderHTML: (attributes: any) => {
+          if (!attributes.width) return {};
+          return { width: attributes.width };
+        },
+      },
+      height: {
+        default: null,
+        renderHTML: (attributes: any) => {
+          if (!attributes.height) return {};
+          return { height: attributes.height };
+        },
+      },
+    } as any;
+  },
+});
+const Mention = TiptapNode.create({
+  name: 'mention',
+  group: 'inline',
+  inline: true,
+  selectable: false,
+  atom: false,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) return {};
+          return { 'data-id': attributes.id };
+        },
+      },
+      name: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-name'),
+        renderHTML: attributes => {
+          if (!attributes.name) return {};
+          return { 'data-name': attributes.name };
+        },
+      },
     };
   },
   parseHTML() {
     return [
-      { tag: 'span.mention[data-mention]' },
+      {
+        tag: 'span[data-mention]',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-user-id') || el.getAttribute('data-id');
+          const name = el.getAttribute('data-user-name') || el.getAttribute('data-name') || el.textContent?.replace('@', '');
+          if (!id || !name) return false;
+          return { id, name };
+        },
+      },
+      // Backward compatibility: handle <span class="mention" data-user-id=...>
+      {
+        tag: 'span.mention',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-user-id') || el.getAttribute('data-id');
+          const name = el.getAttribute('data-user-name') || el.getAttribute('data-name') || el.textContent?.replace('@', '');
+          if (!id || !name) return false;
+          return { id, name };
+        },
+      },
     ];
   },
-  renderHTML({ HTMLAttributes }) {
-    return ['span', { class: 'mention', 'data-mention': 'true', 'data-id': HTMLAttributes.id, 'data-name': HTMLAttributes.name }, 0];
+  renderHTML({ HTMLAttributes, node }) {
+    return [
+      'span',
+      mergeAttributes({ 'data-mention': true, class: 'mention' }, HTMLAttributes),
+      ['span', { class: 'mention-symbol' }, '@'],
+      node.attrs.name,
+    ];
+  },
+});
+
+const TaskMention = TiptapNode.create({
+  name: 'taskMention',
+  group: 'inline',
+  inline: true,
+  selectable: false,
+  atom: true,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) return {};
+          return { 'data-id': attributes.id };
+        },
+      },
+      title: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) return {};
+          return { 'data-title': attributes.title };
+        },
+      },
+      issueKey: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) return {};
+          return { 'data-issue-key': attributes.issueKey };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-task-mention]',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-task-id') || el.getAttribute('data-id');
+          const title = el.getAttribute('data-task-title') || el.getAttribute('data-title') || el.textContent?.replace('#', '');
+          const issueKey = el.getAttribute('data-task-issue-key') || el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+      {
+        tag: 'span.task-mention',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-id');
+          const title = el.getAttribute('data-title') || el.textContent?.replace('#', '');
+          const issueKey = el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes({ 'data-task-mention': true, class: 'task-mention' }, HTMLAttributes),
+      ['span', { class: 'mention-symbol' }, '#'],
+      displayText,
+    ];
+  },
+});
+
+const EpicMention = TiptapNode.create({
+  name: 'epicMention',
+  group: 'inline',
+  inline: true,
+  selectable: false,
+  atom: true,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) return {};
+          return { 'data-id': attributes.id };
+        },
+      },
+      title: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) return {};
+          return { 'data-title': attributes.title };
+        },
+      },
+      issueKey: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) return {};
+          return { 'data-issue-key': attributes.issueKey };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-epic-mention]',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-epic-id') || el.getAttribute('data-id');
+          const title = el.getAttribute('data-epic-title') || el.getAttribute('data-title') || el.textContent?.replace('~', '');
+          const issueKey = el.getAttribute('data-epic-issue-key') || el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+      {
+        tag: 'span.epic-mention',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-id');
+          const title = el.getAttribute('data-title') || el.textContent?.replace('~', '');
+          const issueKey = el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes({ 'data-epic-mention': true, class: 'epic-mention' }, HTMLAttributes),
+      ['span', { class: 'mention-symbol' }, '~'],
+      displayText,
+    ];
+  },
+});
+
+const StoryMention = TiptapNode.create({
+  name: 'storyMention',
+  group: 'inline',
+  inline: true,
+  selectable: false,
+  atom: true,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) return {};
+          return { 'data-id': attributes.id };
+        },
+      },
+      title: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) return {};
+          return { 'data-title': attributes.title };
+        },
+      },
+      issueKey: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) return {};
+          return { 'data-issue-key': attributes.issueKey };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-story-mention]',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-story-id') || el.getAttribute('data-id');
+          const title = el.getAttribute('data-story-title') || el.getAttribute('data-title') || el.textContent?.replace('^', '');
+          const issueKey = el.getAttribute('data-story-issue-key') || el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+      {
+        tag: 'span.story-mention',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-id');
+          const title = el.getAttribute('data-title') || el.textContent?.replace('^', '');
+          const issueKey = el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes({ 'data-story-mention': true, class: 'story-mention' }, HTMLAttributes),
+      ['span', { class: 'mention-symbol' }, '^'],
+      displayText,
+    ];
+  },
+});
+
+const MilestoneMention = TiptapNode.create({
+  name: 'milestoneMention',
+  group: 'inline',
+  inline: true,
+  selectable: false,
+  atom: true,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) return {};
+          return { 'data-id': attributes.id };
+        },
+      },
+      title: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) return {};
+          return { 'data-title': attributes.title };
+        },
+      },
+      issueKey: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) return {};
+          return { 'data-issue-key': attributes.issueKey };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-milestone-mention]',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-milestone-id') || el.getAttribute('data-id');
+          const title = el.getAttribute('data-milestone-title') || el.getAttribute('data-title') || el.textContent?.replace('!', '');
+          const issueKey = el.getAttribute('data-milestone-issue-key') || el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+      {
+        tag: 'span.milestone-mention',
+        getAttrs: element => {
+          const el = element as HTMLElement;
+          const id = el.getAttribute('data-id');
+          const title = el.getAttribute('data-title') || el.textContent?.replace('!', '');
+          const issueKey = el.getAttribute('data-issue-key') || '';
+          if (!id || !title) return false;
+          return { id, title, issueKey };
+        },
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes({ 'data-milestone-mention': true, class: 'milestone-mention' }, HTMLAttributes),
+      ['span', { class: 'mention-symbol' }, '!'],
+      displayText,
+    ];
   },
 });
 
@@ -151,7 +499,7 @@ const tiptapExtensions = [
   Link,
   Code,
   CodeBlock,
-  Image.configure({ allowBase64: true }),
+  ResizableImage,
   ListItem,
   BulletList,
   OrderedList,
@@ -161,7 +509,12 @@ const tiptapExtensions = [
   TableRow,
   TableCell,
   TableHeader,
-  ServerMention,
+  // Custom mentions
+  Mention,
+  TaskMention,
+  EpicMention,
+  StoryMention,
+  MilestoneMention,
 ];
 
 function initializeDocumentContent(ydoc: Y.Doc, content: string) {
@@ -172,10 +525,10 @@ function initializeDocumentContent(ydoc: Y.Doc, content: string) {
     return;
   }
 
+  console.log('[HP] initializeDocumentContent content:', content);
+
   try {
-    // Wrap top-level <img> tags into paragraphs to fit schema
-    const normalizedHtml = content.replace(/(^|\n|>)(\s*<img\b[^>]*>)/gi, '$1<p>$2</p>');
-    const json = generateJSON(normalizedHtml, tiptapExtensions);
+    const json = generateJSON(content, tiptapExtensions);
     const parsed = TiptapTransformer.toYdoc(json as any, 'prosemirror', tiptapExtensions);
     const update = Y.encodeStateAsUpdate(parsed);
     Y.applyUpdate(ydoc, update);
