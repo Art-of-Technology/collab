@@ -496,6 +496,33 @@ export async function createTask(data: {
     }
   });
 
+  // Create TaskRelations entries for epic and story if provided
+  if (epicId || storyId) {
+    const relationsToCreate = [];
+    
+    if (epicId) {
+      relationsToCreate.push({
+        taskId: task.id,
+        relatedItemId: epicId,
+        relatedItemType: 'EPIC' as const
+      });
+    }
+    
+    if (storyId) {
+      relationsToCreate.push({
+        taskId: task.id,
+        relatedItemId: storyId,
+        relatedItemType: 'STORY' as const
+      });
+    }
+    
+    if (relationsToCreate.length > 0) {
+      await prisma.taskRelations.createMany({
+        data: relationsToCreate
+      });
+    }
+  }
+
   // Track task creation activity
   try {
     await trackCreation(

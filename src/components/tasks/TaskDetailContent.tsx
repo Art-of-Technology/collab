@@ -36,6 +36,9 @@ import { StatusSelect } from "./selectors/StatusSelect";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
 import { TaskTabs } from "@/components/tasks/TaskTabs";
+import { useQueryClient } from "@tanstack/react-query";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { taskKeys } from "@/hooks/queries/useTask";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +67,7 @@ export function TaskDetailContent({
   onClose,
   boardId,
 }: TaskDetailContentProps) {
+  const queryClient = useQueryClient();
   const { currentWorkspace } = useWorkspace();
   const { data: session } = useSession();
   const { settings } = useWorkspaceSettings();
@@ -404,6 +408,22 @@ export function TaskDetailContent({
         throw new Error('Failed to delete task');
       }
 
+      // Invalidate queries so taskboard and lists update immediately
+      try {
+        const resolvedBoardId = (boardId || task.taskBoard?.id || "");
+        if (resolvedBoardId) {
+          queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(resolvedBoardId) });
+          queryClient.invalidateQueries({ queryKey: taskKeys.board(resolvedBoardId) });
+        }
+        if (task.workspaceId) {
+          queryClient.invalidateQueries({ queryKey: taskKeys.list(task.workspaceId) });
+        }
+        queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+        queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
+      } catch (e) {
+        // No-op; invalidation best-effort
+      }
+
       toast({
         title: "Task deleted",
         description: "The task has been successfully deleted.",
@@ -412,7 +432,6 @@ export function TaskDetailContent({
       // Close modal and refresh data
       setShowDeleteModal(false);
       onClose?.();
-      refreshBoards();
 
     } catch (error) {
       console.error('Error deleting task:', error);

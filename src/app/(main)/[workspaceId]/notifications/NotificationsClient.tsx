@@ -29,6 +29,13 @@ export default function NotificationsClient() {
   const [groupBy, setGroupBy] = useState<GroupBy>("date");
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   
+  const mobileCategories: { id: string; label: string }[] = [
+    { id: "inbox", label: "Inbox" },
+    { id: "mentioned", label: "Mentioned" },
+    { id: "task-related", label: "Task notifications" },
+    { id: "board-related", label: "Board notifications" },
+  ];
+  
   // Fetch notifications via unified hook
   const { notifications, unreadCount, loading: isLoading, markAllNotificationsAsRead, markNotificationAsRead } = useMention();
   
@@ -68,7 +75,7 @@ export default function NotificationsClient() {
     }
     
     return filtered;
-  }, [notifications, selectedCategory, selectedWorkspace, quickFilter, searchQuery]);
+  }, [notifications, selectedCategory, quickFilter, searchQuery]);
   
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategory(categoryId);
@@ -110,8 +117,8 @@ export default function NotificationsClient() {
 
   return (
     <div className="flex">
-      {/* Left Sidebar - Filters */}
-      <div className="w-64 border-r border-border/50">
+      {/* Left Sidebar - Desktop */}
+      <div className="hidden md:block w-64 border-r border-border/50">
         <NotificationsSidebar
           selectedCategory={selectedCategory}
           selectedWorkspace={selectedWorkspace}
@@ -125,11 +132,36 @@ export default function NotificationsClient() {
       <div className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
         <div className="border-b border-border/50 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="px-6 py-4">
-            {/* Single row - All controls in same row */}
-            <div className="flex items-center gap-3">
+          <div className="px-4 md:px-6 py-3 md:py-4">
+            {/* Responsive controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Mobile category select */}
+              <div className="md:hidden">
+                <Select value={selectedCategory} onValueChange={(v) => handleCategoryChange(v)}>
+                  <SelectTrigger className="w-44 h-9 text-sm">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mobileCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Search - takes up remaining space */}
+              <div className="relative flex-1 min-w-[200px] order-2 md:order-none">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search notifications..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-9 md:h-8 text-sm border-border/50"
+                />
+              </div>
+
               {/* All/Unread buttons */}
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex items-center gap-1 flex-shrink-0 order-3 md:order-none">
                 <Button
                   variant={quickFilter === "all" ? "default" : "ghost"}
                   size="sm"
@@ -152,32 +184,23 @@ export default function NotificationsClient() {
                   )}
                 </Button>
               </div>
-              
-              {/* Search - takes up remaining space */}
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search notifications..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-8 text-sm border-border/50"
-                />
-              </div>
-              
+
               {/* Group by selector */}
-              <Select value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)}>
-                <SelectTrigger className="w-32 h-8 text-sm flex-shrink-0">
-                  <SelectValue placeholder="Group by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="taskboard">Task/Board</SelectItem>
-                </SelectContent>
-              </Select>
-              
+              <div className="hidden md:block order-4 md:order-none">
+                <Select value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)}>
+                  <SelectTrigger className="w-36 md:w-32 h-8 text-sm flex-shrink-0">
+                    <SelectValue placeholder="Group by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="taskboard">Task/Board</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Bulk actions */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0 ml-auto order-5 md:order-none -mb-16 md:mb-0">
                 {selectedNotifications.size > 0 && (
                   <>
                     <Button
@@ -199,7 +222,7 @@ export default function NotificationsClient() {
                     variant="outline"
                     size="sm"
                     onClick={handleMarkAllAsRead}
-                    className="h-8 px-3 text-sm gap-2"
+                    className="inline-flex h-8 px-3 text-sm gap-2"
                   >
                     <CheckCheck className="h-3 w-3" />
                     Mark all read
@@ -221,6 +244,8 @@ export default function NotificationsClient() {
             onSelectionChange={setSelectedNotifications}
             onSelectAll={handleSelectAll}
             onMarkAsRead={(id) => markNotificationAsRead(id)}
+            onMarkAllRead={handleMarkAllAsRead}
+            unreadCount={unreadCount}
           />
         </div>
       </div>

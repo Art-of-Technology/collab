@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
  
 
-## [Unreleased]
+## [0.2.7] - 2025-08-12
 
 ### Added
 - **Default Role Permissions System**: Comprehensive role permission management for workspace security
@@ -30,14 +30,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved session synchronization across browser tabs and windows
 - Updated `README.md` to include Contributors anchors compatible with All Contributors
 - Refreshed documentation for clarity and consistency: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+ - **Board Items Refresh**: Enhanced query invalidation to keep Kanban data in sync
+   - `EpicDetailContent`, `MilestoneDetailContent`, and `StoryDetailContent` now invalidate board items when user-visible fields change (status, assignee, reporter, labels, title, description)
+   - `TaskDetailContent` triggers immediate refresh on task deletion and movement
 
 ### Technical
 - Added comprehensive permission validation to workspace invitation acceptance
 - Enhanced workspace member role management with automatic permission updates
 - Improved session provider architecture for better state synchronization
+ - Improved task creation and deletion hooks to refresh relevant board queries and assigned tasks widgets, ensuring consistent state across the application
 
 ### Removed
 - Tracked `.all-contributorsrc` from the repository (now managed by the workflow)
+
+## [0.2.6] - 2025-08-12
+
+### Changed
+- **Task Search API**: Refactored task search functionality for improved maintainability
+  - Consolidated search query handling into a single `whereCondition` object
+  - Enhanced code readability and simplified conditional logic
+  - Improved task filtering based on workspace context
+- **Task Mention System**: Enhanced task mention suggestion component
+  - Introduced configurable constant for controlling task mention behavior across workspaces
+  - Improved workspace filtering logic for better task accessibility
+  - Enhanced code clarity and maintainability
+
+### Technical
+- Refactored task search API endpoint to use unified search condition handling
+- Updated TaskMentionSuggestion component with cleaner conditional logic for workspace filtering
+
+## [0.2.5] - 2025-08-12
+
+### Added
+- **Pagination Component**: New reusable pagination component for navigating through large datasets
+- **Leave Request Dashboard Integration**: Integrated leave requests dashboard into main workspace dashboard
+- **Paginated Leave Requests**: Added pagination support for workspace leave request management with summary counts
+- **NextAuth Session Provider**: Added new NextAuth session provider for improved authentication handling
+
+## Changed
+- **Enhanced Leave Management UI**: Improved leave management interface with better layout and user experience
+  - Updated LeaveManagementClient to utilize paginated data and summary information
+  - Enhanced LeaveRequestsManager with status filtering and pagination support
+  - Added scrollable leave request list with gradient overlay to indicate more content
+- **Dashboard Layout Improvements**: Updated dashboard page grid layout for improved responsiveness
+- **Leave Request Form**: Enhanced leave request form with better validation and user experience
+- **Calendar Component**: Updated calendar component with improved styling and functionality
+- **Comment System Enhancements**: Improved comment and reply forms across tasks and unified components
+- **Permission System Updates**: Enhanced workspace permission management and role handling
+- **Session Management**: Improved session provider with better error handling and state management
+
+## Fixed
+- **Navigation Styling**: Removed unused navbar styles from globals.css
+- **Leave Request Display**: Fixed layout issues in MyLeave component for better content organization
+- **API Endpoint Improvements**: Enhanced various API endpoints for better error handling and data consistency
+
+## Technical
+- **Enhanced Leave Actions**: Extended leave management actions with new functions for paginated requests and summaries
+- **Improved Query Hooks**: Added new React Query hooks for leave management with pagination support
+- **Code Cleanup**: Removed unused HTML sanitizer and role permission defaults files
+- **Provider Restructuring**: Reorganized authentication providers for better maintainability
+- **Notification Service Updates**: Enhanced notification service with improved functionality
+
 
 ## [0.2.4] - 2025-08-11
 

@@ -110,6 +110,7 @@ export interface LeaveBalanceType {
   trackUnit: TrackUnit;
   isPaid: boolean;
   accrualType: AccrualType;
+  maxBalance: number | null;
 }
 
 // Form submission data for creating a leave request

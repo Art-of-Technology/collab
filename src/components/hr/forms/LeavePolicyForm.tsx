@@ -14,7 +14,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -24,7 +23,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -59,14 +57,14 @@ const leavePolicyFormSchema = z.object({
   deductsLeave: z.boolean().default(true),
   maxBalance: z
     .number()
-    .positive("Maximum balance must be positive")
+    .nonnegative("Maximum balance must be positive")
     .optional(),
   rolloverType: z
     .enum(["ENTIRE_BALANCE", "PARTIAL_BALANCE", "NONE"])
     .optional(),
   rolloverAmount: z
     .number()
-    .positive("Rollover amount must be positive")
+    .nonnegative("Rollover amount must be positive")
     .optional(),
   rolloverDate: z.date().optional(),
   allowOutsideLeaveYearRequest: z.boolean().default(false),
@@ -269,11 +267,11 @@ export default function LeavePolicyForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                        <SelectItem value="FIXED">Fixed Annual Allocation</SelectItem>
-                        <SelectItem value="HOURLY">Hourly Accrual</SelectItem>
-                        <SelectItem value="REGULAR_WORKING_HOURS">Regular Working Hours</SelectItem>
-                        <SelectItem value="DOES_NOT_ACCRUE">Does Not Accrue</SelectItem>
-                      </SelectContent>
+                      <SelectItem value="FIXED">Fixed Annual Allocation</SelectItem>
+                      <SelectItem value="HOURLY">Hourly Accrual</SelectItem>
+                      <SelectItem value="REGULAR_WORKING_HOURS">Regular Working Hours</SelectItem>
+                      <SelectItem value="DOES_NOT_ACCRUE">Does Not Accrue</SelectItem>
+                    </SelectContent>
                   </Select>
                   <FormDescription>
                     How leave is allocated - fixed amount per year or accumulated over time
@@ -298,7 +296,7 @@ export default function LeavePolicyForm({
                       {...field}
                       onChange={(e) =>
                         field.onChange(
-                          e.target.value ? parseFloat(e.target.value) : undefined
+                          e.target.value ? parseFloat(e.target.value) : 0
                         )
                       }
                       value={field.value || ""}
@@ -385,7 +383,7 @@ export default function LeavePolicyForm({
                         {...field}
                         onChange={(e) =>
                           field.onChange(
-                            e.target.value ? parseFloat(e.target.value) : undefined
+                            e.target.value ? parseFloat(e.target.value) : 0
                           )
                         }
                         value={field.value || ""}
