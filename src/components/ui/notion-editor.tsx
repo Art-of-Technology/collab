@@ -27,6 +27,7 @@ import {
   Type,
   Minus,
   Palette,
+  Plus,
 } from "lucide-react";
 import { uploadImage } from "@/utils/cloudinary";
 import { InlineColorPalette } from "@/components/ui/color-palette";
@@ -625,6 +626,32 @@ export function NotionEditor({
     slashStartPosRef.current = null;
   }, [editor, slashQuery]);
 
+  // Handle plus button click to open slash menu
+  const handlePlusClick = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (!editor) return;
+    
+    const { from } = editor.state.selection;
+    slashStartPosRef.current = from;
+    
+    const domPosition = editor.view.coordsAtPos(from);
+    const editorDom = editor.view.dom;
+    if (!editorDom) return;
+    
+    const editorContainer = editorDom.getBoundingClientRect();
+    
+    setSlashPosition({
+      top: domPosition.bottom - editorContainer.top,
+      left: domPosition.left - editorContainer.left,
+    });
+    setShowSlashCommands(true);
+    setSlashQuery('');
+    setSelectedCommandIndex(-1);
+    setIsKeyboardNavigation(false);
+  }, [editor]);
+
   if (!editor) {
     return null;
   }
@@ -660,16 +687,25 @@ export function NotionEditor({
         style={{ cursor: 'text' }}
       >
         <DragHandle editor={editor}>
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            strokeWidth="1.5" 
-            stroke="currentColor"
-            className="w-4 h-4"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-          </svg>
+          <div className="flex items-center gap-1">
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              strokeWidth="1.5" 
+              stroke="currentColor"
+              className="w-4 h-4"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+            </svg>
+            <button
+              onClick={handlePlusClick}
+              onMouseDown={(e) => e.preventDefault()}
+              className="hover:bg-muted rounded p-0.5 transition-colors"
+            >
+              <Plus size={14} className="text-muted-foreground hover:text-foreground" />
+            </button>
+          </div>
         </DragHandle>
         <EditorContent 
           editor={editor} 
