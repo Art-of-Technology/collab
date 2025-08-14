@@ -1103,6 +1103,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const [collabReady, setCollabReady] = useState(0);
   const { data: session } = useSession();
   const { data: currentUser } = useCurrentUser();
+  // Keep a stable ref to the editor for event handlers outside React lifecycle
+  const editorRef = useRef<any>(null);
+  const initialCollabUpdateLoggedRef = useRef(false);
   
   // Get user info for collaboration
   const collaborationUser = useMemo(() => {
@@ -1150,15 +1153,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     const scheme = isSecure ? 'wss' : 'ws';
     const host = window.location.hostname || '127.0.0.1';
     const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '5020';
-    return `${scheme}://${host}:${port}`;
+    const url = `${scheme}://${host}:${port}`
+    console.log('Hocuspocus URL:', url);
+    return url;
   }
 
   useEffect(() => {
+    console.log('Hocuspocus collabDocumentId', collabDocumentId);
     if (!collabDocumentId) return;
 
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
-
+    console.log('Hocuspocus ydoc', ydoc);
     // Offline persistence disabled for collaboration to avoid duplicate merges
 
     const url = computeHocuspocusUrl(collabServerUrl);
@@ -1168,11 +1174,63 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       name: collabDocumentId,
       document: ydoc,
     });
+    // Attach verbose provider/yjs debug listeners
+    try {
+      const provider = providerRef.current as any;
+      if (provider?.on) {
+        provider.on('status', ({ status }: any) => {
+          console.log(`[Hocuspocus][${collabDocumentId}] status:`, status, 'url:', url);
+        });
+        provider.on('synced', (payload: any) => {
+          try {
+            const ed = editorRef.current;
+            if (ed) {
+              const html = ed.getHTML();
+              console.log(`[Hocuspocus][${collabDocumentId}] synced. editor HTML length:`, html.length, 'preview:', html.slice(0, 200));
+            } else {
+              console.log(`[Hocuspocus][${collabDocumentId}] synced before editor init`);
+            }
+          } catch (err) {
+            console.warn(`[Hocuspocus][${collabDocumentId}] error reading editor on synced:`, err);
+          }
+        });
+        provider.on('awarenessUpdate', ({ states }: any = {}) => {
+          try {
+            const names = (states || []).map((s: any) => s?.user?.name || s?.clientId).filter(Boolean);
+            console.log(`[Hocuspocus][${collabDocumentId}] awarenessUpdate`, { count: states?.length, users: names });
+          } catch {
+            console.log(`[Hocuspocus][${collabDocumentId}] awarenessUpdate`);
+          }
+        });
+      }
+      // Y.Doc raw update debug
+      ydoc.on('update', (update: Uint8Array) => {
+        console.log(`[Yjs][${collabDocumentId}] update received bytes:`, update?.length ?? 0);
+      });
+    } catch (err) {
+      console.warn('[Hocuspocus] Failed to attach debug listeners:', err);
+    }
     // Ensure connection attempt even if defaults change in provider
     try {
       (providerRef.current as unknown as { connect?: () => void })?.connect?.();
-    } catch {}
+      console.log('Hocuspocus connected:', url);
+    } catch {
+      console.error('Error connecting to Hocuspocus:', url);
+    }
     setCollabReady((v) => v + 1);
+
+    // Expose minimal debug handles in the browser for manual inspection
+    try {
+      if (typeof window !== 'undefined') {
+        (window as any).__COLLAB_DEBUG__ = {
+          ydoc: ydocRef.current,
+          provider: providerRef.current,
+          documentId: collabDocumentId,
+          url,
+        };
+        console.log('[Collab Debug] window.__COLLAB_DEBUG__ set');
+      }
+    } catch {}
 
     // We can't safely normalize here because the editor instance is created after this effect.
 
@@ -1327,9 +1385,31 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       },
       editable: !readOnly,
       immediatelyRender: true,
+      onCreate: ({ editor: instance }) => {
+        console.log('[Editor] created', { collab: !!collabDocumentId, collabDocumentId });
+        try {
+          const html = instance.getHTML();
+          console.log('[Editor] initial HTML length:', html.length);
+        } catch {}
+      },
+      onUpdate: ({ editor: instance }) => {
+        // Log only the first update in collab mode to avoid noise
+        if (collabDocumentId && !initialCollabUpdateLoggedRef.current) {
+          initialCollabUpdateLoggedRef.current = true;
+          try {
+            const html = instance.getHTML();
+            console.log('[Editor] first update (collab) HTML length:', html.length, 'preview:', html.slice(0, 200));
+          } catch {}
+        }
+      },
     },
     [collabDocumentId, readOnly, collabReady, collaborationUser]
   );
+
+  // Keep editorRef in sync for debug callbacks
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   // Normalize accidental literal HTML text after collab sync
   const hasNormalizedOnEditRef = useRef(false);
