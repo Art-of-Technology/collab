@@ -650,7 +650,6 @@ export function NotionEditor({
             editor.chain().focus().run();
           }
         }}
-        style={{ paddingLeft: '80px' }}
       >
         <DragHandle editor={editor}>
           <div className="drag-handle-container">
@@ -662,7 +661,7 @@ export function NotionEditor({
             >
               <Plus size={20} />
             </button>
-            <div className="drag-handle-dots ml-12" data-drag-handle>
+            <div className="drag-handle-dots ml-1" data-drag-handle>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                 <circle cx="9" cy="6" r="1.5"/>
                 <circle cx="15" cy="6" r="1.5"/>
@@ -741,7 +740,7 @@ export function NotionEditor({
         .drag-handle-container {
           display: flex;
           align-items: center;
-          gap: 4px;
+          gap: 0px;
         }
 
         /* Plus Button */

@@ -214,7 +214,7 @@ export function NoteCreateForm({ onSuccess, onCancel, showBackButton = false }: 
           </div>
 
           {/* Main editor area - takes full remaining height */}
-          <div className="flex-1 px-6 py-4 overflow-hidden">
+          <div className="flex-1 px-6 py-4">
             {/* Notion-style contenteditable h1 title */}
             <FormField
               control={form.control}
