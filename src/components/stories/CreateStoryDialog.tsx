@@ -181,6 +181,7 @@ export function CreateStoryDialog({
       if (createdStory?.id && values.description) {
         const mentionedUserIds = extractMentionUserIds(values.description);
         
+        // Process mentions
         if (mentionedUserIds.length > 0) {
           try {
             await axios.post("/api/mentions", {

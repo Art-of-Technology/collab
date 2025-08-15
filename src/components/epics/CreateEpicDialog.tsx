@@ -192,6 +192,7 @@ export function CreateEpicDialog({
       if (createdEpic?.id && values.description) {
         const mentionedUserIds = extractMentionUserIds(values.description);
 
+        // Process mentions
         if (mentionedUserIds.length > 0) {
           try {
             await axios.post("/api/mentions", {
