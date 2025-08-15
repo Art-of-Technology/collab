@@ -188,10 +188,11 @@ export function CreateEpicDialog({
       const response = await axios.post("/api/epics", payload);
       const createdEpic = response.data;
 
-      // Process mentions in the description
+      // Process mentions and create collaborative document
       if (createdEpic?.id && values.description) {
         const mentionedUserIds = extractMentionUserIds(values.description);
 
+        // Process mentions
         if (mentionedUserIds.length > 0) {
           try {
             await axios.post("/api/mentions", {
@@ -205,6 +206,8 @@ export function CreateEpicDialog({
             // Don't fail the epic creation if mentions fail
           }
         }
+
+        // Collaborative document will be initialized when the epic detail view loads
       }
 
       // Display success message

@@ -328,6 +328,8 @@ export default function CreateTaskForm({
           }
         }
 
+        // Collaborative document will be initialized when the task detail view loads
+
         toast({ title: "Success", description: "Task created successfully." });
         queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardIdToSubmit) });
         queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });

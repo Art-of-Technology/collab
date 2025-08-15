@@ -192,10 +192,11 @@ export function CreateMilestoneDialog({
       const response = await axios.post("/api/milestones", payload);
       const createdMilestone = response.data;
       
-      // Process mentions in the description
+      // Process mentions and create collaborative document
       if (createdMilestone?.id && values.description) {
         const mentionedUserIds = extractMentionUserIds(values.description);
         
+        // Process mentions
         if (mentionedUserIds.length > 0) {
           try {
             await axios.post("/api/mentions", {
@@ -209,6 +210,8 @@ export function CreateMilestoneDialog({
             // Don't fail the milestone creation if mentions fail
           }
         }
+
+        // Collaborative document will be initialized when the milestone detail view loads
       }
       
       // Display success message
