@@ -177,7 +177,7 @@ export function CreateStoryDialog({
       const response = await axios.post("/api/stories", payload);
       const createdStory = response.data;
       
-      // Process mentions and create collaborative document
+      // Process mentions in the description
       if (createdStory?.id && values.description) {
         const mentionedUserIds = extractMentionUserIds(values.description);
         
@@ -195,8 +195,6 @@ export function CreateStoryDialog({
             // Don't fail the story creation if mentions fail
           }
         }
-
-        // Collaborative document will be initialized when the story detail view loads
       }
       
       // Display success message
