@@ -219,7 +219,7 @@ export function NotionEditor({
         },
       }),
       FloatingToolbar,
-      // DragHandle extension kaldırıldı - component olarak kullanacağız
+      // DragHandle extension removed - will use it as a component
     ],
     content: initialValue || content || '<p></p>',
     editable: true,
@@ -568,8 +568,7 @@ export function NotionEditor({
 
     setShowSlashCommands(false);
 
-    // Save current position before any deletions
-    const currentPos = editor.state.selection.from;
+    // Prepare to remove any existing slash query
 
     // Remove the literal "/<query>" only if it actually exists before the cursor
     if (slashQuery?.length) {
