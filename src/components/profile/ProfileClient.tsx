@@ -68,10 +68,19 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
       </Card>
       
       <Tabs defaultValue="profile" className="mb-8">
-        <TabsList className="bg-card/80 border border-border/40">
-          <TabsTrigger value="profile" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Profile Settings</TabsTrigger>
-          <TabsTrigger value="posts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Your Posts</TabsTrigger>
-          <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Notification Settings</TabsTrigger>
+        <TabsList className="bg-card/80 border border-border/40 flex w-full">
+          <TabsTrigger value="profile" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs flex-1 px-2">
+            <span className="sm:hidden">Profile</span>
+            <span className="hidden sm:inline">Profile Settings</span>
+          </TabsTrigger>
+          <TabsTrigger value="posts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs flex-1 px-2">
+            <span className="sm:hidden">Posts</span>
+            <span className="hidden sm:inline">Your Posts</span>
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs flex-1 px-2">
+            <span className="sm:hidden">Notifications</span>
+            <span className="hidden sm:inline">Notification Settings</span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
           <ProfileForm user={{

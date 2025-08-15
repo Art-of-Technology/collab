@@ -308,7 +308,7 @@ export default function NotificationSettings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Notification Settings</h2>
           <p className="text-muted-foreground">
@@ -372,8 +372,8 @@ export default function NotificationSettings() {
                   <CardContent className="pt-0">
                     <div className="space-y-3">
                       {group.settings.map((setting, settingIndex) => (
-                        <div key={setting.key} className="flex items-start justify-between gap-4">
-                          <div className="space-y-1 flex-1">
+                        <div key={setting.key} className="flex items-start justify-between gap-2 sm:gap-4">
+                          <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <label
                                 htmlFor={setting.key}
@@ -427,23 +427,25 @@ export default function NotificationSettings() {
                               )}
                             </p>
                           </div>
-                          {setting.key === "pushNotificationsEnabled" ? (
-                            <Switch
-                              id={setting.key}
-                              checked={isPushSubscribed}
-                              onCheckedChange={(checked) => handleToggle(setting.key, checked)}
-                              disabled={isPushLoading || !isPushSupported}
-                              className="mt-1"
-                            />
-                          ) : (
-                            <Switch
-                              id={setting.key}
-                              checked={preferences[setting.key] || false}
-                              onCheckedChange={(checked) => handleToggle(setting.key, checked)}
-                              disabled={updateMutation.isPending}
-                              className="mt-1"
-                            />
-                          )}
+                          <div className="flex justify-end">
+                            {setting.key === "pushNotificationsEnabled" ? (
+                              <Switch
+                                id={setting.key}
+                                checked={isPushSubscribed}
+                                onCheckedChange={(checked) => handleToggle(setting.key, checked)}
+                                disabled={isPushLoading || !isPushSupported}
+                                className="mt-1"
+                              />
+                            ) : (
+                              <Switch
+                                id={setting.key}
+                                checked={preferences[setting.key] || false}
+                                onCheckedChange={(checked) => handleToggle(setting.key, checked)}
+                                disabled={updateMutation.isPending}
+                                className="mt-1"
+                              />
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
