@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
 
 // GET /api/workspaces/[workspaceId]/permissions - Get permissions for a workspace or user
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { workspaceId: string } }
@@ -12,7 +15,10 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } }
+      );
     }
 
     const _params = await params;
@@ -28,13 +34,19 @@ export async function GET(
       const userRole = await getUserWorkspaceRole(userId, workspaceId);
 
       if (!userRole) {
-        return NextResponse.json({ error: 'User not found in workspace' }, { status: 404 });
+        return NextResponse.json(
+          { error: 'User not found in workspace' },
+          { status: 404, headers: { 'Cache-Control': 'no-store' } }
+        );
       }
 
-      return NextResponse.json({
-        permissions: userPermissions,
-        role: userRole
-      });
+      return NextResponse.json(
+        {
+          permissions: userPermissions,
+          role: userRole,
+        },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
     }
 
     // Otherwise, get all workspace permissions (for management)
@@ -48,7 +60,7 @@ export async function GET(
     if (!hasPermission.hasPermission) {
       return NextResponse.json(
         { error: 'You do not have permission to view workspace permissions' },
-        { status: 403 }
+        { status: 403, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -71,18 +83,21 @@ export async function GET(
       permissionsByRole[rolePermission.role].push(rolePermission);
     }
 
-    return NextResponse.json({
-      permissions: rolePermissions,
-      permissionsByRole,
-      roles: Object.values(WorkspaceRole),
-      availablePermissions: Object.values(Permission)
-    });
+    return NextResponse.json(
+      {
+        permissions: rolePermissions,
+        permissionsByRole,
+        roles: Object.values(WorkspaceRole),
+        availablePermissions: Object.values(Permission),
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
 
   } catch (error) {
     console.error('Error fetching workspace permissions:', error);
     return NextResponse.json(
       { error: 'Failed to fetch permissions' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }

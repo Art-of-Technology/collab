@@ -126,7 +126,7 @@ export async function POST(
         data: {
           userId: session.user.id,
           workspaceId: invitation.workspaceId,
-          role: 'MEMBER'
+          role: 'MEMBER',
         }
       }),
       prisma.workspaceInvitation.update({

@@ -178,6 +178,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Create TaskRelations entry for milestone if provided
+    if (milestoneId) {
+      await prisma.taskRelations.create({
+        data: {
+          taskId: epic.id,
+          relatedItemId: milestoneId,
+          relatedItemType: 'MILESTONE' as const
+        }
+      });
+    }
+
     return NextResponse.json(epic, { status: 201 });
   } catch (error) {
     console.error("Error creating epic:", error);

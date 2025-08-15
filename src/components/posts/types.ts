@@ -27,6 +27,7 @@ export type PrismaPost = Post & {
   })[];
   reactions: Reaction[];
   actions?: PostAction[];
+  isFollowing: boolean;
   _count?: {
     comments: number;
     reactions: number;

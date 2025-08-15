@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
 import BoardItemActivityService from "@/lib/board-item-activity-service";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export async function POST(
   req: Request,
@@ -118,7 +119,7 @@ export async function POST(
       await prisma.notification.createMany({
         data: notificationRecipients.map(recipientId => ({
           type: "TASK_HELP_REQUEST",
-          content: `${session.user.name} requested to help with task: ${task.title}`,
+          content: sanitizeHtmlToPlainText(`${session.user.name} requested to help with task: ${task.title}`),
           userId: recipientId!,
           senderId: session.user.id,
           taskId: taskId

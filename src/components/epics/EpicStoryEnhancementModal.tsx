@@ -12,6 +12,9 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useStoryGeneration } from "@/context/StoryGenerationContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { entityKeys } from "@/hooks/queries/useEntityDetails";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 
 interface StoryPreview {
   title: string;
@@ -61,6 +64,7 @@ export function EpicStoryEnhancementModal({
   const { currentWorkspace } = useWorkspace();
   const { data: session } = useSession();
   const { jobs, refreshJobs } = useStoryGeneration();
+  const queryClient = useQueryClient();
 
   // Reset modal state when opened/closed
   useEffect(() => {
@@ -92,6 +96,18 @@ export function EpicStoryEnhancementModal({
             title: "Stories created successfully",
             description: `${currentJob.boardData?.createdStories?.length || selectedStories.size} stories have been created for this epic.`,
           });
+
+          // Invalidate story caches to ensure StorySelect and other story lists update
+          if (currentWorkspace?.id) {
+            queryClient.invalidateQueries({ queryKey: entityKeys.lists() });
+            queryClient.invalidateQueries({ queryKey: entityKeys.list(currentWorkspace.id, 'stories') });
+            if (boardId) {
+              queryClient.invalidateQueries({ queryKey: entityKeys.list(currentWorkspace.id, 'stories', boardId) });
+              queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
+            }
+            queryClient.invalidateQueries({ queryKey: boardItemsKeys.all });
+          }
+
           onStoriesCreated?.();
           onClose();
         } else if (currentJob.status === 'FAILED') {
@@ -113,7 +129,7 @@ export function EpicStoryEnhancementModal({
 
     try {
       const userEmail = session?.user?.email || "user@example.com";
-      
+
       // Create a more detailed epic context for AI
       const epicContext = `
 Epic Information:
@@ -150,7 +166,7 @@ ${epic.description || epic.title}
       }
 
       const data = await response.json();
-      
+
       if (data.stories && Array.isArray(data.stories)) {
         setGeneratedStories(data.stories);
         // Select all stories by default
@@ -247,7 +263,7 @@ ${epic.description || epic.title}
       high: "bg-orange-100 text-orange-800",
       critical: "bg-red-100 text-red-800",
     };
-    
+
     return (
       <Badge className={priorityColors[priority as keyof typeof priorityColors] || priorityColors.medium}>
         {priority}
@@ -277,7 +293,7 @@ ${epic.description || epic.title}
                 <p className="text-muted-foreground mb-6">
                   AI will analyze your epic and create detailed user stories for implementation
                 </p>
-                <Button 
+                <Button
                   onClick={handleGenerateStories}
                   disabled={isGenerating}
                   size="lg"
@@ -335,11 +351,10 @@ ${epic.description || epic.title}
                 {generatedStories.map((story, index) => (
                   <div
                     key={index}
-                    className={`border rounded-lg p-4 space-y-3 transition-all ${
-                      selectedStories.has(index)
+                    className={`border rounded-lg p-4 space-y-3 transition-all ${selectedStories.has(index)
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/50"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-3">
                       <Checkbox
@@ -360,7 +375,7 @@ ${epic.description || epic.title}
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="text-sm text-muted-foreground">
                           <MarkdownContent htmlContent={story.description} content={story.description} />
                         </div>
@@ -400,7 +415,7 @@ ${epic.description || epic.title}
               <Button variant="outline" onClick={onClose} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleSaveStories}
                 disabled={isSaving || selectedStories.size === 0}
                 className="gap-2"

@@ -27,13 +27,15 @@ interface MentionSuggestionProps {
   query: string;
   onSelect: (user: User) => void;
   workspaceId?: string;
+  onEscape?: () => void;
 }
 
 export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionProps>(
-  ({ query, onSelect, workspaceId }, ref) => {
+  ({ query, onSelect, workspaceId, onEscape }, ref) => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [selectedIndex, setSelectedIndex] = useState(-1); // Start with no selection
+    const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
     const { searchUsers } = useMention();
     const commandRef = useRef<HTMLDivElement>(null);
 
@@ -56,38 +58,57 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
         // Arrow keys for navigation
         if (e.key === "ArrowDown") {
           e.preventDefault();
-          setSelectedIndex((prev) => (prev < users.length - 1 ? prev + 1 : prev));
+          e.stopPropagation();
+          setIsKeyboardNavigation(true);
+          setSelectedIndex((prev) => {
+            // If no item is selected (-1), start from 0
+            if (prev === -1) return 0;
+            // Otherwise move to next item
+            return prev < users.length - 1 ? prev + 1 : prev;
+          });
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
-          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
-        } else if (e.key === "Enter" && users[selectedIndex]) {
+          e.stopPropagation();
+          setIsKeyboardNavigation(true);
+          setSelectedIndex((prev) => {
+            // If no item is selected (-1), start from last item
+            if (prev === -1) return users.length - 1;
+            // Otherwise move to previous item
+            return prev > 0 ? prev - 1 : prev;
+          });
+        } else if (e.key === "Enter" && selectedIndex >= 0 && users[selectedIndex]) {
           e.preventDefault();
+          e.stopPropagation();
+
           onSelect(users[selectedIndex]);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onEscape?.();
         }
       };
 
-      window.addEventListener("keydown", handleKeyDown);
+      // Add event listener to document instead of window, with higher priority
+      document.addEventListener("keydown", handleKeyDown, true); // Use capture phase
       return () => {
-        window.removeEventListener("keydown", handleKeyDown);
+        document.removeEventListener("keydown", handleKeyDown, true);
       };
-    }, [users, users.length, selectedIndex, onSelect]);
+    }, [users, users.length, selectedIndex, onSelect, onEscape]);
 
     // Search users when query changes
     useEffect(() => {
       const fetchUsers = async () => {
-        if (query.length < 1) {
-          setUsers([]);
-          return;
-        }
-        
         setLoading(true);
         try {
-          const searchedUsers = await searchUsers(query);
+          // Fetch users with the query (empty query will return all workspace users)
+          const searchedUsers = await searchUsers(query, workspaceId);
           setUsers(searchedUsers);
           // Reset selected index when new results come in
-          setSelectedIndex(0);
+          setSelectedIndex(-1);
+          setIsKeyboardNavigation(false);
         } catch (error) {
           console.error('Error searching users:', error);
+          setUsers([]);
         } finally {
           setLoading(false);
         }
@@ -98,13 +119,19 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
 
     // Scroll selected item into view
     useEffect(() => {
-      if (commandRef.current && users.length > 0) {
+      if (commandRef.current && users.length > 0 && isKeyboardNavigation) {
         const selectedElement = commandRef.current.querySelector(`[data-index="${selectedIndex}"]`);
         if (selectedElement) {
           selectedElement.scrollIntoView({ block: 'nearest' });
         }
       }
-    }, [selectedIndex, users.length]);
+    }, [selectedIndex, users.length, isKeyboardNavigation]);
+
+    // Handle mouse enter to disable keyboard navigation styling
+    const handleMouseEnter = (index: number) => {
+      setIsKeyboardNavigation(false);
+      setSelectedIndex(index);
+    };
 
     return (
       <div ref={ref} className="z-50 overflow-hidden rounded-lg border shadow-lg animate-in fade-in-0 zoom-in-95 bg-popover">
@@ -118,23 +145,24 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
                 <div className="animate-spin h-3 w-3 rounded-full border-b-2 border-primary"></div>
                 <span className="text-sm text-muted-foreground">Searching...</span>
               </div>
+            ) : users.length === 0 ? (
+              <div className="py-6 text-center">
+                <User2Icon className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground mt-2">No users found</p>
+              </div>
             ) : (
-              <>
-                <CommandEmpty>
-                  <div className="py-6 text-center">
-                    <User2Icon className="h-8 w-8 mx-auto text-muted-foreground/50" />
-                    <p className="text-sm text-muted-foreground mt-2">No users found</p>
-                  </div>
-                </CommandEmpty>
-                <CommandGroup>
+              <CommandGroup>
                   {users.map((user, index) => (
-                    <CommandItem
+                    <div
                       key={user.id}
                       data-index={index}
-                      onSelect={() => onSelect(user)}
+                      onClick={() => onSelect(user)}
+                      onMouseEnter={() => handleMouseEnter(index)}
                       className={cn(
-                        "flex items-center gap-2 px-2 py-2 cursor-pointer",
-                        selectedIndex === index && "bg-accent"
+                        "flex items-center gap-2 px-2 py-2 cursor-pointer rounded-sm",
+                        // Our own hover and selected states
+                        !isKeyboardNavigation && "hover:bg-accent/50",
+                        isKeyboardNavigation && selectedIndex === index && "bg-accent"
                       )}
                     >
                       <div className="flex items-center gap-2 flex-1">
@@ -150,13 +178,12 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
                         )}
                         <span className="text-sm font-medium">{user.name}</span>
                       </div>
-                      {selectedIndex === index && (
+                      {isKeyboardNavigation && selectedIndex === index && (
                         <CheckIcon className="h-4 w-4 text-primary" />
                       )}
-                    </CommandItem>
+                    </div>
                   ))}
                 </CommandGroup>
-              </>
             )}
           </CommandList>
           {users.length > 0 && (

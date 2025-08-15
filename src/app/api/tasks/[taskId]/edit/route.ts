@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { updateTask } from "@/actions/task";
 
 // PATCH /api/tasks/[taskId]/edit - Edit task details
 export async function PATCH(
@@ -22,91 +22,39 @@ export async function PATCH(
       status, 
       dueDate, 
       assigneeId,
-      type 
+      type,
+      labels
     } = await request.json();
 
-    // Find the task to check workspace access and get current values
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        column: true,
-        workspace: true,
-        taskBoard: true,
-      },
-    });
-
-    if (!task) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    // Check if user has access to the workspace (either as owner or member)
-    const workspaceAccess = await prisma.workspace.findFirst({
-      where: {
-        id: task.workspaceId,
-        OR: [
-          { ownerId: user.id }, // User is the owner
-          { members: { some: { userId: user.id } } } // User is a member
-        ]
-      }
-    });
-
-    if (!workspaceAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
-
-    // Find the column ID if status is being updated
-    let columnId = task.columnId;
-    
-    if (status && status !== task.column?.name) {
-      // Find the column with the given name in the task's board
-      const column = await prisma.taskColumn.findFirst({
-        where: {
-          name: status,
-          taskBoardId: task.taskBoardId || undefined,
-        },
-      });
-      
-      if (column) {
-        columnId = column.id;
-      }
-    }
-
-    // Update the task
-    const updatedTask = await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        title: title !== undefined ? title : undefined,
-        description: description !== undefined ? description : undefined,
-        priority: priority !== undefined ? priority : undefined,
-        status: status !== undefined ? status : undefined,
-        type: type !== undefined ? type : undefined,
-        columnId: columnId,
-        dueDate: dueDate !== undefined ? dueDate : undefined,
-        assigneeId: assigneeId !== undefined ? assigneeId || null : undefined,
-      },
-      include: {
-        assignee: true,
-        reporter: true,
-        column: true,
-        workspace: true,
-        taskBoard: true,
-        labels: true,
-        comments: {
-          include: {
-            author: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-      },
+    // Use the server action which includes all notification logic
+    const updatedTask = await updateTask(taskId, {
+      title,
+      description,
+      priority,
+      status,
+      type,
+      dueDate,
+      assigneeId,
+      labels
     });
 
     return NextResponse.json(updatedTask);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating task:", error);
+    
+    // Check if it's a known error from the server action
+    if (error.message === 'Unauthorized') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (error.message === 'Task not found') {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    if (error.message === 'You do not have access to modify this task') {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+    
     return NextResponse.json(
-      { error: "Failed to update task" },
+      { error: error.message || "Failed to update task" },
       { status: 500 }
     );
   }

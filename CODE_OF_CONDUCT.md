@@ -128,6 +128,6 @@ https://www.contributor-covenant.org/faq. Translations are available at
 https://www.contributor-covenant.org/translations.
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[contact-email]: utku@weezboo.com
-[security-email]: utku@weezboo.com
+[contact-email]: hello@weezboo.com
+[security-email]: hello@weezboo.com
 [documentation-url]: https://github.com/Art-of-Technology/collab/wiki

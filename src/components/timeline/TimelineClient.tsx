@@ -19,26 +19,26 @@ interface TimelineClientProps {
 export default function TimelineClient({ initialPosts, currentUserId }: TimelineClientProps) {
   const searchParams = useSearchParams();
   const { currentWorkspace } = useWorkspace();
-  
+
   const filter = searchParams.get("filter");
   const tag = searchParams.get("tag");
-  
+
   // Use the current active filter in URL
   const filterType = filter === 'updates' ? 'UPDATE' :
-                    filter === 'blockers' ? 'BLOCKER' :
-                    filter === 'ideas' ? 'IDEA' :
-                    filter === 'questions' ? 'QUESTION' : undefined;
-  
+    filter === 'blockers' ? 'BLOCKER' :
+      filter === 'ideas' ? 'IDEA' :
+        filter === 'questions' ? 'QUESTION' : undefined;
+
   // TanStack Query for posts with filters
   const { data: posts, isLoading, isError } = usePosts({
     type: filterType,
     tag: tag || undefined,
     workspaceId: currentWorkspace?.id
   });
-  
+
   // Fallback to initial posts until query data loads
   const displayPosts = posts || initialPosts;
-  
+
   return (
     <div className="max-w-4xl mx-auto overflow-x-hidden">
       {tag && (
@@ -48,8 +48,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             <Badge variant="secondary" className="px-3 py-1">
               #{tag}
             </Badge>
-            <Link 
-              href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'} 
+            <Link
+              href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}
               className="ml-2 text-muted-foreground hover:text-foreground"
               aria-label="Clear tag filter"
             >
@@ -58,15 +58,15 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
           </div>
         </div>
       )}
-      
+
       <div className="mb-6">
         <CreatePostForm />
       </div>
-      
+
       <div className="mb-6">
         <FilterTabs />
       </div>
-      
+
       {isLoading && initialPosts.length === 0 ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -10,7 +10,7 @@ interface BoardGenerationContextType {
 
 const BoardGenerationContext = createContext<BoardGenerationContextType>({
   jobs: [],
-  refreshJobs: () => {},
+  refreshJobs: () => { },
 });
 
 export function useBoardGeneration() {
@@ -23,12 +23,6 @@ export function BoardGenerationProvider({ workspaceId, children }: { workspaceId
   const fetchJobs = async () => {
     if (!workspaceId) return;
     try {
-      const response = await fetch(`/api/ai/jobs?workspaceId=${workspaceId}`);
-      const result = await response.json();
-      if (result.success) {
-        // Use pre-filtered board jobs from unified endpoint
-        setJobs(result.boardJobs || []);
-      }
     } catch (error) {
       console.error('Failed to fetch board generation jobs:', error);
     }

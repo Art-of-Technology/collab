@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { trackCreation } from "@/lib/board-item-activity-service";
+import { trackCreation, trackMove } from "@/lib/board-item-activity-service";
+import { NotificationService, NotificationType } from "@/lib/notification-service";
 
 // POST /api/tasks - Create a new task
 export async function POST(request: NextRequest) {
@@ -15,6 +16,7 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
 
     const body = await request.json();
     const {
@@ -174,6 +176,14 @@ export async function POST(request: NextRequest) {
           columnId: task.columnId,
         }
       );
+      await NotificationService.notifyBoardFollowers({
+        boardId: taskBoardId,
+        taskId: task.id,
+        senderId: session.user.id,
+        type: NotificationType.TASK_CREATED,
+        content: `Task ${task.title} was created`,
+        excludeUserIds: [session.user.id],
+      });
     } catch (activityError) {
       console.error("Failed to track task creation activity:", activityError);
       // Don't fail the task creation if activity tracking fails
@@ -284,6 +294,162 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching tasks:", error);
     return NextResponse.json(
       { error: "Failed to fetch tasks" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/tasks - Batch update task order and positions
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const updates = await request.json();
+    
+    // Validate that we have an array of updates
+    if (!Array.isArray(updates)) {
+      return NextResponse.json(
+        { error: "Expected array of task updates" },
+        { status: 400 }
+      );
+    }
+
+    // Validate each update object
+    for (const update of updates) {
+      if (!update.boardId || !update.columnId || !Array.isArray(update.orderedItemIds)) {
+        return NextResponse.json(
+          { error: "Each update must have boardId, columnId, and orderedItemIds" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Process each batch update
+    const results = [];
+    
+    for (const update of updates) {
+      const { boardId, columnId, orderedItemIds, movedItemId } = update;
+      
+      // Verify user has access to the board
+      const board = await prisma.taskBoard.findFirst({
+        where: {
+          id: boardId,
+          OR: [
+            { workspace: { ownerId: session.user.id } },
+            { workspace: { members: { some: { userId: session.user.id } } } }
+          ]
+        }
+      });
+
+      if (!board) {
+        return NextResponse.json(
+          { error: "Board not found or access denied" },
+          { status: 403 }
+        );
+      }
+
+      // Verify column exists and belongs to the board
+      const column = await prisma.taskColumn.findFirst({
+        where: {
+          id: columnId,
+          taskBoardId: boardId
+        }
+      });
+
+      if (!column) {
+        return NextResponse.json(
+          { error: "Column not found or does not belong to board" },
+          { status: 404 }
+        );
+      }
+
+      // Update task positions in a transaction
+      await prisma.$transaction(async (tx) => {
+        // Update all tasks in the column with their new positions
+        for (let i = 0; i < orderedItemIds.length; i++) {
+          const taskId = orderedItemIds[i];
+          await tx.task.update({
+            where: { id: taskId },
+            data: {
+              position: i,
+              columnId: columnId,
+              status: column.name, // Update status to match column
+              updatedAt: new Date()
+            }
+          });
+        }
+      });
+
+      // If a specific task was moved, track the activity and send notifications
+      if (movedItemId) {
+        try {
+          const movedTask = await prisma.task.findUnique({
+            where: { id: movedItemId },
+            include: {
+              column: { select: { name: true } }
+            }
+          });
+
+          if (movedTask) {
+            // Track the move activity
+            await trackMove(
+              'TASK',
+              movedItemId,
+              session.user.id,
+              movedTask.workspaceId,
+              movedTask.column ? { id: movedTask.columnId, name: movedTask.column.name } : null,
+              { id: columnId, name: column.name },
+              boardId
+            );
+
+            // Send notifications for task followers
+            await NotificationService.notifyTaskFollowers({
+              taskId: movedItemId,
+              senderId: session.user.id,
+              type: NotificationType.TASK_STATUS_CHANGED,
+              content: `Task moved to "${column.name}"`,
+              excludeUserIds: []
+            });
+
+            // Send notifications for board followers
+            await NotificationService.notifyBoardFollowers({
+              boardId: boardId,
+              taskId: movedItemId,
+              senderId: session.user.id,
+              type: NotificationType.BOARD_TASK_STATUS_CHANGED,
+              content: `Task "${movedTask.title}" moved to "${column.name}"`,
+              excludeUserIds: []
+            });
+          }
+        } catch (notificationError) {
+          console.error("Failed to send notifications for task move:", notificationError);
+          // Don't fail the operation if notifications fail
+        }
+      }
+
+      results.push({
+        boardId,
+        columnId,
+        updatedCount: orderedItemIds.length
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      results
+    });
+
+  } catch (error) {
+    console.error("Error updating task order:", error);
+    return NextResponse.json(
+      { error: "Failed to update item order" },
       { status: 500 }
     );
   }

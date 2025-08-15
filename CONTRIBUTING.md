@@ -105,6 +105,6 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/Art-of
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[contact-email]: utku@weezboo.com
-[security-email]: utku@weezboo.com
+[contact-email]: hello@weezboo.com
+[security-email]: hello@weezboo.com
 [documentation-url]: https://github.com/Art-of-Technology/collab/wiki

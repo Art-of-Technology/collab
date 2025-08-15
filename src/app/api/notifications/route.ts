@@ -6,20 +6,21 @@ import { getCurrentUser } from "@/lib/session";
 export async function GET(req: NextRequest) {
   try {
     const currentUser = await getCurrentUser();
+
     if (!currentUser?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
+
     // Get query parameters for pagination
     const url = new URL(req.url);
     const limit = parseInt(url.searchParams.get("limit") || "20");
     const page = parseInt(url.searchParams.get("page") || "1");
     const skip = (page - 1) * limit;
-    
+
     // Fetch notifications for the current user
     const notifications = await prisma.notification.findMany({
       where: {
-        userId: currentUser.id
+        userId: currentUser.id,
       },
       include: {
         sender: {
@@ -36,58 +37,72 @@ export async function GET(req: NextRequest) {
             avatarMouth: true,
             avatarNose: true,
             avatarSkinTone: true,
-          }
+          },
         },
         post: {
           select: {
             id: true,
             message: true,
-          }
+          },
         },
         comment: {
           select: {
             id: true,
             message: true,
-          }
+          },
         },
         task: {
           select: {
             id: true,
             title: true,
-          }
+          },
         },
         featureRequest: {
           select: {
             id: true,
             title: true,
-          }
+          },
         },
         epic: {
           select: {
             id: true,
             title: true,
-          }
+          },
         },
         story: {
           select: {
             id: true,
             title: true,
-          }
+          },
         },
         milestone: {
           select: {
             id: true,
             title: true,
-          }
+          },
+        },
+        leaveRequest: {
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+            duration: true,
+            policy: {
+              select: {
+                name: true,
+              },
+            },
+          },
         },
       },
       orderBy: {
-        createdAt: 'desc'
+        createdAt: "desc",
       },
       skip,
       take: limit,
     });
-    
+
     return NextResponse.json(notifications);
   } catch (error) {
     console.error("Error fetching notifications:", error);
@@ -96,4 +111,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle, Clock, UserCircleIcon } from 'lucide-react';
 import { WorkspaceRole, Permission, getRoleDisplayName, getPermissionDisplayName } from '@/lib/permissions';
 
 interface PermissionItem {
@@ -138,6 +138,14 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       Permission.DELETE_SELF_NOTE,
       Permission.DELETE_ANY_NOTE,
       Permission.VIEW_NOTES,
+    ]
+  },
+  {
+    name: 'HR & Leave Management',
+    description: 'Human resources and employee leave management',
+    icon: <UserCircleIcon className="h-4 w-4" />,
+    permissions: [
+      Permission.MANAGE_LEAVE,
     ]
   },
   {
@@ -410,6 +418,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                         Permission.CREATE_BOARD,
                         Permission.EDIT_BOARD,
                         Permission.MANAGE_BOARD_SETTINGS,
+                        Permission.MANAGE_LEAVE,
                       ];
                       const isPermissionImplemented = implementedPermissions.includes(permission);
                       
@@ -503,4 +512,4 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
       </AlertDialog>
     </div>
   );
-} 
+}  

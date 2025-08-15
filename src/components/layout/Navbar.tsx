@@ -47,6 +47,7 @@ import { formatDistanceToNow } from "date-fns";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -71,16 +72,17 @@ export default function Navbar({
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  
+
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
   const { currentWorkspace } = useWorkspace();
-  
+  const { canManageLeave } = useWorkspacePermissions();
+
   // Use Mention context for notifications
-  const { 
-    notifications, 
-    unreadCount, 
-    markNotificationAsRead, 
+  const {
+    notifications,
+    unreadCount,
+    markNotificationAsRead,
     markAllNotificationsAsRead,
     loading: notificationsLoading,
     refetchNotifications
@@ -103,21 +105,21 @@ export default function Navbar({
     router.push("/");
     router.refresh();
   };
-  
+
   // Handle notification click - mark as read and navigate if needed
   const handleNotificationClick = async (id: string, url?: string) => {
     await markNotificationAsRead(id);
-    
+
     if (url) {
       router.push(url);
     }
-    
+
     // Close notifications popover on mobile
     if (window.innerWidth < 768) {
       setShowNotifications(false);
     }
   };
-  
+
   // Format notification time
   const formatNotificationTime = (dateString: string): string => {
     try {
@@ -127,10 +129,10 @@ export default function Navbar({
       return 'recently';
     }
   };
-  
+
   // Generate notification URL based on type
   const getNotificationUrl = (notification: any): string => {
-    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
+    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId, leaveRequestId } = notification;
     const workspaceId = currentWorkspace?.id;
 
     if (!workspaceId) {
@@ -141,6 +143,7 @@ export default function Navbar({
       case 'post_mention':
       case 'post_comment':
       case 'post_reaction':
+      case 'POST_COMMENT_ADDED':
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
       case 'comment_mention':
       case 'comment_reply':
@@ -150,6 +153,7 @@ export default function Navbar({
         // For now, linking to notifications as a fallback
         return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`; // Placeholder, needs better logic
       case 'taskComment_mention': // Added this case
+      case 'TASK_STATUS_CHANGED':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'feature_mention':
       case 'feature_comment':
@@ -158,6 +162,7 @@ export default function Navbar({
       case 'task_mention':
       case 'task_assigned':
       case 'task_status_change':
+      case 'TASK_ASSIGNED':
         return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
       case 'epic_mention':
         return epicId ? `/${workspaceId}/epics/${epicId}` : `/${workspaceId}/tasks`; // Assuming epic detail page
@@ -165,6 +170,12 @@ export default function Navbar({
         return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`; // Assuming story detail page
       case 'milestone_mention':
         return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`; // Assuming milestone detail page
+      case 'LEAVE_REQUEST_STATUS_CHANGED':
+      case 'LEAVE_REQUEST_EDITED':
+        return `/${workspaceId}/dashboard`;
+      case 'LEAVE_REQUEST_HR_ALERT':
+      case 'LEAVE_REQUEST_MANAGER_ALERT':
+        return `/${workspaceId}/leave-management`;
       default:
         return `/${workspaceId}/timeline`;
     }
@@ -295,10 +306,10 @@ export default function Navbar({
                   {/* Notification bell with popover */}
                   <Popover open={showNotifications} onOpenChange={setShowNotifications}>
                     <PopoverTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                    className="relative hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="relative hover:bg-[#1c1c1c] text-gray-400"
                         onClick={() => refetchNotifications()}
                       >
                     <BellIcon className="h-4 w-4" />
@@ -313,17 +324,17 @@ export default function Navbar({
                   <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
                     <h3 className="font-medium text-white">Notifications</h3>
                         {unreadCount > 0 && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                        className="text-xs h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7 px-2"
                             onClick={() => markAllNotificationsAsRead()}
                           >
                             Mark all as read
                           </Button>
                         )}
                       </div>
-                      
+
                       <ScrollArea className="h-80">
                         {notificationsLoading ? (
                       <div className="p-4 text-center text-gray-400 text-sm">
@@ -338,8 +349,9 @@ export default function Navbar({
                             {notifications.map(notification => {
                               const url = getNotificationUrl(notification);
                               const isHtmlContent = /<[^>]+>/.test(notification.content);
+
                               return (
-                                <div 
+                                <div
                                   key={notification.id}
                               className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? 'bg-[#22c55e]/5' : ''}`}
                                   onClick={() => handleNotificationClick(notification.id, url)}
@@ -349,16 +361,16 @@ export default function Navbar({
                                     <CustomAvatar user={notification.sender} size="sm" />
                                   ) : (
                                     <Avatar className="h-8 w-8">
-                                      <AvatarImage 
-                                        src={notification.sender.image || undefined} 
-                                        alt={notification.sender.name || "User"} 
+                                      <AvatarImage
+                                        src={notification.sender.image || undefined}
+                                        alt={notification.sender.name || "User"}
                                       />
                                   <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
                                         {getInitials(notification.sender.name || "U")}
                                       </AvatarFallback>
                                     </Avatar>
                                   )}
-                                  
+
                                   {/* Notification Content */}
                                   <div className="flex-1 space-y-1">
                                     <p className="text-sm">
@@ -384,7 +396,7 @@ export default function Navbar({
                                       {formatNotificationTime(notification.createdAt)}
                                     </p>
                                   </div>
-                                  
+
                                   {/* Read Indicator */}
                                   {!notification.read && (
                                 <div className="h-2 w-2 rounded-full bg-[#22c55e] mt-1.5" />
@@ -395,6 +407,11 @@ export default function Navbar({
                           </div>
                         )}
                       </ScrollArea>
+                      <div className="p-3 border-t border-border/40 flex justify-center">
+                        <Link href={`/${currentWorkspace?.id}/notifications`} className="w-full text-center">
+                          View all notifications
+                        </Link>
+                      </div>
                     </PopoverContent>
                   </Popover>
 
@@ -427,18 +444,29 @@ export default function Navbar({
                       <p className="text-xs text-gray-400">{displayEmail}</p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-                  <DropdownMenuItem asChild className="text-gray-300 hover:text-white hover:bg-[#1f1f1f]">
-                    <Link href="/profile">Profile</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="text-gray-300 hover:text-white hover:bg-[#1f1f1f]">
-                    <Link href="/workspaces">Workspaces</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-                  <DropdownMenuItem 
-                    onClick={handleSignOut}
-                    className="text-gray-300 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                  >
+                  <DropdownMenuSeparator className="bg-[#2a2929]" />
+                  <DropdownMenuGroup>
+                    {hasWorkspaces && (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : "/profile"}>Your Profile</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/my-posts` : "/my-posts"}>My Posts</Link>
+                        </DropdownMenuItem>
+                        {canManageLeave && (
+                          <DropdownMenuItem asChild>
+                            <Link href={currentWorkspace ? `/${currentWorkspace.id}/leave-management` : "/leave-management"}>Leave Management</Link>
+                          </DropdownMenuItem>
+                        )}
+                      </>
+                    )}
+                    <DropdownMenuItem asChild>
+                      <Link href="/workspaces">Manage Workspaces</Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator className="bg-[#2a2929]" />
+                  <DropdownMenuItem onClick={handleSignOut}>
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

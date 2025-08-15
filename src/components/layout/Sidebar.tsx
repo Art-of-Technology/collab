@@ -43,7 +43,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useCurrentUser } from "@/hooks/queries/useUser";
@@ -60,6 +59,8 @@ import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { CommandMenu } from "@/components/ui/command-menu";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
+import { usePermissions } from "@/hooks/use-permissions";
+import { getRoleDisplayName } from "@/lib/permissions";
 
 interface SidebarProps {
   pathname?: string;
@@ -82,6 +83,19 @@ export default function Sidebar({
   const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
+  const { userPermissions } = usePermissions(currentWorkspace?.id);
+
+  const formatGlobalRole = (role?: string) =>
+    role
+      ? role
+        .toString()
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+      : "";
+
+
+  const displayRole = userPermissions?.role ? getRoleDisplayName(userPermissions.role as any) : formatGlobalRole(session?.user?.role) || "Member";
 
   // Use Mention context for notifications
   const {
@@ -398,9 +412,8 @@ export default function Sidebar({
                           return (
                             <div
                               key={notification.id}
-                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${
-                                !notification.read ? "bg-[#22c55e]/5" : ""
-                              }`}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? "bg-[#22c55e]/5" : ""
+                                }`}
                               onClick={() => handleNotificationClick(notification.id, url)}
                             >
                               {/* Sender Avatar */}
@@ -602,9 +615,8 @@ export default function Sidebar({
                           return (
                             <div
                               key={notification.id}
-                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${
-                                !notification.read ? "bg-[#22c55e]/5" : ""
-                              }`}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? "bg-[#22c55e]/5" : ""
+                                }`}
                               onClick={() => handleNotificationClick(notification.id, url)}
                             >
                               {/* Sender Avatar */}
@@ -669,6 +681,29 @@ export default function Sidebar({
           {/* Workspace Selector */}
           <div className="px-1">
             <WorkspaceSelector />
+          </div>
+
+
+          {/* Other workspace features */}
+          <div className="space-y-0.5">
+            {workspaceFeatures.map((item) => (
+              <Button
+                key={item.name}
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start h-7 px-2 text-sm transition-colors",
+                  item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
+                  !currentWorkspace?.id && isLoading && "opacity-50 pointer-events-none"
+                )}
+                asChild
+                disabled={!currentWorkspace?.id && isLoading}
+              >
+                <Link href={item.href}>
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.name}
+                </Link>
+              </Button>
+            ))}
           </div>
 
 
@@ -875,31 +910,6 @@ export default function Sidebar({
                 </div>
               </CollapsibleContent>
             </Collapsible>
-          </div>
-
-          {/* Other workspace features */}
-          <div className="space-y-0.5">
-            <div className="px-2 mb-2">
-              <div className="text-xs font-medium text-gray-500">More</div>
-            </div>
-            {workspaceFeatures.map((item) => (
-              <Button
-                key={item.name}
-                variant="ghost"
-                className={cn(
-                  "w-full justify-start h-7 px-2 text-sm transition-colors",
-                  item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
-                  !currentWorkspace?.id && isLoading && "opacity-50 pointer-events-none"
-                )}
-                asChild
-                disabled={!currentWorkspace?.id && isLoading}
-              >
-                <Link href={item.href}>
-                  <item.icon className="mr-2 h-4 w-4" />
-                  {item.name}
-                </Link>
-              </Button>
-            ))}
           </div>
         </div>
       </ScrollArea>

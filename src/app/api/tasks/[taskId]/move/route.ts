@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import BoardItemActivityService from "@/lib/board-item-activity-service";
+import { NotificationService, NotificationType } from "@/lib/notification-service";
 
 // PATCH /api/tasks/[taskId]/move - Move a task to a different column
 export async function PATCH(
@@ -195,6 +196,55 @@ export async function PATCH(
     } catch (error) {
       console.error('Failed to track task move activity:', error);
       // Don't fail the move if activity tracking fails
+    }
+
+    // Send notifications if the column (status) changed
+    if (task.columnId !== columnId) {
+      try {
+        const content = `Task moved from "${task.column?.name || 'None'}" to "${column.name}"`;
+        
+        // Notify task followers
+        await NotificationService.notifyTaskFollowers({
+          taskId,
+          senderId: currentUser.id,
+          type: NotificationType.TASK_STATUS_CHANGED,
+          content,
+          excludeUserIds: []
+        });
+        
+        // Get the full task details for the title
+        const fullTask = await prisma.task.findUnique({
+          where: { id: taskId },
+          select: { title: true }
+        });
+        
+        // Notify board followers about status change
+        if (task.taskBoardId && fullTask) {
+          await NotificationService.notifyBoardFollowers({
+            boardId: task.taskBoardId,
+            taskId,
+            senderId: currentUser.id,
+            type: NotificationType.BOARD_TASK_STATUS_CHANGED,
+            content: `Task "${fullTask.title}" moved from "${task.column?.name || 'None'}" to "${column.name}"`,
+            excludeUserIds: []
+          });
+          
+          // Additional notification if task was moved to "Done"
+          if (column.name.toLowerCase() === 'done') {
+            await NotificationService.notifyBoardFollowers({
+              boardId: task.taskBoardId,
+              taskId,
+              senderId: currentUser.id,
+              type: NotificationType.BOARD_TASK_COMPLETED,
+              content: `Task "${fullTask.title}" has been completed`,
+              excludeUserIds: []
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to send task move notifications:', error);
+        // Don't fail the move if notifications fail
+      }
     }
 
     return NextResponse.json(updatedTask);

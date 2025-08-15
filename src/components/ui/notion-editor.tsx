@@ -173,6 +173,11 @@ export function NotionEditor({
   const [slashQuery, setSlashQuery] = useState('');
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 });
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
+  
+  // Keyboard navigation for slash commands
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(-1);
+  const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
+  
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   const initialContentRef = useRef(initialValue || content);
@@ -260,18 +265,53 @@ export function NotionEditor({
         });
         setShowSlashCommands(true);
         setSlashQuery('');
+        setSelectedCommandIndex(-1);
+        setIsKeyboardNavigation(false);
       } else if (showSlashCommands) {
         if (event.key === 'Escape') {
           setShowSlashCommands(false);
+          setSelectedCommandIndex(-1);
+          setIsKeyboardNavigation(false);
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          setIsKeyboardNavigation(true);
+          const filteredCommands = slashCommands.filter(cmd => 
+            cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
+          );
+          setSelectedCommandIndex(prev => 
+            prev < filteredCommands.length - 1 ? prev + 1 : 0
+          );
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          setIsKeyboardNavigation(true);
+          const filteredCommands = slashCommands.filter(cmd => 
+            cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
+          );
+          setSelectedCommandIndex(prev => 
+            prev > 0 ? prev - 1 : filteredCommands.length - 1
+          );
         } else if (event.key === 'Enter') {
-          // Handle command selection
-          setShowSlashCommands(false);
+          event.preventDefault();
+          const filteredCommands = slashCommands.filter(cmd => 
+            cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
+          );
+          if (selectedCommandIndex >= 0 && filteredCommands[selectedCommandIndex]) {
+            executeSlashCommand(filteredCommands[selectedCommandIndex].command);
+          } else {
+            setShowSlashCommands(false);
+          }
+          setSelectedCommandIndex(-1);
+          setIsKeyboardNavigation(false);
         } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
           // Update query as user types (but not for shortcuts)
           setSlashQuery(prev => prev + event.key);
+          setSelectedCommandIndex(-1);
+          setIsKeyboardNavigation(false);
         } else if (event.key === 'Backspace') {
           // Handle backspace
           setSlashQuery(prev => prev.slice(0, -1));
+          setSelectedCommandIndex(-1);
+          setIsKeyboardNavigation(false);
         }
       }
     };
@@ -281,7 +321,20 @@ export function NotionEditor({
     return () => {
       editor.view.dom.removeEventListener('keydown', handleKeyDown);
     };
-  }, [editor, showSlashCommands]);
+  }, [editor, showSlashCommands, slashQuery, selectedCommandIndex]);
+
+  // Auto-scroll to selected command
+  useEffect(() => {
+    if (selectedCommandIndex >= 0 && isKeyboardNavigation && showSlashCommands) {
+      const selectedElement = document.querySelector(`[data-command-index="${selectedCommandIndex}"]`);
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }
+    }
+  }, [selectedCommandIndex, isKeyboardNavigation, showSlashCommands]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -849,11 +902,17 @@ export function NotionEditor({
           >
             <div className="text-xs text-muted-foreground mb-2 px-2 font-medium">Commands</div>
             {filteredCommands.length > 0 ? (
-              filteredCommands.map((cmd) => (
+              filteredCommands.map((cmd, index) => (
                 <button
                   key={cmd.command}
                   onClick={() => executeSlashCommand(cmd.command)}
-                  className="w-full flex items-center gap-3 px-2 py-2 text-sm hover:bg-muted rounded-md transition-colors"
+                  onMouseEnter={() => setIsKeyboardNavigation(false)}
+                  className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${
+                    selectedCommandIndex === index && isKeyboardNavigation
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-muted'
+                  }`}
+                  data-command-index={index}
                 >
                   <cmd.icon size={16} className="text-muted-foreground" />
                   <span>{cmd.title}</span>

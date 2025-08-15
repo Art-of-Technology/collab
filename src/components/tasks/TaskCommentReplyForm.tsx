@@ -45,25 +45,6 @@ export function TaskCommentReplyForm({
         parentId: parentCommentId
       });
 
-      // Process mentions if there are any in the reply
-      if (newReply?.id) {
-        const mentionedUserIds = extractMentionUserIds(content);
-        
-        if (mentionedUserIds.length > 0) {
-          try {
-            await axios.post("/api/mentions", {
-              userIds: mentionedUserIds,
-              sourceType: "taskComment",
-              sourceId: newReply.id,
-              content: `mentioned you in a task comment reply: "${content.length > 100 ? content.substring(0, 97) + '...' : content}"`
-            });
-          } catch (error) {
-            console.error("Failed to process mentions:", error);
-            // Don't fail the reply submission if mentions fail
-          }
-        }
-      }
-
       toast({
         title: "Success",
         description: "Reply added successfully",

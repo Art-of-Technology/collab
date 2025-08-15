@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { ShareButton } from "@/components/tasks/ShareButton";
+import { TaskFollowButton } from "@/components/tasks/TaskFollowButton";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { MarkdownEditor, type MarkdownEditorRef } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
 import { useTasks } from "@/context/TasksContext";
 import { useActivity } from "@/context/ActivityContext";
@@ -35,6 +36,9 @@ import { StatusSelect } from "./selectors/StatusSelect";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
 import { TaskTabs } from "@/components/tasks/TaskTabs";
+import { useQueryClient } from "@tanstack/react-query";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { taskKeys } from "@/hooks/queries/useTask";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +67,7 @@ export function TaskDetailContent({
   onClose,
   boardId,
 }: TaskDetailContentProps) {
+  const queryClient = useQueryClient();
   const { currentWorkspace } = useWorkspace();
   const { data: session } = useSession();
   const { settings } = useWorkspaceSettings();
@@ -107,6 +112,9 @@ export function TaskDetailContent({
   // Delete task state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Ref for markdown editor to handle cancel
+  const markdownEditorRef = useRef<MarkdownEditorRef>(null);
 
   // Copy to clipboard function
   const copyToClipboard = async (text: string) => {
@@ -181,6 +189,7 @@ export function TaskDetailContent({
   }, [task?.comments]);
 
   const handleDescriptionChange = useCallback((md: string) => {
+    // Only update local state, don't trigger save until user clicks Save button
     setDescription(md);
   }, []);
 
@@ -399,6 +408,22 @@ export function TaskDetailContent({
         throw new Error('Failed to delete task');
       }
 
+      // Invalidate queries so taskboard and lists update immediately
+      try {
+        const resolvedBoardId = (boardId || task.taskBoard?.id || "");
+        if (resolvedBoardId) {
+          queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(resolvedBoardId) });
+          queryClient.invalidateQueries({ queryKey: taskKeys.board(resolvedBoardId) });
+        }
+        if (task.workspaceId) {
+          queryClient.invalidateQueries({ queryKey: taskKeys.list(task.workspaceId) });
+        }
+        queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+        queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
+      } catch (e) {
+        // No-op; invalidation best-effort
+      }
+
       toast({
         title: "Task deleted",
         description: "The task has been successfully deleted.",
@@ -407,7 +432,6 @@ export function TaskDetailContent({
       // Close modal and refresh data
       setShowDeleteModal(false);
       onClose?.();
-      refreshBoards();
 
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -517,43 +541,26 @@ export function TaskDetailContent({
     setEditingTitle(false);
   };
 
-  // Save description changes
-  const handleSaveDescription = async () => {
-    setSavingDescription(true);
-    try {
-      const success = await saveTaskField('description', description);
-      if (success) {
-        // Process mentions in the updated description
-        if (task?.id && description) {
-          const mentionedUserIds = extractMentionUserIds(description);
+  // Handle description change (now just for mention processing)
+  const handleDescriptionSave = useCallback(async (finalDescription: string) => {
+    if (task?.id && finalDescription) {
+      const mentionedUserIds = extractMentionUserIds(finalDescription);
 
-          if (mentionedUserIds.length > 0) {
-            try {
-              await axios.post("/api/mentions", {
-                userIds: mentionedUserIds,
-                sourceType: "task",
-                sourceId: task.id,
-                content: `mentioned you in a task: "${task.title.length > 100 ? task.title.substring(0, 97) + '...' : task.title}"`
-              });
-            } catch (error) {
-              console.error("Failed to process mentions:", error);
-              // Don't block UI if mentions fail
-            }
-          }
+      if (mentionedUserIds.length > 0) {
+        try {
+          await axios.post("/api/mentions", {
+            userIds: mentionedUserIds,
+            sourceType: "task",
+            sourceId: task.id,
+            content: `mentioned you in a task: "${task.title.length > 100 ? task.title.substring(0, 97) + '...' : task.title}"`
+          });
+        } catch (error) {
+          console.error("Failed to process mentions:", error);
+          // Don't block UI if mentions fail
         }
-
-        setEditingDescription(false);
       }
-    } finally {
-      setSavingDescription(false);
     }
-  };
-
-  // Cancel description editing
-  const handleCancelDescription = () => {
-    setDescription(task?.description || "");
-    setEditingDescription(false);
-  };
+  }, [task?.id, task?.title]);
 
   // Handle assignee change
   const handleAssigneeChange = async (userId: string) => {
@@ -731,163 +738,6 @@ export function TaskDetailContent({
     );
   }
 
-  const renderActivityItem = (activity: TaskActivity) => {
-    let actionText = activity.action.replace("TASK_", "").replace(/_/g, " ").toLowerCase();
-    if (actionText.startsWith("play ")) actionText = actionText.substring(5);
-    else if (actionText === "commented on") actionText = "commented on"; // Keep specific phrases
-    else actionText = actionText.replace("play", "timer"); // Generalize "play" to "timer"
-
-    const activityTime = formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true });
-    
-    // Check if this is a time-related activity that can be edited
-    const isTimeActivity = ["TASK_PLAY_STARTED", "TASK_PLAY_STOPPED", "TIME_ADJUSTED"].includes(activity.action);
-    const canEdit = isTimeActivity && activity.user.id === currentUserId;
-
-    // Parse activity details for time adjustments
-    let activityDetails = null;
-    try {
-      if (activity.details) {
-        activityDetails = JSON.parse(activity.details);
-      }
-    } catch (error) {
-      // Ignore JSON parse errors
-    }
-
-    // Handle time adjustment display
-    if (activity.action === "TIME_ADJUSTED" && activityDetails) {
-      actionText = `adjusted time from ${activityDetails.originalFormatted} to ${activityDetails.newFormatted}`;
-      if (activityDetails.reason) {
-        actionText += ` (${activityDetails.reason})`;
-      }
-    }
-
-    // Handle session edit display
-    if (activity.action === "SESSION_EDITED" && activityDetails) {
-      actionText = "edited a work session for";
-    }
-
-    // Handle help request activities
-    if (activity.action === "HELP_REQUEST_SENT" && activityDetails) {
-      actionText = "requested help for";
-    }
-
-    if (activity.action === "HELP_REQUEST_APPROVED" && activityDetails) {
-      actionText = `approved ${activityDetails.helperName}'s help request for`;
-    }
-
-    if (activity.action === "HELP_REQUEST_REJECTED" && activityDetails) {
-      actionText = `rejected ${activityDetails.helperName}'s help request for`;
-    }
-
-    return (
-      <div key={activity.id} className="group flex items-start space-x-3 py-3 border-b border-border/30 last:border-b-0 hover:bg-muted/20 px-2 rounded">
-        <CustomAvatar user={activity.user} size="sm" />
-        <div className="text-sm flex-1">
-          <p>
-            <span className="font-semibold">{activity.user.name || "Unknown User"}</span>
-            <span className="text-muted-foreground"> {actionText} this task</span>
-          </p>
-          <p className="text-xs text-muted-foreground/80">{activityTime}</p>
-          
-          {/* Show detailed changes for session edits */}
-          {activity.action === "SESSION_EDITED" && activityDetails?.oldValue && activityDetails?.newValue && (
-            <div className="mt-2 p-3 bg-muted/50 rounded-md text-xs border border-border/30">
-              <div className="font-medium mb-2 text-foreground">Session Changes:</div>
-              {(() => {
-                try {
-                  const oldData = JSON.parse(activityDetails.oldValue);
-                  const newData = JSON.parse(activityDetails.newValue);
-                  const changes = activityDetails.changes;
-                  
-                  return (
-                    <div className="space-y-2">
-                      {changes?.startTimeChanged && (
-                        <div>
-                          <div className="text-muted-foreground font-medium">Start Time:</div>
-                          <div className="text-muted-foreground line-through">
-                            {format(new Date(oldData.startTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                          <div className="text-foreground">
-                            {format(new Date(newData.startTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {changes?.endTimeChanged && (
-                        <div>
-                          <div className="text-muted-foreground font-medium">End Time:</div>
-                          <div className="text-muted-foreground line-through">
-                            {format(new Date(oldData.endTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                          <div className="text-foreground">
-                            {format(new Date(newData.endTime), "MMM d, yyyy HH:mm")}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div>
-                        <div className="text-muted-foreground font-medium">Duration:</div>
-                        <div className="text-muted-foreground line-through">
-                          {oldData.duration}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-foreground">{newData.duration}</span>
-                          {changes?.durationChange && (
-                            <Badge 
-                              variant={changes.durationChange.isIncrease ? "default" : "secondary"}
-                              className="text-xs"
-                            >
-                              {changes.durationChange.formatted}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {activityDetails.reason && (
-                        <div className="pt-1 border-t border-border/30">
-                          <div className="text-muted-foreground font-medium">Reason:</div>
-                          <div className="text-foreground italic">
-                            &quot;{activityDetails.reason}&quot;
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                } catch (e) {
-                  return (
-                    <div className="text-muted-foreground">
-                      Unable to display change details
-                    </div>
-                  );
-                }
-              })()}
-            </div>
-          )}
-        </div>
-        {canEdit && activity.action !== "TIME_ADJUSTED" && activity.action !== "SESSION_EDITED" && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={() => {
-              if (totalPlayTime) {
-                setTimeAdjustmentData({
-                  taskId: task!.id,
-                  taskTitle: task!.title,
-                  sessionDurationMs: 0, // Not applicable for history editing
-                  totalDurationMs: totalPlayTime.totalTimeMs,
-                });
-                setShowTimeAdjustmentModal(true);
-              }
-            }}
-            title="Adjust time"
-          >
-            <PenLine className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="pt-6 space-y-8">
@@ -1115,8 +965,12 @@ export function TaskDetailContent({
                   </div>
                 )}
               </div>
-                              {/* Share Button */}
-                <ShareButton entityId={task.id} issueKey={task.issueKey || ""} entityType="tasks" />
+              
+              {/* Task Follow Button */}
+              <TaskFollowButton taskId={task.id} boardId={boardId} />
+              
+              {/* Share Button */}
+              <ShareButton entityId={task.id} issueKey={task.issueKey || ""} entityType="tasks" />
             </div>
           </div>
         </div>
@@ -1127,76 +981,75 @@ export function TaskDetailContent({
           <Card className="overflow-hidden border-border/50 transition-all hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between py-3 bg-muted/30 border-b">
               <CardTitle className="text-md">Description</CardTitle>
-              {!editingDescription && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingDescription(true)}
-                  className="h-8 w-8 p-0 rounded-full"
-                >
-                  <PenLine className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingDescription(!editingDescription)}
+                className="h-8 w-8 p-0 rounded-full"
+              >
+                <PenLine className="h-3.5 w-3.5" />
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <div>
                 {editingDescription ? (
-                  <div className="p-4 space-y-3 bg-muted/10">
-                    <div className="relative">
-                      <div className={savingDescription ? "opacity-50 pointer-events-none" : ""}>
-                        <MarkdownEditor
-                          initialValue={description}
-                          onChange={handleDescriptionChange}
-                          placeholder="Add a description..."
-                          minHeight="150px"
-                          maxHeight="400px"
-                          onAiImprove={handleAiImproveDescription}
-                        />
-                      </div>
-                      {savingDescription && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
+                  <div className="p-4">
+                    <MarkdownEditor
+                      ref={markdownEditorRef}
+                      onChange={handleDescriptionChange}
+                      placeholder="Add a description..."
+                      minHeight="150px"
+                      maxHeight="400px"
+                      onAiImprove={handleAiImproveDescription}
+                       content={task.description || ''}
+                      collabDocumentId={`task:${task.id}:description`}
+                      key={`edit-${task.id}`}
+                    />
+                    <div className="mt-3 flex gap-2">
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
-                        onClick={handleCancelDescription}
-                        disabled={savingDescription}
+                        onClick={() => {
+                          // Broadcast reset to collaborators by restoring last persisted description
+                          const original = task.description || '';
+                          markdownEditorRef.current?.resetTo?.(original);
+                          setEditingDescription(false);
+                        }}
                       >
-                        <X className="h-4 w-4 mr-1" />
                         Cancel
                       </Button>
                       <Button
+                        variant="default"
                         size="sm"
-                        onClick={handleSaveDescription}
-                        disabled={savingDescription}
+                        onClick={async () => {
+                          // Save button: take current editor HTML and persist it via existing mutation
+                          const html = markdownEditorRef.current?.getContent() || '';
+                          const ok = await saveTaskField('description', html);
+                          if (ok) {
+                            setEditingDescription(false);
+                            await handleDescriptionSave(html);
+                          }
+                        }}
                       >
-                        {savingDescription ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-4 w-4 mr-1" />
-                            Save
-                          </>
-                        )}
+                        Save
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <div
-                    className="p-4 prose prose-sm max-w-none dark:prose-invert hover:bg-muted/10 cursor-pointer transition-colors min-h-[120px]"
-                    onClick={() => setEditingDescription(true)}
-                  >
+                  <div className="p-4 min-h-[120px]">
                     {task.description ? (
-                      <MarkdownContent content={task.description} htmlContent={task.description} />
+                      <MarkdownEditor
+                        readOnly
+                        className="border-0"
+                        content={task.description || ''}
+                        minHeight="120px"
+                        maxHeight="100%"
+                      />
                     ) : (
-                      <div className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5">
+                      <div
+                        className="flex items-center justify-center h-[100px] text-muted-foreground border border-dashed rounded-md bg-muted/5 cursor-pointer"
+                        onClick={() => setEditingDescription(true)}
+                      >
                         <div className="text-center">
                           <PenLine className="h-5 w-5 mx-auto mb-2 opacity-70" />
                           <p className="italic text-muted-foreground">Click to add a description</p>

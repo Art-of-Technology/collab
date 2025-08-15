@@ -31,9 +31,6 @@ import {
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCommandSearch } from "@/hooks/queries/useCommandSearch";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
 import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
@@ -79,21 +76,6 @@ export function CommandMenu({
     search,
     currentWorkspace?.id || ""
   );
-  
-  // Debug logging
-  React.useEffect(() => {
-    console.log('Command menu state:', {
-      search,
-      searchLength: search.trim().length,
-      searchResults,
-      searchResultsLength: searchResults.length,
-      isSearching,
-      error,
-      workspaceId: currentWorkspace?.id,
-      showingSearchSection: search.trim().length >= 2,
-      showingResults: search.trim().length >= 2 && searchResults.length > 0
-    });
-  }, [search, searchResults, isSearching, error, currentWorkspace?.id]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {

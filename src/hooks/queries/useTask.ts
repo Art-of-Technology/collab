@@ -77,21 +77,18 @@ export const useCreateTask = () => {
   return useMutation({
     mutationFn: createTask,
     onSuccess: (data) => {
-      // Invalidate tasks list for this workspace
+      // Invalidate tasks list for this workspace (workspace tasks screen)
       queryClient.invalidateQueries({ queryKey: taskKeys.list(data.workspaceId) });
 
-      // Invalidate the workspace details
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(data.workspaceId) });
-
-      // If task is connected to a board and column, invalidate those queries too
+      // If task is connected to a board, invalidate only board-scoped queries (current screen)
       if (data.taskBoardId) {
-        queryClient.invalidateQueries({ queryKey: boardKeys.detail(data.taskBoardId) });
         queryClient.invalidateQueries({ queryKey: taskKeys.board(data.taskBoardId) });
+        // Ensure Kanban board items are refreshed immediately
+        queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(data.taskBoardId) });
       }
 
-      if (data.columnId) {
-        queryClient.invalidateQueries({ queryKey: boardKeys.columns(data.taskBoardId || '') });
-      }
+      // Update assigned tasks widgets
+      queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
     },
   });
 };
@@ -141,6 +138,7 @@ export const useDeleteTask = () => {
       // Get the task data from cache if available to get the workspaceId
       const taskData = queryClient.getQueryData([...taskKeys.detail(taskId)]);
       const workspaceId = taskData ? (taskData as any).workspaceId : null;
+      const boardId = taskData ? ((taskData as any).taskBoardId || (taskData as any).taskBoard?.id) : null;
 
       // Invalidate the specific task
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
@@ -149,6 +147,15 @@ export const useDeleteTask = () => {
       if (workspaceId) {
         queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) });
       }
+
+      // If the task belonged to a board, refresh that board's task queries and Kanban items
+      if (boardId) {
+        queryClient.invalidateQueries({ queryKey: taskKeys.board(boardId) });
+        queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
+      }
+
+      // Update assigned tasks widgets
+      queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
     },
   });
 };
@@ -314,7 +321,17 @@ export const useMoveTask = () => {
       if (boardId) {
         // Invalidate board tasks query
         queryClient.invalidateQueries({ queryKey: taskKeys.board(boardId) });
+        // And invalidate the aggregated board items used by the Kanban
+        queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
       }
+
+      // Invalidate the moved task's detail if available
+      if ((data as any)?.id) {
+        queryClient.invalidateQueries({ queryKey: taskKeys.detail((data as any).id) });
+      }
+
+      // Update assigned tasks widgets
+      queryClient.invalidateQueries({ queryKey: ['assignedTasks'] });
     }
   });
 }; 

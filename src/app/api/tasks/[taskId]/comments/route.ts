@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { addTaskComment } from "@/actions/taskComment";
 
 // GET /api/tasks/[taskId]/comments - Get all comments for a task
 export async function GET(
@@ -100,65 +101,8 @@ export async function POST(
       );
     }
 
-    // Find the task to check workspace access
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { workspaceId: true },
-    });
-
-    if (!task) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    // Check if user has access to the workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        userId: user.id,
-        workspaceId: task.workspaceId,
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
-
-    // If parentId is provided, make sure it exists and belongs to the same task
-    if (parentId) {
-      const parentComment = await prisma.taskComment.findFirst({
-        where: {
-          id: parentId,
-          taskId,
-        },
-      });
-
-      if (!parentComment) {
-        return NextResponse.json(
-          { error: "Parent comment not found" },
-          { status: 404 }
-        );
-      }
-    }
-
-    // Create the comment
-    const comment = await prisma.taskComment.create({
-      data: {
-        content,
-        html,
-        authorId: user.id,
-        taskId,
-        parentId,
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-        reactions: true,
-      },
-    });
+    // Create the comment using the server action (includes access control, mention processing and notifications)
+    const comment = await addTaskComment(taskId, content, parentId, html);
 
     return NextResponse.json(comment);
   } catch (error) {

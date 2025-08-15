@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
 import BoardItemActivityService from "@/lib/board-item-activity-service";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export async function POST(
   req: Request,
@@ -106,9 +107,11 @@ export async function POST(
     await prisma.notification.create({
       data: {
         type: action === 'approve' ? "TASK_HELP_APPROVED" : "TASK_HELP_REJECTED",
-        content: action === 'approve' 
-          ? `Your help request for task "${task.title}" has been approved`
-          : `Your help request for task "${task.title}" has been rejected`,
+        content: sanitizeHtmlToPlainText(
+          action === 'approve' 
+            ? `Your help request for task "${task.title}" has been approved`
+            : `Your help request for task "${task.title}" has been rejected`
+        ),
         userId: helperId,
         senderId: session.user.id,
         taskId: taskId

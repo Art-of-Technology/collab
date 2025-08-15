@@ -11,7 +11,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { RichEditor } from "@/components/RichEditor";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import type { Issue } from "@/types/issue";
 
@@ -144,9 +144,9 @@ export function IssueDescription({
 
         <div className="relative">
           <div className={isSaving ? "opacity-50 pointer-events-none" : ""}>
-            <MarkdownEditor
-              initialValue={description}
-              onChange={handleDescriptionChange}
+            <RichEditor
+              value={description}
+              onChange={(html, text) => handleDescriptionChange(html)}
               onAiImprove={handleAiImprove}
               placeholder="Add a description..."
               minHeight="200px"

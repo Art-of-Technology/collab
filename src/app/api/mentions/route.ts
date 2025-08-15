@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { z } from "zod";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 // Validation schema for mention requests
 const mentionSchema = z.object({
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     }
     
     const { userIds, sourceType, sourceId, content } = validationResult.data;
+    const sanitizedContent = sanitizeHtmlToPlainText(content);
     
     // Create notification promises
     const notificationPromises = userIds.map(async (userId) => {
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
       return prisma.notification.create({
         data: {
           type: notificationType,
-          content: content,
+          content: sanitizedContent,
           userId: userId,
           senderId: currentUser.id,
           read: false,

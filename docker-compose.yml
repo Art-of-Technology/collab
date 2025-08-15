@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  hocuspocus:
+    build:
+      context: .
+      dockerfile: Dockerfile.hocuspocus
+    ports:
+      - "5020:5020"
+    environment:
+      - HOCUSPOCUS_PORT=5020
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/collab
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5020"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits for better performance
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
