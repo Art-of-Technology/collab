@@ -68,15 +68,16 @@ export function NoteCreateForm({ onSuccess, onCancel, showBackButton = false }: 
     fetchTags();
   }, []);
 
-  // Sync title ref with form value
+  const titleValue = form.watch('title');
+
+  // Sync title ref with form value  
   useEffect(() => {
     if (titleRef.current) {
-      const currentValue = form.watch('title');
-      if (titleRef.current.textContent !== currentValue) {
-        titleRef.current.textContent = currentValue || '';
+      if (titleRef.current.textContent !== titleValue) {
+        titleRef.current.textContent = titleValue || '';
       }
     }
-  }, [form.watch('title')]);
+  }, [titleValue]);
 
   // Auto focus on title when component mounts
   useEffect(() => {
@@ -202,7 +203,7 @@ export function NoteCreateForm({ onSuccess, onCancel, showBackButton = false }: 
                 Back to Notes
               </Button>
             )}
-            
+
             <div className="flex space-x-2 ml-auto">
               <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel

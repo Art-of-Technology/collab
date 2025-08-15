@@ -93,6 +93,20 @@ const ResizableImage = Image.extend({
   },
 });
 
+const slashCommands = [
+  { title: 'Text', icon: Type, command: 'paragraph' },
+  { title: 'Heading 1', icon: Heading1, command: 'heading1' },
+  { title: 'Heading 2', icon: Heading2, command: 'heading2' },
+  { title: 'Heading 3', icon: Heading3, command: 'heading3' },
+  { title: 'Bullet List', icon: List, command: 'bulletList' },
+  { title: 'Numbered List', icon: ListOrdered, command: 'orderedList' },
+  { title: 'Quote', icon: Quote, command: 'blockquote' },
+  { title: 'Code Block', icon: Code, command: 'codeBlock' },
+  { title: 'Table', icon: TableIcon, command: 'table' },
+  { title: 'Color', icon: Palette, command: 'color' },
+  { title: 'Divider', icon: Minus, command: 'horizontalRule' },
+];
+
 export function NotionEditor({
   onChange,
   content = "",
@@ -319,20 +333,20 @@ export function NotionEditor({
       return () => clearTimeout(timer);
     }
   }, [editor]);
-  
+
   // Close color palette when clicking outside
   useEffect(() => {
     if (!showColorPalette) return;
-    
+
     const handleClickOutside = (event: MouseEvent) => {
       // Close the color palette when clicking outside
       if (event.target && !(event.target as Element).closest('.color-palette-container')) {
         setShowColorPalette(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -474,6 +488,7 @@ export function NotionEditor({
     }
 
     return cleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, showSlashCommands, slashQuery, selectedCommandIndex]);
 
   // Auto-scroll to selected command
@@ -639,20 +654,6 @@ export function NotionEditor({
     return null;
   }
 
-  const slashCommands = [
-    { title: 'Text', icon: Type, command: 'paragraph' },
-    { title: 'Heading 1', icon: Heading1, command: 'heading1' },
-    { title: 'Heading 2', icon: Heading2, command: 'heading2' },
-    { title: 'Heading 3', icon: Heading3, command: 'heading3' },
-    { title: 'Bullet List', icon: List, command: 'bulletList' },
-    { title: 'Numbered List', icon: ListOrdered, command: 'orderedList' },
-    { title: 'Quote', icon: Quote, command: 'blockquote' },
-    { title: 'Code Block', icon: Code, command: 'codeBlock' },
-    { title: 'Table', icon: TableIcon, command: 'table' },
-    { title: 'Color', icon: Palette, command: 'color' },
-    { title: 'Divider', icon: Minus, command: 'horizontalRule' },
-  ];
-
   const filteredCommands = slashCommands.filter(cmd =>
     cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
   );
@@ -728,8 +729,8 @@ export function NotionEditor({
                   onMouseEnter={() => setIsKeyboardNavigation(false)}
                   onMouseDown={(e) => e.preventDefault()}
                   className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${selectedCommandIndex === index && isKeyboardNavigation
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted'
                     }`}
                   data-command-index={index}
                 >
@@ -1089,10 +1090,10 @@ export function NotionEditor({
         }
       `}</style>
 
-            {/* Color Palette Fixed */}
+      {/* Color Palette Fixed */}
       {showColorPalette && (
         <div
-          style={{ 
+          style={{
             position: "fixed",
             top: `${colorPalettePosition.top}px`,
             left: `${colorPalettePosition.left}px`,

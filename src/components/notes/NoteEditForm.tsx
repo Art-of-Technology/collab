@@ -87,14 +87,15 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   }, []);
 
   // Sync title ref with form value
-  useEffect(() => {
-    if (titleRef.current) {
-      const currentValue = form.watch('title');
-      if (titleRef.current.textContent !== currentValue) {
-        titleRef.current.textContent = currentValue || '';
-      }
+const titleValue = form.watch('title');
+
+useEffect(() => {
+  if (titleRef.current) {
+    if (titleRef.current.textContent !== titleValue) {
+      titleRef.current.textContent = titleValue || '';
     }
-  }, [form.watch('title')]);
+  }
+}, [titleValue]);
 
   // Reset form values when note changes
   useEffect(() => {
