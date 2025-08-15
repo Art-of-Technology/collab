@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef, useEffect, useMemo, useImperativeHandle, forwardRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -13,6 +13,7 @@ import Color from "@tiptap/extension-color";
 import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
+import { useSession } from "next-auth/react";
 import {
   Bold,
   Italic,
@@ -57,6 +58,19 @@ import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
+import * as Y from 'yjs'
+import { HocuspocusProvider as HPProvider } from '@hocuspocus/provider'
+import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import { useCurrentUser } from "@/hooks/queries/useUser";
+
+export interface MarkdownEditorRef {
+  getContent: () => string;
+  saveFromCollab?: () => Promise<void>;
+  resetFromSource?: (html: string) => void;
+  resetTo?: (html: string) => void;
+}
 
 interface MarkdownEditorProps {
   onChange?: (markdown: string, html: string) => void;
@@ -68,6 +82,12 @@ interface MarkdownEditorProps {
   maxHeight?: string;
   compact?: boolean;
   onAiImprove?: (text: string) => Promise<string>;
+  // Enable collaborative editing when provided. The value should be a unique, stable ID for the document.
+  collabDocumentId?: string;
+  // Optionally override the provider URL; defaults to ws://127.0.0.1:1234 in dev
+  collabServerUrl?: string;
+  // Render in read-only mode but stay connected to Yjs/Hocuspocus for live updates
+  readOnly?: boolean;
 }
 
 // Custom Image extension with resize functionality
@@ -471,7 +491,13 @@ const Mention = TiptapNode.create({
   
   selectable: false,
   
-  atom: true,
+  atom: false,
+
+  renderLabel({ node }: { node: any }) {
+    console.log('[Editor] renderLabel node:', node);
+    const username = node.attrs?.name || node.attrs?.label || node.text || '';
+    return `<span class="mention">@${username}</span>`;
+  },
   
   addAttributes() {
     return {
@@ -514,12 +540,23 @@ const Mention = TiptapNode.create({
           const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
           const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
           
-
           
           if (!id || !name) {
             return false
           }
           
+          return { id, name }
+        },
+      },
+      // Backward compatibility: support <span class="mention" data-user-id="...">
+      {
+        tag: 'span.mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
+          const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
+          if (!id || !name) {
+            return false
+          }
           return { id, name }
         },
       },
@@ -619,6 +656,19 @@ const TaskMention = TiptapNode.create({
             return false
           }
           
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="task-mention" data-id="...">
+      {
+        tag: 'span.task-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('#', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
           return { id, title, issueKey }
         },
       },
@@ -723,6 +773,19 @@ const EpicMention = TiptapNode.create({
           return { id, title, issueKey }
         },
       },
+      // Backward compatibility: support <span class="epic-mention" data-id="...">
+      {
+        tag: 'span.epic-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('~', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
     ]
   },
   
@@ -821,6 +884,19 @@ const StoryMention = TiptapNode.create({
             return false
           }
           
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="story-mention" data-id="...">
+      {
+        tag: 'span.story-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('^', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
           return { id, title, issueKey }
         },
       },
@@ -925,6 +1001,19 @@ const MilestoneMention = TiptapNode.create({
           return { id, title, issueKey }
         },
       },
+      // Backward compatibility: support <span class="milestone-mention" data-id="...">
+      {
+        tag: 'span.milestone-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('!', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
     ]
   },
   
@@ -951,7 +1040,30 @@ const MilestoneMention = TiptapNode.create({
   },
 })
 
-export function MarkdownEditor({
+// Generate a consistent color based on user ID
+function getUserColor(userId: string): string {
+  const colors = [
+    '#ef4444', // red
+    '#f97316', // orange
+    '#eab308', // yellow
+    '#22c55e', // green
+    '#14b8a6', // teal
+    '#3b82f6', // blue
+    '#8b5cf6', // violet
+    '#ec4899', // pink
+    '#f43f5e', // rose
+    '#06b6d4', // cyan
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+}
+
+export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>(({
   onChange,
   content = "",
   initialValue = "",
@@ -961,7 +1073,10 @@ export function MarkdownEditor({
   maxHeight = "400px",
   compact = false,
   onAiImprove,
-}: MarkdownEditorProps) {
+  collabDocumentId,
+  collabServerUrl,
+  readOnly = false,
+}: MarkdownEditorProps, ref) => {
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
@@ -970,124 +1085,353 @@ export function MarkdownEditor({
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [showTaskMentions, setShowTaskMentions] = useState(false);
-  const [taskQuery, setTaskQuery] = useState("");
-  const [taskMentionPosition, setTaskMentionPosition] = useState({ top: 0, left: 0 });
   
   // Command menu states
   const [showCommandMenu, setShowCommandMenu] = useState(false);
   const [commandMenuPosition, setCommandMenuPosition] = useState({ top: 0, left: 0 });
   
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const { currentWorkspace: workspaceData } = useWorkspace();
+  const { currentWorkspace } = useWorkspace();
 
-  // Use a stable reference for initialValue to prevent re-renders
-  // Process initial content to convert text-based mentions to HTML
-  const processInitialContent = useCallback((rawContent: string) => {
-    if (!rawContent) return '';
-    
-    let processed = rawContent;
-    
-    // If content looks like text (contains mention patterns but not HTML), process it
-    if (processed.includes('@[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![') || processed.includes('#[')) {
-      // Convert text-based mentions to HTML spans that Tiptap can parse
-      
-      // User mentions: @[name](id) -> HTML span
-      processed = processed.replace(
-        /@\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-mention data-user-id="$2" data-user-name="$1">@$1</span>'
-      );
-      
-      // Epic mentions: ~[name](id) -> HTML span  
-      processed = processed.replace(
-        /~\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-epic-mention data-epic-id="$2" data-epic-title="$1" data-epic-issue-key="">~$1</span>'
-      );
-      
-      // Story mentions: ^[name](id) -> HTML span
-      processed = processed.replace(
-        /\^\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-story-mention data-story-id="$2" data-story-title="$1" data-story-issue-key="">^$1</span>'
-      );
-      
-      // Milestone mentions: ![name](id) -> HTML span  
-      processed = processed.replace(
-        /!\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-milestone-mention data-milestone-id="$2" data-milestone-title="$1" data-milestone-issue-key="">!$1</span>'
-      );
-      
-      // Task mentions: #[name](id) -> HTML span
-      processed = processed.replace(
-        /#\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span data-task-mention data-task-id="$2" data-task-title="$1" data-task-issue-key="">#$1</span>'
-      );
-      
-      // Convert newlines to <br> tags
-      processed = processed.replace(/\n/g, '<br>');
+
+  const initialContentRef = useRef('');
+
+  // Collab: create ydoc/provider optionally
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const providerRef = useRef<HPProvider | null>(null);
+  const indexeddbRef = useRef<IndexeddbPersistence | null>(null);
+  const [collabReady, setCollabReady] = useState(0);
+  const { data: session } = useSession();
+  const { data: currentUser } = useCurrentUser();
+  
+  // Get user info for collaboration
+  const collaborationUser = useMemo(() => {
+    if (!session?.user) {
+      return {
+        name: 'Anonymous',
+        color: '#94a3b8',
+        avatar: null,
+        initials: 'AN',
+      };
     }
     
-    return processed;
-  }, []);
+    // Generate initials from name
+    const name = session.user.name || 'User';
+    const initials = name
+      .split(' ')
+      .map(word => word[0]?.toUpperCase() || '')
+      .join('')
+      .slice(0, 2) || 'U';
+    
+    // Ensure avatar URL is absolute
+    let avatarUrl = currentUser?.image || undefined;
+    if (avatarUrl && !avatarUrl.startsWith('http')) {
+      // If it's a relative URL, make it absolute
+      avatarUrl = `${window.location.origin}${avatarUrl}`;
+    }
+    
+    return {
+      name,
+      color: getUserColor(session.user.id || 'default'),
+      avatar: avatarUrl,
+      initials,
+      id: session.user.id,
+    };
+  }, [session, currentUser?.image]);
 
-  const initialContentRef = useRef(initialValue || content);
+  function computeHocuspocusUrl(overriddenUrl?: string): string {
+    if (overriddenUrl && overriddenUrl.trim().length > 0) return overriddenUrl;
+    if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_HOCUSPOCUS_URL || 'ws://127.0.0.1:1234';
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-primary underline cursor-pointer',
-        },
-      }),
-      // Replace Image with ResizableImage
-      ResizableImage.configure({
-        HTMLAttributes: {
-          class: 'resizable-image',
-        },
-      }),
-      CustomCSS.configure({ css: imageCSS }),
-      Underline,
-      Placeholder.configure({
-        placeholder,
-      }),
-      TextStyle,
-      Heading.configure({
-        levels: [1, 2, 3],
-      }),
-      Color,
-      Mention, // Add Mention extension
-      TaskMention, // Add Task Mention extension
-      EpicMention, // Add Epic Mention extension
-      StoryMention, // Add Story Mention extension
-      MilestoneMention, // Add Milestone Mention extension
-    ],
-    content: initialContentRef.current,
-    editorProps: {
-      attributes: {
-        class: cn(
-          "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
-          "min-h-[80px] p-3 rounded-md border-0",
-          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border"
-        ),
-        style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
+    const envUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
+    if (envUrl && envUrl.trim().length > 0) return envUrl;
+
+    const isSecure = window.location.protocol === 'https:';
+    const scheme = isSecure ? 'wss' : 'ws';
+    const host = window.location.hostname || '127.0.0.1';
+    const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '5020';
+    return `${scheme}://${host}:${port}`;
+  }
+
+  useEffect(() => {
+    if (!collabDocumentId) return;
+
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
+
+    // Offline persistence disabled for collaboration to avoid duplicate merges
+
+    const url = computeHocuspocusUrl(collabServerUrl);
+
+    providerRef.current = new HPProvider({
+      url,
+      name: collabDocumentId,
+      document: ydoc,
+    });
+    // Ensure connection attempt even if defaults change in provider
+    try {
+      (providerRef.current as unknown as { connect?: () => void })?.connect?.();
+    } catch {}
+    setCollabReady((v) => v + 1);
+
+    // We can't safely normalize here because the editor instance is created after this effect.
+
+    return () => {
+      providerRef.current?.destroy();
+      providerRef.current = null;
+      indexeddbRef.current?.destroy();
+      indexeddbRef.current = null;
+      ydocRef.current?.destroy();
+      ydocRef.current = null;
+    };
+  }, [collabDocumentId, collabServerUrl]);
+
+  const editor = useEditor(
+    {
+      extensions: (
+        () => {
+          const base = [
+            StarterKit,
+            Link.configure({
+              openOnClick: false,
+              HTMLAttributes: {
+                class: 'text-primary underline cursor-pointer',
+              },
+            }),
+            // Replace Image with ResizableImage
+            ResizableImage.configure({
+              HTMLAttributes: {
+                class: 'resizable-image',
+              },
+            }),
+            CustomCSS.configure({ css: imageCSS }),
+            Underline,
+            Placeholder.configure({
+              placeholder,
+            }),
+            TextStyle,
+            Heading.configure({
+              levels: [1, 2, 3],
+            }),
+            Color,
+            Mention.configure({
+              renderLabel({ node }: { node: any }) {
+                console.log('[Editor] renderLabel node:', node);
+                const username = node.attrs?.name || node.attrs?.label || node.text || '';
+                return `<span class="mention">@${username}</span>`;
+              },
+              HTMLAttributes: {
+                class: 'mention',
+                'data-mention': 'true',
+              },
+            }),
+            TaskMention,
+            EpicMention,
+            StoryMention,
+            MilestoneMention,
+          ];
+
+          if (collabDocumentId && ydocRef.current) {
+            base.push(
+              Collaboration.configure({ 
+                document: ydocRef.current,
+                field: 'prosemirror',
+              }),
+              CollaborationCursor.configure({
+                provider: providerRef.current!,
+                user: collaborationUser,
+                render: (user: any) => {
+                  const cursor = document.createElement('span');
+                  cursor.classList.add('collaboration-cursor__caret');
+                  cursor.style.borderColor = user.color;
+                  
+                  const label = document.createElement('div');
+                  label.classList.add('collaboration-cursor__label');
+                  label.style.backgroundColor = user.color;
+                  
+                  // Helper function to create initials fallback
+                  const createFallback = () => {
+                    const fallback = document.createElement('div');
+                    fallback.classList.add('collaboration-cursor__avatar-fallback');
+                    fallback.style.backgroundColor = user.color;
+                    fallback.textContent = user.initials || user.name?.slice(0, 2).toUpperCase() || 'U';
+                    return fallback;
+                  };
+                  
+                  // Create avatar element if user has an image
+                  if (user.avatar && user.avatar.trim() !== '') {
+                    const avatarWrapper = document.createElement('div');
+                    avatarWrapper.classList.add('collaboration-cursor__avatar-wrapper');
+                    avatarWrapper.style.border = `2px solid ${user.color}`;
+                    
+                    const avatar = document.createElement('img');
+                    // Ensure we're using a valid URL
+                    avatar.src = user.avatar;
+                    avatar.classList.add('collaboration-cursor__avatar');
+                    // Add crossorigin attribute to handle CORS
+                    avatar.crossOrigin = 'anonymous';
+                    
+                    // Log for debugging
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.log('[Collab] Loading avatar for', user.name, ':', user.avatar);
+                    }
+                    
+                    // Handle avatar loading errors with fallback to initials
+                    avatar.onerror = () => {
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.log('[Collab] Failed to load avatar for', user.name, ', using fallback');
+                      }
+                      // Replace image with initials fallback
+                      avatarWrapper.innerHTML = '';
+                      avatarWrapper.appendChild(createFallback());
+                    };
+                    
+                    // Also add load handler to ensure image loaded
+                    avatar.onload = () => {
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.log('[Collab] Successfully loaded avatar for', user.name);
+                      }
+                    };
+                    
+                    avatarWrapper.appendChild(avatar);
+                    label.appendChild(avatarWrapper);
+                  } else {
+                    // Show initials in a circle if no avatar
+                    const fallbackWrapper = document.createElement('div');
+                    fallbackWrapper.classList.add('collaboration-cursor__avatar-wrapper');
+                    fallbackWrapper.style.border = `2px solid ${user.color}`;
+                    fallbackWrapper.appendChild(createFallback());
+                    label.appendChild(fallbackWrapper);
+                  }
+                  
+                  cursor.appendChild(label);
+                  return cursor;
+                },
+              })
+            );
+          }
+
+          return base;
+        }
+      )(),
+      content: collabDocumentId ? '' : (content || initialValue),
+      editorProps: {
+        attributes: {
+          class: cn(
+            "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
+            "min-h-[80px] p-3 rounded-md border-0",
+            "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border"
+          ),
+          style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
+        }
+      },
+      editable: !readOnly,
+      immediatelyRender: true,
+    },
+    [collabDocumentId, readOnly, collabReady, collaborationUser]
+  );
+
+  // Normalize accidental literal HTML text after collab sync
+  const hasNormalizedOnEditRef = useRef(false);
+  useEffect(() => {
+    if (!editor || !collabDocumentId || readOnly || hasNormalizedOnEditRef.current) return;
+    // Defer a tick to let Collaboration apply server content
+    const t = setTimeout(() => {
+      try {
+        console.log('[Editor] collab sync text:', editor.getText().slice(0, 200));
+        console.log('[Editor] collab sync html:', editor.getHTML().slice(0, 200));
+      } catch {}
+      const text = editor.getText().trim();
+      const startsWithTag = text.startsWith('<');
+      const looksEscaped = /&lt;\/?[a-z]+&gt;/i.test(text);
+      if (startsWithTag || looksEscaped) {
+        const normalized = text
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/^<p>/i, '')
+          .replace(/<\/p>$/i, '')
+          .trim();
+        console.log('[Editor] normalized to:', normalized);
+        editor.commands.setContent(normalized || '');
       }
-    },
-    immediatelyRender: false,
-    onUpdate: ({ editor }) => {
-      // Get the full HTML content for rendering
-      const html = editor.getHTML();
-      
-      // Only pass HTML to the onChange handler
-      onChange?.(html, html); // Passing html twice for compatibility, but second arg could be removed if forms are updated
-    },
-  }, []); // Empty dependency array to ensure editor only initializes once
+      hasNormalizedOnEditRef.current = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, [editor, collabDocumentId, readOnly, collabReady]);
 
   function normalizeHTML(html: string): string {
     return html.replace(/\s+/g, ' ').trim();
   }
 
+  // State for autosave functionality
+  const [isSaving, setIsSaving] = useState(false);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Autosave function for non-collaborative documents
+  const autoSave = useCallback(async () => {
+    if (collabDocumentId || !editor || isSaving) return;
+    
+    try {
+      setIsSaving(true);
+      const content = editor.getHTML();
+      
+      const response = await fetch('/api/collab/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId: undefined,
+          content: content,
+        }),
+      });
+      
+      if (response.ok) {
+        console.log('[MarkdownEditor] Auto-saved (non-collab)');
+      }
+    } catch (error) {
+      console.error('Auto-save error:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [collabDocumentId, editor, isSaving]);
+  
+  // Debounced auto-save
+  const debouncedAutoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSave();
+    }, 2000); // Auto-save after 2 seconds of inactivity
+  }, [autoSave]);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    getContent: () => {
+      return editor?.getHTML() || '';
+    },
+    saveFromCollab: async () => {
+      // no-op here; parent can trigger REST save using current HTML
+    },
+    resetFromSource: (html: string) => {
+      if (editor && !collabDocumentId) {
+        editor.commands.setContent(html || '');
+      }
+    },
+    // Forcefully reset content (works for both collab and non-collab)
+    resetTo: (html: string) => {
+      if (!editor) return;
+      // Emit update so collaborators receive the change
+      editor.commands.setContent(html || '', true);
+    },
+  }), [editor, collabDocumentId]);
+
   useEffect(() => {
+    // Skip content updates when using collaboration to prevent duplication
+    if (collabDocumentId) return;
+    
     if (editor && content !== undefined) {
       const currentContent = editor.getHTML();
       // Only update if the content is actually different to avoid unnecessary updates
@@ -1096,41 +1440,8 @@ export function MarkdownEditor({
         editor.commands.setContent(content || '');
       }
     }
-  }, [editor, content]);
+  }, [editor, content, collabDocumentId]);
 
-  // Track user typing activity
-  useEffect(() => {
-    if (!editor) return;
-
-    let typingTimer: NodeJS.Timeout | null = null;
-
-    const handleKeyDown = () => {
-      setIsUserTyping(true);
-      // Clear existing timer
-      if (typingTimer) {
-        clearTimeout(typingTimer);
-      }
-      // Reset typing flag after a delay
-      typingTimer = setTimeout(() => setIsUserTyping(false), 500);
-    };
-
-    const handleFocus = () => {
-      setIsUserTyping(false); // Reset when editor gains focus
-    };
-
-    const editorDom = editor.view.dom;
-    editorDom.addEventListener('keydown', handleKeyDown);
-    editorDom.addEventListener('focus', handleFocus);
-
-    return () => {
-      editorDom.removeEventListener('keydown', handleKeyDown);
-      editorDom.removeEventListener('focus', handleFocus);
-      // Clear timer on cleanup
-      if (typingTimer) {
-        clearTimeout(typingTimer);
-      }
-    };
-  }, [editor]);
 
   // Handle paste event for images
   useEffect(() => {
@@ -1336,17 +1647,11 @@ export function MarkdownEditor({
   const [milestoneMentionQuery, setMilestoneMentionQuery] = useState("");
   const [showMilestoneMentionSuggestions, setShowMilestoneMentionSuggestions] = useState(false);
   
-  // Track if user is actively typing vs content being set programmatically
-  const [isUserTyping, setIsUserTyping] = useState(false);
-  
-
   const [milestoneCaretPosition, setMilestoneCaretPosition] = useState({ top: 0, left: 0 });
   const milestoneMentionSuggestionRef = useRef<HTMLDivElement>(null);
   
   // Add command menu ref
   const commandMenuRef = useRef<HTMLDivElement>(null);
-  
-  const { currentWorkspace } = useWorkspace();
   
   // Track the last time a mention was inserted
   const lastMentionInsertedRef = useRef<number>(0);
@@ -2032,6 +2337,15 @@ export function MarkdownEditor({
     setShowCommandMenu(false);
   }, [editor]);
   
+  // Add mention event handlers and change propagation to parent
+  const emitChangeToParent = useCallback(() => {
+    if (!editor || !onChange) return;
+    try {
+      const html = editor.getHTML();
+      onChange(html, html);
+    } catch {}
+  }, [editor, onChange]);
+
   // Add mention event handlers
   useEffect(() => {
     if (!editor) return;
@@ -2043,6 +2357,7 @@ export function MarkdownEditor({
     editor.on('update', checkForStoryMentionTrigger);
     editor.on('update', checkForMilestoneMentionTrigger);
     editor.on('update', checkForCommandTrigger);
+    editor.on('update', emitChangeToParent);
     
     return () => {
       editor.off('update', checkForMentionTrigger);
@@ -2051,8 +2366,9 @@ export function MarkdownEditor({
       editor.off('update', checkForStoryMentionTrigger);
       editor.off('update', checkForMilestoneMentionTrigger);
       editor.off('update', checkForCommandTrigger);
+      editor.off('update', emitChangeToParent);
     };
-  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger, emitChangeToParent]);
 
   // Handle keyboard events for command menu
   useEffect(() => {
@@ -2145,24 +2461,30 @@ export function MarkdownEditor({
       .ProseMirror .mention {
         background-color: hsl(var(--primary) / 0.1);
         border-radius: 0.25rem;
-        padding: 0.125rem 0.25rem;
-        margin: 0 0.125rem;
+        padding: 0 0.rem;
+        margin: 0;
         color: hsl(var(--primary));
+        line-height: 1.2;
+        border-radius: 0.5rem;
         font-weight: 500;
         white-space: nowrap;
         display: inline-flex;
         align-items: center;
         user-select: all;
         cursor: pointer;
+        position: relative;
+        top: -0.1rem;
       }
       
       .ProseMirror .task-mention {
-        background-color: rgba(59, 130, 246, 0.1);
+        background-color: transparent;
         border-radius: 0.25rem;
         padding: 0.125rem 0.25rem;
         margin: 0 0.125rem;
-        color: #3b82f6;
+        color: hsl(var(--primary));
         font-weight: 500;
+        text-decoration: underline;
+        text-transform: uppercase;
         white-space: nowrap;
         display: inline-flex;
         align-items: center;
@@ -2238,6 +2560,7 @@ export function MarkdownEditor({
 
   return (
     <div className={cn("flex flex-col rounded-md border", className)}>
+      {!readOnly && (
       <div className="flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/30">
         <TooltipProvider delayDuration={200}>
           <Tooltip>
@@ -2601,6 +2924,7 @@ export function MarkdownEditor({
           </Tooltip>
         </TooltipProvider>
       </div>
+      )}
 
       <div className="flex-1 relative" ref={editorContainerRef}>
         <EditorContent editor={editor} className="w-full" />
@@ -2797,4 +3121,6 @@ export function MarkdownEditor({
       </div>
     </div>
   );
-} 
+});
+
+MarkdownEditor.displayName = 'MarkdownEditor'; 
