@@ -231,7 +231,7 @@ export function InlineColorPalette({
 
   return (
     <div 
-      className="space-y-3" 
+      className="space-y-3 color-palette-container" 
       ref={containerRef} 
       tabIndex={0}
       style={{ outline: 'none' }}

@@ -319,6 +319,24 @@ export function NotionEditor({
       return () => clearTimeout(timer);
     }
   }, [editor]);
+  
+  // Close color palette when clicking outside
+  useEffect(() => {
+    if (!showColorPalette) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      // Close the color palette when clicking outside
+      if (event.target && !(event.target as Element).closest('.color-palette-container')) {
+        setShowColorPalette(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showColorPalette]);
 
   // Handle slash commands
   useEffect(() => {
@@ -1083,7 +1101,7 @@ export function NotionEditor({
             border: "1px solid #4b5563",
             outline: "none"
           }}
-          className="bg-neutral-800 rounded-lg shadow-lg p-4 w-[320px]"
+          className="bg-neutral-800 rounded-lg shadow-lg p-4 w-[320px] color-palette-container"
           onMouseDown={(e) => e.preventDefault()}
         >
           <InlineColorPalette
