@@ -482,16 +482,23 @@ textarea::selection {
   margin-bottom: 0.25rem !important;
 }
 
-/* Tighter spacing for consecutive paragraphs */
-.ProseMirror p + p {
-  margin-top: 0.125rem !important;
+/* Heading placeholders - inherit their parent size */
+.ProseMirror h1.is-empty::before {
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  line-height: normal !important;
 }
 
-/* Remove extra spacing after headings */
-.ProseMirror h1 + p,
-.ProseMirror h2 + p,
-.ProseMirror h3 + p {
-  margin-top: 0.125rem !important;
+.ProseMirror h2.is-empty::before {
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  line-height: normal !important;
+}
+
+.ProseMirror h3.is-empty::before {
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  line-height: normal !important;
 }
 
 /* =============================================== */
@@ -500,12 +507,12 @@ textarea::selection {
 
 /* CSS Variables for fine-tuning drag handle positions */
 :root {
-  --drag-handle-offset-p: 0.2em;  /* Çok daha az - normal text için */
-  --drag-handle-offset-h1: 0.9em;  /* H1 iyi, aynı kalsın */
-  --drag-handle-offset-h2: 0.4em;  /* Çok azaltıldı */
-  --drag-handle-offset-h3: 0.3em;  /* Daha da az */
-  --drag-handle-offset-li: 0.2em;  /* Normal text gibi */
-  --drag-handle-offset-blockquote: 0.2em;  /* Normal text gibi */
+  --drag-handle-offset-p: 0.2em;
+  --drag-handle-offset-h1: 0.9em;
+  --drag-handle-offset-h2: 0.4em;
+  --drag-handle-offset-h3: 0.3em;
+  --drag-handle-offset-li: 0.2em;
+  --drag-handle-offset-blockquote: 0.2em;
 }
 
 /* Base drag handle styles */

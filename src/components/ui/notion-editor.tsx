@@ -46,7 +46,7 @@ interface NotionEditorProps {
 // Floating toolbar extension
 const FloatingToolbar = Extension.create({
   name: 'floatingToolbar',
-  
+
   addOptions() {
     return {
       element: null,
@@ -110,11 +110,11 @@ export function NotionEditor({
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
   const [showColorPalette, setShowColorPalette] = useState(false);
   const [colorPalettePosition, setColorPalettePosition] = useState({ top: 0, left: 0 });
-  
+
   // Keyboard navigation for slash commands
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(-1);
   const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
-  
+
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const slashStartPosRef = useRef<number | null>(null);
 
@@ -140,24 +140,24 @@ export function NotionEditor({
       // ENHANCED PLACEHOLDER - Shows on every empty node
       Placeholder.configure({
         placeholder: ({ node, pos, editor }) => {
-          
+
           // Show placeholder only for empty paragraphs
           if (node.type.name === 'paragraph') {
             // Check if this paragraph is inside a list item or blockquote
             const $pos = editor.state.doc.resolve(pos);
             const isInsideListItem = $pos.parent?.type.name === 'listItem';
             const isInsideBlockquote = $pos.parent?.type.name === 'blockquote';
-            
+
             // If inside a list item, show list item placeholder
             if (isInsideListItem) {
               return 'List item';
             }
-            
+
             // If inside a blockquote, show quote placeholder
             if (isInsideBlockquote) {
               return 'Quote';
             }
-            
+
             return placeholder || "Write, press '/' for commands...";
           }
 
@@ -248,55 +248,55 @@ export function NotionEditor({
   const handlePlusClick = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    
+
     if (!editor) return;
 
-  // Get the button element and its position
-  const buttonElement = event.currentTarget as HTMLElement;
-  const buttonRect = buttonElement.getBoundingClientRect();
-  
-  // Find which line/block this button belongs to by its vertical position
-  // Get the position at the button's vertical center
-  const viewPos = editor.view.posAtCoords({
-    left: buttonRect.right + 50, // A bit to the right of the button
-    top: buttonRect.top + (buttonRect.height / 2) // Vertical center of button
-  });
-  
-  if (!viewPos) return;
-  
-  // Get the resolved position
-  const $pos = editor.state.doc.resolve(viewPos.pos);
-  
-  // Find the start of the current line/block
-  const lineStart = $pos.start($pos.depth);
-  
-  // Move cursor to the end of current line's content
-  const lineEnd = $pos.end($pos.depth);
-  
-  // Set cursor to the end of the line
-  editor.chain()
-    .focus()
-    .setTextSelection(lineEnd)
-    .run();
-  
-  // Store the position for slash command
-  slashStartPosRef.current = lineEnd;
-  
-  // Get coordinates at the cursor position
-  const domPosition = editor.view.coordsAtPos(lineEnd);
-  const editorContainer = editor.view.dom.getBoundingClientRect();
-  
-  // Set slash menu position
-  setSlashPosition({
-    top: domPosition.bottom - editorContainer.top,
-    left: domPosition.left - editorContainer.left,
-  });
-  
-  setShowSlashCommands(true);
-  setSlashQuery('');
-  setSelectedCommandIndex(-1);
-  setIsKeyboardNavigation(false);
-}, [editor]);
+    // Get the button element and its position
+    const buttonElement = event.currentTarget as HTMLElement;
+    const buttonRect = buttonElement.getBoundingClientRect();
+
+    // Find which line/block this button belongs to by its vertical position
+    // Get the position at the button's vertical center
+    const viewPos = editor.view.posAtCoords({
+      left: buttonRect.right + 50, // A bit to the right of the button
+      top: buttonRect.top + (buttonRect.height / 2) // Vertical center of button
+    });
+
+    if (!viewPos) return;
+
+    // Get the resolved position
+    const $pos = editor.state.doc.resolve(viewPos.pos);
+
+    // Find the start of the current line/block
+    const lineStart = $pos.start($pos.depth);
+
+    // Move cursor to the end of current line's content
+    const lineEnd = $pos.end($pos.depth);
+
+    // Set cursor to the end of the line
+    editor.chain()
+      .focus()
+      .setTextSelection(lineEnd)
+      .run();
+
+    // Store the position for slash command
+    slashStartPosRef.current = lineEnd;
+
+    // Get coordinates at the cursor position
+    const domPosition = editor.view.coordsAtPos(lineEnd);
+    const editorContainer = editor.view.dom.getBoundingClientRect();
+
+    // Set slash menu position
+    setSlashPosition({
+      top: domPosition.bottom - editorContainer.top,
+      left: domPosition.left - editorContainer.left,
+    });
+
+    setShowSlashCommands(true);
+    setSlashQuery('');
+    setSelectedCommandIndex(-1);
+    setIsKeyboardNavigation(false);
+  }, [editor]);
 
   // Handle content updates
   useEffect(() => {
@@ -315,7 +315,7 @@ export function NotionEditor({
           editor.commands.focus();
         }
       }, 100);
-      
+
       return () => clearTimeout(timer);
     }
   }, [editor]);
@@ -323,14 +323,14 @@ export function NotionEditor({
   // Handle slash commands
   useEffect(() => {
     if (!editor) return;
-    
+
     // Wait for the editor view to be available
     if (!editor.view) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // Additional safety check
       if (!editor || !editor.view) return;
-      
+
       if (event.key === '/') {
         // Only show slash commands at the start of a line or after whitespace
         const { from } = editor.state.selection;
@@ -367,27 +367,27 @@ export function NotionEditor({
         } else if (event.key === 'ArrowDown') {
           event.preventDefault();
           setIsKeyboardNavigation(true);
-          const filteredCommands = slashCommands.filter(cmd => 
+          const filteredCommands = slashCommands.filter(cmd =>
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
-          setSelectedCommandIndex(prev => 
+          setSelectedCommandIndex(prev =>
             prev < filteredCommands.length - 1 ? prev + 1 : 0
           );
         } else if (event.key === 'ArrowUp') {
           event.preventDefault();
           setIsKeyboardNavigation(true);
-          const filteredCommands = slashCommands.filter(cmd => 
+          const filteredCommands = slashCommands.filter(cmd =>
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
-          setSelectedCommandIndex(prev => 
+          setSelectedCommandIndex(prev =>
             prev > 0 ? prev - 1 : filteredCommands.length - 1
           );
         } else if (event.key === 'Enter') {
           event.preventDefault();
           event.stopPropagation();
           event.stopImmediatePropagation();
-          
-          const filteredCommands = slashCommands.filter(cmd => 
+
+          const filteredCommands = slashCommands.filter(cmd =>
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
           if (selectedCommandIndex >= 0 && filteredCommands[selectedCommandIndex]) {
@@ -397,7 +397,7 @@ export function NotionEditor({
           }
           setSelectedCommandIndex(-1);
           setIsKeyboardNavigation(false);
-          
+
           return false; // Prevent any further processing
         } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
           // Only allow alphanumeric characters for query
@@ -442,19 +442,19 @@ export function NotionEditor({
 
     // Try to set up the listener immediately
     let cleanup = setupListener();
-    
+
     // If it didn't work, retry after a short delay
     if (!cleanup) {
       const timer = setTimeout(() => {
         cleanup = setupListener();
       }, 100);
-      
+
       return () => {
         clearTimeout(timer);
         if (cleanup) cleanup();
       };
     }
-    
+
     return cleanup;
   }, [editor, showSlashCommands, slashQuery, selectedCommandIndex]);
 
@@ -477,19 +477,19 @@ export function NotionEditor({
 
     const handlePaste = async (event: ClipboardEvent) => {
       if (!event.clipboardData?.items) return;
-      
+
       for (let i = 0; i < event.clipboardData.items.length; i++) {
         const item = event.clipboardData.items[i];
-        
+
         if (item.type.indexOf('image') === 0) {
           event.preventDefault();
-          
+
           try {
             setIsUploadingImage(true);
-            
+
             const file = item.getAsFile();
             if (!file) continue;
-            
+
             const imageUrl = await uploadImage(file);
             editor.chain().focus().setImage({ src: imageUrl }).run();
           } catch (error) {
@@ -501,19 +501,19 @@ export function NotionEditor({
         }
       }
     };
-    
+
     const handleDrop = async (event: DragEvent) => {
       if (!event.dataTransfer?.files) return;
-      
+
       for (let i = 0; i < event.dataTransfer.files.length; i++) {
         const file = event.dataTransfer.files[i];
-        
+
         if (file.type.indexOf('image') === 0) {
           event.preventDefault();
-          
+
           try {
             setIsUploadingImage(true);
-            
+
             const imageUrl = await uploadImage(file);
             editor.chain().focus().setImage({ src: imageUrl }).run();
           } catch (error) {
@@ -531,12 +531,12 @@ export function NotionEditor({
     };
 
     const editorElement = editorContainerRef.current;
-    
+
     if (editorElement) {
       editorElement.addEventListener('paste', handlePaste);
       editorElement.addEventListener('drop', handleDrop);
       editorElement.addEventListener('dragover', handleDragOver);
-      
+
       return () => {
         editorElement.removeEventListener('paste', handlePaste);
         editorElement.removeEventListener('drop', handleDrop);
@@ -547,12 +547,12 @@ export function NotionEditor({
 
   const executeSlashCommand = useCallback((command: string) => {
     if (!editor) return;
-  
+
     setShowSlashCommands(false);
 
     // Save current position before any deletions
     const currentPos = editor.state.selection.from;
-  
+
     // Remove the literal "/<query>" only if it actually exists before the cursor
     if (slashQuery?.length) {
       const { from } = editor.state.selection;
@@ -562,7 +562,7 @@ export function NotionEditor({
         editor.chain().deleteRange({ from: start, to: from }).run();
       }
     }
-  
+
     // color: open palette and exit
     if (command === 'color') {
       const { from } = editor.state.selection;
@@ -572,10 +572,10 @@ export function NotionEditor({
       setSlashQuery('');
       return;
     }
-  
+
     // Apply command at current selection
     const chain = editor.chain();
-  
+
     switch (command) {
       case 'paragraph':
         chain.setParagraph().run();
@@ -636,14 +636,14 @@ export function NotionEditor({
     { title: 'Divider', icon: Minus, command: 'horizontalRule' },
   ];
 
-  const filteredCommands = slashCommands.filter(cmd => 
+  const filteredCommands = slashCommands.filter(cmd =>
     cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
   );
 
   return (
     <div className={cn("flex flex-col rounded-md p-0", className)}>
-      <div 
-        className="flex-1 relative" 
+      <div
+        className="flex-1 relative"
         ref={editorContainerRef}
         onClick={() => {
           if (editor) {
@@ -663,23 +663,23 @@ export function NotionEditor({
             </button>
             <div className="drag-handle-dots ml-1" data-drag-handle>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                <circle cx="9" cy="6" r="1.5"/>
-                <circle cx="15" cy="6" r="1.5"/>
-                <circle cx="9" cy="12" r="1.5"/>
-                <circle cx="15" cy="12" r="1.5"/>
-                <circle cx="9" cy="18" r="1.5"/>
-                <circle cx="15" cy="18" r="1.5"/>
+                <circle cx="9" cy="6" r="1.5" />
+                <circle cx="15" cy="6" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" />
+                <circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="18" r="1.5" />
+                <circle cx="15" cy="18" r="1.5" />
               </svg>
             </div>
           </div>
         </DragHandle>
-        <EditorContent 
-          editor={editor} 
+        <EditorContent
+          editor={editor}
           className={cn("w-full", {
             "has-slash-menu": showSlashCommands
-          })} 
+          })}
         />
-        
+
         {/* Overlay when uploading */}
         {isUploadingImage && (
           <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
@@ -689,11 +689,11 @@ export function NotionEditor({
             </div>
           </div>
         )}
-        
+
         {/* Slash commands popup */}
         {showSlashCommands && (
-          <div 
-            style={{ 
+          <div
+            style={{
               position: "absolute",
               top: `${slashPosition.top}px`,
               left: `${slashPosition.left}px`,
@@ -710,11 +710,10 @@ export function NotionEditor({
                   onClick={() => executeSlashCommand(cmd.command)}
                   onMouseEnter={() => setIsKeyboardNavigation(false)}
                   onMouseDown={(e) => e.preventDefault()}
-                  className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${
-                    selectedCommandIndex === index && isKeyboardNavigation
+                  className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${selectedCommandIndex === index && isKeyboardNavigation
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-muted'
-                  }`}
+                    }`}
                   data-command-index={index}
                 >
                   <cmd.icon size={16} className="text-muted-foreground" />
@@ -955,8 +954,34 @@ export function NotionEditor({
         }
 
         /* Heading placeholders */
-        .notion-editor .ProseMirror h1.is-empty::before,
-        .notion-editor .ProseMirror h2.is-empty::before,
+        .notion-editor .ProseMirror h1.is-empty::before {
+          content: attr(data-placeholder);
+          position: absolute;
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: normal;
+          font-weight: normal;
+          font-size: 1.875rem !important;
+          pointer-events: none;
+          user-select: none;
+          top: 0;
+          left: 0;
+        }
+
+        .notion-editor .ProseMirror h2.is-empty::before {
+          content: attr(data-placeholder);
+          position: absolute;
+          color: #9ca3af;
+          opacity: 0.6;
+          font-style: normal;
+          font-weight: normal;
+          font-size: 1.5rem !important;
+          pointer-events: none;
+          user-select: none;
+          top: 0;
+          left: 0;
+        }
+
         .notion-editor .ProseMirror h3.is-empty::before {
           content: attr(data-placeholder);
           position: absolute;
@@ -964,7 +989,7 @@ export function NotionEditor({
           opacity: 0.6;
           font-style: normal;
           font-weight: normal;
-          font-size: 14px !important;
+          font-size: 1.25rem !important;
           pointer-events: none;
           user-select: none;
           top: 0;
@@ -1046,11 +1071,11 @@ export function NotionEditor({
           }
         }
       `}</style>
-      
+
       {/* Color Palette Fixed */}
       {showColorPalette && (
-        <div 
-          style={{ 
+        <div
+          style={{
             position: "fixed",
             top: `${colorPalettePosition.top}px`,
             left: `${colorPalettePosition.left}px`,
