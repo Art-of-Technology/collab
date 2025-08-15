@@ -136,11 +136,11 @@ export default function TasksHeader() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
-        <div className="flex items-center gap-4 w-full md:w-auto">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <TaskBoardSelector />
 
-          <div className="hidden md:flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm">
+          <div className="inline-flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm">
             <ViewButton
               icon={<Kanban size={16} />}
               label="Kanban"
@@ -164,7 +164,7 @@ export default function TasksHeader() {
 
         {/* Board Follow Button - only show when a board is selected */}
         {selectedBoardId && (
-          <div className="flex items-center">
+          <div className="flex justify-start lg:justify-end">
             <BoardFollowButton
               boardId={selectedBoardId}
               showFollowerCount={false}
@@ -225,7 +225,7 @@ function ViewButton({ icon, label, isActive, onClick }: ViewButtonProps) {
   return (
     <button
       className={cn(
-        "relative flex items-center gap-2 px-3 py-2 rounded-md transition-all font-medium text-sm",
+        "relative flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-md transition-all font-medium text-sm",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         isActive ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
       )}
@@ -243,7 +243,7 @@ function ViewButton({ icon, label, isActive, onClick }: ViewButtonProps) {
       )}
       <span className="relative flex items-center gap-2 z-10">
         {icon}
-        <span className="hidden sm:inline">{label}</span>
+        <span className="hidden lg:inline">{label}</span>
       </span>
     </button>
   );

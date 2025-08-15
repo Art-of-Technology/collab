@@ -478,7 +478,7 @@ export default function KanbanView() {
             <Droppable droppableId="columns" direction="horizontal" type="column">
               {(provided) => (
                 <div
-                  className="grid grid-flow-col overflow-auto w-full auto-cols-[300px] gap-4 pb-4"
+                  className="grid grid-flow-col overflow-auto w-full auto-cols-[260px] sm:auto-cols-[300px] gap-3 sm:gap-4 pb-4"
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                 >

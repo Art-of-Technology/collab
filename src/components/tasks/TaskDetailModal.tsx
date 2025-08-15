@@ -57,11 +57,11 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[90vw] md:max-w-[80vw] lg:max-w-[70vw] h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[95vw] md:max-w-[85vw] lg:max-w-[70vw] h-[95vh] sm:h-[90vh] overflow-hidden flex flex-col p-3 sm:p-6">
         <DialogHeader className="sticky top-0 z-10 bg-background pb-2 flex-shrink-0">
           <DialogTitle className="sr-only">Task Details</DialogTitle>
-          <div className="absolute right-4 top-4 flex items-center gap-2">
-            <Button size="sm" variant="ghost" asChild>
+          <div className="absolute right-0 top-0 flex items-center gap-1 sm:gap-2">
+            <Button size="sm" variant="ghost" asChild className="h-8 px-2 sm:px-3">
               <Link
                 href={
                   currentWorkspace?.slug && taskIssueKey
@@ -74,7 +74,7 @@ export default function TaskDetailModal({ taskId, onClose }: TaskDetailModalProp
                 className="flex items-center gap-1"
               >
                 <ExternalLink className="h-4 w-4" />
-                <span>View Full</span>
+                <span className="hidden sm:inline">View Full</span>
               </Link>
             </Button>
             <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">

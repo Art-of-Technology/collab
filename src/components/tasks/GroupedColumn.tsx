@@ -207,9 +207,9 @@ export default function GroupedColumn({
 
   return (
     <Card className="border-t-4" style={{ borderTopColor: columnColor || undefined }}>
-      <CardHeader className="px-3 py-2" {...(canManageBoard ? dragHandleProps : {})}>
+      <CardHeader className="px-2 sm:px-3 py-1.5 sm:py-2" {...(canManageBoard ? dragHandleProps : {})}>
         <div className="flex justify-between items-center">
-          <CardTitle className="text-sm font-medium flex items-center justify-between w-full">
+          <CardTitle className="text-xs sm:text-sm font-medium flex items-center justify-between w-full">
             <div className="flex items-center gap-2">
               <span>{columnName}</span>
               <span className="text-xs font-normal text-muted-foreground">
@@ -231,7 +231,7 @@ export default function GroupedColumn({
         </div>
       </CardHeader>
 
-      <CardContent className="px-2 pb-2 space-y-2">
+      <CardContent className="px-1.5 sm:px-2 pb-2 space-y-1.5 sm:space-y-2">
         {groups.map((group, groupIndex) => (
           <div key={group.id} className="mb-2">
             {groupBy !== 'none' && (
