@@ -1072,16 +1072,18 @@ export function NotionEditor({
         }
       `}</style>
 
-      {/* Color Palette Fixed */}
+            {/* Color Palette Fixed */}
       {showColorPalette && (
         <div
-          style={{
+          style={{ 
             position: "fixed",
             top: `${colorPalettePosition.top}px`,
             left: `${colorPalettePosition.left}px`,
             zIndex: 9999,
+            border: "1px solid #4b5563",
+            outline: "none"
           }}
-          className="bg-neutral-800 border rounded-lg shadow-lg p-4 w-[320px]"
+          className="bg-neutral-800 rounded-lg shadow-lg p-4 w-[320px]"
           onMouseDown={(e) => e.preventDefault()}
         >
           <InlineColorPalette
