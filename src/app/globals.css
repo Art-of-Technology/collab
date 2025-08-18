@@ -20,14 +20,14 @@
 
 /* Dark theme variables */
 .dark-theme {
-  --background: #1c1c1c;
+  --background: #101011;
   --foreground: #ededed;
   --primary: #22c55e;
-  --card-bg: #1c1c1c;
+  --card-bg: #101011;
   --card-border: #333333;
-  --navbar-bg: #0a0a0a;
-  --sidebar-bg: #1a1a1a;
-  --hover-bg: #1c1c1c;
+  --navbar-bg: #090909;
+  --sidebar-bg: #090909;
+  --hover-bg: #1a1a1a;
   --text-primary: #ffffff;
   --text-secondary: #a0aec0;
   --text-muted: #718096;
@@ -95,22 +95,22 @@
   }
   
   .dark {
-    --background: 0 0% 11%;  /* #1c1c1c */
+    --background: 0 0% 6.3%;  /* #101011 - Linear page background */
     --foreground: 0 0% 95%;  /* #f2f2f2 */
     
-    --card: 0 0% 11%;  /* #1c1c1c */
+    --card: 0 0% 6.3%;  /* #101011 */
     --card-foreground: 0 0% 95%;  /* #f2f2f2 */
     
-    --popover: 0 0% 11%;  /* #1c1c1c */
+    --popover: 0 0% 3.5%;  /* #090909 */
     --popover-foreground: 0 0% 95%;  /* #f2f2f2 */
     
     --primary: 142 71% 45%;  /* #22c55e (green) */
     --primary-foreground: 0 0% 100%;  /* #ffffff */
     
-    --secondary: 0 0% 11%;  /* #1c1c1c */
+    --secondary: 0 0% 3.5%;  /* #090909 */
     --secondary-foreground: 0 0% 90%;  /* #e6e6e6 */
     
-    --muted: 0 0% 11%;  /* #1c1c1c */
+    --muted: 0 0% 3.5%;  /* #090909 */
     --muted-foreground: 0 0% 65%;  /* #a6a6a6 */
     
     --accent: 142 71% 45%;  /* #22c55e with 10% opacity */
@@ -119,8 +119,8 @@
     --destructive: 0 84% 60%;  /* #f04444 */
     --destructive-foreground: 0 0% 100%;  /* #ffffff */
     
-    --border: 0 0% 18%;  /* #2e2e2e */
-    --input: 0 0% 18%;  /* #2e2e2e */
+    --border: 0 0% 12%;  /* #1f1f1f - lighter border for Linear style */
+    --input: 0 0% 12%;  /* #1f1f1f */
     --ring: 142 71% 45%;  /* #22c55e (green) */
     
     --chart-1: 142 71% 45%;  /* #22c55e */
@@ -135,8 +135,16 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
   }
 }
 
@@ -146,13 +154,13 @@
   .card, 
   .dropdown-content,
   .dialog-content {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
   }
   
   /* Make cards stand out slightly from background */
   .card {
-    background-color: #1c1c1c;
-    border-color: #2a2929;
+    background-color: #101011;
+    border-color: #1f1f1f;
   }
   
   /* Add subtle hover effects */
@@ -161,7 +169,7 @@
   }
   
   .hover-effect:hover {
-    background-color: #1c1c1c;
+    background-color: #1a1a1a;
     transform: translateY(-1px);
   }
   
@@ -185,7 +193,7 @@
   
   /* Add subtle gradient to backgrounds for more visual interest */
   .gradient-subtle {
-    background-image: linear-gradient(to bottom, #1c1c1c, #181818);
+    background-image: linear-gradient(to bottom, #101011, #0a0a0a);
   }
   
   /* Add border glow effect for selected items */
@@ -194,6 +202,12 @@
     box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
   }
   
+  /* Improve navbar with subtle border */
+  nav {
+    border-bottom: 1px solid #1f1f1f;
+    background-color: #090909;
+    backdrop-filter: blur(10px);
+  }
 }
 
 /* Hide scrollbars but keep functionality */
@@ -376,6 +390,93 @@ textarea::selection {
   font-weight: 600;
 }
 
+/* Kanban View Scrollbar Styles */
+.kanban-horizontal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 #1f1f1f;
+}
+
+.kanban-horizontal-scroll::-webkit-scrollbar {
+  height: 8px;
+  display: block;
+}
+
+.kanban-horizontal-scroll::-webkit-scrollbar-track {
+  background: #1f1f1f;
+  border-radius: 4px;
+}
+
+.kanban-horizontal-scroll::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 4px;
+  border: 1px solid #1f1f1f;
+}
+
+.kanban-horizontal-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #4b5563;
+}
+
+/* Kanban Column Scroll - Completely hidden scrollbars */
+.kanban-column-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.kanban-column-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Line clamp utility for issue cards */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Enhanced badge styling for Linear-like appearance */
+.kanban-badge {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  text-transform: none;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.15s ease;
+}
+
+.kanban-badge:hover {
+  transform: translateY(-0.5px);
+  filter: brightness(1.1);
+}
+
+/* Linear Dock Styles */
+.shadow-3xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Enhanced backdrop blur support */
+@supports (backdrop-filter: blur(20px)) {
+  .linear-dock-blur {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+@supports not (backdrop-filter: blur(20px)) {
+  .linear-dock-blur {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* Smooth dock animations */
+.linear-dock-item {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tag dialog content styles */
 .tag-dialog-content {
   @apply max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2;
 }

@@ -28,11 +28,11 @@ export function BoardGenerationProvider({ workspaceId, children }: { workspaceId
     }
   };
 
-  useEffect(() => {
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 2000); // Sync with other contexts
-    return () => clearInterval(interval);
-  }, [workspaceId]);
+  // useEffect(() => {
+  //   fetchJobs();
+  //   const interval = setInterval(fetchJobs, 2000); // Sync with other contexts
+  //   return () => clearInterval(interval);
+  // }, [workspaceId]);
 
   return (
     <BoardGenerationContext.Provider value={{ jobs, refreshJobs: fetchJobs }}>

@@ -40,25 +40,21 @@ export default async function TimelinePage({
   const typeFilter = filter && filterMap[filter] ? filterMap[filter] as any : undefined;
   
   // Fetch initial posts using the server action
-  const initialPosts = await getPosts({
+  const initialPostsData = await getPosts({
     type: typeFilter,
     tag: tag,
     workspaceId,
-    limit: 20
+    limit: 10
   });
+  
+  // Handle both old and new response formats
+  const initialPosts = Array.isArray(initialPostsData) 
+    ? initialPostsData 
+    : initialPostsData.posts || [];
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 overflow-x-hidden">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Timeline</h1>
-        <p className="text-muted-foreground">
-          Latest updates from your team
-        </p>
-      </div>
-      
-      <TimelineClient 
-        initialPosts={initialPosts} 
-        currentUserId={user?.id || ''} 
-      />
-    </div>
+    <TimelineClient 
+      initialPosts={initialPosts} 
+      currentUserId={user?.id || ''} 
+    />
   );
 } 

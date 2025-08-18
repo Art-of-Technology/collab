@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from "@/lib/session";
+import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
 // GET /api/workspaces/[workspaceId]/members - Get all members of a workspace
 export async function GET(
@@ -15,7 +16,13 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const workspaceId = _params.workspaceId;
+    const workspaceSlugOrId = _params.workspaceId;
+
+    // Resolve workspace slug/ID to actual workspace ID
+    const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+    if (!workspaceId) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+    }
 
     // Check if user has access to the workspace (member or owner)
     const [isMember, isOwner] = await Promise.all([

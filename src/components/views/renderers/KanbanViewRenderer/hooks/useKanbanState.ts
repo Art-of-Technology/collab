@@ -1,0 +1,378 @@
+"use client";
+
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { DropResult } from "@hello-pangea/dnd";
+import { createColumns, countIssuesByType } from '../utils';
+import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
+import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
+import { useUpdateIssue, useCreateIssue, issueKeys } from '@/hooks/queries/useIssues';
+import { useQueryClient } from '@tanstack/react-query';
+import type { 
+  KanbanViewRendererProps 
+} from '../types';
+
+export const useKanbanState = ({
+  view,
+  issues,
+  workspace,
+  onIssueUpdate,
+  onColumnUpdate,
+  onCreateIssue
+}: KanbanViewRendererProps) => {
+  const { toast } = useToast();
+  const isDraggingRef = useRef(false);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const updateIssueMutation = useUpdateIssue();
+  const createIssueMutation = useCreateIssue();
+  
+  // State management with optimistic updates
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
+  const [newIssueTitle, setNewIssueTitle] = useState('');
+  const [showSubIssues, setShowSubIssues] = useState(true);
+  
+  // Local state for immediate UI updates during drag & drop
+  const [localIssues, setLocalIssues] = useState(issues);
+  
+  // Update local issues when props change (from server)
+  useEffect(() => {
+    setLocalIssues(issues);
+  }, [issues]);
+  
+  const filteredIssues = localIssues;
+
+  // Get project IDs from the view configuration
+  const projectIds = useMemo(() => {
+    return view.projectIds || view.projects?.map((p: any) => p.id) || [];
+  }, [view.projectIds, view.projects]);
+
+  // Fetch project statuses for the projects in this view
+  const { data: projectStatusData, isLoading: isLoadingStatuses } = useMultipleProjectStatuses(
+    projectIds,
+    view.grouping?.field === 'status'
+  );
+
+  // Group issues by the specified field (default to status)
+  const columns = useMemo(() => {
+    const projectStatuses = projectStatusData?.statuses || [];
+    return createColumns(filteredIssues, view, projectStatuses);
+  }, [filteredIssues, view, projectStatusData]);
+
+  // Count issues for filter buttons
+  const issueCounts = useMemo(() => {
+    return countIssuesByType(issues);
+  }, [issues]);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+  }, []);
+
+  const handleDragEnd = useCallback(async (result: DropResult) => {
+    const { destination, source, draggableId, type } = result;
+
+    if (!destination) {
+      isDraggingRef.current = false;
+      return;
+    }
+    
+    if (destination.droppableId === source.droppableId && destination.index === source.index) {
+      isDraggingRef.current = false;
+      return;
+    }
+
+    if (type === 'column') {
+      // Handle column reordering
+      const newColumns = Array.from(columns);
+      const [reorderedColumn] = newColumns.splice(source.index, 1);
+      newColumns.splice(destination.index, 0, reorderedColumn);
+      
+      // Update column orders
+      const updatedColumns = newColumns.map((col, index) => ({
+        ...col,
+        order: index
+      }));
+      
+      if (onColumnUpdate) {
+        updatedColumns.forEach(col => {
+          onColumnUpdate(col.id, { order: col.order });
+        });
+      }
+      
+      isDraggingRef.current = false;
+      return;
+    }
+
+    if (type === 'issue') {
+      const issueToMove = localIssues.find((issue: any) => issue.id === draggableId);
+      if (!issueToMove) {
+        isDraggingRef.current = false;
+        return;
+      }
+
+      // 1. IMMEDIATE UI UPDATE - Update local issues array directly
+      const isSameColumn = source.droppableId === destination.droppableId;
+      const newLocalIssues = [...localIssues];
+      const issueIndex = newLocalIssues.findIndex((issue: any) => issue.id === draggableId);
+      
+      if (issueIndex !== -1) {
+        const updatedIssue = { ...newLocalIssues[issueIndex] };
+        
+        // Calculate new position based on drop location
+        const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
+        const targetColumn = columns.find(col => col.id === targetColumnId);
+        
+        if (targetColumn) {
+          // Get issues in target column (excluding the dragged issue)
+          const targetColumnIssues = targetColumn.issues.filter((issue: any) => issue.id !== draggableId);
+          
+          let newPosition: number;
+          
+          if (destination.index === 0) {
+            // Dropping at top - get position before first item
+            const firstIssue = targetColumnIssues[0];
+            // Prioritize viewPosition (from ViewIssuePosition table)
+            const firstPosition = firstIssue?.viewPosition ?? firstIssue?.position ?? 1000;
+            newPosition = Math.max(firstPosition - 1000, 100);
+          } else if (destination.index >= targetColumnIssues.length) {
+            // Dropping at bottom - get position after last item
+            const lastIssue = targetColumnIssues[targetColumnIssues.length - 1];
+            // Prioritize viewPosition (from ViewIssuePosition table)
+            const lastPosition = lastIssue?.viewPosition ?? lastIssue?.position ?? 1000;
+            newPosition = lastPosition + 1000;
+          } else {
+            // Dropping between items - calculate middle position
+            const prevIssue = targetColumnIssues[destination.index - 1];
+            const nextIssue = targetColumnIssues[destination.index];
+            // Prioritize viewPosition (from ViewIssuePosition table)
+            const prevPosition = prevIssue?.viewPosition ?? prevIssue?.position ?? 0;
+            const nextPosition = nextIssue?.viewPosition ?? nextIssue?.position ?? (prevPosition + 2000);
+            newPosition = prevPosition + ((nextPosition - prevPosition) / 2);
+          }
+          
+          // Update issue position
+          updatedIssue.position = newPosition;
+          updatedIssue.viewPosition = newPosition; // Keep for UI consistency
+          
+          // Update status if moving between columns
+          if (!isSameColumn) {
+            updatedIssue.status = targetColumnId;
+            updatedIssue.statusValue = targetColumnId;
+            
+            // Also update projectStatus if available
+            if (targetColumn.name) {
+              updatedIssue.projectStatus = {
+                ...updatedIssue.projectStatus,
+                name: targetColumnId,
+                displayName: targetColumn.name
+              };
+            }
+          }
+        }
+        
+        newLocalIssues[issueIndex] = updatedIssue;
+        
+        // Update local state immediately - this updates the UI instantly
+        setLocalIssues(newLocalIssues);
+      }
+      
+      // 2. BACKGROUND API CALL - Update database with TanStack Query
+      try {
+        // Get the updated issue from local state
+        const updatedIssue = newLocalIssues[issueIndex];
+        
+        // Prepare update data - only update status if moving between columns
+        let needsIssueUpdate = false;
+        const updateData: any = { id: draggableId };
+        
+        // Add status fields if moving between columns
+        if (!isSameColumn) {
+          updateData.status = updatedIssue.status;
+          updateData.statusValue = updatedIssue.statusValue;
+          needsIssueUpdate = true;
+        }
+        
+        // Send the update request only if we need to update the Issue table
+        if (needsIssueUpdate) {
+          await updateIssueMutation.mutateAsync(updateData);
+        }
+        
+        // ALWAYS update view-specific position for any drag & drop operation
+        if (view.id) {
+          const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
+          const positionResponse = await fetch(`/api/views/${view.id}/issue-positions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              issueId: draggableId,
+              columnId: targetColumnId,
+              position: updatedIssue.viewPosition
+            })
+          });
+          
+          if (!positionResponse.ok) {
+            const errorText = await positionResponse.text();
+            throw new Error(`ViewPosition update failed: ${errorText}`);
+          }
+        }
+        // Invalidate TanStack Query cache to refresh from server
+        queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(workspace.id) });
+        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
+        
+        toast({
+          title: isSameColumn ? "Issue reordered" : "Issue moved",
+          description: isSameColumn 
+            ? `${issueToMove.title} position updated`
+            : `${issueToMove.title} moved to ${columns.find(col => col.id === destination.droppableId)?.name}`
+        });
+        
+      } catch (error) {
+        // ERROR HANDLING: Revert to server state
+        console.error('Failed to update issue:', error);
+        
+        // Invalidate cache to revert to server state
+        queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(workspace.id) });
+        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
+        
+        toast({
+          title: "Error",
+          description: "Failed to move issue. Please try again.",
+          variant: "destructive"
+        });
+      }
+    }
+    
+    isDraggingRef.current = false;
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, toast, view.id, queryClient, workspace.id]);
+
+  // Issue handlers
+  const handleIssueClick = useCallback((issueIdOrKey: string) => {
+    // Navigate directly to the issue page (Linear-style)
+    // Use workspace slug if available, else id; fallback to issue's workspaceId
+    const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
+    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
+    
+    // Build URL with view context for proper back navigation
+    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
+    
+    if (workspaceSegment) {
+      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
+    } else {
+      router.push(`/issues/${issueIdOrKey}${viewParams}`);
+    }
+  }, [issues, router, view, workspace]);
+
+  const handleCreateIssue = useCallback(async (columnId: string) => {
+    if (!newIssueTitle.trim()) return;
+    
+    const column = columns.find(col => col.id === columnId);
+    if (!column) return;
+    
+    const issueData = {
+      title: newIssueTitle,
+      status: column.id,  // Use internal name, not display name
+      statusValue: column.id,
+      type: 'TASK'
+    };
+    
+    if (onCreateIssue) {
+      await onCreateIssue(columnId, issueData);
+    }
+    
+    setNewIssueTitle('');
+    setIsCreatingIssue(null);
+    
+    toast({
+      title: "Issue created",
+      description: `${newIssueTitle} created in ${column.name}`
+    });
+  }, [newIssueTitle, columns, onCreateIssue, toast]);
+
+  // Column handlers
+  const handleColumnEdit = useCallback((columnId: string, name: string) => {
+    if (onColumnUpdate) {
+      onColumnUpdate(columnId, { name });
+    }
+    setEditingColumnId(null);
+    setNewColumnName('');
+  }, [onColumnUpdate]);
+
+  // Sub-issues toggle handler
+  const handleToggleSubIssues = useCallback(() => {
+    setShowSubIssues(prev => !prev);
+  }, []);
+
+  // Display properties
+  const displayProperties = view.fields || DEFAULT_DISPLAY_PROPERTIES;
+
+  // Event handlers for UI interactions
+  const handleStartCreatingIssue = useCallback((columnId: string) => {
+    setIsCreatingIssue(columnId);
+  }, []);
+
+  const handleCancelCreatingIssue = useCallback(() => {
+    setIsCreatingIssue(null);
+    setNewIssueTitle('');
+  }, []);
+
+  const handleIssueKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && isCreatingIssue) {
+      handleCreateIssue(isCreatingIssue);
+    } else if (e.key === 'Escape') {
+      handleCancelCreatingIssue();
+    }
+  }, [isCreatingIssue, handleCreateIssue, handleCancelCreatingIssue]);
+
+  const handleStartEditingColumn = useCallback((columnId: string, name: string) => {
+    setEditingColumnId(columnId);
+    setNewColumnName(name);
+  }, []);
+
+  const handleCancelEditingColumn = useCallback(() => {
+    setEditingColumnId(null);
+    setNewColumnName('');
+  }, []);
+
+  const handleColumnKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && editingColumnId) {
+      handleColumnEdit(editingColumnId, newColumnName);
+    } else if (e.key === 'Escape') {
+      handleCancelEditingColumn();
+    }
+  }, [editingColumnId, newColumnName, handleColumnEdit, handleCancelEditingColumn]);
+
+  return {
+    // State
+    editingColumnId,
+    newColumnName,
+    setNewColumnName,
+    isCreatingIssue,
+    newIssueTitle,
+    setNewIssueTitle,
+    
+    // Computed values
+    filteredIssues,
+    columns,
+    issueCounts,
+    displayProperties,
+    showSubIssues,
+    
+    // Handlers
+    handleDragStart,
+    handleDragEnd,
+    handleIssueClick,
+    handleCreateIssue,
+    handleColumnEdit,
+    handleToggleSubIssues,
+    handleStartCreatingIssue,
+    handleCancelCreatingIssue,
+    handleIssueKeyDown,
+    handleStartEditingColumn,
+    handleCancelEditingColumn,
+    handleColumnKeyDown
+  };
+};

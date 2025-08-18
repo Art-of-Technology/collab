@@ -17,13 +17,15 @@ export async function getPosts({
   tag,
   authorId,
   workspaceId,
-  limit = 20
+  limit = 20,
+  cursor
 }: {
   type?: PostType;
   tag?: string;
   authorId?: string;
   workspaceId?: string;
   limit?: number;
+  cursor?: string;
 }) {
   const session = await getServerSession(authOptions);
 
@@ -80,15 +82,24 @@ export async function getPosts({
       } 
     : {};
   
+  // Add cursor-based pagination
+  const cursorCondition = cursor ? {
+    id: {
+      lt: cursor
+    }
+  } : {};
+
   // Get the posts
   const posts = await prisma.post.findMany({
     where: {
       ...query,
       ...tagFilter,
+      ...cursorCondition,
     },
     orderBy: [
       { isPinned: "desc" }, // Pinned posts first
       { createdAt: "desc" }, // Then by creation date
+      { id: "desc" }, // Then by ID for consistent ordering
     ],
     include: {
       author: {
@@ -136,15 +147,23 @@ export async function getPosts({
         }
       }
     },
-    take: limit,
+    take: limit + 1, // Take one extra to check if there are more
   });
 
-  const postsWithFollowers = posts.map(post => ({
+  // Check if there are more posts
+  const hasMore = posts.length > limit;
+  const actualPosts = hasMore ? posts.slice(0, limit) : posts;
+  
+  const postsWithFollowers = actualPosts.map(post => ({
     ...post,
     isFollowing: post.followers.some(follower => follower.userId === session.user.id),
   }));
 
-  return postsWithFollowers;
+  return {
+    posts: postsWithFollowers,
+    hasMore,
+    nextCursor: actualPosts.length > 0 ? actualPosts[actualPosts.length - 1].id : null
+  };
 }
 
 /**

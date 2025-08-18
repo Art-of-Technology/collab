@@ -2,16 +2,25 @@
 
 import { useState } from "react";
 import PostItem from "@/components/posts/PostItem";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { PrismaPost } from "./types";
 
 interface PostListProps {
   posts: PrismaPost[];
   currentUserId: string;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
 }
 
-export default function PostList({ posts, currentUserId }: PostListProps) {
+export default function PostList({ 
+  posts, 
+  currentUserId, 
+  hasNextPage, 
+  isFetchingNextPage, 
+  onLoadMore 
+}: PostListProps) {
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
 
   const toggleExpand = (postId: string) => {
@@ -20,17 +29,15 @@ export default function PostList({ posts, currentUserId }: PostListProps) {
 
   if (posts.length === 0) {
     return (
-      <Card className="p-8 text-center">
-        <CardContent className="text-muted-foreground">
-          <p>No posts found. Be the first to share an update!</p>
-        </CardContent>
-      </Card>
+      <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-8 text-center">
+        <p className="text-[#8b949e]">No posts found. Be the first to share an update!</p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {posts.map((post) => (
+    <div className="space-y-3">
+      {posts.map((post, index) => (
         <div key={post.id}>
           <PostItem
             post={post}
@@ -38,9 +45,29 @@ export default function PostList({ posts, currentUserId }: PostListProps) {
             toggleExpand={toggleExpand}
             currentUserId={currentUserId}
           />
-          {post !== posts[posts.length - 1] && <Separator className="my-4" />}
         </div>
       ))}
+      
+      {/* Load More Button */}
+      {hasNextPage && (
+        <div className="flex justify-center pt-6">
+          <Button
+            variant="outline"
+            onClick={onLoadMore}
+            disabled={isFetchingNextPage}
+            className="bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] hover:bg-[#131313] hover:border-[#333] transition-all duration-200"
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Loading more posts...
+              </>
+            ) : (
+              'Load more posts'
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 } 

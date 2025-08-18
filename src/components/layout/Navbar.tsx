@@ -42,7 +42,6 @@ import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUiContext } from "@/context/UiContext";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { useMention } from "@/context/MentionContext";
-import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { formatDistanceToNow } from "date-fns";
 import { CollabText } from "@/components/ui/collab-text";
@@ -218,43 +217,52 @@ export default function Navbar({
   const displayEmail = userEmail || session?.user?.email || '';
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#191919] border-b border-[#2a2929] h-16 shadow-md">
-      <div className="h-full px-2 md:px-4 flex items-center justify-between">
-        {/* Left section: Mobile menu + search on mobile, Logo on desktop */}
-        <div className="flex items-center gap-0">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#090909] border-b border-[#1f1f1f] h-16 shadow-sm">
+      <div className="h-full px-3 md:px-6 flex items-center justify-between">
+        {/* Left section: Mobile menu + Logo */}
+        <div className="flex items-center gap-3">
           {/* Mobile menu toggle button - only on mobile */}
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden text-gray-400 hover:bg-[#1c1c1c]"
+            className="md:hidden text-gray-400 hover:bg-[#1f1f1f] hover:text-white h-8 w-8"
             onClick={toggleSidebar}
           >
             <Bars3Icon className="h-5 w-5" />
           </Button>
 
-          {/* Mobile search dialog - only on mobile */}
+          {/* Logo */}
+          <Link href="/" className="flex items-center">
+            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
+          </Link>
+        </div>
+
+        {/* Center section: Search */}
+        <div className="flex-1 flex items-center justify-center px-4">
           {shouldShowSearch && (
+            <>
+              {/* Mobile search button */}
             <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
               <DialogTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden hover:bg-[#1c1c1c] text-gray-400 -ml-1"
+                  className="md:hidden hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
                 >
-                  <MagnifyingGlassIcon className="h-5 w-5" />
+                    <MagnifyingGlassIcon className="h-4 w-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-gray-700">
+                <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
                 <DialogHeader>
                   <DialogTitle className="text-white">Search</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSearch} className="mt-2">
                   <div className="relative">
-                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                      <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
                       type="search"
                       placeholder="Search..."
-                      className="pl-9 pr-4 py-2 bg-[#252525] border-gray-700 text-white text-sm rounded-md w-full"
+                        className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       autoFocus
@@ -262,60 +270,35 @@ export default function Navbar({
                   </div>
                   <Button
                     type="submit"
-                    className="mt-3 w-full bg-blue-600 hover:bg-blue-700"
+                      className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
                   >
                     Search
                   </Button>
                 </form>
               </DialogContent>
             </Dialog>
-          )}
 
-          {/* Desktop Logo - only visible on desktop */}
-          <div className="hidden md:flex items-center space-x-4">
-            <Link href="/" className="flex items-center">
-              <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-8 w-auto" />
-            </Link>
-
-            {/* Workspace selector in desktop - next to logo */}
-            {hasWorkspaces && (
-              <div className="flex items-center">
-                <WorkspaceSelector />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Center section: Logo - only on mobile */}
-        <div className="md:hidden absolute left-1/2 transform -translate-x-1/2 flex items-center justify-center">
-          <Link href="/" className="flex items-center">
-            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-8 w-auto" />
-          </Link>
-        </div>
-
-        {/* Middle section for desktop: Search */}
-        <div className="hidden md:flex flex-1 items-center justify-center space-x-4 px-4">
           {/* Desktop search */}
-          {shouldShowSearch && (
-            <div className="w-full max-w-lg">
+              <div className="hidden md:block w-full max-w-md">
               <form onSubmit={handleSearch} className="relative">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
                 </div>
                 <Input
                   type="search"
-                  placeholder="Search posts, people, or tags"
-                  className="pl-9 bg-[#1c1c1c] border-[#2a2929] text-gray-200 focus:border-gray-500"
+                    placeholder="Search..."
+                    className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500 h-9"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </form>
             </div>
+            </>
           )}
         </div>
 
         {/* Right section: Notifications, chat, profile */}
-        <div className="flex items-center gap-0">
+        <div className="flex items-center gap-1">
           {session ? (
             <>
               {hasWorkspaces && (
@@ -329,17 +312,17 @@ export default function Navbar({
                         className="relative hover:bg-[#1c1c1c] text-gray-400"
                         onClick={() => refetchNotifications()}
                       >
-                        <BellIcon className="h-5 w-5" />
+                    <BellIcon className="h-4 w-4" />
                         {unreadCount > 0 && (
-                          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
                             {unreadCount > 9 ? '9+' : unreadCount}
                           </span>
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 p-0" align="end" alignOffset={-5} forceMount>
-                      <div className="flex items-center justify-between p-3 border-b border-border/40">
-                        <h3 className="font-medium">Notifications</h3>
+                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
+                  <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
+                    <h3 className="font-medium text-white">Notifications</h3>
                         {unreadCount > 0 && (
                           <Button
                             variant="ghost"
@@ -354,11 +337,11 @@ export default function Navbar({
 
                       <ScrollArea className="h-80">
                         {notificationsLoading ? (
-                          <div className="p-4 text-center text-muted-foreground text-sm">
+                      <div className="p-4 text-center text-gray-400 text-sm">
                             Loading notifications...
                           </div>
                         ) : notifications.length === 0 ? (
-                          <div className="p-4 text-center text-muted-foreground text-sm">
+                      <div className="p-4 text-center text-gray-400 text-sm">
                             No notifications yet
                           </div>
                         ) : (
@@ -370,7 +353,7 @@ export default function Navbar({
                               return (
                                 <div
                                   key={notification.id}
-                                  className={`flex items-start gap-3 p-3 hover:bg-muted/40 cursor-pointer border-b border-border/20 ${!notification.read ? 'bg-primary/5' : ''}`}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? 'bg-[#22c55e]/5' : ''}`}
                                   onClick={() => handleNotificationClick(notification.id, url)}
                                 >
                                   {/* Sender Avatar */}
@@ -382,7 +365,7 @@ export default function Navbar({
                                         src={notification.sender.image || undefined}
                                         alt={notification.sender.name || "User"}
                                       />
-                                      <AvatarFallback>
+                                  <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
                                         {getInitials(notification.sender.name || "U")}
                                       </AvatarFallback>
                                     </Avatar>
@@ -391,9 +374,9 @@ export default function Navbar({
                                   {/* Notification Content */}
                                   <div className="flex-1 space-y-1">
                                     <p className="text-sm">
-                                      <span className="font-medium">{notification.sender.name}</span>
+                                  <span className="font-medium text-white">{notification.sender.name}</span>
                                       {' '}
-                                      <span className="text-muted-foreground">
+                                  <span className="text-gray-400">
                                         {isHtmlContent ? (
                                           <MarkdownContent
                                             htmlContent={notification.content}
@@ -409,14 +392,14 @@ export default function Navbar({
                                         )}
                                       </span>
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-gray-500">
                                       {formatNotificationTime(notification.createdAt)}
                                     </p>
                                   </div>
 
                                   {/* Read Indicator */}
                                   {!notification.read && (
-                                    <div className="h-2 w-2 rounded-full bg-primary mt-1.5" />
+                                <div className="h-2 w-2 rounded-full bg-[#22c55e] mt-1.5" />
                                   )}
                                 </div>
                               );
@@ -436,27 +419,14 @@ export default function Navbar({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="relative hover:bg-[#1c1c1c] text-gray-400 -ml-1"
+                    className="relative hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
                     onClick={toggleChat}
                   >
-                    <MessageCircle className="h-5 w-5" />
+                <MessageCircle className="h-4 w-4" />
                     {isChatOpen && (
-                      <span className="absolute bottom-1 right-1 bg-blue-500 rounded-full w-2 h-2" />
+                  <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />
                     )}
                   </Button>
-
-                  {/* AI Assistant toggle button */}
-                  {/* <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative hover:bg-[#1c1c1c] text-gray-400"
-                    onClick={toggleAssistant}
-                  >
-                    <SparklesIcon className="h-5 w-5" />
-                    {isAssistantOpen && (
-                      <span className="absolute bottom-1 right-1 bg-purple-500 rounded-full w-2 h-2" />
-                    )}
-                  </Button> */}
                 </>
               )}
 
@@ -467,13 +437,11 @@ export default function Navbar({
                     {renderAvatar()}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-[#1c1c1c] border-[#2a2929] text-gray-200" align="end" forceMount>
-                  <DropdownMenuLabel className="font-normal">
+                <DropdownMenuContent align="end" className="w-56 bg-[#090909] border-[#1f1f1f]">
+                  <DropdownMenuLabel className="text-white">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{userName || session?.user?.name}</p>
-                      <p className="text-xs leading-none text-gray-400">
-                        {displayEmail}
-                      </p>
+                      <p className="text-sm font-medium">{userName || session?.user?.name}</p>
+                      <p className="text-xs text-gray-400">{displayEmail}</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-[#2a2929]" />
@@ -505,7 +473,13 @@ export default function Navbar({
               </DropdownMenu>
             </>
           ) : (
-            <Button variant="outline" className="border-[#2a2929] hover:bg-[#1c1c1c] text-gray-200">Sign In</Button>
+            <Button 
+              variant="outline" 
+              className="border-[#1f1f1f] hover:bg-[#1f1f1f] text-gray-300 hover:text-white h-8 px-3 text-sm"
+              asChild
+            >
+              <Link href="/login">Sign In</Link>
+            </Button>
           )}
         </div>
       </div>

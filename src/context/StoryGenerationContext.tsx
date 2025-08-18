@@ -29,11 +29,11 @@ export function StoryGenerationProvider({ workspaceId, children }: { workspaceId
     }
   };
 
-  useEffect(() => {
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 2000); // Poll every 2 seconds
-    return () => clearInterval(interval);
-  }, [workspaceId]);
+  // useEffect(() => {
+  //   fetchJobs();
+  //   const interval = setInterval(fetchJobs, 2000); // Poll every 2 seconds
+  //   return () => clearInterval(interval);
+  // }, [workspaceId]);
 
   return (
     <StoryGenerationContext.Provider value={{ jobs, refreshJobs: fetchJobs }}>

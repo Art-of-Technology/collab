@@ -259,17 +259,17 @@ export default function CreatePostForm() {
   };
 
   return (
-    <Card className="mb-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border-border/40 bg-card/95">
-      <CardHeader className="pb-3 relative">
+    <Card className="mb-6 shadow-lg hover:shadow-xl transition-all duration-300 bg-[#0e0e0e] border-[#1a1a1a] hover:border-[#333]">
+      <CardHeader className="pb-3 relative border-b border-[#1a1a1a]">
         <div className="flex space-x-4">
           {renderAvatar()}
           <div className="flex-1 space-y-1">
-            <p className="text-sm font-medium leading-none">{session?.user?.name || "Anonymous"}</p>
-            <p className="text-xs text-muted-foreground">@{session?.user?.email?.split('@')[0] || "username"}</p>
+            <p className="text-sm font-medium leading-none text-[#e6edf3]">{session?.user?.name || "Anonymous"}</p>
+            <p className="text-xs text-[#8b949e]">@{session?.user?.email?.split('@')[0] || "username"}</p>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         <Collapsible open={optionsOpen} onOpenChange={setOptionsOpen} className="space-y-0">
           <div className="space-y-2 mb-1">
             <CollabInput

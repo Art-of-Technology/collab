@@ -60,51 +60,51 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
   }
 
   return (
-    <div className="container mx-auto p-0">
-      <div className="mb-6">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="mb-4">
         <Link href={`/workspaces/${workspaceId}`}>
-          <Button variant="ghost" className="pl-0">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button variant="ghost" size="sm" className="pl-0 text-muted-foreground">
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to workspace settings
           </Button>
         </Link>
       </div>
       
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold">Permissions & Roles</h1>
-        <p className="text-muted-foreground">
+      <div className="border-b border-border/40 pb-3 mb-4">
+        <h1 className="text-2xl font-semibold text-foreground">Permissions & Roles</h1>
+        <p className="text-sm text-muted-foreground">
           Manage permissions and member roles for <strong>{workspace.name}</strong>
         </p>
       </div>
 
       <Tabs defaultValue="permissions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="permissions" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
+        <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsTrigger value="permissions" className="flex items-center gap-1.5 text-sm">
+            <Shield className="h-3 w-3" />
             Role Permissions
           </TabsTrigger>
-          <TabsTrigger value="members" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
+          <TabsTrigger value="members" className="flex items-center gap-1.5 text-sm">
+            <Users className="h-3 w-3" />
             Member Roles
           </TabsTrigger>
-          <TabsTrigger value="custom-roles" className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
+          <TabsTrigger value="custom-roles" className="flex items-center gap-1.5 text-sm">
+            <Sparkles className="h-3 w-3" />
             Custom Roles
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="permissions" className="space-y-6">
-          <Card>
-            <CardHeader>
+        <TabsContent value="permissions" className="space-y-4">
+          <Card className="border border-border/40 bg-card/50">
+            <CardHeader className="pb-3 pt-4 px-4">
               <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                <CardTitle>Role Permissions</CardTitle>
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base font-medium">Role Permissions</CardTitle>
               </div>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Configure what each role can do in this workspace. Changes apply immediately to all users with that role.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-4">
               <PermissionsManager 
                 workspaceId={workspaceId} 
                 currentUserRole={userRole as any}
@@ -113,18 +113,18 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
           </Card>
         </TabsContent>
 
-        <TabsContent value="members" className="space-y-6">
-          <Card>
-            <CardHeader>
+        <TabsContent value="members" className="space-y-4">
+          <Card className="border border-border/40 bg-card/50">
+            <CardHeader className="pb-3 pt-4 px-4">
               <div className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                <CardTitle>Member Roles</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base font-medium">Member Roles</CardTitle>
               </div>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Assign roles to workspace members. Each role has different permissions that can be customized in the Permissions tab.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-4">
               <MemberManager 
                 workspaceId={workspaceId}
                 currentUserId={session.user.id}
@@ -134,18 +134,18 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
           </Card>
         </TabsContent>
 
-        <TabsContent value="custom-roles" className="space-y-6">
-          <Card>
-            <CardHeader>
+        <TabsContent value="custom-roles" className="space-y-4">
+          <Card className="border border-border/40 bg-card/50">
+            <CardHeader className="pb-3 pt-4 px-4">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
-                <CardTitle>Custom Roles</CardTitle>
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base font-medium">Custom Roles</CardTitle>
               </div>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Create custom roles with specific permissions tailored to your workspace needs. Custom roles can be assigned to members just like built-in roles.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-4">
               <CustomRolesManager workspaceId={workspaceId} />
             </CardContent>
           </Card>
@@ -157,28 +157,28 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
 
 function PermissionsPageSkeleton() {
   return (
-    <div className="container mx-auto p-0">
-      <div className="border-b pb-4">
-        <Skeleton className="h-8 w-64 mb-2" />
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="border-b border-border/40 pb-3 mb-4">
+        <Skeleton className="h-7 w-64 mb-2" />
         <Skeleton className="h-4 w-96" />
       </div>
 
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-full" />
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-full" />
         
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48 mb-2" />
-            <Skeleton className="h-4 w-full" />
+        <Card className="border border-border/40 bg-card/50">
+          <CardHeader className="pb-3 pt-4 px-4">
+            <Skeleton className="h-5 w-48 mb-2" />
+            <Skeleton className="h-3 w-full" />
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="space-y-2">
-                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-5 w-32" />
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {Array.from({ length: 6 }).map((_, j) => (
-                      <Skeleton key={j} className="h-16 w-full" />
+                      <Skeleton key={j} className="h-14 w-full" />
                     ))}
                   </div>
                 </div>

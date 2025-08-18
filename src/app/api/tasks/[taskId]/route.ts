@@ -24,8 +24,8 @@ export async function GET(
     const resolvedParams = await params;
     const { taskId } = resolvedParams;
     
-    // Check if taskId is an issue key (e.g., WZB-1)
-    const isIssueKey = /^[A-Z]+-\d+$/.test(taskId);
+    // Check if taskId is an issue key (e.g., WZB-1, DNN1-2)
+    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(taskId);
   
     // Fetch the task either by ID or issue key
     const task = isIssueKey 

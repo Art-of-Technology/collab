@@ -131,8 +131,8 @@ export default function PostItem({
   };
 
   return (
-    <Card className="mb-4 transition-shadow hover:shadow-lg border-border/50">
-      <CardHeader className="pb-2">
+    <Card className="mb-4 transition-all duration-200 hover:shadow-lg bg-[#0e0e0e] border-[#1a1a1a] hover:border-[#333] hover:bg-[#131313]">
+      <CardHeader className="pb-2 border-b border-[#1a1a1a]">
         <PostHeader
           authorId={post.author.id}
           authorName={post.author.name}
@@ -152,7 +152,7 @@ export default function PostItem({
         />
       </CardHeader>
 
-      <CardContent className="pt-2">
+      <CardContent className="pt-3 pb-3">
         <PostContent
           message={post.message}
           html={post.html}

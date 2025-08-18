@@ -29,8 +29,6 @@ export default function TaskGenerationStatus() {
     )
   );
 
-  console.log('TaskGeneration widget:', { jobs, hasVisibleJob, visible, jobsLength: jobs.length });
-
   // For debugging: always show widget if we have jobs
   const shouldShow = hasVisibleJob || jobs.length > 0;
 

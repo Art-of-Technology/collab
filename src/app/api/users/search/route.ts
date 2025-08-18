@@ -24,14 +24,39 @@ export async function GET(req: NextRequest) {
     let users;
     
     if (workspaceId) {
-      // If we have a workspace ID, only search for users within that workspace
+      // Resolve workspace by ID or slug
+      const workspace = await prisma.workspace.findFirst({
+        where: {
+          AND: [
+            {
+              OR: [
+                { id: workspaceId },
+                { slug: workspaceId }
+              ]
+            },
+            {
+              OR: [
+                { ownerId: currentUser.id },
+                { members: { some: { userId: currentUser.id } } }
+              ]
+            }
+          ]
+        },
+        select: { id: true }
+      });
+
+      if (!workspace) {
+        return NextResponse.json([], { status: 200 }); // Return empty array if workspace not found or no access
+      }
+
+      // If we have a workspace, only search for users within that workspace
       const whereCondition: any = {
         AND: [
           { id: { not: currentUser.id } },  // Exclude the current user
           {
             OR: [
-              { ownedWorkspaces: { some: { id: workspaceId } } },
-              { workspaceMemberships: { some: { workspaceId } } }
+              { ownedWorkspaces: { some: { id: workspace.id } } },
+              { workspaceMemberships: { some: { workspaceId: workspace.id } } }
             ]
           }
         ]

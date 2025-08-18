@@ -118,13 +118,23 @@ export async function PATCH(req: NextRequest) {
       "leaveRequestEdited",
       "leaveRequestManagerAlert",
       "leaveRequestHRAlert",
+      // Email and push notification fields
       "emailNotificationsEnabled",
+      "pushNotificationsEnabled",
+      "pushSubscription",
     ];
 
     const updateData: any = {};
     for (const field of allowedFields) {
-      if (field in body && typeof body[field] === "boolean") {
-        updateData[field] = body[field];
+      if (field in body) {
+        // Handle boolean fields
+        if (field !== "pushSubscription" && typeof body[field] === "boolean") {
+          updateData[field] = body[field];
+        }
+        // Handle Json fields like pushSubscription
+        else if (field === "pushSubscription") {
+          updateData[field] = body[field];
+        }
       }
     }
 

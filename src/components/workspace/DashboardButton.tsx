@@ -29,8 +29,13 @@ export default function DashboardButton({ workspaceId, workspaceSlug }: Dashboar
   };
 
   return (
-    <Button variant="outline" onClick={handleClick}>
-      <Gauge className="mr-2 h-4 w-4" />
+    <Button 
+      variant="outline" 
+      size="sm" 
+      onClick={handleClick}
+      className="border-[#30363d] text-[#8b949e] hover:bg-[#1a1a1a] hover:text-[#e6edf3]"
+    >
+      <Gauge className="mr-1.5 h-3 w-3" />
       View Dashboard
     </Button>
   );

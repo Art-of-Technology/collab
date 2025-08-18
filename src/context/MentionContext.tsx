@@ -3,6 +3,7 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import axios from 'axios';
+import { useWorkspace } from './WorkspaceContext';
 
 interface User {
   id: string;
@@ -19,10 +20,8 @@ export interface Notification {
   senderId: string;
   postId?: string;
   featureRequestId?: string;
-  taskId?: string;
-  epicId?: string;
-  storyId?: string;
-  milestoneId?: string;
+  issueId?: string; // Replaces taskId, epicId, storyId, milestoneId
+  viewId?: string; // For view-related notifications
   leaveRequestId?: string;
   sender: {
     id: string;
@@ -30,9 +29,20 @@ export interface Notification {
     image: string | null;
     useCustomAvatar: boolean;
   };
-  task?: {
+  issue?: {
     id: string;
     title: string;
+    type: string; // EPIC | STORY | TASK | DEFECT | MILESTONE | SUBTASK
+    issueKey?: string;
+    project?: {
+      id: string;
+      name: string;
+    };
+  };
+  view?: {
+    id: string;
+    name: string;
+    displayType: string;
   };
   leaveRequest?: {
     id: string;
@@ -43,6 +53,16 @@ export interface Notification {
     policy: {
       name: string;
     };
+  };
+  
+  // Legacy fields for backward compatibility during migration
+  taskId?: string;
+  epicId?: string;
+  storyId?: string;
+  milestoneId?: string;
+  task?: {
+    id: string;
+    title: string;
   };
 }
 
@@ -62,6 +82,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const { currentWorkspace } = useWorkspace();
 
   // Calculate unread notifications count
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -80,7 +101,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
       console.error('Error searching users:', error);
       return [];
     }
-  }, []);
+  }, [currentWorkspace?.id]);
 
   // Function to fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -103,10 +124,10 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
   const markNotificationAsRead = useCallback(async (id: string) => {
     try {
       await axios.patch(`/api/notifications/${id}`, { read: true });
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === id 
-            ? { ...notification, read: true } 
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === id
+            ? { ...notification, read: true }
             : notification
         )
       );
@@ -119,13 +140,11 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
   const markAllNotificationsAsRead = useCallback(async () => {
     try {
       await axios.post('/api/notifications/read-all');
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, read: true }))
-      );
+      fetchNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
-  }, []);
+  }, [fetchNotifications]);
 
   // Fetch notifications on mount and when session changes
   useEffect(() => {
