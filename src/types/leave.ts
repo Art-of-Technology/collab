@@ -65,6 +65,17 @@ export interface LeaveRequest {
   };
 }
 
+// Extended interface for leave requests with user info (for managers)
+export interface LeaveRequestWithUser extends LeaveRequest {
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    avatar?: string | null;
+    image?: string | null;
+  };
+}
+
 // Leave Balance type from Prisma
 export interface LeaveBalance {
   id: string;
@@ -99,6 +110,7 @@ export interface LeaveBalanceType {
   trackUnit: TrackUnit;
   isPaid: boolean;
   accrualType: AccrualType;
+  maxBalance: number | null;
 }
 
 // Form submission data for creating a leave request
@@ -141,4 +153,15 @@ export interface LeaveRequestFormProps {
   onSubmit?: (data: LeaveRequestSubmissionData) => Promise<void>;
   onCancel: () => void;
   onSuccess?: () => void;
+  editingRequest?: LeaveRequest; // For editing existing requests
+  isEditing?: boolean;
+}
+
+// Data for editing a leave request
+export interface EditLeaveRequestData {
+  policyId?: string;
+  startDate?: Date;
+  endDate?: Date;
+  duration?: LeaveDuration;
+  notes?: string;
 }

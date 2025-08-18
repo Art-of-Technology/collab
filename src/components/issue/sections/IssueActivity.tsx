@@ -1,6 +1,6 @@
 "use client";
 
-import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHistory";
+import { IssueActivitySection } from "./activity";
 
 interface IssueActivityProps {
   issueId: string;
@@ -8,11 +8,9 @@ interface IssueActivityProps {
 
 export function IssueActivity({ issueId }: IssueActivityProps) {
   return (
-    <BoardItemActivityHistory 
-      itemType="ISSUE" 
-      itemId={issueId} 
+    <IssueActivitySection 
+      issueId={issueId} 
       limit={50}
-      className="border-0 bg-transparent"
     />
   );
 }

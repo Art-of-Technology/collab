@@ -1,0 +1,102 @@
+name: Auto add contributors to README
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  add-contributor:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Ensure README has All Contributors anchors
+        shell: bash
+        run: |
+          if [ ! -f README.md ]; then
+            echo "# ${GITHUB_REPOSITORY##*/}" > README.md
+          fi
+          if ! grep -q "ALL-CONTRIBUTORS-LIST:START" README.md; then
+            {
+              echo ""
+              echo "## Contributors ✨"
+              echo "Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):"
+              echo ""
+              echo "<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->"
+              echo "<!-- ALL-CONTRIBUTORS-LIST:END -->"
+              echo ""
+              echo "This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification."
+            } >> README.md
+          fi
+
+      - name: Create default .all-contributorsrc if missing
+        shell: bash
+        run: |
+          if [ ! -f .all-contributorsrc ]; then
+            cat <<EOF > .all-contributorsrc
+              {
+                "projectName": "${GITHUB_REPOSITORY##*/}",
+                "projectOwner": "${GITHUB_REPOSITORY%/*}",
+                "repoType": "github",
+                "repoHost": "https://github.com",
+                "files": ["README.md"],
+                "imageSize": 100,
+                "commit": false,
+                "contributors": [],
+                "contributorsPerLine": 7,
+                "badgeTemplate": "",
+                "skipCi": true
+              }
+          EOF
+          fi
+
+      - name: Install all-contributors-cli
+        run: npm i -g all-contributors-cli
+
+      - name: Decide contribution type(s)
+        id: types
+        shell: bash
+        run: |
+          LABELS_JSON='${{ toJson(github.event.pull_request.labels) }}'
+          TYPES="code"
+          echo "$LABELS_JSON" | grep -qi '"name":"docs"' && TYPES="doc"
+          echo "$LABELS_JSON" | grep -qi '"name":"documentation"' && TYPES="doc"
+          echo "$LABELS_JSON" | grep -qi '"name":"design"' && TYPES="design"
+          echo "$LABELS_JSON" | grep -qi '"name":"bugfix"' && TYPES="bug,code"
+          echo "types=$TYPES" >> "$GITHUB_OUTPUT"
+
+      - name: Add PR author as contributor
+        env:
+          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          TYPES: ${{ steps.types.outputs.types }}
+        run: |
+          echo "Adding @$AUTHOR_LOGIN for: $TYPES"
+          npx all-contributors add "$AUTHOR_LOGIN" "$TYPES" || true
+          npx all-contributors generate
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: add @${{ github.event.pull_request.user.login }} as contributor [skip ci]"
+          branch: ci/all-contrib/pr-${{ github.event.pull_request.number }}
+          title: "docs: add @${{ github.event.pull_request.user.login }} as contributor"
+          body: |
+            Automated by GitHub Actions after merging #${{ github.event.pull_request.number }}.
+            This PR updates README.md and .all-contributorsrc.
+          labels: automation, documentation
+

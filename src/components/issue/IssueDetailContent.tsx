@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Loader2, 
-  X, 
-  Check, 
-  PenLine, 
+import {
+  Loader2,
+  X,
+  Check,
+  PenLine,
   MessageSquare,
   Copy,
   ExternalLink,
@@ -20,21 +20,34 @@ import {
   Star,
   Command,
   Clock,
-  Plus
+  Plus,
+  ArrowLeft,
+  Play,
+  Pause,
+  StopCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
+import { useDeleteIssue } from "@/hooks/queries/useIssues";
+import PageHeader from "@/components/layout/PageHeader";
+import { useSession } from "next-auth/react";
+import { useActivity } from "@/context/ActivityContext";
+import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
+import { formatLiveTime } from "@/utils/taskHelpers";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHistory";
 import { IssueTabs } from "./sections/IssueTabs";
-import { IssueDescriptionEditor } from "@/components/issue";
+import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
+import { IssueCommentsSection } from "./sections/IssueCommentsSection";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
@@ -45,13 +58,13 @@ import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectS
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
 
 // Import types
-import type { Issue, IssueDetailProps, IssueFieldUpdate } from "@/types/issue";
+import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime, PlayState } from "@/types/issue";
 
 // Helper function for getting type color (still used for the type indicator dot)
 const getTypeColor = (type: string) => {
   const colors = {
     'EPIC': '#8b5cf6',
-    'STORY': '#3b82f6', 
+    'STORY': '#3b82f6',
     'TASK': '#10b981',
     'DEFECT': '#ef4444',
     'MILESTONE': '#f59e0b',
@@ -61,9 +74,10 @@ const getTypeColor = (type: string) => {
 };
 
 interface IssueDetailContentProps extends IssueDetailProps {
-  mode?: 'modal' | 'page';
   workspaceId?: string;
   issueId?: string;
+  viewName?: string;
+  viewSlug?: string;
 }
 
 export function IssueDetailContent({
@@ -73,10 +87,13 @@ export function IssueDetailContent({
   onRefresh,
   onClose,
   boardId,
-  mode = 'modal',
   workspaceId,
-  issueId
+  issueId,
+  viewName,
+  viewSlug
 }: IssueDetailContentProps) {
+  const router = useRouter();
+  const deleteIssueMutation = useDeleteIssue();
   const [isUpdating, setIsUpdating] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
@@ -85,6 +102,133 @@ export function IssueDetailContent({
   const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
   const [labels, setLabels] = useState<any[]>([]);
   const { toast } = useToast();
+
+  // Session and activity hooks
+  const { data: session } = useSession();
+  const { userStatus, handleTaskAction } = useActivity();
+  const { settings } = useWorkspaceSettings();
+  const currentUserId = session?.user?.id;
+
+  // Time tracking state
+  const [totalPlayTime, setTotalPlayTime] = useState<PlayTime | null>(null);
+  const [isTimerLoading, setIsTimerLoading] = useState(false);
+  const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
+  const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
+  const [showHelperModal, setShowHelperModal] = useState(false);
+
+  // Time tracking utilities
+  const canControlTimer = useMemo(() => {
+    if (!issue || !currentUserId) return false;
+    // Allow assignee, reporter, or any user to control their own timer
+    return true;
+  }, [issue, currentUserId]);
+
+  // Get current play state from user activity status
+  const currentPlayState: PlayState = useMemo(() => {
+    if (!userStatus || !issue?.id) return "stopped";
+
+    const isMyIssue = userStatus.currentTaskId === issue.id;
+    if (!isMyIssue) return "stopped";
+
+    return userStatus.currentTaskPlayState || "stopped";
+  }, [userStatus, issue?.id]);
+
+  // Fetch total play time for the issue
+  const fetchTotalPlayTime = useCallback(async () => {
+    if (!issue?.id) return;
+    setIsLoadingPlayTime(true);
+    try {
+      const response = await fetch(`/api/issues/${issue.id}/playtime`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch total play time");
+      }
+      const data: PlayTime = await response.json();
+      setTotalPlayTime(data);
+    } catch (err) {
+      console.error("Error fetching total play time:", err);
+    } finally {
+      setIsLoadingPlayTime(false);
+    }
+  }, [issue?.id]);
+
+  // Handle play/pause/stop actions
+  const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
+    if (!issue?.id) return;
+
+    // Check if user is assigned to this issue before starting
+    if (action === "play") {
+      const isAssignedToMe = issue.assigneeId === currentUserId;
+
+      if (!isAssignedToMe) {
+        // User is not assigned, show helper modal
+        setShowHelperModal(true);
+        return;
+      }
+    }
+
+    setIsTimerLoading(true);
+    try {
+      // Use the ActivityContext for proper state management
+      await handleTaskAction(action, issue.id);
+
+      // Fetch updated play time
+      await fetchTotalPlayTime();
+
+    } catch (err: any) {
+      console.error(`Error ${action} issue:`, err);
+    } finally {
+      setIsTimerLoading(false);
+    }
+  };
+
+  const handleHelperConfirm = async () => {
+    if (!issue?.id) return;
+
+    try {
+      // First, send help request
+      const helpResponse = await fetch(`/api/issues/${issue.id}/request-help`, {
+        method: 'POST',
+      });
+
+      if (!helpResponse.ok) {
+        const error = await helpResponse.json();
+        throw new Error(error.message || 'Failed to request help');
+      }
+
+      const helpData = await helpResponse.json();
+
+      // Then, start working on the issue as a helper
+      setIsTimerLoading(true);
+      await handleTaskAction("play", issue.id);
+
+      if (helpData.status === "approved") {
+        toast({
+          title: "Started as Helper",
+          description: "You are already approved! Timer started and your time will be tracked separately.",
+        });
+      } else {
+        toast({
+          title: "Started as Helper",
+          description: "Help request sent and timer started. Your time will be tracked separately.",
+        });
+      }
+
+      setShowHelperModal(false);
+      await fetchTotalPlayTime();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start as helper",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTimerLoading(false);
+    }
+  };
+
+  const handleHelperCancel = () => {
+    setShowHelperModal(false);
+  };
 
   // Initialize local state from issue data
   useEffect(() => {
@@ -115,6 +259,53 @@ export function IssueDetailContent({
 
     fetchLabels();
   }, [workspaceId]);
+
+  // Effect for live timer when issue is playing
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    // Wait for play time to be loaded before starting timer
+    if (isLoadingPlayTime) {
+      return;
+    }
+
+    if (userStatus?.statusStartedAt && issue?.id) {
+      const isMyIssue = userStatus.currentTaskId === issue.id;
+      const isPlaying = userStatus.currentTaskPlayState === "playing";
+
+      if (isMyIssue && isPlaying) {
+        const tick = () => {
+          const start = new Date(userStatus.statusStartedAt);
+          const now = new Date();
+          const sessionElapsed = now.getTime() - start.getTime();
+
+          // Use the totalTimeMs from the API if available, otherwise 0
+          const baseTime = totalPlayTime?.totalTimeMs || 0;
+          const currentTotalMs = baseTime + sessionElapsed;
+          const formatted = formatLiveTime(currentTotalMs);
+          setLiveTimeDisplay(formatted);
+        };
+
+        tick();
+        intervalId = setInterval(tick, 1000);
+      } else if (!isPlaying && totalPlayTime) {
+        setLiveTimeDisplay(totalPlayTime.formattedTime);
+      }
+    } else if (totalPlayTime && userStatus?.currentTaskId !== issue?.id) {
+      setLiveTimeDisplay(totalPlayTime.formattedTime);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, userStatus?.statusStartedAt, issue?.id, totalPlayTime, isLoadingPlayTime]);
+
+  // Fetch playtime when issue ID changes or onRefresh is called
+  useEffect(() => {
+    if (issue?.id) {
+      fetchTotalPlayTime();
+    }
+  }, [issue?.id, fetchTotalPlayTime, onRefresh]);
 
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
@@ -182,7 +373,7 @@ export function IssueDetailContent({
   // Handle description save
   const handleSaveDescription = useCallback(async () => {
     if (!descriptionHasChanges) return;
-    
+
     setIsDescriptionSaving(true);
     try {
       await handleUpdate({ description });
@@ -214,11 +405,11 @@ export function IssueDetailContent({
         },
         body: JSON.stringify({ text }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to improve text');
       }
-      
+
       const data = await response.json();
       return data.improvedText || text;
     } catch (error) {
@@ -253,13 +444,85 @@ export function IssueDetailContent({
     });
   }, [issue, workspaceId, toast]);
 
-  // Handle open in new tab
-  const handleOpenInNewTab = useCallback(() => {
-    if (!issue?.issueKey || !workspaceId) return;
-    
-    const url = `/${workspaceId}/issues/${issue.issueKey}`;
-    window.open(url, '_blank');
-  }, [issue, workspaceId]);
+  // Handle delete issue
+  const handleDeleteIssue = useCallback(async () => {
+    if (!issue?.issueKey && !issue?.id) return;
+
+    const confirmed = window.confirm('Are you sure you want to delete this issue? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      await deleteIssueMutation.mutateAsync(issue.issueKey || issue.id);
+
+      toast({
+        title: "Issue deleted",
+        description: "The issue has been deleted successfully",
+      });
+
+      // Navigate back based on context
+      if (viewSlug && workspaceId) {
+        router.push(`/${workspaceId}/views/${viewSlug}`);
+      } else {
+        // Try to detect if we came from a view by checking referrer
+        const referrer = document.referrer;
+        if (referrer && workspaceId) {
+          const url = new URL(referrer);
+          const pathSegments = url.pathname.split('/').filter(Boolean);
+
+          // Check if referrer is a view page: /workspace/views/viewSlug
+          if (pathSegments.length >= 3 && pathSegments[1] === 'views') {
+            router.push(referrer);
+            return;
+          }
+        }
+
+        // Fallback based on issue context
+        if (issue.projectId && workspaceId) {
+          router.push(`/${workspaceId}/projects/${issue.projectId}`);
+        } else if (workspaceId) {
+          router.push(`/${workspaceId}/issues`);
+        } else {
+          router.push('/dashboard');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete issue:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete issue. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [issue, deleteIssueMutation, toast, router, viewSlug, workspaceId]);
+
+  // Handle back navigation
+  const handleBackNavigation = useCallback(() => {
+    if (viewSlug && workspaceId) {
+      router.push(`/${workspaceId}/views/${viewSlug}`);
+    } else {
+      // Try to detect if we came from a view by checking referrer
+      const referrer = document.referrer;
+      if (referrer && workspaceId) {
+        const url = new URL(referrer);
+        const pathSegments = url.pathname.split('/').filter(Boolean);
+
+        // Check if referrer is a view page: /workspace/views/viewSlug
+        if (pathSegments.length >= 3 && pathSegments[1] === 'views') {
+          router.push(referrer);
+          return;
+        }
+      }
+
+      // Fallback based on issue context
+      if (issue?.projectId && workspaceId) {
+        router.push(`/${workspaceId}/projects/${issue.projectId}`);
+      } else if (workspaceId) {
+        router.push(`/${workspaceId}/issues`);
+      } else {
+        router.back();
+      }
+    }
+  }, [router, viewSlug, workspaceId, issue]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -286,12 +549,12 @@ export function IssueDetailContent({
             break;
         }
       }
-      
+
       if (event.key === 'Escape') {
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
-        } else if (mode === 'modal') {
+        } else {
           onClose?.();
         }
       }
@@ -299,7 +562,7 @@ export function IssueDetailContent({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, mode, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription]);
+  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription]);
 
   // Loading state
   if (isLoading) {
@@ -374,312 +637,460 @@ export function IssueDetailContent({
 
   return (
     <div className={cn(
-      mode === 'modal' ? "h-full" : "min-h-screen",
-      "flex flex-col",
-      mode === 'page' ? "max-w-7xl mx-auto p-6" : "p-6",
+      "h-full flex flex-col",
       "bg-[#0a0a0a] text-white transition-opacity duration-200",
       isUpdating && "opacity-60"
     )}>
-      {/* Header */}
-      <div className="flex-none space-y-4 mb-6">
-        {/* Top action bar */}
-        <div className="flex items-center justify-between">
+      {/* Page Header */}
+      <PageHeader
+        title={
+          <button
+            onClick={handleBackNavigation}
+            className="flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] transition-colors text-sm"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            <span>Back to {viewName || 'View'}</span>
+          </button>
+        }
+        actions={
           <div className="flex items-center gap-2">
-            {/* Issue Key */}
-            <Badge 
-              className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer"
-              onClick={handleCopyLink}
-            >
-              {issue.issueKey}
-            </Badge>
-            
-            {/* Type Indicator */}
-            <div 
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: getTypeColor(issue.type) }}
-            />
-          </div>
+            {/* Time tracking controls - Only show if time tracking is enabled */}
+            {settings?.timeTrackingEnabled && (
+              <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm mr-2">
+                {currentPlayState === "stopped" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("play")}
+                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Start Timer"
+                  >
+                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                )}
+                {currentPlayState === "playing" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("pause")}
+                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Pause Timer"
+                  >
+                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                  </Button>
+                )}
+                {currentPlayState === "paused" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("play")}
+                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Resume Timer"
+                  >
+                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                )}
+                {(currentPlayState === "playing" || currentPlayState === "paused") && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handlePlayPauseStop("stop")}
+                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
+                    className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Stop Timer"
+                  >
+                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                  </Button>
+                )}
 
-          <div className="flex items-center gap-2">
+                <div className="border-l h-5 border-border/70 mx-1"></div>
+
+                {isLoadingPlayTime ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : userStatus?.currentTaskId === issue?.id && userStatus?.currentTaskPlayState === "playing" ? (
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
+                    <Clock className="h-3.5 w-3.5 text-green-500" />
+                    <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
+                  </div>
+                ) : totalPlayTime ? (
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>{totalPlayTime.formattedTime}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>0h 0m 0s</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <Button
               variant="ghost"
               size="sm"
               onClick={handleCopyLink}
-              className="h-8 w-8 p-0 text-[#8b949e] hover:text-white hover:bg-[#1f1f1f]"
+              className="h-6 px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
             >
-              <Copy className="h-4 w-4" />
+              <Copy className="h-3 w-3 mr-1" />
+              Copy Link
             </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-[#8b949e] hover:text-white hover:bg-[#1f1f1f]"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-[#1f1f1f] border-[#333]">
-                <DropdownMenuItem 
-                  className="text-[#8b949e] hover:text-white hover:bg-[#333]"
-                  onClick={handleOpenInNewTab}
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open in new tab
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-[#8b949e] hover:text-white hover:bg-[#333]">
-                  <Star className="h-4 w-4 mr-2" />
-                  Add to favorites
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#333]" />
-                <DropdownMenuItem className="text-red-400 hover:text-red-300 hover:bg-[#333]">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete issue
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {mode === 'modal' && onClose && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="h-8 w-8 p-0 text-[#8b949e] hover:text-white hover:bg-[#1f1f1f]"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Title */}
-        <div className="space-y-3">
-          {editingTitle ? (
-            <div className="space-y-3">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] focus:border-[#58a6ff] h-auto py-2"
-                placeholder="Issue title"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSaveTitle();
-                  } else if (e.key === 'Escape') {
-                    setEditingTitle(false);
-                    setTitle(issue.title);
-                  }
-                }}
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={handleSaveTitle}
-                  disabled={isUpdating}
-                  className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-                >
-                  {isUpdating ? (
-                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  ) : (
-                    <Check className="h-3 w-3 mr-1" />
-                  )}
-                  Save
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditingTitle(false);
-                    setTitle(issue.title);
-                  }}
-                  disabled={isUpdating}
-                  className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div
-              className="group cursor-pointer flex items-center gap-2"
-              onClick={() => setEditingTitle(true)}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeleteIssue}
+              disabled={deleteIssueMutation.isPending}
+              className="h-6 px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
             >
-              <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors">
-                {issue.title}
-              </h1>
-              <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681]" />
-            </div>
-          )}
-
-          {/* Properties Row - Using New Selectors */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Status Selector */}
-            <IssueStatusSelector
-              value={issue.status}
-              onChange={(value) => handleUpdate({ status: value })}
-              projectId={issue.projectId}
-              disabled={isUpdating}
-            />
-
-            {/* Priority Selector */}
-            <IssuePrioritySelector
-              value={issue.priority || 'MEDIUM'}
-              onChange={(value) => handleUpdate({ priority: value })}
-              disabled={isUpdating}
-            />
-
-            {/* Type Selector */}
-            <IssueTypeSelector
-              value={issue.type}
-              onChange={(value) => handleUpdate({ type: value })}
-              disabled={isUpdating}
-            />
-
-            {/* Assignee Selector */}
-            <IssueAssigneeSelector
-              value={issue.assigneeId}
-              onChange={(value) => handleUpdate({ assigneeId: value })}
-              workspaceId={workspaceId}
-              disabled={isUpdating}
-            />
-
-            {/* Reporter Selector */}
-            <IssueReporterSelector
-              value={issue.reporterId}
-              onChange={(value) => handleUpdate({ reporterId: value })}
-              workspaceId={workspaceId}
-              disabled={isUpdating}
-            />
-
-            {/* Labels Selector */}
-            <IssueLabelSelector
-              value={issue.labels?.map(l => l.id) || []}
-              onChange={(labelIds) => {
-                // Convert label IDs back to label objects for the update
-                const labelObjects = labels.filter(label => labelIds.includes(label.id));
-                handleUpdate({ labels: labelObjects });
-              }}
-              workspaceId={workspaceId}
-              disabled={isUpdating}
-            />
-
-            {/* Project Selector */}
-            <IssueProjectSelector
-              value={issue.projectId}
-              onChange={(value) => handleUpdate({ projectId: value })}
-              workspaceId={workspaceId || ''}
-              disabled={isUpdating}
-            />
-
-            {/* Due Date Selector */}
-            <IssueDateSelector
-              value={issue.dueDate}
-              onChange={(value) => handleUpdate({ dueDate: value })}
-              disabled={isUpdating}
-            />
+              {deleteIssueMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <Trash2 className="h-3 w-3 mr-1" />
+              )}
+              Delete
+            </Button>
           </div>
+        }
+      />
 
-          {/* Created info */}
-          <div className="flex items-center gap-2 text-xs text-[#6e7681]">
-            <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
-            {issue.reporter && (
-              <>
-                <span>by</span>
-                <div className="flex items-center gap-1">
-                  <Avatar className="h-4 w-4">
-                    <AvatarImage src={issue.reporter.image} />
-                    <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
-                      {issue.reporter.name?.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span>{issue.reporter.name}</span>
+      <div className="flex-1 max-w-7xl mx-auto p-6 w-full flex flex-col min-h-0">
+        {/* Header */}
+        <div className="flex-none space-y-4 mb-6">
+
+
+          {/* Title */}
+          <div className="space-y-3">
+            {editingTitle ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  {/* Issue Key Badge */}
+                  <Badge
+                    className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
+                    onClick={handleCopyLink}
+                  >
+                    {issue.issueKey}
+                  </Badge>
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] focus:border-[#58a6ff] h-auto py-2 flex-1"
+                    placeholder="Issue title"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveTitle();
+                      } else if (e.key === 'Escape') {
+                        setEditingTitle(false);
+                        setTitle(issue.title);
+                      }
+                    }}
+                  />
                 </div>
-              </>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveTitle}
+                    disabled={isUpdating}
+                    className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+                  >
+                    {isUpdating ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <Check className="h-3 w-3 mr-1" />
+                    )}
+                    Save
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingTitle(false);
+                      setTitle(issue.title);
+                    }}
+                    disabled={isUpdating}
+                    className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="group cursor-pointer flex items-center gap-3"
+                onClick={() => setEditingTitle(true)}
+              >
+                {/* Issue Key Badge */}
+                <Badge
+                  className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCopyLink();
+                  }}
+                >
+                  {issue.issueKey}
+                </Badge>
+                <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1">
+                  {issue.title}
+                </h1>
+                <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
+              </div>
             )}
+
+            {/* Properties Row - Using New Selectors */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Status Selector */}
+              <IssueStatusSelector
+                value={issue.status}
+                onChange={(value) => handleUpdate({ status: value })}
+                projectId={issue.projectId}
+                disabled={isUpdating}
+              />
+
+              {/* Priority Selector */}
+              <IssuePrioritySelector
+                value={issue.priority || 'MEDIUM'}
+                onChange={(value) => handleUpdate({ priority: value })}
+                disabled={isUpdating}
+              />
+
+              {/* Type Selector */}
+              <IssueTypeSelector
+                value={issue.type}
+                onChange={(value) => handleUpdate({ type: value })}
+                disabled={isUpdating}
+              />
+
+              {/* Assignee Selector */}
+              <IssueAssigneeSelector
+                value={issue.assigneeId}
+                onChange={(value) => handleUpdate({ assigneeId: value })}
+                workspaceId={workspaceId}
+                disabled={isUpdating}
+              />
+
+              {/* Reporter Selector */}
+              <IssueReporterSelector
+                value={issue.reporterId}
+                onChange={(value) => handleUpdate({ reporterId: value })}
+                workspaceId={workspaceId}
+                disabled={isUpdating}
+              />
+
+              {/* Labels Selector */}
+              <IssueLabelSelector
+                value={issue.labels?.map(l => l.id) || []}
+                onChange={(labelIds) => {
+                  // Convert label IDs back to label objects for the update
+                  const labelObjects = labels.filter(label => labelIds.includes(label.id));
+                  handleUpdate({ labels: labelObjects });
+                }}
+                workspaceId={workspaceId}
+                disabled={isUpdating}
+              />
+
+              {/* Project Selector */}
+              <IssueProjectSelector
+                value={issue.projectId}
+                onChange={(value) => handleUpdate({ projectId: value })}
+                workspaceId={workspaceId || ''}
+                disabled={isUpdating}
+              />
+
+              {/* Due Date Selector */}
+              <IssueDateSelector
+                value={issue.dueDate}
+                onChange={(value) => handleUpdate({ dueDate: value })}
+                disabled={isUpdating}
+              />
+            </div>
+
+            {/* Created info */}
+            <div className="flex items-center gap-2 text-xs text-[#6e7681]">
+              <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
+              {issue.reporter && (
+                <>
+                  <span>by</span>
+                  <div className="flex items-center gap-1">
+                    <Avatar className="h-4 w-4">
+                      <AvatarImage src={issue.reporter.image} />
+                      <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
+                        {issue.reporter.name?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span>{issue.reporter.name}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content - Full Width Experience */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="space-y-6 pb-8">
+            {/* Seamless Description Editor - Full Width */}
+            <div className="w-full relative">
+              {/* Save Changes Button - Positioned at top right of editor */}
+              {descriptionHasChanges && (
+                <div className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#21262d] rounded-md shadow-sm">
+                  <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
+                    <div className="h-1.5 w-1.5 bg-orange-400 rounded-full" />
+                    <span>Unsaved</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setDescription(issue?.description || '');
+                        setDescriptionHasChanges(false);
+                      }}
+                      disabled={isDescriptionSaving}
+                      className="h-6 px-2 text-xs text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3] pointer-events-auto"
+                    >
+                      Discard
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDescription}
+                      disabled={isDescriptionSaving}
+                      className="h-6 px-2 text-xs bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] pointer-events-auto"
+                    >
+                      {isDescriptionSaving ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">Save</span>
+                          <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded text-[10px] text-[#8b949e]">
+                            {typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? (
+                              <>
+                                <Command className="h-2.5 w-2.5" />
+                                <span>S</span>
+                              </>
+                            ) : (
+                              <span className="font-mono">Ctrl+S</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <IssueRichEditor
+                value={description}
+                onChange={handleDescriptionChange}
+                placeholder="Add a description..."
+                onAiImprove={handleAiImprove}
+                className="min-h-[400px] w-full"
+                enableSlashCommands={true}
+                enableFloatingMenu={true}
+                enableSaveDiscard={true}
+                originalContent={issue?.description || ''}
+                onContentChange={(content, hasChanges) => {
+                  setDescriptionHasChanges(hasChanges);
+                }}
+                onSave={handleSaveDescription}
+                onDiscard={() => {
+                  setDescription(issue?.description || '');
+                  setDescriptionHasChanges(false);
+                }}
+                minHeight="400px"
+              />
+            </div>
+
+
+
+            {/* Issue Tabs Section - Relations, Sub-issues, Time, Team, Activity (without Comments) */}
+            <IssueTabs
+              issue={issue}
+              initialComments={issue.comments || []}
+              currentUserId={workspaceId || ""} // TODO: Replace with actual current user ID
+              workspaceId={workspaceId || ""}
+              onRefresh={onRefresh}
+            />
+
+            {/* Separate Comments Section - Always visible */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-[#e1e7ef] border-b border-[#21262d] pb-2">
+                <MessageSquare className="h-4 w-4" />
+                <span>Comments</span>
+                {issue.comments && issue.comments.length > 0 && (
+                  <span className="ml-1 text-xs bg-[#333] text-[#aaa] px-1.5 py-0.5 rounded-full">
+                    {issue.comments.length}
+                  </span>
+                )}
+              </div>
+              <IssueCommentsSection
+                issueId={issue.id}
+                initialComments={(issue.comments || []) as any}
+                currentUserId={currentUserId}
+                workspaceId={workspaceId || ""}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content - Full Width Notion-like Experience */}
-      <div className={cn(
-        "flex-1",
-        mode === 'modal' ? "overflow-y-auto" : "overflow-visible"
-      )}>
-        <div className="space-y-6 pb-8">
-                  {/* Seamless Description Editor - Full Width */}
-        <div className="w-full relative">
-          {/* Save Changes Button - Positioned at top right of editor */}
-          {descriptionHasChanges && (
-            <div className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#21262d] rounded-md shadow-sm">
-              <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
-                <div className="h-1.5 w-1.5 bg-orange-400 rounded-full" />
-                <span>Unsaved</span>
-              </div>
-              <div className="flex gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setDescription(issue?.description || '');
-                    setDescriptionHasChanges(false);
-                  }}
-                  disabled={isDescriptionSaving}
-                  className="h-6 px-2 text-xs text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3] pointer-events-auto"
-                >
-                  Discard
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSaveDescription}
-                  disabled={isDescriptionSaving}
-                  className="h-6 px-2 text-xs bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] pointer-events-auto"
-                >
-                                     {isDescriptionSaving ? (
-                     <Loader2 className="h-3 w-3 animate-spin" />
-                   ) : (
-                     <div className="flex items-center gap-2">
-                       <span className="text-xs">Save</span>
-                       <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded text-[10px] text-[#8b949e]">
-                         {typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? (
-                           <>
-                             <Command className="h-2.5 w-2.5" />
-                             <span>S</span>
-                           </>
-                         ) : (
-                           <span className="font-mono">Ctrl+S</span>
-                         )}
-                       </div>
-                     </div>
-                   )}
-                </Button>
+      {/* Helper Confirmation Modal */}
+      <Dialog open={showHelperModal} onOpenChange={setShowHelperModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Work as Helper</DialogTitle>
+            <DialogDescription>
+              You are not assigned to this issue. You will be added as a helper and your time will be tracked separately.
+              {issue?.assigneeId && (
+                <span className="block mt-2 text-sm">
+                  This issue is assigned to someone else.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {issue && (
+            <div className="py-4">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <Play className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{issue.title}</p>
+                  {issue.issueKey && (
+                    <p className="text-xs text-muted-foreground font-mono">{issue.issueKey}</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
-          
-          <IssueDescriptionEditor
-            value={description}
-            onChange={handleDescriptionChange}
-            placeholder="Add a description..."
-            onAiImprove={handleAiImprove}
-            className="min-h-[400px] w-full"
-          />
-        </div>
 
-
-
-          {/* Issue Tabs Section - Relations, Sub-issues, Time, Team, Activity, Comments */}
-          <IssueTabs
-            issue={issue}
-            initialComments={issue.comments || []}
-            currentUserId={workspaceId || ""} // TODO: Replace with actual current user ID
-            workspaceId={workspaceId || ""}
-            onRefresh={onRefresh}
-          />
-        </div>
-      </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handleHelperCancel}
+              disabled={isTimerLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHelperConfirm}
+              disabled={isTimerLoading}
+            >
+              {isTimerLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                "Yes, Start as Helper"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
+import { ensureRolePermissionsForWorkspaceRole } from '@/lib/role-permission-defaults';
 
 // PUT /api/workspaces/[workspaceId]/members/[memberId]/role - Update member role
 export async function PUT(
@@ -94,22 +95,19 @@ export async function PUT(
     }
 
     // Update the member's role
-    const updatedMember = await prisma.workspaceMember.update({
-      where: { id: memberId },
-      data: { 
-        role: role as any,
-        updatedAt: new Date() 
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true
-          }
-        }
-      }
+    const updatedMember = await prisma.$transaction(async (tx) => {
+      const memberUpdated = await tx.workspaceMember.update({
+        where: { id: memberId },
+        data: { role: role as any, updatedAt: new Date() },
+        include: {
+          user: { select: { id: true, name: true, email: true, image: true } },
+        },
+      });
+
+      // Ensure role-level permissions exist for this workspace and role
+      await ensureRolePermissionsForWorkspaceRole(workspaceId, role);
+
+      return memberUpdated;
     });
 
     return NextResponse.json({

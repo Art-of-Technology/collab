@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
+import { entityKeys } from "@/hooks/queries/useEntityDetails";
 import { extractMentionUserIds } from "@/utils/mentions";
 
 import {
@@ -204,6 +205,13 @@ export function CreateStoryDialog({
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(values.taskBoardId) });
       queryClient.invalidateQueries({ queryKey: boardItemsKeys.all });
+
+      // Invalidate stories using the correct entityKeys - this ensures StorySelect updates
+      queryClient.invalidateQueries({ queryKey: entityKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: entityKeys.list(values.workspaceId, 'stories') });
+      queryClient.invalidateQueries({ queryKey: entityKeys.list(values.workspaceId, 'stories', values.taskBoardId) });
+
+      // Also invalidate the old stories key for backward compatibility
       queryClient.invalidateQueries({ queryKey: ['stories'] });
       
       // Reset form and close dialog

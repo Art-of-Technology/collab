@@ -87,34 +87,35 @@ export default function EditWorkspaceForm({ workspace }: EditWorkspaceFormProps)
   };
   
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="name">Workspace Name</Label>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="name" className="text-sm font-medium">Workspace Name</Label>
         <Input
           id="name"
           name="name"
           value={formData.name}
           onChange={handleChange}
           placeholder="My Workspace"
+          className="text-sm"
           required
         />
       </div>
       
-      <div className="space-y-2">
-        <Label htmlFor="slug">
+      <div className="space-y-1.5">
+        <Label htmlFor="slug" className="text-sm font-medium">
           Workspace Slug
-          <span className="text-xs text-muted-foreground ml-2">
+          <span className="text-xs text-muted-foreground ml-1.5">
             (used in URLs)
           </span>
         </Label>
         <div className="flex items-center">
-          <span className="bg-muted px-3 py-2 rounded-l-md border border-r-0 border-input text-muted-foreground">
+          <span className="bg-muted px-2.5 py-1.5 rounded-l border border-r-0 border-input text-muted-foreground text-sm">
             @
           </span>
           <Input
             id="slug"
             name="slug"
-            className="rounded-l-none"
+            className="rounded-l-none text-sm"
             value={formData.slug}
             onChange={handleSlugChange}
             placeholder="my-workspace"
@@ -123,28 +124,31 @@ export default function EditWorkspaceForm({ workspace }: EditWorkspaceFormProps)
         </div>
       </div>
       
-      <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="description" className="text-sm font-medium">Description</Label>
         <Textarea
           id="description"
           name="description"
           value={formData.description}
           onChange={handleChange}
           placeholder="Describe your workspace purpose (optional)"
+          className="text-sm resize-none"
           rows={3}
         />
       </div>
       
-      <div className="flex gap-3 justify-end">
+      <div className="flex gap-2 justify-end pt-2">
         <Button
           type="button"
           variant="outline"
+          size="sm"
           onClick={() => router.refresh()}
           disabled={isLoading}
+          className="text-sm"
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" size="sm" disabled={isLoading} className="text-sm">
           {isLoading ? "Saving..." : "Save Changes"}
         </Button>
       </div>

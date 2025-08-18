@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useCallback, useState, useRef, useEffect, useMemo, useImperativeHandle, forwardRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -13,6 +13,7 @@ import Color from "@tiptap/extension-color";
 import { NodeViewRenderer, NodeViewRendererProps } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
+import { useSession } from "next-auth/react";
 import {
   Bold,
   Italic,
@@ -49,9 +50,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { uploadImage } from "@/utils/cloudinary";
 import { type User, MentionSuggestion } from "@/components/ui/mention-suggestion";
+import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-suggestion";
+import { type Epic, EpicMentionSuggestion } from "@/components/ui/epic-mention-suggestion";
+import { type Story, StoryMentionSuggestion } from "@/components/ui/story-mention-suggestion";
+import { type Milestone, MilestoneMentionSuggestion } from "@/components/ui/milestone-mention-suggestion";
+import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
+import * as Y from 'yjs'
+import { HocuspocusProvider as HPProvider } from '@hocuspocus/provider'
+import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import { useCurrentUser } from "@/hooks/queries/useUser";
+
+export interface MarkdownEditorRef {
+  getContent: () => string;
+  saveFromCollab?: () => Promise<void>;
+  resetFromSource?: (html: string) => void;
+  resetTo?: (html: string) => void;
+}
 
 interface MarkdownEditorProps {
   onChange?: (markdown: string, html: string) => void;
@@ -63,6 +82,12 @@ interface MarkdownEditorProps {
   maxHeight?: string;
   compact?: boolean;
   onAiImprove?: (text: string) => Promise<string>;
+  // Enable collaborative editing when provided. The value should be a unique, stable ID for the document.
+  collabDocumentId?: string;
+  // Optionally override the provider URL; defaults to ws://127.0.0.1:1234 in dev
+  collabServerUrl?: string;
+  // Render in read-only mode but stay connected to Yjs/Hocuspocus for live updates
+  readOnly?: boolean;
 }
 
 // Custom Image extension with resize functionality
@@ -466,7 +491,13 @@ const Mention = TiptapNode.create({
   
   selectable: false,
   
-  atom: true,
+  atom: false,
+
+  renderLabel({ node }: { node: any }) {
+    console.log('[Editor] renderLabel node:', node);
+    const username = node.attrs?.name || node.attrs?.label || node.text || '';
+    return `<span class="mention">@${username}</span>`;
+  },
   
   addAttributes() {
     return {
@@ -505,13 +536,27 @@ const Mention = TiptapNode.create({
       {
         tag: 'span[data-mention]',
         getAttrs: element => {
-          const id = element.getAttribute('data-user-id')
-          const name = element.getAttribute('data-user-name')
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
+          const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
+          
           
           if (!id || !name) {
             return false
           }
           
+          return { id, name }
+        },
+      },
+      // Backward compatibility: support <span class="mention" data-user-id="...">
+      {
+        tag: 'span.mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-user-id') || element.getAttribute('data-id')
+          const name = element.getAttribute('data-user-name') || element.getAttribute('data-name') || element.textContent?.replace('@', '')
+          if (!id || !name) {
+            return false
+          }
           return { id, name }
         },
       },
@@ -539,7 +584,486 @@ const Mention = TiptapNode.create({
   },
 })
 
-export function MarkdownEditor({
+// Define a TaskMention extension for TipTap
+const TaskMention = TiptapNode.create({
+  name: 'taskMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-task-mention]',
+        getAttrs: element => {
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-task-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-task-title') || element.getAttribute('data-title') || element.textContent?.replace('#', '')
+          const issueKey = element.getAttribute('data-task-issue-key') || element.getAttribute('data-issue-key') || ''
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="task-mention" data-id="...">
+      {
+        tag: 'span.task-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('#', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-task-mention': true, class: 'task-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '#',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `#[${displayText}](${node.attrs.id})`
+  },
+})
+
+// Define an EpicMention extension for TipTap
+const EpicMention = TiptapNode.create({
+  name: 'epicMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-epic-mention]',
+        getAttrs: element => {
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-epic-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-epic-title') || element.getAttribute('data-title') || element.textContent?.replace('~', '')
+          const issueKey = element.getAttribute('data-epic-issue-key') || element.getAttribute('data-issue-key') || ''
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="epic-mention" data-id="...">
+      {
+        tag: 'span.epic-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('~', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-epic-mention': true, class: 'epic-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '~',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `~[${displayText}](${node.attrs.id})`
+  },
+})
+
+// Define a StoryMention extension for TipTap
+const StoryMention = TiptapNode.create({
+  name: 'storyMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-story-mention]',
+        getAttrs: element => {
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-story-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-story-title') || element.getAttribute('data-title') || element.textContent?.replace('^', '')
+          const issueKey = element.getAttribute('data-story-issue-key') || element.getAttribute('data-issue-key') || ''
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="story-mention" data-id="...">
+      {
+        tag: 'span.story-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('^', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-story-mention': true, class: 'story-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '^',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `^[${displayText}](${node.attrs.id})`
+  },
+})
+
+// Define a MilestoneMention extension for TipTap
+const MilestoneMention = TiptapNode.create({
+  name: 'milestoneMention',
+  
+  group: 'inline',
+  
+  inline: true,
+  
+  selectable: false,
+  
+  atom: true,
+  
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-id'),
+        renderHTML: attributes => {
+          if (!attributes.id) {
+            return {}
+          }
+          
+          return {
+            'data-id': attributes.id,
+          }
+        },
+      },
+      
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) {
+            return {}
+          }
+          
+          return {
+            'data-title': attributes.title,
+          }
+        },
+      },
+
+      issueKey: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-issue-key'),
+        renderHTML: attributes => {
+          if (!attributes.issueKey) {
+            return {}
+          }
+          
+          return {
+            'data-issue-key': attributes.issueKey,
+          }
+        },
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-milestone-mention]',
+        getAttrs: element => {
+          // Try multiple attribute formats for backwards compatibility
+          const id = element.getAttribute('data-milestone-id') || element.getAttribute('data-id')
+          const title = element.getAttribute('data-milestone-title') || element.getAttribute('data-title') || element.textContent?.replace('!', '')
+          const issueKey = element.getAttribute('data-milestone-issue-key') || element.getAttribute('data-issue-key') || ''
+          
+          if (!id || !title) {
+            return false
+          }
+          
+          return { id, title, issueKey }
+        },
+      },
+      // Backward compatibility: support <span class="milestone-mention" data-id="...">
+      {
+        tag: 'span.milestone-mention',
+        getAttrs: element => {
+          const id = element.getAttribute('data-id')
+          const title = element.getAttribute('data-title') || element.textContent?.replace('!', '')
+          const issueKey = element.getAttribute('data-issue-key') || ''
+          if (!id || !title) {
+            return false
+          }
+          return { id, title, issueKey }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ node, HTMLAttributes }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return [
+      'span',
+      mergeAttributes(
+        { 'data-milestone-mention': true, class: 'milestone-mention' },
+        HTMLAttributes,
+      ),
+      [
+        'span',
+        { class: 'mention-symbol' },
+        '!',
+      ],
+      displayText,
+    ]
+  },
+  
+  renderText({ node }) {
+    const displayText = node.attrs.issueKey || node.attrs.title;
+    return `![${displayText}](${node.attrs.id})`
+  },
+})
+
+// Generate a consistent color based on user ID
+function getUserColor(userId: string): string {
+  const colors = [
+    '#ef4444', // red
+    '#f97316', // orange
+    '#eab308', // yellow
+    '#22c55e', // green
+    '#14b8a6', // teal
+    '#3b82f6', // blue
+    '#8b5cf6', // violet
+    '#ec4899', // pink
+    '#f43f5e', // rose
+    '#06b6d4', // cyan
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+}
+
+export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>(({
   onChange,
   content = "",
   initialValue = "",
@@ -549,7 +1073,10 @@ export function MarkdownEditor({
   maxHeight = "400px",
   compact = false,
   onAiImprove,
-}: MarkdownEditorProps) {
+  collabDocumentId,
+  collabServerUrl,
+  readOnly = false,
+}: MarkdownEditorProps, ref) => {
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showLinkPopover, setShowLinkPopover] = useState(false);
@@ -558,57 +1085,363 @@ export function MarkdownEditor({
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  
+  // Command menu states
+  const [showCommandMenu, setShowCommandMenu] = useState(false);
+  const [commandMenuPosition, setCommandMenuPosition] = useState({ top: 0, left: 0 });
+  
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const { currentWorkspace } = useWorkspace();
 
-  // Use a stable reference for initialValue to prevent re-renders
-  const initialContentRef = useRef(initialValue || content);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-primary underline cursor-pointer',
+  const initialContentRef = useRef('');
+
+  // Collab: create ydoc/provider optionally
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const providerRef = useRef<HPProvider | null>(null);
+  const indexeddbRef = useRef<IndexeddbPersistence | null>(null);
+  const [collabReady, setCollabReady] = useState(0);
+  const { data: session } = useSession();
+  const { data: currentUser } = useCurrentUser();
+  
+  // Get user info for collaboration
+  const collaborationUser = useMemo(() => {
+    if (!session?.user) {
+      return {
+        name: 'Anonymous',
+        color: '#94a3b8',
+        avatar: null,
+        initials: 'AN',
+      };
+    }
+    
+    // Generate initials from name
+    const name = session.user.name || 'User';
+    const initials = name
+      .split(' ')
+      .map(word => word[0]?.toUpperCase() || '')
+      .join('')
+      .slice(0, 2) || 'U';
+    
+    // Ensure avatar URL is absolute
+    let avatarUrl = currentUser?.image || undefined;
+    if (avatarUrl && !avatarUrl.startsWith('http')) {
+      // If it's a relative URL, make it absolute
+      avatarUrl = `${window.location.origin}${avatarUrl}`;
+    }
+    
+    return {
+      name,
+      color: getUserColor(session.user.id || 'default'),
+      avatar: avatarUrl,
+      initials,
+      id: session.user.id,
+    };
+  }, [session, currentUser?.image]);
+
+  function computeHocuspocusUrl(overriddenUrl?: string): string {
+    if (overriddenUrl && overriddenUrl.trim().length > 0) return overriddenUrl;
+    if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_HOCUSPOCUS_URL || 'ws://127.0.0.1:1234';
+
+    const envUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
+    if (envUrl && envUrl.trim().length > 0) return envUrl;
+
+    const isSecure = window.location.protocol === 'https:';
+    const scheme = isSecure ? 'wss' : 'ws';
+    const host = window.location.hostname || '127.0.0.1';
+    const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '5020';
+    return `${scheme}://${host}:${port}`;
+  }
+
+  useEffect(() => {
+    if (!collabDocumentId) return;
+
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
+
+    // Offline persistence disabled for collaboration to avoid duplicate merges
+
+    const url = computeHocuspocusUrl(collabServerUrl);
+
+    providerRef.current = new HPProvider({
+      url,
+      name: collabDocumentId,
+      document: ydoc,
+    });
+    // Ensure connection attempt even if defaults change in provider
+    try {
+      (providerRef.current as unknown as { connect?: () => void })?.connect?.();
+    } catch {}
+    setCollabReady((v) => v + 1);
+
+    // We can't safely normalize here because the editor instance is created after this effect.
+
+    return () => {
+      providerRef.current?.destroy();
+      providerRef.current = null;
+      indexeddbRef.current?.destroy();
+      indexeddbRef.current = null;
+      ydocRef.current?.destroy();
+      ydocRef.current = null;
+    };
+  }, [collabDocumentId, collabServerUrl]);
+
+  const editor = useEditor(
+    {
+      extensions: (
+        () => {
+          const base = [
+            StarterKit,
+            Link.configure({
+              openOnClick: false,
+              HTMLAttributes: {
+                class: 'text-primary underline cursor-pointer',
+              },
+            }),
+            // Replace Image with ResizableImage
+            ResizableImage.configure({
+              HTMLAttributes: {
+                class: 'resizable-image',
+              },
+            }),
+            CustomCSS.configure({ css: imageCSS }),
+            Underline,
+            Placeholder.configure({
+              placeholder,
+            }),
+            TextStyle,
+            Heading.configure({
+              levels: [1, 2, 3],
+            }),
+            Color,
+            Mention.configure({
+              renderLabel({ node }: { node: any }) {
+                console.log('[Editor] renderLabel node:', node);
+                const username = node.attrs?.name || node.attrs?.label || node.text || '';
+                return `<span class="mention">@${username}</span>`;
+              },
+              HTMLAttributes: {
+                class: 'mention',
+                'data-mention': 'true',
+              },
+            }),
+            TaskMention,
+            EpicMention,
+            StoryMention,
+            MilestoneMention,
+          ];
+
+          if (collabDocumentId && ydocRef.current) {
+            base.push(
+              Collaboration.configure({ 
+                document: ydocRef.current,
+                field: 'prosemirror',
+              }),
+              CollaborationCursor.configure({
+                provider: providerRef.current!,
+                user: collaborationUser,
+                render: (user: any) => {
+                  const cursor = document.createElement('span');
+                  cursor.classList.add('collaboration-cursor__caret');
+                  cursor.style.borderColor = user.color;
+                  
+                  const label = document.createElement('div');
+                  label.classList.add('collaboration-cursor__label');
+                  label.style.backgroundColor = user.color;
+                  
+                  // Helper function to create initials fallback
+                  const createFallback = () => {
+                    const fallback = document.createElement('div');
+                    fallback.classList.add('collaboration-cursor__avatar-fallback');
+                    fallback.style.backgroundColor = user.color;
+                    fallback.textContent = user.initials || user.name?.slice(0, 2).toUpperCase() || 'U';
+                    return fallback;
+                  };
+                  
+                  // Create avatar element if user has an image
+                  if (user.avatar && user.avatar.trim() !== '') {
+                    const avatarWrapper = document.createElement('div');
+                    avatarWrapper.classList.add('collaboration-cursor__avatar-wrapper');
+                    avatarWrapper.style.border = `2px solid ${user.color}`;
+                    
+                    const avatar = document.createElement('img');
+                    // Ensure we're using a valid URL
+                    avatar.src = user.avatar;
+                    avatar.classList.add('collaboration-cursor__avatar');
+                    // Add crossorigin attribute to handle CORS
+                    avatar.crossOrigin = 'anonymous';
+                    
+                    // Log for debugging
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.log('[Collab] Loading avatar for', user.name, ':', user.avatar);
+                    }
+                    
+                    // Handle avatar loading errors with fallback to initials
+                    avatar.onerror = () => {
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.log('[Collab] Failed to load avatar for', user.name, ', using fallback');
+                      }
+                      // Replace image with initials fallback
+                      avatarWrapper.innerHTML = '';
+                      avatarWrapper.appendChild(createFallback());
+                    };
+                    
+                    // Also add load handler to ensure image loaded
+                    avatar.onload = () => {
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.log('[Collab] Successfully loaded avatar for', user.name);
+                      }
+                    };
+                    
+                    avatarWrapper.appendChild(avatar);
+                    label.appendChild(avatarWrapper);
+                  } else {
+                    // Show initials in a circle if no avatar
+                    const fallbackWrapper = document.createElement('div');
+                    fallbackWrapper.classList.add('collaboration-cursor__avatar-wrapper');
+                    fallbackWrapper.style.border = `2px solid ${user.color}`;
+                    fallbackWrapper.appendChild(createFallback());
+                    label.appendChild(fallbackWrapper);
+                  }
+                  
+                  cursor.appendChild(label);
+                  return cursor;
+                },
+              })
+            );
+          }
+
+          return base;
+        }
+      )(),
+      content: collabDocumentId ? '' : (content || initialValue),
+      editorProps: {
+        attributes: {
+          class: cn(
+            "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
+            "min-h-[80px] p-3 rounded-md border-0",
+            "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border"
+          ),
+          style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
+        }
+      },
+      editable: !readOnly,
+      immediatelyRender: true,
+    },
+    [collabDocumentId, readOnly, collabReady, collaborationUser]
+  );
+
+  // Normalize accidental literal HTML text after collab sync
+  const hasNormalizedOnEditRef = useRef(false);
+  useEffect(() => {
+    if (!editor || !collabDocumentId || readOnly || hasNormalizedOnEditRef.current) return;
+    // Defer a tick to let Collaboration apply server content
+    const t = setTimeout(() => {
+      try {
+        console.log('[Editor] collab sync text:', editor.getText().slice(0, 200));
+        console.log('[Editor] collab sync html:', editor.getHTML().slice(0, 200));
+      } catch {}
+      const text = editor.getText().trim();
+      const startsWithTag = text.startsWith('<');
+      const looksEscaped = /&lt;\/?[a-z]+&gt;/i.test(text);
+      if (startsWithTag || looksEscaped) {
+        const normalized = text
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/^<p>/i, '')
+          .replace(/<\/p>$/i, '')
+          .trim();
+        console.log('[Editor] normalized to:', normalized);
+        editor.commands.setContent(normalized || '');
+      }
+      hasNormalizedOnEditRef.current = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, [editor, collabDocumentId, readOnly, collabReady]);
+
+  function normalizeHTML(html: string): string {
+    return html.replace(/\s+/g, ' ').trim();
+  }
+
+  // State for autosave functionality
+  const [isSaving, setIsSaving] = useState(false);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Autosave function for non-collaborative documents
+  const autoSave = useCallback(async () => {
+    if (collabDocumentId || !editor || isSaving) return;
+    
+    try {
+      setIsSaving(true);
+      const content = editor.getHTML();
+      
+      const response = await fetch('/api/collab/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      }),
-      // Replace Image with ResizableImage
-      ResizableImage.configure({
-        HTMLAttributes: {
-          class: 'resizable-image',
-        },
-      }),
-      CustomCSS.configure({ css: imageCSS }),
-      Underline,
-      Placeholder.configure({
-        placeholder,
-      }),
-      TextStyle,
-      Heading.configure({
-        levels: [1, 2, 3],
-      }),
-      Color,
-      Mention, // Add Mention extension
-    ],
-    content: initialContentRef.current,
-    editorProps: {
-      attributes: {
-        class: cn(
-          "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
-          "min-h-[80px] p-3 rounded-md border-0",
-          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border"
-        ),
-        style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
+        body: JSON.stringify({
+          documentId: undefined,
+          content: content,
+        }),
+      });
+      
+      if (response.ok) {
+        console.log('[MarkdownEditor] Auto-saved (non-collab)');
+      }
+    } catch (error) {
+      console.error('Auto-save error:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [collabDocumentId, editor, isSaving]);
+  
+  // Debounced auto-save
+  const debouncedAutoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSave();
+    }, 2000); // Auto-save after 2 seconds of inactivity
+  }, [autoSave]);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    getContent: () => {
+      return editor?.getHTML() || '';
+    },
+    saveFromCollab: async () => {
+      // no-op here; parent can trigger REST save using current HTML
+    },
+    resetFromSource: (html: string) => {
+      if (editor && !collabDocumentId) {
+        editor.commands.setContent(html || '');
       }
     },
-    onUpdate: ({ editor }) => {
-      // Get the full HTML content for rendering
-      const html = editor.getHTML();
-      
-      // Only pass HTML to the onChange handler
-      onChange?.(html, html); // Passing html twice for compatibility, but second arg could be removed if forms are updated
+    // Forcefully reset content (works for both collab and non-collab)
+    resetTo: (html: string) => {
+      if (!editor) return;
+      // Emit update so collaborators receive the change
+      editor.commands.setContent(html || '', true);
     },
-  }, []); // Empty dependency array to ensure editor only initializes once
+  }), [editor, collabDocumentId]);
+
+  useEffect(() => {
+    // Skip content updates when using collaboration to prevent duplication
+    if (collabDocumentId) return;
+    
+    if (editor && content !== undefined) {
+      const currentContent = editor.getHTML();
+      // Only update if the content is actually different to avoid unnecessary updates
+      // Normalize both current and incoming content before comparison
+      if (normalizeHTML(currentContent) !== normalizeHTML(content)) {
+        editor.commands.setContent(content || '');
+      }
+    }
+  }, [editor, content, collabDocumentId]);
+
 
   // Handle paste event for images
   useEffect(() => {
@@ -791,13 +1624,41 @@ export function MarkdownEditor({
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [caretPosition, setCaretPosition] = useState({ top: 0, left: 0 });
   const mentionSuggestionRef = useRef<HTMLDivElement>(null);
-  const { currentWorkspace } = useWorkspace();
+  
+  // Add task mention state
+  const [taskMentionQuery, setTaskMentionQuery] = useState("");
+  const [showTaskMentionSuggestions, setShowTaskMentionSuggestions] = useState(false);
+  const [taskCaretPosition, setTaskCaretPosition] = useState({ top: 0, left: 0 });
+  const taskMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add epic mention state
+  const [epicMentionQuery, setEpicMentionQuery] = useState("");
+  const [showEpicMentionSuggestions, setShowEpicMentionSuggestions] = useState(false);
+  const [epicCaretPosition, setEpicCaretPosition] = useState({ top: 0, left: 0 });
+  const epicMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add story mention state
+  const [storyMentionQuery, setStoryMentionQuery] = useState("");
+  const [showStoryMentionSuggestions, setShowStoryMentionSuggestions] = useState(false);
+  const [storyCaretPosition, setStoryCaretPosition] = useState({ top: 0, left: 0 });
+  const storyMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add milestone mention state
+  const [milestoneMentionQuery, setMilestoneMentionQuery] = useState("");
+  const [showMilestoneMentionSuggestions, setShowMilestoneMentionSuggestions] = useState(false);
+  
+  const [milestoneCaretPosition, setMilestoneCaretPosition] = useState({ top: 0, left: 0 });
+  const milestoneMentionSuggestionRef = useRef<HTMLDivElement>(null);
+  
+  // Add command menu ref
+  const commandMenuRef = useRef<HTMLDivElement>(null);
   
   // Track the last time a mention was inserted
   const lastMentionInsertedRef = useRef<number>(0);
 
   // Insert a mention at cursor position
   const insertMention = useCallback((user: User) => {
+
     if (!editor) return;
 
     const { from } = editor.state.selection;
@@ -872,6 +1733,366 @@ export function MarkdownEditor({
       }).insertContent(' ').run();
     }
   }, [editor]);
+
+  // Insert a task mention at cursor position
+  const insertTaskMention = useCallback((task: Task) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the # symbol --- //
+    let hashPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (hashPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeHashPos = nodeText.lastIndexOf('#', searchFromIndex);
+
+        while (relativeHashPos !== -1) {
+          const absoluteHashPos = pos + relativeHashPos;
+          // Ensure the found # is within the search range and before the cursor
+          if (absoluteHashPos >= searchLimit && absoluteHashPos < currentPosition) {
+            // Check if there's a space or start of node right after the #
+            // (to ensure we found the start of the mention query)
+            const textAfterHash = editor.state.doc.textBetween(absoluteHashPos + 1, currentPosition, "");
+            if (!textAfterHash.match(/^\s/) && textAfterHash.indexOf('#') === -1) { // Ensure no space and no other # between trigger and cursor
+              hashPosition = absoluteHashPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeHashPos - 1;
+          relativeHashPos = nodeText.lastIndexOf('#', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowTaskMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if # was found
+    if (hashPosition !== -1) {
+      // Delete from the found # position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: hashPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the task mention node where the # was
+      editor.chain().insertContentAt(hashPosition, {
+        type: 'taskMention',
+        attrs: {
+          id: task.id,
+          title: task.title,
+          issueKey: task.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(hashPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no # was found, insert the task mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'taskMention',
+        attrs: {
+          id: task.id,
+          title: task.title,
+          issueKey: task.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
+  // Insert an epic mention at cursor position
+  const insertEpicMention = useCallback((epic: Epic) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the ~ symbol --- //
+    let tildePosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (tildePosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeTildePos = nodeText.lastIndexOf('~', searchFromIndex);
+
+        while (relativeTildePos !== -1) {
+          const absoluteTildePos = pos + relativeTildePos;
+          // Ensure the found ~ is within the search range and before the cursor
+          if (absoluteTildePos >= searchLimit && absoluteTildePos < currentPosition) {
+            // Check if there's a space or start of node right after the ~
+            // (to ensure we found the start of the mention query)
+            const textAfterTilde = editor.state.doc.textBetween(absoluteTildePos + 1, currentPosition, "");
+            if (!textAfterTilde.match(/^\s/) && textAfterTilde.indexOf('~') === -1) { // Ensure no space and no other ~ between trigger and cursor
+              tildePosition = absoluteTildePos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeTildePos - 1;
+          relativeTildePos = nodeText.lastIndexOf('~', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowEpicMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if ~ was found
+    if (tildePosition !== -1) {
+      // Delete from the found ~ position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: tildePosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the epic mention node where the ~ was
+      editor.chain().insertContentAt(tildePosition, {
+        type: 'epicMention',
+        attrs: {
+          id: epic.id,
+          title: epic.title,
+          issueKey: epic.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(tildePosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no ~ was found, insert the epic mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'epicMention',
+        attrs: {
+          id: epic.id,
+          title: epic.title,
+          issueKey: epic.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
+  // Insert a story mention at cursor position
+  const insertStoryMention = useCallback((story: Story) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the ^ symbol --- //
+    let caretPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (caretPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeCaretPos = nodeText.lastIndexOf('^', searchFromIndex);
+
+        while (relativeCaretPos !== -1) {
+          const absoluteCaretPos = pos + relativeCaretPos;
+          // Ensure the found ^ is within the search range and before the cursor
+          if (absoluteCaretPos >= searchLimit && absoluteCaretPos < currentPosition) {
+            // Check if there's a space or start of node right after the ^
+            // (to ensure we found the start of the mention query)
+            const textAfterCaret = editor.state.doc.textBetween(absoluteCaretPos + 1, currentPosition, "");
+            if (!textAfterCaret.match(/^\s/) && textAfterCaret.indexOf('^') === -1) { // Ensure no space and no other ^ between trigger and cursor
+              caretPosition = absoluteCaretPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeCaretPos - 1;
+          relativeCaretPos = nodeText.lastIndexOf('^', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowStoryMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if ^ was found
+    if (caretPosition !== -1) {
+      // Delete from the found ^ position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: caretPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the story mention node where the ^ was
+      editor.chain().insertContentAt(caretPosition, {
+        type: 'storyMention',
+        attrs: {
+          id: story.id,
+          title: story.title,
+          issueKey: story.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(caretPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no ^ was found, insert the story mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'storyMention',
+        attrs: {
+          id: story.id,
+          title: story.title,
+          issueKey: story.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
+  // Insert a milestone mention at cursor position
+  const insertMilestoneMention = useCallback((milestone: Milestone) => {
+    if (!editor) return;
+
+    const { from } = editor.state.selection;
+    const currentPosition = from;
+
+    // --- Robustly find the position of the ! symbol --- //
+    let exclamationPosition = -1;
+    // Search backwards from the cursor position
+    const searchLimit = Math.max(0, currentPosition - 50); // Limit search to 50 chars back
+    editor.state.doc.nodesBetween(searchLimit, currentPosition, (node, pos) => {
+      if (exclamationPosition !== -1) return false; // Stop if already found
+
+      if (node.isText) {
+        const nodeText = node.textContent || '';
+        let searchFromIndex = currentPosition - pos - 1; // Start searching from the relative cursor position within the node
+        let relativeExclamationPos = nodeText.lastIndexOf('!', searchFromIndex);
+
+        while (relativeExclamationPos !== -1) {
+          const absoluteExclamationPos = pos + relativeExclamationPos;
+          // Ensure the found ! is within the search range and before the cursor
+          if (absoluteExclamationPos >= searchLimit && absoluteExclamationPos < currentPosition) {
+            // Check if there's a space or start of node right after the !
+            // (to ensure we found the start of the mention query)
+            const textAfterExclamation = editor.state.doc.textBetween(absoluteExclamationPos + 1, currentPosition, "");
+            if (!textAfterExclamation.match(/^\s/) && textAfterExclamation.indexOf('!') === -1) { // Ensure no space and no other ! between trigger and cursor
+              exclamationPosition = absoluteExclamationPos;
+              return false; // Stop searching
+            }
+          }
+          // Continue searching backwards within the same text node
+          searchFromIndex = relativeExclamationPos - 1;
+          relativeExclamationPos = nodeText.lastIndexOf('!', searchFromIndex);
+        }
+      }
+      return true; // Continue searching other nodes
+    });
+    // --- End of robust search --- //
+
+    // Close suggestions immediately
+    setShowMilestoneMentionSuggestions(false);
+
+    // Proceed with deletion and insertion if ! was found
+    if (exclamationPosition !== -1) {
+      // Delete from the found ! position to the current cursor position
+      editor.chain().focus().deleteRange({
+        from: exclamationPosition,
+        to: currentPosition
+      }).run();
+
+      // Insert the milestone mention node where the ! was
+      editor.chain().insertContentAt(exclamationPosition, {
+        type: 'milestoneMention',
+        attrs: {
+          id: milestone.id,
+          title: milestone.title,
+          issueKey: milestone.issueKey,
+        },
+      }).run();
+
+      // Add space after the inserted mention node
+      editor.chain().insertContentAt(exclamationPosition + 1, ' ').focus().run(); // +1 because mention node itself has length 1
+
+    } else {
+      // Fallback: If no ! was found, insert the milestone mention at the current cursor position
+      // This might happen if suggestion was triggered in an unusual way
+      editor.chain().focus().insertContent({
+        type: 'milestoneMention',
+        attrs: {
+          id: milestone.id,
+          title: milestone.title,
+          issueKey: milestone.issueKey,
+        },
+      }).insertContent(' ').run();
+    }
+  }, [editor]);
+
+  // Handle command selection
+  const handleCommandSelect = useCallback((command: CommandOption) => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    
+    // Find and remove the slash trigger
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    const lastSlashIndex = content.lastIndexOf('/');
+    
+    if (lastSlashIndex !== -1) {
+      // Delete the slash and any text after it
+      editor.chain().focus().deleteRange({
+        from: lastSlashIndex,
+        to: currentPosition
+      }).run();
+    }
+    
+    // Close command menu
+    setShowCommandMenu(false);
+    
+    // Execute the command action
+    switch (command.id) {
+      case 'mention-user':
+        // Insert @ to trigger user mention
+        editor.chain().focus().insertContent('@').run();
+        break;
+      case 'mention-task':
+        // Insert # to trigger task mention
+        editor.chain().focus().insertContent('#').run();
+        break;
+      case 'mention-epic':
+        // Insert ~ to trigger epic mention
+        editor.chain().focus().insertContent('~').run();
+        break;
+      case 'mention-story':
+        // Insert ^ to trigger story mention
+        editor.chain().focus().insertContent('^').run();
+        break;
+      case 'mention-milestone':
+        // Insert ! to trigger milestone mention
+        editor.chain().focus().insertContent('!').run();
+        break;
+      default:
+        break;
+    }
+  }, [editor]);
   
   // Check for @ mentions when typing
   const checkForMentionTrigger = useCallback(() => {
@@ -917,34 +2138,256 @@ export function MarkdownEditor({
     
     setShowMentionSuggestions(false);
   }, [editor]);
-  
-  // Handle key events for mentions
-  const handleKeyDown = useCallback((event: React.KeyboardEvent | KeyboardEvent) => {
-    if (!showMentionSuggestions) return;
+
+    // Check for # task mentions when typing  
+  const checkForTaskMentionTrigger = useCallback(() => {
+    if (!editor) return;
     
-    // Let MentionSuggestion handle these keys
-    if (event.key === "ArrowUp" || event.key === "ArrowDown" || 
-        event.key === "Enter" || event.key === "Tab" || event.key === "Escape") {
-      event.preventDefault();
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last # character
+    const lastHashIndex = content.lastIndexOf('#');
+    
+    if (lastHashIndex >= 0) {
+      // Check if there's a space between the last # and the word we're typing
+      const textAfterHash = content.substring(lastHashIndex + 1);
+      const hasSpaceAfterHash = textAfterHash.match(/^\s/);
+      
+      if (!hasSpaceAfterHash) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterHash.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for task mention suggestions
+          setTaskCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setTaskMentionQuery(textAfterHash);
+          setShowTaskMentionSuggestions(true);
+          return;
+        }
+      }
     }
-  }, [showMentionSuggestions]);
+    
+    setShowTaskMentionSuggestions(false);
+  }, [editor]);
+
+    // Check for ~ epic mentions when typing  
+  const checkForEpicMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last ~ character
+    const lastTildeIndex = content.lastIndexOf('~');
+    
+    if (lastTildeIndex >= 0) {
+      // Check if there's a space between the last ~ and the word we're typing
+      const textAfterTilde = content.substring(lastTildeIndex + 1);
+      const hasSpaceAfterTilde = textAfterTilde.match(/^\s/);
+      
+      if (!hasSpaceAfterTilde) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterTilde.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for epic mention suggestions
+          setEpicCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setEpicMentionQuery(textAfterTilde);
+          setShowEpicMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowEpicMentionSuggestions(false);
+  }, [editor]);
+
+    // Check for ^ story mentions when typing  
+  const checkForStoryMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last ^ character
+    const lastCaretIndex = content.lastIndexOf('^');
+    
+    if (lastCaretIndex >= 0) {
+      // Check if there's a space between the last ^ and the word we're typing
+      const textAfterCaret = content.substring(lastCaretIndex + 1);
+      const hasSpaceAfterCaret = textAfterCaret.match(/^\s/);
+      
+      if (!hasSpaceAfterCaret) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterCaret.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for story mention suggestions
+          setStoryCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setStoryMentionQuery(textAfterCaret);
+          setShowStoryMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowStoryMentionSuggestions(false);
+  }, [editor]);
+
+    // Check for ! milestone mentions when typing  
+  const checkForMilestoneMentionTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Find the last ! character
+    const lastExclamationIndex = content.lastIndexOf('!');
+    
+
+    
+    if (lastExclamationIndex >= 0) {
+      // Check if there's a space between the last ! and the word we're typing
+      const textAfterExclamation = content.substring(lastExclamationIndex + 1);
+      const hasSpaceAfterExclamation = textAfterExclamation.match(/^\s/);
+      
+      if (!hasSpaceAfterExclamation) {
+        // Don't show suggestions if the query starts with a special character
+        if (!textAfterExclamation.match(/^[^a-zA-Z0-9]/)) {
+          // Position the suggestion popup
+          const domPosition = editor.view.coordsAtPos(currentPosition);
+          const editorContainer = editor.view.dom.getBoundingClientRect();
+          
+          // Set caret position for milestone mention suggestions
+          setMilestoneCaretPosition({
+            top: domPosition.bottom - editorContainer.top,
+            left: domPosition.left - editorContainer.left,
+          });
+          
+          // Set the query and show suggestions
+          setMilestoneMentionQuery(textAfterExclamation);
+          setShowMilestoneMentionSuggestions(true);
+          return;
+        }
+      }
+    }
+    
+    setShowMilestoneMentionSuggestions(false);
+  }, [editor]);
+
+  // Check for command trigger (/)
+  const checkForCommandTrigger = useCallback(() => {
+    if (!editor) return;
+    
+    const currentPosition = editor.view.state.selection.from;
+    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    
+    // Look for slash at the beginning of a line or after a space
+    const lastSlashIndex = content.lastIndexOf('/');
+    
+    if (lastSlashIndex >= 0) {
+      const textBeforeSlash = content.substring(0, lastSlashIndex);
+      const textAfterSlash = content.substring(lastSlashIndex + 1);
+      
+      // Check if slash is at line start or after whitespace
+      const isValidSlashPosition = lastSlashIndex === 0 || 
+        textBeforeSlash.endsWith(' ') || 
+        textBeforeSlash.endsWith('\n');
+      
+      // Check if there's no space after slash (still typing command)
+      const hasSpaceAfterSlash = textAfterSlash.includes(' ') || textAfterSlash.includes('\n');
+      
+      if (isValidSlashPosition && !hasSpaceAfterSlash && textAfterSlash.length <= 20) {
+        // Position the command menu
+        const domPosition = editor.view.coordsAtPos(currentPosition);
+        const editorContainer = editor.view.dom.getBoundingClientRect();
+        
+        setCommandMenuPosition({
+          top: domPosition.bottom - editorContainer.top,
+          left: domPosition.left - editorContainer.left,
+        });
+        
+        setShowCommandMenu(true);
+        return;
+      }
+    }
+    
+    setShowCommandMenu(false);
+  }, [editor]);
   
+  // Add mention event handlers and change propagation to parent
+  const emitChangeToParent = useCallback(() => {
+    if (!editor || !onChange) return;
+    try {
+      const html = editor.getHTML();
+      onChange(html, html);
+    } catch {}
+  }, [editor, onChange]);
+
   // Add mention event handlers
   useEffect(() => {
     if (!editor) return;
     
-    // Listen for keydown events
-    const onKeyDown = (e: KeyboardEvent) => handleKeyDown(e);
-    editor.view.dom.addEventListener('keydown', onKeyDown);
-    
     // Update the editor
     editor.on('update', checkForMentionTrigger);
+    editor.on('update', checkForTaskMentionTrigger);
+    editor.on('update', checkForEpicMentionTrigger);
+    editor.on('update', checkForStoryMentionTrigger);
+    editor.on('update', checkForMilestoneMentionTrigger);
+    editor.on('update', checkForCommandTrigger);
+    editor.on('update', emitChangeToParent);
     
     return () => {
-      editor.view.dom.removeEventListener('keydown', onKeyDown);
       editor.off('update', checkForMentionTrigger);
+      editor.off('update', checkForTaskMentionTrigger);
+      editor.off('update', checkForEpicMentionTrigger);
+      editor.off('update', checkForStoryMentionTrigger);
+      editor.off('update', checkForMilestoneMentionTrigger);
+      editor.off('update', checkForCommandTrigger);
+      editor.off('update', emitChangeToParent);
     };
-  }, [editor, handleKeyDown, checkForMentionTrigger]);
+  }, [editor, checkForMentionTrigger, checkForTaskMentionTrigger, checkForEpicMentionTrigger, checkForStoryMentionTrigger, checkForMilestoneMentionTrigger, checkForCommandTrigger, emitChangeToParent]);
+
+  // Handle keyboard events for command menu
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Let CommandMenu handle these keys when it's open
+      if (showCommandMenu && ["ArrowUp", "ArrowDown", "Enter", "Escape"].includes(event.key)) {
+        event.preventDefault();
+        return;
+      }
+    };
+
+    editor.view.dom.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      editor.view.dom.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editor, showCommandMenu]);
   
   // Close mention suggestions when clicking outside
   useEffect(() => {
@@ -956,6 +2399,51 @@ export function MarkdownEditor({
         !editor.view.dom.contains(event.target as HTMLElement)
       ) {
         setShowMentionSuggestions(false);
+      }
+      
+      if (
+        taskMentionSuggestionRef.current &&
+        !taskMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowTaskMentionSuggestions(false);
+      }
+      
+      if (
+        epicMentionSuggestionRef.current &&
+        !epicMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowEpicMentionSuggestions(false);
+      }
+      
+      if (
+        storyMentionSuggestionRef.current &&
+        !storyMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowStoryMentionSuggestions(false);
+      }
+      
+      if (
+        milestoneMentionSuggestionRef.current &&
+        !milestoneMentionSuggestionRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowMilestoneMentionSuggestions(false);
+      }
+      
+      if (
+        commandMenuRef.current &&
+        !commandMenuRef.current.contains(event.target as HTMLElement) &&
+        editor &&
+        !editor.view.dom.contains(event.target as HTMLElement)
+      ) {
+        setShowCommandMenu(false);
       }
     }
     
@@ -973,9 +2461,43 @@ export function MarkdownEditor({
       .ProseMirror .mention {
         background-color: hsl(var(--primary) / 0.1);
         border-radius: 0.25rem;
+        padding: 0 0.rem;
+        margin: 0;
+        color: hsl(var(--primary));
+        line-height: 1.2;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+        position: relative;
+        top: -0.1rem;
+      }
+      
+      .ProseMirror .task-mention {
+        background-color: transparent;
+        border-radius: 0.25rem;
         padding: 0.125rem 0.25rem;
         margin: 0 0.125rem;
         color: hsl(var(--primary));
+        font-weight: 500;
+        text-decoration: underline;
+        text-transform: uppercase;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
+      .ProseMirror .epic-mention {
+        background-color: rgba(168, 85, 247, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #a855f7;
         font-weight: 500;
         white-space: nowrap;
         display: inline-flex;
@@ -984,7 +2506,39 @@ export function MarkdownEditor({
         cursor: pointer;
       }
       
-      .ProseMirror .mention .mention-symbol {
+      .ProseMirror .story-mention {
+        background-color: rgba(34, 197, 94, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #22c55e;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
+      .ProseMirror .milestone-mention {
+        background-color: rgba(245, 158, 11, 0.1);
+        border-radius: 0.25rem;
+        padding: 0.125rem 0.25rem;
+        margin: 0 0.125rem;
+        color: #f59e0b;
+        font-weight: 500;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        user-select: all;
+        cursor: pointer;
+      }
+      
+      .ProseMirror .mention .mention-symbol,
+      .ProseMirror .task-mention .mention-symbol,
+      .ProseMirror .epic-mention .mention-symbol,
+      .ProseMirror .story-mention .mention-symbol,
+      .ProseMirror .milestone-mention .mention-symbol {
         opacity: 0.7;
         margin-right: 1px;
       }
@@ -1006,6 +2560,7 @@ export function MarkdownEditor({
 
   return (
     <div className={cn("flex flex-col rounded-md border", className)}>
+      {!readOnly && (
       <div className="flex flex-wrap items-center gap-0.5 p-1 border-b bg-muted/30">
         <TooltipProvider delayDuration={200}>
           <Tooltip>
@@ -1369,6 +2924,7 @@ export function MarkdownEditor({
           </Tooltip>
         </TooltipProvider>
       </div>
+      )}
 
       <div className="flex-1 relative" ref={editorContainerRef}>
         <EditorContent editor={editor} className="w-full" />
@@ -1447,7 +3003,7 @@ export function MarkdownEditor({
               position: "absolute",
               top: `${caretPosition.top}px`,
               left: `${caretPosition.left}px`,
-              zIndex: 9999,
+              zIndex: 999999,
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
@@ -1455,10 +3011,116 @@ export function MarkdownEditor({
               query={mentionQuery}
               onSelect={insertMention}
               workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Task Mention Suggestions */}
+        {showTaskMentionSuggestions && (
+          <div 
+            ref={taskMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${taskCaretPosition.top}px`,
+              left: `${taskCaretPosition.left}px`,
+              zIndex: 999999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <TaskMentionSuggestion
+              query={taskMentionQuery}
+              onSelect={insertTaskMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowTaskMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Epic Mention Suggestions */}
+        {showEpicMentionSuggestions && (
+          <div 
+            ref={epicMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${epicCaretPosition.top}px`,
+              left: `${epicCaretPosition.left}px`,
+              zIndex: 999999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <EpicMentionSuggestion
+              query={epicMentionQuery}
+              onSelect={insertEpicMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowEpicMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Story Mention Suggestions */}
+        {showStoryMentionSuggestions && (
+          <div 
+            ref={storyMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${storyCaretPosition.top}px`,
+              left: `${storyCaretPosition.left}px`,
+              zIndex: 999999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <StoryMentionSuggestion
+              query={storyMentionQuery}
+              onSelect={insertStoryMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowStoryMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Milestone Mention Suggestions */}
+        {showMilestoneMentionSuggestions && (
+          <div 
+            ref={milestoneMentionSuggestionRef}
+            style={{ 
+              position: "absolute",
+              top: `${milestoneCaretPosition.top}px`,
+              left: `${milestoneCaretPosition.left}px`,
+              zIndex: 999999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <MilestoneMentionSuggestion
+              query={milestoneMentionQuery}
+              onSelect={insertMilestoneMention}
+              workspaceId={currentWorkspace?.id}
+              onEscape={() => setShowMilestoneMentionSuggestions(false)}
+            />
+          </div>
+        )}
+
+        {/* Command Menu */}
+        {showCommandMenu && (
+          <div 
+            ref={commandMenuRef}
+            style={{ 
+              position: "absolute",
+              top: `${commandMenuPosition.top}px`,
+              left: `${commandMenuPosition.left}px`,
+              zIndex: 999999,
+            }}
+            className="transition-all duration-200 animate-in slide-in-from-left-1"
+          >
+            <CommandMenu
+              onSelect={handleCommandSelect}
+              onEscape={() => setShowCommandMenu(false)}
             />
           </div>
         )}
       </div>
     </div>
   );
-} 
+});
+
+MarkdownEditor.displayName = 'MarkdownEditor'; 

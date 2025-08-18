@@ -3,6 +3,8 @@
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { extractMentionUserIds } from '@/utils/mentions';
+import { NotificationService, NotificationType } from '@/lib/notification-service';
 
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED';
 type PostPriority = 'normal' | 'high' | 'critical';
@@ -15,16 +17,18 @@ export async function getPosts({
   tag,
   authorId,
   workspaceId,
-  limit = 20
+  limit = 20,
+  cursor
 }: {
   type?: PostType;
   tag?: string;
   authorId?: string;
   workspaceId?: string;
   limit?: number;
+  cursor?: string;
 }) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user?.email) {
     throw new Error('Unauthorized');
   }
@@ -78,15 +82,24 @@ export async function getPosts({
       } 
     : {};
   
+  // Add cursor-based pagination
+  const cursorCondition = cursor ? {
+    id: {
+      lt: cursor
+    }
+  } : {};
+
   // Get the posts
   const posts = await prisma.post.findMany({
     where: {
       ...query,
       ...tagFilter,
+      ...cursorCondition,
     },
     orderBy: [
       { isPinned: "desc" }, // Pinned posts first
       { createdAt: "desc" }, // Then by creation date
+      { id: "desc" }, // Then by ID for consistent ordering
     ],
     include: {
       author: {
@@ -128,11 +141,29 @@ export async function getPosts({
           authorId: true,
         },
       },
+      followers: {
+        select: {
+          userId: true,
+        }
+      }
     },
-    take: limit,
+    take: limit + 1, // Take one extra to check if there are more
   });
 
-  return posts;
+  // Check if there are more posts
+  const hasMore = posts.length > limit;
+  const actualPosts = hasMore ? posts.slice(0, limit) : posts;
+  
+  const postsWithFollowers = actualPosts.map(post => ({
+    ...post,
+    isFollowing: post.followers.some(follower => follower.userId === session.user.id),
+  }));
+
+  return {
+    posts: postsWithFollowers,
+    hasMore,
+    nextCursor: actualPosts.length > 0 ? actualPosts[actualPosts.length - 1].id : null
+  };
 }
 
 /**
@@ -335,6 +366,43 @@ export async function createPost(data: {
 
     return newPost;
   });
+  
+  // Process mentions and auto-follow mentioned users
+  const mentionedUserIds = extractMentionUserIds(html || message);
+
+
+  // Auto-follow mentioned users to the post
+  await NotificationService.autoFollowPost(post.id, [...mentionedUserIds, user.id]);
+
+  if (mentionedUserIds.length > 0) {
+    try {
+      // Create mention notifications
+      await prisma.notification.createMany({
+        data: mentionedUserIds.map(userId => ({
+          type: "post_mention",
+          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`,
+          userId: userId,
+          senderId: user.id,
+          read: false,
+          postId: post.id,
+        }))
+      });
+
+
+      if(post.type === 'BLOCKER') {
+        await NotificationService.notifyPostFollowers({
+          postId: post.id,
+          senderId: user.id,
+          type: NotificationType.POST_BLOCKER_CREATED,
+          content: `${user.name} created a blocker post`,
+          excludeUserIds: [],
+        });
+      }
+    } catch (error) {
+      console.error("Failed to create mention notifications or auto-follow:", error);
+      // Don't fail the post creation if mentions fail
+    }
+  }
   
   // Process tags if provided
   if (tags && tags.length > 0) {
@@ -780,6 +848,20 @@ export async function resolveBlockerPost(postId: string) {
 
     return post;
   });
+  
+  // Notify post followers about the resolution
+  try {
+    await NotificationService.notifyPostFollowers({
+      postId: postId,
+      senderId: user.id,
+      type: NotificationType.POST_RESOLVED,
+      content: `resolved the blocker post`,
+      excludeUserIds: [],
+    });
+  } catch (error) {
+    console.error("Failed to notify post followers:", error);
+    // Don't fail the post resolution if notifications fail
+  }
   
   return updatedPost;
 }

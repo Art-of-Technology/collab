@@ -2,20 +2,26 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+The following table lists the versions of this project that currently receive security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 0.2.2   | :white_check_mark: |
+| < 0.2.2 | :x:                |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+If you discover a security vulnerability in this project, please report it to us via email at **security@weezboo.com**.  
+We request that you do **not** publicly disclose the issue until we have released a fix.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+**Response time:**  
+- We aim to acknowledge your report within **48 hours**.  
+- You can expect a progress update within **5 business days**.
+
+**Process:**  
+1. We will confirm receipt of your report.  
+2. Our team will investigate and verify the issue.  
+3. If confirmed, we will work on a fix and coordinate a release.  
+4. You will be credited in the release notes if you wish.
+
+We appreciate your help in keeping this project secure for everyone.

@@ -25,7 +25,7 @@ export default function KanbanColumn({
   newIssueTitle,
   editingColumnId,
   newColumnName,
-  projectId,
+  projects,
   workspaceId,
   currentUserId,
   onIssueClick,
@@ -126,7 +126,7 @@ export default function KanbanColumn({
                   <QuickIssueCreate
                     columnId={column.id}
                     columnStatus={column.name}
-                    projectId={projectId}
+                    projects={projects}
                     workspaceId={workspaceId}
                     currentUserId={currentUserId}
                     onCancel={onCancelCreatingIssue}

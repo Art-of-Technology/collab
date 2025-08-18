@@ -20,7 +20,7 @@ export function TimelineHeader({
   groupedMonths,
 }: TimelineHeaderProps) {
   return (
-    <div className="sticky top-0 z-20 bg-card border-b shadow-sm">
+    <div className="sticky top-0 z-20 bg-[#0e0e0e] border-b border-[#1a1a1a] shadow-sm">
       {/* Month row */}
       <div 
         className="grid" 
@@ -29,11 +29,11 @@ export function TimelineHeader({
           width: `calc(150px + ${totalDays * dayWidth}px)`
         }}
       >
-        <div className="p-2 text-center font-medium bg-muted/50 border-r"></div>
+        <div className="p-2 text-center font-medium bg-[#1a1a1a] border-r border-[#333] text-[#8b949e]"></div>
         {groupedMonths.map(({ month, days }) => (
           <div
             key={month.toISOString()}
-            className="border-r font-medium text-center text-xs py-1 bg-muted/30"
+            className="border-r border-[#333] font-medium text-center text-xs py-2 bg-[#161616] text-[#e6edf3]"
             style={{ gridColumn: `span ${days.length}` }}
           >
             {format(month, "MMMM yyyy")}
@@ -49,18 +49,34 @@ export function TimelineHeader({
           width: `calc(150px + ${totalDays * dayWidth}px)`
         }}
       >
-        <div className="p-2 font-medium text-center border-r bg-muted">Item</div>
+        <div className="p-2 font-medium text-center border-r border-[#333] bg-[#1a1a1a] text-[#e6edf3] text-sm">
+          Item
+        </div>
         {timelineDays.map((day, index) => (
           <div
             key={index}
             className={cn(
-              "py-1 px-0.5 text-center text-[10px] border-r truncate transition-colors",
-              day.getDay() === 0 || day.getDay() === 6 ? "bg-muted/40" : "bg-card",
-              isSameDay(now, day) ? "bg-primary/10 font-medium" : ""
+              "py-1.5 px-0.5 text-center text-[10px] border-r border-[#333] truncate transition-colors",
+              day.getDay() === 0 || day.getDay() === 6 
+                ? "bg-[#161616]" 
+                : "bg-[#0e0e0e]",
+              isSameDay(now, day) 
+                ? "bg-[#0969da]/20 border-[#0969da]/40" 
+                : ""
             )}
           >
-            <div className="font-medium">{format(day, "d")}</div>
-            <div className="text-muted-foreground">{format(day, "EEE")}</div>
+            <div className={cn(
+              "font-medium",
+              isSameDay(now, day) ? "text-[#0969da]" : "text-[#e6edf3]"
+            )}>
+              {format(day, "d")}
+            </div>
+            <div className={cn(
+              "text-xs",
+              isSameDay(now, day) ? "text-[#0969da]/80" : "text-[#8b949e]"
+            )}>
+              {format(day, "EEE")}
+            </div>
           </div>
         ))}
       </div>

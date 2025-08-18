@@ -27,17 +27,17 @@ export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
   
   if (isLoading && !initialTags?.length) {
     return (
-      <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Tag className="h-5 w-5 text-primary" />
+      <Card className="border border-border/40 bg-card/50">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="flex items-center gap-2 text-base font-medium">
+            <Tag className="h-4 w-4 text-muted-foreground" />
             Popular Tags
           </CardTitle>
-          <CardDescription>Trending topics in your team</CardDescription>
+          <CardDescription className="text-xs">Trending topics in your team</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="px-4 pb-4">
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </CardContent>
       </Card>
@@ -45,22 +45,22 @@ export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
   }
   
   return (
-    <Card className="bg-card/90 backdrop-blur-sm shadow-md border-border/50 hover:shadow-lg transition-all duration-300">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <Tag className="h-5 w-5 text-primary" />
+    <Card className="border border-border/40 bg-card/50">
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="flex items-center gap-2 text-base font-medium">
+          <Tag className="h-4 w-4 text-muted-foreground" />
           Popular Tags
         </CardTitle>
-        <CardDescription>Trending topics in your team</CardDescription>
+        <CardDescription className="text-xs">Trending topics in your team</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2">
+      <CardContent className="px-4 pb-4">
+        <div className="flex flex-wrap gap-1.5">
           {popularTags.length > 0 ? (
             popularTags.map((tag: TagType) => (
               <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                 <Badge
                   variant="outline"
-                  className="text-sm py-2 px-3 hover:bg-primary/10 cursor-pointer transition-colors"
+                  className="text-xs py-1 px-2 hover:bg-muted/50 cursor-pointer transition-colors h-6"
                 >
                   <span className="mr-1 font-normal">{tag.name}</span>
                   <span className="opacity-60">{tag._count.posts}</span>
@@ -68,7 +68,7 @@ export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
               </Link>
             ))
           ) : (
-            <div className="py-4 text-center text-muted-foreground w-full">
+            <div className="py-3 text-center text-muted-foreground text-sm w-full">
               No tags to show
             </div>
           )}

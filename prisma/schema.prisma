@@ -70,23 +70,28 @@ model User {
   workspaceMemberships   WorkspaceMember[]
   conversations          Conversation[]          @relation("UserConversations")
   boardGenerationJobs    BoardGenerationJob[]
-  
-  // New unified Issue relationships
-  assignedIssues         Issue[]                 @relation("AssignedIssues")
-  reportedIssues         Issue[]                 @relation("ReportedIssues")
-  issueAssignees         IssueAssignee[]         @relation("IssueAssignee")
-  approvedIssueHelpers   IssueAssignee[]         @relation("IssueAssigneeApprover")
-  
-  // New View relationships
-  ownedViews             View[]                  @relation("OwnedViews")
-  
-  // New Issue Comment relationships
-  issueComments          IssueComment[]          @relation("IssueCommentAuthor")
-  issueCommentReactions  IssueCommentReaction[]  @relation("IssueCommentReactions")
-  
-  // Leave management relationships
   leaveRequest           LeaveRequest[]
   leaveBalances          LeaveBalance[]
+  
+  // New unified Issue system relationships
+  assignedIssues         Issue[]                 @relation("AssignedIssues")
+  reportedIssues         Issue[]                 @relation("ReportedIssues")
+  ownedViews             View[]                  @relation("OwnedViews")
+  issueCommentReactions  IssueCommentReaction[]  @relation("IssueCommentReactions")
+  createdRelations       IssueRelation[]         @relation("CreatedRelations")
+  approvedIssueHelpers   IssueAssignee[]         @relation("IssueAssigneeApprover")
+  issueAssignees         IssueAssignee[]         @relation("IssueAssignee")
+  issueComments          IssueComment[]          @relation("IssueCommentAuthor")
+  
+  // Follower relationships
+  taskFollowers          TaskFollower[]
+  postFollowers          PostFollower[]
+  boardFollowers         BoardFollower[]
+  issueFollowers         IssueFollower[]
+  viewFollowers          ViewFollower[]
+  
+  // Notification preferences
+  notificationPreferences NotificationPreferences?
 }
 
 model Account {
@@ -128,10 +133,11 @@ model Post {
   mentions      Mention[]
   notifications Notification[]
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  resolvedBy    User?          @relation("PostResolvedBy", fields: [resolvedById], references: [id])
   pinnedByUser  User?          @relation("PostPinnedBy", fields: [pinnedBy], references: [id])
+  resolvedBy    User?          @relation("PostResolvedBy", fields: [resolvedById], references: [id])
   workspace     Workspace?     @relation(fields: [workspaceId], references: [id])
   actions       PostAction[]
+  followers     PostFollower[]
   reactions     Reaction[]
   tasks         Task[]
   tags          Tag[]          @relation("PostToTag")
@@ -187,12 +193,12 @@ model Comment {
   milestoneId      String?
   html             String?
   author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   parent           Comment?       @relation("CommentToComment", fields: [parentId], references: [id], onDelete: Cascade)
   children         Comment[]      @relation("CommentToComment")
   post             Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
   story            Story?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   notifications    Notification[]
   reactions        Reaction[]
@@ -341,6 +347,8 @@ model Workspace {
   ownerId             String
   dockEnabled         Boolean               @default(true)
   timeTrackingEnabled Boolean               @default(true)
+  boardGenerationJobs BoardGenerationJob[]
+  boardItemActivities BoardItemActivity[]
   customRoles         CustomRole[]
   epics               Epic[]
   featureRequests     FeatureRequest[]
@@ -358,10 +366,8 @@ model Workspace {
   owner               User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   invitations         WorkspaceInvitation[]
   members             WorkspaceMember[]
-  boardItemActivities BoardItemActivity[]
-  boardGenerationJobs BoardGenerationJob[]
   
-  // New unified models
+  // New unified Issue system relationships
   projects            Project[]
   views               View[]
   issues              Issue[]
@@ -418,26 +424,28 @@ model Project {
 
   @@unique([name, workspaceId])
   @@unique([slug, workspaceId])
+  @@unique([issuePrefix, workspaceId])
   @@index([workspaceId])
 }
 
 // Legacy TaskBoard model for migration purposes (will be removed after migration)
 model TaskBoard {
-  id              String       @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
   slug            String
   description     String?
   workspaceId     String
-  isDefault       Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  isDefault       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   issuePrefix     String
-  nextIssueNumber Int          @default(1)
+  nextIssueNumber Int             @default(1)
+  followers       BoardFollower[]
   epics           Epic[]
   milestones      Milestone[]
   stories         Story[]
   tasks           Task[]
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   columns         TaskColumn[]
 
   @@unique([name, workspaceId])
@@ -505,6 +513,11 @@ model Issue {
   labels        TaskLabel[]      @relation("IssueToLabel")
   viewPositions ViewIssuePosition[]
   helpers       IssueAssignee[]
+  followers     IssueFollower[]
+  
+  // Issue relations
+  sourceRelations IssueRelation[] @relation("SourceRelations")
+  targetRelations IssueRelation[] @relation("TargetRelations")
   
   @@index([projectId])
   @@index([workspaceId])
@@ -559,6 +572,7 @@ model View {
   // Relationships
   workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner         User            @relation("OwnedViews", fields: [ownerId], references: [id], onDelete: Cascade)
+  followers     ViewFollower[]
   
   @@index([workspaceId])
   @@index([ownerId])
@@ -747,6 +761,7 @@ model Task {
   epicId        String?
   milestoneId   String?
   storyId       String?
+  activities    BoardItemActivity[]
   notifications Notification[]
   assignee      User?               @relation("AssignedTasks", fields: [assigneeId], references: [id])
   column        TaskColumn?         @relation(fields: [columnId], references: [id])
@@ -758,14 +773,13 @@ model Task {
   story         Story?              @relation(fields: [storyId], references: [id])
   taskBoard     TaskBoard?          @relation(fields: [taskBoardId], references: [id])
   workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  activities    BoardItemActivity[]
   assignees     TaskAssignee[]
   attachments   TaskAttachment[]
   comments      TaskComment[]
+  followers     TaskFollower[]
   userEvents    UserEvent[]
   userStatuses  UserStatus[]
   labels        TaskLabel[]         @relation("TaskToLabel")
-  relations     TaskRelations[]
 
   @@index([columnId])
   @@index([taskBoardId])
@@ -873,7 +887,7 @@ model BoardItemActivity {
   task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
-  @@index([taskId]) // Keep for backward compatibility
+  @@index([taskId])
   @@index([userId])
   @@index([workspaceId])
   @@index([boardId])
@@ -898,6 +912,7 @@ model Milestone {
   issueKey      String?
   assigneeId    String?
   reporterId    String?
+  comments      Comment[]
   epics         Epic[]
   assignee      User?          @relation("AssignedMilestones", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
@@ -906,7 +921,6 @@ model Milestone {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   notifications Notification[]
   labels        TaskLabel[]    @relation("MilestoneToLabel")
-  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -936,6 +950,7 @@ model Epic {
   position      Int?
   assigneeId    String?
   reporterId    String?
+  comments      Comment[]
   assignee      User?          @relation("AssignedEpics", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
   milestone     Milestone?     @relation(fields: [milestoneId], references: [id])
@@ -946,7 +961,6 @@ model Epic {
   stories       Story[]
   tasks         Task[]
   labels        TaskLabel[]    @relation("EpicToLabel")
-  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -978,6 +992,7 @@ model Story {
   position      Int?
   assigneeId    String?
   reporterId    String?
+  comments      Comment[]
   notifications Notification[]
   assignee      User?          @relation("AssignedStories", fields: [assigneeId], references: [id])
   column        TaskColumn?    @relation(fields: [columnId], references: [id])
@@ -987,7 +1002,6 @@ model Story {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks         Task[]
   labels        TaskLabel[]    @relation("StoryToLabel")
-  comments      Comment[]
 
   @@index([workspaceId])
   @@index([taskBoardId])
@@ -1014,7 +1028,9 @@ model Notification {
   storyId          String?
   milestoneId      String?
   taskCommentId    String?
+  leaveRequestId   String?
   comment          Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  leaveRequest     LeaveRequest?   @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   epic             Epic?           @relation(fields: [epicId], references: [id], onDelete: Cascade)
   featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
   milestone        Milestone?      @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
@@ -1034,6 +1050,7 @@ model Notification {
   @@index([epicId])
   @@index([storyId])
   @@index([milestoneId])
+  @@index([leaveRequestId])
 }
 
 model UserEvent {
@@ -1205,6 +1222,81 @@ model BoardGenerationJob {
   @@index([status])
 }
 
+model TaskFollower {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([taskId, createdAt])
+}
+
+model PostFollower {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([postId, createdAt])
+}
+
+model BoardFollower {
+  id        String    @id @default(cuid())
+  boardId   String
+  userId    String
+  createdAt DateTime  @default(now())
+  board     TaskBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@index([boardId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([boardId, createdAt])
+}
+
+model IssueFollower {
+  id        String   @id @default(cuid())
+  issueId   String
+  userId    String
+  createdAt DateTime @default(now())
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@index([issueId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([issueId, createdAt])
+}
+
+model ViewFollower {
+  id        String   @id @default(cuid())
+  viewId    String
+  userId    String
+  createdAt DateTime @default(now())
+  view      View     @relation(fields: [viewId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([viewId, userId])
+  @@index([viewId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([viewId, createdAt])
+}
+
 model TaskRelations {
   id              String       @id @default(cuid())
   taskId          String
@@ -1213,14 +1305,35 @@ model TaskRelations {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  // Relations
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
   // Indexes
   @@unique([taskId, relatedItemId, relatedItemType])
   @@index([taskId])
   @@index([relatedItemId, relatedItemType])
   @@map("task_relations")
+}
+
+model IssueRelation {
+  id              String              @id @default(cuid())
+  sourceIssueId   String
+  targetIssueId   String
+  relationType    IssueRelationType
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  createdBy       String?
+  
+  // Relationships
+  sourceIssue     Issue               @relation("SourceRelations", fields: [sourceIssueId], references: [id], onDelete: Cascade)
+  targetIssue     Issue               @relation("TargetRelations", fields: [targetIssueId], references: [id], onDelete: Cascade)
+  creator         User?               @relation("CreatedRelations", fields: [createdBy], references: [id])
+
+  // Ensure unique relations
+  @@unique([sourceIssueId, targetIssueId, relationType])
+  @@index([sourceIssueId])
+  @@index([targetIssueId])
+  @@index([relationType])
+  @@index([sourceIssueId, relationType])
+  @@index([targetIssueId, relationType])
+  @@map("issue_relations")
 }
 
 model LeaveRequest {
@@ -1237,8 +1350,9 @@ model LeaveRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  policy LeavePolicy @relation(fields: [policyId], references: [id], onUpdate: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policy        LeavePolicy    @relation(fields: [policyId], references: [id], onUpdate: Cascade)
+  notifications Notification[]
 
   // Indexes
   @@index([userId])
@@ -1570,6 +1684,7 @@ enum Permission {
   VIEW_REPORTS
   PIN_POST
   RESOLVE_BLOCKER
+  MANAGE_LEAVE
 }
 enum IssueType {
   EPIC
@@ -1578,6 +1693,16 @@ enum IssueType {
   DEFECT
   MILESTONE
   SUBTASK
+}
+
+enum IssueRelationType {
+  PARENT
+  CHILD
+  BLOCKS
+  BLOCKED_BY
+  RELATES_TO
+  DUPLICATES
+  DUPLICATED_BY
 }
 
 enum ViewDisplayType {
@@ -1594,4 +1719,50 @@ enum ViewVisibility {
   PERSONAL
   WORKSPACE
   SHARED
+}
+
+model NotificationPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Task notifications
+  taskCreated         Boolean @default(true)
+  taskStatusChanged   Boolean @default(true)
+  taskAssigned        Boolean @default(true)
+  taskCommentAdded    Boolean @default(true)
+  taskPriorityChanged Boolean @default(true)
+  taskDueDateChanged  Boolean @default(true)
+  taskColumnMoved     Boolean @default(false)
+  taskUpdated         Boolean @default(true)
+  taskDeleted         Boolean @default(true)
+  taskMentioned       Boolean @default(true)
+
+  // Board notifications
+  boardTaskCreated       Boolean @default(true)
+  boardTaskStatusChanged Boolean @default(true)
+  boardTaskAssigned      Boolean @default(false)
+  boardTaskCompleted     Boolean @default(true)
+  boardTaskDeleted       Boolean @default(true)
+
+  // Post notifications
+  postCommentAdded Boolean @default(true)
+  postUpdated      Boolean @default(true)
+  postResolved     Boolean @default(true)
+
+  // Leave notifications
+  leaveRequestStatusChanged Boolean @default(true)
+  leaveRequestEdited        Boolean @default(true)
+  leaveRequestManagerAlert  Boolean @default(true)
+  leaveRequestHRAlert       Boolean @default(false)
+
+  // Email notifications
+  emailNotificationsEnabled Boolean @default(true)
+
+  // Push notifications
+  pushNotificationsEnabled Boolean @default(false)
+  pushSubscription         Json? // Stores the push subscription object
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

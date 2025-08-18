@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -18,7 +19,6 @@ import {
   User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 import { getIssuePriorityBadge, getIssueTypeBadge, formatIssueDateShort } from '@/utils/issueHelpers';
 import { format } from 'date-fns';
 
@@ -124,8 +124,10 @@ export default function ListViewRenderer({
   displayProperties = ['ID', 'Priority', 'Status', 'Assignee', 'Project', 'Due date'],
   showSubIssues = true
 }: ListViewRendererProps) {
+  // Router for navigation
+  const router = useRouter();
+  
   // State management
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [hoveredIssueId, setHoveredIssueId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [selectedFilters, setSelectedFilters] = useState<{
@@ -257,8 +259,20 @@ export default function ListViewRenderer({
   }, [issues, selectedFilters, displaySettings]);
 
   // Handlers
-  const handleIssueClick = (issueId: string) => {
-    setSelectedIssueId(issueId);
+  const handleIssueClick = (issueIdOrKey: string) => {
+    // Navigate directly to the issue page (Linear-style)
+    // Use workspace slug if available, else id; fallback to issue's workspaceId
+    const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
+    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
+    
+    // Build URL with view context for proper back navigation
+    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
+    
+    if (workspaceSegment) {
+      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
+    } else {
+      router.push(`/issues/${issueIdOrKey}${viewParams}`);
+    }
   };
 
   const handleGroupToggle = (groupKey: string) => {
@@ -359,7 +373,7 @@ export default function ListViewRenderer({
       )}
       onMouseEnter={() => setHoveredIssueId(issue.id)}
       onMouseLeave={() => setHoveredIssueId(null)}
-      onClick={() => handleIssueClick(issue.id)}
+      onClick={() => handleIssueClick(issue.issueKey || issue.id)}
     >
       {/* Status Icon */}
       <div className="flex items-center w-6 mr-3 flex-shrink-0">
@@ -545,13 +559,6 @@ export default function ListViewRenderer({
         )}
       </div>
 
-      {/* Issue Detail Modal */}
-      {selectedIssueId && (
-        <IssueDetailModal
-          issueId={selectedIssueId}
-          onClose={() => setSelectedIssueId(null)}
-        />
-      )}
     </div>
   );
 } 

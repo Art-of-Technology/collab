@@ -1,4 +1,3 @@
-/* eslint-disable */
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -43,12 +42,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAssignedTasks, TaskOption } from "@/hooks/useAssignedTasks";
+import { useAssignedIssues, IssueOption } from "@/hooks/useAssignedIssues";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useActivity } from "@/context/ActivityContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { cn } from "@/lib/utils";
-import { SessionAdjustmentModal } from "@/components/tasks/SessionAdjustmentModal";
+import { SessionAdjustmentModal } from "@/components/ui/SessionAdjustmentModal";
 import { formatDurationDetailed } from "@/utils/duration";
 
 interface ActivityStatusWidgetProps {
@@ -135,22 +134,22 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const { data: session } = useSession();
   const { currentWorkspace } = useWorkspace();
   const { settings } = useWorkspaceSettings();
-  const { boards, loading: tasksLoading, refetch } = useAssignedTasks(currentWorkspace?.id);
+  const { projects, loading: issuesLoading, refetch } = useAssignedIssues(currentWorkspace?.id);
   const { userStatus, isLoading, startActivity, endActivity, handleTaskAction } = useActivity();
   const router = useRouter();
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [selectedIssueId, setSelectedIssueId] = useState<string>("");
   const [liveTime, setLiveTime] = useState<string | null>(null);
-  const [taskTotalTime, setTaskTotalTime] = useState<string>("0h 0m 0s");
-  const [taskSearchQuery, setTaskSearchQuery] = useState<string>("");
+  const [issueTotalTime, setIssueTotalTime] = useState<string>("0h 0m 0s");
+  const [issueSearchQuery, setIssueSearchQuery] = useState<string>("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [searchTasks, setSearchTasks] = useState<TaskOption[]>([]);
+  const [searchIssues, setSearchIssues] = useState<IssueOption[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showHelperModal, setShowHelperModal] = useState(false);
-  const [selectedTaskForHelper, setSelectedTaskForHelper] = useState<TaskOption | null>(null);
+  const [selectedIssueForHelper, setSelectedIssueForHelper] = useState<IssueOption | null>(null);
   const [showTimeAdjustmentModal, setShowTimeAdjustmentModal] = useState(false);
   const [timeAdjustmentData, setTimeAdjustmentData] = useState<{
-    taskId: string;
-    taskTitle: string;
+    issueId: string;
+    issueTitle: string;
     sessionDurationMs: number;
     totalDurationMs: number;
   } | null>(null);
@@ -168,26 +167,26 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     let intervalId: NodeJS.Timeout | null = null;
 
     if (userStatus?.statusStartedAt) {
-      const isTaskWorking = userStatus.currentStatus === "WORKING" && userStatus.currentTaskId && settings?.timeTrackingEnabled;
-      const isTaskPlaying = isTaskWorking && userStatus.currentTaskPlayState === "playing";
+      const isIssueWorking = userStatus.currentStatus === "WORKING" && userStatus.currentTaskId && settings?.timeTrackingEnabled;
+      const isIssuePlaying = isIssueWorking && userStatus.currentTaskPlayState === "playing";
       
-      if (isTaskPlaying) {
-        // For playing tasks, count up from total time
+      if (isIssuePlaying) {
+        // For playing issues, count up from total time
         const tick = async () => {
           const start = new Date(userStatus.statusStartedAt);
           const now = new Date();
           const sessionElapsed = now.getTime() - start.getTime();
           
           // Parse total time to milliseconds
-          const totalTimeMs = parseDurationToMs(taskTotalTime);
+          const totalTimeMs = parseDurationToMs(issueTotalTime);
           const currentTotalMs = totalTimeMs + sessionElapsed;
           setLiveTime(formatDurationDetailed(currentTotalMs));
         };
 
         tick(); // Initial update
         intervalId = setInterval(tick, 1000);
-      } else if (!isTaskWorking) {
-        // For non-task activities, count session time from zero
+      } else if (!isIssueWorking) {
+        // For non-issue activities, count session time from zero
         const tick = () => {
           const start = new Date(userStatus.statusStartedAt);
           const now = new Date();
@@ -198,7 +197,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
         tick(); // Initial update
         intervalId = setInterval(tick, 1000);
       } else {
-        // For paused/stopped tasks, show static total time
+        // For paused/stopped issues, show static total time
         setLiveTime(null);
       }
     } else {
@@ -208,7 +207,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [userStatus?.statusStartedAt, userStatus?.currentStatus, userStatus?.currentTaskId, userStatus?.currentTaskPlayState, settings?.timeTrackingEnabled, taskTotalTime]);
+  }, [userStatus?.statusStartedAt, userStatus?.currentStatus, userStatus?.currentTaskId, userStatus?.currentTaskPlayState, settings?.timeTrackingEnabled, issueTotalTime]);
 
   // Helper function to parse duration string to milliseconds
   const parseDurationToMs = (duration: string): number => {
@@ -225,70 +224,70 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
     );
   };
 
-  // Sync selectedTaskId with userStatus.currentTaskId
+  // Sync selectedIssueId with userStatus.currentTaskId (keeping currentTaskId for backward compatibility)
   useEffect(() => {
     if (userStatus?.currentStatus === "WORKING" && userStatus.currentTaskId) {
-      setSelectedTaskId(userStatus.currentTaskId);
+      setSelectedIssueId(userStatus.currentTaskId);
     } else if (userStatus?.currentStatus !== "WORKING") {
-      setSelectedTaskId("");
+      setSelectedIssueId("");
     }
   }, [userStatus?.currentTaskId, userStatus?.currentStatus]);
 
-  // Fetch total time when current task changes
+  // Fetch total time when current issue changes
   useEffect(() => {
     if (userStatus?.currentTaskId && settings?.timeTrackingEnabled) {
-      fetchTaskTotalTime(userStatus.currentTaskId);
+      fetchIssueTotalTime(userStatus.currentTaskId);
     } else {
-      setTaskTotalTime("0h 0m 0s");
+      setIssueTotalTime("0h 0m 0s");
     }
   }, [userStatus?.currentTaskId, settings?.timeTrackingEnabled]);
 
 
 
-  // Fetch total play time for a task
-  const fetchTaskTotalTime = async (taskId: string) => {
+  // Fetch total play time for an issue
+  const fetchIssueTotalTime = async (issueId: string) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}/playtime`);
+      const response = await fetch(`/api/issues/${issueId}/playtime`);
       if (response.ok) {
         const data = await response.json();
-        setTaskTotalTime(data.formattedTime || "0h 0m 0s");
-        return data.totalPlayTimeMs || 0;
+        setIssueTotalTime(data.formattedTime || "0h 0m 0s");
+        return data.totalTimeMs || 0;
       }
     } catch (error) {
-      console.error("Error fetching task total time:", error);
+      console.error("Error fetching issue total time:", error);
     }
     return 0;
   };
 
-  const handleTaskNavigation = (taskId: string, issueKey?: string) => {
+  const handleIssueNavigation = (issueId: string, issueKey?: string) => {
     if (currentWorkspace) {
-      // Use workspace slug and issue key if available, otherwise fall back to legacy format
+      // Use workspace slug and issue key if available, otherwise fall back to ID format
       if (currentWorkspace.slug && issueKey) {
-        router.push(`/${currentWorkspace.slug}/tasks/${issueKey}`);
+        router.push(`/${currentWorkspace.slug}/issues/${issueKey}`);
       } else {
-        router.push(`/${currentWorkspace.id}/tasks/${taskId}`);
+        router.push(`/${currentWorkspace.id}/issues/${issueId}`);
       }
       setIsDropdownOpen(false);
     }
   };
 
-  const handleTaskClick = (task: TaskOption) => {
-    const isAssignedToMe = task.assignee?.id === session?.user?.id;
+  const handleIssueClick = (issue: IssueOption) => {
+    const isAssignedToMe = issue.assignee?.id === session?.user?.id;
     
     if (isAssignedToMe) {
-      // User is assigned to this task, start normally
-      handleQuickStartTask(task.id);
+      // User is assigned to this issue, start normally
+      handleQuickStartIssue(issue.id);
     } else {
       // User is not assigned, show helper modal
-      setSelectedTaskForHelper(task);
+      setSelectedIssueForHelper(issue);
       setShowHelperModal(true);
     }
   };
 
-  const handleQuickStartTask = async (taskId: string) => {
+  const handleQuickStartIssue = async (issueId: string) => {
     try {
-      await startActivity("TASK_START", taskId);
-      setTaskSearchQuery("");
+      await startActivity("TASK_START", issueId);
+      setIssueSearchQuery("");
       setIsDropdownOpen(false);
       refetch();
     } catch (error) {
@@ -297,11 +296,11 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   };
 
   const handleHelperConfirm = async () => {
-    if (!selectedTaskForHelper) return;
+    if (!selectedIssueForHelper) return;
 
     try {
       // First, send help request
-      const helpResponse = await fetch(`/api/tasks/${selectedTaskForHelper.id}/request-help`, {
+      const helpResponse = await fetch(`/api/issues/${selectedIssueForHelper.id}/request-help`, {
         method: 'POST',
       });
 
@@ -312,8 +311,8 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
 
       const helpData = await helpResponse.json();
 
-      // Then, start working on the task as a helper
-      await startActivity("TASK_START", selectedTaskForHelper.id);
+      // Then, start working on the issue as a helper
+      await startActivity("TASK_START", selectedIssueForHelper.id);
 
       if (helpData.status === "approved") {
         toast({
@@ -328,7 +327,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
       }
 
       setShowHelperModal(false);
-      setSelectedTaskForHelper(null);
+      setSelectedIssueForHelper(null);
       refetch();
     } catch (error) {
       toast({
@@ -341,7 +340,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
 
   const handleHelperCancel = () => {
     setShowHelperModal(false);
-    setSelectedTaskForHelper(null);
+    setSelectedIssueForHelper(null);
   };
 
   const handleTimeAdjustmentConfirm = () => {
@@ -409,7 +408,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
   const handleEndActivity = async () => {
     try {
       await endActivity();
-      setSelectedTaskId("");
+      setSelectedIssueId("");
     } catch (error) {
       // Error handling is done in the context
     }
@@ -428,8 +427,8 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
       if (sessionDurationMs > twentyFourHoursMs) {
         // Show session adjustment modal instead of time adjustment modal
         setTimeAdjustmentData({
-          taskId,
-          taskTitle: userStatus.currentTask?.title || "Task",
+          issueId: taskId,
+          issueTitle: userStatus.currentTask?.title || "Issue",
           sessionDurationMs,
           totalDurationMs: sessionDurationMs, // For session adjustment, we only care about this session
         });
@@ -438,75 +437,75 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
       }
     }
 
-    try {
-      await handleTaskAction(action, taskId);
-      // Refresh the total play time after the action
-      await fetchTaskTotalTime(taskId);
-    } catch (error) {
-      // Error handling is done in the context
-    }
+          try {
+        await handleTaskAction(action, taskId);
+        // Refresh the total play time after the action
+        await fetchIssueTotalTime(taskId);
+      } catch (error) {
+        // Error handling is done in the context
+      }
   };
 
   const currentConfig = STATUS_CONFIGS[userStatus?.currentStatus as keyof typeof STATUS_CONFIGS] || STATUS_CONFIGS.AVAILABLE;
   const StatusIcon = currentConfig.icon;
 
-  // Search all tasks in workspace when query changes
+  // Search all issues in workspace when query changes
   useEffect(() => {
-    if (!taskSearchQuery.trim() || !currentWorkspace?.id) {
-      setSearchTasks([]);
+    if (!issueSearchQuery.trim() || !currentWorkspace?.id) {
+      setSearchIssues([]);
       return;
     }
 
-    const searchAllTasks = async () => {
+    const searchAllIssues = async () => {
       if (!currentWorkspace?.id) {
         console.warn('No current workspace available for search');
-        setSearchTasks([]);
+        setSearchIssues([]);
         return;
       }
 
       setIsSearching(true);
       try {
-        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/search-tasks?q=${encodeURIComponent(taskSearchQuery)}`);
+        const response = await fetch(`/api/workspaces/${currentWorkspace.id}/search-issues?q=${encodeURIComponent(issueSearchQuery)}`);
         if (response.ok) {
           const data = await response.json();
-          setSearchTasks(data.tasks || []);
+          setSearchIssues(data.issues || []);
         } else {
           console.error('Search failed:', response.status, response.statusText);
-          setSearchTasks([]);
+          setSearchIssues([]);
         }
       } catch (error) {
-        console.error('Error searching tasks:', error);
-        setSearchTasks([]);
+        console.error('Error searching issues:', error);
+        setSearchIssues([]);
       } finally {
         setIsSearching(false);
       }
     };
 
-    const debounceTimer = setTimeout(searchAllTasks, 300);
+    const debounceTimer = setTimeout(searchAllIssues, 300);
     return () => clearTimeout(debounceTimer);
-  }, [taskSearchQuery, currentWorkspace?.id]);
+  }, [issueSearchQuery, currentWorkspace?.id]);
 
-  // Filter tasks based on search query
-  const getFilteredTasks = () => {
-    if (!taskSearchQuery.trim()) {
-      // Show most recently created tasks assigned to me, fallback to all tasks if none assigned
-      const allTasks = boards.flatMap(board => board.tasks);
-      const myTasks = allTasks.filter(task => task.assignee?.id === session?.user?.id);
+  // Filter issues based on search query
+  const getFilteredIssues = () => {
+    if (!issueSearchQuery.trim()) {
+      // Show most recently created issues assigned to me, fallback to all issues if none assigned
+      const allIssues = projects.flatMap(project => project.issues);
+      const myIssues = allIssues.filter(issue => issue.assignee?.id === session?.user?.id);
       
-      if (myTasks.length > 0) {
+      if (myIssues.length > 0) {
         // Sort by most recently created and take top 3
-        return myTasks
+        return myIssues
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 3);
       }
       
-      // If no tasks assigned to me, show 3 most recent tasks for search purposes
-      return allTasks
+      // If no issues assigned to me, show 3 most recent issues for search purposes
+      return allIssues
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 3);
     }
     
-    return searchTasks;
+    return searchIssues;
   };
 
   const getActionButtons = () => {
@@ -564,8 +563,8 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                 if (userStatus?.currentTaskId) {
                   const sessionDurationMs = userStatus?.statusStartedAt ? Date.now() - new Date(userStatus.statusStartedAt).getTime() : 0;
                   setTimeAdjustmentData({
-                    taskId: userStatus.currentTaskId,
-                    taskTitle: userStatus.currentTask?.title || "Task",
+                    issueId: userStatus.currentTaskId,
+                    issueTitle: userStatus.currentTask?.title || "Issue",
                     sessionDurationMs,
                     totalDurationMs: sessionDurationMs,
                   });
@@ -625,7 +624,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
             <div className="space-y-0.5">
               <div className="flex items-center gap-1 md:gap-2">
                 <button
-                  onClick={() => handleTaskNavigation(userStatus.currentTask!.id, userStatus.currentTask!.issueKey)}
+                  onClick={() => handleIssueNavigation(userStatus.currentTask!.id, userStatus.currentTask!.issueKey)}
                   className="font-mono text-xs text-white/60 hover:text-white/90 hover:underline transition-colors cursor-pointer"
                   title="Click to view full task"
                 >
@@ -645,7 +644,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                 <span className={cn("text-xs", 
                   userStatus?.currentTaskPlayState === "playing" ? "text-green-400 font-semibold" : currentConfig.textColor
                 )}>
-                  {userStatus?.currentTaskPlayState === "playing" && liveTime ? liveTime : taskTotalTime}
+                  {userStatus?.currentTaskPlayState === "playing" && liveTime ? liveTime : issueTotalTime}
                 </span>
                 <span className="text-xs text-white/50">•</span>
                 <span className="text-xs text-white/60">{currentConfig.label}</span>
@@ -717,25 +716,25 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
               {/* Task Selection - Always show if time tracking is enabled */}
               {settings?.timeTrackingEnabled && (
                 <>
-                  <DropdownMenuLabel className="text-xs">Work on Task</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">Work on Issue</DropdownMenuLabel>
                   
-                  {/* Task Search */}
+                  {/* Issue Search */}
                   <div className="px-2 py-1">
                     <div className="relative">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search tasks..."
-                        value={taskSearchQuery}
-                        onChange={(e) => setTaskSearchQuery(e.target.value)}
+                        placeholder="Search issues..."
+                        value={issueSearchQuery}
+                        onChange={(e) => setIssueSearchQuery(e.target.value)}
                         className="pl-8 h-8 text-sm"
-                        disabled={tasksLoading}
+                        disabled={issuesLoading}
                       />
-                      {taskSearchQuery && (
+                      {issueSearchQuery && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="absolute right-1 top-1 h-6 w-6 p-0"
-                          onClick={() => setTaskSearchQuery("")}
+                          onClick={() => setIssueSearchQuery("")}
                         >
                           <X className="h-3 w-3" />
                         </Button>
@@ -744,39 +743,39 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                   </div>
 
                   {/* Loading State */}
-                  {(tasksLoading || isSearching) && (
+                  {(issuesLoading || isSearching) && (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       <span className="ml-2 text-sm text-muted-foreground">
-                        {tasksLoading ? "Loading tasks..." : "Searching..."}
+                        {issuesLoading ? "Loading issues..." : "Searching..."}
                       </span>
                     </div>
                   )}
 
-                  {/* Filtered Tasks */}
-                  {!tasksLoading && !isSearching && (
+                  {/* Filtered Issues */}
+                  {!issuesLoading && !isSearching && (
                     <div className="max-h-48 overflow-y-auto">
-                      {getFilteredTasks().length > 0 ? (
+                      {getFilteredIssues().length > 0 ? (
                         <>
-                          {!taskSearchQuery && (
+                          {!issueSearchQuery && (
                             <div className="px-2 py-1">
                               <div className="text-xs text-muted-foreground">
-                                {getFilteredTasks().some(task => task.assignee?.id === session?.user?.id) 
-                                  ? "Recent tasks assigned to you:" 
-                                  : "Available tasks:"
+                                {getFilteredIssues().some(issue => issue.assignee?.id === session?.user?.id) 
+                                  ? "Recent issues assigned to you:" 
+                                  : "Available issues:"
                                 }
                               </div>
                             </div>
                           )}
-                          {getFilteredTasks().map((task) => {
-                            const board = boards.find(b => b.tasks.some(t => t.id === task.id));
-                            const isAssignedToMe = task.assignee?.id === session?.user?.id;
+                          {getFilteredIssues().map((issue) => {
+                            const project = projects.find(p => p.issues.some(i => i.id === issue.id));
+                            const isAssignedToMe = issue.assignee?.id === session?.user?.id;
                             
                             return (
-                              <div key={task.id} className="group">
+                              <div key={issue.id} className="group">
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    handleTaskClick(task);
+                                    handleIssueClick(issue);
                                   }}
                                   disabled={isLoading}
                                   className="pl-6 pr-2"
@@ -788,18 +787,18 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            handleTaskNavigation(task.id, task.issueKey);
+                                            handleIssueNavigation(issue.id, issue.issueKey);
                                           }}
                                           className="font-mono text-xs opacity-70 flex-shrink-0 hover:opacity-100 hover:underline transition-opacity"
-                                          title="Click to view full task"
+                                          title="Click to view full issue"
                                         >
-                                          {task.issueKey}
+                                          {issue.issueKey}
                                         </button>
-                                        <span className="truncate flex-1 font-medium">{task.title}</span>
-                                        {task.currentPlayState === "playing" && (
+                                        <span className="truncate flex-1 font-medium">{issue.title}</span>
+                                        {issue.currentPlayState === "playing" && (
                                           <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
                                         )}
-                                        {task.currentPlayState === "paused" && (
+                                        {issue.currentPlayState === "paused" && (
                                           <div className="h-2 w-2 bg-amber-500 rounded-full flex-shrink-0" />
                                         )}
                                         {!isAssignedToMe && (
@@ -807,14 +806,14 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                                         )}
                                       </div>
                                       <div className="flex items-center justify-between pl-5">
-                                        {board && (
+                                        {project && (
                                           <div className="text-xs text-muted-foreground">
-                                            {board.name}
+                                            {project.name}
                                           </div>
                                         )}
-                                        {task.assignee && (
+                                        {issue.assignee && (
                                           <div className="text-xs text-muted-foreground">
-                                            Assigned to: {task.assignee.name}
+                                            Assigned to: {issue.assignee.name}
                                           </div>
                                         )}
                                       </div>
@@ -825,9 +824,9 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                                       className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTaskNavigation(task.id, task.issueKey);
+                                        handleIssueNavigation(issue.id, issue.issueKey);
                                       }}
-                                      title="Open full task view"
+                                      title="Open full issue view"
                                     >
                                       <ExternalLink className="h-3 w-3" />
                                     </Button>
@@ -839,7 +838,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
                         </>
                       ) : (
                         <div className="px-6 py-2 text-sm text-muted-foreground">
-                          {taskSearchQuery ? "No tasks found" : "No tasks available"}
+                          {issueSearchQuery ? "No issues found" : "No issues available"}
                         </div>
                       )}
                     </div>
@@ -897,23 +896,23 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           <DialogHeader>
             <DialogTitle>Work as Helper</DialogTitle>
             <DialogDescription>
-              You are not assigned to this task. You will be added as a helper and your time will be tracked separately.
-              {selectedTaskForHelper?.assignee && (
+              You are not assigned to this issue. You will be added as a helper and your time will be tracked separately.
+              {selectedIssueForHelper?.assignee && (
                 <span className="block mt-2 text-sm">
-                  This task is assigned to <strong>{selectedTaskForHelper.assignee.name}</strong>.
+                  This issue is assigned to <strong>{selectedIssueForHelper.assignee.name}</strong>.
                 </span>
               )}
             </DialogDescription>
           </DialogHeader>
           
-          {selectedTaskForHelper && (
+          {selectedIssueForHelper && (
             <div className="py-4">
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
                 <Activity className="h-4 w-4 text-muted-foreground" />
                 <div className="flex-1">
-                  <p className="font-medium text-sm">{selectedTaskForHelper.title}</p>
-                  {selectedTaskForHelper.issueKey && (
-                    <p className="text-xs text-muted-foreground font-mono">{selectedTaskForHelper.issueKey}</p>
+                  <p className="font-medium text-sm">{selectedIssueForHelper.title}</p>
+                  {selectedIssueForHelper.issueKey && (
+                    <p className="text-xs text-muted-foreground font-mono">{selectedIssueForHelper.issueKey}</p>
                   )}
                 </div>
               </div>
@@ -1008,7 +1007,7 @@ export function ActivityStatusWidget({ className }: ActivityStatusWidgetProps) {
           isOpen={showTimeAdjustmentModal}
           onClose={handleTimeAdjustmentCancel}
           sessionDurationMs={timeAdjustmentData.sessionDurationMs}
-          taskId={timeAdjustmentData.taskId}
+          taskId={timeAdjustmentData.issueId}
           onSessionAdjusted={handleTimeAdjusted}
           mode={timeAdjustmentData.sessionDurationMs > 24 * 60 * 60 * 1000 ? 'auto' : 'manual'}
         />

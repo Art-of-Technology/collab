@@ -51,10 +51,10 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
   } = useKanbanState(props);
 
   return (
-    <div className="h-full w-full bg-[#101011] overflow-hidden">
+    <div className="h-full flex-1 bg-[#101011] overflow-hidden">
       {/* Kanban Board Container - Full height scrollable area */}
       <div className="h-full overflow-hidden">
-        <div className="h-full p-6 overflow-hidden w-full">
+        <div className="h-full p-6 overflow-hidden">
           <KanbanBoard
             columns={columns}
             issues={filteredIssues}
@@ -64,7 +64,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             newIssueTitle={newIssueTitle}
             editingColumnId={editingColumnId}
             newColumnName={newColumnName}
-            projectId={projectId || view.projects?.[0]?.id || ''}
+            projects={view.projects || []}
             workspaceId={workspaceId || workspace?.id || ''}
             currentUserId={currentUserId || ''}
             onDragEnd={handleDragEnd}

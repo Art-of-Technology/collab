@@ -120,6 +120,18 @@ export interface IssueDetailProps {
   boardId?: string;
 }
 
+// Time tracking interfaces
+export interface PlayTime {
+  totalTimeMs: number;
+  formattedTime: string;
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+export type PlayState = "stopped" | "playing" | "paused";
+
 export interface IssueModalProps {
   issueId: string | null;
   onClose: () => void;

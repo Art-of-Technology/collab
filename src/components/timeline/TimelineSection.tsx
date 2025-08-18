@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Calendar, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, Star, Layers, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimelineItem } from "./TimelineItem";
 
@@ -38,14 +38,27 @@ export function TimelineSection({
   const typeStyles = getTypeStyles(type);
   
   if (items.length === 0) return null;
+
+  const getTypeIcon = () => {
+    switch (type) {
+      case 'milestone':
+        return <Star className="h-3.5 w-3.5 text-[#fbbf24]" />;
+      case 'epic':
+        return <Layers className="h-3.5 w-3.5 text-[#8b5cf6]" />;
+      case 'story':
+        return <BookOpen className="h-3.5 w-3.5 text-[#06b6d4]" />;
+      default:
+        return <Calendar className="h-3.5 w-3.5 text-[#8b949e]" />;
+    }
+  };
   
   return (
     <div className="timeline-section">
       {/* Section Header */}
       <div 
         className={cn(
-          "grid items-center sticky left-0 z-10 cursor-pointer transition-colors border-b",
-          typeStyles.header
+          "grid items-center sticky left-0 z-10 cursor-pointer transition-colors border-b border-[#1a1a1a]",
+          "bg-[#0e0e0e] hover:bg-[#161616]"
         )}
         style={{ 
           gridTemplateColumns: `150px repeat(${totalDays}, ${dayWidth}px)`,
@@ -53,24 +66,26 @@ export function TimelineSection({
         }}
         onClick={() => toggleSection(type)}
       >
-        <div className="flex items-center p-2 font-semibold border-r">
-          {type === 'milestone' && <Star className="h-4 w-4 mr-2 text-indigo-500" />}
-          {type === 'epic' && <Calendar className="h-4 w-4 mr-2 text-purple-500" />}
-          {type === 'story' && <div className="h-4 w-4 mr-2 rounded-sm bg-blue-400"></div>}
-          
-          <span>{title} ({items.length})</span>
+        <div className="flex items-center px-3 py-2 font-medium border-r border-[#333] bg-[#1a1a1a]">
+          <div className="flex items-center gap-2 flex-1">
+            {getTypeIcon()}
+            <span className="text-sm text-[#e6edf3]">{title}</span>
+            <span className="text-xs text-[#8b949e] bg-[#333] px-1.5 py-0.5 rounded">
+              {items.length}
+            </span>
+          </div>
           <Button 
             variant="ghost" 
             size="icon" 
-            className="ml-auto h-6 w-6"
+            className="h-5 w-5 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#333]"
             onClick={(e) => {
               e.stopPropagation();
               toggleSection(type);
             }}
           >
             {isCollapsed ? 
-              <ArrowRight className="h-3.5 w-3.5" /> : 
-              <ArrowLeft className="h-3.5 w-3.5 rotate-90" />
+              <ArrowRight className="h-3 w-3" /> : 
+              <ArrowLeft className="h-3 w-3 rotate-90" />
             }
           </Button>
         </div>
@@ -84,10 +99,13 @@ export function TimelineSection({
           {items.map((item, index) => (
             <div 
               key={item.id} 
-              className="relative" 
+              className={cn(
+                "relative transition-colors hover:bg-[#161616]/50",
+                index % 2 === 0 ? "bg-[#0e0e0e]" : "bg-[#131313]"
+              )}
               style={{ 
-                height: "40px", 
-                borderBottom: "1px solid var(--border)"
+                height: "36px", 
+                borderBottom: "1px solid #1a1a1a"
               }}
             >
               <TimelineItem

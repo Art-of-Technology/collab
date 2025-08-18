@@ -18,15 +18,7 @@ import {
 import { Plus, Search, X, ChevronsUpDown, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sortTagsBySearchTerm } from "@/utils/sortUtils";
-
-interface NoteTag {
-  id: string;
-  name: string;
-  color: string;
-  _count?: {
-    notes: number;
-  };
-}
+import { NoteTag } from "@/types/models";
 
 interface TagSelectProps {
   value: string[];
@@ -43,6 +35,11 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Keyboard navigation state
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
+  
   const { toast } = useToast();
 
   const fetchTags = useCallback(async () => {
@@ -169,14 +166,87 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 100);
+      // Reset keyboard navigation state
+      setSelectedIndex(-1);
+      setIsKeyboardNavigation(false);
     } else {
       setSearchTerm("");
+      setSelectedIndex(-1);
+      setIsKeyboardNavigation(false);
     }
   };
+
+  // Keyboard navigation handler
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle navigation keys when tag select dialog is open
+      if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
+        return;
+      }
+
+      // Total items = filteredTags + "Create new tag" button
+      const totalItems = filteredTags.length + 1;
+      
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          e.stopPropagation();
+          setIsKeyboardNavigation(true);
+          setSelectedIndex(prev => 
+            prev < totalItems - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          e.stopPropagation();
+          setIsKeyboardNavigation(true);
+          setSelectedIndex(prev => 
+            prev > 0 ? prev - 1 : totalItems - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          e.stopPropagation();
+          if (selectedIndex >= 0 && selectedIndex < filteredTags.length) {
+            // Select a tag
+            const selectedTag = filteredTags[selectedIndex];
+            handleTagSelect(selectedTag.id);
+          } else if (selectedIndex === filteredTags.length) {
+            // Open create dialog
+            setIsCreateDialogOpen(true);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          e.stopPropagation();
+          setIsOpen(false);
+          break;
+      }
+    };
+
+    // Add global event listener with capture phase
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen, selectedIndex, tags, searchTerm]); // Use tags and searchTerm instead of filteredTags
 
   const filteredTags = useMemo(() => {
     return sortTagsBySearchTerm(tags, searchTerm);
   }, [tags, searchTerm]);
+
+  // Auto-scroll to selected item
+  useEffect(() => {
+    if (selectedIndex >= 0 && isKeyboardNavigation && isOpen) {
+      const selectedElement = document.querySelector(`[data-tag-index="${selectedIndex}"]`);
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }
+    }
+  }, [selectedIndex, isKeyboardNavigation, isOpen]);
 
   const selectedTags = tags.filter(tag => value.includes(tag.id));
 
@@ -212,10 +282,16 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
               </div>
               
               <div className="max-h-[300px] overflow-y-auto p-2">
-                {filteredTags.map((tag) => (
+                {filteredTags.map((tag, index) => (
                   <div
                     key={tag.id}
-                    className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                    data-tag-index={index}
+                    className={`relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 ${
+                      selectedIndex === index && isKeyboardNavigation 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'hover:bg-accent hover:text-accent-foreground'
+                    }`}
+                    onMouseEnter={() => setIsKeyboardNavigation(false)}
                   >
                     <button
                       onClick={() => handleTagSelect(tag.id)}
@@ -263,7 +339,13 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full justify-start"
+                      className={`w-full justify-start ${
+                        selectedIndex === filteredTags.length && isKeyboardNavigation
+                          ? 'bg-primary text-primary-foreground'
+                          : ''
+                      }`}
+                      data-tag-index={filteredTags.length}
+                      onMouseEnter={() => setIsKeyboardNavigation(false)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Create new tag

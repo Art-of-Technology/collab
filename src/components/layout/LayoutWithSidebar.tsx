@@ -2,7 +2,9 @@
 
 import React from "react";
 import Sidebar from "@/components/layout/Sidebar";
+import RightSidebar from "@/components/layout/RightSidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
+import { ViewFiltersProvider } from "@/context/ViewFiltersContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import AssistantWrapper from "@/components/layout/AssistantWrapper";
@@ -25,8 +27,9 @@ export default function LayoutWithSidebar({
   const { open: commandMenuOpen, setOpen: setCommandMenuOpen } = useCommandMenu();
 
   return (
-    <div className="h-screen bg-[#101011] flex">
-      <div className="flex flex-1 overflow-hidden">
+    <ViewFiltersProvider>
+      <div className="h-screen bg-[#101011] flex">
+        <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar - responsive */}
         <div
           className={`${isCollapsed ? 'w-16' : 'w-64'
@@ -76,10 +79,15 @@ export default function LayoutWithSidebar({
         </Button>
 
         {/* Main content area */}
-        <main className="flex-1 bg-[#090909] overflow-hidden p-2">
-          <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-auto">
-            {children}
+        <main className="flex-1 bg-[#090909] overflow-hidden flex">
+          <div className="flex-1 p-2 min-w-0">
+            <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-hidden">
+              {children}
+            </div>
           </div>
+          
+          {/* Right sidebar for ViewFilters */}
+          <RightSidebar />
         </main>
 
         {/* Mobile sidebar overlay */}
@@ -89,16 +97,17 @@ export default function LayoutWithSidebar({
             onClick={toggleSidebar}
           />
         )}
+        </div>
+
+        {/* AI Assistant */}
+        <AssistantWrapper />
+
+        {/* Chat */}
+        <ChatboxWrapper />
+
+        {/* Dock */}
+        <AppDock />
       </div>
-
-      {/* AI Assistant */}
-      <AssistantWrapper />
-
-      {/* Chat */}
-      <ChatboxWrapper />
-
-      {/* Dock */}
-      <AppDock />
-    </div>
+    </ViewFiltersProvider>
   );
 }

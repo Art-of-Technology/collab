@@ -23,15 +23,19 @@ import {
   Loader2,
   Eye,
   User,
-  Globe
+  Globe,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import FilterDropdown from '@/components/views/shared/FilterDropdown';
-import DisplayDropdown from '@/components/views/shared/DisplayDropdown';
-import ViewTypeSelector from '@/components/views/shared/ViewTypeSelector';
-import FilterTags from '@/components/views/shared/FilterTags';
+import { ViewTypeSelector } from '@/components/views/selectors/ViewTypeSelector';
+import { ViewProjectSelector } from '@/components/views/selectors/ViewProjectSelector';
+import { ViewGroupingSelector } from '@/components/views/selectors/ViewGroupingSelector';
+import { ViewOrderingSelector } from '@/components/views/selectors/ViewOrderingSelector';
+import { ViewDisplayPropertiesSelector } from '@/components/views/selectors/ViewDisplayPropertiesSelector';
+import { ViewFiltersSelector } from '@/components/views/selectors/ViewFiltersSelector';
+import { useCreateView } from '@/hooks/queries/useViews';
 
 interface CreateViewModalProps {
   isOpen: boolean;
@@ -65,9 +69,9 @@ export default function CreateViewModal({
     displayProperties: ['Priority', 'Status', 'Assignee'],
   });
   
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
+  const createViewMutation = useCreateView();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,55 +85,44 @@ export default function CreateViewModal({
       return;
     }
 
-    setIsLoading(true);
-    
     try {
-      const response = await fetch(`/api/workspaces/${formData.targetWorkspaceId}/views`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          displayType: formData.displayType,
-          visibility: formData.visibility,
-          projectIds: formData.projectIds,
-          filters: selectedFilters,
-          sorting: { field: formData.ordering, direction: 'asc' },
-          grouping: { field: formData.grouping },
-          fields: formData.displayProperties,
-          layout: {
-            showSubtasks: true,
-            showLabels: true,
-            showAssigneeAvatars: true
-          }
-        })
+      const viewData = {
+        name: formData.name,
+        description: formData.description,
+        displayType: formData.displayType,
+        visibility: formData.visibility as 'PERSONAL' | 'WORKSPACE' | 'SHARED',
+        projectIds: formData.projectIds,
+        filters: selectedFilters,
+        sorting: { field: formData.ordering, direction: 'asc' },
+        grouping: { field: formData.grouping },
+        fields: formData.displayProperties,
+        layout: {
+          showSubtasks: true,
+          showLabels: true,
+          showAssigneeAvatars: true
+        }
+      };
+
+      const result = await createViewMutation.mutateAsync({
+        workspaceId: formData.targetWorkspaceId,
+        viewData
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to create view');
-      }
-
-      const { view } = await response.json();
       
       toast({
         title: 'Success',
         description: 'View created successfully'
       });
       
-      onViewCreated?.(view);
+      onViewCreated?.(result.view);
       onClose();
       
     } catch (error) {
       console.error('Error creating view:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create view',
+        description: error instanceof Error ? error.message : 'Failed to create view',
         variant: 'destructive'
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -195,18 +188,20 @@ export default function CreateViewModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] bg-[#090909] border-[#1f1f1f] text-white overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b border-[#1f1f1f] flex flex-row items-center justify-between">
-                    <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#1f1f1f] rounded-lg">
-              <Eye className="h-4 w-4 text-[#999]" />
+      <DialogContent className="max-w-3xl p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Create view</DialogTitle>
+        </DialogHeader>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-sm bg-purple-500 flex items-center justify-center">
+              <Eye className="h-2.5 w-2.5 text-white" />
             </div>
-            <DialogTitle className="text-xl font-medium text-white">Create view</DialogTitle>
+            <span className="text-[#9ca3af] text-sm">Create view</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-[#999]">Save to</span>
-            
-            {/* Workspace/Personal Selector */}
+            <span className="text-xs text-[#6e7681]">Save to</span>
             <Select
               value={formData.visibility === 'PERSONAL' ? 'PERSONAL' : formData.targetWorkspaceId} 
               onValueChange={(value) => {
@@ -225,19 +220,19 @@ export default function CreateViewModal({
                 }
               }}
             >
-              <SelectTrigger className="h-7 w-auto min-w-[100px] bg-[#5e4ec9] border-[#5e4ec9] text-white text-sm">
+              <SelectTrigger className="h-6 w-auto min-w-[80px] bg-[#238636] border-[#238636] text-white text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#090909] border-[#1f1f1f]">
-                <SelectItem value="PERSONAL" className="text-white focus:bg-[#1f1f1f]">
-                  <div className="flex items-center gap-2">
+              <SelectContent className="bg-[#0e0e0e] border-[#1a1a1a]">
+                <SelectItem value="PERSONAL" className="text-white focus:bg-[#1a1a1a] text-xs">
+                  <div className="flex items-center gap-1.5">
                     <User className="h-3 w-3" />
                     Personal
                   </div>
                 </SelectItem>
                 {workspaces.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-[#1f1f1f]">
-                    <div className="flex items-center gap-2">
+                  <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-[#1a1a1a] text-xs">
+                    <div className="flex items-center gap-1.5">
                       {workspace.logoUrl ? (
                         <img src={workspace.logoUrl} alt="" className="h-3 w-3 rounded" />
                       ) : (
@@ -249,125 +244,107 @@ export default function CreateViewModal({
                 ))}
               </SelectContent>
             </Select>
-            
-            <Button variant="ghost" size="sm" className="h-7 px-3 text-[#999] hover:text-white">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={isLoading || !formData.name.trim()}
-              size="sm" 
-              className="h-7 px-3 bg-[#0969da] hover:bg-[#0860ca] text-white"
+            <button
+              onClick={onClose}
+              className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save'
-              )}
-            </Button>
+              <X className="h-4 w-4" />
+            </button>
           </div>
-        </DialogHeader>
+        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-6">
-            {/* View Name and Description */}
-            <div className="space-y-4">
-              <div>
-                <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="View Name"
-                  className="text-xl font-medium bg-transparent border-none p-0 h-auto text-white placeholder-[#666] focus-visible:ring-0"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Description (optional)"
-                  className="bg-transparent border-none p-0 min-h-[60px] text-[#999] placeholder-[#666] resize-none focus-visible:ring-0"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+        {/* Content */}
+        <div className="px-4 py-4">
+          {/* View Name Input - Matches NewIssueModal exactly */}
+          <input
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="View name"
+                          className="w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder-[#6e7681] focus:ring-0 focus:border-none focus:outline-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 mb-3"
+              disabled={createViewMutation.isPending}
+              autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+          />
 
-            {/* View Type Selection */}
-            <ViewTypeSelector
-              selectedType={formData.displayType}
-              onTypeChange={handleDisplayTypeChange}
-              variant="modal"
-              availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
+          {/* Description Input - Matches IssueDescriptionEditor styling */}
+          <div className="relative cursor-text mb-4">
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Add description..."
+              className="w-full min-h-[80px] text-[#e6edf3] bg-transparent border-none outline-none resize-none leading-relaxed focus:ring-0 focus-visible:outline-none placeholder-[#6e7681]"
+              disabled={createViewMutation.isPending}
+              rows={3}
             />
+          </div>
 
-            {/* Filter and Display Controls */}
-            <div className="flex items-center gap-2">
-              <FilterDropdown
-                selectedFilters={selectedFilters}
-                onFilterChange={handleFilterChange}
-                variant="modal"
-                projects={projects}
-              />
+          {/* Properties - Badge Selectors like NewIssueModal */}
+          <div className="flex flex-wrap gap-1 mt-2 mb-6">
+            <ViewTypeSelector
+              value={formData.displayType as "LIST" | "KANBAN" | "TIMELINE"}
+              onChange={handleDisplayTypeChange}
+            />
+            <ViewProjectSelector
+              value={formData.projectIds}
+              onChange={(projectIds) => setFormData(prev => ({ ...prev, projectIds }))}
+              projects={projects}
+            />
+            <ViewGroupingSelector
+              value={formData.grouping}
+              onChange={(grouping) => setFormData(prev => ({ ...prev, grouping }))}
+              displayType={formData.displayType}
+            />
+            <ViewOrderingSelector
+              value={formData.ordering}
+              onChange={(ordering) => setFormData(prev => ({ ...prev, ordering }))}
+              displayType={formData.displayType}
+            />
+            <ViewDisplayPropertiesSelector
+              value={formData.displayProperties}
+              onChange={(properties) => setFormData(prev => ({ ...prev, displayProperties: properties }))}
+            />
+            <ViewFiltersSelector
+              value={selectedFilters}
+              onChange={setSelectedFilters}
+              projects={projects}
+            />
+          </div>
 
-              <DisplayDropdown
-                displayType={formData.displayType}
-                grouping={formData.grouping}
-                ordering={formData.ordering}
-                displayProperties={formData.displayProperties}
-                onGroupingChange={(grouping) => setFormData(prev => ({ ...prev, grouping }))}
-                onOrderingChange={(ordering) => setFormData(prev => ({ ...prev, ordering }))}
-                onDisplayPropertiesChange={(properties) => setFormData(prev => ({ ...prev, displayProperties: properties }))}
-                variant="modal"
-              />
+          {/* Actions */}
+          <div className="flex items-center justify-between pt-2 border-t border-[#1a1a1a]">
+            <div className="flex items-center gap-3 text-xs text-[#6e7681]">
+              <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#30363d] rounded">⌘</kbd>
+              <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#30363d] rounded">↵</kbd>
+              <span>to create</span>
             </div>
-
-            {/* Active Filters Display */}
-            {Object.keys(selectedFilters).length > 0 && (
-              <div className="space-y-2">
-                <span className="text-sm text-[#999]">Active filters:</span>
-                <FilterTags
-                  filters={selectedFilters}
-                  onRemove={removeFilter}
-                  projects={projects}
-                  variant="modal"
-                />
-              </div>
-            )}
-
-            {/* Projects List */}
-            {projects.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white font-medium">Projects</span>
-                  <span className="text-xs text-[#666]">
-                    {formData.projectIds.length === 0 ? 'All projects included' : `${formData.projectIds.length} selected`}
-                  </span>
-                </div>
-                
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {projects.map((project) => (
-                    <div
-                      key={project.id}
-                      className="flex items-center gap-3 p-2 rounded hover:bg-[#1f1f1f] cursor-pointer"
-                      onClick={() => toggleProject(project.id)}
-                    >
-                      <Checkbox
-                        checked={formData.projectIds.includes(project.id)}
-                        className="border-[#2a2a2a] data-[state=checked]:bg-[#0969da] data-[state=checked]:border-[#0969da]"
-                      />
-                      <div 
-                        className="w-3 h-3 rounded"
-                        style={{ backgroundColor: project.color || '#6b7280' }}
-                      />
-                      <span className="text-sm text-white flex-1">{project.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                onClick={onClose}
+                className="text-[#6e7681] hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={createViewMutation.isPending || !formData.name.trim()}
+                className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium disabled:opacity-50"
+              >
+                {createViewMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create view'
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

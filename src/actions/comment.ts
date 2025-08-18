@@ -3,6 +3,9 @@
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { extractMentionUserIds } from '@/utils/mentions';
+import { NotificationService, NotificationType } from '@/lib/notification-service';
+import { sanitizeHtmlToPlainText } from '@/lib/html-sanitizer';
 
 /**
  * Get comments for a post
@@ -212,6 +215,46 @@ export async function createComment(data: {
       }
     }
   });
+  
+  // Process mentions and auto-follow mentioned users
+  const mentionedUserIds = extractMentionUserIds(html || message);
+  const previewBase = sanitizeHtmlToPlainText(message);
+  if (mentionedUserIds.length > 0) {
+    try {
+      // Create mention notifications
+      await prisma.notification.createMany({
+        data: mentionedUserIds.map(userId => ({
+          type: "comment_mention",
+          content: `mentioned you in a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
+          userId: userId,
+          senderId: user.id,
+          read: false,
+          postId: postId,
+          commentId: comment.id,
+        }))
+      });
+
+      // Auto-follow mentioned users to the post
+      await NotificationService.autoFollowPost(postId, mentionedUserIds);
+    } catch (error) {
+      console.error("Failed to create mention notifications or auto-follow:", error);
+      // Don't fail the comment creation if mentions fail
+    }
+  }
+
+  // Notify all post followers about the new comment
+  try {
+    await NotificationService.notifyPostFollowers({
+      postId: postId,
+      senderId: user.id,
+      type: NotificationType.POST_COMMENT_ADDED,
+      content: `added a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
+      excludeUserIds: mentionedUserIds, // Exclude mentioned users as they already got mention notifications
+    });
+  } catch (error) {
+    console.error("Failed to notify post followers:", error);
+    // Don't fail the comment creation if notifications fail
+  }
   
   return comment;
 }

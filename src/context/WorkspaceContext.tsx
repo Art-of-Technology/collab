@@ -85,8 +85,8 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       let targetWorkspace: Workspace | null = null;
       
       if (urlWorkspaceId) {
-        // Use workspace from URL if it exists and user has access
-        targetWorkspace = data.find((w: Workspace) => w.id === urlWorkspaceId) || null;
+        // Use workspace from URL if it exists and user has access (support both ID and slug)
+        targetWorkspace = data.find((w: Workspace) => w.id === urlWorkspaceId || w.slug === urlWorkspaceId) || null;
       }
       
       if (!targetWorkspace && data.length > 0) {
@@ -116,8 +116,8 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       const urlWorkspaceId = getWorkspaceIdFromUrl();
       
       if (urlWorkspaceId) {
-        const urlWorkspace = workspaces.find(w => w.id === urlWorkspaceId);
-        if (urlWorkspace && (!currentWorkspace || currentWorkspace.id !== urlWorkspaceId)) {
+        const urlWorkspace = workspaces.find(w => w.id === urlWorkspaceId || w.slug === urlWorkspaceId);
+        if (urlWorkspace && (!currentWorkspace || (currentWorkspace.id !== urlWorkspace.id && currentWorkspace.slug !== urlWorkspaceId))) {
           setCurrentWorkspace(urlWorkspace);
           // Update localStorage for fallback purposes
           localStorage.setItem('currentWorkspaceId', urlWorkspace.id);

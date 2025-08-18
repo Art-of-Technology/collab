@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
-import { Permission, WorkspaceRole } from '@/lib/permissions';
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { Permission, WorkspaceRole } from "@/lib/permissions";
 
 interface PermissionCheckResult {
   hasPermission: boolean;
@@ -16,29 +16,32 @@ interface UserPermissions {
 
 export function usePermissions(workspaceId?: string) {
   const { data: session } = useSession();
-
   const {
     data: userPermissions,
     isLoading,
     error,
   } = useQuery<UserPermissions>({
-    queryKey: ['permissions', session?.user?.id, workspaceId],
+    queryKey: ["permissions", session?.user?.id, workspaceId],
     queryFn: async () => {
       if (!session?.user?.id || !workspaceId) {
-        throw new Error('User or workspace not found');
+        throw new Error("User or workspace not found");
       }
-
       const response = await fetch(
-        `/api/workspaces/${workspaceId}/permissions?userId=${session.user.id}`
+        `/api/workspaces/${workspaceId}/permissions?userId=${session.user.id}`,
+        { cache: "no-store" as RequestCache }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch permissions');
+        throw new Error("Failed to fetch permissions");
       }
 
       return response.json();
     },
     enabled: !!session?.user?.id && !!workspaceId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
   });
 
   const checkPermission = (permission: Permission): PermissionCheckResult => {
@@ -47,10 +50,10 @@ export function usePermissions(workspaceId?: string) {
     }
 
     if (error || !userPermissions) {
-      return { 
-        hasPermission: false, 
-        loading: false, 
-        error: error?.message || 'Failed to load permissions' 
+      return {
+        hasPermission: false,
+        loading: false,
+        error: error?.message || "Failed to load permissions",
       };
     }
 
@@ -61,20 +64,22 @@ export function usePermissions(workspaceId?: string) {
     };
   };
 
-  const hasAnyPermission = (permissions: Permission[]): PermissionCheckResult => {
+  const hasAnyPermission = (
+    permissions: Permission[]
+  ): PermissionCheckResult => {
     if (isLoading) {
       return { hasPermission: false, loading: true };
     }
 
     if (error || !userPermissions) {
-      return { 
-        hasPermission: false, 
-        loading: false, 
-        error: error?.message || 'Failed to load permissions' 
+      return {
+        hasPermission: false,
+        loading: false,
+        error: error?.message || "Failed to load permissions",
       };
     }
 
-    const hasAny = permissions.some(permission => 
+    const hasAny = permissions.some((permission) =>
       userPermissions.permissions.includes(permission)
     );
 
@@ -85,20 +90,22 @@ export function usePermissions(workspaceId?: string) {
     };
   };
 
-  const hasAllPermissions = (permissions: Permission[]): PermissionCheckResult => {
+  const hasAllPermissions = (
+    permissions: Permission[]
+  ): PermissionCheckResult => {
     if (isLoading) {
       return { hasPermission: false, loading: true };
     }
 
     if (error || !userPermissions) {
-      return { 
-        hasPermission: false, 
-        loading: false, 
-        error: error?.message || 'Failed to load permissions' 
+      return {
+        hasPermission: false,
+        loading: false,
+        error: error?.message || "Failed to load permissions",
       };
     }
 
-    const hasAll = permissions.every(permission => 
+    const hasAll = permissions.every((permission) =>
       userPermissions.permissions.includes(permission)
     );
 
@@ -115,14 +122,14 @@ export function usePermissions(workspaceId?: string) {
     }
 
     if (error || !userPermissions) {
-      return { 
-        hasPermission: false, 
-        loading: false, 
-        error: error?.message || 'Failed to load permissions' 
+      return {
+        hasPermission: false,
+        loading: false,
+        error: error?.message || "Failed to load permissions",
       };
     }
 
-    const isAdminRole = ['OWNER', 'ADMIN'].includes(userPermissions.role);
+    const isAdminRole = ["OWNER", "ADMIN"].includes(userPermissions.role);
 
     return {
       hasPermission: isAdminRole,
@@ -132,7 +139,7 @@ export function usePermissions(workspaceId?: string) {
   };
 
   const isSystemAdmin = (): boolean => {
-    return session?.user?.role === 'SYSTEM_ADMIN';
+    return session?.user?.role === "SYSTEM_ADMIN";
   };
 
   return {
@@ -150,17 +157,27 @@ export function usePermissions(workspaceId?: string) {
 // Convenience hooks for common permission checks
 export function useCanManagePosts(workspaceId?: string) {
   const { hasAnyPermission } = usePermissions(workspaceId);
-  return hasAnyPermission([Permission.EDIT_ANY_POST, Permission.DELETE_ANY_POST]);
+  return hasAnyPermission([
+    Permission.EDIT_ANY_POST,
+    Permission.DELETE_ANY_POST,
+  ]);
 }
 
 export function useCanManageTasks(workspaceId?: string) {
   const { hasAnyPermission } = usePermissions(workspaceId);
-  return hasAnyPermission([Permission.EDIT_ANY_TASK, Permission.DELETE_ANY_TASK, Permission.ASSIGN_TASK]);
+  return hasAnyPermission([
+    Permission.EDIT_ANY_TASK,
+    Permission.DELETE_ANY_TASK,
+    Permission.ASSIGN_TASK,
+  ]);
 }
 
 export function useCanManageWorkspace(workspaceId?: string) {
   const { hasAnyPermission } = usePermissions(workspaceId);
-  return hasAnyPermission([Permission.MANAGE_WORKSPACE_SETTINGS, Permission.CHANGE_MEMBER_ROLES]);
+  return hasAnyPermission([
+    Permission.MANAGE_WORKSPACE_SETTINGS,
+    Permission.CHANGE_MEMBER_ROLES,
+  ]);
 }
 
 export function useCanManageWorkspacePermissions(workspaceId?: string) {
@@ -175,10 +192,18 @@ export function useCanInviteMembers(workspaceId?: string) {
 
 export function useCanEditFeatureRequests(workspaceId?: string) {
   const { hasAnyPermission } = usePermissions(workspaceId);
-  return hasAnyPermission([Permission.EDIT_ANY_FEATURE_REQUEST, Permission.DELETE_ANY_FEATURE_REQUEST]);
+  return hasAnyPermission([
+    Permission.EDIT_ANY_FEATURE_REQUEST,
+    Permission.DELETE_ANY_FEATURE_REQUEST,
+  ]);
 }
 
 export function useCanCreateBoard(workspaceId?: string) {
   const { checkPermission } = usePermissions(workspaceId);
   return checkPermission(Permission.CREATE_BOARD);
-} 
+}
+
+export function useCanManageLeave(workspaceId?: string) {
+  const { checkPermission } = usePermissions(workspaceId);
+  return checkPermission(Permission.MANAGE_LEAVE);
+}

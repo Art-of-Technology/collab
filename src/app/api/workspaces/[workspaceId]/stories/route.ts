@@ -16,6 +16,8 @@ export async function GET(
     }
 
     const { workspaceId } = await params;
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
 
     // Check workspace membership
     const membership = await prisma.workspaceMember.findFirst({
@@ -29,11 +31,37 @@ export async function GET(
       return NextResponse.json({ error: 'Workspace not found or access denied' }, { status: 404 });
     }
 
-    // Get all stories in workspace
+    // Build where clause with search
+    const whereClause: any = {
+      workspaceId: workspaceId
+    };
+
+    if (search) {
+      whereClause.OR = [
+        {
+          title: {
+            contains: search,
+            mode: 'insensitive'
+          }
+        },
+        {
+          issueKey: {
+            contains: search,
+            mode: 'insensitive'
+          }
+        },
+        {
+          description: {
+            contains: search,
+            mode: 'insensitive'
+          }
+        }
+      ];
+    }
+
+    // Get stories in workspace with optional search
     const stories = await prisma.story.findMany({
-      where: {
-        workspaceId: workspaceId
-      },
+      where: whereClause,
       select: {
         id: true,
         title: true,
@@ -41,6 +69,7 @@ export async function GET(
         status: true,
         priority: true,
         storyPoints: true,
+        issueKey: true,
         createdAt: true,
         updatedAt: true
       },

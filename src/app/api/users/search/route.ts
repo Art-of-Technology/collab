@@ -14,9 +14,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const query = url.searchParams.get("q");
     
-    if (!query || query.length < 1) {
-      return NextResponse.json([]);
-    }
+    // If no query provided, we'll return all users (with limit)
+    const searchQuery = query?.trim() || "";
     
     // Get the workspace context if available
     const workspaceId = url.searchParams.get("workspace");
@@ -25,23 +24,54 @@ export async function GET(req: NextRequest) {
     let users;
     
     if (workspaceId) {
-      // If we have a workspace ID, only search for users within that workspace
-      users = await prisma.user.findMany({
+      // Resolve workspace by ID or slug
+      const workspace = await prisma.workspace.findFirst({
         where: {
-          OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-          ],
           AND: [
-            { id: { not: currentUser.id } },  // Exclude the current user
             {
               OR: [
-                { ownedWorkspaces: { some: { id: workspaceId } } },
-                { workspaceMemberships: { some: { workspaceId } } }
+                { id: workspaceId },
+                { slug: workspaceId }
+              ]
+            },
+            {
+              OR: [
+                { ownerId: currentUser.id },
+                { members: { some: { userId: currentUser.id } } }
               ]
             }
           ]
         },
+        select: { id: true }
+      });
+
+      if (!workspace) {
+        return NextResponse.json([], { status: 200 }); // Return empty array if workspace not found or no access
+      }
+
+      // If we have a workspace, only search for users within that workspace
+      const whereCondition: any = {
+        AND: [
+          { id: { not: currentUser.id } },  // Exclude the current user
+          {
+            OR: [
+              { ownedWorkspaces: { some: { id: workspace.id } } },
+              { workspaceMemberships: { some: { workspaceId: workspace.id } } }
+            ]
+          }
+        ]
+      };
+
+      // Add search conditions only if we have a search query
+      if (searchQuery.length > 0) {
+        whereCondition.OR = [
+          { name: { contains: searchQuery, mode: 'insensitive' } },
+          { email: { contains: searchQuery, mode: 'insensitive' } },
+        ];
+      }
+
+      users = await prisma.user.findMany({
+        where: whereCondition,
         select: {
           id: true,
           name: true,
@@ -61,16 +91,22 @@ export async function GET(req: NextRequest) {
       });
     } else {
       // If no workspace is specified, search all users
+      const whereCondition: any = {
+        AND: [
+          { id: { not: currentUser.id } }  // Exclude the current user
+        ]
+      };
+
+      // Add search conditions only if we have a search query
+      if (searchQuery.length > 0) {
+        whereCondition.OR = [
+          { name: { contains: searchQuery, mode: 'insensitive' } },
+          { email: { contains: searchQuery, mode: 'insensitive' } },
+        ];
+      }
+
       users = await prisma.user.findMany({
-        where: {
-          OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-          ],
-          AND: [
-            { id: { not: currentUser.id } }  // Exclude the current user
-          ]
-        },
+        where: whereCondition,
         select: {
           id: true,
           name: true,

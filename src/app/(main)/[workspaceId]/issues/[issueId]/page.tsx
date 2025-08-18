@@ -1,24 +1,27 @@
 "use client";
 
 import { Suspense, useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { IssueDetailContent } from "@/components/issue/IssueDetailContent";
 import { getWorkspaceIdFromClient } from "@/lib/client-workspace";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { Loader2 } from "lucide-react";
 
 export default function IssuePage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
+  const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const issueParam = params?.issueId as string;
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  
+  // Extract view context from URL params or referrer
+  const viewSlug = searchParams.get('view');
+  const viewName = searchParams.get('viewName');
 
-  useEffect(() => {
-    // Client-side workspace resolution (fallback to route param if provided)
-    const w = getWorkspaceIdFromClient();
-    setWorkspaceId(w || (params?.workspaceId as string));
-  }, [params]);
+  // Use the resolved workspace ID from context
+  const workspaceId = currentWorkspace?.id || null;
 
-  if (!workspaceId || !issueParam) {
+  if (workspaceLoading || !workspaceId || !issueParam) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
@@ -27,7 +30,7 @@ export default function IssuePage() {
   }
 
   return (
-    <div className="min-h-screen w-full overflow-y-auto bg-[#0a0a0a]">
+    <div className="h-screen w-full overflow-hidden bg-[#0a0a0a]">
       <Suspense
         fallback={
           <div className="flex h-[80vh] items-center justify-center">
@@ -38,6 +41,8 @@ export default function IssuePage() {
         <IssuePageContent 
           issueId={issueParam}
           workspaceId={workspaceId}
+          viewSlug={viewSlug}
+          viewName={viewName}
           onClose={() => router.back()}
         />
       </Suspense>
@@ -45,9 +50,11 @@ export default function IssuePage() {
   );
 }
 
-function IssuePageContent({ issueId, workspaceId, onClose }: {
+function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }: {
   issueId: string;
   workspaceId: string;
+  viewSlug: string | null;
+  viewName: string | null;
   onClose: () => void;
 }) {
   const [issue, setIssue] = useState<any>(null);
@@ -94,9 +101,10 @@ function IssuePageContent({ issueId, workspaceId, onClose }: {
       isLoading={isLoading}
       onRefresh={fetchIssue}
       onClose={onClose}
-      mode="page"
       workspaceId={workspaceId}
       issueId={issueId}
+      viewSlug={viewSlug || undefined}
+      viewName={viewName || undefined}
     />
   );
 }

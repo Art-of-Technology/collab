@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Kanban, List, Plus, GitBranch, ChevronDown } from "lucide-react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ import {
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { urls } from "@/lib/url-resolver";
+import { BoardFollowButton } from "@/components/boards/BoardFollowButton";
+import { useInvalidateBoardFollowQueries } from "@/hooks/queries/useBoardFollow";
 
 export default function TasksHeader() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
@@ -32,12 +34,23 @@ export default function TasksHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const invalidateBoardFollowQueries = useInvalidateBoardFollowQueries();
+  const previousBoardIdRef = useRef<string | null>(null);
 
   // Fetch task boards for the current workspace
   const { data: taskBoards } = useTaskBoards({
     workspaceId: currentWorkspace?.id,
     includeStats: true
   });
+
+  // Handle board switching - invalidate previous board's follow queries
+  useEffect(() => {
+    if (selectedBoardId && previousBoardIdRef.current && selectedBoardId !== previousBoardIdRef.current) {
+      // Invalidate the previous board's follow queries
+      invalidateBoardFollowQueries(previousBoardIdRef.current);
+    }
+    previousBoardIdRef.current = selectedBoardId;
+  }, [selectedBoardId, invalidateBoardFollowQueries]);
 
   const handleCreateTaskOpen = () => {
     setIsCreateTaskOpen(true);
@@ -60,11 +73,11 @@ export default function TasksHeader() {
       // Fallback to manual URL construction for backward compatibility
       const params = new URLSearchParams(searchParams.toString());
       params.set('view', newView);
-      
+
       if (selectedBoardId) {
         params.set('board', selectedBoardId);
       }
-      
+
       const url = `${pathname}?${params.toString()}`;
       router.push(url, { scroll: false });
     }
@@ -126,28 +139,38 @@ export default function TasksHeader() {
       <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <TaskBoardSelector />
-          
+
           <div className="hidden md:flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm">
-            <ViewButton 
-              icon={<Kanban size={16} />} 
-              label="Kanban" 
-              isActive={view === 'kanban'} 
-              onClick={() => handleViewChange('kanban')} 
+            <ViewButton
+              icon={<Kanban size={16} />}
+              label="Kanban"
+              isActive={view === 'kanban'}
+              onClick={() => handleViewChange('kanban')}
             />
-            <ViewButton 
-              icon={<List size={16} />} 
-              label="List" 
-              isActive={view === 'list'} 
-              onClick={() => handleViewChange('list')} 
+            <ViewButton
+              icon={<List size={16} />}
+              label="List"
+              isActive={view === 'list'}
+              onClick={() => handleViewChange('list')}
             />
-            <ViewButton 
-              icon={<GitBranch size={16} />} 
-              label="Hierarchy" 
-              isActive={view === 'hierarchy'} 
-              onClick={() => handleViewChange('hierarchy')} 
+            <ViewButton
+              icon={<GitBranch size={16} />}
+              label="Hierarchy"
+              isActive={view === 'hierarchy'}
+              onClick={() => handleViewChange('hierarchy')}
             />
           </div>
         </div>
+
+        {/* Board Follow Button - only show when a board is selected */}
+        {selectedBoardId && (
+          <div className="flex items-center">
+            <BoardFollowButton
+              boardId={selectedBoardId}
+              showFollowerCount={false}
+            />
+          </div>
+        )}
       </div>
 
       <CreateTaskForm

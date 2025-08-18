@@ -16,17 +16,18 @@ export default function WorkspaceDetailsEditor({ workspace }: WorkspaceDetailsEd
   return (
     <>
       <Button 
-        className="w-full mt-4"
+        size="sm"
+        className="w-full mt-3 text-sm"
         onClick={() => setIsOpen(true)}
       >
         Edit Workspace Details
       </Button>
       
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[525px]">
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>Edit Workspace Details</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-semibold">Edit Workspace Details</DialogTitle>
+            <DialogDescription className="text-sm">
               Update information about your workspace. Changes will be visible to all members.
             </DialogDescription>
           </DialogHeader>

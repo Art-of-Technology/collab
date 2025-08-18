@@ -49,26 +49,42 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, slug, description, logoUrl } = body;
+    const { name, description } = body;
 
     // Validate required fields
-    if (!name || !slug) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Name and slug are required' },
+        { error: 'Name is required' },
         { status: 400 }
       );
     }
 
-    // Check if slug is unique
-    const existingWorkspace = await prisma.workspace.findUnique({
-      where: { slug }
-    });
+    // Generate unique slug from name
+    const generateSlug = (name: string) => {
+      return name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    };
 
-    if (existingWorkspace) {
-      return NextResponse.json(
-        { error: 'A workspace with this slug already exists' },
-        { status: 400 }
-      );
+    let baseSlug = generateSlug(name);
+    let slug = baseSlug;
+    let counter = 1;
+
+    // Ensure slug is unique
+    while (true) {
+      const existingWorkspace = await prisma.workspace.findUnique({
+        where: { slug }
+      });
+
+      if (!existingWorkspace) {
+        break;
+      }
+
+      slug = `${baseSlug}-${counter}`;
+      counter++;
     }
 
     // Check user's workspace limit (free plan limit is 3)
@@ -89,7 +105,6 @@ export async function POST(request: NextRequest) {
         name,
         slug,
         description,
-        logoUrl,
         ownerId: session.user.id,
         members: {
           create: {

@@ -97,20 +97,21 @@ export function CreateWorkspaceForm() {
   
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Workspace Name *</FormLabel>
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-[#e6edf3] text-sm font-medium">Workspace Name</FormLabel>
               <FormControl>
-                <Input placeholder="My Team" {...field} />
+                <Input 
+                  placeholder="My Team" 
+                  {...field} 
+                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm"
+                />
               </FormControl>
-              <FormDescription>
-                This is the name that will be displayed for your workspace.
-              </FormDescription>
-              <FormMessage />
+              <FormMessage className="text-[#f85149] text-xs" />
             </FormItem>
           )}
         />
@@ -119,15 +120,19 @@ export function CreateWorkspaceForm() {
           control={form.control}
           name="slug"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Workspace Slug *</FormLabel>
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-[#e6edf3] text-sm font-medium">Workspace Slug</FormLabel>
               <FormControl>
-                <Input placeholder="my-team" {...field} />
+                <Input 
+                  placeholder="my-team" 
+                  {...field}
+                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm font-mono"
+                />
               </FormControl>
-              <FormDescription>
-                This will be used in URLs. Only lowercase letters, numbers, and hyphens are allowed.
+              <FormDescription className="text-[#6e7681] text-xs">
+                Used in URLs • Only lowercase letters, numbers, and hyphens
               </FormDescription>
-              <FormMessage />
+              <FormMessage className="text-[#f85149] text-xs" />
             </FormItem>
           )}
         />
@@ -136,19 +141,18 @@ export function CreateWorkspaceForm() {
           control={form.control}
           name="description"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-[#e6edf3] text-sm font-medium">Description</FormLabel>
               <FormControl>
                 <Textarea 
                   placeholder="A brief description of your workspace" 
                   {...field} 
                   value={field.value || ''}
+                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors resize-none text-sm min-h-[60px]"
+                  rows={2}
                 />
               </FormControl>
-              <FormDescription>
-                Describe the purpose of your workspace.
-              </FormDescription>
-              <FormMessage />
+              <FormMessage className="text-[#f85149] text-xs" />
             </FormItem>
           )}
         />
@@ -157,37 +161,38 @@ export function CreateWorkspaceForm() {
           control={form.control}
           name="logoUrl"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Logo URL</FormLabel>
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-[#e6edf3] text-sm font-medium">Logo URL</FormLabel>
               <FormControl>
                 <Input 
                   placeholder="https://example.com/logo.png" 
                   {...field} 
                   value={field.value || ''}
+                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm"
                 />
               </FormControl>
-              <FormDescription>
-                Provide a URL to your workspace logo (optional).
+              <FormDescription className="text-[#6e7681] text-xs">
+                Optional • Provide a URL to your workspace logo
               </FormDescription>
-              <FormMessage />
+              <FormMessage className="text-[#f85149] text-xs" />
             </FormItem>
           )}
         />
         
-        <div className="pt-4">
+        <div className="pt-6">
           <Button 
             type="submit" 
             disabled={createWorkspaceMutation.isPending} 
-            className="w-full"
+            className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium transition-colors disabled:opacity-50"
           >
             {createWorkspaceMutation.isPending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Workspace...
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                Creating...
               </>
             ) : (
               <>
-                <Building2 className="mr-2 h-4 w-4" />
+                <Building2 className="mr-2 h-3 w-3" />
                 Create Workspace
               </>
             )}

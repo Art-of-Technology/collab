@@ -47,7 +47,7 @@ export const issueKeys = {
 // Hook for fetching issues by workspace (used by views)
 export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[]) {
   return useQuery({
-    queryKey: issueKeys.byWorkspace(workspaceId),
+    queryKey: [...issueKeys.byWorkspace(workspaceId), ...(projectIds || []).sort()],
     queryFn: async () => {
       const params = new URLSearchParams({
         workspaceId,
@@ -103,7 +103,13 @@ export function useCreateIssue() {
     },
     onSuccess: (data, variables) => {
       // Invalidate and refetch related queries
-      queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(variables.workspaceId) });
+      // Invalidate all workspace queries (with any project combination)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === 'issues' && 
+          query.queryKey[1] === 'workspace' && 
+          query.queryKey[2] === variables.workspaceId
+      });
       queryClient.invalidateQueries({ queryKey: issueKeys.byProject(variables.projectId) });
       queryClient.invalidateQueries({ queryKey: issueKeys.lists() });
       
