@@ -85,51 +85,49 @@ export class HocuspocusManager {
         provider: this.provider,
         user,
         render: (user: any) => {
-          const cursor = document.createElement('span');
-          cursor.classList.add('collaboration-cursor__caret');
-          cursor.style.borderColor = user.color;
-          
-          const label = document.createElement('div');
-          label.classList.add('collaboration-cursor__label');
-          label.style.backgroundColor = user.color;
-          
-          // Helper function to create initials fallback
-          const createFallback = () => {
-            const fallback = document.createElement('div');
-            fallback.classList.add('collaboration-cursor__avatar-fallback');
-            fallback.style.backgroundColor = user.color;
-            fallback.textContent = user.initials || user.name?.slice(0, 2).toUpperCase() || 'U';
-            return fallback;
+          // Build a Figma-like cursor with pointer and name label
+          const getReadableTextColor = (bg: string): string => {
+            try {
+              let r = 0, g = 0, b = 0;
+              if (bg.startsWith('#')) {
+                const hex = bg.replace('#', '');
+                const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+                r = parseInt(full.substring(0, 2), 16);
+                g = parseInt(full.substring(2, 4), 16);
+                b = parseInt(full.substring(4, 6), 16);
+              } else if (bg.startsWith('rgb')) {
+                const nums = bg.match(/\d+\.?\d*/g) || [];
+                r = Number(nums[0] || 0);
+                g = Number(nums[1] || 0);
+                b = Number(nums[2] || 0);
+              }
+              const l = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+              return l > 0.6 ? '#000' : '#fff';
+            } catch {
+              return '#fff';
+            }
           };
-          
-          // Create avatar element if user has an image
-          if (user.avatar && user.avatar.trim() !== '') {
-            const avatarWrapper = document.createElement('div');
-            avatarWrapper.classList.add('collaboration-cursor__avatar-wrapper');
-            avatarWrapper.style.border = `2px solid ${user.color}`;
-            
-            const avatar = document.createElement('img');
-            avatar.src = user.avatar;
-            avatar.classList.add('collaboration-cursor__avatar');
-            avatar.crossOrigin = 'anonymous';
-            
-            // Handle avatar loading errors with fallback to initials
-            avatar.onerror = () => {
-              avatarWrapper.innerHTML = '';
-              avatarWrapper.appendChild(createFallback());
-            };
-            
-            avatarWrapper.appendChild(avatar);
-            label.appendChild(avatarWrapper);
-          } else {
-            // Show initials in a circle if no avatar
-            const fallbackWrapper = document.createElement('div');
-            fallbackWrapper.classList.add('collaboration-cursor__avatar-wrapper');
-            fallbackWrapper.style.border = `2px solid ${user.color}`;
-            fallbackWrapper.appendChild(createFallback());
-            label.appendChild(fallbackWrapper);
-          }
-          
+
+          const cursor = document.createElement('span');
+          cursor.classList.add('collaboration-cursor__caret', 'collab-cursor');
+          cursor.style.setProperty('--cursor-color', user.color);
+          cursor.style.color = user.color;
+
+          const pointer = document.createElement('div');
+          pointer.classList.add('collab-cursor__pointer');
+          pointer.innerHTML = `
+            <svg class="collab-cursor__pointer-svg" viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 2l7 18 2-7 7-2z" fill="currentColor"/>
+            </svg>
+          `;
+
+          const label = document.createElement('div');
+          label.classList.add('collab-cursor__label');
+          label.textContent = user.name || user.initials || 'User';
+          label.style.backgroundColor = user.color;
+          label.style.color = getReadableTextColor(user.color);
+
+          cursor.appendChild(pointer);
           cursor.appendChild(label);
           return cursor;
         },
