@@ -14,7 +14,7 @@ export default function KanbanBoard({
   newIssueTitle,
   editingColumnId,
   newColumnName,
-  projectId,
+  projects,
   workspaceId,
   currentUserId,
   onDragEnd,
@@ -64,7 +64,7 @@ export default function KanbanBoard({
                 newIssueTitle={newIssueTitle}
                 editingColumnId={editingColumnId}
                 newColumnName={newColumnName}
-                projectId={projectId}
+                projects={projects}
                 workspaceId={workspaceId}
                 currentUserId={currentUserId}
                 onIssueClick={onIssueClick}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,14 +17,9 @@ import {
   Clock,
   CheckCircle2
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import { useProjects } from '@/hooks/queries/useProjects';
+import { useViews } from '@/hooks/queries/useViews';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateProjectModal from '@/components/modals/CreateProjectModal';
 import { cn } from '@/lib/utils';
@@ -47,13 +42,30 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
     includeStats: true
   });
 
+  const { data: views = [] } = useViews({
+    workspaceId,
+    includeStats: true,
+  });
+
   const filteredProjects = projects.filter(project => 
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const handleProjectClick = (projectSlug: string) => {
-    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${projectSlug}`);
+  // Helper function to find default view for a project (same as in Sidebar)
+  const getDefaultViewForProject = (projectId: string) => {
+    return views.find(view => 
+      view.projectIds.includes(projectId) && view.isDefault
+    );
+  };
+
+  const handleProjectClick = (projectSlug: string, projectId: string) => {
+    const defaultView = getDefaultViewForProject(projectId);
+    const href = defaultView 
+      ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${defaultView.slug || defaultView.id}`
+      : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${projectSlug}`;
+    
+    router.push(href);
   };
 
   const handleCreateProject = () => {
@@ -77,9 +89,25 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
 
   // Project Row Component - Similar to IssueRow in ListViewRenderer
   const ProjectRow = ({ project }: { project: any }) => {
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
     const totalIssues = project._count?.issues || 0;
     const completedIssues = project._count?.completedIssues || 0;
     const progress = totalIssues > 0 ? (completedIssues / totalIssues) * 100 : 0;
+
+    // Handle clicks outside the dropdown
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+          setDropdownOpen(false);
+        }
+      };
+
+      if (dropdownOpen) {
+        document.addEventListener('mousedown', handleClickOutside, true);
+        return () => document.removeEventListener('mousedown', handleClickOutside, true);
+      }
+    }, [dropdownOpen]);
 
     return (
       <div 
@@ -90,7 +118,12 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
         )}
         onMouseEnter={() => setHoveredProjectId(project.id)}
         onMouseLeave={() => setHoveredProjectId(null)}
-        onClick={() => handleProjectClick(project.slug)}
+        onClick={(e) => {
+          // Don't navigate if dropdown is open or click is from dropdown area
+          if (!dropdownOpen && !dropdownRef.current?.contains(e.target as Node)) {
+            handleProjectClick(project.slug, project.id);
+          }
+        }}
       >
         {/* Status Icon */}
         <div className="flex items-center w-6 mr-3 flex-shrink-0">
@@ -162,26 +195,57 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
         </div>
 
         {/* Actions Menu */}
-        <div className="flex-shrink-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 text-[#666] hover:text-[#ccc] opacity-0 group-hover:opacity-100 transition-all"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-[#090909] border-[#1f1f1f]">
-              <DropdownMenuItem className="text-gray-300">Edit project</DropdownMenuItem>
-              <DropdownMenuItem className="text-gray-300">Project settings</DropdownMenuItem>
-              <DropdownMenuItem className="text-gray-300">Duplicate</DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-              <DropdownMenuItem className="text-red-400">Archive project</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="flex-shrink-0 relative" ref={dropdownRef}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="opacity-0 group-hover:opacity-100 h-6 w-6 text-[#666] hover:text-[#ccc] hover:bg-[#2a2a2a]"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setDropdownOpen(!dropdownOpen);
+            }}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </Button>
+          
+          {dropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 w-48 bg-[#090909] border border-[#1f1f1f] rounded-md shadow-lg z-[1000]">
+              <div className="py-1">
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`);
+                  }}
+                >
+                  Settings
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    // Add duplicate functionality here
+                  }}
+                >
+                  Duplicate
+                </button>
+                <div className="h-px bg-[#1f1f1f] my-1" />
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-[#1a1a1a] transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    // Add archive functionality here
+                  }}
+                >
+                  Archive project
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

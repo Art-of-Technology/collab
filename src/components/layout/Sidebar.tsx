@@ -155,7 +155,12 @@ export default function Sidebar({
     }
   }, [views, viewSearchQuery]);
 
-
+  // Helper function to find default view for a project
+  const getDefaultViewForProject = (projectId: string) => {
+    return views.find(view => 
+      view.projectIds.includes(projectId) && view.isDefault
+    );
+  };
 
   // Filter projects for sidebar display - show latest 4
   const sidebarProjects = useMemo(() => {
@@ -751,31 +756,39 @@ export default function Sidebar({
                       <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                     </div>
                   ) : sidebarProjects.length > 0 ? (
-                    sidebarProjects.map((project) => (
-                      <Button
-                        key={project.id}
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start h-7 px-2 text-sm transition-colors",
-                          pathname.includes(`/projects/${project.slug || project.id}`)
-                            ? "bg-[#1f1f1f] text-white"
-                            : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                        )}
-                        asChild
-                      >
-                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`} className="min-w-0 block">
-                          <div className="flex items-center w-full min-w-0">
-                            <FolderOpen className="mr-2 h-3 w-3 flex-shrink-0" />
-                            <span className="truncate flex-1 text-xs">{project.name}</span>
-                            {project._count?.issues && (
-                              <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
-                                {project._count.issues}
-                              </Badge>
-                            )}
-                          </div>
-                        </Link>
-                      </Button>
-                    ))
+                    sidebarProjects.map((project) => {
+                      const defaultView = getDefaultViewForProject(project.id);
+                      const href = defaultView 
+                        ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${defaultView.slug || defaultView.id}`
+                        : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`;
+                      
+                      return (
+                        <Button
+                          key={project.id}
+                          variant="ghost"
+                          className={cn(
+                            "w-full justify-start h-7 px-2 text-sm transition-colors",
+                            (defaultView && pathname.includes(`/views/${defaultView.slug || defaultView.id}`)) ||
+                            pathname.includes(`/projects/${project.slug || project.id}`)
+                              ? "bg-[#1f1f1f] text-white"
+                              : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                          )}
+                          asChild
+                        >
+                          <Link href={href} className="min-w-0 block">
+                            <div className="flex items-center w-full min-w-0">
+                              <FolderOpen className="mr-2 h-3 w-3 flex-shrink-0" />
+                              <span className="truncate flex-1 text-xs">{project.name}</span>
+                              {project._count?.issues && (
+                                <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
+                                  {project._count.issues}
+                                </Badge>
+                              )}
+                            </div>
+                          </Link>
+                        </Button>
+                      );
+                    })
                   ) : projectSearchQuery ? (
                     <div className="px-2 py-2 text-xs text-gray-500 text-center">No projects found for "{projectSearchQuery}"</div>
                   ) : (

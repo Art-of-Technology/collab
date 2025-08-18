@@ -64,7 +64,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             newIssueTitle={newIssueTitle}
             editingColumnId={editingColumnId}
             newColumnName={newColumnName}
-            projectId={projectId || view.projects?.[0]?.id || ''}
+            projects={view.projects || []}
             workspaceId={workspaceId || workspace?.id || ''}
             currentUserId={currentUserId || ''}
             onDragEnd={handleDragEnd}

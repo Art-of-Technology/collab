@@ -14,7 +14,9 @@
     "prisma:init-workspace": "ts-node prisma/scripts/create-default-workspace.ts",
     "prisma:seed": "ts-node prisma/scripts/seed.ts",
     "email:test-credentials": "ts-node scripts/generate-test-email.ts",
-    "migrate:unified-issue": "ts-node scripts/data-migration.ts"
+    "migrate:unified-issue": "ts-node scripts/data-migration.ts",
+    "migrate:production": "ts-node scripts/data-migration-last.ts",
+    "migrate:production:dry-run": "cross-env DRY_RUN=true ts-node scripts/data-migration-last.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.8.0",

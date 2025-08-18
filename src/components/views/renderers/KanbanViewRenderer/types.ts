@@ -36,7 +36,13 @@ export interface KanbanColumnProps {
   newIssueTitle: string;
   editingColumnId: string | null;
   newColumnName: string;
-  projectId: string;
+  projects: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    issuePrefix: string;
+    color?: string;
+  }>;
   workspaceId: string;
   currentUserId: string;
   onIssueClick: (issueId: string) => void;
@@ -71,7 +77,13 @@ export interface KanbanBoardProps {
   newIssueTitle: string;
   editingColumnId: string | null;
   newColumnName: string;
-  projectId: string;
+  projects: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    issuePrefix: string;
+    color?: string;
+  }>;
   workspaceId: string;
   currentUserId: string;
   onDragEnd: (result: any) => void;

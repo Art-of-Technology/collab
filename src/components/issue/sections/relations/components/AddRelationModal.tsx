@@ -3,7 +3,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Search, X, Plus, CheckSquare, Circle, GitBranch, Bug, Flag, Square } from "lucide-react";
@@ -319,7 +318,7 @@ export function AddRelationModal({
               </div>
             ) : (
               <div className="space-y-0.5 p-1">
-                {searchResults.map((item) => (
+                {searchResults.map((item: RelationItem) => (
                   <SearchRelationItem
                     key={item.id}
                     item={item}

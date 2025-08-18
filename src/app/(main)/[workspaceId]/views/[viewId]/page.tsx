@@ -144,7 +144,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
           title: true,
           issueKey: true,
           type: true,
-          status: true
+          statusValue: true
         }
       },
       column: {
@@ -174,51 +174,64 @@ export default async function ViewPage({ params }: ViewPageProps) {
     }
   };
 
-  // Apply view filters
+  // Apply view filters (only if filters exist and are not empty)
   if (view.filters && typeof view.filters === 'object') {
     const filters = view.filters as Record<string, string[]>;
     
-    Object.entries(filters).forEach(([filterKey, filterValues]) => {
-      if (Array.isArray(filterValues) && filterValues.length > 0) {
-        switch (filterKey) {
-          case 'status':
-            issuesQuery.where.status = { in: filterValues };
-            break;
-          case 'priority':
-            issuesQuery.where.priority = { in: filterValues };
-            break;
-          case 'type':
-            issuesQuery.where.type = { in: filterValues };
-            break;
-          case 'assignee':
-            issuesQuery.where.assigneeId = { in: filterValues };
-            break;
-          case 'reporter':
-            issuesQuery.where.reporterId = { in: filterValues };
-            break;
-          case 'dueDate':
-            // Handle date filters
-            if (filterValues.includes('Overdue')) {
-              issuesQuery.where.dueDate = { lt: new Date() };
-            } else if (filterValues.includes('Due Today')) {
-              const today = new Date();
-              const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-              const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-              issuesQuery.where.dueDate = { gte: startOfDay, lt: endOfDay };
-            }
-            break;
+    // Only apply filters if there are actual filter values
+    const hasActiveFilters = Object.values(filters).some(
+      filterValues => Array.isArray(filterValues) && filterValues.length > 0
+    );
+    
+    if (hasActiveFilters) {
+      Object.entries(filters).forEach(([filterKey, filterValues]) => {
+        if (Array.isArray(filterValues) && filterValues.length > 0) {
+          switch (filterKey) {
+            case 'status':
+              // Use statusValue for backward compatibility (issues use this field)
+              issuesQuery.where.statusValue = { in: filterValues };
+              break;
+            case 'priority':
+              issuesQuery.where.priority = { in: filterValues };
+              break;
+            case 'type':
+              // Convert type values to uppercase to match Prisma IssueType enum
+              issuesQuery.where.type = { in: filterValues.map(value => value.toUpperCase()) };
+              break;
+            case 'assignee':
+              issuesQuery.where.assigneeId = { in: filterValues };
+              break;
+            case 'reporter':
+              issuesQuery.where.reporterId = { in: filterValues };
+              break;
+            case 'dueDate':
+              // Handle date filters
+              if (filterValues.includes('Overdue')) {
+                issuesQuery.where.dueDate = { lt: new Date() };
+              } else if (filterValues.includes('Due Today')) {
+                const today = new Date();
+                const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                issuesQuery.where.dueDate = { gte: startOfDay, lt: endOfDay };
+              }
+              break;
+          }
         }
-      }
-    });
+      });
+    }
   }
 
-  // If no projects are specified in the view, include all workspace projects
+  // Apply project filtering based on view configuration
   if (view.projectIds.length === 0) {
+    // If no projects are specified in the view, include all workspace projects
     const workspaceProjects = await prisma.project.findMany({
       where: { workspaceId: workspace.id },
       select: { id: true }
     });
     issuesQuery.where.projectId = { in: workspaceProjects.map(p => p.id) };
+  } else {
+    // If specific projects are specified, filter by those project IDs
+    issuesQuery.where.projectId = { in: view.projectIds };
   }
 
   const issues = await prisma.issue.findMany(issuesQuery);

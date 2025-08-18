@@ -6,16 +6,27 @@ export interface Project {
   name: string;
   slug: string;
   description: string | null;
-  workspaceId: string;
+  workspaceId?: string;
   isDefault: boolean;
-  issuePrefix: string;
-  nextIssueNumbers: Record<string, number>;
+  issuePrefix?: string;
+  keyPrefix?: string; // For settings API compatibility
+  nextIssueNumbers?: Record<string, number>;
   color?: string;
   createdAt: Date;
   updatedAt: Date;
+  statuses?: ProjectStatus[]; // For settings API compatibility
+  issueCount?: number; // For API compatibility
   _count?: {
     issues: number;
   };
+}
+
+export interface ProjectStatus {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  isDefault?: boolean;
 }
 
 interface UseProjectsOptions {
@@ -85,6 +96,19 @@ export const useCreateProject = () => {
       // Also invalidate queries with includeStats for sidebar
       queryClient.invalidateQueries({ 
         queryKey: ["projects", { workspaceId: variables.workspaceId, includeStats: true }]
+      });
+
+      // Invalidate views queries since creating a project also creates a default view
+      queryClient.invalidateQueries({ queryKey: ["views"] });
+      
+      // Specifically invalidate the views queries used by sidebar and other components
+      queryClient.invalidateQueries({ 
+        queryKey: ["views", { workspaceId: variables.workspaceId }]
+      });
+      
+      // Also invalidate views queries with includeStats for sidebar
+      queryClient.invalidateQueries({ 
+        queryKey: ["views", { workspaceId: variables.workspaceId, includeStats: true }]
       });
     },
   });

@@ -19,6 +19,7 @@ import { IssueTitleInput, type IssueTitleInputRef } from "./IssueTitleInput";
 import { useCreateIssue } from "@/hooks/queries/useIssues";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 type IssueType = "TASK" | "EPIC" | "STORY" | "MILESTONE" | "DEFECT" | "SUBTASK";
 
@@ -59,6 +60,7 @@ export default function NewIssueModal({
   const titleRef = useRef<IssueTitleInputRef>(null);
   const createIssueMutation = useCreateIssue();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Auto-set reporter to current user when modal opens
   useEffect(() => {
@@ -168,7 +170,7 @@ export default function NewIssueModal({
       // Create sub-issues sequentially if any (to avoid race conditions with issue key generation)
       if (subIssues.length > 0) {
         for (const subIssue of subIssues) {
-          await createIssueMutation.mutateAsync({
+          const childResult = await createIssueMutation.mutateAsync({
             title: subIssue.title,
             type: subIssue.type || "SUBTASK",
             status: subIssue.status || status,
@@ -180,7 +182,31 @@ export default function NewIssueModal({
             labels: subIssue.labels || [],
             parentId: mainIssueId, // Link to parent issue
           });
+
+          const childIssueId = childResult.issue?.id || childResult.id;
+
+          // Create the parent-child relation record for the relations system
+          try {
+            await fetch(`/api/workspaces/${workspaceId}/issues/${result.issue?.issueKey || result.issueKey}/relations`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                targetIssueId: childIssueId,
+                relationType: 'child'
+              }),
+            });
+          } catch (relationError) {
+            console.error('Failed to create parent-child relation:', relationError);
+            // Don't fail the whole operation if relation creation fails
+          }
         }
+
+        // Invalidate relations query so the new sub-issues appear in the issue detail view
+        queryClient.invalidateQueries({
+          queryKey: ["issue-relations", workspaceId, result.issue?.issueKey || result.issueKey],
+        });
       }
       
       if (createMore) {

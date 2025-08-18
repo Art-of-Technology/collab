@@ -17,10 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  Search, 
-  MoreHorizontal, 
-  Plus, 
+import {
+  Search,
+  MoreHorizontal,
+  Plus,
   Grid,
   List,
   Table,
@@ -34,23 +34,33 @@ import {
   RotateCcw,
   Filter,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2
 } from 'lucide-react';
 import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
 import TimelineViewRenderer from './renderers/TimelineViewRenderer';
-import FilterDropdown from './shared/FilterDropdown';
-import DisplayDropdown from './shared/DisplayDropdown';
-import ViewTypeSelector from './shared/ViewTypeSelector';
 import ViewFilters from './shared/ViewFilters';
+import ViewTypeSelector from './shared/ViewTypeSelector';
+import { ViewProjectSelector } from './selectors/ViewProjectSelector';
+import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
+import { ViewOrderingSelector } from './selectors/ViewOrderingSelector';
+import { ViewDisplayPropertiesSelector } from './selectors/ViewDisplayPropertiesSelector';
+import { StatusSelector } from './selectors/StatusSelector';
+import { PrioritySelector } from './selectors/PrioritySelector';
+import { TypeSelector } from './selectors/TypeSelector';
+import { AssigneeSelector } from './selectors/AssigneeSelector';
+import { LabelsSelector } from './selectors/LabelsSelector';
 import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
-import { useQueryClient } from '@tanstack/react-query';
+import { useProjects } from '@/hooks/queries/useProjects';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import React, { useEffect } from 'react';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
-import { useIssuesByWorkspace } from '@/hooks/queries/useIssues';
+
 import { useViewFilters } from '@/context/ViewFiltersContext';
 import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
 
@@ -125,15 +135,55 @@ export default function ViewRenderer({
     setCurrentUser
   } = useViewFilters();
 
-  // Use TanStack Query for real-time issue data
-  const { data: issuesData, isLoading: isLoadingIssues } = useIssuesByWorkspace(
-    workspace.id, 
-    view.projects?.map(p => p.id)
-  );
-  
-  // Use TanStack Query issues if available, fallback to initial SSR data
-  // Prefer fresh data only if it's actually different (to avoid overriding optimistic updates)
-  const issues = issuesData?.issues || initialIssues;
+  // Fetch all workspace projects for the project selector
+  const { data: allProjects = [] } = useProjects({
+    workspaceId: workspace.id,
+    includeStats: false,
+  });
+
+  // Fetch workspace members for assignee selector
+  const { data: workspaceMembers = [] } = useQuery({
+    queryKey: ['workspace-members', workspace.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/workspaces/${workspace.id}/members`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch members');
+      }
+      const members = await response.json();
+      
+      // Transform the data to extract user objects from members
+      return members.map((member: any) => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        image: member.user.image,
+        useCustomAvatar: member.user.useCustomAvatar,
+        avatarAccessory: member.user.avatarAccessory,
+        avatarBrows: member.user.avatarBrows,
+        avatarEyes: member.user.avatarEyes,
+        avatarEyewear: member.user.avatarEyewear,
+        avatarHair: member.user.avatarHair,
+        avatarMouth: member.user.avatarMouth,
+        avatarNose: member.user.avatarNose,
+        avatarSkinTone: member.user.avatarSkinTone,
+      }));
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch workspace labels for labels selector
+  const { data: workspaceLabels = [] } = useQuery({
+    queryKey: ['workspace-labels', workspace.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/workspaces/${workspace.id}/labels`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch labels');
+      }
+      const data = await response.json();
+      return data.labels || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Fetch view-specific issue positions for proper ordering
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(view.id, view.displayType === 'KANBAN');
@@ -160,9 +210,61 @@ export default function ViewRenderer({
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState(view.fields || []);
+  const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
   const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
+
+  // Determine which projects are newly selected (not in original view)
+  const originalProjectIds = useMemo(() => view.projects.map(p => p.id), [view.projects]);
+  const additionalProjectIds = useMemo(() => {
+    return tempProjectIds.filter(id => !originalProjectIds.includes(id));
+  }, [tempProjectIds, originalProjectIds]);
+
+  // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
+  const { data: liveIssuesData } = useIssuesByWorkspace(
+    workspace.id, 
+    tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)
+  );
+
+  // Fetch issues from additional projects if any are selected
+  const { data: additionalIssuesData, isLoading: isLoadingAdditionalIssues } = useQuery({
+    queryKey: ['additional-issues', workspace.id, additionalProjectIds.sort().join(',')],
+    queryFn: async () => {
+      if (additionalProjectIds.length === 0) return { issues: [] };
+      
+      const params = new URLSearchParams({
+        workspaceId: workspace.id,
+        projectIds: additionalProjectIds.join(',')
+      });
+      
+      const response = await fetch(`/api/issues?${params}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch additional issues');
+      }
+      return response.json();
+    },
+    enabled: additionalProjectIds.length > 0,
+    staleTime: 5000,
+  });
+
+  // Merge original issues with live data and additional issues from newly selected projects
+  const allIssues = useMemo(() => {
+    // Use live data if available, otherwise fall back to initialIssues
+    const baseIssues = liveIssuesData?.issues || initialIssues;
+    const additional = additionalIssuesData?.issues || [];
+    
+    // Remove duplicates by ID when merging
+    const issueMap = new Map();
+    [...baseIssues, ...additional].forEach(issue => {
+      issueMap.set(issue.id, issue);
+    });
+    
+    return Array.from(issueMap.values());
+  }, [initialIssues, liveIssuesData, additionalIssuesData]);
+
+  // Use merged issues for filtering
+  const issues = allIssues;
   
   // Track the last saved state to properly detect changes
   const [lastSavedState, setLastSavedState] = useState({
@@ -182,7 +284,9 @@ export default function ViewRenderer({
       displayProperties: view.fields || [],
       filters: view.filters || {}
     });
-  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters]);
+    // Reset temp project IDs when view changes
+    setTempProjectIds(view.projects.map(p => p.id));
+  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
   
   // Update ViewFilters context with current data
   useEffect(() => {
@@ -202,9 +306,10 @@ export default function ViewRenderer({
       tempDisplayType !== lastSavedState.displayType ||
       tempGrouping !== lastSavedState.grouping ||
       tempOrdering !== lastSavedState.ordering ||
-      JSON.stringify(tempDisplayProperties) !== JSON.stringify(lastSavedState.displayProperties)
+      JSON.stringify(tempDisplayProperties) !== JSON.stringify(lastSavedState.displayProperties) ||
+      JSON.stringify(tempProjectIds.sort()) !== JSON.stringify(view.projects.map(p => p.id).sort())
     );
-  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, lastSavedState]);
+  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects]);
 
   // Reset to view defaults
   const resetToDefaults = () => {
@@ -213,6 +318,7 @@ export default function ViewRenderer({
     setTempGrouping(lastSavedState.grouping);
     setTempOrdering(lastSavedState.ordering);
     setTempDisplayProperties(lastSavedState.displayProperties);
+    setTempProjectIds(view.projects.map(p => p.id));
     setTempShowSubIssues(true);
     setTempShowEmptyGroups(true);
     setTempCompletedIssues('all');
@@ -228,6 +334,23 @@ export default function ViewRenderer({
   const filteredIssues = useMemo(() => {
     // Merge issues with view-specific positions first
     let filtered = mergeIssuesWithViewPositions(issues, viewPositionsData?.positions || []);
+    
+    // Apply project filtering if tempProjectIds differs from original view projects
+    const originalProjectIds = view.projects.map(p => p.id).sort();
+    const currentProjectIds = tempProjectIds.sort();
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
+    
+    if (projectSelectionChanged) {
+      if (tempProjectIds.length === 0) {
+        // If no projects selected, show no issues
+        filtered = [];
+      } else {
+        // Filter to selected projects
+        filtered = filtered.filter(issue => {
+          return tempProjectIds.includes(issue.projectId);
+        });
+      }
+    }
     
     // Apply issue type filter (all/active/backlog)
     switch (issueFilterType) {
@@ -266,13 +389,19 @@ export default function ViewRenderer({
         filtered = filtered.filter(issue => {
           switch (filterKey) {
             case 'status':
-              return filterValues.includes(issue.status);
+              return filterValues.includes(issue.statusValue || issue.status);
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
               return filterValues.includes(issue.type);
             case 'assignee':
-              return filterValues.includes(issue.assigneeId);
+              const assigneeId = issue.assigneeId || 'unassigned';
+              return filterValues.includes(assigneeId);
+            case 'labels':
+              if (!issue.labels || issue.labels.length === 0) {
+                return filterValues.includes('no-labels');
+              }
+              return issue.labels.some((label: any) => filterValues.includes(label.id));
             case 'project':
               return filterValues.includes(issue.projectId);
             default:
@@ -320,7 +449,7 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData]);
+  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, tempProjectIds, view.projects]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -391,6 +520,7 @@ export default function ViewRenderer({
           sorting: { field: tempOrdering, direction: 'desc' },
           grouping: { field: tempGrouping },
           fields: tempDisplayProperties,
+          projectIds: tempProjectIds,
         })
       });
 
@@ -447,7 +577,7 @@ export default function ViewRenderer({
           description: `Copy of ${view.name}`,
           displayType: tempDisplayType,
           visibility: 'PERSONAL',
-          projectIds: view.projects.map(p => p.id),
+          projectIds: tempProjectIds,
           filters: allFilters,
           sorting: { field: tempOrdering, direction: 'desc' },
           grouping: { field: tempGrouping },
@@ -473,34 +603,7 @@ export default function ViewRenderer({
     }
   };
 
-  const handleFilterChange = (filterId: string, value: string, isSelected: boolean) => {
-    setTempFilters(prev => {
-      if (isSelected) {
-        return {
-          ...prev,
-          [filterId]: prev[filterId] ? [...prev[filterId], value] : [value]
-        };
-      } else {
-        return {
-          ...prev,
-          [filterId]: prev[filterId]?.filter(v => v !== value) || []
-        };
-      }
-    });
-  };
 
-  const removeTempFilter = (filterId: string, value?: string) => {
-    setTempFilters(prev => {
-      if (!value) {
-        const { [filterId]: removed, ...rest } = prev;
-        return rest;
-      }
-      return {
-        ...prev,
-        [filterId]: prev[filterId]?.filter(v => v !== value) || []
-      };
-    });
-  };
 
   const handleToggleViewFilters = () => {
     toggleViewFilters();
@@ -508,15 +611,35 @@ export default function ViewRenderer({
 
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {
-    const allIssuesCount = issues.length;
-    const activeIssuesCount = issues.filter((issue: any) => {
+    // Use the same project filtering logic as in filteredIssues
+    let countingIssues = [...issues];
+    
+    // Apply project filtering if tempProjectIds differs from original view projects
+    const originalProjectIds = view.projects.map(p => p.id).sort();
+    const currentProjectIds = tempProjectIds.sort();
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
+    
+    if (projectSelectionChanged) {
+      if (tempProjectIds.length === 0) {
+        // If no projects selected, show no issues
+        countingIssues = [];
+      } else {
+        // Filter to selected projects
+        countingIssues = countingIssues.filter(issue => {
+          return tempProjectIds.includes(issue.projectId);
+        });
+      }
+    }
+    
+    const allIssuesCount = countingIssues.length;
+    const activeIssuesCount = countingIssues.filter((issue: any) => {
       const status = (issue.statusValue || issue.status || '').toLowerCase();
       return status !== 'done' && 
              status !== 'backlog' && 
              status !== 'cancelled' &&
              status !== 'todo'; // Todo items should be in backlog, not active
     }).length;
-    const backlogIssuesCount = issues.filter((issue: any) => {
+    const backlogIssuesCount = countingIssues.filter((issue: any) => {
       const status = (issue.statusValue || issue.status || '').toLowerCase();
       return status === 'backlog' || status === 'todo';
     }).length;
@@ -526,7 +649,7 @@ export default function ViewRenderer({
       activeIssuesCount,
       backlogIssuesCount
     };
-  }, [issues]);
+  }, [issues, tempProjectIds, view.projects]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
@@ -566,12 +689,17 @@ export default function ViewRenderer({
       issues: sortedIssues,
       workspace,
       currentUser,
-      // Additional props needed by KanbanViewRenderer
-      projectId: view.projects?.[0]?.id || '',
+      // Additional props needed by KanbanViewRenderer  
+      projectId: tempProjectIds?.[0] || view.projects?.[0]?.id || '',
       workspaceId: workspace.id,
       currentUserId: currentUser.id,
       onIssueCreated: () => {
-        // Invalidate queries to refresh data
+        // Invalidate queries to refresh data - use the correct query keys
+        const currentProjectIds = tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id);
+        queryClient.invalidateQueries({ 
+          queryKey: [...issueKeys.byWorkspace(workspace.id), ...currentProjectIds.sort()] 
+        });
+        queryClient.invalidateQueries({ queryKey: ['additional-issues', workspace.id] });
         queryClient.invalidateQueries({ queryKey: ['issues'] });
       },
       // ViewFilters props - these will be passed but individual renderers can choose to use them or not
@@ -720,7 +848,7 @@ export default function ViewRenderer({
         open={isNewIssueOpen}
         onOpenChange={setIsNewIssueOpen}
         workspaceId={workspace.id}
-        projectId={view.projects?.length === 1 ? view.projects[0].id : undefined}
+        projectId={tempProjectIds?.length === 1 ? tempProjectIds[0] : undefined}
         onCreated={() => {
           setIsNewIssueOpen(false);
           queryClient.invalidateQueries();
@@ -776,58 +904,123 @@ export default function ViewRenderer({
               </Button>
             </div>
 
-            <FilterDropdown
-              selectedFilters={tempFilters}
-              onFilterChange={handleFilterChange}
-              variant="toolbar"
-              projects={view.projects}
-            />
-
-            {/* Only show filter count if filters are active */}
-            {Object.keys(allFilters).length > 0 && (
-              <Badge 
-                variant="secondary" 
-                className="text-xs bg-[#1a1a1a] text-[#9ca3af] border-none px-2 py-1"
-              >
-                {Object.values(allFilters).flat().length} filters
-              </Badge>
-            )}
+            {/* Badge-like selectors matching CreateViewModal */}
+            <div className="flex flex-wrap gap-1">
+              <ViewProjectSelector
+                value={tempProjectIds}
+                onChange={(projectIds) => {
+                  // Handle project selection changes
+                  // This will be stored as temporary changes and can be saved as a new view or update current view
+                  setTempProjectIds(projectIds);
+                }}
+                projects={allProjects}
+              />
+              <ViewGroupingSelector
+                value={tempGrouping}
+                onChange={setTempGrouping}
+                displayType={tempDisplayType}
+              />
+              <ViewOrderingSelector
+                value={tempOrdering}
+                onChange={setTempOrdering}
+                displayType={tempDisplayType}
+              />
+              <ViewDisplayPropertiesSelector
+                value={tempDisplayProperties}
+                onChange={setTempDisplayProperties}
+              />
+              <StatusSelector
+                value={allFilters.status || []}
+                onChange={(statuses) => {
+                  const viewStatuses = view.filters?.status || [];
+                  const isDifferent = JSON.stringify(statuses.sort()) !== JSON.stringify(viewStatuses.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, status: statuses }));
+                  } else {
+                    const { status, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+              />
+              <PrioritySelector
+                value={allFilters.priority || []}
+                onChange={(priorities) => {
+                  const viewPriorities = view.filters?.priority || [];
+                  const isDifferent = JSON.stringify(priorities.sort()) !== JSON.stringify(viewPriorities.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, priority: priorities }));
+                  } else {
+                    const { priority, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+              />
+              <TypeSelector
+                value={allFilters.type || []}
+                onChange={(types) => {
+                  const viewTypes = view.filters?.type || [];
+                  const isDifferent = JSON.stringify(types.sort()) !== JSON.stringify(viewTypes.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, type: types }));
+                  } else {
+                    const { type, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+              />
+              <AssigneeSelector
+                value={allFilters.assignee || []}
+                onChange={(assignees) => {
+                  const viewAssignees = view.filters?.assignee || [];
+                  const isDifferent = JSON.stringify(assignees.sort()) !== JSON.stringify(viewAssignees.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, assignee: assignees }));
+                  } else {
+                    const { assignee, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+                assignees={workspaceMembers}
+              />
+              <LabelsSelector
+                value={allFilters.labels || []}
+                onChange={(labels) => {
+                  const viewLabels = view.filters?.labels || [];
+                  const isDifferent = JSON.stringify(labels.sort()) !== JSON.stringify(viewLabels.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, labels }));
+                  } else {
+                    const { labels, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+                labels={workspaceLabels}
+              />
+            </div>
           </div>
 
-          {/* Right: Display Controls */}
+          {/* Right: View Type Toggle */}
           <div className="flex items-center gap-2">
-            {/* View Type Selector */}
             <ViewTypeSelector
               selectedType={tempDisplayType}
               onTypeChange={setTempDisplayType}
               variant="toolbar"
-              availableTypes={['LIST', 'KANBAN']}
-            />
-
-            {/* Display Dropdown */}
-            <DisplayDropdown
-              displayType={tempDisplayType}
-              grouping={tempGrouping}
-              ordering={tempOrdering}
-              displayProperties={tempDisplayProperties}
-              showSubIssues={tempShowSubIssues}
-              showEmptyGroups={tempShowEmptyGroups}
-              completedIssues={tempCompletedIssues}
-              onGroupingChange={setTempGrouping}
-              onOrderingChange={setTempOrdering}
-              onDisplayPropertiesChange={setTempDisplayProperties}
-              onShowSubIssuesChange={setTempShowSubIssues}
-              onShowEmptyGroupsChange={setTempShowEmptyGroups}
-              onCompletedIssuesChange={setTempCompletedIssues}
-              onReset={resetToDefaults}
-              variant="toolbar"
+              availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
             />
           </div>
         </div>
       </div>
 
       {/* View Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
+        {isLoadingAdditionalIssues && (
+          <div className="absolute top-4 right-4 z-10 bg-[#0d1117] border border-[#30363d] rounded-md px-3 py-2 shadow-lg">
+            <div className="flex items-center gap-2 text-[#8b949e]">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-xs">Loading additional issues...</span>
+            </div>
+          </div>
+        )}
         {renderViewContent()}
       </div>
     </div>

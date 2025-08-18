@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
+import { generateUniqueViewSlug } from '@/lib/utils';
+import { DEFAULT_PROJECT_STATUSES, generateInternalStatusName } from '@/constants/project-statuses';
 
 // Function to generate a unique issue prefix within a workspace
 async function generateUniqueIssuePrefix(workspaceId: string, requestedPrefix?: string, projectName?: string): Promise<string> {
@@ -270,38 +272,71 @@ export async function POST(
       );
     }
 
-    // Create the project
-    const project = await prisma.project.create({
-      data: {
-        name,
-        slug,
-        description,
-        color,
-        issuePrefix: finalIssuePrefix,
-        isDefault: false,
-        workspaceId,
-        nextIssueNumbers: {
-          EPIC: 1,
-          STORY: 1,
-          TASK: 1,
-          DEFECT: 1,
-          MILESTONE: 1,
-          SUBTASK: 1
-        }
-      },
-      include: {
-        _count: {
-          select: {
-            issues: true
+    // Create the project and its default statuses in a transaction
+    const project = await prisma.$transaction(async (tx) => {
+      // Create the project
+      const newProject = await tx.project.create({
+        data: {
+          name,
+          slug,
+          description,
+          color,
+          issuePrefix: finalIssuePrefix,
+          isDefault: false,
+          workspaceId,
+          nextIssueNumbers: {
+            EPIC: 1,
+            STORY: 1,
+            TASK: 1,
+            DEFECT: 1,
+            MILESTONE: 1,
+            SUBTASK: 1
+          }
+        },
+        include: {
+          _count: {
+            select: {
+              issues: true
+            }
           }
         }
-      }
+      });
+
+      // Create default statuses for the project using constants
+      const defaultStatuses = DEFAULT_PROJECT_STATUSES.map(status => ({
+        name: status.name,
+        displayName: status.displayName,
+        color: status.color,
+        order: status.order,
+        isDefault: status.isDefault,
+        isFinal: status.isFinal || false,
+        projectId: newProject.id
+      }));
+
+      await tx.projectStatus.createMany({
+        data: defaultStatuses
+      });
+
+      return newProject;
     });
 
     // Create default view for the project
+    const viewName = `${project.name}: Default`;
+    
+    // Generate unique slug for the view
+    const viewSlugChecker = async (slug: string, workspaceId: string) => {
+      const existingView = await prisma.view.findFirst({
+        where: { slug, workspaceId }
+      });
+      return !!existingView;
+    };
+
+    const viewSlug = await generateUniqueViewSlug(viewName, workspaceId, viewSlugChecker);
+    
     await prisma.view.create({
       data: {
-        name: `${project.name} Board`,
+        name: viewName,
+        slug: viewSlug,
         description: `Default Kanban view for ${project.name}`,
         displayType: 'KANBAN',
         visibility: 'WORKSPACE',
