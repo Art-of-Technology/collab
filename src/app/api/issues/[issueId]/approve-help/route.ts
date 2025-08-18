@@ -23,7 +23,7 @@ export async function POST(
     }
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+-\d+$/.test(issueId);
+    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
     const issue = isIssueKey
       ? await prisma.issue.findFirst({ 
           where: { issueKey: issueId }, 

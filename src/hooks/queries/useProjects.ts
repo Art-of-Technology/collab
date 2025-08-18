@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
 export interface Project {
@@ -54,5 +54,38 @@ export const useProject = (workspaceId: string | undefined, projectSlug: string 
     },
     enabled: !!workspaceId && !!projectSlug,
     staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+};
+
+// Create project mutation
+export interface CreateProjectData {
+  name: string;
+  description?: string;
+  color?: string;
+  issuePrefix?: string;
+}
+
+export const useCreateProject = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ workspaceId, projectData }: { workspaceId: string; projectData: CreateProjectData }) => {
+      const { data } = await axios.post(`/api/workspaces/${workspaceId}/projects`, projectData);
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate all projects queries for this workspace
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      
+      // Specifically invalidate the queries used by sidebar and other components
+      queryClient.invalidateQueries({ 
+        queryKey: ["projects", { workspaceId: variables.workspaceId }]
+      });
+      
+      // Also invalidate queries with includeStats for sidebar
+      queryClient.invalidateQueries({ 
+        queryKey: ["projects", { workspaceId: variables.workspaceId, includeStats: true }]
+      });
+    },
   });
 };

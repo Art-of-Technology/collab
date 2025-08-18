@@ -22,6 +22,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
+import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { StatusSelect, getStatusBadge } from "../tasks/selectors/StatusSelect";
 import { AssigneeSelect } from "../tasks/selectors/AssigneeSelect";
 import { ReporterSelect } from "../tasks/selectors/ReporterSelect";
@@ -231,14 +232,12 @@ export function EpicDetailContent({
                 onRefresh();
             }, 100);
 
-            // Invalidate TanStack Query cache for board items if status, assignee, or reporter changed
-            if ((field === 'status' || field === 'assigneeId' || field === 'reporterId') && effectiveBoardId) {
-                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
-            }
-
-            // Also invalidate board items when labels are updated
-            if (field === 'labels' && effectiveBoardId) {
-                queryClient.invalidateQueries({ queryKey: ['boardItems', { board: effectiveBoardId }] });
+            // Invalidate Kanban board items when any user-visible board field changes
+            if (
+                effectiveBoardId &&
+                (field === 'status' || field === 'assigneeId' || field === 'reporterId' || field === 'labels' || field === 'title' || field === 'description')
+            ) {
+                queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(effectiveBoardId) });
             }
 
             return true;
@@ -599,7 +598,7 @@ export function EpicDetailContent({
                                     onClick={() => setEditingTitle(true)}
                                 >
                                     <h1 className="text-2xl font-bold group-hover:text-primary transition-colors pr-8">
-                                        {epic.title}
+                                        {title}
                                     </h1>
                                     <PenLine className="h-4 w-4 absolute right-0 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground group-hover:text-primary" />
                                 </div>
@@ -652,6 +651,7 @@ export function EpicDetailContent({
                                                     minHeight="150px"
                                                     maxHeight="400px"
                                                     onAiImprove={handleAiImproveDescription}
+                                                    collabDocumentId={`epic:${epic.id}:description`}
                                                 />
                                             </div>
                                             {savingDescription && (
@@ -664,7 +664,15 @@ export function EpicDetailContent({
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={handleCancelDescription}
+                                                onClick={() => {
+                                                    const original = epic?.description || '';
+                                                    // Find the editor instance via ref if available, else just close
+                                                    try {
+                                                        const node = document.querySelector('[data-mention]');
+                                                    } catch {}
+                                                    setDescription(original);
+                                                    setEditingDescription(false);
+                                                }}
                                                 disabled={savingDescription}
                                             >
                                                 <X className="h-4 w-4 mr-1" />

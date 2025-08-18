@@ -12,7 +12,10 @@ import {
   MoreHorizontal,
   Calendar,
   Users,
-  CheckSquare
+  CheckSquare,
+  Circle,
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -23,7 +26,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProjects } from '@/hooks/queries/useProjects';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import CreateProjectModal from '@/components/modals/CreateProjectModal';
 import { cn } from '@/lib/utils';
+import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
+import { format } from 'date-fns';
 
 interface ProjectsPageClientProps {
   workspaceId: string;
@@ -33,6 +39,8 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: projects = [], isLoading } = useProjects({
     workspaceId,
@@ -49,39 +57,121 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
   };
 
   const handleCreateProject = () => {
-    // TODO: Open create project modal
-    console.log('Create new project');
+    setShowCreateModal(true);
   };
 
-  const ProjectCard = ({ project }: { project: any }) => {
+  // Helper function to get project status icon based on progress
+  const getProjectStatusIcon = (project: any) => {
+    const totalIssues = project._count?.issues || 0;
+    const completedIssues = project._count?.completedIssues || 0;
+    const progress = totalIssues > 0 ? (completedIssues / totalIssues) * 100 : 0;
+
+    if (progress === 100) {
+      return <CheckCircle2 className="h-3.5 w-3.5 text-[#22c55e]" fill="currentColor" />;
+    } else if (progress > 0) {
+      return <Clock className="h-3.5 w-3.5 text-[#3b82f6]" />;
+    } else {
+      return <Circle className="h-3.5 w-3.5 text-[#8b949e]" />;
+    }
+  };
+
+  // Project Row Component - Similar to IssueRow in ListViewRenderer
+  const ProjectRow = ({ project }: { project: any }) => {
+    const totalIssues = project._count?.issues || 0;
+    const completedIssues = project._count?.completedIssues || 0;
+    const progress = totalIssues > 0 ? (completedIssues / totalIssues) * 100 : 0;
+
     return (
-      <div
-        className="group p-6 rounded-lg border border-[#1f1f1f] bg-[#090909] hover:bg-[#1f1f1f] hover:border-[#2a2a2a] transition-all cursor-pointer"
+      <div 
+        className={cn(
+          "group flex items-center px-6 py-3 border-b border-[#1f1f1f] transition-all duration-150 cursor-pointer",
+          "hover:bg-[#0f1011] hover:border-[#333]",
+          hoveredProjectId === project.id && "bg-[#0f1011]"
+        )}
+        onMouseEnter={() => setHoveredProjectId(project.id)}
+        onMouseLeave={() => setHoveredProjectId(null)}
         onClick={() => handleProjectClick(project.slug)}
       >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: project.color || '#6b7280' }}
-            >
-              <FolderOpen className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-white text-lg">{project.name}</h3>
-              <p className="text-sm text-gray-400 mt-1">{project.description || 'No description'}</p>
-            </div>
+        {/* Status Icon */}
+        <div className="flex items-center w-6 mr-3 flex-shrink-0">
+          {getProjectStatusIcon(project)}
+        </div>
+
+        {/* Project Icon */}
+        <div className="flex items-center w-8 mr-3 flex-shrink-0">
+          <div 
+            className="w-6 h-6 rounded flex items-center justify-center"
+            style={{ backgroundColor: project.color || '#6b7280' }}
+          >
+            <FolderOpen className="h-3.5 w-3.5 text-white" />
           </div>
-          
+        </div>
+
+        {/* Project Name and Description */}
+        <div className="flex-1 min-w-0 mr-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+              {project.name}
+            </span>
+          </div>
+          {project.description && (
+            <div className="text-xs text-[#8b949e] mt-0.5 truncate">
+              {project.description}
+            </div>
+          )}
+        </div>
+
+        {/* Stats Section */}
+        <div className="flex items-center gap-3 flex-shrink-0 mr-4">
+          {/* Issues Count */}
+          <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+            <CheckSquare className="h-3 w-3" />
+            <span className="text-[10px] font-medium">{totalIssues}</span>
+          </div>
+
+          {/* Members Count */}
+          <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-md">
+            <Users className="h-3 w-3" />
+            <span className="text-[10px] font-medium">{project._count?.members || 0}</span>
+          </div>
+
+          {/* Progress Badge */}
+          {totalIssues > 0 && (
+            <Badge 
+              className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
+              style={{ 
+                backgroundColor: (project.color || '#6b7280') + '30',
+                color: project.color || '#8b949e'
+              }}
+            >
+              {Math.round(progress)}%
+            </Badge>
+          )}
+
+          {/* Active Status */}
+          <Badge className="h-4 px-1.5 text-[9px] font-medium leading-none bg-green-500/30 text-green-400 border-0 rounded-sm">
+            Active
+          </Badge>
+        </div>
+
+        {/* Updated Date */}
+        <div className="flex-shrink-0 w-16 mr-3">
+          <span className="text-[#6e7681] text-xs">
+            {format(new Date(project.updatedAt), 'MMM d')}
+          </span>
+        </div>
+
+        {/* Actions Menu */}
+        <div className="flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="opacity-0 group-hover:opacity-100 h-8 w-8 text-gray-400 hover:text-white hover:bg-[#2a2a2a]"
+                size="sm"
+                className="h-6 w-6 p-0 text-[#666] hover:text-[#ccc] opacity-0 group-hover:opacity-100 transition-all"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-[#090909] border-[#1f1f1f]">
@@ -92,75 +182,6 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
               <DropdownMenuItem className="text-red-400">Archive project</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-
-        <div className="space-y-4">
-          {/* Project stats */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-3 rounded-lg bg-[#1f1f1f]">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <CheckSquare className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium text-gray-300">Issues</span>
-              </div>
-              <div className="text-2xl font-bold text-white">
-                {project._count?.issues || 0}
-              </div>
-            </div>
-            
-            <div className="text-center p-3 rounded-lg bg-[#1f1f1f]">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Users className="h-4 w-4 text-green-500" />
-                <span className="text-sm font-medium text-gray-300">Members</span>
-              </div>
-              <div className="text-2xl font-bold text-white">
-                {project._count?.members || 0}
-              </div>
-            </div>
-            
-            <div className="text-center p-3 rounded-lg bg-[#1f1f1f]">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Calendar className="h-4 w-4 text-purple-500" />
-                <span className="text-sm font-medium text-gray-300">Views</span>
-              </div>
-              <div className="text-2xl font-bold text-white">
-                {project._count?.views || 0}
-              </div>
-            </div>
-          </div>
-
-          {/* Project progress */}
-          {project._count?.issues > 0 && (
-            <div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-400">Progress</span>
-                <span className="text-gray-400">
-                  {Math.round(((project._count?.completedIssues || 0) / project._count.issues) * 100)}%
-                </span>
-              </div>
-              <div className="w-full bg-[#1f1f1f] rounded-full h-2">
-                <div 
-                  className="h-2 rounded-full transition-all"
-                  style={{ 
-                    backgroundColor: project.color || '#6b7280',
-                    width: `${((project._count?.completedIssues || 0) / project._count.issues) * 100}%`
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Last updated */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-500">
-              Updated {new Date(project.updatedAt).toLocaleDateString()}
-            </span>
-            <Badge 
-              variant="secondary" 
-              className="bg-green-500/10 text-green-400 border-green-500/20"
-            >
-              Active
-            </Badge>
-          </div>
         </div>
       </div>
     );
@@ -176,69 +197,85 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
 
   return (
     <div className="h-full flex flex-col bg-[#101011]">
-      {/* Header */}
-      <div className="border-b border-[#1f1f1f] bg-[#101011] p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-white">Projects</h1>
-            <p className="text-gray-400 mt-1">Organize your work into focused areas</p>
-          </div>
-          <Button
-            onClick={handleCreateProject}
-            className="bg-[#22c55e] hover:bg-[#16a34a] text-white"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New project
-          </Button>
-        </div>
-
-        {/* Search */}
-        <div className="mt-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+      {/* Header using PageHeader component */}
+      <PageHeader
+        icon={FolderOpen}
+        title="Projects"
+        subtitle={`${filteredProjects.length} project${filteredProjects.length !== 1 ? 's' : ''}`}
+        search={
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#666]" />
             <Input
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
+              className={cn(pageHeaderSearchStyles, "w-64")}
             />
           </div>
-        </div>
-      </div>
+        }
+        actions={
+          <Button
+            onClick={handleCreateProject}
+            className={cn(pageHeaderButtonStyles.primary, "h-7 px-3")}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            New project
+          </Button>
+        }
+      />
 
-      {/* Projects content */}
+      {/* Projects List Content */}
       <div className="flex-1 overflow-auto">
-        <div className="p-6">
-          {filteredProjects.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
+        {filteredProjects.length > 0 ? (
+          <div>
+            {filteredProjects.map((project) => (
+              <ProjectRow key={project.id} project={project} />
+            ))}
+          </div>
+        ) : searchQuery ? (
+          <div className="flex items-center justify-center h-64 text-[#8b949e]">
+            <div className="text-center">
+              <Search className="h-8 w-8 mx-auto mb-2 text-[#6e7681]" />
+              <p className="text-sm">No projects match your search</p>
+              <p className="text-xs text-[#6e7681] mt-1">
+                Try different keywords
+              </p>
             </div>
-          ) : searchQuery ? (
-            <div className="text-center py-12">
-              <FolderOpen className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-300 mb-2">No projects found</h3>
-              <p className="text-gray-500">Try adjusting your search terms</p>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <FolderOpen className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-300 mb-2">No projects yet</h3>
-              <p className="text-gray-500 mb-6">
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
+                <FolderOpen className="h-6 w-6 text-[#666]" />
+              </div>
+              <p className="text-[#9ca3af] text-sm mb-1">No projects found</p>
+              <p className="text-[#666] text-xs mb-4">
                 Projects help you organize your work into focused areas
               </p>
               <Button
                 onClick={handleCreateProject}
-                className="bg-[#22c55e] hover:bg-[#16a34a] text-white"
+                className={cn(pageHeaderButtonStyles.primary, "h-7 px-3")}
               >
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Create your first project
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Create Project Modal */}
+      {showCreateModal && (
+        <CreateProjectModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          workspaceId={workspaceId}
+          onProjectCreated={(project) => {
+            console.log("Project created:", project);
+            // The useCreateProject hook will automatically invalidate queries
+          }}
+        />
+      )}
     </div>
   );
 } 

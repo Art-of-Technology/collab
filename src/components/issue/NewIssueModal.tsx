@@ -13,7 +13,7 @@ import { IssueReporterSelector } from "./selectors/IssueReporterSelector";
 import { IssueDateSelector } from "./selectors/IssueDateSelector";
 import { IssueProjectSelector } from "./selectors/IssueProjectSelector";
 import { IssueTypeSelector } from "./selectors/IssueTypeSelector";
-import { IssueDescriptionEditor } from "./IssueDescriptionEditor";
+import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { SubIssueManager, SubIssue } from "./SubIssueManager";
 import { IssueTitleInput, type IssueTitleInputRef } from "./IssueTitleInput";
 import { useCreateIssue } from "@/hooks/queries/useIssues";
@@ -278,7 +278,7 @@ export default function NewIssueModal({
           />
 
           {/* Description Editor with Enhanced Features */}
-          <IssueDescriptionEditor
+          <IssueRichEditor
             value={description}
             onChange={setDescription}
             placeholder="Add description..."
@@ -291,6 +291,11 @@ export default function NewIssueModal({
             onAiImprove={handleAiImprove}
             onCreateSubIssue={handleCreateSubIssue}
             className="mb-4"
+            enableSlashCommands={true}
+            enableFloatingMenu={true}
+            enableSubIssueCreation={true}
+            minHeight="200px"
+            maxHeight="400px"
           />
 
           {/* Properties */}

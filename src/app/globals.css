@@ -135,8 +135,16 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
   }
 }
 
@@ -264,7 +272,7 @@
   background-color: rgba(31, 41, 55, 0.45);
   color: rgba(255, 255, 255, 0.95);
   border-radius: 3px;
-  padding: 0.05rem 0.25rem;
+  padding: 0.02rem 0.25rem;
   margin: 0 1px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -471,4 +479,110 @@ textarea::selection {
 /* Tag dialog content styles */
 .tag-dialog-content {
   @apply max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-0 rounded-md pl-2 pr-2;
+}
+
+.task-mention {
+  @apply inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium;
+}
+
+.dark .task-mention {
+  @apply bg-blue-900 text-blue-200;
+}
+
+/* Collaboration cursor styles */
+.collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid #0d0d0d;
+  border-right: 1px solid #0d0d0d;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.collaboration-cursor__label {
+  position: absolute;
+  top: -0.3em;
+  left: -1px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  user-select: none;
+  color: #fff;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.collaboration-cursor__avatar-wrapper {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collaboration-cursor__avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.collaboration-cursor__avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Style for collaborative text selections */
+.ProseMirror .collaboration-cursor__selection {
+  background-color: transparent !important;
+}
+
+/* Override TipTap's default collaboration styles */
+.ProseMirror [class*="collaboration-cursor"] {
+  background-color: transparent !important;
+}
+
+/* Style text that's currently being edited by another user */
+.ProseMirror span[data-color] {
+  background-color: transparent !important;
+  color: attr(data-color) !important;
+  position: relative;
+}
+
+/* Add underline effect for active collaborative edits */
+.ProseMirror span[data-color]::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: currentColor;
+  opacity: 0.3;
+}
+
+/* Remove default Yjs/ProseMirror collaboration backgrounds */
+.ProseMirror .ProseMirror-yjs-cursor {
+  display: none;
+}
+
+/* Ensure cursor caret is visible with proper color */
+.collaboration-cursor__caret {
+  border-color: currentColor !important;
 }

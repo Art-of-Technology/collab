@@ -11,23 +11,63 @@ interface User {
   image: string | null;
 }
 
-interface Notification {
+export interface Notification {
   id: string;
   type: string;
   content: string;
   read: boolean;
   createdAt: string;
   senderId: string;
+  postId?: string;
+  featureRequestId?: string;
+  issueId?: string; // Replaces taskId, epicId, storyId, milestoneId
+  viewId?: string; // For view-related notifications
+  leaveRequestId?: string;
   sender: {
     id: string;
     name: string | null;
     image: string | null;
     useCustomAvatar: boolean;
   };
+  issue?: {
+    id: string;
+    title: string;
+    type: string; // EPIC | STORY | TASK | DEFECT | MILESTONE | SUBTASK
+    issueKey?: string;
+    project?: {
+      id: string;
+      name: string;
+    };
+  };
+  view?: {
+    id: string;
+    name: string;
+    displayType: string;
+  };
+  leaveRequest?: {
+    id: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+    duration: string;
+    policy: {
+      name: string;
+    };
+  };
+  
+  // Legacy fields for backward compatibility during migration
+  taskId?: string;
+  epicId?: string;
+  storyId?: string;
+  milestoneId?: string;
+  task?: {
+    id: string;
+    title: string;
+  };
 }
 
 interface MentionContextType {
-  searchUsers: (query: string) => Promise<User[]>;
+  searchUsers: (query: string, workspaceId?: string) => Promise<User[]>;
   notifications: Notification[];
   unreadCount: number;
   markNotificationAsRead: (id: string) => Promise<void>;
@@ -48,16 +88,14 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   // Function to search users for mentions
-  const searchUsers = useCallback(async (query: string): Promise<User[]> => {
-    if (!query || query.length < 1) return [];
-
+  const searchUsers = useCallback(async (query: string, workspaceId?: string): Promise<User[]> => {
     try {
-      const url = new URL('/api/users/search', window.location.origin);
-      url.searchParams.append('q', query);
-      if (currentWorkspace?.id) {
-        url.searchParams.append('workspace', currentWorkspace.id);
+      // Send the query as-is, empty query will return all workspace users
+      let url = `/api/users/search?q=${encodeURIComponent(query || '')}`;
+      if (workspaceId) {
+        url += `&workspace=${encodeURIComponent(workspaceId)}`;
       }
-      const response = await axios.get(url.href);
+      const response = await axios.get(url);
       return response.data;
     } catch (error) {
       console.error('Error searching users:', error);
@@ -67,7 +105,9 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
 
   // Function to fetch notifications
   const fetchNotifications = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user) {
+      return;
+    }
 
     setLoading(true);
     try {
@@ -78,7 +118,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user]);
 
   // Function to mark a notification as read
   const markNotificationAsRead = useCallback(async (id: string) => {

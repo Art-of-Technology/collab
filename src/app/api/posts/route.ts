@@ -166,6 +166,11 @@ export async function GET(req: Request) {
         { createdAt: "desc" }, // Then by creation date
       ],
       include: {
+        followers: {
+          select: {
+            userId: true,
+          },
+        },
         author: {
           select: {
             id: true,

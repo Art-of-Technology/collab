@@ -43,7 +43,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useCurrentUser } from "@/hooks/queries/useUser";
@@ -51,6 +50,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
 import CreateViewModal from "@/components/modals/CreateViewModal";
+import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NewIssueModal from "@/components/issue/NewIssueModal";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +60,8 @@ import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { CommandMenu } from "@/components/ui/command-menu";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
+import { usePermissions } from "@/hooks/use-permissions";
+import { getRoleDisplayName } from "@/lib/permissions";
 
 interface SidebarProps {
   pathname?: string;
@@ -82,6 +84,19 @@ export default function Sidebar({
   const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
+  const { userPermissions } = usePermissions(currentWorkspace?.id);
+
+  const formatGlobalRole = (role?: string) =>
+    role
+      ? role
+        .toString()
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+      : "";
+
+
+  const displayRole = userPermissions?.role ? getRoleDisplayName(userPermissions.role as any) : formatGlobalRole(session?.user?.role) || "Member";
 
   // Use Mention context for notifications
   const {
@@ -108,6 +123,7 @@ export default function Sidebar({
   const [viewSearchQuery, setViewSearchQuery] = useState("");
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
+  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     projects: false,
     views: false,
@@ -398,9 +414,8 @@ export default function Sidebar({
                           return (
                             <div
                               key={notification.id}
-                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${
-                                !notification.read ? "bg-[#22c55e]/5" : ""
-                              }`}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? "bg-[#22c55e]/5" : ""
+                                }`}
                               onClick={() => handleNotificationClick(notification.id, url)}
                             >
                               {/* Sender Avatar */}
@@ -602,9 +617,8 @@ export default function Sidebar({
                           return (
                             <div
                               key={notification.id}
-                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${
-                                !notification.read ? "bg-[#22c55e]/5" : ""
-                              }`}
+                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? "bg-[#22c55e]/5" : ""
+                                }`}
                               onClick={() => handleNotificationClick(notification.id, url)}
                             >
                               {/* Sender Avatar */}
@@ -672,16 +686,38 @@ export default function Sidebar({
           </div>
 
 
+          {/* Other workspace features */}
+          <div className="space-y-0.5">
+            {workspaceFeatures.map((item) => (
+              <Button
+                key={item.name}
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start h-7 px-2 text-sm transition-colors",
+                  item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
+                  !currentWorkspace?.id && isLoading && "opacity-50 pointer-events-none"
+                )}
+                asChild
+                disabled={!currentWorkspace?.id && isLoading}
+              >
+                <Link href={item.href}>
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.name}
+                </Link>
+              </Button>
+            ))}
+          </div>
+
+
           {/* Projects Section */}
           <div>
             <Collapsible open={!collapsedSections.projects} onOpenChange={() => toggleSection("projects")}>
               <CollapsibleTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-xs font-medium"
+                  className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-sm font-medium"
                 >
                   <div className="flex items-center">
-                    <FolderOpen className="mr-2 h-3 w-3" />
                     Projects
                   </div>
                   <div className="flex items-center">
@@ -694,9 +730,9 @@ export default function Sidebar({
                   </div>
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 mt-1 pl-2">
+              <CollapsibleContent>
                 {/* Projects search */}
-                <div className="px-2 mb-2">
+                <div className="px-2 mb-2 mt-1">
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
                     <Input
@@ -729,7 +765,8 @@ export default function Sidebar({
                       >
                         <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`} className="min-w-0 block">
                           <div className="flex items-center w-full min-w-0">
-                            <span className="truncate flex-1">{project.name}</span>
+                            <FolderOpen className="mr-2 h-3 w-3 flex-shrink-0" />
+                            <span className="truncate flex-1 text-xs">{project.name}</span>
                             {project._count?.issues && (
                               <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
                                 {project._count.issues}
@@ -749,21 +786,15 @@ export default function Sidebar({
                   <div className="pt-1 space-y-0.5">
                     <Button
                       variant="ghost"
-                      onClick={() => {
-                        // TODO: Implement create project modal
-                        toast({
-                          title: "Coming soon",
-                          description: "Create project functionality will be available soon",
-                        });
-                      }}
-                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      onClick={() => setShowCreateProjectModal(true)}
+                      className="w-full justify-start h-7 px-2 text-xs text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                     >
                       <Plus className="mr-2 h-3 w-3" />
                       Create project
                     </Button>
                     <Button
                       variant="ghost"
-                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      className="w-full justify-start h-7 px-2 text-xs text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                       asChild
                     >
                       <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/projects`}>
@@ -783,10 +814,9 @@ export default function Sidebar({
               <CollapsibleTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-xs font-medium"
+                  className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-sm font-medium"
                 >
                   <div className="flex items-center">
-                    <Eye className="mr-2 h-3 w-3" />
                     Views
                   </div>
                   <div className="flex items-center">
@@ -799,9 +829,9 @@ export default function Sidebar({
                   </div>
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-1 mt-1 pl-2">
+              <CollapsibleContent>
                 {/* Views search */}
-                <div className="px-2 mb-2">
+                <div className="px-2 mb-2 mt-1">
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
                     <Input
@@ -834,8 +864,9 @@ export default function Sidebar({
                       >
                         <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.slug || view.id}`} className="min-w-0 block">
                           <div className="flex items-center w-full min-w-0">
+                            <Eye className="mr-2 h-3 w-3 flex-shrink-0" />
                             {view.isFavorite && <Star className="mr-1 h-3 w-3 text-yellow-500 fill-current" />}
-                            <span className="truncate flex-1">{view.name}</span>
+                            <span className="truncate flex-1 text-xs">{view.name}</span>
                             {view._count?.issues && (
                               <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
                                 {view._count.issues}
@@ -856,14 +887,14 @@ export default function Sidebar({
                     <Button
                       variant="ghost"
                       onClick={() => setShowCreateViewModal(true)}
-                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      className="w-full justify-start h-7 px-2 text-xs text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                     >
                       <Plus className="mr-2 h-3 w-3" />
                       Create view
                     </Button>
                     <Button
                       variant="ghost"
-                      className="w-full justify-start h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      className="w-full justify-start h-7 px-2 text-xs text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                       asChild
                     >
                       <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views`}>
@@ -875,31 +906,6 @@ export default function Sidebar({
                 </div>
               </CollapsibleContent>
             </Collapsible>
-          </div>
-
-          {/* Other workspace features */}
-          <div className="space-y-0.5">
-            <div className="px-2 mb-2">
-              <div className="text-xs font-medium text-gray-500">More</div>
-            </div>
-            {workspaceFeatures.map((item) => (
-              <Button
-                key={item.name}
-                variant="ghost"
-                className={cn(
-                  "w-full justify-start h-7 px-2 text-sm transition-colors",
-                  item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
-                  !currentWorkspace?.id && isLoading && "opacity-50 pointer-events-none"
-                )}
-                asChild
-                disabled={!currentWorkspace?.id && isLoading}
-              >
-                <Link href={item.href}>
-                  <item.icon className="mr-2 h-4 w-4" />
-                  {item.name}
-                </Link>
-              </Button>
-            ))}
           </div>
         </div>
       </ScrollArea>
@@ -958,6 +964,19 @@ export default function Sidebar({
         />
       )}
 
+      {/* Create Project Modal */}
+      {showCreateProjectModal && (
+        <CreateProjectModal
+          isOpen={showCreateProjectModal}
+          onClose={() => setShowCreateProjectModal(false)}
+          workspaceId={currentWorkspace?.id || ""}
+          onProjectCreated={(project) => {
+            console.log("Project created:", project);
+            // The useCreateProject hook will automatically invalidate queries
+          }}
+        />
+      )}
+
       {/* New Issue Modal */}
       <NewIssueModal
         open={showNewIssueModal}
@@ -978,13 +997,7 @@ export default function Sidebar({
           onOpenChange={setCommandMenuOpen}
           onCreateIssue={() => setShowNewIssueModal(true)}
           onCreateView={() => setShowCreateViewModal(true)}
-          onCreateProject={() => {
-            // TODO: Implement new project modal trigger
-            toast({
-              title: "Coming soon",
-              description: "Create project functionality will be available soon",
-            });
-          }}
+          onCreateProject={() => setShowCreateProjectModal(true)}
         />
       )}
     </div>

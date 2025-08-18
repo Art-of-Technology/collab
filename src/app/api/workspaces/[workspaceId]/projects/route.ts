@@ -4,6 +4,97 @@ import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
+// Function to generate a unique issue prefix within a workspace
+async function generateUniqueIssuePrefix(workspaceId: string, requestedPrefix?: string, projectName?: string): Promise<string> {
+  // If a specific prefix is requested, validate its uniqueness
+  if (requestedPrefix && requestedPrefix.trim()) {
+    const cleanPrefix = requestedPrefix.trim().toUpperCase();
+    
+    // Check if this prefix already exists in the workspace
+    const existingProject = await prisma.project.findFirst({
+      where: {
+        workspaceId,
+        issuePrefix: cleanPrefix
+      }
+    });
+    
+    if (!existingProject) {
+      return cleanPrefix; // Requested prefix is available
+    }
+  }
+  
+  // Generate automatic prefix from project name
+  if (projectName) {
+    const baseName = projectName.trim().toUpperCase();
+    
+    // Try different strategies to generate a unique prefix
+    const strategies = [
+      // Strategy 1: First 3 characters
+      baseName.substring(0, 3),
+      // Strategy 2: First 4 characters  
+      baseName.substring(0, 4),
+      // Strategy 3: First letter + first letter of each word
+      baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join('').substring(0, 4),
+      // Strategy 4: Initials (first letter of each word)
+      baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join(''),
+    ];
+    
+    // Try each strategy
+    for (const basePrefix of strategies) {
+      if (basePrefix.length >= 2) { // Minimum 2 characters
+        // Try the base prefix first
+        const existingProject = await prisma.project.findFirst({
+          where: {
+            workspaceId,
+            issuePrefix: basePrefix
+          }
+        });
+        
+        if (!existingProject) {
+          return basePrefix;
+        }
+        
+        // If base prefix exists, try with numbers
+        for (let i = 1; i <= 99; i++) {
+          const numberedPrefix = `${basePrefix}${i}`;
+          const existingNumberedProject = await prisma.project.findFirst({
+            where: {
+              workspaceId,
+              issuePrefix: numberedPrefix
+            }
+          });
+          
+          if (!existingNumberedProject) {
+            return numberedPrefix;
+          }
+        }
+      }
+    }
+  }
+  
+  // Fallback: Generate random prefix
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let attempt = 0; attempt < 100; attempt++) {
+    let randomPrefix = '';
+    for (let i = 0; i < 3; i++) {
+      randomPrefix += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    const existingProject = await prisma.project.findFirst({
+      where: {
+        workspaceId,
+        issuePrefix: randomPrefix
+      }
+    });
+    
+    if (!existingProject) {
+      return randomPrefix;
+    }
+  }
+  
+  throw new Error('Unable to generate unique issue prefix');
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { workspaceId: string } }
@@ -168,8 +259,16 @@ export async function POST(
       );
     }
 
-    // Generate issue prefix if not provided
-    const finalIssuePrefix = issuePrefix || name.substring(0, 3).toUpperCase();
+    // Generate unique issue prefix
+    let finalIssuePrefix: string;
+    try {
+      finalIssuePrefix = await generateUniqueIssuePrefix(workspaceId, issuePrefix, name);
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Unable to generate unique issue prefix. Please try a different project name or specify a custom prefix.' }, 
+        { status: 400 }
+      );
+    }
 
     // Create the project
     const project = await prisma.project.create({

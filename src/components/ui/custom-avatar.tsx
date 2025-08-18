@@ -42,7 +42,7 @@ const FaceLayer = ({ src, alt, className = "", priority = false, zIndex = 1 }: F
 };
 
 export interface CustomAvatarProps {
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   user: {
     avatarSkinTone?: number | null;
     avatarEyes?: number | null;
@@ -82,6 +82,7 @@ export function CustomAvatar({ size = "md", user, className = "" }: CustomAvatar
   
   // Size classes
   const sizeClasses = {
+    xs: "!h-6 !w-6 min-h-[1.5rem] min-w-[1.5rem]",
     sm: "!h-8 !w-8 min-h-[2rem] min-w-[2rem]",
     md: "!h-10 !w-10 min-h-[2.5rem] min-w-[2.5rem]",
     lg: "!h-16 !w-16 min-h-[4rem] min-w-[4rem]",

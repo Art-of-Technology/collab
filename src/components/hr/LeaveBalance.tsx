@@ -14,6 +14,8 @@ import {
 import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
 import { LeaveBalanceProps } from "@/types/leave";
 
+const GAUGE_DEFAULT_COLOR = "#3b82f6";
+
 export function LeaveBalance({
   balances = [],
   isLoading = false,
@@ -24,7 +26,6 @@ export function LeaveBalance({
   const isSelectedLeaveTypeValid = useMemo(() => {
     return !!selectedLeaveType && balances.some(b => b.policyId === selectedLeaveType);
   }, [balances, selectedLeaveType]);
-
   // Update selectedLeaveType when balances change
   useEffect(() => {
     if (balances.length > 0 && (!selectedLeaveType || !isSelectedLeaveTypeValid)) {
@@ -49,6 +50,11 @@ export function LeaveBalance({
     if (percentage >= 50) return "#16a34a"; // green-600
     if (percentage >= 10) return "#ca8a04"; // yellow-600
     return "#dc2626"; // red-600
+  }, []);
+
+  // Helper function to ensure balance is never negative for display
+  const getDisplayBalance = useCallback((balance: number) => {
+    return Math.max(0, balance);
   }, []);
 
   // Handle loading state
@@ -145,46 +151,59 @@ export function LeaveBalance({
                 </Badge>
               )}
             </div>
-            <div className="space-y-1 flex-shrink-0">
-              <div className="text-xs text-muted-foreground py-0.5">
-                {formatValue(
-                  currentBalance.totalAccrued,
-                  currentBalance.trackUnit
-                )}
+            {currentBalance.maxBalance !== null && (
+              <div className="space-y-1 flex-shrink-0">
+                <div className="text-xs text-muted-foreground py-0.5">
+                  {formatValue(
+                    currentBalance.totalAccrued,
+                    currentBalance.trackUnit
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-4 h-full flex flex-col items-center gap-4 min-w-[250px]">
           {/* Circular Progress Bar */}
           <div>
             <AnimatedCircularProgressBar
-              max={currentBalance.totalAccrued}
+              max={currentBalance.maxBalance !== null ? currentBalance.totalAccrued : currentBalance.totalUsed || 1}
               value={currentBalance.totalUsed}
               customValue={
                 <div className="flex flex-col items-center justify-center gap-1">
                   <div
                     style={{
-                      color: getAvailableColorHex(
-                        currentBalance.balance,
-                        currentBalance.totalAccrued
-                      ),
+                      color: currentBalance.maxBalance !== null
+                        ? getAvailableColorHex(
+                          currentBalance.balance,
+                          currentBalance.totalAccrued
+                        )
+                        : GAUGE_DEFAULT_COLOR,
                     }}
                     className={`text-lg font-bold`}
                   >
-                    {formatValue(
-                      currentBalance.balance,
-                      currentBalance.trackUnit
-                    )}
+                    {currentBalance.maxBalance !== null
+                      ? formatValue(
+                        getDisplayBalance(currentBalance.balance),
+                        currentBalance.trackUnit
+                      )
+                      : formatValue(
+                        currentBalance.totalUsed,
+                        currentBalance.trackUnit
+                      )
+                    }
                   </div>
                 </div>
               }
               min={0}
-              gaugePrimaryColor="#3b82f6"
-              gaugeSecondaryColor={getAvailableColorHex(
-                currentBalance.balance,
-                currentBalance.totalAccrued
-              )}
+              gaugePrimaryColor={GAUGE_DEFAULT_COLOR}
+              gaugeSecondaryColor={currentBalance.maxBalance !== null
+                ? getAvailableColorHex(
+                  currentBalance.balance,
+                  currentBalance.totalAccrued
+                )
+                : GAUGE_DEFAULT_COLOR
+              }
               className="size-32"
             />
           </div>
@@ -196,18 +215,21 @@ export function LeaveBalance({
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <span>Used: {currentBalance.totalUsed}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{
-                    backgroundColor: getAvailableColorHex(
-                      currentBalance.balance,
-                      currentBalance.totalAccrued
-                    ),
-                  }}
-                ></div>
-                <span>Remaining: {currentBalance.balance}</span>
-              </div>
+              {
+                currentBalance.maxBalance !== null && (
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        backgroundColor: getAvailableColorHex(
+                          currentBalance.balance,
+                          currentBalance.totalAccrued
+                        ),
+                      }}
+                    ></div>
+                    <span>Remaining: {getDisplayBalance(currentBalance.balance)}</span>
+                  </div>
+                )}
             </div>
           </div>
         </CardContent>

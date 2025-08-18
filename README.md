@@ -91,7 +91,7 @@ Collab is designed to streamline internal communication and work tracking by off
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/collab.git
+   git clone https://github.com/Art-of-Technology/collab.git
    cd collab
    ```
 2. Install dependencies:
@@ -114,6 +114,33 @@ Collab is designed to streamline internal communication and work tracking by off
    npm run prisma:init-workspace
    ```
 6. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+### Hocuspocus (collaborative editing) — Development setup
+
+To enable the collaborative editor locally, run the Hocuspocus WebSocket server alongside the app.
+
+1. Add the client URL to your `.env.local` (pick one):
+   ```bash
+   # Explicit URL (recommended)
+   NEXT_PUBLIC_HOCUSPOCUS_URL=ws://127.0.0.1:5020
+   # or set only the port (falls back to current host)
+   NEXT_PUBLIC_HOCUSPOCUS_PORT=5020
+   ```
+2. Start the Hocuspocus server (choose one):
+   - Node (in a separate terminal):
+     ```bash
+     npm run hocuspocus
+     ```
+   - Docker (requires Docker running):
+     ```bash
+     docker compose up -d hocuspocus
+     ```
+   By default it listens on port 1234. You can change it with `HOCUSPOCUS_PORT=5020`.
+3. Ensure your `DATABASE_URL` is set and migrations are applied (Hocuspocus reads from the same database).
+4. Keep the Hocuspocus server running while you work, and run the app with:
    ```bash
    npm run dev
    ```
@@ -160,15 +187,23 @@ This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By parti
 
 Thanks goes to these wonderful people:
 
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="http://www.scrivt.com"><img src="https://avatars.githubusercontent.com/u/36661336?v=4?s=100" width="50px;" alt="Erkan DOGAN"/><br /><sub><b>Erkan DOGAN</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=erkandogan" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Documentation">📖</a> <a href="#design-erkandogan" title="Design">🎨</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/redoh"><img src="https://avatars.githubusercontent.com/u/38852479?v=4?s=100" width="50px;" alt="Neo"/><br /><sub><b>Neo</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Documentation">📖</a> <a href="#design-redoh" title="Design">🎨</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/utku-weezboo"><img src="https://avatars.githubusercontent.com/u/173268231?v=4?s=100" width="50px;" alt="utku-weezboo"/><br /><sub><b>utku-weezboo</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=utku-weezboo" title="Code">💻</a> <a href="https://github.com/Art-of-Technology/collab/commits?author=utku-weezboo" title="Documentation">📖</a> <a href="#design-utku-weezboo" title="Design">🎨</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/redoh"><img src="https://avatars.githubusercontent.com/u/38852479?v=4?s=100" width="100px;" alt="Ferit"/><br /><sub><b>Ferit</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=redoh" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ozngnr"><img src="https://avatars.githubusercontent.com/u/67223977?v=4?s=100" width="100px;" alt="Ozan Guner"/><br /><sub><b>Ozan Guner</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=ozngnr" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/erdenizko"><img src="https://avatars.githubusercontent.com/u/168836048?v=4?s=100" width="100px;" alt="Erdeniz Korkmaz"/><br /><sub><b>Erdeniz Korkmaz</b></sub></a><br /><a href="https://github.com/Art-of-Technology/collab/commits?author=erdenizko" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## License
 
@@ -178,8 +213,7 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 
 ## Contact
 
-[contact-email]
-
+[https://weezboo.com](https://weezboo.com)
 [https://github.com/Art-of-Technology/collab](https://github.com/Art-of-Technology/collab)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -187,8 +221,8 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contact-email]: utku@weezboo.com
-[security-email]: utku@weezboo.com
+[contact-email]: hello@weezboo.com
+[security-email]: hello@weezboo.com
 [documentation-url]: https://github.com/Art-of-Technology/collab/wiki
 [contributors-shield]: https://img.shields.io/github/contributors/Art-of-Technology/collab.svg?style=for-the-badge
 [contributors-url]: https://github.com/Art-of-Technology/collab/graphs/contributors

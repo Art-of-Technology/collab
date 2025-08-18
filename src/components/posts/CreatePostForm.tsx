@@ -129,41 +129,37 @@ export default function CreatePostForm() {
     // Extract user IDs directly from the message if using new format
     const mentionedUserIds = extractMentionUserIds(message);
 
-    // If we have user IDs from the new format, use only those
-    if (mentionedUserIds.length > 0) {
-      try {
-        await axios.post("/api/mentions", {
-          userIds: mentionedUserIds,
-          sourceType: "post",
-          sourceId: postId,
-          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`
-        });
-      } catch (error) {
-        console.error("Failed to process mentions:", error);
-        // Don't fail the post creation if mentions fail
-      }
-      return;
-    }
-
-    // Fallback: extract usernames for backward compatibility (old format only)
+    // Also extract usernames for backward compatibility (old format)
     const mentionedUsernames = extractMentions(message);
 
-    // If no mentions found in either format, return early
-    if (mentionedUsernames.length === 0) return;
+    // If neither format found, return early
+    if (mentionedUserIds.length === 0 && mentionedUsernames.length === 0) return;
 
     try {
-      // Query users by usernames to get their IDs
-      const response = await axios.post("/api/users/lookup", {
-        usernames: mentionedUsernames,
-        workspaceId: currentWorkspace?.id
-      });
+      let userIds = [...mentionedUserIds]; // Start with directly extracted IDs
 
-      const mentionedUsers = response.data;
+      // If we have usernames that need to be looked up
+      if (mentionedUsernames.length > 0) {
+        // Query users by usernames to get their IDs
+        const response = await axios.post("/api/users/lookup", {
+          usernames: mentionedUsernames,
+          workspaceId: currentWorkspace?.id
+        });
 
-      if (mentionedUsers && mentionedUsers.length > 0) {
-        const userIds = mentionedUsers.map((user: any) => user.id);
+        const mentionedUsers = response.data;
 
-        // Create notifications for mentioned users
+        if (mentionedUsers && mentionedUsers.length > 0) {
+          // Add the looked-up user IDs
+          const lookupUserIds = mentionedUsers.map((user: any) => user.id);
+          userIds = [...userIds, ...lookupUserIds];
+
+          // Remove duplicates
+          userIds = [...new Set(userIds)];
+        }
+      }
+
+      // Create notifications for mentioned users (if any found)
+      if (userIds.length > 0) {
         await axios.post("/api/mentions", {
           userIds,
           sourceType: "post",
@@ -213,18 +209,13 @@ export default function CreatePostForm() {
         : [];
 
       // Use TanStack Query mutation
-      const createdPost = await createPostMutation.mutateAsync({
+      await createPostMutation.mutateAsync({
         message: formData.message,
         type: formData.type as 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION',
         tags: tagsArray,
         priority: formData.priority as 'normal' | 'high' | 'critical',
         workspaceId: currentWorkspace.id,
       });
-
-      // Process mentions if the post was created successfully
-      if (createdPost?.id) {
-        await processMentions(createdPost.id, formData.message);
-      }
 
       // Reset form
       setFormData({
@@ -268,17 +259,17 @@ export default function CreatePostForm() {
   };
 
   return (
-    <Card className="mb-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border-border/40 bg-card/95">
-      <CardHeader className="pb-3 relative">
+    <Card className="mb-6 shadow-lg hover:shadow-xl transition-all duration-300 bg-[#0e0e0e] border-[#1a1a1a] hover:border-[#333]">
+      <CardHeader className="pb-3 relative border-b border-[#1a1a1a]">
         <div className="flex space-x-4">
           {renderAvatar()}
           <div className="flex-1 space-y-1">
-            <p className="text-sm font-medium leading-none">{session?.user?.name || "Anonymous"}</p>
-            <p className="text-xs text-muted-foreground">@{session?.user?.email?.split('@')[0] || "username"}</p>
+            <p className="text-sm font-medium leading-none text-[#e6edf3]">{session?.user?.name || "Anonymous"}</p>
+            <p className="text-xs text-[#8b949e]">@{session?.user?.email?.split('@')[0] || "username"}</p>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         <Collapsible open={optionsOpen} onOpenChange={setOptionsOpen} className="space-y-0">
           <div className="space-y-2 mb-1">
             <CollabInput

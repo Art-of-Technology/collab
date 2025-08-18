@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import {
   getPosts,
   getPostById,
@@ -9,6 +9,7 @@ import {
   deletePost,
   getUserPosts
 } from '@/actions/post';
+import { getPostStats } from '@/actions/postStats';
 
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION';
 type PostPriority = 'normal' | 'high' | 'critical';
@@ -22,7 +23,7 @@ export const postKeys = {
   detail: (id: string) => [...postKeys.details(), id] as const,
 };
 
-// Get posts hook
+// Get posts hook (legacy - returns posts directly)
 export const usePosts = (filters: {
   type?: PostType;
   tag?: string;
@@ -32,7 +33,35 @@ export const usePosts = (filters: {
 }) => {
   return useQuery({
     queryKey: postKeys.list(filters),
-    queryFn: () => getPosts(filters),
+    queryFn: async () => {
+      const result = await getPosts(filters);
+      // Return just the posts for backward compatibility
+      return result.posts || result;
+    },
+  });
+};
+
+// Infinite posts hook for pagination
+export const useInfinitePosts = (filters: {
+  type?: PostType;
+  tag?: string;
+  authorId?: string;
+  workspaceId?: string;
+  limit?: number;
+}) => {
+  return useInfiniteQuery({
+    queryKey: [...postKeys.list(filters), 'infinite'],
+    queryFn: async ({ pageParam = undefined }) => {
+      const result = await getPosts({
+        ...filters,
+        cursor: pageParam
+      });
+      return result;
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.nextCursor : undefined;
+    },
+    initialPageParam: undefined,
   });
 };
 
@@ -52,8 +81,9 @@ export const useCreatePost = () => {
   return useMutation({
     mutationFn: createPost,
     onSuccess: () => {
-      // Invalidate posts lists
+      // Invalidate posts lists and stats
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['posts', 'stats'] });
     },
   });
 };
@@ -70,9 +100,10 @@ export const useUpdatePost = (postId: string) => {
       priority: PostPriority;
     }) => updatePost(postId, data),
     onSuccess: () => {
-      // Invalidate posts lists and the specific post
+      // Invalidate posts lists, stats, and the specific post
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
       queryClient.invalidateQueries({ queryKey: postKeys.detail(postId) });
+      queryClient.invalidateQueries({ queryKey: ['posts', 'stats'] });
     },
   });
 };
@@ -84,8 +115,9 @@ export const useDeletePost = () => {
   return useMutation({
     mutationFn: deletePost,
     onSuccess: () => {
-      // Invalidate posts lists
+      // Invalidate posts lists and stats
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['posts', 'stats'] });
     },
   });
 };
@@ -96,4 +128,13 @@ export function useUserPosts(userId: string, workspaceId: string) {
     queryFn: () => getUserPosts(userId, workspaceId),
     enabled: !!userId && !!workspaceId
   });
-} 
+}
+
+// Get post statistics hook
+export const usePostStats = (workspaceId?: string) => {
+  return useQuery({
+    queryKey: ['posts', 'stats', workspaceId],
+    queryFn: () => getPostStats({ workspaceId }),
+    enabled: !!workspaceId,
+  });
+};
