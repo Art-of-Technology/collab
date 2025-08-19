@@ -19,7 +19,9 @@ export const useBoardItems = (boardId: string | undefined) => {
     queryKey: boardItemsKeys.board(boardId || ''),
     queryFn: () => getBoardItems(boardId as string),
     enabled: !!boardId,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 5, // Keep very fresh for realtime invalidations
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 };
 
