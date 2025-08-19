@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { issueKeys } from '@/hooks/queries/useIssues';
 import { boardItemsKeys } from '@/hooks/queries/useBoardItems';
@@ -11,31 +11,63 @@ export interface RealtimeOptions {
   viewId?: string;
 }
 
+// Singleton connection manager per workspace to avoid duplicate SSE connections
+type WorkspaceConnection = {
+  source: EventSource;
+  refCount: number;
+  listeners: Set<(data: any) => void>;
+};
+
+const workspaceConnections: Record<string, WorkspaceConnection> = {};
+
+function getOrCreateWorkspaceConnection(workspaceId: string): WorkspaceConnection {
+  let conn = workspaceConnections[workspaceId];
+  if (conn) return conn;
+
+  const url = `/api/realtime/workspace/${workspaceId}/stream`;
+  const source = new EventSource(url, { withCredentials: true });
+  conn = {
+    source,
+    refCount: 0,
+    listeners: new Set(),
+  };
+
+  source.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      conn.listeners.forEach((cb) => cb(data));
+    } catch {
+      // ignore
+    }
+  };
+
+  source.onerror = () => {
+    // Allow the browser to manage reconnection
+  };
+
+  workspaceConnections[workspaceId] = conn;
+  return conn;
+}
+
 export function useRealtimeWorkspaceEvents(options: RealtimeOptions) {
   const { workspaceId, boardId, viewId } = options;
   const queryClient = useQueryClient();
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     if (!workspaceId) return;
 
-    const url = `/api/realtime/workspace/${workspaceId}/stream`;
-    const es = new EventSource(url, { withCredentials: true });
-    eventSourceRef.current = es;
+    const conn = getOrCreateWorkspaceConnection(workspaceId);
+    conn.refCount += 1;
 
-    es.onmessage = (event) => {
+    const handleEvent = (data: any) => {
       try {
-        const data = JSON.parse(event.data);
         if (data?.type === 'issue.updated') {
-          // Invalidate issues for this workspace
           if (data.workspaceId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(String(data.workspaceId)) });
           }
-          // Invalidate board items if we have board context
           if (boardId) {
             queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
           }
-          // Also invalidate specific issue detail cache
           if (data.issueId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.detail(String(data.issueId)) });
           }
@@ -75,13 +107,15 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions) {
       }
     };
 
-    es.onerror = () => {
-      // Let browser retry with default EventSource behavior
-    };
+    conn.listeners.add(handleEvent);
 
     return () => {
-      es.close();
-      eventSourceRef.current = null;
+      conn.listeners.delete(handleEvent);
+      conn.refCount -= 1;
+      if (conn.refCount <= 0) {
+        try { conn.source.close(); } catch {}
+        delete workspaceConnections[workspaceId];
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, boardId, viewId]);

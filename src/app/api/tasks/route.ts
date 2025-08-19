@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation, trackMove } from "@/lib/board-item-activity-service";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { publishEvent } from '@/lib/redis';
 
 // POST /api/tasks - Create a new task
 export async function POST(request: NextRequest) {
@@ -432,6 +433,20 @@ export async function PATCH(request: NextRequest) {
           console.error("Failed to send notifications for task move:", notificationError);
           // Don't fail the operation if notifications fail
         }
+      }
+
+      // Publish realtime event for other clients to refresh board items
+      try {
+        await publishEvent(`workspace:${board.workspaceId}:events`, {
+          type: 'board.items.reordered',
+          workspaceId: board.workspaceId,
+          boardId,
+          columnId,
+          movedItemId: movedItemId || null,
+          orderedItemIds,
+        });
+      } catch (e) {
+        // Non-fatal
       }
 
       results.push({
