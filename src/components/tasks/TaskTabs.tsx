@@ -39,7 +39,9 @@ export function BoardItemTabs({
   const { settings } = useWorkspaceSettings();
 
   // Determine which tabs to show based on item type
-  const showSessions = itemType === 'task' && settings?.timeTrackingEnabled;
+  // Always show the Sessions tab for tasks; the content will render a
+  // disabled message when workspace time tracking is turned off.
+  const showSessions = itemType === 'task';
   const showHelpers = itemType === 'task';
   const showRelations = !!itemData; // Show relations tab if itemData is provided
 
