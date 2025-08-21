@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
-import { IssueType } from "@/types/issue";
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
