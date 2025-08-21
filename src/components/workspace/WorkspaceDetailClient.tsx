@@ -98,7 +98,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
       <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <div className="flex flex-col items-center justify-center py-16 space-y-3">
           <h2 className="text-xl font-semibold text-destructive">Error Loading Workspace</h2>
-          <p className="text-sm text-muted-foreground">{error.message || "Failed to load workspace details"}</p>
+          <p className="text-sm text-muted-foreground">{(error as Error)?.message || "Failed to load workspace details"}</p>
           <Button size="sm" asChild>
             <Link href="/workspaces">Return to Workspaces</Link>
           </Button>
