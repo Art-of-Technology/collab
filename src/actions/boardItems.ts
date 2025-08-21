@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client'; // Import Prisma
+import { publishEvent } from '@/lib/redis';
 
 /**
  * Get all items (tasks, milestones, epics, stories) for a board
@@ -621,6 +622,15 @@ export async function reorderItemsInColumn(data: {
         }
       }
     }
+
+    await publishEvent(`workspace:${board.workspaceId}:events`, {
+      type: 'board.items.reordered',
+      workspaceId: board.workspaceId,
+      boardId,
+      columnId,
+      movedItemId,
+      orderedItemIds
+    });
   } catch (error) {
     console.error("Error reordering items in transaction:", error);
     // More specific error handling can be added based on Prisma error codes

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { publishEvent } from '@/lib/redis';
 import { userSelectFields } from "@/lib/user-utils";
 import { checkUserPermission, Permission } from "@/lib/permissions";
 import { isUUID } from "@/lib/url-utils";
@@ -213,6 +214,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { boardId: s
         description,
         issuePrefix,
       } as any, // Using type assertion to bypass type check until Prisma client is regenerated
+    });
+
+    await publishEvent(`workspace:${existingBoard.workspaceId}:events`, {
+      type: 'board.updated',
+      workspaceId: existingBoard.workspaceId,
+      boardId: updatedBoard.id
     });
 
     return NextResponse.json(updatedBoard);

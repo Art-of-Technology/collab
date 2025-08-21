@@ -530,9 +530,19 @@ export function IssueDetailContent({
       if (event.metaKey || event.ctrlKey) {
         switch (event.key) {
           case 'c':
-            if (!editingTitle) {
-              event.preventDefault();
-              handleCopyLink();
+            {
+              const activeElement = document.activeElement as HTMLElement | null;
+              const isTextInputFocused = !!activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.isContentEditable ||
+                !!activeElement.closest('[contenteditable="true"]')
+              );
+
+              if (!editingTitle && !isTextInputFocused) {
+                event.preventDefault();
+                handleCopyLink();
+              }
             }
             break;
           case 's':

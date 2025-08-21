@@ -28,7 +28,9 @@ export function IssueTabs({
   const { settings } = useWorkspaceSettings();
 
   // Determine which tabs to show based on issue type and settings
-  const showSessions = settings?.timeTrackingEnabled;
+  // Always show the Time tab; the inner content will display an informative
+  // message when time tracking is disabled for the workspace.
+  const showSessions = true;
   const showHelpers = true; // Show helpers for all issues
   const showRelations = true; // Show relations for all issues
 

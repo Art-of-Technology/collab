@@ -228,7 +228,7 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
                     </span>
                   </div>
                   {entry.task.taskBoard && (
-                    <div className="text-xs text-muted-foreground mt-0.5">
+                    <div className="text-xs text-muted-foreground mt-0.5 truncate">
                       {entry.task.taskBoard.name}
                     </div>
                   )}
@@ -316,7 +316,7 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
                     </Button>
                   </div>
                   {entry.task.taskBoard && (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground truncate">
                       {entry.task.taskBoard.name}
                     </div>
                   )}
@@ -402,7 +402,7 @@ export function TimesheetEntryCard({ entry, onRefresh }: TimesheetEntryCardProps
                             )}
                           </div>
                           {session.description && (
-                            <div className="text-xs text-muted-foreground mt-1">
+                            <div className="text-xs text-muted-foreground mt-1 truncate">
                               {session.description}
                             </div>
                           )}

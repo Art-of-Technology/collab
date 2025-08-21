@@ -58,12 +58,12 @@ import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
-import * as Y from 'yjs'
-import { HocuspocusProvider as HPProvider } from '@hocuspocus/provider'
-import Collaboration from '@tiptap/extension-collaboration'
-import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
-import { IndexeddbPersistence } from 'y-indexeddb'
 import { useCurrentUser } from "@/hooks/queries/useUser";
+import { 
+  HocuspocusManager, 
+  createCollaborationUser, 
+  type HocuspocusConfig 
+} from "@/lib/collaboration";
 
 export interface MarkdownEditorRef {
   getContent: () => string;
@@ -84,8 +84,6 @@ interface MarkdownEditorProps {
   onAiImprove?: (text: string) => Promise<string>;
   // Enable collaborative editing when provided. The value should be a unique, stable ID for the document.
   collabDocumentId?: string;
-  // Optionally override the provider URL; defaults to ws://127.0.0.1:1234 in dev
-  collabServerUrl?: string;
   // Render in read-only mode but stay connected to Yjs/Hocuspocus for live updates
   readOnly?: boolean;
 }
@@ -1040,28 +1038,6 @@ const MilestoneMention = TiptapNode.create({
   },
 })
 
-// Generate a consistent color based on user ID
-function getUserColor(userId: string): string {
-  const colors = [
-    '#ef4444', // red
-    '#f97316', // orange
-    '#eab308', // yellow
-    '#22c55e', // green
-    '#14b8a6', // teal
-    '#3b82f6', // blue
-    '#8b5cf6', // violet
-    '#ec4899', // pink
-    '#f43f5e', // rose
-    '#06b6d4', // cyan
-  ];
-  
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  return colors[Math.abs(hash) % colors.length];
-}
 
 export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>(({
   onChange,
@@ -1074,7 +1050,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   compact = false,
   onAiImprove,
   collabDocumentId,
-  collabServerUrl,
   readOnly = false,
 }: MarkdownEditorProps, ref) => {
   const [linkUrl, setLinkUrl] = useState('');
@@ -1093,98 +1068,49 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const { currentWorkspace } = useWorkspace();
 
-
-  const initialContentRef = useRef('');
-
-  // Collab: create ydoc/provider optionally
-  const ydocRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<HPProvider | null>(null);
-  const indexeddbRef = useRef<IndexeddbPersistence | null>(null);
+  // Collaboration setup
+  const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);
   const { data: session } = useSession();
   const { data: currentUser } = useCurrentUser();
   
   // Get user info for collaboration
-  const collaborationUser = useMemo(() => {
-    if (!session?.user) {
-      return {
-        name: 'Anonymous',
-        color: '#94a3b8',
-        avatar: null,
-        initials: 'AN',
-      };
-    }
-    
-    // Generate initials from name
-    const name = session.user.name || 'User';
-    const initials = name
-      .split(' ')
-      .map(word => word[0]?.toUpperCase() || '')
-      .join('')
-      .slice(0, 2) || 'U';
-    
-    // Ensure avatar URL is absolute
-    let avatarUrl = currentUser?.image || undefined;
-    if (avatarUrl && !avatarUrl.startsWith('http')) {
-      // If it's a relative URL, make it absolute
-      avatarUrl = `${window.location.origin}${avatarUrl}`;
-    }
-    
-    return {
-      name,
-      color: getUserColor(session.user.id || 'default'),
-      avatar: avatarUrl,
-      initials,
-      id: session.user.id,
-    };
-  }, [session, currentUser?.image]);
+  const collaborationUser = useMemo(() => 
+    createCollaborationUser(session, currentUser), 
+    [session, currentUser]
+  );
 
-  function computeHocuspocusUrl(overriddenUrl?: string): string {
-    if (overriddenUrl && overriddenUrl.trim().length > 0) return overriddenUrl;
-    if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_HOCUSPOCUS_URL || 'ws://127.0.0.1:1234';
-
-    const envUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
-    if (envUrl && envUrl.trim().length > 0) return envUrl;
-
-    const isSecure = window.location.protocol === 'https:';
-    const scheme = isSecure ? 'wss' : 'ws';
-    const host = window.location.hostname || '127.0.0.1';
-    const port = process.env.NEXT_PUBLIC_HOCUSPOCUS_PORT || '5020';
-    return `${scheme}://${host}:${port}`;
-  }
 
   useEffect(() => {
     if (!collabDocumentId) return;
 
-    const ydoc = new Y.Doc();
-    ydocRef.current = ydoc;
+    const initializeCollaboration = async () => {
+      if (hocuspocusManagerRef.current) {
+        return;
+      }
 
-    // Offline persistence disabled for collaboration to avoid duplicate merges
+      const config: HocuspocusConfig = {
+        documentId: collabDocumentId,
+      };
 
-    const url = computeHocuspocusUrl(collabServerUrl);
+      const manager = new HocuspocusManager(config);
+      hocuspocusManagerRef.current = manager;
 
-    providerRef.current = new HPProvider({
-      url,
-      name: collabDocumentId,
-      document: ydoc,
-    });
-    // Ensure connection attempt even if defaults change in provider
-    try {
-      (providerRef.current as unknown as { connect?: () => void })?.connect?.();
-    } catch {}
-    setCollabReady((v) => v + 1);
+      try {
+        await manager.initialize();
+        setCollabReady((v) => v + 1);
+      } catch (error) {
+        console.error('Failed to initialize collaboration:', error);
+      }
+    };
 
-    // We can't safely normalize here because the editor instance is created after this effect.
+    initializeCollaboration();
 
     return () => {
-      providerRef.current?.destroy();
-      providerRef.current = null;
-      indexeddbRef.current?.destroy();
-      indexeddbRef.current = null;
-      ydocRef.current?.destroy();
-      ydocRef.current = null;
+      hocuspocusManagerRef.current?.destroy();
+      hocuspocusManagerRef.current = null;
     };
-  }, [collabDocumentId, collabServerUrl]);
+  }, [collabDocumentId]);
 
   const editor = useEditor(
     {
@@ -1231,90 +1157,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             MilestoneMention,
           ];
 
-          if (collabDocumentId && ydocRef.current) {
-            base.push(
-              Collaboration.configure({ 
-                document: ydocRef.current,
-                field: 'prosemirror',
-              }),
-              CollaborationCursor.configure({
-                provider: providerRef.current!,
-                user: collaborationUser,
-                render: (user: any) => {
-                  const cursor = document.createElement('span');
-                  cursor.classList.add('collaboration-cursor__caret');
-                  cursor.style.borderColor = user.color;
-                  
-                  const label = document.createElement('div');
-                  label.classList.add('collaboration-cursor__label');
-                  label.style.backgroundColor = user.color;
-                  
-                  // Helper function to create initials fallback
-                  const createFallback = () => {
-                    const fallback = document.createElement('div');
-                    fallback.classList.add('collaboration-cursor__avatar-fallback');
-                    fallback.style.backgroundColor = user.color;
-                    fallback.textContent = user.initials || user.name?.slice(0, 2).toUpperCase() || 'U';
-                    return fallback;
-                  };
-                  
-                  // Create avatar element if user has an image
-                  if (user.avatar && user.avatar.trim() !== '') {
-                    const avatarWrapper = document.createElement('div');
-                    avatarWrapper.classList.add('collaboration-cursor__avatar-wrapper');
-                    avatarWrapper.style.border = `2px solid ${user.color}`;
-                    
-                    const avatar = document.createElement('img');
-                    // Ensure we're using a valid URL
-                    avatar.src = user.avatar;
-                    avatar.classList.add('collaboration-cursor__avatar');
-                    // Add crossorigin attribute to handle CORS
-                    avatar.crossOrigin = 'anonymous';
-                    
-                    // Log for debugging
-                    if (process.env.NODE_ENV !== 'production') {
-                      console.log('[Collab] Loading avatar for', user.name, ':', user.avatar);
-                    }
-                    
-                    // Handle avatar loading errors with fallback to initials
-                    avatar.onerror = () => {
-                      if (process.env.NODE_ENV !== 'production') {
-                        console.log('[Collab] Failed to load avatar for', user.name, ', using fallback');
-                      }
-                      // Replace image with initials fallback
-                      avatarWrapper.innerHTML = '';
-                      avatarWrapper.appendChild(createFallback());
-                    };
-                    
-                    // Also add load handler to ensure image loaded
-                    avatar.onload = () => {
-                      if (process.env.NODE_ENV !== 'production') {
-                        console.log('[Collab] Successfully loaded avatar for', user.name);
-                      }
-                    };
-                    
-                    avatarWrapper.appendChild(avatar);
-                    label.appendChild(avatarWrapper);
-                  } else {
-                    // Show initials in a circle if no avatar
-                    const fallbackWrapper = document.createElement('div');
-                    fallbackWrapper.classList.add('collaboration-cursor__avatar-wrapper');
-                    fallbackWrapper.style.border = `2px solid ${user.color}`;
-                    fallbackWrapper.appendChild(createFallback());
-                    label.appendChild(fallbackWrapper);
-                  }
-                  
-                  cursor.appendChild(label);
-                  return cursor;
-                },
-              })
-            );
+          if (collabDocumentId && hocuspocusManagerRef.current) {
+            try {
+              const extensions = hocuspocusManagerRef.current.getCollaborationExtensions(collaborationUser);
+              base.push(...extensions);
+            } catch (error) {
+              console.warn('Failed to get collaboration extensions:', error);
+            }
           }
 
           return base;
         }
       )(),
-      content: collabDocumentId ? '' : (content || initialValue),
+      content: collabDocumentId ? undefined : (content || initialValue),
       editorProps: {
         attributes: {
           class: cn(
@@ -1326,86 +1181,52 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
         }
       },
       editable: !readOnly,
-      immediatelyRender: true,
+      immediatelyRender: false,
+      onCreate: ({ editor }) => {
+        // Set initial content after collaboration is ready
+        if (collabDocumentId && (content || initialValue)) {
+          // Small delay to ensure collaboration is fully initialized
+          setTimeout(() => {
+            if (editor.isEmpty) {
+              editor.commands.setContent(content || initialValue || '');
+            }
+          }, 100);
+        }
+      },
+      onUpdate: ({ editor }) => {
+        if (!onChange) return;
+        const html = editor.getHTML();
+        const markdown = editor.getText(); // Simple text for now
+        onChange(markdown, html);
+      },
     },
     [collabDocumentId, readOnly, collabReady, collaborationUser]
   );
 
-  // Normalize accidental literal HTML text after collab sync
-  const hasNormalizedOnEditRef = useRef(false);
+  // Handle collaboration-specific initialization
   useEffect(() => {
-    if (!editor || !collabDocumentId || readOnly || hasNormalizedOnEditRef.current) return;
-    // Defer a tick to let Collaboration apply server content
-    const t = setTimeout(() => {
-      try {
-        console.log('[Editor] collab sync text:', editor.getText().slice(0, 200));
-        console.log('[Editor] collab sync html:', editor.getHTML().slice(0, 200));
-      } catch {}
-      const text = editor.getText().trim();
-      const startsWithTag = text.startsWith('<');
-      const looksEscaped = /&lt;\/?[a-z]+&gt;/i.test(text);
-      if (startsWithTag || looksEscaped) {
-        const normalized = text
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/^<p>/i, '')
-          .replace(/<\/p>$/i, '')
-          .trim();
-        console.log('[Editor] normalized to:', normalized);
-        editor.commands.setContent(normalized || '');
-      }
-      hasNormalizedOnEditRef.current = true;
-    }, 0);
-    return () => clearTimeout(t);
-  }, [editor, collabDocumentId, readOnly, collabReady]);
+    if (!editor || !collabDocumentId) return;
+    
+    // Set initial content when switching to collaboration mode
+    if (content || initialValue) {
+      const checkAndSetContent = () => {
+        // Only set content if editor is empty (first load)
+        if (editor.isEmpty) {
+          editor.commands.setContent(content || initialValue || '');
+        }
+      };
+      
+      // Give collaboration time to sync
+      const timeout = setTimeout(checkAndSetContent, 200);
+      return () => clearTimeout(timeout);
+    }
+  }, [editor, collabDocumentId, collabReady]);
 
   function normalizeHTML(html: string): string {
     return html.replace(/\s+/g, ' ').trim();
   }
 
-  // State for autosave functionality
-  const [isSaving, setIsSaving] = useState(false);
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Autosave function for non-collaborative documents
-  const autoSave = useCallback(async () => {
-    if (collabDocumentId || !editor || isSaving) return;
-    
-    try {
-      setIsSaving(true);
-      const content = editor.getHTML();
-      
-      const response = await fetch('/api/collab/save', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          documentId: undefined,
-          content: content,
-        }),
-      });
-      
-      if (response.ok) {
-        console.log('[MarkdownEditor] Auto-saved (non-collab)');
-      }
-    } catch (error) {
-      console.error('Auto-save error:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [collabDocumentId, editor, isSaving]);
   
-  // Debounced auto-save
-  const debouncedAutoSave = useCallback(() => {
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-    
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      autoSave();
-    }, 2000); // Auto-save after 2 seconds of inactivity
-  }, [autoSave]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -1416,15 +1237,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       // no-op here; parent can trigger REST save using current HTML
     },
     resetFromSource: (html: string) => {
-      if (editor && !collabDocumentId) {
+      if (editor) {
         editor.commands.setContent(html || '');
       }
     },
-    // Forcefully reset content (works for both collab and non-collab)
     resetTo: (html: string) => {
-      if (!editor) return;
-      // Emit update so collaborators receive the change
-      editor.commands.setContent(html || '', true);
+      if (editor) {
+        editor.commands.setContent(html || '');
+      }
     },
   }), [editor, collabDocumentId]);
 

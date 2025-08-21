@@ -338,70 +338,70 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                   </div>
                 </div>
 
-                {/* Quick Stats */}
-                {timesheetData && (
-                  <div className="hidden md:flex items-center gap-6 pl-6 border-l border-gray-200 dark:border-gray-700">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        {timesheetData.summary.formattedTotalWorkTime}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Work Time</div>
+              {/* Quick Stats */}
+              {timesheetData && (
+                <div className="flex flex-wrap items-center gap-3 md:gap-6 md:pl-6 md:border-l border-gray-200 dark:border-gray-700">
+                  <div className="text-center">
+                    <div className="text-lg md:text-2xl font-bold text-green-600 dark:text-green-400">
+                      {timesheetData.summary.formattedTotalWorkTime}
                     </div>
-                    <div className="text-center">
-                      <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{timesheetData.summary.productivityScore}%</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Productivity</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{timesheetData.summary.totalActiveTasks}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Active</div>
-                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Work Time</div>
                   </div>
-                )}
-              </div>
-
-              {/* View Controls */}
-              <div className="flex items-center gap-3">
-                <Tabs value={filters.view} onValueChange={handleViewChange}>
-                  <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
-                    <TabsTrigger value="daily" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                      <Sun className="h-4 w-4 mr-2" />
-                      Daily
-                    </TabsTrigger>
-                    <TabsTrigger value="weekly" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                      <CalendarDays className="h-4 w-4 mr-2" />
-                      Weekly
-                    </TabsTrigger>
-                    <TabsTrigger value="monthly" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Monthly
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
+                  <div className="text-center">
+                    <div className="text-lg md:text-xl font-bold text-blue-600 dark:text-blue-400">{timesheetData.summary.productivityScore}%</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Productivity</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg md:text-xl font-bold text-purple-600 dark:text-purple-400">{timesheetData.summary.totalActiveTasks}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Active</div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Navigation and Actions */}
-            <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center mt-6">
-              {/* Date Navigation */}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDateNavigation("prev")}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+            {/* View Controls */}
+            <div className="flex items-center gap-3">
+              <Tabs value={filters.view} onValueChange={handleViewChange}>
+                <TabsList className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
+                  <TabsTrigger value="daily" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <Sun className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Daily</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="weekly" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <CalendarDays className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Weekly</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="monthly" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">
+                    <Calendar className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Monthly</span>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFilters((prev) => ({ ...prev, date: new Date().toISOString() }))}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700 min-w-[120px]"
-                >
-                  <Target className="h-4 w-4 mr-2" />
-                  Today
-                </Button>
+          {/* Navigation and Actions */}
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mt-6">
+            {/* Date Navigation */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDateNavigation("prev")}
+                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFilters((prev) => ({ ...prev, date: new Date().toISOString() }))}
+                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
+              >
+                <Target className="h-4 w-4 mr-2" />
+                Today
+              </Button>
 
                 <Button
                   variant="outline"
@@ -413,142 +413,142 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                 </Button>
               </div>
 
-              {/* Filters and Actions */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select value={filters.boardId || "all"} onValueChange={handleBoardFilter}>
-                  <SelectTrigger className="w-[140px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Board" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Boards</SelectItem>
-                    {boards?.map((board: any) => (
-                      <SelectItem key={board.id} value={board.id}>
-                        {board.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Filters and Actions */}
+            <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-2 xl:flex xl:flex-row xl:gap-2">
+              <Select value={filters.boardId || "all"} onValueChange={handleBoardFilter}>
+                <SelectTrigger className="w-full xl:w-auto xl:min-w-[90px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Board" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Boards</SelectItem>
+                  {boards?.map((board: any) => (
+                    <SelectItem key={board.id} value={board.id}>
+                      {board.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-                <Select
-                  value={localFilters.activityType}
-                  onValueChange={(value) => setLocalFilters((prev) => ({ ...prev, activityType: value }))}
-                >
-                  <SelectTrigger className="w-[140px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
-                    <Activity className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="work">
-                      <div className="flex items-center gap-2">
-                        <Target className="h-3 w-3 text-green-400" />
-                        Work
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="break">
-                      <div className="flex items-center gap-2">
-                        <Coffee className="h-3 w-3 text-blue-400" />
-                        Break
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="lunch">
-                      <div className="flex items-center gap-2">
-                        <Coffee className="h-3 w-3 text-orange-400" />
-                        Lunch
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="meeting">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-3 w-3 text-purple-400" />
-                        Meeting
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="travel">
-                      <div className="flex items-center gap-2">
-                        <Activity className="h-3 w-3 text-indigo-400" />
-                        Travel
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="review">
-                      <div className="flex items-center gap-2">
-                        <Eye className="h-3 w-3 text-teal-400" />
-                        Review
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="research">
-                      <div className="flex items-center gap-2">
-                        <Search className="h-3 w-3 text-cyan-400" />
-                        Research
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <Select
+                value={localFilters.activityType}
+                onValueChange={(value) => setLocalFilters((prev) => ({ ...prev, activityType: value }))}
+              >
+                <SelectTrigger className="w-full xl:w-auto xl:min-w-[90px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
+                  <Activity className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="work">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-3 w-3 text-green-400" />
+                      Work
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="break">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="h-3 w-3 text-blue-400" />
+                      Break
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="lunch">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="h-3 w-3 text-orange-400" />
+                      Lunch
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="meeting">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-3 w-3 text-purple-400" />
+                      Meeting
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="travel">
+                    <div className="flex items-center gap-2">
+                      <Activity className="h-3 w-3 text-indigo-400" />
+                      Travel
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="review">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-3 w-3 text-teal-400" />
+                      Review
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="research">
+                    <div className="flex items-center gap-2">
+                      <Search className="h-3 w-3 text-cyan-400" />
+                      Research
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 
-                <Select value={localFilters.status} onValueChange={(value) => setLocalFilters((prev) => ({ ...prev, status: value }))}>
-                  <SelectTrigger className="w-[140px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
-                    <Timer className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="ongoing">
-                      <div className="flex items-center gap-2">
-                        <Play className="h-3 w-3 text-green-600" />
-                        Ongoing
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="paused">
-                      <div className="flex items-center gap-2">
-                        <Pause className="h-3 w-3 text-amber-600" />
-                        Paused
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="completed">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-3 w-3 text-blue-600" />
-                        Completed
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <Select value={localFilters.status} onValueChange={(value) => setLocalFilters((prev) => ({ ...prev, status: value }))}>
+                <SelectTrigger className="w-full xl:w-auto xl:min-w-[90px] bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20">
+                  <Timer className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="ongoing">
+                    <div className="flex items-center gap-2">
+                      <Play className="h-3 w-3 text-green-600" />
+                      Ongoing
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="paused">
+                    <div className="flex items-center gap-2">
+                      <Pause className="h-3 w-3 text-amber-600" />
+                      Paused
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="completed">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-3 w-3 text-blue-600" />
+                      Completed
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20 hover:bg-white dark:hover:bg-gray-700"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExport("csv")} className="cursor-pointer">
-                      <Download className="h-4 w-4 mr-2" />
-                      Export CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport("pdf")} className="cursor-pointer">
-                      <Download className="h-4 w-4 mr-2" />
-                      Export PDF
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full xl:w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-white/20 hover:bg-white dark:hover:bg-gray-700"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport("csv")} className="cursor-pointer">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("pdf")} className="cursor-pointer">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetch()}
-                  disabled={isLoading}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isLoading}
+                className="w-full xl:w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              </Button>
             </div>
           </div>
         </div>
+      </div>
 
         {/* Content */}
         {isLoading ? (

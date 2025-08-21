@@ -49,7 +49,7 @@ export function mergeIssuesWithViewPositions(
   });
   
   return issues.map(issue => {
-    const currentStatus = issue.statusValue || issue.status || 'todo';
+    const currentStatus = issue.projectStatus?.name || issue.statusValue || issue.status || 'todo';
     const positionKey = `${issue.id}_${currentStatus}`;
     const viewPosition = positionMap.get(positionKey);
     
