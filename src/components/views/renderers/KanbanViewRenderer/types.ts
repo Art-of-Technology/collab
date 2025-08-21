@@ -11,6 +11,16 @@ export interface KanbanViewRendererProps {
 }
 
 
+export type FilterType = 'all' | 'active' | 'backlog';
+
+export interface FilterState {
+  assignees: string[];
+  labels: string[];
+  priority: string[];
+  projects: string[];
+}
+
+
 
 export interface Column {
   id: string;

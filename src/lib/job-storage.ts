@@ -1,7 +1,7 @@
 // Shared in-memory job storage
 // In production, this should be replaced with Redis or a proper database
 
-import { redis } from './redis';
+import { withRedisOr, withRedisOrVoid } from './redis';
 
 export interface JobStatus {
   id: string;
@@ -23,23 +23,39 @@ export interface JobStatus {
 const JOB_PREFIX = 'boardgen:job:';
 
 export async function setJob(job: JobStatus) {
-  await redis.set(JOB_PREFIX + job.id, JSON.stringify(job), { EX: 600 });
+  await withRedisOrVoid(async (redis) => {
+    await redis.set(JOB_PREFIX + job.id, JSON.stringify(job), { EX: 600 });
+  });
 }
 
 export async function getJob(jobId: string): Promise<JobStatus | undefined> {
-  const data = await redis.get(JOB_PREFIX + jobId);
-  return data ? JSON.parse(data) : undefined;
+  return withRedisOr<JobStatus | undefined>(undefined, async (redis) => {
+    const data = await redis.get(JOB_PREFIX + jobId);
+    return data ? JSON.parse(data) : undefined;
+  });
 }
 
 export async function deleteJob(jobId: string) {
-  await redis.del(JOB_PREFIX + jobId);
+  await withRedisOrVoid(async (redis) => {
+    await redis.del(JOB_PREFIX + jobId);
+  });
 }
 
 export async function getAllJobs(): Promise<JobStatus[]> {
-  const keys = await redis.keys(JOB_PREFIX + '*');
-  if (!keys.length) return [];
-  const values = await redis.mGet(keys) as (string | null)[];
-  return values.filter((v): v is string => !!v).map((v) => JSON.parse(v));
+  return withRedisOr<JobStatus[]>([], async (redis) => {
+    // Use SCAN to avoid blocking Redis on large keyspaces
+    let cursor = '0';
+    const keys: string[] = [];
+    do {
+      const [next, batch] = await (redis as any).scan(cursor, { MATCH: `${JOB_PREFIX}*`, COUNT: 200 });
+      cursor = next;
+      if (Array.isArray(batch) && batch.length) keys.push(...batch);
+    } while (cursor !== '0');
+
+    if (!keys.length) return [];
+    const values = await redis.mGet(keys) as (string | null)[];
+    return values.filter((v): v is string => !!v).map((v) => JSON.parse(v));
+  });
 }
 
 export async function getJobsByUser(userId: string): Promise<JobStatus[]> {

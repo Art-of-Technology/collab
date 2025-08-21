@@ -76,13 +76,24 @@ export async function POST(
       );
     }
 
-    // Create relations
-    const relationData = relations.map((relation: any) => ({
-      sourceIssueId: sourceIssue.id,
-      targetIssueId: relation.targetIssueId,
-      relationType: relation.relationType.toUpperCase(),
-      createdBy: session.user.id
-    }));
+    // Create relations - normalize CHILD to PARENT with reversed direction
+    const relationData = relations.map((relation: any) => {
+      const providedType = String(relation.relationType || '').toUpperCase();
+      if (providedType === 'CHILD') {
+        return {
+          sourceIssueId: relation.targetIssueId,
+          targetIssueId: sourceIssue.id,
+          relationType: 'PARENT',
+          createdBy: session.user.id
+        };
+      }
+      return {
+        sourceIssueId: sourceIssue.id,
+        targetIssueId: relation.targetIssueId,
+        relationType: providedType,
+        createdBy: session.user.id
+      };
+    });
 
     // Use upsert to handle existing relations
     const createdRelations = await prisma.$transaction(

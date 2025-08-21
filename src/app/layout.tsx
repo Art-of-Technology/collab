@@ -16,6 +16,7 @@ import { ActivityProvider } from '@/context/ActivityContext';
 import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { cookies } from "next/headers";
 
 // Load the Inter font with display swap for better font loading performance
 const inter = Inter({ 
@@ -36,6 +37,11 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+
+  const cookieStore = await cookies();
+  const sidebar = cookieStore.get("sidebarDesktop")?.value ?? "open"; // "open" | "closed"
+  const width = sidebar === "open" ? "var(--sidebar-open)" : "var(--sidebar-closed)";
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -58,7 +64,10 @@ export default async function RootLayout({
         <Hotjar />
       </head>
 
-      <body className={cn("bg-background font-sans antialiased", fontSans.variable, inter.className)}>
+      <body
+        className={cn("bg-background font-sans antialiased", fontSans.variable, inter.className)}
+        style={{ "--sidebar-width": width } as React.CSSProperties}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

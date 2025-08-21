@@ -19,16 +19,5 @@ export default async function TimesheetPage() {
   // Verify workspace access and redirect if needed
   const workspaceId = await verifyWorkspaceAccess(session.user);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold">Timesheet</h1>
-        <p className="text-muted-foreground">
-          Track and analyze your time spent on tasks and activities
-        </p>
-      </div>
-
-      <TimesheetClient workspaceId={workspaceId} userId={session.user.id} />
-    </div>
-  );
+  return <TimesheetClient workspaceId={workspaceId} userId={session.user.id} />;
 } 

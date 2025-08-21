@@ -188,7 +188,7 @@ export async function getWorkspaceById(workspaceId: string) {
   
   // Check if the user has access to this workspace
   const isOwner = workspace.ownerId === user.id;
-  const isMember = workspace.members.some(member => member.userId === user.id);
+  const isMember = workspace.members.some((member: WorkspaceMember) => member.userId === user.id);
   
   if (!isOwner && !isMember) {
     throw new Error('You do not have access to this workspace');
@@ -476,7 +476,7 @@ export async function addWorkspaceMember(data: {
   }
   
   // Check if the user is already a member
-  const isAlreadyMember = workspace.members.some(member => member.userId === userToAdd.id);
+  const isAlreadyMember = workspace.members.some((member: { userId: string }) => member.userId === userToAdd.id);
   
   if (isAlreadyMember) {
     throw new Error('User is already a member of this workspace');
@@ -717,7 +717,11 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
         }
       },
       members: {
-        include: {
+        select: {
+          id: true,
+          role: true,
+          status: true,
+          createdAt: true,
           user: {
             select: {
               id: true,
@@ -781,7 +785,11 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
           }
         },
         members: {
-          include: {
+          select: {
+            id: true,
+            role: true,
+            status: true,
+            createdAt: true,
             user: {
               select: {
                 id: true,
@@ -826,7 +834,7 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
   
   // Check if the user has access to this workspace
   const isOwner = workspace.ownerId === session.user.id;
-  const isMember = workspace.members.some(member => member.userId === session.user.id);
+  const isMember = workspace.members.some((member: { user: { id: string } }) => member.user.id === session.user.id);
   const isAdmin = session.user.role === 'admin';
   
   if (!isOwner && !isMember && !isAdmin) {
@@ -899,7 +907,7 @@ export async function getWorkspaceMembers(workspaceId: string) {
   }
   
   // Format members (including owner) for consistent structure
-  const formattedMembers = workspace.members.map(member => ({
+  const formattedMembers = workspace.members.map((member: { id: string; user: { id: string; name: string; image: string; role: string; }; role: string; }) => ({
     id: member.id,
     userId: member.user.id,
     role: member.role,
@@ -910,4 +918,112 @@ export async function getWorkspaceMembers(workspaceId: string) {
     workspace,
     members: formattedMembers
   };
+} 
+
+/**
+ * Update workspace member status (activate/deactivate)
+ */
+export async function updateWorkspaceMemberStatus(data: {
+  workspaceId: string;
+  memberId: string;
+  status: boolean;
+}) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  const { workspaceId, memberId, status } = data;
+  
+  // Get the current user
+  const currentUser = await prisma.user.findUnique({
+    where: {
+      email: session.user.email
+    }
+  });
+  
+  if (!currentUser) {
+    throw new Error('User not found');
+  }
+  
+  // Get the workspace and check permissions
+  const workspace = await prisma.workspace.findUnique({
+    where: {
+      id: workspaceId
+    },
+    include: {
+      owner: {
+        select: {
+          id: true
+        }
+      }
+    }
+  });
+  
+  if (!workspace) {
+    throw new Error('Workspace not found');
+  }
+  
+  // Check if user is the owner or has admin permissions
+  const isOwner = workspace.ownerId === currentUser.id;
+  const isAdmin = await prisma.workspaceMember.findFirst({
+    where: {
+      workspaceId,
+      userId: currentUser.id,
+      role: 'ADMIN',
+      status: true
+    }
+  });
+  
+  if (!isOwner && !isAdmin) {
+    throw new Error('Only workspace owners and admins can update member status');
+  }
+  
+  // Find the member to update
+  const member = await prisma.workspaceMember.findFirst({
+    where: {
+      id: memberId,
+      workspaceId
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true
+        }
+      }
+    }
+  });
+  
+  if (!member) {
+    throw new Error('Member not found');
+  }
+  
+  // Prevent deactivating the workspace owner
+  if (member.userId === workspace.ownerId) {
+    throw new Error('Cannot deactivate the workspace owner');
+  }
+  
+  // Update the member status
+  const updatedMember = await prisma.workspaceMember.update({
+    where: {
+      id: memberId
+    },
+    data: {
+      status
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true
+        }
+      }
+    }
+  });
+  
+  return updatedMember;
 } 

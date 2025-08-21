@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type IssueType = "TASK" | "EPIC" | "STORY" | "MILESTONE" | "DEFECT" | "SUBTASK";
+type IssueType = "TASK" | "EPIC" | "STORY" | "BUG" | "MILESTONE" | "SUBTASK";
 
 interface IssueTypeSelectorProps {
   value: IssueType;
@@ -52,12 +52,6 @@ const TYPE_CONFIG = {
     color: "#ef4444",
     description: "A problem that needs fixing"
   },
-  DEFECT: {
-    label: "Bug",
-    icon: Bug,
-    color: "#ef4444",
-    description: "A problem that needs fixing"
-  },
   MILESTONE: {
     label: "Milestone",
     icon: Flag,
@@ -83,7 +77,7 @@ export function IssueTypeSelector({
   const selectedConfig = TYPE_CONFIG[value] || TYPE_CONFIG.TASK;
   const Icon = selectedConfig.icon;
 
-  const options: IssueType[] = ["TASK", "STORY", "EPIC", "DEFECT", "MILESTONE", "SUBTASK"];
+  const options: IssueType[] = ["TASK", "STORY", "EPIC", "BUG", "MILESTONE", "SUBTASK"];
 
   // If readonly, just return the same styling as the button but non-interactive
   if (readonly) {

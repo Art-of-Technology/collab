@@ -195,8 +195,9 @@ export default async function ViewPage({ params }: ViewPageProps) {
               issuesQuery.where.priority = { in: filterValues };
               break;
             case 'type':
-              // Convert type values to uppercase to match Prisma IssueType enum
-              issuesQuery.where.type = { in: filterValues.map(value => value.toUpperCase()) };
+              issuesQuery.where.type = {
+                in: filterValues.map(value => value.toUpperCase())
+              };
               break;
             case 'assignee':
               issuesQuery.where.assigneeId = { in: filterValues };

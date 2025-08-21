@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -58,6 +58,7 @@ import { useProjects } from '@/hooks/queries/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import React, { useEffect } from 'react';
+import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
 
@@ -121,6 +122,8 @@ export default function ViewRenderer({
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
+  const pendingColumnOrdersRef = useRef<Record<string, number>>({});
+  const commitColumnOrderRef = useRef<any>(null);
   
   // ViewFilters context
   const {
@@ -203,6 +206,9 @@ export default function ViewRenderer({
       window.removeEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
     };
   }, [view.id, queryClient]);
+
+  // Realtime: subscribe to workspace-level events to keep issues and positions fresh
+  useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
 
   // Temporary state for filters and display (resets on refresh)
   const [tempFilters, setTempFilters] = useState<Record<string, string[]>>({});
@@ -393,7 +399,8 @@ export default function ViewRenderer({
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
-              return filterValues.includes(issue.type);
+              const fvs = (filterValues as string[]).map(v => v.toUpperCase());
+              return fvs.includes((issue.type || '').toUpperCase());
             case 'assignee':
               const assigneeId = issue.assigneeId || 'unassigned';
               return filterValues.includes(assigneeId);
@@ -609,47 +616,102 @@ export default function ViewRenderer({
     toggleViewFilters();
   };
 
-  // Count issues for filter buttons
+  // Count issues for filter buttons (must match PageHeader filtering semantics)
   const issueCounts = useMemo(() => {
-    // Use the same project filtering logic as in filteredIssues
     let countingIssues = [...issues];
-    
-    // Apply project filtering if tempProjectIds differs from original view projects
+
+    // Project selection (same logic as filteredIssues)
     const originalProjectIds = view.projects.map(p => p.id).sort();
     const currentProjectIds = tempProjectIds.sort();
     const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
-    
     if (projectSelectionChanged) {
       if (tempProjectIds.length === 0) {
-        // If no projects selected, show no issues
         countingIssues = [];
       } else {
-        // Filter to selected projects
-        countingIssues = countingIssues.filter(issue => {
-          return tempProjectIds.includes(issue.projectId);
-        });
+        countingIssues = countingIssues.filter(issue => tempProjectIds.includes(issue.projectId));
       }
     }
-    
+
+    // Search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      countingIssues = countingIssues.filter(issue =>
+        issue.title.toLowerCase().includes(q) ||
+        issue.issueKey?.toLowerCase().includes(q) ||
+        issue.description?.toLowerCase().includes(q)
+      );
+    }
+
+    // Combined view filters (view + temp)
+    Object.entries(allFilters).forEach(([filterKey, filterValues]) => {
+      if (Array.isArray(filterValues) && filterValues.length > 0) {
+        countingIssues = countingIssues.filter(issue => {
+          switch (filterKey) {
+            case 'status':
+              return filterValues.includes(issue.statusValue || issue.status);
+            case 'priority':
+              return filterValues.includes(issue.priority);
+            case 'type':
+              return filterValues.includes(issue.type);
+            case 'assignee': {
+              const assigneeId = issue.assigneeId || 'unassigned';
+              return filterValues.includes(assigneeId);
+            }
+            case 'labels':
+              if (!issue.labels || issue.labels.length === 0) {
+                return filterValues.includes('no-labels');
+              }
+              return issue.labels.some((label: any) => filterValues.includes(label.id));
+            case 'project':
+              return filterValues.includes(issue.projectId);
+            default:
+              return true;
+          }
+        });
+      }
+    });
+
+    // Sidebar ViewFilters (assignees, labels, priority, projects)
+    if (viewFiltersState.assignees.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        const assigneeId = issue.assignee?.id || 'unassigned';
+        return viewFiltersState.assignees.includes(assigneeId);
+      });
+    }
+    if (viewFiltersState.labels.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        if (!issue.labels || issue.labels.length === 0) {
+          return viewFiltersState.labels.includes('no-labels');
+        }
+        return issue.labels.some((label: any) => viewFiltersState.labels.includes(label.id));
+      });
+    }
+    if (viewFiltersState.priority.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        const priority = issue.priority || 'no-priority';
+        return viewFiltersState.priority.includes(priority);
+      });
+    }
+    if (viewFiltersState.projects.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        const projectId = issue.project?.id || 'no-project';
+        return viewFiltersState.projects.includes(projectId);
+      });
+    }
+
+    // Now compute counts per tab from the filtered dataset
     const allIssuesCount = countingIssues.length;
     const activeIssuesCount = countingIssues.filter((issue: any) => {
       const status = (issue.statusValue || issue.status || '').toLowerCase();
-      return status !== 'done' && 
-             status !== 'backlog' && 
-             status !== 'cancelled' &&
-             status !== 'todo'; // Todo items should be in backlog, not active
+      return status !== 'done' && status !== 'backlog' && status !== 'cancelled' && status !== 'todo';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
       const status = (issue.statusValue || issue.status || '').toLowerCase();
       return status === 'backlog' || status === 'todo';
     }).length;
 
-    return {
-      allIssuesCount,
-      activeIssuesCount,
-      backlogIssuesCount
-    };
-  }, [issues, tempProjectIds, view.projects]);
+    return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
+  }, [issues, tempProjectIds, view.projects, searchQuery, allFilters, viewFiltersState]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
@@ -674,6 +736,49 @@ export default function ViewRenderer({
         variant: "destructive"
       });
       throw error;
+    }
+  };
+
+  // Persist Kanban column order (project statuses) with debounce batching
+  const handleColumnUpdate = (columnId: string, updates: any) => {
+    // columnId here is the internal status name (e.g., 'in_progress')
+    if (typeof updates?.order === 'number') {
+      pendingColumnOrdersRef.current[columnId] = updates.order;
+
+      if (commitColumnOrderRef.current) {
+        clearTimeout(commitColumnOrderRef.current);
+      }
+
+      commitColumnOrderRef.current = setTimeout(async () => {
+        const orders = pendingColumnOrdersRef.current;
+        pendingColumnOrdersRef.current = {};
+
+        try {
+          const projectIdsToUpdate = (tempProjectIds.length > 0
+            ? tempProjectIds
+            : view.projects.map(p => p.id));
+
+          const updatesArray = Object.entries(orders)
+            .map(([name, order]) => ({ name, order }))
+            .sort((a, b) => a.order - b.order);
+
+          await Promise.all(projectIdsToUpdate.map((projectId) =>
+            fetch(`/api/projects/${projectId}/statuses/reorder`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: updatesArray })
+            })
+          ));
+
+          // Refresh statuses used by Kanban columns
+          queryClient.invalidateQueries({ queryKey: ['multiple-project-statuses'] });
+
+          toast({ title: 'Columns reordered', description: 'Saved new column order' });
+        } catch (error) {
+          console.error('Failed to reorder columns:', error);
+          toast({ title: 'Error', description: 'Failed to save column order', variant: 'destructive' });
+        }
+      }, 150);
     }
   };
 
@@ -711,6 +816,7 @@ export default function ViewRenderer({
       onSubIssuesToggle: () => setTempShowSubIssues(prev => !prev),
       // Kanban callbacks
       onIssueUpdate: handleIssueUpdate,
+      onColumnUpdate: handleColumnUpdate,
     };
 
     switch (tempDisplayType) {

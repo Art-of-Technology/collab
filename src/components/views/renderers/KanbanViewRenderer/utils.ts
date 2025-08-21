@@ -178,7 +178,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         groupValue = issue.type === 'EPIC' ? 'Epic' : 
                     issue.type === 'STORY' ? 'Story' :
                     issue.type === 'TASK' ? 'Task' :
-                    issue.type === 'DEFECT' ? 'Defect' :
+                    issue.type === 'BUG' ? 'Bug' :
                     issue.type === 'MILESTONE' ? 'Milestone' :
                     issue.type === 'SUBTASK' ? 'Subtask' :
                     'Task';
@@ -215,9 +215,9 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
   });
 
   // Sort issues within each column by view-specific position for proper ordering
-  const sortedColumns = Array.from(columnsMap.values()).map(column => ({
+  const sortedColumns = Array.from(columnsMap.values()).map((column: Column) => ({
     ...column,
-    issues: column.issues.sort((a, b) => {
+    issues: column.issues.sort((a: any, b: any) => {
       // Sort by view-specific position first, fallback to global position, then creation date
       const posA = a.viewPosition ?? a.position ?? 999999;
       const posB = b.viewPosition ?? b.position ?? 999999;

@@ -22,7 +22,7 @@ const formatFilterValue = (value: string): string => {
     case 'EPIC': return 'Epic';
     case 'STORY': return 'Story';
     case 'TASK': return 'Task';
-    case 'DEFECT': return 'Defect';
+    case 'BUG': return 'Bug';
     case 'MILESTONE': return 'Milestone';
     case 'SUBTASK': return 'Subtask';
     default: return value;

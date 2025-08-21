@@ -51,8 +51,8 @@ export const ISSUE_TYPE_CONFIG = {
     darkBorderColor: "dark:border-emerald-700/50",
     darkColor: "dark:text-emerald-400"
   },
-  DEFECT: {
-    label: "Defect",
+  BUG: {
+    label: "Bug",
     icon: Bug,
     color: "text-red-600",
     bgColor: "bg-red-50",
@@ -259,7 +259,7 @@ export function getIssueKeyPrefix(type: IssueType): string {
     EPIC: 'E',
     STORY: 'S', 
     TASK: 'T',
-    DEFECT: 'D',
+    BUG: 'D',
     MILESTONE: 'M',
     SUBTASK: 'ST'
   };
@@ -288,7 +288,7 @@ export function getValidChildTypes(type: IssueType): IssueType[] {
     STORY: ['TASK', 'SUBTASK'], 
     TASK: ['SUBTASK'],
     MILESTONE: ['EPIC', 'STORY', 'TASK'],
-    DEFECT: ['SUBTASK'],
+    BUG: ['SUBTASK'],
     SUBTASK: []
   };
   return childMap[type] || [];
@@ -299,8 +299,8 @@ export function getValidParentTypes(type: IssueType): IssueType[] {
     EPIC: ['MILESTONE'],
     STORY: ['EPIC'],
     TASK: ['EPIC', 'STORY'],
-    SUBTASK: ['TASK', 'STORY', 'DEFECT'],
-    DEFECT: [],
+    SUBTASK: ['TASK', 'STORY', 'BUG'],
+    BUG: [],
     MILESTONE: []
   };
   return parentMap[type] || [];
@@ -308,7 +308,7 @@ export function getValidParentTypes(type: IssueType): IssueType[] {
 
 // Progress calculation
 export function calculateIssueProgress(issue: Issue): number {
-  if (issue.type === 'TASK' || issue.type === 'SUBTASK' || issue.type === 'DEFECT') {
+  if (issue.type === 'TASK' || issue.type === 'SUBTASK' || issue.type === 'BUG') {
     // For leaf items, progress is based on status
     const status = issue.status?.toLowerCase();
     if (status === 'done' || status === 'completed') return 100;

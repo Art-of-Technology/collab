@@ -61,7 +61,9 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
       return response.json();
     },
     enabled: !!workspaceId,
-    staleTime: 5000, // 5 seconds to allow optimistic updates to show
+    staleTime: 1000 * 5,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
@@ -86,12 +88,18 @@ export function useCreateIssue() {
 
   return useMutation({
     mutationFn: async (data: CreateIssueData): Promise<any> => {
+      // Normalize issue type casing
+      const payload: CreateIssueData = { ...data };
+      if (payload.type) {
+        payload.type = payload.type.toUpperCase();
+      }
+
       const response = await fetch('/api/issues', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -126,6 +134,10 @@ export function useUpdateIssue() {
   return useMutation({
     mutationFn: async (data: UpdateIssueData): Promise<any> => {
       const { id, ...updateData } = data;
+      // Normalize issue type casing
+      if (updateData.type) {
+        updateData.type = updateData.type.toUpperCase();
+      }
       const response = await fetch(`/api/issues/${id}`, {
         method: 'PUT',
         headers: {

@@ -19,7 +19,7 @@ const getTypeColor = (type: string) => {
     'EPIC': '#8b5cf6',
     'STORY': '#3b82f6', 
     'TASK': '#10b981',
-    'DEFECT': '#ef4444',
+    'BUG': '#ef4444',
     'MILESTONE': '#f59e0b',
     'SUBTASK': '#6b7280'
   };

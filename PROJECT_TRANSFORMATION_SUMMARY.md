@@ -16,7 +16,7 @@
 
 ### 1. **Database Schema Transformation**
 - **Renamed** `TaskBoard` → `Project`
-- **Created** unified `Issue` model with `type` field (`EPIC`, `STORY`, `TASK`, `DEFECT`, `MILESTONE`, `SUBTASK`)
+- **Created** unified `Issue` model with `type` field (`EPIC`, `STORY`, `TASK`, `BUG`, `MILESTONE`, `SUBTASK`)
 - **Implemented** new `View` model for independent, multi-project views
 - **Added** proper label and color support
 - **Maintained** hierarchy relationships (parent-child between issues)

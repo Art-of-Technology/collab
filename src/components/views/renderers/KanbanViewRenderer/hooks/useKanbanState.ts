@@ -37,6 +37,7 @@ export const useKanbanState = ({
   
   // Local state for immediate UI updates during drag & drop
   const [localIssues, setLocalIssues] = useState(issues);
+  const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   
   // Update local issues when props change (from server)
   useEffect(() => {
@@ -65,8 +66,16 @@ export const useKanbanState = ({
     }
 
     const projectStatuses = projectStatusData?.statuses || [];
-    return createColumns(filteredIssues, view, projectStatuses);
-  }, [filteredIssues, view, projectStatusData, isLoadingStatuses]);
+    const baseColumns = createColumns(filteredIssues, view, projectStatuses);
+    if (localColumnOrder && view.grouping?.field === 'status') {
+      const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
+      return baseColumns.map((col: any) => ({
+        ...col,
+        order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
+      }));
+    }
+    return baseColumns;
+  }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder]);
 
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {
@@ -102,6 +111,8 @@ export const useKanbanState = ({
         ...col,
         order: index
       }));
+      // Optimistically reflect new order in UI
+      setLocalColumnOrder(updatedColumns.map((c) => c.id));
       
       if (onColumnUpdate) {
         updatedColumns.forEach(col => {
@@ -114,141 +125,49 @@ export const useKanbanState = ({
     }
 
     if (type === 'issue') {
-      const issueToMove = localIssues.find((issue: any) => issue.id === draggableId);
-      if (!issueToMove) {
-        isDraggingRef.current = false;
-        return;
-      }
-
-      // 1. IMMEDIATE UI UPDATE - Update local issues array directly
       const isSameColumn = source.droppableId === destination.droppableId;
+      const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
+
       const newLocalIssues = [...localIssues];
-      const issueIndex = newLocalIssues.findIndex((issue: any) => issue.id === draggableId);
-      
-      if (issueIndex !== -1) {
-        const updatedIssue = { ...newLocalIssues[issueIndex] };
-        
-        // Calculate new position based on drop location
-        const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
-        const targetColumn = columns.find(col => col.id === targetColumnId);
-        
-        if (targetColumn) {
-          // Get issues in target column (excluding the dragged issue)
-          const targetColumnIssues = targetColumn.issues.filter((issue: any) => issue.id !== draggableId);
-          
-          let newPosition: number;
-          
-          if (destination.index === 0) {
-            // Dropping at top - get position before first item
-            const firstIssue = targetColumnIssues[0];
-            // Prioritize viewPosition (from ViewIssuePosition table)
-            const firstPosition = firstIssue?.viewPosition ?? firstIssue?.position ?? 1000;
-            newPosition = Math.max(firstPosition - 1000, 100);
-          } else if (destination.index >= targetColumnIssues.length) {
-            // Dropping at bottom - get position after last item
-            const lastIssue = targetColumnIssues[targetColumnIssues.length - 1];
-            // Prioritize viewPosition (from ViewIssuePosition table)
-            const lastPosition = lastIssue?.viewPosition ?? lastIssue?.position ?? 1000;
-            newPosition = lastPosition + 1000;
-          } else {
-            // Dropping between items - calculate middle position
-            const prevIssue = targetColumnIssues[destination.index - 1];
-            const nextIssue = targetColumnIssues[destination.index];
-            // Prioritize viewPosition (from ViewIssuePosition table)
-            const prevPosition = prevIssue?.viewPosition ?? prevIssue?.position ?? 0;
-            const nextPosition = nextIssue?.viewPosition ?? nextIssue?.position ?? (prevPosition + 2000);
-            newPosition = prevPosition + ((nextPosition - prevPosition) / 2);
-          }
-          
-          // Update issue position
-          updatedIssue.position = newPosition;
-          updatedIssue.viewPosition = newPosition; // Keep for UI consistency
-          
-          // Update status if moving between columns
-          if (!isSameColumn) {
-            updatedIssue.status = targetColumnId;
-            updatedIssue.statusValue = targetColumnId;
-            
-            // Also update projectStatus if available
-            if (targetColumn.name) {
-              updatedIssue.projectStatus = {
-                ...updatedIssue.projectStatus,
-                name: targetColumnId,
-                displayName: targetColumn.name
-              };
-            }
-          }
-        }
-        
-        newLocalIssues[issueIndex] = updatedIssue;
-        
-        // Update local state immediately - this updates the UI instantly
-        setLocalIssues(newLocalIssues);
+      const issueIndex = newLocalIssues.findIndex((i: any) => i.id === draggableId);
+      if (issueIndex === -1) { isDraggingRef.current = false; return; }
+
+      const targetColumn = columns.find(col => col.id === targetColumnId);
+      if (!targetColumn) { isDraggingRef.current = false; return; }
+
+      // Build neighbor context and compute a middle position
+      const items = targetColumn.issues.filter((i: any) => i.id !== draggableId);
+      const destIndex = isSameColumn && destination.index > source.index ? destination.index - 1 : destination.index;
+      const getPos = (it: any) => (it?.viewPosition ?? it?.position ?? 0);
+      const prev = destIndex > 0 ? items[destIndex - 1] : undefined;
+      const next = destIndex < items.length ? items[destIndex] : undefined;
+      const newPosition = prev && next
+        ? (getPos(prev) + getPos(next)) / 2
+        : prev
+          ? getPos(prev) + 1
+          : next
+            ? getPos(next) - 1
+            : 0;
+
+      const updatedIssue: any = { ...newLocalIssues[issueIndex], viewPosition: newPosition, position: newPosition };
+      if (!isSameColumn) {
+        updatedIssue.status = targetColumnId;
+        updatedIssue.statusValue = targetColumnId;
       }
-      
-      // 2. BACKGROUND API CALL - Update database with TanStack Query
+      newLocalIssues[issueIndex] = updatedIssue;
+      setLocalIssues(newLocalIssues);
+
       try {
-        // Get the updated issue from local state
-        const updatedIssue = newLocalIssues[issueIndex];
-        
-        // Prepare update data - only update status if moving between columns
-        let needsIssueUpdate = false;
-        const updateData: any = { id: draggableId };
-        
-        // Add status fields if moving between columns
         if (!isSameColumn) {
-          updateData.status = updatedIssue.status;
-          updateData.statusValue = updatedIssue.statusValue;
-          needsIssueUpdate = true;
+          await updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue });
         }
-        
-        // Send the update request only if we need to update the Issue table
-        if (needsIssueUpdate) {
-          await updateIssueMutation.mutateAsync(updateData);
-        }
-        
-        // ALWAYS update view-specific position for any drag & drop operation
-        if (view.id) {
-          const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
-          const positionResponse = await fetch(`/api/views/${view.id}/issue-positions`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              issueId: draggableId,
-              columnId: targetColumnId,
-              position: updatedIssue.viewPosition
-            })
-          });
-          
-          if (!positionResponse.ok) {
-            const errorText = await positionResponse.text();
-            throw new Error(`ViewPosition update failed: ${errorText}`);
-          }
-        }
-        // Invalidate TanStack Query cache to refresh from server
-        queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(workspace.id) });
-        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
-        
-        toast({
-          title: isSameColumn ? "Issue reordered" : "Issue moved",
-          description: isSameColumn 
-            ? `${issueToMove.title} position updated`
-            : `${issueToMove.title} moved to ${columns.find(col => col.id === destination.droppableId)?.name}`
+        await fetch(`/api/views/${view.id}/issue-positions`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ issueId: draggableId, columnId: targetColumnId, position: newPosition })
         });
-        
-      } catch (error) {
-        // ERROR HANDLING: Revert to server state
-        console.error('Failed to update issue:', error);
-        
-        // Invalidate cache to revert to server state
-        queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(workspace.id) });
-        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
-        
-        toast({
-          title: "Error",
-          description: "Failed to move issue. Please try again.",
-          variant: "destructive"
-        });
+      } catch (err) {
+        console.error('Failed to persist reorder:', err);
       }
     }
     

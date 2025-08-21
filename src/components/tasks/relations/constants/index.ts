@@ -7,7 +7,8 @@ export const RELATIONS_CONFIG: Record<ItemType, RelationsConfig> = {
       { type: 'MILESTONE', label: 'Milestones', key: 'milestones', urlPath: 'milestones' },
       { type: 'EPIC', label: 'Epics', key: 'epics', urlPath: 'epics' },
       { type: 'STORY', label: 'Stories', key: 'stories', urlPath: 'stories' },
-      { type: 'PARENT_TASK', label: 'Parent Tasks', key: 'parentTasks', urlPath: 'tasks', isParent: true }
+      { type: 'PARENT_TASK', label: 'Parent Tasks', key: 'parentTasks', urlPath: 'tasks', isParent: true },
+      { type: 'PARENT_TASK', label: 'Subtasks', key: 'subtasks', urlPath: 'tasks' }
     ]
   },
   epic: {

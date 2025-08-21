@@ -37,6 +37,7 @@ import { TimesheetSummaryCards } from "./TimesheetSummaryCards";
 import { TimesheetEntryCard } from "./TimesheetEntryCard";
 import { TimesheetAnalytics } from "./TimesheetAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
+import PageHeader from "@/components/layout/PageHeader";
 
 interface TimesheetClientProps {
   workspaceId: string;
@@ -306,30 +307,36 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Enhanced Header */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 border border-blue-100 dark:border-blue-900/30">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5" />
-        <div className="relative p-6">
-          <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
-            {/* Live Activity Info */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg flex items-center justify-center">
-                    <Activity className="h-6 w-6 text-white" />
-                  </div>
-                  {(timesheetData?.summary?.totalActiveTasks ?? 0) > 0 && (
-                    <div className="absolute -top-1 -right-1 h-4 w-4 bg-green-500 rounded-full animate-pulse flex items-center justify-center">
-                      <div className="h-2 w-2 bg-white rounded-full" />
+    <>
+      <PageHeader
+        icon={Timer}
+        title="Timesheet"
+        subtitle="Track and analyze your time spent on tasks and activities"
+      />
+      <div className="space-y-6 p-4 md:p-6">
+        {/* Enhanced Header */}
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 border border-blue-100 dark:border-blue-900/30">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5" />
+          <div className="relative p-6">
+            <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+              {/* Live Activity Info */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg flex items-center justify-center">
+                      <Activity className="h-6 w-6 text-white" />
                     </div>
-                  )}
+                    {(timesheetData?.summary?.totalActiveTasks ?? 0) > 0 && (
+                      <div className="absolute -top-1 -right-1 h-4 w-4 bg-green-500 rounded-full animate-pulse flex items-center justify-center">
+                        <div className="h-2 w-2 bg-white rounded-full" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Time Tracking</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{formatDateRange()}</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Time Tracking</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{formatDateRange()}</p>
-                </div>
-              </div>
 
               {/* Quick Stats */}
               {timesheetData && (
@@ -396,15 +403,15 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
                 Today
               </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDateNavigation("next")}
-                className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDateNavigation("next")}
+                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-700"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
 
             {/* Filters and Actions */}
             <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-2 xl:flex xl:flex-row xl:gap-2">
@@ -543,157 +550,158 @@ export function TimesheetClient({ workspaceId }: TimesheetClientProps) {
         </div>
       </div>
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="space-y-6">
-          {/* Summary Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-4 w-4 rounded animate-pulse" />
-                    <Skeleton className="h-4 w-20 animate-pulse" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16 mb-2 animate-pulse" />
-                  <Skeleton className="h-3 w-24 animate-pulse" />
-                  <div className="mt-3">
-                    <Skeleton className="h-2 w-full rounded-full animate-pulse" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Tabs Skeleton */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-10 w-20 rounded-lg animate-pulse" />
-              <Skeleton className="h-10 w-20 rounded-lg animate-pulse" />
+        {/* Content */}
+        {isLoading ? (
+          <div className="space-y-6">
+            {/* Summary Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} className="overflow-hidden">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4 rounded animate-pulse" />
+                      <Skeleton className="h-4 w-20 animate-pulse" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-8 w-16 mb-2 animate-pulse" />
+                    <Skeleton className="h-3 w-24 animate-pulse" />
+                    <div className="mt-3">
+                      <Skeleton className="h-2 w-full rounded-full animate-pulse" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </div>
 
-          {/* Entries Skeleton */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-6 w-40 animate-pulse" />
+            {/* Tabs Skeleton */}
+            <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <Skeleton className="h-6 w-16 rounded-full animate-pulse" />
-                <Skeleton className="h-6 w-16 rounded-full animate-pulse" />
+                <Skeleton className="h-10 w-20 rounded-lg animate-pulse" />
+                <Skeleton className="h-10 w-20 rounded-lg animate-pulse" />
               </div>
             </div>
 
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i} className="overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-10 w-10 rounded-lg animate-pulse" />
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-5 w-32 animate-pulse" />
-                          <Skeleton className="h-5 w-16 rounded-full animate-pulse" />
+            {/* Entries Skeleton */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-6 w-40 animate-pulse" />
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-16 rounded-full animate-pulse" />
+                  <Skeleton className="h-6 w-16 rounded-full animate-pulse" />
+                </div>
+              </div>
+
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="overflow-hidden">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-10 w-10 rounded-lg animate-pulse" />
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-5 w-32 animate-pulse" />
+                            <Skeleton className="h-5 w-16 rounded-full animate-pulse" />
+                          </div>
+                          <Skeleton className="h-4 w-48 animate-pulse" />
                         </div>
-                        <Skeleton className="h-4 w-48 animate-pulse" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-8 w-20 rounded animate-pulse" />
+                        <Skeleton className="h-8 w-8 rounded animate-pulse" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-8 w-20 rounded animate-pulse" />
-                      <Skeleton className="h-8 w-8 rounded animate-pulse" />
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-16 animate-pulse" />
+                        <Skeleton className="h-5 w-20 animate-pulse" />
+                      </div>
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-12 animate-pulse" />
+                        <Skeleton className="h-5 w-16 animate-pulse" />
+                      </div>
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-14 animate-pulse" />
+                        <Skeleton className="h-5 w-18 animate-pulse" />
+                      </div>
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-18 animate-pulse" />
+                        <Skeleton className="h-5 w-24 animate-pulse" />
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="space-y-1">
-                      <Skeleton className="h-3 w-16 animate-pulse" />
-                      <Skeleton className="h-5 w-20 animate-pulse" />
-                    </div>
-                    <div className="space-y-1">
-                      <Skeleton className="h-3 w-12 animate-pulse" />
-                      <Skeleton className="h-5 w-16 animate-pulse" />
-                    </div>
-                    <div className="space-y-1">
-                      <Skeleton className="h-3 w-14 animate-pulse" />
-                      <Skeleton className="h-5 w-18 animate-pulse" />
-                    </div>
-                    <div className="space-y-1">
-                      <Skeleton className="h-3 w-18 animate-pulse" />
-                      <Skeleton className="h-5 w-24 animate-pulse" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ) : timesheetData ? (
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            {/* Summary Cards */}
-            <TimesheetSummaryCards summary={timesheetData.summary} />
-
-            {/* Entries */}
-            <div className="space-y-4">
-              {filteredEntries.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <Timer className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">
-                    {timesheetData.entries.length === 0 ? "No Time Tracked" : "No Matching Entries"}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {timesheetData.entries.length === 0
-                      ? "No time tracking data found for the selected period."
-                      : "No entries match the current filters. Try adjusting your filter criteria."}
-                  </p>
-                  {timesheetData.entries.length > 0 && filteredEntries.length === 0 && (
-                    <Button variant="outline" className="mt-4" onClick={() => setLocalFilters({ activityType: "all", status: "all" })}>
-                      Clear Filters
-                    </Button>
-                  )}
+                  </CardContent>
                 </Card>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">
-                      Time Entries ({filteredEntries.length}
-                      {filteredEntries.length !== timesheetData.entries.length && (
-                        <span className="text-muted-foreground"> of {timesheetData.entries.length}</span>
-                      )}
-                      )
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        <Play className="h-3 w-3" />
-                        {filteredEntries.filter((e) => e.status === "ongoing").length} Active
-                      </Badge>
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <Pause className="h-3 w-3" />
-                        {filteredEntries.filter((e) => e.status === "paused").length} Paused
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {filteredEntries.map((entry) => (
-                    <TimesheetEntryCard key={entry.id} entry={entry} onRefresh={() => refetch()} />
-                  ))}
-                </>
-              )}
+              ))}
             </div>
-          </TabsContent>
+          </div>
+        ) : timesheetData ? (
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="analytics">
-            <TimesheetAnalytics data={timesheetData} filters={filters} />
-          </TabsContent>
-        </Tabs>
-      ) : null}
-    </div>
+            <TabsContent value="overview" className="space-y-6">
+              {/* Summary Cards */}
+              <TimesheetSummaryCards summary={timesheetData.summary} />
+
+              {/* Entries */}
+              <div className="space-y-4">
+                {filteredEntries.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <Timer className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">
+                      {timesheetData.entries.length === 0 ? "No Time Tracked" : "No Matching Entries"}
+                    </h3>
+                    <p className="text-muted-foreground">
+                      {timesheetData.entries.length === 0
+                        ? "No time tracking data found for the selected period."
+                        : "No entries match the current filters. Try adjusting your filter criteria."}
+                    </p>
+                    {timesheetData.entries.length > 0 && filteredEntries.length === 0 && (
+                      <Button variant="outline" className="mt-4" onClick={() => setLocalFilters({ activityType: "all", status: "all" })}>
+                        Clear Filters
+                      </Button>
+                    )}
+                  </Card>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">
+                        Time Entries ({filteredEntries.length}
+                        {filteredEntries.length !== timesheetData.entries.length && (
+                          <span className="text-muted-foreground"> of {timesheetData.entries.length}</span>
+                        )}
+                        )
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <Play className="h-3 w-3" />
+                          {filteredEntries.filter((e) => e.status === "ongoing").length} Active
+                        </Badge>
+                        <Badge variant="outline" className="flex items-center gap-1">
+                          <Pause className="h-3 w-3" />
+                          {filteredEntries.filter((e) => e.status === "paused").length} Paused
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {filteredEntries.map((entry) => (
+                      <TimesheetEntryCard key={entry.id} entry={entry} onRefresh={() => refetch()} />
+                    ))}
+                  </>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="analytics">
+              <TimesheetAnalytics data={timesheetData} filters={filters} />
+            </TabsContent>
+          </Tabs>
+        ) : null}
+      </div>
+    </>
   );
 }

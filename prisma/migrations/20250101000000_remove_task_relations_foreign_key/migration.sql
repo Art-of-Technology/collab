@@ -1,2 +1,3 @@
--- Remove foreign key constraint from TaskRelations table
-ALTER TABLE "task_relations" DROP CONSTRAINT IF EXISTS "task_relations_taskId_fkey"; 
+ALTER TABLE IF EXISTS "task_relations"
+ DROP CONSTRAINT IF EXISTS "task_relations_parentId_fkey";
+DROP TABLE IF EXISTS "task_relations" CASCADE;

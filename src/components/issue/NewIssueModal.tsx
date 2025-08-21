@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
-type IssueType = "TASK" | "EPIC" | "STORY" | "MILESTONE" | "DEFECT" | "SUBTASK";
+type IssueType = "TASK" | "EPIC" | "STORY" | "MILESTONE" | "BUG" | "SUBTASK";
 
 interface NewIssueModalProps {
   open: boolean;

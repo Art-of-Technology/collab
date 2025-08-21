@@ -288,7 +288,7 @@ export async function POST(
             EPIC: 1,
             STORY: 1,
             TASK: 1,
-            DEFECT: 1,
+            BUG: 1,
             MILESTONE: 1,
             SUBTASK: 1
           }

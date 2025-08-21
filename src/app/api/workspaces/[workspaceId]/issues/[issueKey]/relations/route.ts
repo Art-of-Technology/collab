@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import type { IssueRelationType as PrismaIssueRelationType } from "@prisma/client";
 
 // GET /api/workspaces/[workspaceId]/issues/[issueKey]/relations
 export async function GET(
@@ -135,10 +136,8 @@ export async function GET(
 
       switch (relation.relationType) {
         case 'PARENT':
+          // Current issue is child; target is its parent
           relations.parent = relatedIssue;
-          break;
-        case 'CHILD':
-          relations.children.push(relatedIssue);
           break;
         case 'BLOCKS':
           relations.blocks.push(relatedIssue);
@@ -149,6 +148,7 @@ export async function GET(
         case 'DUPLICATES':
           relations.duplicates.push(relatedIssue);
           break;
+        // Intentionally ignore 'CHILD' type going forward; parent/child is represented via 'PARENT'
       }
     });
 
@@ -171,11 +171,7 @@ export async function GET(
 
       switch (relation.relationType) {
         case 'PARENT':
-          // If another issue has this as parent, this is child of that issue
-          // But we don't show "child of" - we show the parent relationship from the parent's side
-          break;
-        case 'CHILD':
-          // If another issue has this as child, add to our children
+          // Another issue (child) points to THIS as its parent via PARENT -> list that source as our child
           relations.children.push(relatedIssue);
           break;
         case 'BLOCKS':
@@ -187,6 +183,7 @@ export async function GET(
         case 'DUPLICATES':
           relations.duplicated_by.push(relatedIssue);
           break;
+        // Ignore legacy 'CHILD' entries
       }
     });
 
@@ -282,12 +279,36 @@ export async function POST(
       );
     }
 
+    // Normalize relation: Drop 'CHILD' type by mapping it to 'PARENT' with reversed direction
+    const providedType = String(relationType || '').toUpperCase();
+    let finalSourceId = sourceIssue.id;
+    let finalTargetId = targetIssueId;
+    let finalType: PrismaIssueRelationType;
+
+    if (providedType === 'CHILD') {
+      // Current issue is the parent; target becomes the child
+      finalSourceId = targetIssueId;
+      finalTargetId = sourceIssue.id;
+      finalType = 'PARENT';
+    } else if (
+      providedType === 'PARENT' ||
+      providedType === 'BLOCKS' ||
+      providedType === 'BLOCKED_BY' ||
+      providedType === 'RELATES_TO' ||
+      providedType === 'DUPLICATES' ||
+      providedType === 'DUPLICATED_BY'
+    ) {
+      finalType = providedType as PrismaIssueRelationType;
+    } else {
+      return NextResponse.json({ error: "Invalid relationType" }, { status: 400 });
+    }
+
     // Create the relation
     const relation = await prisma.issueRelation.create({
       data: {
-        sourceIssueId: sourceIssue.id,
-        targetIssueId: targetIssueId,
-        relationType: relationType.toUpperCase(),
+        sourceIssueId: finalSourceId,
+        targetIssueId: finalTargetId,
+        relationType: finalType,
         createdBy: session.user.id
       }
     });

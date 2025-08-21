@@ -66,7 +66,7 @@ const getTypeColor = (type: string) => {
     'EPIC': '#8b5cf6',
     'STORY': '#3b82f6',
     'TASK': '#10b981',
-    'DEFECT': '#ef4444',
+    'BUG': '#ef4444',
     'MILESTONE': '#f59e0b',
     'SUBTASK': '#6b7280'
   };
@@ -530,9 +530,19 @@ export function IssueDetailContent({
       if (event.metaKey || event.ctrlKey) {
         switch (event.key) {
           case 'c':
-            if (!editingTitle) {
-              event.preventDefault();
-              handleCopyLink();
+            {
+              const activeElement = document.activeElement as HTMLElement | null;
+              const isTextInputFocused = !!activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.isContentEditable ||
+                !!activeElement.closest('[contenteditable="true"]')
+              );
+
+              if (!editingTitle && !isTextInputFocused) {
+                event.preventDefault();
+                handleCopyLink();
+              }
             }
             break;
           case 's':

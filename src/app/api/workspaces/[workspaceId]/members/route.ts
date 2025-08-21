@@ -30,6 +30,7 @@ export async function GET(
         where: {
           userId: user.id,
           workspaceId,
+          status: true, // Ensure the member is active
         },
       }),
       prisma.workspace.findFirst({
@@ -48,6 +49,7 @@ export async function GET(
     const members = await prisma.workspaceMember.findMany({
       where: {
         workspaceId,
+        status: true, // Only active members
       },
       include: {
         user: {

@@ -53,7 +53,7 @@ const mockIssues = [
     id: '2', 
     key: 'TEST-2',
     title: 'Fix login page styling',
-    type: 'DEFECT',
+    type: 'BUG',
     status: 'TODO',
     priority: 'MEDIUM',
     assignee: {
@@ -71,7 +71,7 @@ const mockIssues = [
 
 const issueTypeIcons = {
   TASK: CheckSquare,
-  DEFECT: AlertTriangle,
+  BUG: AlertTriangle,
   EPIC: Circle,
   STORY: Circle,
   MILESTONE: Clock,
@@ -80,7 +80,7 @@ const issueTypeIcons = {
 
 const issueTypeColors = {
   TASK: 'text-blue-500',
-  DEFECT: 'text-red-500',
+  BUG: 'text-red-500',
   EPIC: 'text-purple-500',
   STORY: 'text-green-500',
   MILESTONE: 'text-yellow-500',
