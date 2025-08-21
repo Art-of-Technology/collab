@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -38,13 +39,15 @@ export function FloatingSelectionMenu({
 }: FloatingSelectionMenuProps) {
   if (!isVisible || !editor) return null;
 
-  return (
+  // Render in a portal to avoid clipping by overflow-hidden ancestors
+  const menu = (
     <div
-      className="absolute z-[9998] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
+      className="fixed z-[9998] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
       style={{
         top: position.top,
         left: position.left,
       }}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       <TooltipProvider delayDuration={200}>
         {/* Text Formatting */}
@@ -300,4 +303,7 @@ export function FloatingSelectionMenu({
       </TooltipProvider>
     </div>
   );
+
+  if (typeof window === 'undefined' || !document?.body) return menu;
+  return createPortal(menu, document.body);
 }
