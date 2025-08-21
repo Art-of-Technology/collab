@@ -17,15 +17,15 @@ type SidebarContextType = {
 
 const SidebarContext = createContext<SidebarContextType>({
   isCollapsedDesktop: false,
-  toggleDesktop: () => { },
-  setCollapsedDesktop: () => { },
+  toggleDesktop: () => {},
+  setCollapsedDesktop: () => {},
   isMobileOpen: false,
-  openMobile: () => { },
-  closeMobile: () => { },
-  toggleMobile: () => { },
+  openMobile: () => {},
+  closeMobile: () => {},
+  toggleMobile: () => {},
   isMdUp: false,
   isCollapsed: false,
-  toggleSidebar: () => { },
+  toggleSidebar: () => {},
 });
 
 export function useSidebar() {
@@ -48,8 +48,12 @@ function persistDesktop(state: "open" | "closed") {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ target: "desktop", state }),
-    }).catch(() => { });
-  } catch { }
+    }).catch((err) => {
+      console.error("Failed to persist sidebar state to API:", err);
+    });
+  } catch (err) {
+    console.error("Failed to persist sidebar state to cookie:", err);
+  }
 }
 
 export default function SidebarProvider({ children }: { children: React.ReactNode }) {

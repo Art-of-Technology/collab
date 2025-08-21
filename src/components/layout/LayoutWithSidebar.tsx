@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import RightSidebar from "@/components/layout/RightSidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
@@ -30,6 +30,12 @@ export default function LayoutWithSidebar({
     isCollapsed,
   } = useSidebar();
   const { open: commandMenuOpen, setOpen: setCommandMenuOpen } = useCommandMenu();
+
+  const sidebarLeft = useMemo(() => {
+    if (isMdUp) return "calc(var(--sidebar-width))";
+    if (isMobileOpen) return "calc(var(--sidebar-open))";
+    return "0px";
+  }, [isMdUp, isMobileOpen]);
 
   return (
     <ViewFiltersProvider>
@@ -93,7 +99,7 @@ export default function LayoutWithSidebar({
             className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px]
                          bg-[#090909] border border-[#1f1f1f] hover:bg-[#1a1a1a]
                          text-gray-400 hover:text-white rounded-r-md rounded-l-none border-l-0 shadow-md transition-all duration-200"
-            style={{ left: isMobileOpen ? "calc(var(--sidebar-open))" : isMdUp ? "calc(var(--sidebar-width))" : "0px" }}
+            style={{ left: sidebarLeft }}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? (
