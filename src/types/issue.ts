@@ -1,4 +1,4 @@
-export type IssueType = 'EPIC' | 'STORY' | 'TASK' | 'DEFECT' | 'MILESTONE' | 'SUBTASK';
+export type IssueType = 'EPIC' | 'STORY' | 'TASK' | 'BUG' | 'DEFECT' | 'MILESTONE' | 'SUBTASK';
 
 export type IssuePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 

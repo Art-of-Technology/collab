@@ -51,6 +51,16 @@ export const ISSUE_TYPE_CONFIG = {
     darkBorderColor: "dark:border-emerald-700/50",
     darkColor: "dark:text-emerald-400"
   },
+  BUG: {
+    label: "Bug",
+    icon: Bug,
+    color: "text-red-600",
+    bgColor: "bg-red-50",
+    borderColor: "border-red-200",
+    darkBgColor: "dark:bg-red-900/20",
+    darkBorderColor: "dark:border-red-700/50",
+    darkColor: "dark:text-red-400"
+  },
   DEFECT: {
     label: "Bug",
     icon: Bug,
@@ -308,7 +318,7 @@ export function getValidParentTypes(type: IssueType): IssueType[] {
 
 // Progress calculation
 export function calculateIssueProgress(issue: Issue): number {
-  if (issue.type === 'TASK' || issue.type === 'SUBTASK' || issue.type === 'DEFECT') {
+  if (issue.type === 'TASK' || issue.type === 'SUBTASK' || issue.type === 'DEFECT' || issue.type === 'BUG') {
     // For leaf items, progress is based on status
     const status = issue.status?.toLowerCase();
     if (status === 'done' || status === 'completed') return 100;

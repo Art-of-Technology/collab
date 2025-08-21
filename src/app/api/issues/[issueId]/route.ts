@@ -304,6 +304,12 @@ export async function PUT(
 
     // Handle status updates to work with new ProjectStatus system
     let updateData = { ...body, updatedAt: new Date() };
+
+    // Normalize type if provided: accept "Bug" from clients but store as DEFECT enum
+    if (typeof updateData.type === 'string') {
+      const upper = updateData.type.toUpperCase();
+      updateData.type = upper === 'DEFECT' ? 'BUG' : upper;
+    }
     
     // Handle labels relation updates
     let relationalUpdates: any = {};

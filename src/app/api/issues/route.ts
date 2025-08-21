@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
+import { IssueType } from "@/types/issue";
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
@@ -188,6 +189,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Use a transaction to ensure atomic counter increment and issue creation
+    // Normalize type: map Bug label to DEFECT enum and uppercase everything else
+    const normalizedTypeInput = typeof type === 'string' ? type.toUpperCase() : 'TASK';
+    const dbType: IssueType = normalizedTypeInput === 'DEFECT' ? 'BUG' : normalizedTypeInput as IssueType ;
+
     const created = await prisma.$transaction(async (tx) => {
       // Get the latest project data with current counters
       const currentProject = await tx.project.findUnique({
@@ -259,7 +264,7 @@ export async function POST(request: NextRequest) {
         data: {
           title,
           description,
-          type,
+          type: dbType,
           statusId: statusId,
           statusValue: status || undefined,
           status: status || undefined,
@@ -292,7 +297,7 @@ export async function POST(request: NextRequest) {
 
       // Update the counter to be at least one more than what we used
       const updatedNext = { ...(currentProject.nextIssueNumbers as any) };
-      updatedNext[type] = Math.max(nextNum + 1, updatedNext[type] || 1);
+      updatedNext[dbType] = Math.max(nextNum + 1, updatedNext[dbType] || 1);
       await tx.project.update({
         where: { id: projectId },
         data: { nextIssueNumbers: updatedNext as any },
