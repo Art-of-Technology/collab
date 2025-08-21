@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { trackFieldChanges, createActivity, compareObjects } from "@/lib/board-item-activity-service";
+import { publishEvent } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 // GET /api/issues/[issueId] - Get issue details
 export async function GET(
@@ -503,6 +505,19 @@ export async function PUT(
     } catch (e) {
       console.warn('Issue activity tracking failed:', e);
     }
+
+    await publishEvent(`workspace:${updatedIssue.workspaceId}:events`, {
+      type: 'issue.updated',
+      workspaceId: updatedIssue.workspaceId,
+      projectId: updatedIssue.projectId,
+      issueId: updatedIssue.id,
+      issueKey: updatedIssue.issueKey,
+      status: updatedIssue.status ?? undefined,
+      statusId: updatedIssue.statusId ?? undefined,
+      statusValue: updatedIssue.statusValue ?? undefined,
+      columnId: updatedIssue.columnId ?? undefined,
+      updatedAt: updatedIssue.updatedAt
+    });
 
     return NextResponse.json({ issue: updatedIssue });
 

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
+import { publishEvent } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 // PUT /api/views/[viewId]/issue-positions
 export async function PUT(
@@ -77,6 +79,15 @@ export async function PUT(
         columnId,
         position: position
       }
+    });
+
+    await publishEvent(`workspace:${view.workspaceId}:events`, {
+      type: 'view.issue-position.updated',
+      workspaceId: view.workspaceId,
+      viewId,
+      issueId,
+      columnId,
+      position
     });
 
     return NextResponse.json({ 

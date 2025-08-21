@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CreateTaskForm from "@/components/tasks/CreateTaskForm";
 import { useSearchParams } from "next/navigation";
+import { useRealtimeWorkspaceEvents } from "@/hooks/useRealtimeWorkspaceEvents";
 
 // Define task interface
 interface Task {
@@ -73,6 +74,12 @@ export default function KanbanView() {
   const deleteColumnMutation = useDeleteColumn();
   const reorderColumnsMutation = useReorderColumns(selectedBoardId || "");
   const reorderItemsMutation = useReorderBoardItems();
+
+  // Realtime: subscribe to workspace updates and invalidate board items as needed
+  useRealtimeWorkspaceEvents({
+    workspaceId: currentWorkspace?.id,
+    boardId: selectedBoardId || undefined,
+  });
 
   // Add the quick task creation dialog and functionality
   const [isQuickTaskOpen, setIsQuickTaskOpen] = useState(false);
