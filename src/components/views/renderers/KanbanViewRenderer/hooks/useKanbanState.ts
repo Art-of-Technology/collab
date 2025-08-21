@@ -37,6 +37,7 @@ export const useKanbanState = ({
   
   // Local state for immediate UI updates during drag & drop
   const [localIssues, setLocalIssues] = useState(issues);
+  const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   
   // Update local issues when props change (from server)
   useEffect(() => {
@@ -59,8 +60,16 @@ export const useKanbanState = ({
   // Group issues by the specified field (default to status)
   const columns = useMemo(() => {
     const projectStatuses = projectStatusData?.statuses || [];
-    return createColumns(filteredIssues, view, projectStatuses);
-  }, [filteredIssues, view, projectStatusData]);
+    const baseColumns = createColumns(filteredIssues, view, projectStatuses);
+    if (localColumnOrder && view.grouping?.field === 'status') {
+      const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
+      return baseColumns.map((col: any) => ({
+        ...col,
+        order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
+      }));
+    }
+    return baseColumns;
+  }, [filteredIssues, view, projectStatusData, localColumnOrder]);
 
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {
@@ -96,6 +105,8 @@ export const useKanbanState = ({
         ...col,
         order: index
       }));
+      // Optimistically reflect new order in UI
+      setLocalColumnOrder(updatedColumns.map((c) => c.id));
       
       if (onColumnUpdate) {
         updatedColumns.forEach(col => {
