@@ -27,7 +27,7 @@ const TYPE_OPTIONS = [
 
 function getTypeConfig(type: string) {
   const normalizedType = type?.toUpperCase();
-  const mapped = normalizedType === 'DEFECT' ? 'BUG' : normalizedType;
+  const mapped = normalizedType;
   return TYPE_OPTIONS.find(t => t.value === mapped) || TYPE_OPTIONS[0]; // default to TASK
 }
 

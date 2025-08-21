@@ -19,7 +19,7 @@ import {
 const FILTER_OPTIONS = [
   { id: 'status', name: 'Status', values: ['Backlog', 'Todo', 'In Progress', 'In Review', 'Done', 'Cancelled'] },
   { id: 'priority', name: 'Priority', values: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'] },
-  { id: 'type', name: 'Issue Type', values: ['EPIC', 'STORY', 'TASK', 'DEFECT', 'MILESTONE', 'SUBTASK'] },
+  { id: 'type', name: 'Issue Type', values: ['EPIC', 'STORY', 'TASK', 'BUG', 'MILESTONE', 'SUBTASK'] },
   { id: 'assignee', name: 'Assignee', values: [] },
   { id: 'project', name: 'Project', values: [] },
 ];
@@ -40,7 +40,7 @@ const formatFilterValue = (value: string): string => {
     case 'EPIC': return 'Epic';
     case 'STORY': return 'Story';
     case 'TASK': return 'Task';
-    case 'DEFECT': return 'Bug';
+    case 'BUG': return 'Bug';
     case 'MILESTONE': return 'Milestone';
     case 'SUBTASK': return 'Subtask';
     default: return value;

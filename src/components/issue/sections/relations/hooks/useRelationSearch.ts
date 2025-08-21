@@ -38,7 +38,7 @@ export function useRelationSearch(
               apiType = 'TASK';
               break;
             case 'defect':
-              apiType = 'DEFECT';
+              apiType = 'BUG';
               break;
             default:
               apiType = type.toUpperCase();
@@ -74,7 +74,7 @@ export function useRelationSearch(
           status: issue.status,
           priority: issue.priority,
           type: issue.type?.toLowerCase() === 'task' ? 'issue' : 
-                issue.type?.toLowerCase() === 'defect' ? 'defect' :
+                issue.type?.toLowerCase() === 'bug' ? 'defect' :
                 issue.type?.toLowerCase() || 'issue',
           assignee: issue.assignee,
           project: issue.project,

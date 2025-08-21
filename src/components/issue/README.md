@@ -6,7 +6,7 @@ Modern, Linear.app-style React components for the unified Issue model. These com
 
 - **Linear.app-inspired**: Clean, minimal design with subtle gradients and smooth animations
 - **Modular**: Each component has a single responsibility
-- **Consistent**: Unified design language across all issue types (Epic, Story, Task, Defect, Milestone, Subtask)
+- **Consistent**: Unified design language across all issue types (Epic, Story, Task, Bug, Milestone, Subtask)
 - **Accessible**: Proper ARIA labels, keyboard navigation, and semantic HTML
 - **Type-safe**: Full TypeScript support with comprehensive type definitions
 
@@ -108,7 +108,7 @@ Supports all unified issue types with appropriate icons and colors:
 - 🎯 **Epic** - Purple, Target icon
 - 📖 **Story** - Blue, BookOpen icon  
 - ✅ **Task** - Green, CheckSquare icon
-- 🐛 **Defect** - Red, Bug icon
+- 🐛 **Bug** - Red, Bug icon
 - 🏁 **Milestone** - Amber, Milestone icon
 - 📝 **Subtask** - Gray, ChevronDown icon
 
@@ -149,7 +149,7 @@ interface Issue {
   id: string;
   title: string;
   description?: string;
-  type: IssueType; // EPIC | STORY | TASK | DEFECT | MILESTONE | SUBTASK
+  type: IssueType; // EPIC | STORY | TASK | BUG | MILESTONE | SUBTASK
   status?: string;
   priority: IssuePriority; // LOW | MEDIUM | HIGH | URGENT
   

@@ -41,7 +41,6 @@ export const ISSUE_TYPE_COLORS = {
   'STORY': 'bg-blue-500/10 text-blue-400',
   'TASK': 'bg-green-500/10 text-green-400',
   'BUG': 'bg-red-500/10 text-red-400',
-  'DEFECT': 'bg-red-500/10 text-red-400',
   'MILESTONE': 'bg-indigo-500/10 text-indigo-400',
   'SUBTASK': 'bg-cyan-500/10 text-cyan-400',
 };
@@ -51,7 +50,6 @@ export const ISSUE_TYPE_LABELS = {
   'STORY': 'Story',
   'TASK': 'Task',
   'BUG': 'Bug',
-  'DEFECT': 'Bug',
   'MILESTONE': 'Milestone',
   'SUBTASK': 'Subtask',
 };

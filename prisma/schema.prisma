@@ -412,7 +412,7 @@ model Project {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   issuePrefix     String
-  nextIssueNumbers Json        @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"DEFECT\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
+  nextIssueNumbers Json        @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"BUG\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
   
   // Relationships
   workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1691,7 +1691,6 @@ enum IssueType {
   STORY
   TASK
   BUG
-  DEFECT
   MILESTONE
   SUBTASK
 }

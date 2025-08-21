@@ -22,8 +22,8 @@ INSERT INTO "Project" (
 SELECT 
   id, name, slug, description, workspaceId, isDefault,
   createdAt, updatedAt, issuePrefix,
-  -- Convert single nextIssueNumber to JSON object
-  FORMAT('{"EPIC": %s, "STORY": %s, "TASK": %s, "DEFECT": %s, "MILESTONE": %s, "SUBTASK": %s}', 
+  -- Convert single nextIssueNumber to JSON object (using BUG)
+  FORMAT('{"EPIC": %s, "STORY": %s, "TASK": %s, "BUG": %s, "MILESTONE": %s, "SUBTASK": %s}', 
     nextIssueNumber, nextIssueNumber, nextIssueNumber, 
     nextIssueNumber, nextIssueNumber, nextIssueNumber)::json
 FROM "TaskBoard";

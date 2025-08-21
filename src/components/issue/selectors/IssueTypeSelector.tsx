@@ -52,12 +52,6 @@ const TYPE_CONFIG = {
     color: "#ef4444",
     description: "A problem that needs fixing"
   },
-  DEFECT: {
-    label: "Bug",
-    icon: Bug,
-    color: "#ef4444",
-    description: "A problem that needs fixing"
-  },
   MILESTONE: {
     label: "Milestone",
     icon: Flag,

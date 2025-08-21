@@ -217,7 +217,7 @@ export default function TableViewRenderer({
                           issue.type === 'EPIC' && "bg-purple-500/10 text-purple-400",
                           issue.type === 'STORY' && "bg-blue-500/10 text-blue-400",
                           issue.type === 'TASK' && "bg-green-500/10 text-green-400",
-                          issue.type === 'DEFECT' && "bg-red-500/10 text-red-400"
+                          issue.type === 'BUG' && "bg-red-500/10 text-red-400"
                         )}
                       >
                         {issue.type.toLowerCase()}

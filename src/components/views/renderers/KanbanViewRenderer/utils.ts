@@ -179,7 +179,6 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
                     issue.type === 'STORY' ? 'Story' :
                     issue.type === 'TASK' ? 'Task' :
                     issue.type === 'BUG' ? 'Bug' :
-                    issue.type === 'DEFECT' ? 'Bug' :
                     issue.type === 'MILESTONE' ? 'Milestone' :
                     issue.type === 'SUBTASK' ? 'Subtask' :
                     'Task';

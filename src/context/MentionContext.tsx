@@ -32,7 +32,7 @@ export interface Notification {
   issue?: {
     id: string;
     title: string;
-    type: string; // EPIC | STORY | TASK | DEFECT | MILESTONE | SUBTASK
+    type: string; // EPIC | STORY | TASK | BUG | MILESTONE | SUBTASK
     issueKey?: string;
     project?: {
       id: string;

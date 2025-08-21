@@ -78,7 +78,7 @@ export const IssueMentionExtension = Node.create({
           return { color: '#22c55e', icon: '○' };
         case 'TASK':
           return { color: '#6366f1', icon: '☑' };
-        case 'DEFECT':
+        case 'BUG':
           return { color: '#ef4444', icon: '●' };
         case 'MILESTONE':
           return { color: '#f59e0b', icon: '▲' };

@@ -86,11 +86,10 @@ export function useCreateIssue() {
 
   return useMutation({
     mutationFn: async (data: CreateIssueData): Promise<any> => {
-      // Normalize issue type for backend: send 'BUG' instead of 'DEFECT' and uppercase others
+      // Normalize issue type casing
       const payload: CreateIssueData = { ...data };
       if (payload.type) {
-        const upper = payload.type.toUpperCase();
-        payload.type = upper === 'DEFECT' ? 'BUG' : upper;
+        payload.type = payload.type.toUpperCase();
       }
 
       const response = await fetch('/api/issues', {
@@ -133,10 +132,9 @@ export function useUpdateIssue() {
   return useMutation({
     mutationFn: async (data: UpdateIssueData): Promise<any> => {
       const { id, ...updateData } = data;
-      // Normalize issue type for backend: send 'BUG' instead of 'DEFECT' and uppercase others
+      // Normalize issue type casing
       if (updateData.type) {
-        const upper = updateData.type.toUpperCase();
-        updateData.type = upper === 'DEFECT' ? 'BUG' : upper;
+        updateData.type = updateData.type.toUpperCase();
       }
       const response = await fetch(`/api/issues/${id}`, {
         method: 'PUT',
