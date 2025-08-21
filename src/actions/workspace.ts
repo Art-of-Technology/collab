@@ -188,7 +188,7 @@ export async function getWorkspaceById(workspaceId: string) {
   
   // Check if the user has access to this workspace
   const isOwner = workspace.ownerId === user.id;
-  const isMember = workspace.members.some((member: { userId: string }) => member.userId === user.id);
+  const isMember = workspace.members.some((member: WorkspaceMember) => member.userId === user.id);
   
   if (!isOwner && !isMember) {
     throw new Error('You do not have access to this workspace');
