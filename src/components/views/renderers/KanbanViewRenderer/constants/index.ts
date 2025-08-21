@@ -1,7 +1,7 @@
 export const DEFAULT_COLUMNS = {
   status: ['backlog', 'todo', 'in_progress', 'review', 'done'],
   priority: ['Urgent', 'High', 'Medium', 'Low'],
-  type: ['Epic', 'Story', 'Task', 'Defect', 'Milestone', 'Subtask'],
+  type: ['Epic', 'Story', 'Task', 'Bug', 'Milestone', 'Subtask'],
 };
 
 export const COLUMN_COLORS = {
@@ -22,6 +22,7 @@ export const COLUMN_COLORS = {
     'epic': 'border-purple-500',
     'story': 'border-blue-500',
     'task': 'border-green-500',
+    'bug': 'border-red-500',
     'defect': 'border-red-500',
     'milestone': 'border-indigo-500',
     'subtask': 'border-cyan-500',
@@ -39,7 +40,7 @@ export const ISSUE_TYPE_COLORS = {
   'EPIC': 'bg-purple-500/10 text-purple-400',
   'STORY': 'bg-blue-500/10 text-blue-400',
   'TASK': 'bg-green-500/10 text-green-400',
-  'DEFECT': 'bg-red-500/10 text-red-400',
+  'BUG': 'bg-red-500/10 text-red-400',
   'MILESTONE': 'bg-indigo-500/10 text-indigo-400',
   'SUBTASK': 'bg-cyan-500/10 text-cyan-400',
 };
@@ -48,7 +49,7 @@ export const ISSUE_TYPE_LABELS = {
   'EPIC': 'Epic',
   'STORY': 'Story',
   'TASK': 'Task',
-  'DEFECT': 'Defect',
+  'BUG': 'Bug',
   'MILESTONE': 'Milestone',
   'SUBTASK': 'Subtask',
 };

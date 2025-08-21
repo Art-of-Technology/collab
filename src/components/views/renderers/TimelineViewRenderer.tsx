@@ -91,13 +91,11 @@ export default function TimelineViewRenderer({
     
     // Apply label filters
     if (selectedFilters.labels.length > 0) {
-      filtered = filtered.filter(issue => {
+      filtered = filtered.filter((issue: any) => {
         if (!issue.labels || issue.labels.length === 0) {
           return selectedFilters.labels.includes('no-labels');
         }
-        return issue.labels.some((label: any) => 
-          selectedFilters.labels.includes(label.id)
-        );
+        return issue.labels.some((label: any) => selectedFilters.labels.includes(label.id));
       });
     }
     
@@ -297,13 +295,13 @@ export default function TimelineViewRenderer({
                                 issue.type === 'EPIC' && "bg-purple-500/10 text-purple-400",
                                 issue.type === 'STORY' && "bg-blue-500/10 text-blue-400",
                                 issue.type === 'TASK' && "bg-green-500/10 text-green-400",
-                                issue.type === 'DEFECT' && "bg-red-500/10 text-red-400"
+                                issue.type === 'BUG' && "bg-red-500/10 text-red-400"
                               )}
                             >
                               {issue.type === 'EPIC' ? 'Epic' : 
                                 issue.type === 'STORY' ? 'Story' :
                                 issue.type === 'TASK' ? 'Task' :
-                                issue.type === 'DEFECT' ? 'Defect' :
+                                issue.type === 'BUG' ? 'Bug' :
                                 issue.type === 'MILESTONE' ? 'Milestone' :
                                 issue.type === 'SUBTASK' ? 'Subtask' :
                                 issue.type?.toLowerCase()}
@@ -424,12 +422,11 @@ export default function TimelineViewRenderer({
       <ViewFilters
         issues={issues}
         workspace={workspace}
+        currentUser={currentUser}
         isOpen={isRightSidebarOpen}
         onToggle={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
         selectedFilters={selectedFilters}
         onFiltersChange={setSelectedFilters}
-        showSubIssues={showSubIssues}
-        onSubIssuesToggle={() => setShowSubIssues(!showSubIssues)}
         viewType="timeline"
       />
 

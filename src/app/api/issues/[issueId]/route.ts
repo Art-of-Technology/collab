@@ -306,6 +306,11 @@ export async function PUT(
 
     // Handle status updates to work with new ProjectStatus system
     let updateData = { ...body, updatedAt: new Date() };
+
+    // Normalize type casing if provided
+    if (typeof updateData.type === 'string') {
+      updateData.type = updateData.type.toUpperCase();
+    }
     
     // Handle labels relation updates
     let relationalUpdates: any = {};

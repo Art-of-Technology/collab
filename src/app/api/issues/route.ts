@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
         data: {
           title,
           description,
-          type,
+          type: type,
           statusId: statusId,
           statusValue: status || undefined,
           status: status || undefined,

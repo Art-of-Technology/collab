@@ -42,7 +42,7 @@ export interface Issue {
   id: string;
   title: string;
   issueKey?: string;
-  type: 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE' | 'DEFECT' | 'SUBTASK';
+  type: 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE' | 'SUBTASK' | 'BUG';
   status?: string;
   priority?: string;
   project?: {
@@ -59,7 +59,7 @@ export interface Issue {
 }
 
 export type MentionType = 'user' | 'issue';
-export type IssueType = 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE' | 'DEFECT' | 'SUBTASK';
+export type IssueType = 'TASK' | 'EPIC' | 'STORY' | 'MILESTONE' | 'SUBTASK' | 'BUG';
 
 export interface MentionSuggestion {
   position: { top: number; left: number };

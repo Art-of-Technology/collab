@@ -351,7 +351,7 @@ async function migrateProjects(stats: MigrationStats) {
             EPIC: taskBoard.nextIssueNumber,
             STORY: taskBoard.nextIssueNumber,
             TASK: taskBoard.nextIssueNumber,
-            DEFECT: taskBoard.nextIssueNumber,
+            BUG: taskBoard.nextIssueNumber,
             MILESTONE: taskBoard.nextIssueNumber,
             SUBTASK: taskBoard.nextIssueNumber
           }
@@ -844,7 +844,7 @@ async function generateIssueKeys(stats: MigrationStats) {
       EPIC: 1,
       STORY: 1,
       TASK: 1,
-      DEFECT: 1,
+      BUG: 1,
       MILESTONE: 1,
       SUBTASK: 1
     }
@@ -859,7 +859,7 @@ async function generateIssueKeys(stats: MigrationStats) {
         EPIC: 'E',
         STORY: 'S',
         TASK: 'T',
-        DEFECT: 'D',
+        BUG: 'D',
         MILESTONE: 'M',
         SUBTASK: 'ST'
       }

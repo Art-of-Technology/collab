@@ -20,14 +20,15 @@ const TYPE_OPTIONS = [
   { value: "TASK", label: "Task", icon: CheckSquare, color: "text-emerald-600" },
   { value: "STORY", label: "Story", icon: BookOpen, color: "text-blue-600" },
   { value: "EPIC", label: "Epic", icon: Target, color: "text-purple-600" },
-  { value: "DEFECT", label: "Defect", icon: Bug, color: "text-red-600" },
+  { value: "BUG", label: "Bug", icon: Bug, color: "text-red-600" },
   { value: "MILESTONE", label: "Milestone", icon: Milestone, color: "text-amber-600" },
   { value: "SUBTASK", label: "Subtask", icon: ChevronDown, color: "text-slate-600" },
 ];
 
 function getTypeConfig(type: string) {
   const normalizedType = type?.toUpperCase();
-  return TYPE_OPTIONS.find(t => t.value === normalizedType) || TYPE_OPTIONS[0]; // default to TASK
+  const mapped = normalizedType;
+  return TYPE_OPTIONS.find(t => t.value === mapped) || TYPE_OPTIONS[0]; // default to TASK
 }
 
 export function TypeSelector({

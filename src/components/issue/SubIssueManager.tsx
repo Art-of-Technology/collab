@@ -11,7 +11,7 @@ export interface SubIssue {
   status?: string;
   priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   assigneeId?: string;
-  type?: "TASK" | "EPIC" | "STORY" | "MILESTONE" | "DEFECT" | "SUBTASK";
+  type?: "TASK" | "EPIC" | "STORY" | "MILESTONE" | "BUG" | "SUBTASK";
   labels?: string[];
   isCreating?: boolean;
 }

@@ -10,7 +10,7 @@ export interface Issue {
   id: string;
   title: string;
   issueKey: string | null;
-  type: 'EPIC' | 'STORY' | 'TASK' | 'DEFECT' | 'MILESTONE' | 'SUBTASK';
+  type: 'EPIC' | 'STORY' | 'TASK' | 'BUG' | 'MILESTONE' | 'SUBTASK';
   status?: string;
   priority: string;
   project: {
@@ -30,7 +30,7 @@ interface IssueMentionSuggestionProps {
   onSelect: (issue: Issue) => void;
   workspaceId?: string;
   onEscape?: () => void;
-  issueTypes?: Array<'EPIC' | 'STORY' | 'TASK' | 'DEFECT' | 'MILESTONE' | 'SUBTASK'>; // Filter by issue types
+  issueTypes?: Array<'EPIC' | 'STORY' | 'TASK' | 'BUG' | 'MILESTONE' | 'SUBTASK'>; // Filter by issue types
 }
 
 const CAN_MENTION_ALL_ISSUES = true;
@@ -40,7 +40,7 @@ const ISSUE_TYPE_ICONS = {
   EPIC: Target,
   STORY: BookOpen,
   TASK: HashIcon,
-  DEFECT: Bug,
+  BUG: Bug,
   MILESTONE: Milestone,
   SUBTASK: ArrowUpCircle,
 };
@@ -97,7 +97,7 @@ export const IssueMentionSuggestion = forwardRef<HTMLDivElement, IssueMentionSug
           return 'bg-blue-100 text-blue-700';
         case 'TASK':
           return 'bg-green-100 text-green-700';
-        case 'DEFECT':
+        case 'BUG':
           return 'bg-red-100 text-red-700';
         case 'MILESTONE':
           return 'bg-yellow-100 text-yellow-700';

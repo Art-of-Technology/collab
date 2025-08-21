@@ -1,4 +1,4 @@
-export type IssueType = 'EPIC' | 'STORY' | 'TASK' | 'DEFECT' | 'MILESTONE' | 'SUBTASK';
+export type IssueType = 'EPIC' | 'STORY' | 'TASK' | 'BUG' | 'MILESTONE' | 'SUBTASK';
 
 export type IssuePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
@@ -130,8 +130,6 @@ export interface PlayTime {
   seconds: number;
 }
 
-export type PlayState = "stopped" | "playing" | "paused";
-
 export interface IssueModalProps {
   issueId: string | null;
   onClose: () => void;
@@ -171,5 +169,3 @@ export interface PlayTime {
   totalTimeMs: number;
   formattedTime: string;
 }
-
-export type PlayState = 'stopped' | 'playing' | 'paused'; 

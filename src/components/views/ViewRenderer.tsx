@@ -397,7 +397,8 @@ export default function ViewRenderer({
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
-              return filterValues.includes(issue.type);
+              const fvs = (filterValues as string[]).map(v => v.toUpperCase());
+              return fvs.includes((issue.type || '').toUpperCase());
             case 'assignee':
               const assigneeId = issue.assigneeId || 'unassigned';
               return filterValues.includes(assigneeId);
