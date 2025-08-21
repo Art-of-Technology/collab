@@ -12,6 +12,7 @@ export interface Relations {
   stories: any[];
   milestones: any[];
   parentTasks: any[];
+  subtasks: any[];
 }
 
 export interface RelationItemProps {

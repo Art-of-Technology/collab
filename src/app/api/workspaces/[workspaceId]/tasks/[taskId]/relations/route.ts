@@ -63,10 +63,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const epicIds = relations.filter(r => r.relatedItemType === 'EPIC').map(r => r.relatedItemId);
     const storyIds = relations.filter(r => r.relatedItemType === 'STORY').map(r => r.relatedItemId);
     const milestoneIds = relations.filter(r => r.relatedItemType === 'MILESTONE').map(r => r.relatedItemId);
-    const parentTaskIds = relations.filter(r => r.relatedItemType === 'PARENT_TASK').map(r => r.relatedItemId);
+    const directParentTaskIds = relations
+      .filter(r => r.relatedItemType === 'PARENT_TASK')
+      .map(r => r.relatedItemId);
+
+    // Also include child tasks that point to this task as their parent
+    const incomingParentLinks = await prisma.taskRelations.findMany({
+      where: { relatedItemType: 'PARENT_TASK', relatedItemId: taskId },
+      select: { taskId: true }
+    });
+    const childTaskIds = incomingParentLinks.map(l => l.taskId);
+    const parentTaskIds = Array.from(new Set(directParentTaskIds));
+    const subtaskIds = Array.from(new Set(childTaskIds));
 
     // Fetch all details in parallel
-    const [epics, stories, milestones, parentTasks] = await Promise.all([
+    const [epics, stories, milestones, parentTasks, subtasks] = await Promise.all([
       epicIds.length > 0 ? prisma.epic.findMany({
         where: { 
           id: { in: epicIds },
@@ -121,6 +132,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           issueKey: true,
           description: true
         }
+      }) : [],
+
+      subtaskIds.length > 0 ? prisma.task.findMany({
+        where: {
+          id: { in: subtaskIds },
+          workspaceId
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          issueKey: true,
+          description: true
+        }
       }) : []
     ]);
 
@@ -128,7 +153,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       epics,
       stories,
       milestones,
-      parentTasks
+      parentTasks,
+      subtasks,
+      // Back-compat alias for clients expecting `children`
+      children: subtasks
     });
 
   } catch (error) {
@@ -357,15 +385,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const deletedRelations = await prisma.taskRelations.deleteMany({
       where: {
         OR: [
+          // Forward direction as provided
           {
-        taskId,
-        relatedItemId,
-        relatedItemType
+            taskId,
+            relatedItemId,
+            relatedItemType
           },
+          // Reverse direction using computed reverse type (epic/story/milestone/task cases)
           {
             taskId: relatedItemId,
             relatedItemId: taskId,
             relatedItemType: reverseRelationType
+          },
+          // Reverse direction using provided type as a fallback (helps when reverse type equals provided, e.g., PARENT_TASK)
+          {
+            taskId: relatedItemId,
+            relatedItemId: taskId,
+            relatedItemType
           }
         ]
       }

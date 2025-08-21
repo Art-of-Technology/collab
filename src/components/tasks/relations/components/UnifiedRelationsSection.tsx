@@ -52,7 +52,8 @@ export function UnifiedRelationsSection({
     epics: [],
     stories: [],
     milestones: [],
-    parentTasks: []
+    parentTasks: [],
+    subtasks: []
   });
   
   const [isLoading, setIsLoading] = useState(false);
@@ -224,7 +225,7 @@ export function UnifiedRelationsSection({
                       <RelationItem
                         key={relationItem.id}
                         title={relationItem.title}
-                        type={relationConfig.key === 'parentTasks' ? 'task' : relationConfig.key.slice(0, -1) as any}
+                        type={relationConfig.key === 'parentTasks' || relationConfig.key === 'subtasks' ? 'task' : relationConfig.key.slice(0, -1) as any}
                         issueKey={relationItem.issueKey}
                         status={relationItem.status}
                         href={generateHref(relationConfig.key, relationItem)}
