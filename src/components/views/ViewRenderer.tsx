@@ -393,7 +393,14 @@ export default function ViewRenderer({
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
-              return filterValues.includes(issue.type);
+              // Normalize: if user selects BUG, include both BUG and DEFECT
+              // Also allow legacy DEFECT selection to include BUG
+              const fvs = (filterValues as string[]).map(v => v.toUpperCase());
+              const includeBug = fvs.includes('BUG') || fvs.includes('DEFECT');
+              if (includeBug) {
+                return issue.type === 'BUG' || issue.type === 'DEFECT';
+              }
+              return fvs.includes((issue.type || '').toUpperCase());
             case 'assignee':
               const assigneeId = issue.assigneeId || 'unassigned';
               return filterValues.includes(assigneeId);

@@ -21,6 +21,7 @@ const GROUPING_OPTIONS = {
   status: { label: "Status", description: "Group by issue status" },
   priority: { label: "Priority", description: "Group by priority level" },
   assignee: { label: "Assignee", description: "Group by assigned person" },
+  type: { label: "Type", description: "Group by issue type" },
   project: { label: "Project", description: "Group by project" },
   label: { label: "Label", description: "Group by labels" }
 } as const;
@@ -40,8 +41,8 @@ export function ViewGroupingSelector({
     const allOptions = Object.keys(GROUPING_OPTIONS) as Array<keyof typeof GROUPING_OPTIONS>;
     
     if (displayType === 'KANBAN') {
-      // Kanban works best with status grouping
-      return allOptions.filter(key => ['status', 'priority', 'assignee'].includes(key));
+      // Kanban works best with status/type grouping
+      return allOptions.filter(key => ['status', 'type', 'priority', 'assignee'].includes(key));
     }
     
     return allOptions;

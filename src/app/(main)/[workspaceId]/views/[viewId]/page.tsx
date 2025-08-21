@@ -195,11 +195,13 @@ export default async function ViewPage({ params }: ViewPageProps) {
               issuesQuery.where.priority = { in: filterValues };
               break;
             case 'type':
-              // Map human labels to enum: allow "Bug" to map to DEFECT
+              // Map human labels to enum: allow "Bug" to map to BUG or DEFECT
               issuesQuery.where.type = {
-                in: filterValues.map(value => {
+                in: filterValues.flatMap(value => {
                   const upper = value.toUpperCase();
-                  return upper === 'BUG' ? 'DEFECT' : upper;
+                  if (upper === 'BUG') return ['BUG', 'DEFECT'];
+                  if (upper === 'DEFECT') return ['BUG', 'DEFECT'];
+                  return [upper];
                 })
               };
               break;

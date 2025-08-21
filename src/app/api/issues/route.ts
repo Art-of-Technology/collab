@@ -189,10 +189,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Use a transaction to ensure atomic counter increment and issue creation
-    // Normalize type from client: accept "DEFECT" but store DB enum as "BUG"; uppercase others
-    const normalizedTypeInput = typeof type === 'string' ? type.toUpperCase() : 'TASK';
-    const dbType = normalizedTypeInput === 'DEFECT' ? 'BUG' as IssueType : normalizedTypeInput as IssueType;
-
     const created = await prisma.$transaction(async (tx) => {
       // Get the latest project data with current counters
       const currentProject = await tx.project.findUnique({
@@ -205,13 +201,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Find a unique issue key by checking existing keys and incrementing if needed
-      let nextNum = (currentProject.nextIssueNumbers as any)?.[dbType] || 1;
+      let nextNum = (currentProject.nextIssueNumbers as any)?.[type] || 1;
       let issueKey: string;
       let attempts = 0;
       const maxAttempts = 100; // Prevent infinite loop
 
       do {
-        issueKey = `${currentProject.issuePrefix}-${dbType.charAt(0)}${nextNum}`;
+        issueKey = `${currentProject.issuePrefix}-${type.charAt(0)}${nextNum}`;
         
         // Check if this key already exists
         const existingIssue = await tx.issue.findFirst({
@@ -264,7 +260,7 @@ export async function POST(request: NextRequest) {
         data: {
           title,
           description,
-          type: dbType,
+          type: type,
           statusId: statusId,
           statusValue: status || undefined,
           status: status || undefined,
@@ -297,7 +293,7 @@ export async function POST(request: NextRequest) {
 
       // Update the counter to be at least one more than what we used
       const updatedNext = { ...(currentProject.nextIssueNumbers as any) };
-      updatedNext[dbType] = Math.max(nextNum + 1, updatedNext[dbType] || 1);
+      updatedNext[type] = Math.max(nextNum + 1, updatedNext[type] || 1);
       await tx.project.update({
         where: { id: projectId },
         data: { nextIssueNumbers: updatedNext as any },
