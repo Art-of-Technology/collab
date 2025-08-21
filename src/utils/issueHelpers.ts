@@ -52,7 +52,7 @@ export const ISSUE_TYPE_CONFIG = {
     darkColor: "dark:text-emerald-400"
   },
   DEFECT: {
-    label: "Defect",
+    label: "Bug",
     icon: Bug,
     color: "text-red-600",
     bgColor: "bg-red-50",

@@ -1,7 +1,7 @@
 export const DEFAULT_COLUMNS = {
   status: ['backlog', 'todo', 'in_progress', 'review', 'done'],
   priority: ['Urgent', 'High', 'Medium', 'Low'],
-  type: ['Epic', 'Story', 'Task', 'Defect', 'Milestone', 'Subtask'],
+  type: ['Epic', 'Story', 'Task', 'Bug', 'Milestone', 'Subtask'],
 };
 
 export const COLUMN_COLORS = {
@@ -48,7 +48,7 @@ export const ISSUE_TYPE_LABELS = {
   'EPIC': 'Epic',
   'STORY': 'Story',
   'TASK': 'Task',
-  'DEFECT': 'Defect',
+  'DEFECT': 'Bug',
   'MILESTONE': 'Milestone',
   'SUBTASK': 'Subtask',
 };
