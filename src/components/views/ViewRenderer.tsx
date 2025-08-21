@@ -609,47 +609,102 @@ export default function ViewRenderer({
     toggleViewFilters();
   };
 
-  // Count issues for filter buttons
+  // Count issues for filter buttons (must match PageHeader filtering semantics)
   const issueCounts = useMemo(() => {
-    // Use the same project filtering logic as in filteredIssues
     let countingIssues = [...issues];
-    
-    // Apply project filtering if tempProjectIds differs from original view projects
+
+    // Project selection (same logic as filteredIssues)
     const originalProjectIds = view.projects.map(p => p.id).sort();
     const currentProjectIds = tempProjectIds.sort();
     const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
-    
     if (projectSelectionChanged) {
       if (tempProjectIds.length === 0) {
-        // If no projects selected, show no issues
         countingIssues = [];
       } else {
-        // Filter to selected projects
-        countingIssues = countingIssues.filter(issue => {
-          return tempProjectIds.includes(issue.projectId);
-        });
+        countingIssues = countingIssues.filter(issue => tempProjectIds.includes(issue.projectId));
       }
     }
-    
+
+    // Search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      countingIssues = countingIssues.filter(issue =>
+        issue.title.toLowerCase().includes(q) ||
+        issue.issueKey?.toLowerCase().includes(q) ||
+        issue.description?.toLowerCase().includes(q)
+      );
+    }
+
+    // Combined view filters (view + temp)
+    Object.entries(allFilters).forEach(([filterKey, filterValues]) => {
+      if (Array.isArray(filterValues) && filterValues.length > 0) {
+        countingIssues = countingIssues.filter(issue => {
+          switch (filterKey) {
+            case 'status':
+              return filterValues.includes(issue.statusValue || issue.status);
+            case 'priority':
+              return filterValues.includes(issue.priority);
+            case 'type':
+              return filterValues.includes(issue.type);
+            case 'assignee': {
+              const assigneeId = issue.assigneeId || 'unassigned';
+              return filterValues.includes(assigneeId);
+            }
+            case 'labels':
+              if (!issue.labels || issue.labels.length === 0) {
+                return filterValues.includes('no-labels');
+              }
+              return issue.labels.some((label: any) => filterValues.includes(label.id));
+            case 'project':
+              return filterValues.includes(issue.projectId);
+            default:
+              return true;
+          }
+        });
+      }
+    });
+
+    // Sidebar ViewFilters (assignees, labels, priority, projects)
+    if (viewFiltersState.assignees.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        const assigneeId = issue.assignee?.id || 'unassigned';
+        return viewFiltersState.assignees.includes(assigneeId);
+      });
+    }
+    if (viewFiltersState.labels.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        if (!issue.labels || issue.labels.length === 0) {
+          return viewFiltersState.labels.includes('no-labels');
+        }
+        return issue.labels.some((label: any) => viewFiltersState.labels.includes(label.id));
+      });
+    }
+    if (viewFiltersState.priority.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        const priority = issue.priority || 'no-priority';
+        return viewFiltersState.priority.includes(priority);
+      });
+    }
+    if (viewFiltersState.projects.length > 0) {
+      countingIssues = countingIssues.filter(issue => {
+        const projectId = issue.project?.id || 'no-project';
+        return viewFiltersState.projects.includes(projectId);
+      });
+    }
+
+    // Now compute counts per tab from the filtered dataset
     const allIssuesCount = countingIssues.length;
     const activeIssuesCount = countingIssues.filter((issue: any) => {
       const status = (issue.statusValue || issue.status || '').toLowerCase();
-      return status !== 'done' && 
-             status !== 'backlog' && 
-             status !== 'cancelled' &&
-             status !== 'todo'; // Todo items should be in backlog, not active
+      return status !== 'done' && status !== 'backlog' && status !== 'cancelled' && status !== 'todo';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
       const status = (issue.statusValue || issue.status || '').toLowerCase();
       return status === 'backlog' || status === 'todo';
     }).length;
 
-    return {
-      allIssuesCount,
-      activeIssuesCount,
-      backlogIssuesCount
-    };
-  }, [issues, tempProjectIds, view.projects]);
+    return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
+  }, [issues, tempProjectIds, view.projects, searchQuery, allFilters, viewFiltersState]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
