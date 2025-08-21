@@ -58,9 +58,15 @@ export const useKanbanState = ({
 
   // Group issues by the specified field (default to status)
   const columns = useMemo(() => {
+    // Avoid showing fallback default columns while statuses are loading for status grouping
+    const groupField = view.grouping?.field || 'status';
+    if (groupField === 'status' && isLoadingStatuses) {
+      return [] as ReturnType<typeof createColumns>;
+    }
+
     const projectStatuses = projectStatusData?.statuses || [];
     return createColumns(filteredIssues, view, projectStatuses);
-  }, [filteredIssues, view, projectStatusData]);
+  }, [filteredIssues, view, projectStatusData, isLoadingStatuses]);
 
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {
@@ -360,6 +366,7 @@ export const useKanbanState = ({
     issueCounts,
     displayProperties,
     showSubIssues,
+    isLoadingStatuses,
     
     // Handlers
     handleDragStart,

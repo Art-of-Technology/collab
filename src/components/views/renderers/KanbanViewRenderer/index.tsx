@@ -34,6 +34,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     columns,
     issueCounts,
     displayProperties,
+    isLoadingStatuses,
     
     // Handlers
     handleDragStart,
@@ -55,6 +56,11 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
       {/* Kanban Board Container - Full height scrollable area */}
       <div className="h-full overflow-hidden">
         <div className="h-full p-6 overflow-hidden">
+          {isLoadingStatuses && (view.grouping?.field || 'status') === 'status' ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          ) : (
           <KanbanBoard
             columns={columns}
             issues={filteredIssues}
@@ -82,6 +88,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             onColumnNameChange={setNewColumnName}
             onIssueCreated={onIssueCreated || (() => {})}
           />
+          )}
         </div>
       </div>
     </div>
