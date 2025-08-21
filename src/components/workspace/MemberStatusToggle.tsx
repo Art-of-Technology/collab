@@ -27,22 +27,6 @@ function OwnerBadge() {
   );
 }
 
-function StatusBadge({ status }: { readonly status: boolean }) {
-  return (
-    <Badge
-      variant={status ? "default" : "secondary"}
-      className={cn(
-        "h-5 px-2 text-xs",
-        status
-          ? "bg-green-100 text-green-800 border-green-200"
-          : "bg-gray-100 text-gray-600 border-gray-200"
-      )}
-    >
-      {status ? "Active" : "Inactive"}
-    </Badge>
-  );
-}
-
 export default function MemberStatusToggle({
   memberId,
   workspaceId,
@@ -90,7 +74,6 @@ export default function MemberStatusToggle({
 
       toast({
         title: "Status Updated",
-        description: `${memberName} is now ${newStatus ? "active" : "inactive"
         description: `${memberName} is now ${newStatus ? "active" : "inactive"}`,
       });
     } catch (error) {
@@ -111,10 +94,6 @@ export default function MemberStatusToggle({
 
   if (isOwner) {
     return <OwnerBadge />;
-  }
-
-  if (!canManage) {
-    return <StatusBadge status={status} />;
   }
 
   return (

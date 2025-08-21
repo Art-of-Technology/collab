@@ -107,6 +107,19 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
     );
   }
 
+  const getMemberCounts = (workspace: any) => {
+    if (!workspace || !workspace.members) return { active: 0, total: 0, hasInactive: false };
+
+    const activeMembers = workspace.members.filter((m: any) => m.status).length;
+    const totalMembers = workspace.members.length;
+
+    return {
+      active: activeMembers,
+      total: totalMembers,
+      hasInactive: totalMembers > activeMembers
+    };
+  }
+
   // Use the permissions returned from the server action
   const { isOwner, canManage } = localWorkspace || workspace || workspaceData;
 
@@ -165,22 +178,23 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
               {(localWorkspace?.members.some((m: any) => !m.status) || workspace?.members.some((m: any) => !m.status) || workspaceData.members.some((m: any) => !m.status)) && (
                 <span className="text-muted-foreground"> / {(localWorkspace?.members.length || workspace?.members.length || workspaceData.members.length) + 1} total</span>
               )}
-            {(() => {
-              const counts =
-                localWorkspace && localWorkspace.members
-                  ? getMemberCounts(localWorkspace)
-                  : workspace && workspace.members
-                  ? getMemberCounts(workspace)
-                  : getMemberCounts(workspaceData);
-              return (
-                <span>
-                  {counts.active} active
-                  {counts.hasInactive && (
-                    <span className="text-muted-foreground"> / {counts.total} total</span>
-                  )}
-                </span>
-              );
-            })()}
+              {(() => {
+                const counts =
+                  localWorkspace && localWorkspace.members
+                    ? getMemberCounts(localWorkspace)
+                    : workspace && workspace.members
+                      ? getMemberCounts(workspace)
+                      : getMemberCounts(workspaceData);
+                return (
+                  <span>
+                    {counts.active} active
+                    {counts.hasInactive && (
+                      <span className="text-muted-foreground"> / {counts.total} total</span>
+                    )}
+                  </span>
+                );
+              })()}
+            </span>
           </Button>
         </div>
       </div>
