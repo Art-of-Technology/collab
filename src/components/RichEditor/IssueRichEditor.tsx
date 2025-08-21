@@ -177,14 +177,12 @@ export function IssueRichEditor({
       if (selectedText.trim().length > 0) {
         setTimeout(() => {
           const coords = editor.view.coordsAtPos(from);
-          const containerRect = containerRef.current?.getBoundingClientRect();
-          if (containerRect) {
-            setFloatingMenuPosition({
-              top: coords.top - containerRect.top - 60,
-              left: Math.max(0, coords.left - containerRect.left - 100),
-            });
-            setShowFloatingMenu(true);
-          }
+          // Use viewport coordinates for a fixed-position, portaled menu
+          setFloatingMenuPosition({
+            top: Math.max(8, coords.top - 60),
+            left: Math.max(8, coords.left - 100),
+          });
+          setShowFloatingMenu(true);
         }, 10);
       }
     } else {
@@ -323,6 +321,9 @@ export function IssueRichEditor({
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
         additionalExtensions={additionalExtensions}
+        // Disable internal floating toolbar to avoid duplication; we'll render our own
+        toolbarMode="static"
+        showToolbar={false}
       />
 
       {/* Floating Selection Menu */}
