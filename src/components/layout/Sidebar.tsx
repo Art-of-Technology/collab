@@ -27,6 +27,7 @@ import {
   Timer,
   Bell,
   Search as SearchIcon,
+  Calendar,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { formatDistanceToNow } from "date-fns";
@@ -62,6 +63,7 @@ import { CommandMenu } from "@/components/ui/command-menu";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getRoleDisplayName } from "@/lib/permissions";
+import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface SidebarProps {
   pathname?: string;
@@ -85,6 +87,7 @@ export default function Sidebar({
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
   const { userPermissions } = usePermissions(currentWorkspace?.id);
+  const { canManageLeave } = useWorkspacePermissions();
 
   const formatGlobalRole = (role?: string) =>
     role
@@ -952,6 +955,15 @@ export default function Sidebar({
                 Your Profile
               </Link>
             </DropdownMenuItem>
+            {canManageLeave && <DropdownMenuItem asChild>
+              <Link
+                href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/leave-management` : "/leave-management"}
+                className="text-gray-300 hover:text-white"
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                Leave Management
+              </Link>
+            </DropdownMenuItem>}
             <DropdownMenuItem asChild>
               <Link href="/workspaces" className="text-gray-300 hover:text-white">
                 <Users className="mr-2 h-4 w-4" />
