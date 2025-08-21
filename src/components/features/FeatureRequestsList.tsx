@@ -143,45 +143,49 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6 px-1 sm:px-0">
-        <div className="flex flex-wrap gap-2 sm:gap-3 items-center justify-start">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Filter className="h-4 w-4" />
-            <span>Filter:</span>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between px-6 pt-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-center justify-start">
+          <div className="flex gap-2 w-full justify-between">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Filter className="h-4 w-4" />
+              <span>Filter:</span>
+            </div>
+            <Select value={status} onValueChange={handleStatusChange}>
+              <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
 
-          <div className="flex items-center gap-2 text-muted-foreground text-sm pl-2">
-            <ArrowUpDown className="h-4 w-4" />
-            <span>Sort:</span>
+          <div className="flex gap-2 w-full justify-between">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <ArrowUpDown className="h-4 w-4" />
+              <span>Sort:</span>
+            </div>
+            <Select value={orderBy} onValueChange={handleOrderChange}>
+              <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                {orderOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={orderBy} onValueChange={handleOrderChange}>
-            <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              {orderOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
-        <div className="text-sm bg-secondary/50 py-1  rounded-full text-secondary-foreground text-left tracking-tight sm:tracking-normal">
+        <div className="text-sm py-1 text-secondary-foreground text-left tracking-tight sm:tracking-normal">
           {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
         </div>
       </div>

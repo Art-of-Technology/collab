@@ -57,9 +57,9 @@ export default function LayoutWithSidebar({
           </div>
 
           {/* Main content + right sidebar */}
-          <main className="bg-[#090909] overflow-hidden flex">
-            <div className="flex-1 p-2 min-w-0">
-              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-hidden">
+          <main className="bg-[#090909] overflow-auto flex">
+            <div className="flex-1 p-2 min-w-0 overflow-auto">
+              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-auto">
                 {children}
               </div>
             </div>

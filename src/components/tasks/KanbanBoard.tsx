@@ -9,15 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Cog } from "lucide-react";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 import { useUpdateBoard } from "@/hooks/queries/useTask";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useRealtimeWorkspaceEvents } from "@/hooks/useRealtimeWorkspaceEvents";
 
 export default function KanbanBoard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { toast } = useToast();
   const { selectedBoard, refreshBoards } = useTasks();
   const { canManageBoard, isLoading: permissionsLoading } = useWorkspacePermissions();
+  const { currentWorkspace } = useWorkspace();
   
   // Use the update board mutation hook if we have a board selected
   const updateBoardMutation = useUpdateBoard(selectedBoard?.id || '');
+
+  // Realtime: subscribe to workspace events to invalidate queries on updates
+  useRealtimeWorkspaceEvents({
+    workspaceId: currentWorkspace?.id,
+    boardId: selectedBoard?.id,
+  });
 
   if (!selectedBoard) {
     return (

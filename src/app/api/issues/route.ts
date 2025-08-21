@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
+import { publishEvent } from '@/lib/redis';
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
@@ -318,6 +319,18 @@ export async function POST(request: NextRequest) {
 
     // Track creation as activity
     await trackCreation('ISSUE', created.id, session.user.id, workspaceId, undefined, created);
+
+    // Publish realtime creation event
+    await publishEvent(`workspace:${workspaceId}:events`, {
+      type: 'issue.created',
+      workspaceId,
+      projectId: created.projectId,
+      issueId: created.id,
+      issueKey: created.issueKey,
+      status: created.status ?? undefined,
+      statusId: created.statusId ?? undefined,
+      statusValue: created.statusValue ?? undefined,
+    });
 
     return NextResponse.json({ issue: created }, { status: 201 });
   } catch (error) {
