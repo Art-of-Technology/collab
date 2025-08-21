@@ -189,9 +189,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Use a transaction to ensure atomic counter increment and issue creation
-    // Normalize type: map Bug label to DEFECT enum and uppercase everything else
+    // Normalize type from client: accept "DEFECT" but store DB enum as "BUG"; uppercase others
     const normalizedTypeInput = typeof type === 'string' ? type.toUpperCase() : 'TASK';
-    const dbType: IssueType = normalizedTypeInput === 'DEFECT' ? 'BUG' : normalizedTypeInput as IssueType ;
+    const dbType = normalizedTypeInput === 'DEFECT' ? 'BUG' as IssueType : normalizedTypeInput as IssueType;
 
     const created = await prisma.$transaction(async (tx) => {
       // Get the latest project data with current counters
@@ -205,13 +205,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Find a unique issue key by checking existing keys and incrementing if needed
-      let nextNum = (currentProject.nextIssueNumbers as any)?.[type] || 1;
+      let nextNum = (currentProject.nextIssueNumbers as any)?.[dbType] || 1;
       let issueKey: string;
       let attempts = 0;
       const maxAttempts = 100; // Prevent infinite loop
 
       do {
-        issueKey = `${currentProject.issuePrefix}-${type.charAt(0)}${nextNum}`;
+        issueKey = `${currentProject.issuePrefix}-${dbType.charAt(0)}${nextNum}`;
         
         // Check if this key already exists
         const existingIssue = await tx.issue.findFirst({
