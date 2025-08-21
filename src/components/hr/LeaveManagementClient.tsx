@@ -10,7 +10,7 @@ import {
 } from "@/hooks/queries/useLeave";
 import { LeaveRequestsManager } from "@/components/hr/LeaveRequestsManager";
 import { Button } from "@/components/ui/button";
-import { Calendar, Settings} from "lucide-react";
+import { Calendar, Settings } from "lucide-react";
 import PageHeader from "../layout/PageHeader";
 
 interface LeaveManagementClientProps {
@@ -57,7 +57,7 @@ export default function LeaveManagementClient({ workspaceId }: LeaveManagementCl
         title="Leave Management" 
         subtitle="Review and manage leave requests from your team members." 
         icon={Calendar} 
-        actions={ 
+        actions={
           <Link href={`/${workspaceId}/leave-management/policies`}>
             <Button variant="outline">
               <Settings className="h-4 w-4" />

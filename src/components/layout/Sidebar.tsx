@@ -955,15 +955,17 @@ export default function Sidebar({
                 Your Profile
               </Link>
             </DropdownMenuItem>
-            {canManageLeave && <DropdownMenuItem asChild>
-              <Link
-                href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/leave-management` : "/leave-management"}
-                className="text-gray-300 hover:text-white"
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                Leave Management
-              </Link>
-            </DropdownMenuItem>}
+            {canManageLeave && (
+              <DropdownMenuItem asChild>
+                <Link
+                  href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/leave-management` : "/leave-management"}
+                  className="text-gray-300 hover:text-white"
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Leave Management
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link href="/workspaces" className="text-gray-300 hover:text-white">
                 <Users className="mr-2 h-4 w-4" />
