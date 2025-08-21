@@ -165,7 +165,22 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
               {(localWorkspace?.members.some((m: any) => !m.status) || workspace?.members.some((m: any) => !m.status) || workspaceData.members.some((m: any) => !m.status)) && (
                 <span className="text-muted-foreground"> / {(localWorkspace?.members.length || workspace?.members.length || workspaceData.members.length) + 1} total</span>
               )}
-            </span>
+            {(() => {
+              const counts =
+                localWorkspace && localWorkspace.members
+                  ? getMemberCounts(localWorkspace)
+                  : workspace && workspace.members
+                  ? getMemberCounts(workspace)
+                  : getMemberCounts(workspaceData);
+              return (
+                <span>
+                  {counts.active} active
+                  {counts.hasInactive && (
+                    <span className="text-muted-foreground"> / {counts.total} total</span>
+                  )}
+                </span>
+              );
+            })()}
           </Button>
         </div>
       </div>
