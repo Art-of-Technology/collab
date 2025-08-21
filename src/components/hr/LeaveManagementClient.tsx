@@ -10,7 +10,8 @@ import {
 } from "@/hooks/queries/useLeave";
 import { LeaveRequestsManager } from "@/components/hr/LeaveRequestsManager";
 import { Button } from "@/components/ui/button";
-import { Settings} from "lucide-react";
+import { Calendar, Settings } from "lucide-react";
+import PageHeader from "../layout/PageHeader";
 
 interface LeaveManagementClientProps {
   workspaceId: string;
@@ -51,13 +52,12 @@ export default function LeaveManagementClient({ workspaceId }: LeaveManagementCl
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Leave Management</h1>
-          <p className="text-gray-600 mt-2">Review and manage leave requests from your team members.</p>
-        </div>
-        <div className="flex items-center space-x-2 mt-1">
+    <div className="mx-auto">
+      <PageHeader 
+        title="Leave Management" 
+        subtitle="Review and manage leave requests from your team members." 
+        icon={Calendar} 
+        actions={
           <Link href={`/${workspaceId}/leave-management/policies`}>
             <Button variant="outline">
               <Settings className="h-4 w-4" />
@@ -65,20 +65,21 @@ export default function LeaveManagementClient({ workspaceId }: LeaveManagementCl
                 Manage Policies
               </span>
             </Button>
-          </Link>
-        </div>
-      </div>
+          </Link>} 
+        />
 
-      <LeaveRequestsManager
-        data={paginatedData}
-        summaryData={summaryData}
-        isLoading={isLoading || isLoadingSummary}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        onPageChange={handlePageChange}
-        onStatusFilterChange={handleStatusFilterChange}
-        currentStatusFilter={statusFilter}
-      />
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
+        <LeaveRequestsManager
+          data={paginatedData}
+          summaryData={summaryData}
+          isLoading={isLoading || isLoadingSummary}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onPageChange={handlePageChange}
+          onStatusFilterChange={handleStatusFilterChange}
+          currentStatusFilter={statusFilter}
+        />
+      </div>
     </div>
   );
 }
