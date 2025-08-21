@@ -65,11 +65,11 @@ export function TimesheetSummaryCards({ summary }: TimesheetSummaryCardsProps) {
       {summaryCards.map((card, index) => (
         <Card key={index} className="hover:shadow-lg hover:scale-[1.02] transition-all duration-200 border-l-4 border-l-transparent hover:border-l-blue-500 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pr-4 relative">
+            <CardTitle className={`text-sm font-medium text-muted-foreground ${card.title === 'Productivity' ? 'mr-2 xl:mr-4' : ''}`}>
               {card.title}
             </CardTitle>
-            <div className={`${card.bgColor} p-3 rounded-xl shadow-sm ${card.color} relative`}>
+            <div className={`${card.bgColor} p-2 rounded-xl shadow-sm ${card.color} relative`}>
               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
               <div className="relative">
                 {card.icon}
@@ -119,8 +119,8 @@ export function TimesheetSummaryCards({ summary }: TimesheetSummaryCardsProps) {
         <Card className="md:col-span-2 lg:col-span-4 border-l-4 border-l-green-500 bg-gradient-to-r from-green-50/50 to-transparent dark:from-green-950/20 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent" />
           <CardContent className="pt-6 relative">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <div className="h-10 w-10 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm flex items-center justify-center">
@@ -133,7 +133,7 @@ export function TimesheetSummaryCards({ summary }: TimesheetSummaryCardsProps) {
                     <p className="text-xs text-muted-foreground">Currently active work</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-2">
                   <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200 shadow-sm">
                     <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse mr-2" />
                     {summary.totalActiveTasks} active
