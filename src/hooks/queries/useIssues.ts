@@ -61,7 +61,9 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
       return response.json();
     },
     enabled: !!workspaceId,
-    staleTime: 5000, // 5 seconds to allow optimistic updates to show
+    staleTime: 1000 * 5,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

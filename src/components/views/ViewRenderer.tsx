@@ -58,6 +58,7 @@ import { useProjects } from '@/hooks/queries/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import React, { useEffect } from 'react';
+import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
 
@@ -203,6 +204,9 @@ export default function ViewRenderer({
       window.removeEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
     };
   }, [view.id, queryClient]);
+
+  // Realtime: subscribe to workspace-level events to keep issues and positions fresh
+  useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
 
   // Temporary state for filters and display (resets on refresh)
   const [tempFilters, setTempFilters] = useState<Record<string, string[]>>({});

@@ -23,6 +23,7 @@ import { motion } from "framer-motion";
 import { urls } from "@/lib/url-resolver";
 import { BoardFollowButton } from "@/components/boards/BoardFollowButton";
 import { useInvalidateBoardFollowQueries } from "@/hooks/queries/useBoardFollow";
+import { useRealtimeWorkspaceEvents } from "@/hooks/useRealtimeWorkspaceEvents";
 
 export default function TasksHeader() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
@@ -36,6 +37,8 @@ export default function TasksHeader() {
   const searchParams = useSearchParams();
   const invalidateBoardFollowQueries = useInvalidateBoardFollowQueries();
   const previousBoardIdRef = useRef<string | null>(null);
+  // Keep header-related data fresh when boards update elsewhere
+  useRealtimeWorkspaceEvents({ workspaceId: currentWorkspace?.id, boardId: selectedBoardId });
 
   // Fetch task boards for the current workspace
   const { data: taskBoards } = useTaskBoards({
