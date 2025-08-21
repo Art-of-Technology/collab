@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from "@/lib/session";
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
-import { stat } from 'fs';
 
 // GET /api/workspaces/[workspaceId]/members - Get all members of a workspace
 export async function GET(
