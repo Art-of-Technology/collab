@@ -91,7 +91,7 @@ export default function MemberStatusToggle({
       toast({
         title: "Status Updated",
         description: `${memberName} is now ${newStatus ? "active" : "inactive"
-          }`,
+        description: `${memberName} is now ${newStatus ? "active" : "inactive"}`,
       });
     } catch (error) {
       console.error("Error updating member status:", error);
