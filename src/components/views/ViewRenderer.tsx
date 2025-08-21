@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -122,6 +122,8 @@ export default function ViewRenderer({
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
+  const pendingColumnOrdersRef = useRef<Record<string, number>>({});
+  const commitColumnOrderRef = useRef<any>(null);
   
   // ViewFilters context
   const {
@@ -682,6 +684,49 @@ export default function ViewRenderer({
     }
   };
 
+  // Persist Kanban column order (project statuses) with debounce batching
+  const handleColumnUpdate = (columnId: string, updates: any) => {
+    // columnId here is the internal status name (e.g., 'in_progress')
+    if (typeof updates?.order === 'number') {
+      pendingColumnOrdersRef.current[columnId] = updates.order;
+
+      if (commitColumnOrderRef.current) {
+        clearTimeout(commitColumnOrderRef.current);
+      }
+
+      commitColumnOrderRef.current = setTimeout(async () => {
+        const orders = pendingColumnOrdersRef.current;
+        pendingColumnOrdersRef.current = {};
+
+        try {
+          const projectIdsToUpdate = (tempProjectIds.length > 0
+            ? tempProjectIds
+            : view.projects.map(p => p.id));
+
+          const updatesArray = Object.entries(orders)
+            .map(([name, order]) => ({ name, order }))
+            .sort((a, b) => a.order - b.order);
+
+          await Promise.all(projectIdsToUpdate.map((projectId) =>
+            fetch(`/api/projects/${projectId}/statuses/reorder`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: updatesArray })
+            })
+          ));
+
+          // Refresh statuses used by Kanban columns
+          queryClient.invalidateQueries({ queryKey: ['multiple-project-statuses'] });
+
+          toast({ title: 'Columns reordered', description: 'Saved new column order' });
+        } catch (error) {
+          console.error('Failed to reorder columns:', error);
+          toast({ title: 'Error', description: 'Failed to save column order', variant: 'destructive' });
+        }
+      }, 150);
+    }
+  };
+
   const renderViewContent = () => {
     const sharedProps = {
       view: {
@@ -716,6 +761,7 @@ export default function ViewRenderer({
       onSubIssuesToggle: () => setTempShowSubIssues(prev => !prev),
       // Kanban callbacks
       onIssueUpdate: handleIssueUpdate,
+      onColumnUpdate: handleColumnUpdate,
     };
 
     switch (tempDisplayType) {
