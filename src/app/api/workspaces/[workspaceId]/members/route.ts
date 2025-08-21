@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from "@/lib/session";
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
+import { stat } from 'fs';
 
 // GET /api/workspaces/[workspaceId]/members - Get all members of a workspace
 export async function GET(
@@ -30,6 +31,7 @@ export async function GET(
         where: {
           userId: user.id,
           workspaceId,
+          status: true, // Ensure the member is active
         },
       }),
       prisma.workspace.findFirst({
@@ -48,6 +50,7 @@ export async function GET(
     const members = await prisma.workspaceMember.findMany({
       where: {
         workspaceId,
+        status: true, // Only active members
       },
       include: {
         user: {

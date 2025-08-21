@@ -382,7 +382,7 @@ model WorkspaceMember {
   role        String    @default("MEMBER")
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
+  status Boolean @default(true) // Active status of the member
   @@unique([userId, workspaceId])
 }
 
