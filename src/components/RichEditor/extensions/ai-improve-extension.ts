@@ -1,4 +1,5 @@
 import { Extension } from '@tiptap/core';
+import { extractSelectionAsMarkdown } from '../utils/ai-improve';
 
 export interface AIImproveOptions {
   onAiImprove?: (text: string) => Promise<string>;
@@ -52,22 +53,45 @@ export const AIImproveExtension = Extension.create<AIImproveOptions>({
             return false;
           }
 
+          // Extract both plain text and markdown for comparison
           const selectedText = editor.state.doc.textBetween(from, to, ' ');
-          console.log('Selected text:', selectedText);
+          
+          // Extract markdown-formatted content
+          const selectedMarkdown = extractSelectionAsMarkdown(editor, from, to);
+          
+          console.log('AIImproveExtension: Selected content details:', {
+            plainText: selectedText,
+            markdown: selectedMarkdown,
+            from,
+            to,
+            length: selectedText.length,
+            trimmedLength: selectedText.trim().length,
+            editorHTML: editor.getHTML(),
+            editorText: editor.getText()
+          });
           
           if (!selectedText.trim()) {
             console.log('AIImproveExtension: No text selected, returning false');
             return false;
           }
 
-          // Save the selection position
-          this.storage.savedSelection = { from, to };
+          // Use markdown if it's different from plain text (has formatting), otherwise use plain text
+          const contentToImprove = selectedMarkdown && selectedMarkdown !== selectedText ? selectedMarkdown : selectedText;
+          const isMarkdown = selectedMarkdown && selectedMarkdown !== selectedText;
+          
+          // Save the selection position and original text
+          this.storage.savedSelection = { from, to, originalText: selectedText };
           this.storage.isImproving = true;
           
-          console.log('AIImproveExtension: Calling onAiImprove with text:', selectedText);
+          console.log('AIImproveExtension: Saved selection:', this.storage.savedSelection);
+          console.log('AIImproveExtension: Sending to AI:', { 
+            content: contentToImprove, 
+            isMarkdown,
+            originalText: selectedText 
+          });
 
-          // Call the AI improve function
-          this.options.onAiImprove(selectedText)
+          // Call the AI improve function with the formatted content
+          this.options.onAiImprove(contentToImprove)
             .then((result) => {
               console.log('AIImproveExtension: AI improve result received:', result);
               this.storage.improvedText = result;

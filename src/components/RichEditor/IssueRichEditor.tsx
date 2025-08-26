@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
 import { SlashCommandsExtension, SubIssueCreationExtension, SaveDiscardExtension, AIImproveExtension } from './extensions';
+import { parseMarkdownToTipTap } from './utils/ai-improve';
 import {
   Heading1,
   Heading2,
@@ -142,6 +143,7 @@ export function IssueRichEditor({
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [improvedText, setImprovedText] = useState<string>('');
   const [improvePosition, setImprovePosition] = useState({ top: 0, left: 0 });
+  const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
 
   // Get filtered commands based on query
   const filteredCommands = DEFAULT_SLASH_COMMANDS.filter(cmd => 
@@ -234,27 +236,47 @@ export function IssueRichEditor({
       return;
     }
 
-    const extension = editor.extensionManager.extensions.find((ext: any) => ext.name === 'aiImprove');
-    console.log('AIImprove extension found:', !!extension);
-    console.log('Extension storage:', extension?.storage);
-    console.log('Improved text:', improvedText);
-    console.log('Improved text type:', typeof improvedText);
-    console.log('Improved text length:', improvedText.length);
+    console.log('Apply improvement - current state:', {
+      improvedText,
+      savedSelection,
+      hasImprovedText: !!improvedText,
+      hasSavedSelection: !!savedSelection
+    });
     
-    if (extension && extension.storage.savedSelection && improvedText) {
-      const { from, to } = extension.storage.savedSelection;
-      console.log('Saved selection:', { from, to });
+    if (savedSelection && improvedText) {
+      const { from, to, originalText } = savedSelection;
+      console.log('Saved selection:', { from, to, originalText });
       
       // Get current selection to compare
       const currentSelection = editor.state.selection;
       console.log('Current selection:', { from: currentSelection.from, to: currentSelection.to });
       
       try {
+        // Check what type of content we're replacing
+        const originalTextContent = editor.state.doc.textBetween(from, to, ' ');
+        const isSimpleText = originalTextContent === originalText && !originalTextContent.includes('\n');
+        
+        console.log('Content replacement context:', {
+          originalText,
+          originalTextContent,
+          isSimpleText,
+          improvedText,
+          selectionRange: { from, to }
+        });
+        
+        // Parse the improved text as markdown to HTML for better formatting
+        const htmlContent = parseMarkdownToTipTap(improvedText);
+        console.log('Parsed improved content:', { original: improvedText, parsed: htmlContent });
+        
+        // For simple text replacements, try to use plain text first to avoid extra formatting
+        const contentToInsert = isSimpleText && !htmlContent.includes('<') ? improvedText : htmlContent;
+        console.log('Content to insert:', contentToInsert);
+        
         // Method 1: Try direct replacement
         let result = editor.chain()
           .focus()
           .setTextSelection({ from, to })
-          .insertContent(improvedText)
+          .insertContent(contentToInsert)
           .run();
         
         console.log('Method 1 - Direct replacement result:', result);
@@ -266,7 +288,7 @@ export function IssueRichEditor({
             .focus()
             .setTextSelection({ from, to })
             .deleteSelection()
-            .insertContent(improvedText)
+            .insertContent(contentToInsert)
             .run();
           
           console.log('Method 2 - Delete then insert result:', result);
@@ -275,32 +297,32 @@ export function IssueRichEditor({
         // If still not working, try method 3: replace range
         if (!result) {
           console.log('Trying method 3: replace range');
-          const replaceResult = editor.commands.insertContentAt({ from, to }, improvedText);
+          const replaceResult = editor.commands.insertContentAt({ from, to }, contentToInsert);
           console.log('Method 3 result:', replaceResult);
         }
         
-        // Method 4: Try with plain text if HTML parsing is the issue
-        if (!result) {
-          console.log('Trying method 4: plain text insertion');
+        // Method 4: Try with plain text only if we were using HTML
+        if (!result && contentToInsert !== improvedText) {
+          console.log('Trying method 4: fallback to plain text');
           const textResult = editor.chain()
+            .focus()
+            .setTextSelection({ from, to })
+            .deleteSelection()
+            .insertContent(improvedText)
+            .run();
+          console.log('Method 4 result:', textResult);
+        }
+        
+        // Method 5: Final fallback - structured text insertion
+        if (!result) {
+          console.log('Trying method 5: structured text replacement');
+          const testResult = editor.chain()
             .focus()
             .setTextSelection({ from, to })
             .deleteSelection()
             .insertContent({ type: 'text', text: improvedText })
             .run();
-          console.log('Method 4 result:', textResult);
-        }
-        
-        // Method 5: Test with simple text to see if insertion works at all
-        if (!result) {
-          console.log('Trying method 5: simple test insertion');
-          const testResult = editor.chain()
-            .focus()
-            .setTextSelection({ from, to })
-            .deleteSelection()
-            .insertContent('TEST REPLACEMENT')
-            .run();
-          console.log('Method 5 test result:', testResult);
+          console.log('Method 5 result:', testResult);
         }
         
       } catch (error) {
@@ -308,8 +330,7 @@ export function IssueRichEditor({
       }
     } else {
       console.log('Missing requirements:', {
-        hasExtension: !!extension,
-        hasSavedSelection: !!(extension?.storage.savedSelection),
+        hasSavedSelection: !!savedSelection,
         hasImprovedText: !!improvedText
       });
     }
@@ -317,12 +338,14 @@ export function IssueRichEditor({
     // Reset state
     setShowImprovePopover(false);
     setImprovedText('');
-  }, [improvedText]);
+    setSavedSelection(null);
+  }, [improvedText, savedSelection]);
 
   // Handle canceling AI improvement
   const handleCancelImprovement = useCallback(() => {
     setShowImprovePopover(false);
     setImprovedText('');
+    setSavedSelection(null);
   }, []);
 
   // Handle sub-issue creation
@@ -392,14 +415,15 @@ export function IssueRichEditor({
 
     const handleAiImproveReady = (event: CustomEvent) => {
       console.log('AI Improve Ready event received:', event.detail);
-      const { improvedText, savedSelection } = event.detail;
+      const { improvedText, savedSelection: eventSavedSelection } = event.detail;
       setImprovedText(improvedText);
+      setSavedSelection(eventSavedSelection);
       setIsImproving(false);
       setShowFloatingMenu(false); // Hide floating menu when showing popover
       
       // Calculate position for the popover
-      if (savedSelection) {
-        const coords = editor.view.coordsAtPos(savedSelection.from);
+      if (eventSavedSelection) {
+        const coords = editor.view.coordsAtPos(eventSavedSelection.from);
         setImprovePosition({
           top: coords.top - 100,
           left: coords.left,
