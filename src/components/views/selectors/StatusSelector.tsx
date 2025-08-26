@@ -27,8 +27,8 @@ export function StatusSelector({
 
   const getStatusOptions = useCallback(() => {
     const flatStatuses = projects.map(p => p.statuses || []).flat();
-    const sortedStatuses = flatStatuses.reduce((acc: any[], cur: any) => acc.find((a: any) => a.name === cur.name) ? acc : [...acc, cur], []);
-    return sortedStatuses;
+    const uniqueStatuses = Array.from(new Map(flatStatuses.map(s => [s.name, s])).values());
+    return uniqueStatuses;
   }, [projects]);
 
   const selectedStatuses = value.map(v => {
