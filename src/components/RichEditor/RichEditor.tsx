@@ -519,11 +519,18 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
       {/* Editor Container */}
       <div 
-        className={cn("relative cursor-text flex-1", toolbarMode === 'static' ? "p-3" : "")} 
+        className={cn(
+          "relative cursor-text flex-1", 
+          toolbarMode === 'static' ? "p-0" : "",
+          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : ""
+        )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
         onKeyDown={onKeyDown}
-        style={{ minHeight: toolbarMode === 'static' ? 'auto' : minHeight }}
+        style={{ 
+          minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
+          maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined
+        }}
       >
         {/* Custom Placeholder Overlay */}
         {isEmpty && !readOnly && (
@@ -548,7 +555,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             "focus-within:outline-none"
           )}
           style={{ 
-            minHeight: toolbarMode === 'static' ? '100px' : minHeight,
+            minHeight: toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight),
             padding: toolbarMode === 'static' ? '0' : '0' // Remove any default padding
           }}
         />
@@ -556,7 +563,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         {/* Global CSS for TipTap styling */}
         <style jsx global>{`
           .ProseMirror {
-            min-height: ${toolbarMode === 'static' ? '100px' : minHeight};
+            min-height: ${toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight)};
             outline: none;
             padding: 0;
             line-height: 1.5;

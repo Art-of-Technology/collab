@@ -265,13 +265,13 @@ export default function NewIssueModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden flex flex-col">
         <VisuallyHidden>
           <DialogTitle>New issue</DialogTitle>
         </VisuallyHidden>
         
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a] flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-sm bg-purple-500 flex items-center justify-center">
               <span className="text-xs text-white font-medium">W</span>
@@ -287,7 +287,7 @@ export default function NewIssueModal({
         </div>
 
         {/* Content */}
-        <div className="px-4 py-4">
+        <div className="px-4 py-4 flex-1 min-h-0">
           {/* Title Input - No borders on focus */}
           <IssueTitleInput
             ref={titleRef}
@@ -321,7 +321,7 @@ export default function NewIssueModal({
             enableFloatingMenu={true}
             enableSubIssueCreation={true}
             minHeight="200px"
-            maxHeight="400px"
+            maxHeight="300px"
           />
 
           {/* Properties */}
@@ -376,34 +376,35 @@ export default function NewIssueModal({
             className="mb-6"
           />
 
-          {/* Actions */}
-          <div className="flex items-center justify-between pt-2 border-t border-[#1a1a1a]">
-            <button
-              type="button"
-              onClick={() => setCreateMore(!createMore)}
-              className="flex items-center gap-2 text-[#6e7681] hover:text-white transition-colors"
-            >
-              <div className={cn(
-                "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                createMore 
-                  ? "bg-blue-500 border-blue-500" 
-                  : "border-[#333] hover:border-[#555]"
-              )}>
-                {createMore && <Plus className="h-2.5 w-2.5 text-white" />}
-              </div>
-              <span className="text-sm">Create more</span>
-            </button>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[#6e7681]">⌘↵</span>
-              <Button 
-                onClick={handleCreate} 
-                disabled={!canCreate || creating || createIssueMutation.isPending}
-                className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium"
-              >
-                {creating || createIssueMutation.isPending ? "Creating..." : "Create issue"}
-              </Button>
+        </div>
+
+        {/* Actions - Fixed at bottom */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-[#1a1a1a] flex-shrink-0 bg-[#0e0e0e]">
+          <button
+            type="button"
+            onClick={() => setCreateMore(!createMore)}
+            className="flex items-center gap-2 text-[#6e7681] hover:text-white transition-colors"
+          >
+            <div className={cn(
+              "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+              createMore 
+                ? "bg-blue-500 border-blue-500" 
+                : "border-[#333] hover:border-[#555]"
+            )}>
+              {createMore && <Plus className="h-2.5 w-2.5 text-white" />}
             </div>
+            <span className="text-sm">Create more</span>
+          </button>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#6e7681]">⌘↵</span>
+            <Button 
+              onClick={handleCreate} 
+              disabled={!canCreate || creating || createIssueMutation.isPending}
+              className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium"
+            >
+              {creating || createIssueMutation.isPending ? "Creating..." : "Create issue"}
+            </Button>
           </div>
         </div>
       </DialogContent>
