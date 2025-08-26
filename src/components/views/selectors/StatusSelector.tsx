@@ -96,7 +96,8 @@ export function StatusSelector({
           ) : (
             <>
               <div className="flex items-center gap-0.5">
-                  return <div key={status.id}>{statusIcon(status)}</div>;
+                {selectedStatuses.slice(0, 2).map((status) => {
+                  return <span key={status.id}>{statusIcon(status)}</span>
                 })}
                 {selectedStatuses.length > 2 && (
                   <div className="h-2.5 w-2.5 rounded-full bg-[#404040] flex items-center justify-center">
