@@ -546,14 +546,6 @@ export function IssueRichEditor({
         />
       )}
       
-      {/* Debug info */}
-      {process.env.NODE_ENV === 'development' && showImprovePopover && (
-        <div className="fixed top-4 right-4 bg-red-500 text-white p-2 text-xs z-[99999]">
-          Popover should be visible: {showImprovePopover.toString()}<br/>
-          Improved text length: {improvedText.length}<br/>
-          Position: {improvePosition.top}, {improvePosition.left}
-        </div>
-      )}
     </div>
   );
 }
