@@ -42,12 +42,7 @@
   }
 
   .sidebar-toggle {
-    left: calc(var(--sidebar-width) - 1px);
     transition: left 200ms ease, transform 200ms ease, background 150ms ease;
-  }
-
-  .app-sidebar[data-collapsed="true"] ~ main .sidebar-toggle {
-    left: calc(var(--sidebar-closed) - 1px);
   }
 }
 
