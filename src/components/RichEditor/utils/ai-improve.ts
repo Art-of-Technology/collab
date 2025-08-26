@@ -152,7 +152,9 @@ export async function builtInAiImprove(text: string): Promise<string> {
   if (!text.trim()) return text;
 
   try {
-    console.log('builtInAiImprove: Sending request to API with text:', text);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('builtInAiImprove: Sending request to API with text:', text);
+    }
     
     const response = await fetch("/api/ai/improve", {
       method: "POST",
