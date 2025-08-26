@@ -112,9 +112,15 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
     return (
       <div 
         className={cn(
-          "group flex items-center px-6 py-3 border-b border-[#1f1f1f] transition-all duration-150 cursor-pointer",
-          "hover:bg-[#0f1011] hover:border-[#333]",
-          hoveredProjectId === project.id && "bg-[#0f1011]"
+          "group relative cursor-pointer transition-all duration-200",
+          // Mobile-first: Card-like design with glassmorphism
+          "mx-3 mb-3 p-4 rounded-xl",
+          "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
+          "border border-white/10 hover:border-white/20",
+          // Desktop: More compact list style
+          "md:mx-0 md:mb-0 md:p-3 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
+          "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]",
+          hoveredProjectId === project.id && "md:bg-[#0f1011]"
         )}
         onMouseEnter={() => setHoveredProjectId(project.id)}
         onMouseLeave={() => setHoveredProjectId(null)}
@@ -125,127 +131,254 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
           }
         }}
       >
-        {/* Status Icon */}
-        <div className="flex items-center w-6 mr-3 flex-shrink-0">
-          {getProjectStatusIcon(project)}
-        </div>
-
-        {/* Project Icon */}
-        <div className="flex items-center w-8 mr-3 flex-shrink-0">
-          <div 
-            className="w-6 h-6 rounded flex items-center justify-center"
-            style={{ backgroundColor: project.color || '#6b7280' }}
-          >
-            <FolderOpen className="h-3.5 w-3.5 text-white" />
+        {/* Mobile Layout */}
+        <div className="md:hidden">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* Status Icon */}
+              <div className="flex items-center shrink-0">
+                {getProjectStatusIcon(project)}
+              </div>
+              
+              {/* Project Icon */}
+              <div 
+                className="w-6 h-6 rounded flex items-center justify-center shrink-0"
+                style={{ backgroundColor: project.color || '#6b7280' }}
+              >
+                <FolderOpen className="h-3.5 w-3.5 text-white" />
+              </div>
+              
+              {/* Project Name */}
+              <span className="text-white text-sm font-medium truncate">
+                {project.name}
+              </span>
+            </div>
+            
+            {/* Actions */}
+            <div className="flex-shrink-0 relative" ref={dropdownRef}>
+              <button 
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setDropdownOpen(!dropdownOpen);
+                }}
+              >
+                <MoreHorizontal className="h-4 w-4 text-gray-400" />
+              </button>
+              
+              {dropdownOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-black/90 backdrop-blur-xl border border-white/20 rounded-md shadow-lg z-[1000]">
+                  <div className="py-1">
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(false);
+                        router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`);
+                      }}
+                    >
+                      Settings
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(false);
+                        // Add duplicate functionality here
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                    <div className="h-px bg-white/20 my-1" />
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-white/10 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(false);
+                        // Add archive functionality here
+                      }}
+                    >
+                      Archive project
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+          
+          {/* Description */}
+          {project.description && (
+            <p className="text-gray-500 text-xs mb-2 line-clamp-2">
+              {project.description}
+            </p>
+          )}
+          
+          {/* Stats and metadata row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Issues Count */}
+              <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+                <CheckSquare className="h-3 w-3" />
+                <span className="text-xs font-medium">{project._count?.issues || 0}</span>
+              </div>
 
-        {/* Project Name and Description */}
-        <div className="flex-1 min-w-0 mr-4">
-          <div className="flex items-center gap-2">
-            <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
-              {project.name}
+              {/* Members Count */}
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-md">
+                <Users className="h-3 w-3" />
+                <span className="text-xs font-medium">{project._count?.members || 0}</span>
+              </div>
+
+              {/* Active Status */}
+              <Badge className="h-6 px-2 text-xs font-medium leading-none bg-green-500/30 text-green-400 border-0 rounded-sm">
+                Active
+              </Badge>
+
+              {/* Progress Badge */}
+              {totalIssues > 0 && (
+                <Badge 
+                  className="h-6 px-2 text-xs font-medium leading-none border-0 rounded-md"
+                  style={{ 
+                    backgroundColor: (project.color || '#6b7280') + '30',
+                    color: project.color || '#8b949e'
+                  }}
+                >
+                  {Math.round(progress)}%
+                </Badge>
+              )}
+            </div>
+            
+            {/* Updated Date */}
+            <span className="text-gray-500 text-xs">
+              {format(new Date(project.updatedAt), 'MMM d')}
             </span>
           </div>
-          {project.description && (
-            <div className="text-xs text-[#8b949e] mt-0.5 truncate">
-              {project.description}
-            </div>
-          )}
         </div>
 
-        {/* Stats Section */}
-        <div className="flex items-center gap-3 flex-shrink-0 mr-4">
-          {/* Issues Count */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
-            <CheckSquare className="h-3 w-3" />
-            <span className="text-[10px] font-medium">{totalIssues}</span>
+        {/* Desktop Layout - Original structure */}
+        <div className="hidden md:flex md:items-center">
+          {/* Status Icon */}
+          <div className="flex items-center w-6 mr-3 flex-shrink-0">
+            {getProjectStatusIcon(project)}
           </div>
 
-          {/* Members Count */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-md">
-            <Users className="h-3 w-3" />
-            <span className="text-[10px] font-medium">{project._count?.members || 0}</span>
+          {/* Project Icon */}
+          <div className="flex items-center w-8 mr-3 flex-shrink-0">
+            <div 
+              className="w-6 h-6 rounded flex items-center justify-center"
+              style={{ backgroundColor: project.color || '#6b7280' }}
+            >
+              <FolderOpen className="h-3.5 w-3.5 text-white" />
+            </div>
           </div>
 
-          {/* Progress Badge */}
-          {totalIssues > 0 && (
-            <Badge 
-              className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
-              style={{ 
-                backgroundColor: (project.color || '#6b7280') + '30',
-                color: project.color || '#8b949e'
+          {/* Project Name and Description */}
+          <div className="flex-1 min-w-0 mr-4">
+            <div className="flex items-center gap-2">
+              <span className="text-white text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
+                {project.name}
+              </span>
+            </div>
+            {project.description && (
+              <div className="text-xs text-gray-500 mt-0.5 truncate">
+                {project.description}
+              </div>
+            )}
+          </div>
+
+          {/* Stats Section */}
+          <div className="flex items-center gap-3 flex-shrink-0 mr-4">
+            {/* Issues Count */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+              <CheckSquare className="h-3 w-3" />
+              <span className="text-[10px] font-medium">{totalIssues}</span>
+            </div>
+
+            {/* Members Count */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-md">
+              <Users className="h-3 w-3" />
+              <span className="text-[10px] font-medium">{project._count?.members || 0}</span>
+            </div>
+
+            {/* Progress Badge */}
+            {totalIssues > 0 && (
+              <Badge 
+                className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
+                style={{ 
+                  backgroundColor: (project.color || '#6b7280') + '30',
+                  color: project.color || '#8b949e'
+                }}
+              >
+                {Math.round(progress)}%
+              </Badge>
+            )}
+
+            {/* Active Status */}
+            <Badge className="h-4 px-1.5 text-[9px] font-medium leading-none bg-green-500/30 text-green-400 border-0 rounded-sm">
+              Active
+            </Badge>
+          </div>
+
+          {/* Updated Date */}
+          <div className="flex-shrink-0 w-16 mr-3">
+            <span className="text-gray-500 text-xs">
+              {format(new Date(project.updatedAt), 'MMM d')}
+            </span>
+          </div>
+
+          {/* Actions Menu */}
+          <div className="flex-shrink-0 relative" ref={dropdownRef}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="opacity-0 group-hover:opacity-100 h-6 w-6 text-gray-400 hover:text-white hover:bg-[#2a2a2a]"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setDropdownOpen(!dropdownOpen);
               }}
             >
-              {Math.round(progress)}%
-            </Badge>
-          )}
-
-          {/* Active Status */}
-          <Badge className="h-4 px-1.5 text-[9px] font-medium leading-none bg-green-500/30 text-green-400 border-0 rounded-sm">
-            Active
-          </Badge>
-        </div>
-
-        {/* Updated Date */}
-        <div className="flex-shrink-0 w-16 mr-3">
-          <span className="text-[#6e7681] text-xs">
-            {format(new Date(project.updatedAt), 'MMM d')}
-          </span>
-        </div>
-
-        {/* Actions Menu */}
-        <div className="flex-shrink-0 relative" ref={dropdownRef}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="opacity-0 group-hover:opacity-100 h-6 w-6 text-[#666] hover:text-[#ccc] hover:bg-[#2a2a2a]"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              setDropdownOpen(!dropdownOpen);
-            }}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </Button>
-          
-          {dropdownOpen && (
-            <div className="absolute right-0 top-full mt-1 w-48 bg-[#090909] border border-[#1f1f1f] rounded-md shadow-lg z-[1000]">
-              <div className="py-1">
-                <button
-                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#1a1a1a] transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen(false);
-                    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`);
-                  }}
-                >
-                  Settings
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#1a1a1a] transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen(false);
-                    // Add duplicate functionality here
-                  }}
-                >
-                  Duplicate
-                </button>
-                <div className="h-px bg-[#1f1f1f] my-1" />
-                <button
-                  className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-[#1a1a1a] transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen(false);
-                    // Add archive functionality here
-                  }}
-                >
-                  Archive project
-                </button>
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+            
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-[#090909] border border-[#1f1f1f] rounded-md shadow-lg z-[1000]">
+                <div className="py-1">
+                  <button
+                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropdownOpen(false);
+                      router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`);
+                    }}
+                  >
+                    Settings
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#1a1a1a] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropdownOpen(false);
+                      // Add duplicate functionality here
+                    }}
+                  >
+                    Duplicate
+                  </button>
+                  <div className="h-px bg-[#1f1f1f] my-1" />
+                  <button
+                    className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-[#1a1a1a] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropdownOpen(false);
+                      // Add archive functionality here
+                    }}
+                  >
+                    Archive project
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -291,7 +424,7 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
       {/* Projects List Content */}
       <div className="flex-1 overflow-auto">
         {filteredProjects.length > 0 ? (
-          <div>
+          <div className="pb-20 md:pb-16 md:divide-y md:divide-[#1a1a1a]">
             {filteredProjects.map((project) => (
               <ProjectRow key={project.id} project={project} />
             ))}

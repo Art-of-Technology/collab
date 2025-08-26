@@ -59,7 +59,7 @@ import { useUiContext } from "@/context/UiContext";
 import { useMention } from "@/context/MentionContext";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { CommandMenu } from "@/components/ui/command-menu";
+
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getRoleDisplayName } from "@/lib/permissions";
@@ -69,16 +69,12 @@ interface SidebarProps {
   pathname?: string;
   isCollapsed?: boolean;
   toggleSidebar?: () => void;
-  commandMenuOpen?: boolean;
-  setCommandMenuOpen?: (open: boolean) => void;
 }
 
 export default function Sidebar({
   pathname = "",
   isCollapsed = false,
   toggleSidebar,
-  commandMenuOpen = false,
-  setCommandMenuOpen,
 }: SidebarProps) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -181,10 +177,7 @@ export default function Sidebar({
     return [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 4);
   }, [projects, projectSearchQuery]);
 
-  // Handle opening command menu
-  const handleOpenCommandMenu = () => {
-    setCommandMenuOpen?.(true);
-  };
+
 
   // Handle sign out from Navbar
   const handleSignOut = async () => {
@@ -369,8 +362,15 @@ export default function Sidebar({
               variant="ghost"
               size="icon"
               className="w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-              onClick={handleOpenCommandMenu}
-              title="Command Menu (Cmd+K)"
+              onClick={() => {
+                const event = new KeyboardEvent('keydown', {
+                  key: 'k',
+                  metaKey: true,
+                  bubbles: true
+                });
+                document.dispatchEvent(event);
+              }}
+              title="Search (Cmd+K)"
             >
               <SearchIcon className="h-4 w-4" />
             </Button>
@@ -572,8 +572,15 @@ export default function Sidebar({
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-              onClick={handleOpenCommandMenu}
-              title="Command Menu (Cmd+K)"
+              onClick={() => {
+                const event = new KeyboardEvent('keydown', {
+                  key: 'k',
+                  metaKey: true,
+                  bubbles: true
+                });
+                document.dispatchEvent(event);
+              }}
+              title="Search (Cmd+K)"
             >
               <SearchIcon className="h-4 w-4" />
             </Button>
@@ -1017,16 +1024,7 @@ export default function Sidebar({
         }}
       />
 
-      {/* Command Menu */}
-      {setCommandMenuOpen && (
-        <CommandMenu
-          open={commandMenuOpen}
-          onOpenChange={setCommandMenuOpen}
-          onCreateIssue={() => setShowNewIssueModal(true)}
-          onCreateView={() => setShowCreateViewModal(true)}
-          onCreateProject={() => setShowCreateProjectModal(true)}
-        />
-      )}
+
     </div>
   );
 }

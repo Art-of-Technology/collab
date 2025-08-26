@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
         id: user.id,
         type: 'user',
         title: user.name || user.email || 'Unknown User',
-        description: user.role ? `${user.role}${user.team ? ` • ${user.team}` : ''}` : user.team,
+        description: user.role ? `${user.role}${user.team ? ` • ${user.team}` : ''}` : user.team || undefined,
         url: `/${workspaceSlug}/profile/${user.id}`,
         metadata: { user }
       });
@@ -140,13 +140,26 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    // Search Views
+    // Search Views (only show views user can access)
     const views = await prisma.view.findMany({
       where: {
         workspaceId,
         OR: [
           { name: { contains: query, mode: 'insensitive' } },
           { description: { contains: query, mode: 'insensitive' } },
+        ],
+        AND: [
+          {
+            OR: [
+              { visibility: { not: 'PERSONAL' } },
+              { 
+                AND: [
+                  { visibility: 'PERSONAL' },
+                  { ownerId: currentUser.id }
+                ]
+              }
+            ]
+          }
         ]
       },
       select: {
@@ -156,6 +169,7 @@ export async function GET(req: NextRequest) {
         slug: true,
         displayType: true,
         visibility: true,
+        ownerId: true,
         _count: {
           select: { issuePositions: true }
         }
@@ -316,7 +330,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Sort results by relevance (exact matches first, then by type priority)
-    const typePriority = { issue: 1, project: 2, view: 3, user: 4, note: 5, post: 6, tag: 7 };
+    const typePriority = { user: 1, view: 2, issue: 3, project: 4, note: 5, post: 6, tag: 7 };
     
     results.sort((a, b) => {
       // Exact title matches first
@@ -329,9 +343,7 @@ export async function GET(req: NextRequest) {
       return (typePriority[a.type] || 10) - (typePriority[b.type] || 10);
     });
 
-    const finalResults = results.slice(0, limit);
-    console.log(`Search API: query="${query}", results=${finalResults.length}`, finalResults.map(r => ({ type: r.type, title: r.title })));
-    
+    const finalResults = results.slice(0, limit); 
     return NextResponse.json(finalResults);
   } catch (error) {
     console.error("Error searching content:", error);

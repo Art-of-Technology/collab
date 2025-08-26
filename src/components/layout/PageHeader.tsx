@@ -48,82 +48,178 @@ export default function PageHeader({
 }: PageHeaderProps) {
   return (
     <div className={cn(
-      "bg-[#101011] px-6 py-2",
-      showBorder && "border-b border-[#1a1a1a]",
+      // Base styling with glassmorphism
+      "backdrop-blur-xl border-white/10",
+      "bg-black/40 md:bg-[#101011]", // Glassmorphism on mobile, solid on desktop
+      
+      // Responsive padding and spacing
+      "px-4 py-3 md:px-6 md:py-2",
+      
+      // Border styling
+      showBorder && "border-b border-white/10 md:border-[#1a1a1a]",
+      
+      // Mobile-specific styling
+      "max-md:sticky max-md:top-0 max-md:z-40 max-md:shadow-lg",
+      
       className
-    )}>
+    )}
+    style={{
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    }}
+    >
       <div className="flex items-center justify-between">
         {/* Left Side */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             {/* Icon and Title */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
               {Icon && (
-                <Icon className="h-5 w-5 text-[#9ca3af]" />
+                <Icon className="h-4 w-4 md:h-5 md:w-5 text-gray-400 shrink-0" />
               )}
               {typeof title === 'string' ? (
-                <h1 className="text-xl font-semibold text-white">
+                <h1 className="text-lg md:text-xl font-semibold text-white truncate">
                   {title}
                 </h1>
               ) : (
-                title
+                <div className="min-w-0 flex-1">
+                  {title}
+                </div>
               )}
             </div>
             
-            {/* Subtitle/Count */}
+            {/* Subtitle/Count - Hide on small mobile */}
             {subtitle && (
-              <span className="text-[#666] text-sm">
+              <span className="text-gray-500 text-xs md:text-sm hidden sm:inline-block shrink-0">
                 {subtitle}
               </span>
             )}
           </div>
 
-          {/* Additional Left Content */}
-          {leftContent}
+          {/* Additional Left Content - Hide on mobile if too crowded */}
+          {leftContent && (
+            <div className="hidden md:block">
+              {leftContent}
+            </div>
+          )}
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-3">
-          {/* Search */}
-          {search}
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+          {/* Search - Responsive sizing */}
+          {search && (
+            <div className="hidden sm:block">
+              {search}
+            </div>
+          )}
 
-          {/* Actions */}
-          {actions}
+          {/* Actions - Compact on mobile */}
+          {actions && (
+            <div className="flex items-center gap-1.5 md:gap-2">
+              {actions}
+            </div>
+          )}
 
           {/* Additional Right Content */}
           {rightContent}
         </div>
       </div>
+      
+      {/* Mobile: Show subtitle below on small screens */}
+      {subtitle && (
+        <div className="sm:hidden mt-1">
+          <span className="text-gray-500 text-xs">
+            {subtitle}
+          </span>
+        </div>
+      )}
+      
+      {/* Mobile: Show left content below if present */}
+      {leftContent && (
+        <div className="md:hidden mt-2">
+          {leftContent}
+        </div>
+      )}
     </div>
   );
 }
 
-// Predefined button styles for consistency
+// Predefined button styles for consistency with mobile-first design
 export const pageHeaderButtonStyles = {
-  // Default ghost button style
-  ghost: "h-6 px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]",
+  // Default ghost button style - Mobile optimized
+  ghost: cn(
+    "h-7 px-2.5 md:h-6 md:px-2 text-xs",
+    "text-gray-400 hover:text-white",
+    "border border-white/10 hover:border-white/20",
+    "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
+    "rounded-lg transition-all duration-200"
+  ),
   
-  // Primary action button (green)
-  primary: "h-6 px-2 text-[#238636] hover:text-[#2ea043] text-xs border border-[#21262d] hover:border-[#238636] bg-[#0d1117] hover:bg-[#0d1721]",
+  // Primary action button (green) - Mobile optimized
+  primary: cn(
+    "h-7 px-2.5 md:h-6 md:px-2 text-xs",
+    "text-green-400 hover:text-green-300",
+    "border border-green-500/20 hover:border-green-400/30",
+    "bg-green-500/10 hover:bg-green-500/20 backdrop-blur-sm",
+    "rounded-lg transition-all duration-200"
+  ),
   
-  // Update/Save button (blue)
-  update: "h-6 px-2 text-[#8cc8ff] hover:text-[#58a6ff] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]",
+  // Update/Save button (blue) - Mobile optimized
+  update: cn(
+    "h-7 px-2.5 md:h-6 md:px-2 text-xs",
+    "text-blue-400 hover:text-blue-300",
+    "border border-blue-500/20 hover:border-blue-400/30",
+    "bg-blue-500/10 hover:bg-blue-500/20 backdrop-blur-sm",
+    "rounded-lg transition-all duration-200"
+  ),
   
-  // Danger/Delete button (red)
-  danger: "h-6 px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]",
+  // Danger/Delete button (red) - Mobile optimized
+  danger: cn(
+    "h-7 px-2.5 md:h-6 md:px-2 text-xs",
+    "text-red-400 hover:text-red-300",
+    "border border-red-500/20 hover:border-red-400/30",
+    "bg-red-500/10 hover:bg-red-500/20 backdrop-blur-sm",
+    "rounded-lg transition-all duration-200"
+  ),
   
-  // Reset button (muted)
-  reset: "h-6 px-2 text-[#666] hover:text-[#999] text-xs border border-transparent hover:border-[#333]",
+  // Reset button (muted) - Mobile optimized
+  reset: cn(
+    "h-7 px-2.5 md:h-6 md:px-2 text-xs",
+    "text-gray-500 hover:text-gray-400",
+    "border border-transparent hover:border-white/10",
+    "bg-transparent hover:bg-white/5",
+    "rounded-lg transition-all duration-200"
+  ),
 
-  // Active state for filter buttons
-  active: "h-6 px-2 text-xs border",
-  activeBlue: "border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]",
-  activeRed: "border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]",
-  activeGray: "border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]",
+  // Active state for filter buttons - Mobile optimized
+  active: "h-7 px-2.5 md:h-6 md:px-2 text-xs border rounded-lg backdrop-blur-sm",
+  activeBlue: cn(
+    "border-blue-400/50 text-blue-300 bg-blue-500/20",
+    "hover:bg-blue-500/25 hover:border-blue-400/60"
+  ),
+  activeRed: cn(
+    "border-red-400/50 text-red-300 bg-red-500/20",
+    "hover:bg-red-500/25 hover:border-red-400/60"
+  ),
+  activeGray: cn(
+    "border-gray-400/50 text-gray-300 bg-white/20",
+    "hover:bg-white/25 hover:border-gray-400/60"
+  ),
   
-  // Inactive state for filter buttons
-  inactive: "border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+  // Inactive state for filter buttons - Mobile optimized
+  inactive: cn(
+    "border-white/10 text-gray-400 hover:text-white",
+    "hover:border-white/20 bg-white/5 hover:bg-white/10"
+  )
 };
 
-// Search input styles for consistency
-export const pageHeaderSearchStyles = "pl-7 w-48 bg-[#0d1117] border-[#21262d] text-white placeholder-[#666] focus:border-[#58a6ff] h-6 text-xs";
+// Search input styles for consistency - Mobile optimized
+export const pageHeaderSearchStyles = cn(
+  "pl-7 w-32 sm:w-40 md:w-48",
+  "bg-white/5 md:bg-[#0d1117] backdrop-blur-sm",
+  "border-white/10 md:border-[#21262d]",
+  "text-white placeholder-gray-500",
+  "focus:border-white/30 md:focus:border-[#58a6ff]",
+  "h-7 md:h-6 text-xs rounded-lg",
+  "transition-all duration-200"
+);

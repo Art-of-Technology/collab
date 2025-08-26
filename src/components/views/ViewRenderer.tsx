@@ -64,6 +64,7 @@ import { useRouter } from 'next/navigation';
 
 import { useViewFilters } from '@/context/ViewFiltersContext';
 import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
+import { cn } from '@/lib/utils';
 
 interface ViewRendererProps {
   view: {
@@ -963,60 +964,70 @@ export default function ViewRenderer({
       />
 
       {/* Filters and Display Controls Bar */}
-      <div className="border-b border-[#1a1a1a] bg-[#101011] px-6 py-2">
-        <div className="flex items-center justify-between">
-          {/* Left: Filters */}
-          <div className="flex items-center gap-2">
-            {/* Issue Type Filter Buttons */}
-            <div className="flex items-center gap-1 mr-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIssueFilterType('all')}
-                className={`h-6 px-2 text-xs border ${
-                  issueFilterType === 'all' 
-                    ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-                }`}
-              >
-                All Issues
-                <span className="ml-1 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIssueFilterType('active')}
-                className={`h-6 px-2 text-xs border ${
-                  issueFilterType === 'active' 
-                    ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]' 
-                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-                }`}
-              >
-                Active
-                <span className="ml-1 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIssueFilterType('backlog')}
-                className={`h-6 px-2 text-xs border ${
-                  issueFilterType === 'backlog' 
-                    ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
-                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-                }`}
-              >
-                Backlog
-                <span className="ml-1 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
-              </Button>
-            </div>
+      <div className={cn(
+        "border-b bg-[#101011] transition-colors",
+        // Mobile: Glassmorphism styling
+        "border-white/10 bg-black/60 backdrop-blur-xl px-4 py-3",
+        // Desktop: Original styling  
+        "md:border-[#1a1a1a] md:bg-[#101011] md:backdrop-blur-none md:px-6 md:py-2"
+      )}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2">
+          {/* Issue Type Filter Buttons - Full width on mobile */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 md:mr-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIssueFilterType('all')}
+              className={cn(
+                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
+                "md:h-6 md:px-2",
+                issueFilterType === 'all' 
+                  ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 hover:border-blue-400' 
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
+              )}
+            >
+              All Issues
+              <span className="ml-1.5 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIssueFilterType('active')}
+              className={cn(
+                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
+                "md:h-6 md:px-2",
+                issueFilterType === 'active' 
+                  ? 'border-red-400 text-red-400 bg-red-500/20 hover:bg-red-500/30 hover:border-red-400' 
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
+              )}
+            >
+              Active
+              <span className="ml-1.5 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIssueFilterType('backlog')}
+              className={cn(
+                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
+                "md:h-6 md:px-2",
+                issueFilterType === 'backlog' 
+                  ? 'border-gray-400 text-gray-400 bg-gray-500/20 hover:bg-gray-500/30 hover:border-gray-400' 
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
+              )}
+            >
+              Backlog
+              <span className="ml-1.5 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
+            </Button>
+          </div>
 
-            {/* Badge-like selectors matching CreateViewModal */}
-            <div className="flex flex-wrap gap-1">
+          {/* Mobile: Filters and View Type in Column */}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2 md:flex-1">
+            {/* Badge-like selectors - wrap on mobile */}
+            <div className="flex flex-wrap gap-1.5 md:gap-1">
               <ViewProjectSelector
                 value={tempProjectIds}
                 onChange={(projectIds) => {
-                  // Handle project selection changes
-                  // This will be stored as temporary changes and can be saved as a new view or update current view
                   setTempProjectIds(projectIds);
                 }}
                 projects={allProjects}
@@ -1103,16 +1114,16 @@ export default function ViewRenderer({
                 labels={workspaceLabels}
               />
             </div>
-          </div>
 
-          {/* Right: View Type Toggle */}
-          <div className="flex items-center gap-2">
-            <ViewTypeSelector
-              selectedType={tempDisplayType}
-              onTypeChange={setTempDisplayType}
-              variant="toolbar"
-              availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
-            />
+            {/* View Type Toggle - Right aligned on desktop, left on mobile */}
+            <div className="flex items-center justify-start md:justify-end">
+              <ViewTypeSelector
+                selectedType={tempDisplayType}
+                onTypeChange={setTempDisplayType}
+                variant="toolbar"
+                availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
+              />
+            </div>
           </div>
         </div>
       </div>
