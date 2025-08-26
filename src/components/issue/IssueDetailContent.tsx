@@ -411,7 +411,8 @@ export function IssueDetailContent({
       }
 
       const data = await response.json();
-      return data.improvedText || text;
+      console.log('handleAiImprove: API response data:', data);
+      return data.message || data.improvedText || text;
     } catch (error) {
       console.error('Error improving text:', error);
       toast({

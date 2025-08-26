@@ -42,12 +42,14 @@ export function FloatingSelectionMenu({
   // Render in a portal to avoid clipping by overflow-hidden ancestors
   const menu = (
     <div
-      className="fixed z-[9998] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
+      className="fixed z-[99999] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm pointer-events-auto"
       style={{
         top: position.top,
         left: position.left,
       }}
       onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <TooltipProvider delayDuration={200}>
         {/* Text Formatting */}
@@ -58,10 +60,15 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('bold') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white pointer-events-auto",
+                editor.isActive('bold') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleBold().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleBold().run();
+              }}
+              onMouseDown={(e) => e.preventDefault()}
             >
               <Bold className="h-4 w-4" />
             </Button>
@@ -76,10 +83,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('italic') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('italic') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleItalic().run();
+              }}
             >
               <Italic className="h-4 w-4" />
             </Button>
@@ -94,10 +105,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('underline') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('underline') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleUnderline().run();
+              }}
             >
               <UnderlineIcon className="h-4 w-4" />
             </Button>
@@ -112,10 +127,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('strike') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('strike') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleStrike().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleStrike().run();
+              }}
             >
               <Strikethrough className="h-4 w-4" />
             </Button>
@@ -130,10 +149,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('code') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('code') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleCode().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleCode().run();
+              }}
             >
               <Code className="h-4 w-4" />
             </Button>
@@ -152,10 +175,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleHeading({ level: 1 }).run();
+              }}
             >
               <Heading1 className="h-4 w-4" />
             </Button>
@@ -170,10 +197,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleHeading({ level: 2 }).run();
+              }}
             >
               <Heading2 className="h-4 w-4" />
             </Button>
@@ -188,10 +219,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleHeading({ level: 3 }).run();
+              }}
             >
               <Heading3 className="h-4 w-4" />
             </Button>
@@ -210,10 +245,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('bulletList') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('bulletList') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleBulletList().run();
+              }}
             >
               <List className="h-4 w-4" />
             </Button>
@@ -228,10 +267,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('orderedList') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('orderedList') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleOrderedList().run();
+              }}
             >
               <ListOrdered className="h-4 w-4" />
             </Button>
@@ -246,10 +289,14 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors",
-                editor.isActive('blockquote') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('blockquote') ? "bg-[#333] text-white" : "text-[#e6edf3]"
               )}
-              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleBlockquote().run();
+              }}
             >
               <Quote className="h-4 w-4" />
             </Button>
@@ -269,7 +316,11 @@ export function FloatingSelectionMenu({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 hover:bg-purple-500/20 transition-colors"
-                onClick={onAiImprove}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAiImprove?.();
+                }}
                 disabled={isImproving}
               >
                 {isImproving ? (
@@ -292,7 +343,11 @@ export function FloatingSelectionMenu({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 hover:bg-blue-500/20 transition-colors"
-                onClick={onCreateSubIssue}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onCreateSubIssue?.();
+                }}
               >
                 <GitBranch className="h-4 w-4 text-blue-400" />
               </Button>
