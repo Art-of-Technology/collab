@@ -38,12 +38,16 @@
     width: var(--sidebar-width);
     overflow: hidden;
     background: #090909;
-    border-right: 1px solid #1f1f1f;
     transition: width 200ms ease;
   }
 
   .sidebar-toggle {
+    left: calc(var(--sidebar-width) - 1px);
     transition: left 200ms ease, transform 200ms ease, background 150ms ease;
+  }
+
+  .app-sidebar[data-collapsed="true"] ~ main .sidebar-toggle {
+    left: calc(var(--sidebar-closed) - 1px);
   }
 }
 
@@ -62,7 +66,6 @@
     will-change: transform;
     z-index: 30;
     background: #090909;
-    border-right: 1px solid #1f1f1f;
   }
 
   .app-sidebar[data-open="true"] {
