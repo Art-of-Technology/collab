@@ -35,6 +35,7 @@ export const useKanbanState = ({
   // Local state for immediate UI updates during drag & drop
   const [localIssues, setLocalIssues] = useState(issues);
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
+  const previousIssuesRef = useRef<any[] | null>(null);
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
@@ -129,6 +130,9 @@ export const useKanbanState = ({
       const isSameColumn = source.droppableId === destination.droppableId;
       const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
 
+      // Snapshot for rollback
+      previousIssuesRef.current = localIssues;
+
       const newLocalIssues = [...localIssues];
       const issueIndex = newLocalIssues.findIndex((i: any) => i.id === draggableId);
       if (issueIndex === -1) { isDraggingRef.current = false; return; }
@@ -174,6 +178,15 @@ export const useKanbanState = ({
       );
       Promise.all(requests).catch((err) => {
         console.error('Failed to persist reorder:', err);
+        // Rollback on failure
+        if (previousIssuesRef.current) {
+          setLocalIssues(previousIssuesRef.current);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Reorder failed',
+          description: 'Could not save new position. Restored previous order.'
+        });
       }).finally(() => {
         isDraggingRef.current = false;
       });
@@ -181,7 +194,7 @@ export const useKanbanState = ({
     }
     
     isDraggingRef.current = false;
-  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, view?.grouping?.field]);
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, view?.grouping?.field, toast]);
 
   // Issue handlers
   const handleIssueClick = useCallback((issueIdOrKey: string) => {
