@@ -4,7 +4,6 @@ import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { generateUniqueViewSlug } from '@/lib/utils';
-import { DEFAULT_PROJECT_STATUSES, generateInternalStatusName } from '@/constants/project-statuses';
 
 // Function to generate a unique issue prefix within a workspace
 async function generateUniqueIssuePrefix(workspaceId: string, requestedPrefix?: string, projectName?: string): Promise<string> {
@@ -302,19 +301,25 @@ export async function POST(
         }
       });
 
-      // Create default statuses for the project using constants
-      const defaultStatuses = DEFAULT_PROJECT_STATUSES.map(status => ({
-        name: status.name,
-        displayName: status.displayName,
-        color: status.color,
-        order: status.order,
-        isDefault: status.isDefault,
-        isFinal: status.isFinal || false,
-        projectId: newProject.id
-      }));
+      // Get the default statuses from the projects StatusTemplate table
+      const defaultStatuses = await prisma.statusTemplate.findMany({
+        where: {
+          isDefault: true,
+        }
+      });
 
+      // Create the project statuses
       await tx.projectStatus.createMany({
-        data: defaultStatuses
+        data: defaultStatuses.map(status => ({
+          name: status.name,
+          displayName: status.displayName,
+          color: status.color,
+          order: status.order,
+          isDefault: status.isDefault,
+          isFinal: false,
+          iconName: status.iconName,
+          projectId: newProject.id
+        }))
       });
 
       return newProject;
