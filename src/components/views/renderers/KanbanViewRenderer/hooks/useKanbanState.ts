@@ -140,7 +140,6 @@ export const useKanbanState = ({
         const canDrop = canIssueMoveTo(draggedIssue, targetColumnId);
 
         setHoverState({ canDrop, columnId: targetColumnId });
-        console.log(`Can drop issue ${draggedIssue.id} to column ${targetColumnId}:`, canDrop);
       }
     } else {
       setHoverState({ canDrop: true, columnId: '' });
@@ -247,7 +246,7 @@ export const useKanbanState = ({
     setDraggedIssue(null);
     setHoverState({ canDrop: true, columnId: '' });
     isDraggingRef.current = false;
-  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState, draggedIssue, toast]);
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast]);
 
   // Issue handlers
   const handleIssueClick = useCallback((issueIdOrKey: string) => {
