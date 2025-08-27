@@ -27,13 +27,11 @@ import {
   Clock,
   Copy,
   Settings,
+  X,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCommandSearch } from "@/hooks/queries/useCommandSearch";
-import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
-import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
-import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
 import { cn } from "@/lib/utils";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -128,9 +126,7 @@ export function CommandMenu({
           "md:max-w-2xl md:max-h-[80vh]",
           "max-md:w-full max-md:h-full max-md:max-w-none max-md:max-h-none max-md:rounded-none",
           // Desktop: Floating dock-like design
-          "md:bg-black/40 md:backdrop-blur-xl md:border md:border-white/10 md:rounded-2xl",
-          // Mobile: Full dark background
-          "max-md:bg-[#090909]"
+          "bg-black/40 backdrop-blur-xl md:border md:border-white/10 md:rounded-2xl",
         )}
         style={{
           backdropFilter: 'blur(20px)',
@@ -143,17 +139,16 @@ export function CommandMenu({
         <Command 
           className={cn(
             "border-0",
-            "md:bg-transparent", // Transparent on desktop for glassmorphism
-            "max-md:bg-[#090909]", // Solid background on mobile
-            "max-md:flex max-md:flex-col" // Column layout on mobile
+            "bg-transparent", // Transparent on desktop for glassmorphism
           )} 
           filter={() => 1}
         >
           {/* Desktop: Input at top */}
           <div className={cn(
-            "sticky top-0 z-10 md:block hidden",
-            "md:bg-black/60 md:backdrop-blur-xl", // Glassmorphism header on desktop
-            "border-b border-white/10"
+            "sticky top-0 z-10",
+            "bg-black/60 backdrop-blur-xl", // Glassmorphism header on desktop
+            "border-b border-white/10",
+            "relative" // For positioning close button
           )}>
             <CommandInput
               placeholder="Type a command or search..."
@@ -161,18 +156,33 @@ export function CommandMenu({
               onValueChange={setSearch}
               className={cn(
                 "text-white placeholder-gray-400 border-0 bg-transparent",
-                "h-12 px-4 text-sm", // Desktop styling
+                "h-12 px-4 pr-12 md:pr-4 text-sm", // Extra right padding on mobile for close button
                 "focus:ring-0 focus:outline-none"
               )}
             />
+            {/* Close button - Mobile only */}
+            <button
+              onClick={() => onOpenChange(false)}
+              className={cn(
+                "absolute right-3 top-1/2 -translate-y-1/2",
+                "md:hidden", // Only show on mobile
+                "h-8 w-8 rounded-full",
+                "flex items-center justify-center",
+                "text-gray-400 hover:text-white",
+                "hover:bg-white/10 transition-all duration-200",
+                "touch-manipulation" // Better touch interaction
+              )}
+              aria-label="Close command menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
           
           <CommandList 
             className={cn(
-              "md:bg-transparent", // Transparent on desktop
-              "max-md:bg-[#090909]", // Solid background on mobile
+              "bg-transparent", // Transparent on desktop
               "md:h-[400px]", // Fixed height on desktop
-              "max-md:flex-1 max-md:flex max-md:flex-col-reverse", // Mobile: flex column reverse
+              "max-md:flex-1 max-md:flex max-md:flex-col", // Mobile: flex column reverse
               "overflow-y-auto", // Always scrollable
               "p-1" // More compact padding
             )}
@@ -223,7 +233,7 @@ export function CommandMenu({
                 <span className="text-sm">Search failed. Please try again.</span>
               </CommandItem>
             ) : searchResults.length > 0 ? (
-              <div className="max-md:flex max-md:flex-col-reverse">
+              <div className="flex flex-col">
                 {searchResults.slice(0, 8).map((result) => (
                 <CommandItem
                   key={`${result.type}-${result.id}`}
@@ -402,7 +412,7 @@ export function CommandMenu({
             <CommandShortcut className="ml-auto text-xs text-gray-500">Alt C</CommandShortcut>
           </CommandItem>
           <CommandItem
-            onSelect={() => navigateTo(getWorkspacePath("/issues"))}
+            onSelect={() => navigateTo(getWorkspacePath("/views"))}
             className={cn(
               "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
               "hover:bg-white/10 hover:text-white",
@@ -411,8 +421,8 @@ export function CommandMenu({
               "mx-1"
             )}
           >
-            <CheckSquare className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Go to Issues</span>
+            <Eye className="h-4 w-4 text-gray-400" />
+            <span className="text-sm">Go to Views</span>
           </CommandItem>
         </CommandGroup>
 
@@ -702,24 +712,6 @@ export function CommandMenu({
           </>
         )}
         </CommandList>
-        
-        {/* Mobile: Input at bottom */}
-        <div className={cn(
-          "sticky bottom-0 z-10 md:hidden",
-          "bg-[#090909]", // Solid background on mobile
-          "border-t border-white/10" // Top border to separate from results
-        )}>
-          <CommandInput
-            placeholder="Type a command or search..."
-            value={search}
-            onValueChange={setSearch}
-            className={cn(
-              "text-white placeholder-gray-400 border-0 bg-transparent",
-              "h-14 px-6 text-base", // Larger on mobile
-              "focus:ring-0 focus:outline-none"
-            )}
-          />
-        </div>
         </Command>
       </DialogContent>
     </Dialog>

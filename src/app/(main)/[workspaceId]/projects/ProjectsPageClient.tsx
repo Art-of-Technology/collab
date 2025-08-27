@@ -406,17 +406,17 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={cn(pageHeaderSearchStyles, "w-64")}
+              className={cn(pageHeaderSearchStyles, "w-full md:w-64")}
             />
           </div>
         }
         actions={
           <Button
             onClick={handleCreateProject}
-            className={cn(pageHeaderButtonStyles.primary, "h-7 px-3")}
+            className={pageHeaderButtonStyles.primary}
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New project
+            <Plus className="h-3.5 w-3.5 md:mr-1.5" />
+            <span data-text className="hidden md:inline ml-1">New project</span>
           </Button>
         }
       />

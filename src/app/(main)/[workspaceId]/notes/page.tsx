@@ -356,10 +356,9 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         actions={
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="h-7 md:h-8 px-2.5 md:px-3 text-xs md:text-sm bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-lg transition-all duration-200">
-                <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2" />
-                <span className="hidden sm:inline">New Note</span>
-                <span className="sm:hidden">New</span>
+              <Button className="h-6 px-1 md:px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md transition-all duration-200 flex items-center justify-center">
+                <Plus className="h-3.5 w-3.5 md:mr-2" />
+                <span data-text className="hidden md:inline ml-1">New Note</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

@@ -353,17 +353,17 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
               placeholder="Search views..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-32 sm:w-40 md:w-64 bg-white/5 md:bg-[#1a1a1a] backdrop-blur-sm border-white/10 md:border-[#2a2a2a] text-white placeholder-gray-500 focus:border-white/30 md:focus:border-[#0969da] h-7 md:h-8 text-xs md:text-sm rounded-lg transition-all duration-200"
+              className="pl-10 w-full md:w-64 bg-white/5 md:bg-[#1a1a1a] backdrop-blur-sm border-white/10 md:border-[#2a2a2a] text-white placeholder-gray-500 focus:border-white/30 md:focus:border-[#0969da] h-7 md:h-8 text-xs md:text-sm rounded-lg transition-all duration-200"
             />
           </div>
         }
         actions={
           <Button
             onClick={handleCreateView}
-            className={cn(pageHeaderButtonStyles.primary, "h-7 px-3")}
+            className={pageHeaderButtonStyles.primary}
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New view
+            <Plus className="h-3.5 w-3.5 md:mr-1.5" />
+            <span data-text className="hidden md:inline ml-1">New view</span>
           </Button>
         }
       />

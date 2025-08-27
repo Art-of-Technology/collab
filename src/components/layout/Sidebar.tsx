@@ -17,7 +17,6 @@ import {
   FolderOpen,
   Eye,
   Plus,
-  CheckSquare,
   MessageSquare,
   FileText,
   Clock,
@@ -264,14 +263,8 @@ export default function Sidebar({
       .substring(0, 2);
   };
 
-  // Generate workspace navigation
+  // Generate workspace navigation (core features)
   const workspaceNavigation = [
-    {
-      name: "Issues",
-      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/issues` : "#",
-      icon: CheckSquare,
-      current: pathname.includes("/issues"),
-    },
     {
       name: "Projects",
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/projects` : "#",
@@ -526,7 +519,30 @@ export default function Sidebar({
 
         {/* Navigation - collapsed */}
         <div className="flex-1 p-2 space-y-1">
+          {/* Core Navigation */}
           {workspaceNavigation.map((item) => (
+            <Button
+              key={item.name}
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "w-full h-10 transition-colors",
+                item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]",
+                !currentWorkspace?.id && isLoading && "opacity-50 pointer-events-none"
+              )}
+              onClick={() => router.push(item.href)}
+              disabled={!currentWorkspace?.id && isLoading}
+              title={item.name}
+            >
+              <item.icon className="h-5 w-5" />
+            </Button>
+          ))}
+          
+          {/* Separator */}
+          <div className="border-t border-[#1f1f1f] my-2" />
+          
+          {/* Workspace Features */}
+          {workspaceFeatures.map((item) => (
             <Button
               key={item.name}
               variant="ghost"

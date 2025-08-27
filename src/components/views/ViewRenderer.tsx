@@ -859,8 +859,8 @@ export default function ViewRenderer({
                 onClick={resetToDefaults}
                 className={pageHeaderButtonStyles.reset}
               >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Reset
+                <RotateCcw className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">Reset</span>
               </Button>
               <Button
                 variant="ghost"
@@ -868,8 +868,8 @@ export default function ViewRenderer({
                 onClick={handleUpdateView}
                 className={pageHeaderButtonStyles.update}
               >
-                <Save className="h-3 w-3 mr-1" />
-                Update
+                <Save className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">Update</span>
               </Button>
               <Button
                 variant="ghost"
@@ -877,8 +877,8 @@ export default function ViewRenderer({
                 onClick={() => setShowSaveDialog(true)}
                 className={pageHeaderButtonStyles.danger}
               >
-                <Save className="h-3 w-3 mr-1" />
-                Save as new
+                <Save className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">Save as new</span>
               </Button>
             </div>
           )
@@ -902,8 +902,8 @@ export default function ViewRenderer({
               onClick={handleToggleViewFilters}
               className={pageHeaderButtonStyles.ghost}
             >
-              {isViewFiltersOpen ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-              View Options
+              {isViewFiltersOpen ? <EyeOff className="h-3 w-3 md:mr-1" /> : <Eye className="h-3 w-3 md:mr-1" />}
+              <span data-text className="hidden md:inline ml-1">View Options</span>
             </Button>
             <Button
               variant="ghost"
@@ -911,8 +911,8 @@ export default function ViewRenderer({
               className={pageHeaderButtonStyles.primary}
               onClick={() => setIsNewIssueOpen(true)}
             >
-              <Plus className="h-3 w-3 mr-1" />
-              New Issue
+              <Plus className="h-3 w-3 md:mr-1" />
+              <span data-text className="hidden md:inline ml-1">New Issue</span>
             </Button>
           </>
         }
