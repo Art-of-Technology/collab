@@ -117,7 +117,7 @@ export default function KanbanColumn({
                 ref={provided.innerRef}
                 {...provided.droppableProps}
                 className={cn(
-                  "flex-1 space-y-2 min-h-[200px] rounded-lg transition-colors",
+                  "flex-1 space-y-2 min-h-[200px] rounded-lg transition-colors overflow-y-auto",
                   snapshot.isDraggingOver && "bg-[#1a1a1a]"
                 )}
               >

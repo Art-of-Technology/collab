@@ -2,16 +2,8 @@
 
 import { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { 
   Dialog,
   DialogContent,
   DialogHeader,
@@ -19,20 +11,14 @@ import {
 } from '@/components/ui/dialog';
 import {
   Search,
-  MoreHorizontal,
   Plus,
   Grid,
   List,
   Table,
   Calendar,
   BarChart3,
-  Share,
-  Edit,
-  Trash2,
-  Users,
   Save,
   RotateCcw,
-  Filter,
   Eye,
   EyeOff,
   Loader2
@@ -41,7 +27,6 @@ import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
 import TimelineViewRenderer from './renderers/TimelineViewRenderer';
-import ViewFilters from './shared/ViewFilters';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
@@ -87,6 +72,7 @@ interface ViewRendererProps {
       slug: string;
       issuePrefix: string;
       color?: string;
+      statuses?: any[];
     }>;
     isDefault: boolean;
     isFavorite: boolean;
@@ -230,7 +216,7 @@ export default function ViewRenderer({
 
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
-    workspace.id, 
+    workspace.id,
     tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)
   );
 
@@ -396,7 +382,7 @@ export default function ViewRenderer({
         filtered = filtered.filter(issue => {
           switch (filterKey) {
             case 'status':
-              return filterValues.includes(issue.statusValue || issue.status);
+              return filterValues.includes(issue.statusId);
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
@@ -1048,6 +1034,7 @@ export default function ViewRenderer({
               />
               <StatusSelector
                 value={allFilters.status || []}
+                projects={view.projects || []}
                 onChange={(statuses) => {
                   const viewStatuses = view.filters?.status || [];
                   const isDifferent = JSON.stringify(statuses.sort()) !== JSON.stringify(viewStatuses.sort());

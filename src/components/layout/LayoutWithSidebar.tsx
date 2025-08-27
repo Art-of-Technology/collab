@@ -97,7 +97,7 @@ export default function LayoutWithSidebar({
             className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px] hidden md:flex
                          bg-[#090909] border border-[#1f1f1f] hover:bg-[#1a1a1a]
                          text-gray-400 hover:text-white rounded-r-md rounded-l-none border-l-0 shadow-md transition-all duration-200"
-            style={{ left: sidebarLeft }}
+            style={{ left: `calc(${sidebarLeft} + 8px)` }}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? (
