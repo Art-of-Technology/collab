@@ -38,7 +38,6 @@
     width: var(--sidebar-width);
     overflow: hidden;
     background: #090909;
-    border-right: 1px solid #1f1f1f;
     transition: width 200ms ease;
   }
 
@@ -62,7 +61,6 @@
     will-change: transform;
     z-index: 30;
     background: #090909;
-    border-right: 1px solid #1f1f1f;
   }
 
   .app-sidebar[data-open="true"] {
