@@ -11,25 +11,6 @@ export async function getProjectStatuses(projectIds: string[]) {
       throw new Error('Unauthorized - Please sign in to access project statuses')
     }
 
-    // Input validation
-    if (!projectIds) {
-      throw new Error('Project IDs are required')
-    }
-
-    if (!Array.isArray(projectIds)) {
-      throw new Error('Project IDs must be an array')
-    }
-
-    if (projectIds.length === 0) {
-      return []
-    }
-
-    // Validate project ID format (assuming they are UUIDs or similar)
-    const invalidIds = projectIds.filter(id => !id || typeof id !== 'string' || id.trim().length === 0)
-    if (invalidIds.length > 0) {
-      throw new Error('Invalid project ID format detected')
-    }
-
     // Get the current user
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }

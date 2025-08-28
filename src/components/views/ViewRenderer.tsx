@@ -1038,7 +1038,7 @@ export default function ViewRenderer({
               />
               <StatusSelector
                 value={allFilters.status || []}
-                projects={view.projects || []}
+                projectIds={tempProjectIds}
                 onChange={(statuses) => {
                   const viewStatuses = view.filters?.status || [];
                   const isDifferent = JSON.stringify(statuses.sort()) !== JSON.stringify(viewStatuses.sort());

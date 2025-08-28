@@ -13,7 +13,7 @@ import { getProjectStatuses } from "@/actions/status";
 
 interface StatusSelectorProps {
   value: string[];
-  projects: any[];
+  projectIds: string[];
   onChange: (statuses: string[]) => void;
   disabled?: boolean;
 }
@@ -23,13 +23,15 @@ export function StatusSelector({
   value = [],
   onChange,
   disabled = false,
-  projects = [],
+  projectIds = [],
 }: StatusSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const projectIds = projects.map(p => p.id);
 
-    staleTime: 5 * 60 * 1000, // 5 minutes,
-    enabled: projectIds.length > 0,
+  const { data: statuses = [], isLoading, isError } = useQuery({
+    queryKey: ['statuses', projectIds],
+    queryFn: () => getProjectStatuses(projectIds),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: projectIds.length > 0
   });
 
   if (isError) return null;

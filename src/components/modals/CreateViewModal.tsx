@@ -59,7 +59,7 @@ export default function CreateViewModal({
   onViewCreated
 }: CreateViewModalProps) {
   const { workspaces } = useWorkspace();
-
+  const initialProjectIds = projects.map(p => p.id);
   // Fetch workspace members for assignee selector
   const { data: workspaceMembers = [] } = useQuery({
     queryKey: ['workspace-members', workspaceId],
@@ -325,7 +325,7 @@ export default function CreateViewModal({
             <StatusSelector
               value={formData.filters.status}
               onChange={(status) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, status } }))}
-              projects={formData.projectIds.length > 0 ? formData.projectIds.map(p => ({ id: p })) : projects}
+              projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
             />
             <PrioritySelector
               value={formData.filters.priority}
