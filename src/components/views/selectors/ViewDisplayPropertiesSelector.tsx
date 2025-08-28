@@ -45,31 +45,11 @@ export function ViewDisplayPropertiesSelector({
     return `${value.length} properties`;
   };
 
-  const mapToCanonical = (raw: string): string => {
-    const key = (raw || '').toLowerCase().replace(/\s+/g, '');
-    switch (key) {
-      case 'assignee': return 'Assignee';
-      case 'priority': return 'Priority';
-      case 'labels': return 'Labels';
-      case 'duedate': return 'Due Date';
-      case 'storypoints': return 'Story Points';
-      case 'reporter': return 'Reporter';
-      case 'status': return 'Status';
-      case 'project': return 'Project';
-      case 'created':
-      case 'createdat': return 'Created';
-      case 'updated':
-      case 'updatedat': return 'Updated';
-      default: return raw;
-    }
-  };
-
   const toggleProperty = (propertyKey: string) => {
-    const canonical = mapToCanonical(propertyKey);
-    if (value.includes(canonical)) {
-      onChange(value.filter(p => p !== canonical));
+    if (value.includes(propertyKey)) {
+      onChange(value.filter(p => p !== propertyKey));
     } else {
-      onChange([...value, canonical]);
+      onChange([...value, propertyKey]);
     }
   };
 
@@ -78,8 +58,7 @@ export function ViewDisplayPropertiesSelector({
   };
 
   const selectAll = () => {
-    const all = Array.from(new Set(DISPLAY_PROPERTIES.map(p => mapToCanonical(p.key))));
-    onChange(all);
+    onChange(DISPLAY_PROPERTIES.map(p => p.key));
   };
 
   const clearAll = () => {

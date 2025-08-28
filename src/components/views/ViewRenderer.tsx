@@ -101,37 +101,6 @@ export default function ViewRenderer({
   workspace, 
   currentUser 
 }: ViewRendererProps) {
-  // Normalize display property keys to canonical labels used by renderers
-  const normalizeDisplayProperties = useCallback((properties: string[] | undefined | null): string[] => {
-    // Default when view has no fields configured
-    if (!Array.isArray(properties)) return ["Priority", "Status", "Assignee"];
-    const mapToCanonical = (raw: string): string => {
-      const key = (raw || '').toLowerCase().replace(/\s+/g, '');
-      switch (key) {
-        case 'assignee': return 'Assignee';
-        case 'priority': return 'Priority';
-        case 'labels': return 'Labels';
-        case 'duedate': return 'Due Date';
-        case 'storypoints': return 'Story Points';
-        case 'reporter': return 'Reporter';
-        case 'status': return 'Status';
-        case 'project': return 'Project';
-        case 'created':
-        case 'createdat': return 'Created';
-        case 'updated':
-        case 'updatedat': return 'Updated';
-        case 'id': return 'ID';
-        case 'comments': return 'Comments';
-        case 'subissues': return 'Sub-issues';
-        case 'startdate': return 'Start Date';
-        case 'progress': return 'Progress';
-        default: return raw;
-      }
-    };
-    const set = new Set<string>();
-    properties.forEach((p) => set.add(mapToCanonical(p)));
-    return Array.from(set);
-  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newViewName, setNewViewName] = useState('');
@@ -232,7 +201,7 @@ export default function ViewRenderer({
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
-  const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(normalizeDisplayProperties(view.fields as string[]));
+  const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
@@ -294,7 +263,7 @@ export default function ViewRenderer({
     displayType: view.displayType,
     grouping: view.grouping?.field || 'none',
     ordering: view.sorting?.field || 'manual',
-    displayProperties: normalizeDisplayProperties(view.fields as string[]),
+    displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
     filters: view.filters || {}
   });
 
@@ -304,14 +273,14 @@ export default function ViewRenderer({
       displayType: view.displayType,
       grouping: view.grouping?.field || 'none',
       ordering: view.sorting?.field || 'manual',
-      displayProperties: normalizeDisplayProperties(view.fields as string[]),
+      displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
       filters: view.filters || {}
     });
     // Reset temp project IDs when view changes
     setTempProjectIds(view.projects.map(p => p.id));
     // Sync temp display properties with view on view change
-    setTempDisplayProperties(normalizeDisplayProperties(view.fields as string[]));
-  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects, normalizeDisplayProperties]);
+    setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
+  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
   
   // Update ViewFilters context with current data
   useEffect(() => {
