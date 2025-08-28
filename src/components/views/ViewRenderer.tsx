@@ -1,17 +1,9 @@
 "use client";
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { 
   Dialog,
   DialogContent,
   DialogHeader,
@@ -19,20 +11,14 @@ import {
 } from '@/components/ui/dialog';
 import {
   Search,
-  MoreHorizontal,
   Plus,
   Grid,
   List,
   Table,
   Calendar,
   BarChart3,
-  Share,
-  Edit,
-  Trash2,
-  Users,
   Save,
   RotateCcw,
-  Filter,
   Eye,
   EyeOff,
   Loader2
@@ -41,7 +27,6 @@ import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
 import TimelineViewRenderer from './renderers/TimelineViewRenderer';
-import ViewFilters from './shared/ViewFilters';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
@@ -64,6 +49,7 @@ import { useRouter } from 'next/navigation';
 
 import { useViewFilters } from '@/context/ViewFiltersContext';
 import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
+import { cn } from '@/lib/utils';
 
 interface ViewRendererProps {
   view: {
@@ -86,6 +72,7 @@ interface ViewRendererProps {
       slug: string;
       issuePrefix: string;
       color?: string;
+      statuses?: any[];
     }>;
     isDefault: boolean;
     isFavorite: boolean;
@@ -215,7 +202,7 @@ export default function ViewRenderer({
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
-  const [tempDisplayProperties, setTempDisplayProperties] = useState(view.fields || []);
+  const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
@@ -229,7 +216,7 @@ export default function ViewRenderer({
 
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
-    workspace.id, 
+    workspace.id,
     tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)
   );
 
@@ -277,7 +264,7 @@ export default function ViewRenderer({
     displayType: view.displayType,
     grouping: view.grouping?.field || 'none',
     ordering: view.sorting?.field || 'manual',
-    displayProperties: view.fields || [],
+    displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
     filters: view.filters || {}
   });
 
@@ -287,11 +274,13 @@ export default function ViewRenderer({
       displayType: view.displayType,
       grouping: view.grouping?.field || 'none',
       ordering: view.sorting?.field || 'manual',
-      displayProperties: view.fields || [],
+      displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
       filters: view.filters || {}
     });
     // Reset temp project IDs when view changes
     setTempProjectIds(view.projects.map(p => p.id));
+    // Sync temp display properties with view on view change
+    setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
   
   // Update ViewFilters context with current data
@@ -307,12 +296,14 @@ export default function ViewRenderer({
 
   // Check if current state differs from last saved state
   const hasChanges = useMemo(() => {
+    const sortedTemp = [...tempDisplayProperties].sort();
+    const sortedSaved = [...(lastSavedState.displayProperties || [])].sort();
     return (
       Object.keys(tempFilters).length > 0 ||
       tempDisplayType !== lastSavedState.displayType ||
       tempGrouping !== lastSavedState.grouping ||
       tempOrdering !== lastSavedState.ordering ||
-      JSON.stringify(tempDisplayProperties) !== JSON.stringify(lastSavedState.displayProperties) ||
+      JSON.stringify(sortedTemp) !== JSON.stringify(sortedSaved) ||
       JSON.stringify(tempProjectIds.sort()) !== JSON.stringify(view.projects.map(p => p.id).sort())
     );
   }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects]);
@@ -395,7 +386,7 @@ export default function ViewRenderer({
         filtered = filtered.filter(issue => {
           switch (filterKey) {
             case 'status':
-              return filterValues.includes(issue.statusValue || issue.status);
+              return filterValues.includes(issue.statusId);
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
@@ -858,8 +849,8 @@ export default function ViewRenderer({
                 onClick={resetToDefaults}
                 className={pageHeaderButtonStyles.reset}
               >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Reset
+                <RotateCcw className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">Reset</span>
               </Button>
               <Button
                 variant="ghost"
@@ -867,8 +858,8 @@ export default function ViewRenderer({
                 onClick={handleUpdateView}
                 className={pageHeaderButtonStyles.update}
               >
-                <Save className="h-3 w-3 mr-1" />
-                Update
+                <Save className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">Update</span>
               </Button>
               <Button
                 variant="ghost"
@@ -876,8 +867,8 @@ export default function ViewRenderer({
                 onClick={() => setShowSaveDialog(true)}
                 className={pageHeaderButtonStyles.danger}
               >
-                <Save className="h-3 w-3 mr-1" />
-                Save as new
+                <Save className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">Save as new</span>
               </Button>
             </div>
           )
@@ -901,8 +892,8 @@ export default function ViewRenderer({
               onClick={handleToggleViewFilters}
               className={pageHeaderButtonStyles.ghost}
             >
-              {isViewFiltersOpen ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-              View Options
+              {isViewFiltersOpen ? <EyeOff className="h-3 w-3 md:mr-1" /> : <Eye className="h-3 w-3 md:mr-1" />}
+              <span data-text className="hidden md:inline ml-1">View Options</span>
             </Button>
             <Button
               variant="ghost"
@@ -910,8 +901,8 @@ export default function ViewRenderer({
               className={pageHeaderButtonStyles.primary}
               onClick={() => setIsNewIssueOpen(true)}
             >
-              <Plus className="h-3 w-3 mr-1" />
-              New Issue
+              <Plus className="h-3 w-3 md:mr-1" />
+              <span data-text className="hidden md:inline ml-1">New Issue</span>
             </Button>
           </>
         }
@@ -963,60 +954,70 @@ export default function ViewRenderer({
       />
 
       {/* Filters and Display Controls Bar */}
-      <div className="border-b border-[#1a1a1a] bg-[#101011] px-6 py-2">
-        <div className="flex items-center justify-between">
-          {/* Left: Filters */}
-          <div className="flex items-center gap-2">
-            {/* Issue Type Filter Buttons */}
-            <div className="flex items-center gap-1 mr-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIssueFilterType('all')}
-                className={`h-6 px-2 text-xs border ${
-                  issueFilterType === 'all' 
-                    ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-                }`}
-              >
-                All Issues
-                <span className="ml-1 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIssueFilterType('active')}
-                className={`h-6 px-2 text-xs border ${
-                  issueFilterType === 'active' 
-                    ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]' 
-                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-                }`}
-              >
-                Active
-                <span className="ml-1 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIssueFilterType('backlog')}
-                className={`h-6 px-2 text-xs border ${
-                  issueFilterType === 'backlog' 
-                    ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
-                    : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-                }`}
-              >
-                Backlog
-                <span className="ml-1 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
-              </Button>
-            </div>
+      <div className={cn(
+        "border-b bg-[#101011] transition-colors",
+        // Mobile: Glassmorphism styling
+        "border-white/10 bg-black/60 backdrop-blur-xl px-4 py-3",
+        // Desktop: Original styling  
+        "md:border-[#1a1a1a] md:bg-[#101011] md:backdrop-blur-none md:px-6 md:py-2"
+      )}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2">
+          {/* Issue Type Filter Buttons - Full width on mobile */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 md:mr-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIssueFilterType('all')}
+              className={cn(
+                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
+                "md:h-6 md:px-2",
+                issueFilterType === 'all' 
+                  ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 hover:border-blue-400' 
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
+              )}
+            >
+              All Issues
+              <span className="ml-1.5 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIssueFilterType('active')}
+              className={cn(
+                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
+                "md:h-6 md:px-2",
+                issueFilterType === 'active' 
+                  ? 'border-red-400 text-red-400 bg-red-500/20 hover:bg-red-500/30 hover:border-red-400' 
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
+              )}
+            >
+              Active
+              <span className="ml-1.5 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIssueFilterType('backlog')}
+              className={cn(
+                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
+                "md:h-6 md:px-2",
+                issueFilterType === 'backlog' 
+                  ? 'border-gray-400 text-gray-400 bg-gray-500/20 hover:bg-gray-500/30 hover:border-gray-400' 
+                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
+              )}
+            >
+              Backlog
+              <span className="ml-1.5 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
+            </Button>
+          </div>
 
-            {/* Badge-like selectors matching CreateViewModal */}
-            <div className="flex flex-wrap gap-1">
+          {/* Mobile: Filters and View Type in Column */}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2 md:flex-1">
+            {/* Badge-like selectors - wrap on mobile */}
+            <div className="flex flex-wrap gap-1.5 md:gap-1">
               <ViewProjectSelector
                 value={tempProjectIds}
                 onChange={(projectIds) => {
-                  // Handle project selection changes
-                  // This will be stored as temporary changes and can be saved as a new view or update current view
                   setTempProjectIds(projectIds);
                 }}
                 projects={allProjects}
@@ -1037,6 +1038,7 @@ export default function ViewRenderer({
               />
               <StatusSelector
                 value={allFilters.status || []}
+                projects={view.projects || []}
                 onChange={(statuses) => {
                   const viewStatuses = view.filters?.status || [];
                   const isDifferent = JSON.stringify(statuses.sort()) !== JSON.stringify(viewStatuses.sort());
@@ -1103,16 +1105,16 @@ export default function ViewRenderer({
                 labels={workspaceLabels}
               />
             </div>
-          </div>
 
-          {/* Right: View Type Toggle */}
-          <div className="flex items-center gap-2">
-            <ViewTypeSelector
-              selectedType={tempDisplayType}
-              onTypeChange={setTempDisplayType}
-              variant="toolbar"
-              availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
-            />
+            {/* View Type Toggle - Right aligned on desktop, left on mobile */}
+            <div className="flex items-center justify-start md:justify-end">
+              <ViewTypeSelector
+                selectedType={tempDisplayType}
+                onTypeChange={setTempDisplayType}
+                variant="toolbar"
+                availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
+              />
+            </div>
           </div>
         </div>
       </div>

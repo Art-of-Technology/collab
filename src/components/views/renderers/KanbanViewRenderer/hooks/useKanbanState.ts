@@ -31,6 +31,8 @@ export const useKanbanState = ({
   const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
   const [newIssueTitle, setNewIssueTitle] = useState('');
   const [showSubIssues, setShowSubIssues] = useState(true);
+
+  const [hoverState, setHoverState] = useState<{ canDrop: boolean, columnId: string }>({ canDrop: true, columnId: '' });
   
   // Local state for immediate UI updates during drag & drop
   const [localIssues, setLocalIssues] = useState(issues);
@@ -84,13 +86,82 @@ export const useKanbanState = ({
     return countIssuesByType(issues);
   }, [issues]);
 
+  // Helper function to validate if an issue can be moved to a target column
+  const canIssueMoveTo = useCallback((issue: any, targetColumnId: string): boolean => {
+    // Allow movement within the same column (reordering)
+    if (issue.status === targetColumnId || issue.statusValue === targetColumnId) {
+      return true;
+    }
+
+    // If we don't have project statuses data, allow movement (fallback behavior)
+    if (!projectStatusData?.projectStatuses) {
+      return true;
+    }
+
+    // Find the project-specific statuses for the issue's project
+    const projectSpecificStatuses = projectStatusData.projectStatuses.filter(
+      (ps: any) => ps.projectId === issue.projectId
+    );
+
+    // If no project-specific statuses found, allow movement to common columns
+    if (projectSpecificStatuses.length === 0) {
+      return true;
+    }
+
+    // Check if the target column exists in the issue's project statuses
+    const targetStatusExists = projectSpecificStatuses.some(
+      (ps: any) => ps.name === targetColumnId
+    );
+
+    return targetStatusExists;
+  }, [projectStatusData]);
+
+  // Track the currently dragged issue and hover state for visual feedback
+  const [draggedIssue, setDraggedIssue] = useState<any>(null);
+
   // Drag and drop handlers
-  const handleDragStart = useCallback(() => {
+  const handleDragStart = useCallback((start: any) => {
     isDraggingRef.current = true;
-  }, []);
+    if (start.type === 'issue') {
+      const issue = localIssues.find((i: any) => i.id === start.draggableId);
+      setDraggedIssue(issue);
+    }
+  }, [localIssues]);
+
+  const handleDragUpdate = useCallback((update: any) => {
+    if (!update.destination) {
+      setHoverState({ canDrop: true, columnId: '' });
+      return;
+    }
+    
+    if (update.type === 'issue' && update.destination) {
+      const targetColumnId = update.destination.droppableId;
+      
+      // Find the dragged issue and check if it can be moved to the target column
+      if (draggedIssue) {
+        const canDrop = canIssueMoveTo(draggedIssue, targetColumnId);
+
+        setHoverState({ canDrop, columnId: targetColumnId });
+      }
+    } else {
+      setHoverState({ canDrop: true, columnId: '' });
+    }
+  }, [draggedIssue, canIssueMoveTo]);
 
   const handleDragEnd = useCallback(async (result: DropResult) => {
     const { destination, source, draggableId, type } = result;
+
+    if (!hoverState.canDrop) {
+      isDraggingRef.current = false;
+      setHoverState({ canDrop: true, columnId: '' });
+      toast({
+        title: "Cannot drop issue",
+        description: `Issue ${draggedIssue?.title} cannot be dropped to column ${hoverState.columnId}`,
+        variant: "destructive"
+      });
+      
+      return;
+    }
 
     if (!destination) {
       isDraggingRef.current = false;
@@ -193,8 +264,11 @@ export const useKanbanState = ({
       return;
     }
     
+    // Clear dragged issue and hover state
+    setDraggedIssue(null);
+    setHoverState({ canDrop: true, columnId: '' });
     isDraggingRef.current = false;
-  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, view?.grouping?.field, toast]);
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field]);
 
   // Issue handlers
   const handleIssueClick = useCallback((issueIdOrKey: string) => {
@@ -253,8 +327,11 @@ export const useKanbanState = ({
     setShowSubIssues(prev => !prev);
   }, []);
 
-  // Display properties
-  const displayProperties = view.fields || DEFAULT_DISPLAY_PROPERTIES;
+  // Display properties: use raw values; respect empty array; fallback only if undefined
+  const displayProperties = useMemo(() => {
+    if (Array.isArray(view.fields)) return view.fields;
+    return DEFAULT_DISPLAY_PROPERTIES;
+  }, [view.fields]);
 
   // Event handlers for UI interactions
   const handleStartCreatingIssue = useCallback((columnId: string) => {
@@ -308,9 +385,12 @@ export const useKanbanState = ({
     displayProperties,
     showSubIssues,
     isLoadingStatuses,
+    draggedIssue,
+    hoverState,
     
     // Handlers
     handleDragStart,
+    handleDragUpdate,
     handleDragEnd,
     handleIssueClick,
     handleCreateIssue,

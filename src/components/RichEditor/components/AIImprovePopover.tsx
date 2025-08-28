@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 
 interface AIImprovePopoverProps {
@@ -24,12 +25,12 @@ export function AIImprovePopover({
     return null;
   }
 
-  return (
+  const popover = (
     <div 
-      className="absolute z-[9999] w-80 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden"
+      className="fixed z-[99999] w-80 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden pointer-events-auto"
       style={{
-        top: position.top + 45,
-        left: Math.max(10, position.left + 200),
+        top: Math.max(10, position.top + 45),
+        left: Math.max(10, Math.min(position.left + 200, window.innerWidth - 320)),
       }}
     >
       <div className="p-3 border-b border-[#333] bg-[#1a1a1a]">
@@ -64,4 +65,7 @@ export function AIImprovePopover({
       </div>
     </div>
   );
+
+  if (typeof window === 'undefined' || !document?.body) return popover;
+  return createPortal(popover, document.body);
 }

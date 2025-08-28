@@ -114,6 +114,13 @@ export async function GET(request: NextRequest) {
             issuePrefix: true,
           }
         },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          }
+        },
         assignee: {
           select: {
             id: true,
@@ -138,6 +145,7 @@ export async function GET(request: NextRequest) {
       status: issue.status,
       priority: issue.priority,
       project: issue.project,
+      workspace: issue.workspace,
       assignee: issue.assignee,
     }));
 

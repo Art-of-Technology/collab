@@ -35,9 +35,12 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     issueCounts,
     displayProperties,
     isLoadingStatuses,
+    draggedIssue,
+    hoverState,
     
     // Handlers
     handleDragStart,
+    handleDragUpdate,
     handleDragEnd,
     handleIssueClick,
     handleCreateIssue,
@@ -73,8 +76,11 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             projects={view.projects || []}
             workspaceId={workspaceId || workspace?.id || ''}
             currentUserId={currentUserId || ''}
+            draggedIssue={draggedIssue}
+            hoverState={hoverState}
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
+            onDragUpdate={handleDragUpdate}
             onIssueClick={handleIssueClick}
             onCreateIssue={handleCreateIssue}
             onStartCreatingIssue={handleStartCreatingIssue}

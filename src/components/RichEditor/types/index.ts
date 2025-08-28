@@ -51,6 +51,11 @@ export interface Issue {
     slug?: string;
     issuePrefix?: string;
   } | null;
+  workspace?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   assignee?: {
     id: string;
     name: string | null;

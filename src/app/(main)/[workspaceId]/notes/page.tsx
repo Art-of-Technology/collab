@@ -1,38 +1,15 @@
 /* eslint-disable */
 "use client";
 
-
 import { useState, useEffect, useMemo, useRef } from "react";
 
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Search,
-  Plus,
-  Filter,
-  Star,
-  FileText,
-  Tag as TagIcon,
-  Edit,
-  Trash2,
-  Eye,
-  Lock
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import PageHeader from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
@@ -78,11 +55,11 @@ interface NoteTag {
 // Utility function to process note content for preview
 const getNotePreview = (content: string, maxLength: number = 100) => {
   const processedContent = content
-    .replace(/<p[^>]*>/gi, '')
-    .replace(/<\/p>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/<p[^>]*>/gi, "")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 
   const truncated = processedContent.length > maxLength;
@@ -163,28 +140,24 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle navigation keys when tag dropdown is open
-      if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
+      if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) {
         return;
       }
 
       const totalItems = filteredTags.length + 1;
 
       switch (e.key) {
-        case 'ArrowDown':
+        case "ArrowDown":
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex(prev =>
-            prev < totalItems - 1 ? prev + 1 : 0
-          );
+          setSelectedIndex((prev) => (prev < totalItems - 1 ? prev + 1 : 0));
           break;
-        case 'ArrowUp':
+        case "ArrowUp":
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex(prev =>
-            prev > 0 ? prev - 1 : totalItems - 1
-          );
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : totalItems - 1));
           break;
-        case 'Enter':
+        case "Enter":
           e.preventDefault();
           e.stopPropagation();
           if (selectedIndex === 0) {
@@ -198,7 +171,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             setIsTagDropdownOpen(false);
           }
           break;
-        case 'Escape':
+        case "Escape":
           e.preventDefault();
           e.stopPropagation();
           setIsTagDropdownOpen(false);
@@ -207,15 +180,15 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     };
 
     // Add global event listener with capture phase (like other working components)
-    document.addEventListener('keydown', handleKeyDown, true);
-    return () => document.removeEventListener('keydown', handleKeyDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [isTagDropdownOpen, selectedIndex, filteredTags]);
 
   // Auto-scroll to selected item
   useEffect(() => {
     if (selectedIndex >= 0 && tagListRef.current) {
       const container = tagListRef.current;
-      const items = container.querySelectorAll('[data-tag-index]');
+      const items = container.querySelectorAll("[data-tag-index]");
       const selectedItem = items[selectedIndex] as HTMLElement;
 
       if (selectedItem) {
@@ -224,11 +197,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
         // Check if item is above the visible area
         if (itemRect.top < containerRect.top) {
-          container.scrollTop -= (containerRect.top - itemRect.top) + 10;
+          container.scrollTop -= containerRect.top - itemRect.top + 10;
         }
         // Check if item is below the visible area
         else if (itemRect.bottom > containerRect.bottom) {
-          container.scrollTop += (itemRect.bottom - containerRect.bottom) + 10;
+          container.scrollTop += itemRect.bottom - containerRect.bottom + 10;
         }
       }
     }
@@ -240,7 +213,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       if (searchQuery) params.append("search", searchQuery);
       if (selectedTag) params.append("tag", selectedTag);
       if (showFavorites) params.append("favorite", "true");
-      
+
       // Handle tab-based filtering
       switch (activeTab) {
         case "private":
@@ -276,8 +249,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           break;
       }
 
-
-
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
         const data = await response.json();
@@ -305,9 +276,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const fetchTags = async () => {
     try {
       // Always send workspace parameter for My Notes filtering
-      const url = workspaceId 
-        ? `/api/notes/tags?workspace=${workspaceId}`
-        : "/api/notes/tags";
+      const url = workspaceId ? `/api/notes/tags?workspace=${workspaceId}` : "/api/notes/tags";
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -327,7 +296,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       });
 
       if (response.ok) {
-        setNotes(notes.filter(note => note.id !== noteId));
+        setNotes(notes.filter((note) => note.id !== noteId));
         toast({
           title: "Success",
           description: "Note deleted successfully",
@@ -357,9 +326,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
       if (response.ok) {
         const updatedNote = await response.json();
-        setNotes(notes.map(note =>
-          note.id === noteId ? updatedNote : note
-        ));
+        setNotes(notes.map((note) => (note.id === noteId ? updatedNote : note)));
       }
     } catch (error) {
       console.error("Error toggling favorite:", error);
@@ -380,22 +347,18 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   }
 
   return (
-    <div className="container mx-auto py-6 px-1">
-      <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-4 tracking-tight">Notes</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Create and organize your notes with markdown support
-            </p>
-          </div>
-
+    <div className="h-full flex flex-col bg-[#101011]">
+      {/* Header */}
+      <PageHeader
+        icon={FileText}
+        title="Notes"
+        subtitle="Create and organize your notes with markdown support"
+        actions={
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="w-[100px] sm:w-auto text-sm sm:text-base h-8 sm:h-10 px-1 sm:px-4 gap-0 sm:gap-2 sm:mt-6" style={{ fontSize: '14px' }}>
-                <Plus className="h-3 w-3 mr-1 sm:h-4 sm:w-4" />
-                <span className="ml-0 sm:ml-0">New Note</span>
+              <Button className="h-6 px-1 md:px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md transition-all duration-200 flex items-center justify-center">
+                <Plus className="h-3.5 w-3.5 md:mr-2" />
+                <span data-text className="hidden md:inline ml-1">New Note</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -412,275 +375,272 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               />
             </DialogContent>
           </Dialog>
-        </div>
+        }
+      />
 
-        {/* Filters and Search */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 text-xs sm:text-sm h-7 sm:h-10"
-              style={{ fontSize: '14px' }}
-            />
-          </div>
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="container mx-auto py-6 px-1">
+          <div className="flex flex-col gap-6">
+            {/* Filters and Search */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search notes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 text-xs sm:text-sm h-7 sm:h-10"
+                  style={{ fontSize: "14px" }}
+                />
+              </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant={showFavorites ? "default" : "outline"}
-              onClick={() => setShowFavorites(!showFavorites)}
-              className="text-xs w-[100px] sm:text-sm h-7 sm:h-10"
-              style={{ fontSize: '14px' }}
-            >
-              <Star className="h-4 w-4" />
-              Favorites
-            </Button>
-
-            <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: '14px' }}>
-                  <Filter className="h-4 w-4" />
-                  {selectedTag ? tags.find(t => t.id === selectedTag)?.name : "All Tags"}
+              <div className="flex gap-2">
+                <Button
+                  variant={showFavorites ? "default" : "outline"}
+                  onClick={() => setShowFavorites(!showFavorites)}
+                  className="text-xs w-[100px] sm:text-sm h-7 sm:h-10"
+                  style={{ fontSize: "14px" }}
+                >
+                  <Star className="h-4 w-4" />
+                  Favorites
                 </Button>
-              </DialogTrigger>
-              <DialogContent ref={tagDialogContentRef} className="tag-dialog-content">
-                <div className="p-2 sm:p-4 border-b">
-                  <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
-                  <div className="relative mt-2 mb-1">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-3 w-3 sm:h-4 sm:w-4" />
-                    <Input
-                      ref={tagSearchInputRef}
-                      placeholder="Search tags..."
-                      value={tagSearchTerm}
-                      onChange={(e) => setTagSearchTerm(e.target.value)}
-                      className="pl-6 sm:pl-8 text-sm sm:text-base h-8 sm:h-10"
-                    />
-                  </div>
-                </div>
-                <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
-                  <div
-                    data-tag-index="0"
-                    className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${selectedIndex === 0 ? 'bg-primary text-primary-foreground' : 'border-transparent hover:border-primary hover:bg-primary/10'
-                      }`}
-                    onClick={() => {
-                      setSelectedTag(null);
-                      setTagSearchTerm("");
-                      setIsTagDropdownOpen(false);
-                    }}
-                  >
-                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-600" />
-                    All Tags
-                  </div>
-                  {filteredTags.map((tag, index) => (
-                    <div
-                      key={tag.id}
-                      data-tag-index={index + 1}
-                      className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${selectedIndex === index + 1
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-primary/10'
-                        }`}
-                      onClick={() => {
-                        setSelectedTag(tag.id);
-                        setTagSearchTerm("");
-                        setIsTagDropdownOpen(false);
-                      }}
-                    >
-                      <div
-                        className="w-2 h-2 sm:w-3 sm:h-3 rounded-full"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      {tag.name} ({tag._count.notes})
-                    </div>
-                  ))}
-                  {filteredTags.length === 0 && tagSearchTerm.trim() && (
-                    <div className="px-2 py-2 text-sm sm:text-base text-muted-foreground text-center">
-                      No tags found matching "{tagSearchTerm}"
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
 
-        {/* Horizontal Tabs */}
-        <div className="max-w-2xl">
-          <div className="flex gap-8 border-b border-border w-fit">
-            <button 
-              onClick={() => setActiveTab("all")}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "all" 
-                  ? "text-primary border-primary" 
-                  : "text-muted-foreground border-transparent hover:text-foreground"
-              }`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setActiveTab("private")}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "private" 
-                  ? "text-primary border-primary" 
-                  : "text-muted-foreground border-transparent hover:text-foreground"
-              }`}
-            >
-              Private
-            </button>
-            <button 
-              onClick={() => setActiveTab("public")}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "public" 
-                  ? "text-primary border-primary" 
-                  : "text-muted-foreground border-transparent hover:text-foreground"
-              }`}
-            >
-              Public
-            </button>
-            <div className="border-l border-border h-6 self-end mb-3"></div>
-            <button 
-              onClick={() => setActiveTab("team-notes")}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === "team-notes" 
-                  ? "text-primary border-primary" 
-                  : "text-muted-foreground border-transparent hover:text-foreground"
-              }`}
-            >
-              Team Notes
-            </button>
-          </div>
-        </div>
-
-        {/* Notes Grid */}
-        {notes.length === 0 ? (
-          <div className="text-center py-12">
-            <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h3 className="mt-4 text-lg font-medium">No notes found</h3>
-            <p className="text-muted-foreground">
-              {searchQuery || selectedTag || showFavorites
-                ? "Try adjusting your filters"
-                : activeTab === "private" || activeTab === "public" || activeTab === "all"
-                  ? "Get started by creating your first note"
-                  : "No team notes found"}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-            {notes.map((note) => (
-              <Link
-                key={note.id}
-                href={`/${workspaceId}/notes/${note.id}`}
-                className="block"
-              >
-                <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
-                  <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
-                    {/* Author mention on the left */}
-                    <div className="flex items-center gap-1 sm:gap-2">
-                      <span className="text-xs sm:text-sm text-muted-foreground">@{note.author.name}</span>
-                    </div>
-                    
-                    {/* Action buttons on the right */}
-                    <div className="flex items-center gap-3 sm:gap-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toggleFavorite(note.id, note.isFavorite);
-                        }}
-                      >
-                        <Star
-                          className={`h-1 w-1 sm:h-4 sm:w-4 ${note.isFavorite
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "text-muted-foreground"
-                            }`}
+                <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: "14px" }}>
+                      <Filter className="h-4 w-4" />
+                      {selectedTag ? tags.find((t) => t.id === selectedTag)?.name : "All Tags"}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent ref={tagDialogContentRef} className="tag-dialog-content">
+                    <div className="p-2 sm:p-4 border-b">
+                      <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
+                      <div className="relative mt-2 mb-1">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-3 w-3 sm:h-4 sm:w-4" />
+                        <Input
+                          ref={tagSearchInputRef}
+                          placeholder="Search tags..."
+                          value={tagSearchTerm}
+                          onChange={(e) => setTagSearchTerm(e.target.value)}
+                          className="pl-6 sm:pl-8 text-sm sm:text-base h-8 sm:h-10"
                         />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setEditingNote(note);
-                        }}
-                      >
-                        <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleDeleteNote(note.id);
-                        }}
-                      >
-                        <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
-                      </Button>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mb-2 sm:mb-3">
-                    <h3 className="font-semibold line-clamp-1 text-sm sm:text-base flex-1">{note.title}</h3>
-                    <div className="flex items-center gap-1 ml-2">
-                      {note.isPublic ? (
-                        <div title="Public note">
-                          <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
+                    <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
+                      <div
+                        data-tag-index="0"
+                        className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
+                          selectedIndex === 0
+                            ? "bg-primary text-primary-foreground"
+                            : "border-transparent hover:border-primary hover:bg-primary/10"
+                        }`}
+                        onClick={() => {
+                          setSelectedTag(null);
+                          setTagSearchTerm("");
+                          setIsTagDropdownOpen(false);
+                        }}
+                      >
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-600" />
+                        All Tags
+                      </div>
+                      {filteredTags.map((tag, index) => (
+                        <div
+                          key={tag.id}
+                          data-tag-index={index + 1}
+                          className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${
+                            selectedIndex === index + 1 ? "bg-primary text-primary-foreground" : "hover:bg-primary/10"
+                          }`}
+                          onClick={() => {
+                            setSelectedTag(tag.id);
+                            setTagSearchTerm("");
+                            setIsTagDropdownOpen(false);
+                          }}
+                        >
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                          {tag.name} ({tag._count.notes})
                         </div>
-                      ) : (
-                        <div title="Private note">
-                          <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                      ))}
+                      {filteredTags.length === 0 && tagSearchTerm.trim() && (
+                        <div className="px-2 py-2 text-sm sm:text-base text-muted-foreground text-center">
+                          No tags found matching "{tagSearchTerm}"
                         </div>
                       )}
                     </div>
-                  </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
 
-                  <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
-                    <div className="text-muted-foreground text-sm sm:text-sm">
-                      {(() => {
-                        const { preview, truncated } = getNotePreview(note.content, 100);
-                        return (
-                          <>
-                            {preview}
-                            {truncated && '...'}
-                          </>
-                        );
-                      })()}
+            {/* Horizontal Tabs */}
+            <div className="max-w-2xl">
+              <div className="flex gap-8 border-b border-border w-fit">
+                <button
+                  onClick={() => setActiveTab("all")}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "all" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setActiveTab("private")}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "private"
+                      ? "text-primary border-primary"
+                      : "text-muted-foreground border-transparent hover:text-foreground"
+                  }`}
+                >
+                  Private
+                </button>
+                <button
+                  onClick={() => setActiveTab("public")}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "public"
+                      ? "text-primary border-primary"
+                      : "text-muted-foreground border-transparent hover:text-foreground"
+                  }`}
+                >
+                  Public
+                </button>
+                <div className="border-l border-border h-6 self-end mb-3"></div>
+                <button
+                  onClick={() => setActiveTab("team-notes")}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "team-notes"
+                      ? "text-primary border-primary"
+                      : "text-muted-foreground border-transparent hover:text-foreground"
+                  }`}
+                >
+                  Team Notes
+                </button>
+              </div>
+            </div>
+
+            {/* Notes Grid */}
+            {notes.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-4 text-lg font-medium">No notes found</h3>
+                <p className="text-muted-foreground">
+                  {searchQuery || selectedTag || showFavorites
+                    ? "Try adjusting your filters"
+                    : activeTab === "private" || activeTab === "public" || activeTab === "all"
+                    ? "Get started by creating your first note"
+                    : "No team notes found"}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+                {notes.map((note) => (
+                  <Link key={note.id} href={`/${workspaceId}/notes/${note.id}`} className="block">
+                    <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
+                      <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
+                        {/* Author mention on the left */}
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <span className="text-xs sm:text-sm text-muted-foreground">@{note.author.name}</span>
+                        </div>
+
+                        {/* Action buttons on the right */}
+                        <div className="flex items-center gap-3 sm:gap-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              toggleFavorite(note.id, note.isFavorite);
+                            }}
+                          >
+                            <Star
+                              className={`h-1 w-1 sm:h-4 sm:w-4 ${
+                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                              }`}
+                            />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setEditingNote(note);
+                            }}
+                          >
+                            <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteNote(note.id);
+                            }}
+                          >
+                            <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mb-2 sm:mb-3">
+                        <h3 className="font-semibold line-clamp-1 text-sm sm:text-base flex-1">{note.title}</h3>
+                        <div className="flex items-center gap-1 ml-2">
+                          {note.isPublic ? (
+                            <div title="Public note">
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
+                            </div>
+                          ) : (
+                            <div title="Private note">
+                              <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
+                        <div className="text-muted-foreground text-sm sm:text-sm">
+                          {(() => {
+                            const { preview, truncated } = getNotePreview(note.content, 100);
+                            return (
+                              <>
+                                {preview}
+                                {truncated && "..."}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {note.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
+                          {note.tags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              variant="secondary"
+                              className="text-sm px-1 py-0.5 sm:px-2 sm:py-1"
+                              style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                            >
+                              <TagIcon className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                              {tag.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="text-sm text-muted-foreground mt-auto">
+                        Updated {new Date(note.updatedAt).toLocaleDateString()}
+                        {note.workspace && <span className="ml-2">• {note.workspace.name}</span>}
+                      </div>
                     </div>
-                  </div>
-
-                  {note.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
-                      {note.tags.map((tag) => (
-                        <Badge
-                          key={tag.id}
-                          variant="secondary"
-                          className="text-sm px-1 py-0.5 sm:px-2 sm:py-1"
-                          style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                        >
-                          <TagIcon className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
-                          {tag.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="text-sm text-muted-foreground mt-auto">
-                    Updated {new Date(note.updatedAt).toLocaleDateString()}
-                    {note.workspace && (
-                      <span className="ml-2">• {note.workspace.name}</span>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            ))}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Edit Note Dialog */}
@@ -704,4 +664,4 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       )}
     </div>
   );
-} 
+}

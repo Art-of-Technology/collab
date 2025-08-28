@@ -164,7 +164,7 @@ export function IssueAssigneeSelector({
           <button
             type="button"
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-            onClick={() => onChange(undefined as any)}
+            onClick={() => onChange(null as any)}
           >
             <div className="h-5 w-5 rounded-full border-2 border-dashed border-[#555] flex items-center justify-center">
               <UserX className="h-2.5 w-2.5 text-[#6e7681]" />

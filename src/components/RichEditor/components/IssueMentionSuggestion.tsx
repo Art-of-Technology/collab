@@ -19,7 +19,7 @@ interface IssueMentionSuggestionProps {
   query: string;
   onSelect: (issue: Issue) => void;
   onEscape?: () => void;
-  workspaceId?: string;
+  workspaceId?: string; // Keep for backwards compatibility but no longer used for filtering
 }
 
 // Priority icon mapping to match IssuePrioritySelector
@@ -88,9 +88,10 @@ export function IssueMentionSuggestion({
       try {
         const params = new URLSearchParams({ q: query || '' });
 
-        if (workspaceId) {
-          params.append('workspace', workspaceId);
-        }
+        // Don't pass workspaceId to search across all accessible workspaces
+        // if (workspaceId) {
+        //   params.append('workspace', workspaceId);
+        // }
 
         const response = await fetch(`/api/issues/search?${params}`);
         if (response.ok) {
@@ -111,7 +112,7 @@ export function IssueMentionSuggestion({
     };
 
     fetchIssues();
-  }, [query, workspaceId]);
+  }, [query]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -234,6 +235,15 @@ export function IssueMentionSuggestion({
                   {issue.title}
                 </span>
               </div>
+              
+              {/* Workspace name - only show if it exists and is different from current context */}
+              {issue.workspace && (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[#6e7681] text-[10px] font-mono">
+                    {issue.workspace.name}
+                  </span>
+                </div>
+              )}
             </div>
           </button>
         );

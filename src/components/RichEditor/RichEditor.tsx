@@ -83,7 +83,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const [isImproving, setIsImproving] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
-  const [savedSelection, setSavedSelection] = useState<{ from: number; to: number } | null>(null);
+  const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
   const [isEmpty, setIsEmpty] = useState(!value || value === '' || value === '<p></p>' || value === '<p><br></p>');
   
   // Initialize editor with extensions
@@ -360,21 +360,150 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   }, [editor, checkForMentionTrigger]);
 
   const applyImprovedText = useCallback(() => {
-    if (!editor || !improvedText || !savedSelection) return;
+    if (!editor || !improvedText || !savedSelection) {
+      console.log('applyImprovedText: Missing required data', { 
+        hasEditor: !!editor, 
+        hasImprovedText: !!improvedText, 
+        hasSavedSelection: !!savedSelection 
+      });
+      return;
+    }
     
-    // Replace only the originally selected text
-    const { from, to } = savedSelection;
+    const { from, to, originalText } = savedSelection;
+    try {
+      // Get current document state
+      const currentDoc = editor.state.doc;
+      const currentDocLength = currentDoc.content.size;
+      
+      console.log('applyImprovedText: Document info', {
+        currentDocLength,
+        from,
+        to,
+        isValidRange: from >= 0 && to <= currentDocLength
+      });
+      
+      // Try direct replacement first
+      if (from >= 0 && to <= currentDocLength && from <= to) {
+        const currentTextAtPosition = currentDoc.textBetween(from, to, ' ');
+        console.log('applyImprovedText: Text at saved position', { 
+          currentTextAtPosition, 
+          originalText,
+          matches: currentTextAtPosition === originalText 
+        });
+        
+        // Try the replacement regardless of whether text matches exactly
+        // This handles cases where formatting might affect comparison
+        console.log('applyImprovedText: Attempting replacement at saved positions');
+        
+        const result = editor.chain()
+          .focus()
+          .setTextSelection({ from, to })
+          .deleteSelection()
+          .insertContent(improvedText)
+          .run();
+          
+        console.log('applyImprovedText: Replacement result', result);
+        
+        if (result) {
+          console.log('applyImprovedText: Direct replacement successful');
+          setImprovedText(null);
+          setShowImprovePopover(false);
+          setSavedSelection(null);
+          return;
+        }
+      }
+      
+      // Fallback 1: Search for the original text in the document
+      console.log('applyImprovedText: Direct replacement failed, searching for text');
+      const fullText = editor.getText();
+      const originalTextIndex = fullText.indexOf(originalText);
+      
+      if (originalTextIndex !== -1) {
+        console.log('applyImprovedText: Found original text at index', originalTextIndex);
+        
+        // Calculate character positions in the document
+        // This is a simplified approach - for complex docs we'd need more sophisticated position mapping
+        let charCount = 0;
+        let foundFrom = -1;
+        let foundTo = -1;
+        
+        // Walk through the document to find the correct positions
+        currentDoc.descendants((node, pos) => {
+          if (node.isText) {
+            const nodeText = node.text || '';
+            const nodeStart = charCount;
+            const nodeEnd = charCount + nodeText.length;
+            
+            if (originalTextIndex >= nodeStart && originalTextIndex < nodeEnd) {
+              foundFrom = pos + (originalTextIndex - nodeStart);
+              foundTo = foundFrom + originalText.length;
+              return false; // Stop traversing
+            }
+            
+            charCount += nodeText.length;
+          } else if (node.isBlock) {
+            charCount += 1; // Add space for block breaks
+          }
+          return true;
+        });
+        
+        if (foundFrom !== -1 && foundTo !== -1) {
+          console.log('applyImprovedText: Found positions', { foundFrom, foundTo });
+          
+          const result = editor.chain()
+            .focus()
+            .setTextSelection({ from: foundFrom, to: foundTo })
+            .deleteSelection()
+            .insertContent(improvedText)
+            .run();
+            
+          if (result) {
+            console.log('applyImprovedText: Search-based replacement successful');
+            setImprovedText(null);
+            setShowImprovePopover(false);
+            setSavedSelection(null);
+            return;
+          }
+        }
+      }
+      
+      // Fallback 2: Replace current selection if any
+      console.log('applyImprovedText: Using current selection fallback');
+      const { from: currentFrom, to: currentTo } = editor.state.selection;
+      
+      if (currentFrom !== currentTo) {
+        console.log('applyImprovedText: Replacing current selection');
+        editor.chain()
+          .focus()
+          .deleteSelection()
+          .insertContent(improvedText)
+          .run();
+      } else {
+        console.log('applyImprovedText: Inserting at cursor position');
+        editor.chain()
+          .focus()
+          .insertContent(improvedText)
+          .run();
+      }
+      
+      console.log('applyImprovedText: Fallback replacement completed');
+      
+    } catch (error) {
+      console.error('applyImprovedText: Error during replacement', error);
+      
+      // Final fallback: just insert the text
+      try {
+        editor.chain()
+          .focus()
+          .insertContent(improvedText)
+          .run();
+        console.log('applyImprovedText: Final fallback successful');
+      } catch (finalError) {
+        console.error('applyImprovedText: All replacement methods failed', finalError);
+      }
+    }
     
-    // Parse markdown to proper HTML
-    const htmlContent = parseMarkdownToTipTap(improvedText);
-    
-    editor.chain()
-      .focus()
-      .setTextSelection({ from, to })
-      .deleteSelection()
-      .insertContent(htmlContent)
-      .run();
-    
+    // Clean up state
     setImprovedText(null);
     setShowImprovePopover(false);
     setSavedSelection(null);
@@ -443,10 +572,18 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     // AI Improve event handlers
     const handleAiImproveReady = (event: CustomEvent) => {
       const { improvedText, savedSelection } = event.detail;
+      console.log('handleAiImproveReady: Received AI improve result', {
+        improvedText,
+        savedSelection,
+        eventDetail: event.detail
+      });
+      
       setImprovedText(improvedText);
       setSavedSelection(savedSelection);
       setShowImprovePopover(true);
       setIsImproving(false);
+      
+      console.log('handleAiImproveReady: State updated, popover should be visible');
     };
 
     const handleAiImproveError = (event: CustomEvent) => {
@@ -519,11 +656,18 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
       {/* Editor Container */}
       <div 
-        className={cn("relative cursor-text flex-1", toolbarMode === 'static' ? "p-3" : "")} 
+        className={cn(
+          "relative cursor-text flex-1", 
+          toolbarMode === 'static' ? "p-0" : "",
+          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : ""
+        )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
         onKeyDown={onKeyDown}
-        style={{ minHeight: toolbarMode === 'static' ? 'auto' : minHeight }}
+        style={{ 
+          minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
+          maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined
+        }}
       >
         {/* Custom Placeholder Overlay */}
         {isEmpty && !readOnly && (
@@ -531,8 +675,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             className="absolute pointer-events-none text-[#6e7681] text-sm z-0"
             style={{ 
               // In static mode, offset by the container's p-3 padding (12px)
-              top: toolbarMode === 'static' ? '12px' : '0',
-              left: toolbarMode === 'static' ? '12px' : '0',
+              top: toolbarMode === 'static' ? '0' : '0',
+              left: toolbarMode === 'static' ? '0' : '0',
               lineHeight: '1.5',
               fontSize: '14px'
             }}
@@ -548,7 +692,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             "focus-within:outline-none"
           )}
           style={{ 
-            minHeight: toolbarMode === 'static' ? '100px' : minHeight,
+            minHeight: toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight),
             padding: toolbarMode === 'static' ? '0' : '0' // Remove any default padding
           }}
         />
@@ -556,7 +700,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         {/* Global CSS for TipTap styling */}
         <style jsx global>{`
           .ProseMirror {
-            min-height: ${toolbarMode === 'static' ? '100px' : minHeight};
+            min-height: ${toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight)};
             outline: none;
             padding: 0;
             line-height: 1.5;

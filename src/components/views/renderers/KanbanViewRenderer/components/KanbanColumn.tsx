@@ -7,7 +7,8 @@ import {
   Plus,
   GripVertical,
   Check,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable, Droppable } from "@hello-pangea/dnd";
@@ -28,6 +29,8 @@ export default function KanbanColumn({
   projects,
   workspaceId,
   currentUserId,
+  draggedIssue,
+  hoverState,
   onIssueClick,
   onCreateIssue,
   onStartCreatingIssue,
@@ -41,6 +44,10 @@ export default function KanbanColumn({
   onColumnNameChange,
   onIssueCreated
 }: KanbanColumnProps) {
+
+  const shouldShowDisabledState = hoverState.columnId === column.id && !hoverState.canDrop;
+  const cannotDropReason = `Cannot drop issue from ${draggedIssue?.project?.name || 'different project'} here`;
+
   return (
     <Draggable key={column.id} draggableId={column.id} index={index}>
       {(provided, snapshot) => (
@@ -97,6 +104,11 @@ export default function KanbanColumn({
                   <Badge variant="secondary" className="text-xs bg-[#1f1f1f] text-[#999] border-0">
                     {column.issues.length}
                   </Badge>
+                  {shouldShowDisabledState && (
+                    <div title={cannotDropReason}>
+                      <AlertCircle className="h-4 w-4 text-red-400 ml-2" />
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -117,10 +129,19 @@ export default function KanbanColumn({
                 ref={provided.innerRef}
                 {...provided.droppableProps}
                 className={cn(
-                  "flex-1 space-y-2 min-h-[200px] rounded-lg transition-colors",
-                  snapshot.isDraggingOver && "bg-[#1a1a1a]"
+                  "relative flex-1 space-y-2 min-h-[200px] rounded-lg transition-all duration-200 overflow-y-auto",
+                  snapshot.isDraggingOver && !shouldShowDisabledState && "bg-[#1a1a1a] border border-[#0969da]",
+                  snapshot.isDraggingOver && shouldShowDisabledState && "bg-[#1a1a1a] border border-red-500",
                 )}
               >
+                {snapshot.isDraggingOver && shouldShowDisabledState && (
+                  <div className="absolute inset-0 bg-red-700/10 z-10">
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-white text-sm">{cannotDropReason}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Create Issue Input */}
                 {isCreatingIssue && (
                   <QuickIssueCreate
@@ -148,9 +169,13 @@ export default function KanbanColumn({
                 {provided.placeholder}
 
                 {/* Empty Column */}
-                {column.issues.length === 0 && !isCreatingIssue && (
+                {column.issues.length === 0 && !isCreatingIssue && !snapshot.isDraggingOver && (
                   <div
-                    className="flex items-center justify-center h-32 text-[#666] border-2 border-dashed border-[#2a2a2a] rounded-lg hover:border-[#0969da] transition-colors cursor-pointer"
+                    className={cn(
+                      "flex items-center justify-center h-32 text-[#666] border-2 border-dashed border-[#2a2a2a] rounded-lg transition-colors cursor-pointer",
+                      snapshot.isDraggingOver && "pointer-events-none",
+                      !snapshot.isDraggingOver && "hover:border-[#0969da]"
+                    )}
                     onClick={() => onStartCreatingIssue(column.id)}
                   >
                     <div className="text-center">
