@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -32,7 +31,6 @@ import {
   ViewGroupingSelector,
   ViewOrderingSelector,
   ViewDisplayPropertiesSelector,
-  ViewFiltersSelector,
   StatusSelector,
   PrioritySelector,
   TypeSelector,
@@ -116,7 +114,13 @@ export default function CreateViewModal({
     grouping: 'none',
     ordering: 'manual',
     displayProperties: ['Priority', 'Status', 'Assignee'],
-    filters: {} as Record<string, string[]>
+    filters: {
+      status: [] as string[],
+      priority: [] as string[],
+      type: [] as string[],
+      assignee: [] as string[],
+      labels: [] as string[]
+    }
   });
   const { toast } = useToast();
   const createViewMutation = useCreateView();

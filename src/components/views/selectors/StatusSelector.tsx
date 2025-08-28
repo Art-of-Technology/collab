@@ -32,7 +32,7 @@ export function StatusSelector({
     queryKey: ['statuses', projectIds],
     queryFn: () => getProjectStatuses(projectIds),
     staleTime: 5 * 60 * 1000, // 5 minutes
-  })
+  });
 
   if (isError) return null;
 
