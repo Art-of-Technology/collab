@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -202,7 +202,7 @@ export default function ViewRenderer({
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
-  const [tempDisplayProperties, setTempDisplayProperties] = useState(view.fields || []);
+  const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
@@ -264,7 +264,7 @@ export default function ViewRenderer({
     displayType: view.displayType,
     grouping: view.grouping?.field || 'none',
     ordering: view.sorting?.field || 'manual',
-    displayProperties: view.fields || [],
+    displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
     filters: view.filters || {}
   });
 
@@ -274,11 +274,13 @@ export default function ViewRenderer({
       displayType: view.displayType,
       grouping: view.grouping?.field || 'none',
       ordering: view.sorting?.field || 'manual',
-      displayProperties: view.fields || [],
+      displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
       filters: view.filters || {}
     });
     // Reset temp project IDs when view changes
     setTempProjectIds(view.projects.map(p => p.id));
+    // Sync temp display properties with view on view change
+    setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
   
   // Update ViewFilters context with current data
@@ -294,12 +296,14 @@ export default function ViewRenderer({
 
   // Check if current state differs from last saved state
   const hasChanges = useMemo(() => {
+    const sortedTemp = [...tempDisplayProperties].sort();
+    const sortedSaved = [...(lastSavedState.displayProperties || [])].sort();
     return (
       Object.keys(tempFilters).length > 0 ||
       tempDisplayType !== lastSavedState.displayType ||
       tempGrouping !== lastSavedState.grouping ||
       tempOrdering !== lastSavedState.ordering ||
-      JSON.stringify(tempDisplayProperties) !== JSON.stringify(lastSavedState.displayProperties) ||
+      JSON.stringify(sortedTemp) !== JSON.stringify(sortedSaved) ||
       JSON.stringify(tempProjectIds.sort()) !== JSON.stringify(view.projects.map(p => p.id).sort())
     );
   }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects]);

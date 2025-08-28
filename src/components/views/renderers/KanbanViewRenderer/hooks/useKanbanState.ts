@@ -305,8 +305,11 @@ export const useKanbanState = ({
     setShowSubIssues(prev => !prev);
   }, []);
 
-  // Display properties
-  const displayProperties = view.fields || DEFAULT_DISPLAY_PROPERTIES;
+  // Display properties: use raw values; respect empty array; fallback only if undefined
+  const displayProperties = useMemo(() => {
+    if (Array.isArray(view.fields)) return view.fields;
+    return DEFAULT_DISPLAY_PROPERTIES;
+  }, [view.fields]);
 
   // Event handlers for UI interactions
   const handleStartCreatingIssue = useCallback((columnId: string) => {
