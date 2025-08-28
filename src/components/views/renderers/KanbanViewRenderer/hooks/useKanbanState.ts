@@ -89,7 +89,7 @@ export const useKanbanState = ({
     isDraggingRef.current = true;
   }, []);
 
-  const handleDragEnd = useCallback((result: DropResult) => {
+  const handleDragEnd = useCallback(async (result: DropResult) => {
     const { destination, source, draggableId, type } = result;
 
     if (!destination) {
