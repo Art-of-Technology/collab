@@ -54,15 +54,6 @@ export async function getProjectStatuses(projectIds: string[]) {
     return statuses
 
   } catch (error) {
-    // Log the error for debugging (in production, use proper logging)
-    console.error('Error in getProjectStatuses:', error)
-    
-    // Re-throw known errors with user-friendly messages
-    if (error instanceof Error) {
-      throw error
-    }
-    
-    // Handle unexpected errors
     throw new Error('Failed to fetch project statuses. Please try again.')
   }
 }
