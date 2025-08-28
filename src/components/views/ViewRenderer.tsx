@@ -838,15 +838,15 @@ export default function ViewRenderer({
         subtitle={`${sortedIssues.length} ${sortedIssues.length === 1 ? 'issue' : 'issues'}`}
         leftContent={
           hasChanges && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={resetToDefaults}
                 className={pageHeaderButtonStyles.reset}
               >
-                <RotateCcw className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">Reset</span>
+                <RotateCcw className="h-3 w-3 lg:mr-1" />
+                <span className="hidden lg:inline">Reset</span>
               </Button>
               <Button
                 variant="ghost"
@@ -854,8 +854,8 @@ export default function ViewRenderer({
                 onClick={handleUpdateView}
                 className={pageHeaderButtonStyles.update}
               >
-                <Save className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">Update</span>
+                <Save className="h-3 w-3 lg:mr-1" />
+                <span className="hidden lg:inline">Update</span>
               </Button>
               <Button
                 variant="ghost"
@@ -863,8 +863,8 @@ export default function ViewRenderer({
                 onClick={() => setShowSaveDialog(true)}
                 className={pageHeaderButtonStyles.danger}
               >
-                <Save className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">Save as new</span>
+                <Save className="h-3 w-3 lg:mr-1" />
+                <span className="hidden lg:inline">Save as new</span>
               </Button>
             </div>
           )
