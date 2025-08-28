@@ -370,20 +370,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     }
     
     const { from, to, originalText } = savedSelection;
-    console.log('applyImprovedText: Starting replacement', { 
-      from, 
-      to, 
-      originalText, 
-      improvedText,
-      editorHTML: editor.getHTML(),
-      editorText: editor.getText()
-    });
-    
     try {
-      // Simple approach: just replace the text as plain text first
-      // TipTap will handle the formatting
-      console.log('applyImprovedText: Attempting direct text replacement');
-      
       // Get current document state
       const currentDoc = editor.state.doc;
       const currentDocLength = currentDoc.content.size;

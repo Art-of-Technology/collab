@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import AssistantWrapper from "@/components/layout/AssistantWrapper";
 import ChatboxWrapper from "./ChatboxWrapper";
 import { AppDock } from "@/components/dock";
-import { useCommandMenu } from "@/components/ui/command-menu";
+import { useCommandMenu, CommandMenu } from "@/components/ui/command-menu";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -50,16 +51,14 @@ export default function LayoutWithSidebar({
                 pathname={pathname}
                 isCollapsed={isCollapsedDesktop}
                 toggleSidebar={toggleDesktop}
-                commandMenuOpen={commandMenuOpen}
-                setCommandMenuOpen={setCommandMenuOpen}
               />
             </div>
           </div>
 
           {/* Main content + right sidebar */}
-          <main className="bg-[#090909] overflow-auto flex">
-            <div className="flex-1 p-2 min-w-0 overflow-auto">
-              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-auto">
+          <main className="bg-[#090909] flex h-full md:overflow-auto">
+            <div className="flex-1 p-2 min-w-0 md:overflow-auto">
+              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-y-auto">
                 {children}
               </div>
             </div>
@@ -78,8 +77,6 @@ export default function LayoutWithSidebar({
                 pathname={pathname}
                 isCollapsed={false}
                 toggleSidebar={toggleMobile}
-                commandMenuOpen={commandMenuOpen}
-                setCommandMenuOpen={setCommandMenuOpen}
               />
             </div>
           </div>
@@ -92,11 +89,12 @@ export default function LayoutWithSidebar({
             />
           )}
 
+          {/* Desktop sidebar toggle - hidden on mobile since we have bottom nav */}
           <Button
             variant="ghost"
             size="icon"
             onClick={isMdUp ? toggleDesktop : toggleMobile}
-            className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px]
+            className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px] hidden md:flex
                          bg-[#090909] border border-[#1f1f1f] hover:bg-[#1a1a1a]
                          text-gray-400 hover:text-white rounded-r-md rounded-l-none border-l-0 shadow-md transition-all duration-200"
             style={{ left: `calc(${sidebarLeft} + 8px)` }}
@@ -110,10 +108,17 @@ export default function LayoutWithSidebar({
           </Button>
         </div>
 
-        {/* AI Assistant, Chatbox, and Dock */}
+        {/* AI Assistant, Chatbox, and Navigation */}
         <AssistantWrapper />
         <ChatboxWrapper />
-        <AppDock />
+        {/* <AppDock /> */}
+        <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
+        
+        {/* Global Command Menu */}
+        <CommandMenu
+          open={commandMenuOpen}
+          onOpenChange={setCommandMenuOpen}
+        />
       </div>
     </ViewFiltersProvider>
   );

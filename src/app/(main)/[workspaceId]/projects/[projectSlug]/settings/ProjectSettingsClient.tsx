@@ -299,18 +299,18 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
             <Button
               onClick={handleBack}
               variant="ghost"
-              className="h-7 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className={cn(pageHeaderButtonStyles.ghost, "text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]")}
             >
-              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-              Back to Projects
+              <ArrowLeft className="h-3.5 w-3.5 md:mr-1.5" />
+              <span data-text className="hidden md:inline ml-1">Back to Projects</span>
             </Button>
             <Button
               onClick={handleSave}
               disabled={saving}
-              className={cn(pageHeaderButtonStyles.primary, "h-7 px-3")}
+              className={pageHeaderButtonStyles.primary}
             >
-              <Save className="mr-1.5 h-3.5 w-3.5" />
-              {saving ? 'Saving...' : 'Save Changes'}
+              <Save className="h-3.5 w-3.5 md:mr-1.5" />
+              <span data-text className="hidden md:inline ml-1">{saving ? 'Saving...' : 'Save Changes'}</span>
             </Button>
           </div>
         }
