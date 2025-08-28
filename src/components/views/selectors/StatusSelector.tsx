@@ -28,10 +28,8 @@ export function StatusSelector({
   const [isOpen, setIsOpen] = useState(false);
   const projectIds = projects.map(p => p.id);
 
-  const { data: statuses = [], isLoading, isError } = useQuery({
-    queryKey: ['statuses', projectIds],
-    queryFn: () => getProjectStatuses(projectIds),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes,
+    enabled: projectIds.length > 0,
   });
 
   if (isError) return null;
