@@ -232,7 +232,56 @@ export const useKanbanState = ({
   }, []);
 
   // Display properties
-  const displayProperties = view.fields || DEFAULT_DISPLAY_PROPERTIES;
+  const normalizeDisplayProperties = (properties: string[] | undefined): string[] => {
+    // If undefined (no config), fall back to defaults. If explicitly empty (Clear), respect empty.
+    if (typeof properties === 'undefined') return DEFAULT_DISPLAY_PROPERTIES;
+    if (Array.isArray(properties) && properties.length === 0) return [];
+    const mapToCanonical = (raw: string): string => {
+      const key = (raw || '').toLowerCase().replace(/\s+/g, '');
+      switch (key) {
+        case 'assignee':
+          return 'Assignee';
+        case 'priority':
+          return 'Priority';
+        case 'labels':
+          return 'Labels';
+        case 'duedate':
+          return 'Due Date';
+        case 'storypoints':
+          return 'Story Points';
+        case 'reporter':
+          return 'Reporter';
+        case 'status':
+          return 'Status';
+        case 'project':
+          return 'Project';
+        case 'created':
+        case 'createdat':
+          return 'Created';
+        case 'updated':
+        case 'updatedat':
+          return 'Updated';
+        case 'id':
+          return 'ID';
+        case 'comments':
+          return 'Comments';
+        case 'subissues':
+          return 'Sub-issues';
+        case 'startdate':
+          return 'Start Date';
+        case 'progress':
+          return 'Progress';
+        default:
+          // Fallback to original string if unknown
+          return raw;
+      }
+    };
+    const canonicalSet = new Set<string>();
+    properties.forEach((p) => canonicalSet.add(mapToCanonical(p)));
+    return Array.from(canonicalSet);
+  };
+
+  const displayProperties = normalizeDisplayProperties(view.fields);
 
   // Event handlers for UI interactions
   const handleStartCreatingIssue = useCallback((columnId: string) => {

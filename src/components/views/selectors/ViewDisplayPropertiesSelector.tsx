@@ -20,7 +20,7 @@ const DISPLAY_PROPERTIES = [
   { key: "Status", label: "Status", description: "Show current status" },
   { key: "Assignee", label: "Assignee", description: "Show assigned person" },
   { key: "Labels", label: "Labels", description: "Show issue labels" },
-  { key: "DueDate", label: "Due Date", description: "Show due dates" },
+  { key: "Due Date", label: "Due Date", description: "Show due dates" },
   { key: "Project", label: "Project", description: "Show project information" },
   { key: "Reporter", label: "Reporter", description: "Show who created the issue" },
   { key: "Created", label: "Created", description: "Show creation date" },
@@ -45,11 +45,31 @@ export function ViewDisplayPropertiesSelector({
     return `${value.length} properties`;
   };
 
+  const mapToCanonical = (raw: string): string => {
+    const key = (raw || '').toLowerCase().replace(/\s+/g, '');
+    switch (key) {
+      case 'assignee': return 'Assignee';
+      case 'priority': return 'Priority';
+      case 'labels': return 'Labels';
+      case 'duedate': return 'Due Date';
+      case 'storypoints': return 'Story Points';
+      case 'reporter': return 'Reporter';
+      case 'status': return 'Status';
+      case 'project': return 'Project';
+      case 'created':
+      case 'createdat': return 'Created';
+      case 'updated':
+      case 'updatedat': return 'Updated';
+      default: return raw;
+    }
+  };
+
   const toggleProperty = (propertyKey: string) => {
-    if (value.includes(propertyKey)) {
-      onChange(value.filter(p => p !== propertyKey));
+    const canonical = mapToCanonical(propertyKey);
+    if (value.includes(canonical)) {
+      onChange(value.filter(p => p !== canonical));
     } else {
-      onChange([...value, propertyKey]);
+      onChange([...value, canonical]);
     }
   };
 
@@ -58,7 +78,8 @@ export function ViewDisplayPropertiesSelector({
   };
 
   const selectAll = () => {
-    onChange(DISPLAY_PROPERTIES.map(p => p.key));
+    const all = Array.from(new Set(DISPLAY_PROPERTIES.map(p => mapToCanonical(p.key))));
+    onChange(all);
   };
 
   const clearAll = () => {
