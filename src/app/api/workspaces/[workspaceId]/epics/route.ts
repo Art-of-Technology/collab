@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -22,6 +22,7 @@ export async function GET(
     // Check workspace membership
     const membership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         workspaceId,
         userId: session.user.id
       }
@@ -78,7 +79,7 @@ export async function GET(
     });
 
     return NextResponse.json(epics);
-    
+
   } catch (error) {
     console.error('Error fetching epics:', error);
     return NextResponse.json(

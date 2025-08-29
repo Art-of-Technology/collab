@@ -23,124 +23,124 @@ export async function GET(
 
     const resolvedParams = await params;
     const { taskId } = resolvedParams;
-    
+
     // Check if taskId is an issue key (e.g., WZB-1, DNN1-2)
     const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(taskId);
-  
+
     // Fetch the task either by ID or issue key
-    const task = isIssueKey 
+    const task = isIssueKey
       ? await prisma.task.findFirst({
-          where: { issueKey: taskId },
-          include: {
-            assignee: true,
-            reporter: true,
-            column: true,
-            taskBoard: true,
-            workspace: true,
-            labels: true,
-            story: {
-              select: {
-                id: true,
-                title: true,
-                epic: {
-                  select: {
-                    id: true,
-                    title: true,
-                    milestone: {
-                      select: {
-                        id: true,
-                        title: true,
-                      }
+        where: { issueKey: taskId },
+        include: {
+          assignee: true,
+          reporter: true,
+          column: true,
+          taskBoard: true,
+          workspace: true,
+          labels: true,
+          story: {
+            select: {
+              id: true,
+              title: true,
+              epic: {
+                select: {
+                  id: true,
+                  title: true,
+                  milestone: {
+                    select: {
+                      id: true,
+                      title: true,
                     }
                   }
                 }
               }
-            },
-            parentTask: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-              }
-            },
-            subtasks: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-                status: true,
-              },
-              orderBy: {
-                createdAt: 'desc',
-              }
-            },
-            comments: {
-              include: {
-                author: true,
-              },
-              orderBy: {
-                createdAt: "desc",
-              },
-            },
-            attachments: true,
+            }
           },
-        })
+          parentTask: {
+            select: {
+              id: true,
+              title: true,
+              issueKey: true,
+            }
+          },
+          subtasks: {
+            select: {
+              id: true,
+              title: true,
+              issueKey: true,
+              status: true,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            }
+          },
+          comments: {
+            include: {
+              author: true,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
+          attachments: true,
+        },
+      })
       : await prisma.task.findUnique({
-          where: { id: taskId },
-          include: {
-            assignee: true,
-            reporter: true,
-            column: true,
-            taskBoard: true,
-            workspace: true,
-            labels: true,
-            story: {
-              select: {
-                id: true,
-                title: true,
-                epic: {
-                  select: {
-                    id: true,
-                    title: true,
-                    milestone: {
-                      select: {
-                        id: true,
-                        title: true,
-                      }
+        where: { id: taskId },
+        include: {
+          assignee: true,
+          reporter: true,
+          column: true,
+          taskBoard: true,
+          workspace: true,
+          labels: true,
+          story: {
+            select: {
+              id: true,
+              title: true,
+              epic: {
+                select: {
+                  id: true,
+                  title: true,
+                  milestone: {
+                    select: {
+                      id: true,
+                      title: true,
                     }
                   }
                 }
               }
-            },
-            parentTask: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-              }
-            },
-            subtasks: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-                status: true,
-              },
-              orderBy: {
-                createdAt: 'desc',
-              }
-            },
-            comments: {
-              include: {
-                author: true,
-              },
-              orderBy: {
-                createdAt: "desc",
-              },
-            },
-            attachments: true,
+            }
           },
-        });
+          parentTask: {
+            select: {
+              id: true,
+              title: true,
+              issueKey: true,
+            }
+          },
+          subtasks: {
+            select: {
+              id: true,
+              title: true,
+              issueKey: true,
+              status: true,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            }
+          },
+          comments: {
+            include: {
+              author: true,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
+          attachments: true,
+        },
+      });
 
     if (!task) {
       return NextResponse.json(
@@ -148,7 +148,7 @@ export async function GET(
         { status: 404 }
       );
     }
-    
+
     // Check if user has access to the workspace (either as owner or member)
     const workspaceAccess = await prisma.workspace.findFirst({
       where: {
@@ -168,28 +168,28 @@ export async function GET(
     if (!workspaceAccess) {
       // Enhanced error logging for debugging
       console.error(`Access denied: User ${currentUser.id} attempted to access task ${taskId} in workspace ${task.workspaceId}`);
-      
+
       // Check what workspaces user has access to (both owned and member)
       const ownedWorkspaces = await prisma.workspace.findMany({
         where: { ownerId: currentUser.id },
         select: { id: true, name: true }
       });
-      
+
       const memberWorkspaces = await prisma.workspaceMember.findMany({
-        where: { userId: currentUser.id },
+        where: { userId: currentUser.id, status: true },
         include: { workspace: { select: { id: true, name: true } } }
       });
-      
+
       const allUserWorkspaces = [
         ...ownedWorkspaces.map(w => ({ id: w.id, name: w.name, role: 'OWNER' })),
         ...memberWorkspaces.map(w => ({ id: w.workspace.id, name: w.workspace.name, role: 'MEMBER' }))
       ];
-      
+
       console.error(`User accessible workspaces:`, allUserWorkspaces);
       console.error(`Task workspace: ${task.workspaceId}, Task workspace name: ${task.workspace?.name}`);
-      
+
       return NextResponse.json(
-        { 
+        {
           error: "You don't have access to this task",
           debug: {
             taskWorkspace: task.workspaceId,
@@ -200,11 +200,11 @@ export async function GET(
         { status: 403 }
       );
     }
-    
+
     // Fetch the milestone and epic if they exist
     let milestone = null;
     let epic = null;
-    
+
     if (task.milestoneId) {
       // Task has direct milestone association
       milestone = await prisma.milestone.findUnique({
@@ -218,7 +218,7 @@ export async function GET(
       // Task has milestone via story -> epic -> milestone
       milestone = task.story.epic.milestone;
     }
-    
+
     if (task.epicId) {
       // Task has direct epic association
       epic = await prisma.epic.findUnique({
@@ -232,7 +232,7 @@ export async function GET(
       // Task has epic via story
       epic = task.story.epic;
     }
-    
+
     // Transform attachments to match the component interface
     const transformedTask = {
       ...task,
@@ -318,9 +318,9 @@ export async function DELETE(
       skipTaskIdReference: true
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Task deleted successfully' 
+    return NextResponse.json({
+      success: true,
+      message: 'Task deleted successfully'
     });
 
   } catch (error) {

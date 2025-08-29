@@ -196,23 +196,23 @@ export async function getTaskById(taskId: string) {
           }
         }
       },
-      story: { 
-        select: { 
-          id: true, 
-          title: true, 
+      story: {
+        select: {
+          id: true,
+          title: true,
           epic: {
-            select: { 
-              id: true, 
+            select: {
+              id: true,
               title: true,
               milestone: {
-                select: { 
-                  id: true, 
-                  title: true 
-                } 
+                select: {
+                  id: true,
+                  title: true
+                }
               }
-            } 
+            }
           }
-        } 
+        }
       }
     }
   });
@@ -322,7 +322,8 @@ export async function createTask(data: {
     const isMember = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId,
-        userId: assigneeId
+        userId: assigneeId,
+        status: true
       }
     });
 
@@ -335,12 +336,13 @@ export async function createTask(data: {
 
   // If a reporter is provided, verify they are a member of the workspace
   const reporterToUse = reporterId || user.id;
-  
+
   if (reporterId && reporterId !== user.id) {
     const isMember = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId,
-        userId: reporterId
+        userId: reporterId,
+        status: true,
       }
     });
 
@@ -367,7 +369,7 @@ export async function createTask(data: {
     if (board && board.issuePrefix) {
       // Generate the issue key
       issueKey = `${board.issuePrefix}-${board.nextIssueNumber}`;
-      
+
       // Update the board's next issue number
       await prisma.taskBoard.update({
         where: { id: board.id },
@@ -499,7 +501,7 @@ export async function createTask(data: {
   // Create TaskRelations entries for epic and story if provided
   if (epicId || storyId) {
     const relationsToCreate = [];
-    
+
     if (epicId) {
       relationsToCreate.push({
         taskId: task.id,
@@ -507,7 +509,7 @@ export async function createTask(data: {
         relatedItemType: 'EPIC' as const
       });
     }
-    
+
     if (storyId) {
       relationsToCreate.push({
         taskId: task.id,
@@ -515,7 +517,7 @@ export async function createTask(data: {
         relatedItemType: 'STORY' as const
       });
     }
-    
+
     if (relationsToCreate.length > 0) {
       await prisma.taskRelations.createMany({
         data: relationsToCreate
@@ -549,17 +551,17 @@ export async function createTask(data: {
   // Auto-follow the task for relevant users
   try {
     const autoFollowUsers = [];
-    
+
     // Auto-follow the reporter (creator)
     if (task.reporterId) {
       autoFollowUsers.push(task.reporterId);
     }
-    
+
     // Auto-follow the assignee if different from reporter
     if (task.assigneeId && task.assigneeId !== task.reporterId) {
       autoFollowUsers.push(task.assigneeId);
     }
-    
+
     if (autoFollowUsers.length > 0) {
       await NotificationService.autoFollowTask(task.id, autoFollowUsers);
     }
@@ -650,7 +652,8 @@ export async function updateTask(taskId: string, data: {
     const isMember = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId: task.workspaceId,
-        userId: assigneeId
+        userId: assigneeId,
+        status: true
       }
     });
 
@@ -666,7 +669,8 @@ export async function updateTask(taskId: string, data: {
     const isMember = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId: task.workspaceId,
-        userId: reporterId
+        userId: reporterId,
+        status: true,
       }
     });
 
@@ -679,7 +683,7 @@ export async function updateTask(taskId: string, data: {
 
   // Find the column ID if status is being updated
   let columnId = task.columnId;
-  
+
   if (status && status !== task.column?.name) {
     // Find the column with the given name in the task's board
     const column = await prisma.taskColumn.findFirst({
@@ -688,7 +692,7 @@ export async function updateTask(taskId: string, data: {
         taskBoardId: task.taskBoardId || undefined,
       },
     });
-    
+
     if (column) {
       columnId = column.id;
     }
@@ -797,7 +801,7 @@ export async function updateTask(taskId: string, data: {
             where: { id: change.oldValue },
             select: { id: true, name: true }
           }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
-          
+
           const newAssignee = change.newValue ? await prisma.user.findUnique({
             where: { id: change.newValue },
             select: { id: true, name: true }
@@ -818,7 +822,7 @@ export async function updateTask(taskId: string, data: {
             where: { id: change.oldValue },
             select: { id: true, name: true }
           }).then(user => user ? { id: user.id, name: user.name || 'Unknown User' } : null) : null;
-          
+
           const newReporter = change.newValue ? await prisma.user.findUnique({
             where: { id: change.newValue },
             select: { id: true, name: true }
@@ -857,7 +861,7 @@ export async function updateTask(taskId: string, data: {
             'dueDate': 'DUE_DATE_CHANGED',
             'type': 'TYPE_CHANGED',
           };
-          
+
           await createActivity({
             itemType: 'TASK',
             itemId: taskId,
@@ -905,7 +909,7 @@ export async function updateTask(taskId: string, data: {
                 select: { name: true }
               });
               content = `Task assigned to ${assignee?.name || 'Unknown User'}`;
-              
+
               // Auto-follow the new assignee
               await NotificationService.addTaskFollower(taskId, change.newValue);
             }
@@ -916,7 +920,7 @@ export async function updateTask(taskId: string, data: {
             break;
           case 'dueDate':
             notificationType = NotificationType.TASK_DUE_DATE_CHANGED;
-            content = change.newValue 
+            content = change.newValue
               ? `Task due date set to ${new Date(change.newValue).toLocaleDateString()}`
               : 'Task due date removed';
             break;
@@ -947,7 +951,7 @@ export async function updateTask(taskId: string, data: {
               content: `Task "${task.title}" status changed from "${change.oldValue || 'None'}" to "${change.newValue || 'None'}"`,
               excludeUserIds: []
             });
-            
+
             // Additional notification if task was completed (status changed to "Done")
             if (change.newValue && change.newValue.toLowerCase() === 'done') {
               await NotificationService.notifyBoardFollowers({
@@ -1039,7 +1043,7 @@ export async function deleteTask(taskId: string) {
       excludeUserIds: [],
       skipTaskIdReference: true
     });
-    
+
     // Notify board followers if task belongs to a board - skip taskId reference
     if (task.taskBoardId) {
       await NotificationService.notifyBoardFollowers({
@@ -1249,7 +1253,7 @@ export async function getWorkspaceBoards(workspaceId: string) {
   if (!workspaceId) {
     throw new Error('Workspace ID is required');
   }
-  
+
   const boards = await prisma.taskBoard.findMany({
     where: {
       workspaceId: workspaceId,
@@ -1258,7 +1262,7 @@ export async function getWorkspaceBoards(workspaceId: string) {
       createdAt: 'asc',
     },
   });
-  
+
   return boards;
 }
 
@@ -1269,7 +1273,7 @@ export async function getBoardColumns(boardId: string) {
   if (!boardId) {
     throw new Error('Board ID is required');
   }
-  
+
   const columns = await prisma.taskColumn.findMany({
     where: {
       taskBoardId: boardId,
@@ -1278,7 +1282,7 @@ export async function getBoardColumns(boardId: string) {
       order: 'asc',
     },
   });
-  
+
   return columns;
 }
 
@@ -1593,7 +1597,7 @@ export async function updateColumn(columnId: string, data: {
   if (!hasPermission.hasPermission) {
     throw new Error('You don\'t have permission to edit columns in this board');
   }
-  
+
   // Update the column
   const updatedColumn = await prisma.taskColumn.update({
     where: { id: columnId },
@@ -1635,7 +1639,7 @@ export async function deleteColumn(columnId: string) {
   // Get the column to verify permissions
   const column = await prisma.taskColumn.findUnique({
     where: { id: columnId },
-    include: { 
+    include: {
       taskBoard: {
         include: {
           columns: true
@@ -1784,7 +1788,8 @@ export async function moveTask(taskId: string, data: { columnId: string; positio
   const hasAccess = await prisma.workspaceMember.findFirst({
     where: {
       userId: user.id,
-      workspaceId: task.workspaceId
+      workspaceId: task.workspaceId,
+      status: true
     }
   });
 

@@ -40,6 +40,7 @@ export async function GET(
     const userWorkspaces = await prisma.workspaceMember.findMany({
       where: {
         userId: currentUser.id,
+        status: true
       },
       select: {
         workspaceId: true,
