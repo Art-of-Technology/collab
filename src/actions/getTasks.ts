@@ -2,7 +2,6 @@
 
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { truncate } from 'lodash';
 import { cookies } from 'next/headers';
 
 /**
