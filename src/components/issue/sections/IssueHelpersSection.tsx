@@ -184,7 +184,7 @@ export function IssueHelpersSection({
       <div>
         {/* Loading State */}
         {loading && (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center">
             <LoadingState size="sm" className="h-5 w-5 text-[#666]" noPadding={true} />
             <span className="ml-2 text-sm text-[#888]">Loading team members...</span>
           </div>
