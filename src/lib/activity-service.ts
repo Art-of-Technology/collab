@@ -605,7 +605,7 @@ export class ActivityService {
    */
   static async getTeamActivity(workspaceId: string) {
     const members = await prisma.workspaceMember.findMany({
-      where: { workspaceId },
+      where: { workspaceId, status: true },
       include: {
         user: {
           include: {

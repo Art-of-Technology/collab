@@ -102,6 +102,7 @@ export async function POST(
     // Check if user is already a member
     const existingMembership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: session.user.id,
         workspaceId: invitation.workspaceId
       }

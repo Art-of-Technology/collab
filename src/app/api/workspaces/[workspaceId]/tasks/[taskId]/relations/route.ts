@@ -40,6 +40,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Check workspace membership
     const membership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         workspaceId,
         userId: session.user.id
       }
@@ -195,6 +196,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Check workspace membership
     const membership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         workspaceId,
         userId: session.user.id
       }
@@ -352,6 +354,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Check workspace membership
     const membership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         workspaceId,
         userId: session.user.id
       }

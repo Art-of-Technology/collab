@@ -33,9 +33,9 @@ export async function PATCH(
     // Fetch the task to check permissions and get current column info
     const task = await prisma.task.findUnique({
       where: { id: taskId },
-      select: { 
-        workspaceId: true, 
-        columnId: true, 
+      select: {
+        workspaceId: true,
+        columnId: true,
         position: true,
         taskBoardId: true,
         column: {
@@ -57,6 +57,7 @@ export async function PATCH(
     // Check if user has access to the workspace
     const hasAccess = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: currentUser.id,
         workspaceId: task.workspaceId,
       },
@@ -91,7 +92,7 @@ export async function PATCH(
     // Begin a transaction to handle position updates
     await prisma.$transaction(async (tx) => {
       const currentPosition = task.position || 0;
-      
+
       // If moving to a different column
       if (task.columnId !== columnId) {
         // Decrement positions for tasks after the moved task in the source column
@@ -202,7 +203,7 @@ export async function PATCH(
     if (task.columnId !== columnId) {
       try {
         const content = `Task moved from "${task.column?.name || 'None'}" to "${column.name}"`;
-        
+
         // Notify task followers
         await NotificationService.notifyTaskFollowers({
           taskId,
@@ -211,13 +212,13 @@ export async function PATCH(
           content,
           excludeUserIds: []
         });
-        
+
         // Get the full task details for the title
         const fullTask = await prisma.task.findUnique({
           where: { id: taskId },
           select: { title: true }
         });
-        
+
         // Notify board followers about status change
         if (task.taskBoardId && fullTask) {
           await NotificationService.notifyBoardFollowers({
@@ -228,7 +229,7 @@ export async function PATCH(
             content: `Task "${fullTask.title}" moved from "${task.column?.name || 'None'}" to "${column.name}"`,
             excludeUserIds: []
           });
-          
+
           // Additional notification if task was moved to "Done"
           if (column.name.toLowerCase() === 'done') {
             await NotificationService.notifyBoardFollowers({

@@ -33,7 +33,8 @@ export async function PATCH(
     const member = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId: project.workspaceId,
-        user: { email: session.user.email }
+        user: { email: session.user.email },
+        status: true
       }
     });
     if (!member) {

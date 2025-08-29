@@ -11,7 +11,7 @@ async function getCurrentWorkspaceId(userId: string) {
   // Try to get from cookies first
   const cookieStore = await cookies();
   const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
-  
+
   if (currentWorkspaceId) {
     // Verify the user has access to this workspace
     const hasAccess = await prisma.workspace.findFirst({
@@ -23,16 +23,17 @@ async function getCurrentWorkspaceId(userId: string) {
         ]
       }
     });
-    
+
     if (hasAccess) {
       return currentWorkspaceId;
     }
   }
-  
+
   // If not in cookies or no access, get the first workspace the user has access to
   const userWorkspace = await prisma.workspaceMember.findFirst({
     where: {
       userId,
+      status: true
     },
     select: {
       workspaceId: true,
@@ -41,7 +42,7 @@ async function getCurrentWorkspaceId(userId: string) {
       updatedAt: 'desc',
     },
   });
-  
+
   return userWorkspace?.workspaceId;
 }
 
@@ -50,11 +51,11 @@ async function getCurrentWorkspaceId(userId: string) {
  */
 export async function getTasksData() {
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     throw new Error('Unauthorized');
   }
-  
+
   // Get the user
   const user = await prisma.user.findUnique({
     where: {
@@ -64,14 +65,14 @@ export async function getTasksData() {
       id: true
     }
   });
-  
+
   if (!user) {
     throw new Error('User not found');
   }
-  
+
   // Get the current workspace ID
   const workspaceId = await getCurrentWorkspaceId(user.id);
-  
+
   if (!workspaceId) {
     return {
       currentUserId: user.id,
@@ -80,7 +81,7 @@ export async function getTasksData() {
       hasNoWorkspace: true
     };
   }
-  
+
   // Get all task boards for this workspace
   const boards = await prisma.taskBoard.findMany({
     where: {
@@ -97,7 +98,7 @@ export async function getTasksData() {
       createdAt: 'asc'
     }
   });
-  
+
   return {
     currentUserId: user.id,
     workspaceId,

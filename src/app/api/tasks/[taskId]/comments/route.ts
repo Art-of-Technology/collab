@@ -30,6 +30,7 @@ export async function GET(
     // Check if user has access to the workspace
     const hasAccess = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: user.id,
         workspaceId: task.workspaceId,
       },

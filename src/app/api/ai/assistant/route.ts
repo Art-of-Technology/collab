@@ -268,7 +268,8 @@ async function createTask(userId: string, args: any) {
       const isMember = await prisma.workspaceMember.findFirst({
         where: {
           workspaceId: args.workspaceId,
-          userId: args.assigneeId
+          userId: args.assigneeId,
+          status: true
         }
       });
 

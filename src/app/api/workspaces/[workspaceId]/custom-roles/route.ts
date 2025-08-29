@@ -21,6 +21,7 @@ export async function GET(
     // Check if user is a member of the workspace
     const member = await prisma.workspaceMember.findUnique({
       where: {
+        status: true,
         userId_workspaceId: {
           userId: session.user.id,
           workspaceId

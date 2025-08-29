@@ -37,6 +37,7 @@ export async function GET(
     const isOwner = task.workspace.ownerId === userId;
     const isMember = await prisma.workspaceMember.findUnique({
       where: {
+        status: true,
         userId_workspaceId: {
           userId,
           workspaceId: task.workspaceId,

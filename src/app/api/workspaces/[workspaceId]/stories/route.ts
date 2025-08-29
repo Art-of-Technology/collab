@@ -22,6 +22,7 @@ export async function GET(
     // Check workspace membership
     const membership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         workspaceId,
         userId: session.user.id
       }

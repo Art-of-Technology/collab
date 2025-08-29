@@ -10,7 +10,7 @@ export async function getPendingInvitations(email: string) {
   if (!email) {
     throw new Error('Email is required');
   }
-  
+
   const pendingInvitations = await prisma.workspaceInvitation.findMany({
     where: {
       email,
@@ -32,7 +32,7 @@ export async function getPendingInvitations(email: string) {
     },
     orderBy: { createdAt: "desc" }
   });
-  
+
   return pendingInvitations;
 }
 
@@ -41,24 +41,24 @@ export async function getPendingInvitations(email: string) {
  */
 export async function checkUserHasWorkspaces() {
   const session = await getAuthSession();
-  
+
   if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
-  
+
   const count = await prisma.workspaceMember.count({
     where: {
       userId: session.user.id
     }
   });
-  
+
   // Check if user is an owner of any workspace
   const ownedCount = await prisma.workspace.count({
     where: {
       ownerId: session.user.id
     }
   });
-  
+
   return (count > 0 || ownedCount > 0);
 }
 
@@ -102,7 +102,7 @@ export async function getInvitationByToken(token: string) {
  */
 export async function acceptInvitation(token: string) {
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     throw new Error('You must be logged in to accept an invitation');
   }
@@ -132,6 +132,7 @@ export async function acceptInvitation(token: string) {
   const existingMember = await prisma.workspaceMember.findFirst({
     where: {
       workspaceId: invitation.workspaceId,
+      status: true,
       user: {
         email: session.user.email
       }
@@ -155,13 +156,13 @@ export async function acceptInvitation(token: string) {
   // Update invitation status
   await prisma.workspaceInvitation.update({
     where: { id: invitation.id },
-    data: { 
+    data: {
       status: 'accepted'
     }
   });
 
-  return { 
-    success: true, 
+  return {
+    success: true,
     workspaceId: invitation.workspaceId,
     workspaceName: invitation.workspace.name
   };

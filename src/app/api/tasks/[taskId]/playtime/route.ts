@@ -35,16 +35,17 @@ export async function GET(
     // Permission check: User must be part of the workspace or its owner
     const isWorkspaceOwner = task.workspace.ownerId === userId;
     const workspaceMember = await prisma.workspaceMember.findUnique({
-        where: {
-            userId_workspaceId: {
-                userId: userId,
-                workspaceId: task.workspaceId,
-            },
+      where: {
+        status: true,
+        userId_workspaceId: {
+          userId: userId,
+          workspaceId: task.workspaceId,
         },
+      },
     });
 
     if (!isWorkspaceOwner && !workspaceMember) {
-        return new NextResponse("Forbidden: You are not authorized to access this task's playtime.", { status: 403 });
+      return new NextResponse("Forbidden: You are not authorized to access this task's playtime.", { status: 403 });
     }
 
     // Use the new activity service to get task time spent by the current user
