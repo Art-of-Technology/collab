@@ -35,6 +35,7 @@ import { ViewGroupingSelector } from '@/components/views/selectors/ViewGroupingS
 import { ViewOrderingSelector } from '@/components/views/selectors/ViewOrderingSelector';
 import { ViewDisplayPropertiesSelector } from '@/components/views/selectors/ViewDisplayPropertiesSelector';
 import { ViewFiltersSelector } from '@/components/views/selectors/ViewFiltersSelector';
+import { ViewUpdatedAtSelector } from '@/components/views/selectors/ViewUpdatedAtSelector';
 import { useCreateView } from '@/hooks/queries/useViews';
 
 interface CreateViewModalProps {
@@ -70,6 +71,7 @@ export default function CreateViewModal({
   });
   
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
+  const [updatedAtFilters, setUpdatedAtFilters] = useState<string[]>([]);
   const { toast } = useToast();
   const createViewMutation = useCreateView();
 
@@ -86,13 +88,19 @@ export default function CreateViewModal({
     }
 
     try {
+      // Combine all filters
+      const allFilters = {
+        ...selectedFilters,
+        ...(updatedAtFilters.length > 0 && { updatedAt: updatedAtFilters })
+      };
+
       const viewData = {
         name: formData.name,
         description: formData.description,
         displayType: formData.displayType,
         visibility: formData.visibility as 'PERSONAL' | 'WORKSPACE' | 'SHARED',
         projectIds: formData.projectIds,
-        filters: selectedFilters,
+        filters: allFilters,
         sorting: { field: formData.ordering, direction: 'asc' },
         grouping: { field: formData.grouping },
         fields: formData.displayProperties,
@@ -312,6 +320,10 @@ export default function CreateViewModal({
               value={selectedFilters}
               onChange={setSelectedFilters}
               projects={projects}
+            />
+            <ViewUpdatedAtSelector
+              value={updatedAtFilters}
+              onChange={setUpdatedAtFilters}
             />
           </div>
 

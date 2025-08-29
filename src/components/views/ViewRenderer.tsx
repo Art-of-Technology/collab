@@ -32,6 +32,7 @@ import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
 import { ViewOrderingSelector } from './selectors/ViewOrderingSelector';
 import { ViewDisplayPropertiesSelector } from './selectors/ViewDisplayPropertiesSelector';
+import { ViewUpdatedAtSelector } from './selectors/ViewUpdatedAtSelector';
 import { StatusSelector } from './selectors/StatusSelector';
 import { PrioritySelector } from './selectors/PrioritySelector';
 import { TypeSelector } from './selectors/TypeSelector';
@@ -214,10 +215,25 @@ export default function ViewRenderer({
     return tempProjectIds.filter(id => !originalProjectIds.includes(id));
   }, [tempProjectIds, originalProjectIds]);
 
+  // Check if view has active filters (other than just project filtering)
+  const hasActiveFilters = useMemo(() => {
+    if (!view.filters || typeof view.filters !== 'object') return false;
+    
+    const filters = view.filters as Record<string, any>;
+    return Object.entries(filters).some(([key, value]) => {
+      // Skip project filtering as that's handled separately
+      if (key === 'project') return false;
+      return Array.isArray(value) && value.length > 0;
+    });
+  }, [view.filters]);
+
+  // Only fetch live data if view has NO active filters to avoid overriding server-side filtering
+  const shouldFetchLiveData = !hasActiveFilters;
+  
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
-    workspace.id,
-    tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)
+    shouldFetchLiveData ? workspace.id : '',
+    shouldFetchLiveData ? (tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)) : undefined
   );
 
   // Fetch issues from additional projects if any are selected
@@ -243,8 +259,11 @@ export default function ViewRenderer({
 
   // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // Use live data if available, otherwise fall back to initialIssues
-    const baseIssues = liveIssuesData?.issues || initialIssues;
+    // When view has filters, prioritize server-side filtered initialIssues
+    // When no filters, use live data for real-time updates
+    const baseIssues = hasActiveFilters 
+      ? initialIssues 
+      : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
     
     // Remove duplicates by ID when merging
@@ -254,7 +273,7 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
 
   // Use merged issues for filtering
   const issues = allIssues;
@@ -1099,6 +1118,19 @@ export default function ViewRenderer({
                   }
                 }}
                 labels={workspaceLabels}
+              />
+              <ViewUpdatedAtSelector
+                value={allFilters.updatedAt || []}
+                onChange={(updatedAtFilters) => {
+                  const viewUpdatedAt = view.filters?.updatedAt || [];
+                  const isDifferent = JSON.stringify(updatedAtFilters.sort()) !== JSON.stringify(viewUpdatedAt.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, updatedAt: updatedAtFilters }));
+                  } else {
+                    const { updatedAt, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
               />
             </div>
 
