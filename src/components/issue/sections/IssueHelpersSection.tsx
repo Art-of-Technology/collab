@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Users, Check, X, Clock, UserPlus, Loader2 } from "lucide-react";
+import { Users, Check, X, Clock, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 interface IssueHelper {
   id: string;
@@ -184,7 +185,7 @@ export function IssueHelpersSection({
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-[#666]" />
+            <LoadingState size="sm" className="h-5 w-5 text-[#666]" noPadding={true} />
             <span className="ml-2 text-sm text-[#888]">Loading team members...</span>
           </div>
         )}
