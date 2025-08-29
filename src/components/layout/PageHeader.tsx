@@ -70,16 +70,16 @@ export default function PageHeader({
     >
       {/* Main Header Row */}
       <div className="flex items-center justify-between min-h-[32px]">
-        {/* Left Side - Title with inline subtitle on mobile */}
-        <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
-          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+        {/* Left Side - Title with inline subtitle and buttons */}
+        <div className="flex items-center gap-1 md:gap-4 min-w-0 flex-1">
+          <div className="flex items-center gap-1 md:gap-3 min-w-0 flex-1">
             {/* Icon and Title */}
-            <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
+            <div className="flex items-center gap-1 md:gap-2 min-w-0">
               {Icon && (
                 <Icon className="h-4 w-4 md:h-5 md:w-5 text-gray-400 shrink-0" />
               )}
               {typeof title === 'string' ? (
-                <h1 className="text-base md:text-xl font-semibold text-white truncate">
+                <h1 className="text-xs sm:text-sm md:text-xl font-semibold text-white truncate">
                   {title}
                 </h1>
               ) : (
@@ -89,20 +89,20 @@ export default function PageHeader({
               )}
             </div>
 
-            {/* Subtitle/Count - Show inline on mobile, normal on desktop */}
+            {/* Subtitle/Count - Responsive visibility */}
             {subtitle && (
-              <span className="text-gray-500 text-xs md:text-sm shrink-0">
+              <span className="text-gray-400 text-xs md:text-sm shrink-0 hidden xs:inline">
                 {subtitle}
               </span>
             )}
-          </div>
 
-          {/* Additional Left Content - Hide on mobile if too crowded */}
-          {leftContent && (
-            <div className="hidden lg:block">
-              {leftContent}
-            </div>
-          )}
+            {/* Left Content - Show inline with title, responsive spacing */}
+            {leftContent && (
+              <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 ml-0.5 sm:ml-1 md:ml-2">
+                {leftContent}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Side - Desktop only (search + actions) */}
@@ -147,12 +147,7 @@ export default function PageHeader({
           </div>
         )}
 
-        {/* Mobile: Show left content below if present */}
-        {leftContent && (
-          <div className="lg:hidden mt-2">
-            {leftContent}
-          </div>
-        )}
+        {/* Mobile: leftContent is now shown inline with title */}
       </div>
     </div>
   );

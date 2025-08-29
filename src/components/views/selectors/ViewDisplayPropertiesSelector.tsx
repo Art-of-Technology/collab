@@ -20,7 +20,7 @@ const DISPLAY_PROPERTIES = [
   { key: "Status", label: "Status", description: "Show current status" },
   { key: "Assignee", label: "Assignee", description: "Show assigned person" },
   { key: "Labels", label: "Labels", description: "Show issue labels" },
-  { key: "DueDate", label: "Due Date", description: "Show due dates" },
+  { key: "Due Date", label: "Due Date", description: "Show due dates" },
   { key: "Project", label: "Project", description: "Show project information" },
   { key: "Reporter", label: "Reporter", description: "Show who created the issue" },
   { key: "Created", label: "Created", description: "Show creation date" },

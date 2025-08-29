@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Circle, Clock, CheckCircle2, XCircle, Timer, Archive } from "lucide-react";
+import { Circle, CheckCircle2, XCircle, Timer, Archive, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { getProjectStatuses } from "@/actions/status";
 
 interface StatusSelectorProps {
   value: string[];
-  projects: any[];
+  projectIds: string[];
   onChange: (statuses: string[]) => void;
   disabled?: boolean;
 }
@@ -21,24 +23,28 @@ export function StatusSelector({
   value = [],
   onChange,
   disabled = false,
-  projects = [],
+  projectIds = [],
 }: StatusSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const getStatusOptions = useCallback(() => {
-    const flatStatuses = projects.map(p => p.statuses || []).flat();
-    const uniqueStatuses = Array.from(new Map(flatStatuses.map(s => [s.name, s])).values());
-    return uniqueStatuses;
-  }, [projects]);
+  const { data: statuses = [], isLoading, isError } = useQuery({
+    queryKey: ['statuses', projectIds],
+    queryFn: () => getProjectStatuses(projectIds),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: projectIds.length > 0
+  });
+
+  if (isError) return null;
+
+  const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.name, s])).values());
 
   const selectedStatuses = value.map(v => {
-    return getStatusOptions().find(s => s.id === v)
-  }).filter(Boolean);
+    return uniqueStatuses.find(s => s.id === v) || null
+  }).filter(Boolean) as typeof uniqueStatuses;
 
   const toggleStatus = (statusName: string) => {
     // Get all status IDs that match this status name across all projects
-    const flatStatuses = projects.map(p => p.statuses || []).flat();
-    const matchingStatusIds = flatStatuses
+    const matchingStatusIds = statuses
       .filter((status: any) => status.name === statusName)
       .map((status: any) => status.id);
 
@@ -121,47 +127,53 @@ export function StatusSelector({
           Filter by status
         </div>
 
-        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
-          {/* Clear all option */}
-          <button
-            type="button"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-            onClick={() => onChange([])}
-          >
-            <Circle className="h-3.5 w-3.5 text-[#6e7681]" />
-            <span className="text-[#9ca3af] flex-1">Clear status filter</span>
-            {value.length === 0 && (
-              <span className="text-xs text-[#6e7681]">✓</span>
-            )}
-          </button>
+        {isLoading ? (
+          <div className="flex items-center w-full justify-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span className="text-[#6e7681] text-xs">Loading...</span>
+          </div>
+        ) : (
+          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
+            {/* Clear all option */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              onClick={() => onChange([])}
+            >
+              <Circle className="h-3.5 w-3.5 text-[#6e7681]" />
+              <span className="text-[#9ca3af] flex-1">Clear status filter</span>
+              {value.length === 0 && (
+                <span className="text-xs text-[#6e7681]">✓</span>
+              )}
+            </button>
 
 
-          {getStatusOptions().map((status) => {
-            // Get all status IDs that match this status name across all projects
-            const flatStatuses = projects.map(p => p.statuses || []).flat();
-            const matchingStatusIds = flatStatuses
-              .filter((s: any) => s.name === status.name)
-              .map((s: any) => s.id);
+            {uniqueStatuses.map((status) => {
+              // Get all status IDs that match this status name across all projects
+              const matchingStatusIds = statuses
+                .filter((s: any) => s.name === status.name)
+                .map((s: any) => s.id);
 
-            // Check if any of the matching status IDs are currently selected
-            const isSelected = matchingStatusIds.some(id => value.includes(id));
+              // Check if any of the matching status IDs are currently selected
+              const isSelected = matchingStatusIds.some(id => value.includes(id));
 
-            return (
-              <button
-                key={status.name}
-                type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-                onClick={() => toggleStatus(status.name)}
-              >
-                {statusIcon(status)}
-                <span className="text-[#cccccc] flex-1">{status.displayName}</span>
-                {isSelected && (
-                  <span className="text-xs text-[#6e7681]">✓</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <button
+                  key={status.name}
+                  type="button"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                  onClick={() => toggleStatus(status.name)}
+                >
+                  {statusIcon(status)}
+                  <span className="text-[#cccccc] flex-1">{status.displayName}</span>
+                  {isSelected && (
+                    <span className="text-xs text-[#6e7681]">✓</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

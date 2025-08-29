@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -203,7 +203,7 @@ export default function ViewRenderer({
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
-  const [tempDisplayProperties, setTempDisplayProperties] = useState(view.fields || []);
+  const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
@@ -283,7 +283,7 @@ export default function ViewRenderer({
     displayType: view.displayType,
     grouping: view.grouping?.field || 'none',
     ordering: view.sorting?.field || 'manual',
-    displayProperties: view.fields || [],
+    displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
     filters: view.filters || {}
   });
 
@@ -293,11 +293,13 @@ export default function ViewRenderer({
       displayType: view.displayType,
       grouping: view.grouping?.field || 'none',
       ordering: view.sorting?.field || 'manual',
-      displayProperties: view.fields || [],
+      displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
       filters: view.filters || {}
     });
     // Reset temp project IDs when view changes
     setTempProjectIds(view.projects.map(p => p.id));
+    // Sync temp display properties with view on view change
+    setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
   
   // Update ViewFilters context with current data
@@ -313,12 +315,14 @@ export default function ViewRenderer({
 
   // Check if current state differs from last saved state
   const hasChanges = useMemo(() => {
+    const sortedTemp = [...tempDisplayProperties].sort();
+    const sortedSaved = [...(lastSavedState.displayProperties || [])].sort();
     return (
       Object.keys(tempFilters).length > 0 ||
       tempDisplayType !== lastSavedState.displayType ||
       tempGrouping !== lastSavedState.grouping ||
       tempOrdering !== lastSavedState.ordering ||
-      JSON.stringify(tempDisplayProperties) !== JSON.stringify(lastSavedState.displayProperties) ||
+      JSON.stringify(sortedTemp) !== JSON.stringify(sortedSaved) ||
       JSON.stringify(tempProjectIds.sort()) !== JSON.stringify(view.projects.map(p => p.id).sort())
     );
   }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects]);
@@ -857,15 +861,15 @@ export default function ViewRenderer({
         subtitle={`${sortedIssues.length} ${sortedIssues.length === 1 ? 'issue' : 'issues'}`}
         leftContent={
           hasChanges && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={resetToDefaults}
                 className={pageHeaderButtonStyles.reset}
               >
-                <RotateCcw className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">Reset</span>
+                <RotateCcw className="h-3 w-3 lg:mr-1" />
+                <span className="hidden lg:inline">Reset</span>
               </Button>
               <Button
                 variant="ghost"
@@ -873,8 +877,8 @@ export default function ViewRenderer({
                 onClick={handleUpdateView}
                 className={pageHeaderButtonStyles.update}
               >
-                <Save className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">Update</span>
+                <Save className="h-3 w-3 lg:mr-1" />
+                <span className="hidden lg:inline">Update</span>
               </Button>
               <Button
                 variant="ghost"
@@ -882,8 +886,8 @@ export default function ViewRenderer({
                 onClick={() => setShowSaveDialog(true)}
                 className={pageHeaderButtonStyles.danger}
               >
-                <Save className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">Save as new</span>
+                <Save className="h-3 w-3 lg:mr-1" />
+                <span className="hidden lg:inline">Save as new</span>
               </Button>
             </div>
           )
@@ -1053,7 +1057,7 @@ export default function ViewRenderer({
               />
               <StatusSelector
                 value={allFilters.status || []}
-                projects={view.projects || []}
+                projectIds={tempProjectIds}
                 onChange={(statuses) => {
                   const viewStatuses = view.filters?.status || [];
                   const isDifferent = JSON.stringify(statuses.sort()) !== JSON.stringify(viewStatuses.sort());

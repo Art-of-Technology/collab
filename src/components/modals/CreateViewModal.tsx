@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -18,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
 import {
   Loader2,
   Eye,
@@ -26,16 +23,21 @@ import {
   Globe,
   X
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { ViewTypeSelector } from '@/components/views/selectors/ViewTypeSelector';
-import { ViewProjectSelector } from '@/components/views/selectors/ViewProjectSelector';
-import { ViewGroupingSelector } from '@/components/views/selectors/ViewGroupingSelector';
-import { ViewOrderingSelector } from '@/components/views/selectors/ViewOrderingSelector';
-import { ViewDisplayPropertiesSelector } from '@/components/views/selectors/ViewDisplayPropertiesSelector';
-import { ViewFiltersSelector } from '@/components/views/selectors/ViewFiltersSelector';
-import { ViewUpdatedAtSelector } from '@/components/views/selectors/ViewUpdatedAtSelector';
+
+import {
+  ViewTypeSelector,
+  ViewProjectSelector,
+  ViewGroupingSelector,
+  ViewOrderingSelector,
+  ViewDisplayPropertiesSelector,
+  StatusSelector,
+  PrioritySelector,
+  TypeSelector,
+  AssigneeSelector,
+  LabelsSelector
+} from '@/components/views/selectors';
 import { useCreateView } from '@/hooks/queries/useViews';
 
 interface CreateViewModalProps {
@@ -58,6 +60,51 @@ export default function CreateViewModal({
   onViewCreated
 }: CreateViewModalProps) {
   const { workspaces } = useWorkspace();
+  const initialProjectIds = projects.map(p => p.id);
+  // Fetch workspace members for assignee selector
+  const { data: workspaceMembers = [] } = useQuery({
+    queryKey: ['workspace-members', workspaceId],
+    queryFn: async () => {
+      const response = await fetch(`/api/workspaces/${workspaceId}/members`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch members');
+      }
+      const members = await response.json();
+
+      // Transform the data to extract user objects from members
+      return members.map((member: any) => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        image: member.user.image,
+        useCustomAvatar: member.user.useCustomAvatar,
+        avatarAccessory: member.user.avatarAccessory,
+        avatarBrows: member.user.avatarBrows,
+        avatarEyes: member.user.avatarEyes,
+        avatarEyewear: member.user.avatarEyewear,
+        avatarHair: member.user.avatarHair,
+        avatarMouth: member.user.avatarMouth,
+        avatarNose: member.user.avatarNose,
+        avatarSkinTone: member.user.avatarSkinTone,
+      }));
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch workspace labels for labels selector
+  const { data: workspaceLabels = [] } = useQuery({
+    queryKey: ['workspace-labels', workspaceId],
+    queryFn: async () => {
+      const response = await fetch(`/api/workspaces/${workspaceId}/labels`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch labels');
+      }
+      const data = await response.json();
+      return data.labels || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -68,10 +115,18 @@ export default function CreateViewModal({
     grouping: 'none',
     ordering: 'manual',
     displayProperties: ['Priority', 'Status', 'Assignee'],
+    filters: {
+      status: [] as string[],
+      priority: [] as string[],
+      type: [] as string[],
+      assignee: [] as string[],
+      labels: [] as string[]
+    }
   });
   
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const [updatedAtFilters, setUpdatedAtFilters] = useState<string[]>([]);
+
   const { toast } = useToast();
   const createViewMutation = useCreateView();
 
@@ -100,7 +155,7 @@ export default function CreateViewModal({
         displayType: formData.displayType,
         visibility: formData.visibility as 'PERSONAL' | 'WORKSPACE' | 'SHARED',
         projectIds: formData.projectIds,
-        filters: allFilters,
+        filters: formData.filters,
         sorting: { field: formData.ordering, direction: 'asc' },
         grouping: { field: formData.grouping },
         fields: formData.displayProperties,
@@ -132,44 +187,6 @@ export default function CreateViewModal({
         variant: 'destructive'
       });
     }
-  };
-
-  const toggleProject = (projectId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      projectIds: prev.projectIds.includes(projectId)
-        ? prev.projectIds.filter(id => id !== projectId)
-        : [...prev.projectIds, projectId]
-    }));
-  };
-
-  const handleFilterChange = (filterId: string, value: string, isSelected: boolean) => {
-    setSelectedFilters(prev => {
-      if (isSelected) {
-        return {
-          ...prev,
-          [filterId]: prev[filterId] ? [...prev[filterId], value] : [value]
-        };
-      } else {
-        return {
-          ...prev,
-          [filterId]: prev[filterId]?.filter(v => v !== value) || []
-        };
-      }
-    });
-  };
-
-  const removeFilter = (filterId: string, value?: string) => {
-    setSelectedFilters(prev => {
-      if (!value) {
-        const { [filterId]: removed, ...rest } = prev;
-        return rest;
-      }
-      return {
-        ...prev,
-        [filterId]: prev[filterId]?.filter(v => v !== value) || []
-      };
-    });
   };
 
   const handleDisplayTypeChange = (newType: string) => {
@@ -268,9 +285,9 @@ export default function CreateViewModal({
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="View name"
-                          className="w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder-[#6e7681] focus:ring-0 focus:border-none focus:outline-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 mb-3"
-              disabled={createViewMutation.isPending}
-              autoFocus
+            className="w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder-[#6e7681] focus:ring-0 focus:border-none focus:outline-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 mb-3"
+            disabled={createViewMutation.isPending}
+            autoFocus
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
@@ -316,10 +333,36 @@ export default function CreateViewModal({
               value={formData.displayProperties}
               onChange={(properties) => setFormData(prev => ({ ...prev, displayProperties: properties }))}
             />
-            <ViewFiltersSelector
-              value={selectedFilters}
-              onChange={setSelectedFilters}
-              projects={projects}
+            <StatusSelector
+              value={formData.filters.status}
+              onChange={(status) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, status } }))}
+              projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
+            />
+            <PrioritySelector
+              value={formData.filters.priority}
+              onChange={(priority) => {
+                setFormData(prev => ({ ...prev, filters: { ...prev.filters, priority } }));
+              }}
+            />
+            <TypeSelector
+              value={formData.filters.type}
+              onChange={(type) => {
+                setFormData(prev => ({ ...prev, filters: { ...prev.filters, type } }));
+              }}
+            />
+            <AssigneeSelector
+              value={formData.filters.assignee}
+              onChange={(assignee) => {
+                setFormData(prev => ({ ...prev, filters: { ...prev.filters, assignee } }));
+              }}
+              assignees={workspaceMembers}
+            />
+            <LabelsSelector
+              value={formData.filters.labels}
+              onChange={(labels) => {
+                setFormData(prev => ({ ...prev, filters: { ...prev.filters, labels } }));
+              }}
+              labels={workspaceLabels}
             />
             <ViewUpdatedAtSelector
               value={updatedAtFilters}

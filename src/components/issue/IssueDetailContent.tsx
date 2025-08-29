@@ -1001,7 +1001,7 @@ export function IssueDetailContent({
                 onChange={handleDescriptionChange}
                 placeholder="Add a description..."
                 onAiImprove={handleAiImprove}
-                className="min-h-[400px] w-full"
+                className="w-full"
                 enableSlashCommands={true}
                 enableFloatingMenu={true}
                 enableSaveDiscard={true}
@@ -1015,6 +1015,7 @@ export function IssueDetailContent({
                   setDescriptionHasChanges(false);
                 }}
                 minHeight="400px"
+                maxHeight="none"
               />
             </div>
 
