@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, format } from "date-fns";
-import { Loader2, Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock, Copy, Trash2 } from "lucide-react";
+import { Check, X, PenLine, Calendar as CalendarIcon, Plus, Play, Pause, StopCircle, History, Clock, Copy, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -36,6 +36,7 @@ import { StatusSelect } from "./selectors/StatusSelect";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { TimeAdjustmentModal } from "@/components/tasks/TimeAdjustmentModal";
 import { TaskTabs } from "@/components/tasks/TaskTabs";
+import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 import { useQueryClient } from "@tanstack/react-query";
 import { boardItemsKeys } from "@/hooks/queries/useBoardItems";
 import { taskKeys } from "@/hooks/queries/useTask";
@@ -775,7 +776,7 @@ export function TaskDetailContent({
                       />
                       {savingTitle && (
                         <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <LoadingState size="sm" className="h-5 w-5" noPadding={true} />
                         </div>
                       )}
                     </div>
@@ -799,7 +800,7 @@ export function TaskDetailContent({
                     >
                       {savingTitle ? (
                         <>
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          <LoadingState size="sm" className="h-4 w-4 mr-1" noPadding={true} />
                           Saving...
                         </>
                       ) : (
@@ -870,7 +871,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Start Timer"
                     >
-                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      {isTimerLoading ? <LoadingState size="sm" className="h-4 w-4" noPadding={true} /> : <Play className="h-4 w-4" />}
                     </Button>
                   )}
                   {currentPlayState === "playing" && (
@@ -882,7 +883,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Pause Timer"
                     >
-                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                      {isTimerLoading ? <LoadingState size="sm" className="h-4 w-4" noPadding={true} /> : <Pause className="h-4 w-4" />}
                     </Button>
                   )}
                   {currentPlayState === "paused" && (
@@ -894,7 +895,7 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Resume Timer"
                     >
-                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      {isTimerLoading ? <LoadingState size="sm" className="h-4 w-4" noPadding={true} /> : <Play className="h-4 w-4" />}
                     </Button>
                   )}
                   {(currentPlayState === "playing" || currentPlayState === "paused") && (
@@ -906,14 +907,14 @@ export function TaskDetailContent({
                       className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Stop Timer"
                     >
-                      {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
+                      {isTimerLoading ? <LoadingState size="sm" className="h-4 w-4" noPadding={true} /> : <StopCircle className="h-4 w-4" />}
                     </Button>
                   )}
 
                   <div className="border-l h-5 border-border/70 mx-1"></div>
 
                   {isLoadingPlayTime ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <LoadingState size="sm" className="h-4 w-4 text-muted-foreground" noPadding={true} />
                   ) : userStatus?.currentTaskId === task?.id && userStatus?.currentTaskPlayState === "playing" ? (
                     <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
                       <Clock className="h-3.5 w-3.5 text-green-500" />
@@ -959,11 +960,11 @@ export function TaskDetailContent({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                {savingType && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </div>
-                )}
+                                  {savingType && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
+                    </div>
+                  )}
               </div>
               
               {/* Task Follow Button */}
@@ -1094,7 +1095,7 @@ export function TaskDetailContent({
                   />
                   {savingStatus && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
                     </div>
                   )}
                 </div>
@@ -1120,7 +1121,7 @@ export function TaskDetailContent({
                   </Select>
                   {savingPriority && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
                     </div>
                   )}
                 </div>
@@ -1137,7 +1138,7 @@ export function TaskDetailContent({
                   />
                   {savingAssignee && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
                     </div>
                   )}
                 </div>
@@ -1154,7 +1155,7 @@ export function TaskDetailContent({
                   />
                   {savingReporter && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
                     </div>
                   )}
                 </div>
@@ -1188,7 +1189,7 @@ export function TaskDetailContent({
                   </Popover>
                   {savingDueDate && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
                     </div>
                   )}
                 </div>
@@ -1205,7 +1206,7 @@ export function TaskDetailContent({
                   />
                   {savingLabels && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoadingState size="sm" className="h-4 w-4" noPadding={true} />
                     </div>
                   )}
                 </div>
@@ -1311,7 +1312,7 @@ export function TaskDetailContent({
             >
               {isTimerLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoadingState size="sm" className="h-4 w-4 mr-2" noPadding={true} />
                   Starting...
                 </>
               ) : (
@@ -1374,7 +1375,7 @@ export function TaskDetailContent({
             >
               {isDeleting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoadingState size="sm" className="h-4 w-4 mr-2" noPadding={true} />
                   Deleting...
                 </>
               ) : (

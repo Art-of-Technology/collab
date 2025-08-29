@@ -1,17 +1,24 @@
 "use client";
 
-export function LoadingState() {
+export function LoadingState(props: {
+  size?: "sm" | "md" | "lg" | "xl";
+  className?: string;
+  noPadding?: boolean;
+}) {
+  const { size = "md", className = "", noPadding = false } = props;
+  
+  const sizeClasses = {
+    sm: "h-4 w-4",
+    md: "h-6 w-6",
+    lg: "h-8 w-8",
+    xl: "h-12 w-12"
+  };
+
+  const containerClasses = noPadding ? "flex items-center justify-center" : "flex items-center justify-center py-8";
+
   return (
-    <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex gap-2.5 py-1.5 px-1 animate-pulse">
-          <div className="h-6 w-6 bg-[#1a1a1a] rounded-full flex-shrink-0" />
-          <div className="flex-1 space-y-1">
-            <div className="h-3 bg-[#1a1a1a] rounded w-3/4" />
-            <div className="h-2 bg-[#1a1a1a] rounded w-1/2" />
-          </div>
-        </div>
-      ))}
+    <div className={containerClasses}>
+      <div className={`animate-spin rounded-full border-b-2 border-blue-500 ${sizeClasses[size]} ${className}`}></div>
     </div>
   );
 }
