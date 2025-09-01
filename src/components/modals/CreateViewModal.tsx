@@ -38,6 +38,7 @@ import {
   LabelsSelector,
   ViewUpdatedAtSelector
 } from '@/components/views/selectors';
+import { ActionFiltersSelector, type ActionFilter } from '@/components/views/selectors/ActionFiltersSelector';
 import { useCreateView } from '@/hooks/queries/useViews';
 
 interface CreateViewModalProps {
@@ -121,7 +122,8 @@ export default function CreateViewModal({
       type: [] as string[],
       assignee: [] as string[],
       labels: [] as string[],
-      updatedAt: [] as string[]
+      updatedAt: [] as string[],
+      actions: [] as ActionFilter[]
     }
   });
   const { toast } = useToast();
@@ -358,6 +360,12 @@ export default function CreateViewModal({
             <ViewUpdatedAtSelector
               value={formData.filters.updatedAt}
               onChange={(updatedAt) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, updatedAt } }))}
+            />
+            <ActionFiltersSelector
+              value={formData.filters.actions}
+              onChange={(actions: ActionFilter[]) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, actions } }))}
+              projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
+              workspaceMembers={workspaceMembers}
             />
           </div>
 

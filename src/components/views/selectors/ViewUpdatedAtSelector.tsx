@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar, ChevronDown, Check, X, Plus } from "lucide-react";
+import { Calendar, Plus, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay, endOfDay, isValid, parseISO } from "date-fns";
 
@@ -127,28 +127,58 @@ export function ViewUpdatedAtSelector({
 
   const getDisplayText = () => {
     if (activeFilters.length === 0) {
-      return "Updated";
+      return "Updated at";
     }
-    if (activeFilters.length === 1) {
-      return activeFilters[0].label;
+    
+    const presetFilter = activeFilters.find(f => f.type === 'preset');
+    const customFilters = activeFilters.filter(f => f.type === 'range');
+    
+    if (presetFilter && customFilters.length === 0) {
+      // Only preset filter
+      return presetFilter.label;
+    } else if (!presetFilter && customFilters.length === 1) {
+      // Only one custom range
+      return customFilters[0].label;
+    } else if (!presetFilter && customFilters.length > 1) {
+      // Only multiple custom ranges
+      return `${customFilters.length} custom ranges`;
+    } else if (presetFilter && customFilters.length === 1) {
+      // One preset + one custom
+      return `${presetFilter.label} + 1 custom`;
+    } else if (presetFilter && customFilters.length > 1) {
+      // One preset + multiple custom
+      return `${presetFilter.label} + ${customFilters.length} custom`;
     }
-    return `${activeFilters.length} time ranges`;
+    
+    return `${activeFilters.length} date ranges`;
   };
 
   const toggleFilter = (filter: DateRangeFilter) => {
     if (!filter.value) return;
     
     const isSelected = value.includes(filter.value);
-    if (isSelected) {
-      onChange(value.filter(v => v !== filter.value));
+    
+    if (filter.type === 'preset') {
+      // For preset options, use radio button behavior (only one can be selected)
+      if (isSelected) {
+        // Deselect current preset
+        onChange(value.filter(v => !PRESET_OPTIONS.some(preset => preset.value === v)));
+      } else {
+        // Remove any other preset options and add this one
+        const withoutPresets = value.filter(v => !PRESET_OPTIONS.some(preset => preset.value === v));
+        onChange([...withoutPresets, filter.value]);
+      }
     } else {
-      onChange([...value, filter.value]);
+      // For custom ranges, use checkbox behavior (multiple can be selected)
+      if (isSelected) {
+        onChange(value.filter(v => v !== filter.value));
+      } else {
+        onChange([...value, filter.value]);
+      }
     }
   };
 
-  const removeFilter = (filterValue: string) => {
-    onChange(value.filter(v => v !== filterValue));
-  };
+
 
   const addCustomRange = () => {
     if (!customStartDate || !customEndDate) return;
@@ -174,9 +204,7 @@ export function ViewUpdatedAtSelector({
     }
   };
 
-  const clearAllFilters = () => {
-    onChange([]);
-  };
+
 
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
@@ -188,151 +216,164 @@ export function ViewUpdatedAtSelector({
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
             "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
             "text-[#cccccc] focus:outline-none bg-[#181818]",
-            disabled && "opacity-50 cursor-not-allowed",
-            activeFilters.length > 0 && "border-[#22c55e]/30 bg-[#22c55e]/5"
+            disabled && "opacity-50 cursor-not-allowed"
           )}
         >
-          <Calendar className={cn(
-            "h-3 w-3",
-            activeFilters.length > 0 ? "text-[#22c55e]" : "text-[#6b7280]"
-          )} />
-          <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
-          <ChevronDown className="h-3 w-3 text-[#6e7681]" />
+          {activeFilters.length === 0 ? (
+            <>
+              <Calendar className="h-3 w-3 text-[#6e7681]" />
+              <span className="text-[#6e7681] text-xs">Updated at</span>
+            </>
+          ) : activeFilters.length === 1 ? (
+            <>
+              <Calendar className="h-3 w-3 text-green-500" />
+              <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-0.5">
+                <Calendar className="h-2.5 w-2.5 text-green-500" />
+                {activeFilters.length > 1 && (
+                  <div className="h-2.5 w-2.5 rounded-full bg-[#404040] flex items-center justify-center">
+                    <span className="text-[8px] text-white font-medium">+</span>
+                  </div>
+                )}
+              </div>
+              <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
+            </>
+          )}
         </button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-80 p-1 bg-[#1c1c1e] border-[#333] shadow-lg"
+        className="w-80 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#333] mb-1">
-          <span className="text-xs text-[#9ca3af]">Updated at</span>
-          {activeFilters.length > 0 && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="text-xs text-[#6e7681] hover:text-[#e6edf3]"
-            >
-              Clear all
-            </button>
-          )}
+        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
+          Filter by updated date
         </div>
 
-        {/* Active filters */}
-        {activeFilters.length > 0 && (
-          <div className="px-2 py-1 mb-2">
-            <div className="text-xs text-[#9ca3af] mb-2">Active filters:</div>
-            <div className="flex flex-wrap gap-1">
-              {activeFilters.map((filter) => (
-                <div
-                  key={filter.id}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#22c55e]/20 border border-[#22c55e]/30 rounded text-xs"
-                >
-                  <span className="text-[#22c55e]">updated:</span>
-                  <span className="text-[#e6edf3]">{filter.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFilter(filter.value!)}
-                    className="text-[#6e7681] hover:text-[#f85149]"
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        <div className="space-y-2 max-h-64 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
+          {/* Clear all option */}
+          <button
+            type="button"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+            onClick={() => onChange([])}
+          >
+            <History className="h-3.5 w-3.5 text-[#6e7681]" />
+            <span className="text-[#9ca3af] flex-1">Clear date filter</span>
+            {activeFilters.length === 0 && (
+              <span className="text-xs text-[#6e7681]">✓</span>
+            )}
+          </button>
           {/* Preset options */}
-          <div>
-            <div className="text-xs font-medium text-[#e6edf3] px-2 py-1">
-              Quick filters
-            </div>
-            <div className="space-y-0.5">
-              {PRESET_OPTIONS.map((option) => {
-                const isSelected = value.includes(option.value!);
-                
-                return (
+          {PRESET_OPTIONS.map((option) => {
+            const isSelected = value.includes(option.value!);
+            
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                onClick={() => toggleFilter(option)}
+              >
+                <Calendar className="h-3.5 w-3.5 text-green-500" />
+                <span className="text-[#cccccc] flex-1">{option.label}</span>
+                {isSelected && (
+                  <span className="text-xs text-[#6e7681]">✓</span>
+                )}
+              </button>
+            );
+          })}
+
+          {/* Active custom date ranges */}
+          {activeFilters.filter(filter => filter.type === 'range').length > 0 && (
+            <>
+              <div className="border-t border-[#2d2d30] my-1"></div>
+              {activeFilters
+                .filter(filter => filter.type === 'range')
+                .map((customFilter) => (
                   <button
-                    key={option.id}
+                    key={customFilter.id}
                     type="button"
-                    className="w-full flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
-                    onClick={() => toggleFilter(option)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                    onClick={() => {
+                      // Remove the custom range when clicked
+                      onChange(value.filter(v => v !== customFilter.value));
+                    }}
                   >
-                    <div className="w-4 h-4 flex items-center justify-center">
-                      {isSelected && <Check className="h-3 w-3 text-[#22c55e]" />}
-                    </div>
-                    <span className="text-[#e6edf3] text-xs">{option.label}</span>
+                    <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                    <span className="text-[#cccccc] flex-1">{customFilter.label}</span>
+                    <span className="text-xs text-[#6e7681]">✓</span>
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                ))}
+            </>
+          )}
 
           {/* Custom date range */}
-          <div>
-            <div className="text-xs font-medium text-[#e6edf3] px-2 py-1">
-              Custom range
-            </div>
-            
-            {!showCustomRange ? (
+          {!showCustomRange ? (
+            <>
+              {(PRESET_OPTIONS.some(option => value.includes(option.value!)) || 
+                activeFilters.filter(filter => filter.type === 'range').length > 0) && (
+                <div className="border-t border-[#2d2d30] my-1"></div>
+              )}
               <button
                 type="button"
                 onClick={() => setShowCustomRange(true)}
-                className="w-full flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
               >
-                <div className="w-4 h-4 flex items-center justify-center">
-                  <Plus className="h-3 w-3 text-[#6b7280]" />
-                </div>
-                <span className="text-[#6b7280] text-xs">Add custom date range</span>
+                <Plus className="h-3.5 w-3.5 text-[#6e7681]" />
+                <span className="text-[#9ca3af] flex-1">Add custom date range</span>
               </button>
-            ) : (
-              <div className="px-2 py-2 space-y-2">
-                <div className="space-y-1">
-                  <label className="text-xs text-[#9ca3af]">From</label>
-                  <input
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-full px-2 py-1 text-xs bg-[#0e0e0e] border border-[#333] rounded text-[#e6edf3] focus:border-[#22c55e] focus:outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-[#9ca3af]">To</label>
-                  <input
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-full px-2 py-1 text-xs bg-[#0e0e0e] border border-[#333] rounded text-[#e6edf3] focus:border-[#22c55e] focus:outline-none"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={addCustomRange}
-                    disabled={!customStartDate || !customEndDate}
-                    className="px-2 py-1 text-xs bg-[#22c55e] text-white rounded hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustomRange(false);
-                      setCustomStartDate("");
-                      setCustomEndDate("");
-                    }}
-                    className="px-2 py-1 text-xs text-[#6e7681] hover:text-[#e6edf3]"
-                  >
-                    Cancel
-                  </button>
-                </div>
+            </>
+          ) : (
+            <div className="px-2 py-2 space-y-2 border-t border-[#2d2d30]">
+              <div className="text-[10px] text-[#6e7681] px-0 py-1 uppercase tracking-wide">
+                Custom range
               </div>
-            )}
-          </div>
+              <div className="space-y-1">
+                <label className="text-xs text-[#9ca3af]">From</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="w-full px-2 py-1 text-xs bg-[#0e0e0e] border border-[#2d2d30] rounded text-[#cccccc] focus:border-[#22c55e] focus:outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-[#9ca3af]">To</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="w-full px-2 py-1 text-xs bg-[#0e0e0e] border border-[#2d2d30] rounded text-[#cccccc] focus:border-[#22c55e] focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addCustomRange}
+                  disabled={!customStartDate || !customEndDate}
+                  className="px-2 py-1 text-xs bg-[#22c55e] text-white rounded hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCustomRange(false);
+                    setCustomStartDate("");
+                    setCustomEndDate("");
+                  }}
+                  className="px-2 py-1 text-xs text-[#6e7681] hover:text-[#cccccc]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>

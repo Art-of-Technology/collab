@@ -38,6 +38,8 @@ import { PrioritySelector } from './selectors/PrioritySelector';
 import { TypeSelector } from './selectors/TypeSelector';
 import { AssigneeSelector } from './selectors/AssigneeSelector';
 import { LabelsSelector } from './selectors/LabelsSelector';
+import { ActionFiltersSelector, type ActionFilter } from './selectors/ActionFiltersSelector';
+import { useActionFilteredIssues } from '@/hooks/useActionFilteredIssues';
 import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
 import { useProjects } from '@/hooks/queries/useProjects';
@@ -199,7 +201,7 @@ export default function ViewRenderer({
   useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
 
   // Temporary state for filters and display (resets on refresh)
-  const [tempFilters, setTempFilters] = useState<Record<string, string[]>>({});
+  const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
@@ -346,10 +348,20 @@ export default function ViewRenderer({
     return combinedFilters;
   }, [view.filters, tempFilters]);
 
+  // Apply action filters first (async filtering)
+  const { 
+    filteredIssues: actionFilteredIssues, 
+    isLoading: isActionFilterLoading 
+  } = useActionFilteredIssues({
+    issues,
+    actionFilters: allFilters.actions as ActionFilter[] || [],
+    workspaceId: workspace.id
+  });
+
   // Apply view filters and search
   const filteredIssues = useMemo(() => {
-    // Merge issues with view-specific positions first
-    let filtered = mergeIssuesWithViewPositions(issues, viewPositionsData?.positions || []);
+    // Start with action-filtered issues instead of all issues
+    let filtered = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
     
     // Apply project filtering if tempProjectIds differs from original view projects
     const originalProjectIds = view.projects.map(p => p.id).sort();
@@ -470,6 +482,7 @@ export default function ViewRenderer({
                 }
                 return false;
               });
+
             default:
               return true;
           }
@@ -515,7 +528,7 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, tempProjectIds, view.projects]);
+  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, tempProjectIds, view.projects]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -677,7 +690,7 @@ export default function ViewRenderer({
 
   // Count issues for filter buttons (must match PageHeader filtering semantics)
   const issueCounts = useMemo(() => {
-    let countingIssues = [...issues];
+    let countingIssues = [...actionFilteredIssues];
 
     // Project selection (same logic as filteredIssues)
     const originalProjectIds = view.projects.map(p => p.id).sort();
@@ -723,6 +736,7 @@ export default function ViewRenderer({
               return issue.labels.some((label: any) => filterValues.includes(label.id));
             case 'project':
               return filterValues.includes(issue.projectId);
+
             default:
               return true;
           }
@@ -770,7 +784,7 @@ export default function ViewRenderer({
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [issues, tempProjectIds, view.projects, searchQuery, allFilters, viewFiltersState]);
+  }, [actionFilteredIssues, tempProjectIds, view.projects, searchQuery, allFilters, viewFiltersState]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
@@ -1184,6 +1198,21 @@ export default function ViewRenderer({
                     setTempFilters(rest);
                   }
                 }}
+              />
+              <ActionFiltersSelector
+                value={allFilters.actions || []}
+                onChange={(actionFilters: ActionFilter[]) => {
+                  const viewActions = view.filters?.actions || [];
+                  const isDifferent = JSON.stringify(actionFilters) !== JSON.stringify(viewActions);
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, actions: actionFilters }));
+                  } else {
+                    const { actions, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+                projectIds={tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)}
+                workspaceMembers={workspaceMembers}
               />
             </div>
 
