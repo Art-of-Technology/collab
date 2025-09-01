@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { checkUserHasWorkspaces, getPendingInvitations } from "@/actions/invitation";
 import WelcomeClient from "@/components/welcome/WelcomeClient";
-import { getValidWorkspaceId } from "@/lib/workspace-helpers";
+import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +18,9 @@ export default async function WelcomePage() {
 
   // If user has workspaces, redirect to currentWorkspace (cookie) or fallback to an accessible one
   if (hasWorkspaces) {
-    const workspaceId = await getValidWorkspaceId({ id: session.user.id });
-    if (workspaceId) {
-      redirect(`/${workspaceId}/dashboard`);
+    const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
+    if (workspaceSlugOrId) {
+      redirect(`/${workspaceSlugOrId}/dashboard`);
     }
   }
 

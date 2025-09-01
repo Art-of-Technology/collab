@@ -17,8 +17,8 @@ type User = {
  * this function will return the first workspace they have access to.
  * If the user has no workspaces, it returns null.
  */
-export async function getValidWorkspaceId(user: User): Promise<string | null> {
-  if (!user) return null;
+export async function getWorkspaceId(user: User): Promise<string> {
+  if (!user) throw new Error('User not found');
 
   // Get current workspace from cookie
   const cookieStore = await cookies();
@@ -54,7 +54,51 @@ export async function getValidWorkspaceId(user: User): Promise<string | null> {
     orderBy: { createdAt: 'asc' }
   });
 
-  return firstAccessible?.id ?? null;
+  if (!firstAccessible) throw new Error('No workspace available');
+
+  return firstAccessible.id;
+}
+
+/**
+ * Get a valid workspace path segment (slug if available, otherwise ID)
+ * Verifies cookie-selected workspace access; falls back to first accessible
+ */
+export async function getWorkspaceSlugOrId(user: User): Promise<string | null> {
+  if (!user) return null;
+
+  const cookieStore = await cookies();
+  const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
+
+  if (currentWorkspaceId) {
+    const ws = await prisma.workspace.findFirst({
+      where: {
+        id: currentWorkspaceId,
+        OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } }
+        ]
+      },
+      select: { id: true, slug: true }
+    });
+
+    if (ws) {
+      return ws.slug || ws.id;
+    }
+  }
+
+  const firstAccessible = await prisma.workspace.findFirst({
+    where: {
+      OR: [
+        { ownerId: user.id },
+        { members: { some: { userId: user.id, status: true } } }
+      ]
+    },
+    select: { id: true, slug: true },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  if (!firstAccessible) return null;
+  return firstAccessible.slug || firstAccessible.id;
 }
 
 /**
@@ -75,7 +119,7 @@ export async function verifyWorkspaceAccess(
     redirect("/login");
   }
 
-  const workspaceId = await getValidWorkspaceId(user);
+  const workspaceId = await getWorkspaceId(user);
   
   if (!workspaceId && redirectNoAccess) {
     redirect('/welcome');

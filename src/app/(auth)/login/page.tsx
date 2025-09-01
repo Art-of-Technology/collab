@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { getValidWorkspaceId } from "@/lib/workspace-helpers";
+import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
 
 export const dynamic = 'force-dynamic';
 
@@ -11,11 +11,11 @@ export default async function LoginPage() {
   const user = await getCurrentUser();
 
   if (user) {
-    const workspaceId = await getValidWorkspaceId({ id: user.id });
-    if (!workspaceId) {
+    const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: user.id });
+    if (!workspaceSlugOrId) {
       redirect("/welcome");
     }
-    redirect(`/${workspaceId}/timeline`);
+    redirect(`/${workspaceSlugOrId}/timeline`);
   }
 
   return (

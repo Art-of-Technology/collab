@@ -2,7 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import { getAuthSession } from "@/lib/auth";
-import { getValidWorkspaceId } from "@/lib/workspace-helpers";
+import { getWorkspaceId } from "@/lib/workspace-helpers";
 
 export default async function WelcomeLayout({
   children,
@@ -17,7 +17,7 @@ export default async function WelcomeLayout({
   }
   
   // Check if user has a valid current workspace (cookie or fallback)
-  const workspaceId = await getValidWorkspaceId({ id: session.user.id });
+  const workspaceId = await getWorkspaceId({ id: session.user.id });
   const hasWorkspaces = !!workspaceId;
   
   return (

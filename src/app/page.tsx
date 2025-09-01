@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
-import { getValidWorkspaceId } from "@/lib/workspace-helpers";
+import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
 
 export default async function Home() {
   const session = await getAuthSession();
@@ -10,12 +10,12 @@ export default async function Home() {
     redirect("/home");
   } 
 
-  // Determine current workspace using cookie (fallback to any accessible one)
-  const workspaceId = await getValidWorkspaceId({ id: session.user.id });
-
-  if (!workspaceId) {
+  try {
+    // Determine current workspace using cookie (fallback to any accessible one)
+    const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
+    redirect(`/${workspaceSlugOrId}/dashboard`);
+  } catch (error) {
+    console.error("Error loading workspace:", error);
     redirect("/welcome");
   }
-
-  redirect(`/${workspaceId}/dashboard`);
 }
