@@ -107,6 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: { boardId: str
       // If not the owner or admin, check if they're a workspace member
       const isMember = await prisma.workspaceMember.findFirst({
         where: {
+          status: true,
           userId: currentUser.id,
           workspaceId: board.workspaceId,
         },

@@ -43,6 +43,7 @@ export async function PATCH(
     // Check if user has admin rights in the workspace
     const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: currentUser.id,
         workspaceId: board.workspaceId,
       },

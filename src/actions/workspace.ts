@@ -569,7 +569,8 @@ export async function removeWorkspaceMember(data: {
   const member = await prisma.workspaceMember.findFirst({
     where: {
       workspaceId,
-      userId
+      userId,
+      status: true
     }
   });
   
@@ -990,7 +991,8 @@ export async function updateWorkspaceMemberStatus(data: {
   const member = await prisma.workspaceMember.findFirst({
     where: {
       id: memberId,
-      workspaceId
+      workspaceId,
+      status: true
     },
     include: {
       user: {
