@@ -259,6 +259,12 @@ export async function createWorkspace(data: {
         connect: {
           id: user.id
         }
+      },
+      members: {
+        create: {
+          userId: user.id,
+          role: 'owner'
+        }
       }
     },
     include: {
