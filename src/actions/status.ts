@@ -1,0 +1,59 @@
+'use server'
+
+import { getAuthSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+
+export async function getProjectStatuses(projectIds: string[]) {
+  try {
+    // Authentication check
+    const session = await getAuthSession()
+    if (!session?.user?.email) {
+      throw new Error('Unauthorized - Please sign in to access project statuses')
+    }
+
+    // Get the current user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    })
+
+    if (!user) {
+      throw new Error('User not found')
+    }
+
+    // Verify user has access to the requested projects
+    const accessibleProjects = await prisma.project.findMany({
+      where: {
+        id: { in: projectIds },
+        workspace: {
+          OR: [
+            { ownerId: user.id },
+            { members: { some: { userId: user.id } } }
+          ]
+        }
+      },
+      select: { id: true }
+    })
+
+    const accessibleProjectIds = accessibleProjects.map(p => p.id)
+
+    // Only return statuses for projects the user has access to
+    if (accessibleProjectIds.length === 0) {
+      return []
+    }
+
+    const statuses = await prisma.projectStatus.findMany({
+      where: { 
+        projectId: { in: accessibleProjectIds } 
+      },
+      orderBy: [
+        { order: 'asc' },
+        { name: 'asc' }
+      ]
+    })
+
+    return statuses
+
+  } catch (error) {
+    throw new Error('Failed to fetch project statuses. Please try again.')
+  }
+}

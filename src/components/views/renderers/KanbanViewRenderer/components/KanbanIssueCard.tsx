@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Draggable } from "@hello-pangea/dnd";
 import type { KanbanIssueCardProps } from '../types';
+import { format } from 'date-fns';
 
 // Helper functions for issue styling
 const getTypeColor = (type: string) => {
@@ -48,6 +49,10 @@ const KanbanIssueCard = React.memo(({
   const showDueDate = displayProperties.includes('Due Date');
   const showStoryPoints = displayProperties.includes('Story Points');
   const showReporter = displayProperties.includes('Reporter');
+  const showProject = displayProperties.includes('Project');
+  const showStatus = displayProperties.includes('Status');
+  const showCreated = displayProperties.includes('Created');
+  const showUpdated = displayProperties.includes('Updated');
 
   const handleCardClick = useCallback(() => {
     const keyOrId = issue.issueKey || issue.id;
@@ -140,7 +145,7 @@ const KanbanIssueCard = React.memo(({
               )}
 
               {/* Project Badge */}
-              {issue.project && (
+              {showProject && issue.project && (
                 <Badge 
                   className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm"
                   style={{ 
@@ -155,10 +160,7 @@ const KanbanIssueCard = React.memo(({
               {/* Due Date */}
               {showDueDate && issue.dueDate && (
                 <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-orange-500/20 text-orange-400 border-0 rounded-sm">
-                  {new Date(issue.dueDate).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric' 
-                  })}
+                  {format(new Date(issue.dueDate), 'MMM d')}
                 </Badge>
               )}
 
@@ -173,6 +175,27 @@ const KanbanIssueCard = React.memo(({
               {showReporter && issue.reporter && (
                 <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-purple-500/20 text-purple-400 border-0 rounded-sm">
                   {issue.reporter.name}
+                </Badge>
+              )}
+
+              {/* Status Badge */}
+              {showStatus && (issue.projectStatus?.displayName || issue.status || issue.statusValue) && (
+                <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-gray-500/20 text-gray-300 border-0 rounded-sm">
+                  {issue.projectStatus?.displayName || issue.status || issue.statusValue}
+                </Badge>
+              )}
+
+              {/* Created */}
+              {showCreated && issue.createdAt && (
+                <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-gray-500/20 text-gray-300 border-0 rounded-sm">
+                  Created {format(new Date(issue.createdAt), 'MMM d')}
+                </Badge>
+              )}
+
+              {/* Updated */}
+              {showUpdated && issue.updatedAt && (
+                <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-gray-500/20 text-gray-300 border-0 rounded-sm">
+                  Updated {format(new Date(issue.updatedAt), 'MMM d')}
                 </Badge>
               )}
             </div>
