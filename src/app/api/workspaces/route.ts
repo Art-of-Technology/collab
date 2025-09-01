@@ -15,12 +15,12 @@ export async function GET() {
       );
     }
 
-    // Get workspaces where user is a member or owner
+    // Get workspaces where user is owner or an ACTIVE member
     const workspaces = await prisma.workspace.findMany({
       where: {
         OR: [
           { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
+          { members: { some: { userId: session.user.id, status: true } } }
         ]
       },
       orderBy: { createdAt: 'asc' },

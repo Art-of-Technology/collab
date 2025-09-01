@@ -115,17 +115,14 @@ export async function GET(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
     
-    // Verify user has access to workspace
+    // Verify user has access to workspace (must be owner or ACTIVE member)
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        OR: [
+          { ownerId: (session.user as any).id },
+          { members: { some: { userId: (session.user as any).id, status: true } } }
+        ]
       }
     });
 

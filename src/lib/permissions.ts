@@ -176,7 +176,7 @@ export async function checkUserPermission(
       return { hasPermission: true, userRole: "OWNER" as any };
     }
 
-    // Check if user is a member of the workspace
+    // Check if user is a member of the workspace (single row due to where: { workspaceId })
     const membership = user.workspaceMemberships[0];
     if (!membership) {
       return {
@@ -272,7 +272,7 @@ export async function getUserPermissions(
       return Object.values(Permission);
     }
 
-    // Check if user is a member of the workspace
+    // Check if user is a member of the workspace (single row due to where: { workspaceId })
     const membership = user.workspaceMemberships[0];
     if (!membership) {
       return [];
@@ -325,7 +325,7 @@ export async function getUserWorkspaceRole(
       return "OWNER";
     }
 
-    // Member role
+    // Member role (single row due to where: { workspaceId })
     const membership = user.workspaceMemberships[0];
     return membership?.role || null;
   } catch (error) {

@@ -24,41 +24,37 @@ export async function getValidWorkspaceId(user: User): Promise<string | null> {
   const cookieStore = await cookies();
   const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
 
-  // Get all workspaces the user has access to
-  const userWorkspaces = await prisma.workspace.findMany({
+  // If a workspace ID exists in cookie, verify the user has access to it
+  if (currentWorkspaceId) {
+    const hasAccess = await prisma.workspace.findFirst({
+      where: {
+        id: currentWorkspaceId,
+        OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } }
+        ]
+      },
+      select: { id: true }
+    });
+
+    if (hasAccess) {
+      return currentWorkspaceId;
+    }
+  }
+
+  // Fallback: return any accessible workspace (oldest by creation for stability)
+  const firstAccessible = await prisma.workspace.findFirst({
     where: {
       OR: [
         { ownerId: user.id },
-        { members: { some: { userId: user.id } } }
+        { members: { some: { userId: user.id, status: true } } }
       ]
     },
-    select: { id: true }
+    select: { id: true },
+    orderBy: { createdAt: 'asc' }
   });
-  
-  // Check if user has any workspaces
-  if (userWorkspaces.length === 0) {
-    return null;
-  }
-  
-  // Get valid workspace IDs the user has access to
-  const validWorkspaceIds = userWorkspaces.map(workspace => workspace.id);
-  
-  // If a workspace ID is in the cookie, verify the user has access to it
-  let workspaceId = currentWorkspaceId;
-  if (workspaceId) {
-    const hasAccess = validWorkspaceIds.includes(workspaceId);
-    
-    if (!hasAccess) {
-      // If the user doesn't have access to the workspace in the cookie,
-      // use their first accessible workspace instead
-      workspaceId = userWorkspaces[0].id;
-    }
-  } else {
-    // No workspace ID in cookie, use the first workspace
-    workspaceId = userWorkspaces[0].id;
-  }
-  
-  return workspaceId;
+
+  return firstAccessible?.id ?? null;
 }
 
 /**
