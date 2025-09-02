@@ -13,6 +13,7 @@ import Heading from "@tiptap/extension-heading";
 import Color from "@tiptap/extension-color";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
+import { handleSlashCommandUpdate } from "@/utils/slash-command-utils";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -59,6 +60,8 @@ interface IssueDescriptionEditorProps {
   className?: string;
   onAiImprove?: (text: string) => Promise<string>;
   onCreateSubIssue?: (selectedText: string) => void;
+  originalValue?: string;
+  onEscWithUnsavedChanges?: () => void;
 }
 
 // Slash command menu items
@@ -129,6 +132,8 @@ export function IssueDescriptionEditor({
   className,
   onAiImprove,
   onCreateSubIssue,
+  originalValue,
+  onEscWithUnsavedChanges,
 }: IssueDescriptionEditorProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
@@ -209,10 +214,28 @@ export function IssueDescriptionEditor({
           }
         }
 
-        // Handle escape to close slash menu
-        if (event.key === 'Escape' && showSlashMenu) {
-          setShowSlashMenu(false);
-          return true;
+        // Handle escape key
+        if (event.key === 'Escape') {
+          // First priority: close slash menu if open
+          if (showSlashMenu) {
+            setShowSlashMenu(false);
+            return true;
+          }
+          
+          // Second priority: handle unsaved changes if callback is provided
+          if (onEscWithUnsavedChanges && originalValue !== undefined) {
+            const hasUnsavedChanges = value !== originalValue && 
+              !(value === '<p></p>' && originalValue === '') &&
+              !(value === '' && originalValue === '<p></p>');
+            
+            if (hasUnsavedChanges) {
+              onEscWithUnsavedChanges();
+              return true;
+            }
+          }
+          
+          // If no slash menu and no unsaved changes, let the event bubble up
+          return false;
         }
 
         // Handle arrow keys in slash menu
@@ -262,17 +285,11 @@ export function IssueDescriptionEditor({
 
       // Handle slash command query updates
       if (showSlashMenu) {
-        const { from } = editor.state.selection;
-        const beforeText = editor.state.doc.textBetween(Math.max(0, from - 20), from, ' ', ' ');
-        const slashIndex = beforeText.lastIndexOf('/');
-        
-        if (slashIndex !== -1) {
-          const query = beforeText.substring(slashIndex + 1);
-          setSlashQuery(query);
-          setSelectedSlashIndex(0);
-        } else {
-          setShowSlashMenu(false);
-        }
+        handleSlashCommandUpdate(editor, {
+          setSlashQuery,
+          setSelectedSlashIndex,
+          hideSlashMenu: () => setShowSlashMenu(false),
+        });
       }
     },
     onSelectionUpdate: ({ editor }) => {

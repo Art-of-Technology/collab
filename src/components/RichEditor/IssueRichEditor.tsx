@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { SlashCommand } from './extensions/slash-commands-extension';
 import type { RichEditorRef } from './types';
+import { handleSlashCommandUpdate } from '@/utils/slash-command-utils';
 
 interface IssueRichEditorProps {
   value: string;
@@ -364,6 +365,8 @@ export function IssueRichEditor({
     if (showSlashMenu) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
+        e.stopPropagation(); // Prevent event from bubbling up
+        
         if (e.key === 'ArrowDown') {
           setSelectedSlashIndex(prev => 
             prev < filteredCommands.length - 1 ? prev + 1 : 0
@@ -378,6 +381,7 @@ export function IssueRichEditor({
       
       if (e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation(); // Prevent event from bubbling up
         if (filteredCommands[selectedSlashIndex]) {
           handleSlashCommandSelect(filteredCommands[selectedSlashIndex]);
         }
@@ -386,12 +390,13 @@ export function IssueRichEditor({
       
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation(); // Prevent event from bubbling up
         handleHideSlashMenu();
         return;
       }
     }
     
-    // Pass through to parent
+    // Pass through to parent only if slash menu is not handling the event
     onKeyDown?.(e);
   }, [showSlashMenu, filteredCommands, selectedSlashIndex, handleSlashCommandSelect, handleHideSlashMenu, onKeyDown]);
 
@@ -459,6 +464,7 @@ export function IssueRichEditor({
         commands: DEFAULT_SLASH_COMMANDS,
         onShowMenu: handleShowSlashMenu,
         onHideMenu: handleHideSlashMenu,
+        isMenuOpen: () => showSlashMenu,
       })
     );
   }
@@ -505,6 +511,16 @@ export function IssueRichEditor({
         onAiImprove={onAiImprove}
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
+        onUpdate={(editor) => {
+          // Handle slash command query updates
+          if (showSlashMenu) {
+            handleSlashCommandUpdate(editor, {
+              setSlashQuery,
+              setSelectedSlashIndex,
+              hideSlashMenu: handleHideSlashMenu,
+            });
+          }
+        }}
         additionalExtensions={additionalExtensions}
         // Disable internal floating toolbar to avoid duplication; we'll render our own
         toolbarMode="static"
