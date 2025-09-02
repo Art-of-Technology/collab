@@ -106,7 +106,7 @@ export default function MemberStatusToggle({
           <Switch
             checked={status}
             onCheckedChange={handleStatusChange}
-            disabled={isUpdating}
+            disabled={isUpdating || !canManage}
             className="data-[state=checked]:bg-green-600"
           />
         )}

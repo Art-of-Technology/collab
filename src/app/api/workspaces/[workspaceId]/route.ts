@@ -87,9 +87,9 @@ export async function GET(
       );
     }
 
-    // Check if user is a member or owner
-    const isMember = workspace.members.some(member => member.userId === session.user.id) || 
-                    workspace.ownerId === session.user.id;
+    // Check if user is an ACTIVE member or owner
+    const isMember = workspace.ownerId === session.user.id ||
+      workspace.members.some(member => member.userId === session.user.id && member.status === true);
 
     if (!isMember) {
       return NextResponse.json(
