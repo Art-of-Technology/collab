@@ -363,8 +363,7 @@ export default function ViewRenderer({
     workspaceId: workspace.id
   });
 
-  // Use the existing originalProjectIds from above (no duplicate needed)
-  
+  // Create a sorted copy of tempProjectIds for stable comparison and filtering
   const sortedTempProjectIds = useMemo(() => 
     [...tempProjectIds].sort(), [tempProjectIds]
   );
