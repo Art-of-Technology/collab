@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { trackFieldChanges, createActivity, compareObjects } from "@/lib/board-item-activity-service";
+import { trackFieldChanges, createActivity, compareObjects, trackAssignment } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
@@ -480,11 +480,64 @@ export async function PUT(
 
     // Track activities for changed fields (Issue-centric)
     try {
+      // Handle assignee changes separately with proper user name resolution
+      if (assigneeChanged) {
+        const oldAssignee = oldIssue.assigneeId ? await prisma.user.findUnique({
+          where: { id: oldIssue.assigneeId },
+          select: { id: true, name: true }
+        }) : null;
+        
+        const newAssignee = updatedIssue.assigneeId ? await prisma.user.findUnique({
+          where: { id: updatedIssue.assigneeId },
+          select: { id: true, name: true }
+        }) : null;
+        
+        // Use the specialized trackAssignment function
+        await trackAssignment(
+          'ISSUE',
+          updatedIssue.id,
+          currentUser.id,
+          updatedIssue.workspaceId,
+          oldAssignee,
+          newAssignee
+        );
+      }
+
+      // Handle reporter changes separately with proper user name resolution
+      const reporterChanged = oldIssue.reporterId !== updatedIssue.reporterId;
+      if (reporterChanged) {
+        const oldReporter = oldIssue.reporterId ? await prisma.user.findUnique({
+          where: { id: oldIssue.reporterId },
+          select: { id: true, name: true }
+        }) : null;
+        
+        const newReporter = updatedIssue.reporterId ? await prisma.user.findUnique({
+          where: { id: updatedIssue.reporterId },
+          select: { id: true, name: true }
+        }) : null;
+        
+        // Create specialized reporter change activity
+        await createActivity({
+          itemType: 'ISSUE',
+          itemId: updatedIssue.id,
+          action: 'REPORTER_CHANGED',
+          userId: currentUser.id,
+          workspaceId: updatedIssue.workspaceId,
+          details: {
+            oldReporter,
+            newReporter,
+            changedAt: new Date().toISOString(),
+          },
+          fieldName: 'reporterId',
+          oldValue: oldReporter?.id || null,
+          newValue: newReporter?.id || null,
+        });
+      }
+
+      // Track other field changes (excluding assigneeId and reporterId since we handled them above)
       const fieldsToTrack = [
         'title',
         'description',
-        'assigneeId',
-        'reporterId',
         'status',
         'priority',
         'columnId',

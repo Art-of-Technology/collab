@@ -41,7 +41,7 @@ const editLeaveRequestSchema = z.object({
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { requestId: string } }
+  { params }: { params: Promise<{ requestId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -50,7 +50,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { requestId } = params;
+    const { requestId } = await params;
     const body = await req.json();
     const validated = updateLeaveRequestSchema.safeParse(body);
 
@@ -120,7 +120,7 @@ export async function PATCH(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { requestId: string } }
+  { params }: { params: Promise<{ requestId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -129,7 +129,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { requestId } = params;
+    const { requestId } = await params;
     const body = await req.json();
     const validated = editLeaveRequestSchema.safeParse(body);
 
@@ -320,7 +320,7 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { requestId: string } }
+  { params }: { params: Promise<{ requestId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -329,7 +329,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { requestId } = params;
+    const { requestId } = await params;
 
     // Get the current user
     const user = await prisma.user.findUnique({

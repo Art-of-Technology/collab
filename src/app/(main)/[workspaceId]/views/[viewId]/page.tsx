@@ -221,6 +221,80 @@ export default async function ViewPage({ params }: ViewPageProps) {
                 issuesQuery.where.dueDate = { gte: startOfDay, lt: endOfDay };
               }
               break;
+            case 'updatedAt':
+              // Handle updatedAt filters
+              const updatedAtConditions: any[] = [];
+              
+              filterValues.forEach(filterValue => {
+                const today = new Date();
+                
+                if (filterValue === 'today') {
+                  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                  updatedAtConditions.push({
+                    updatedAt: { gte: startOfDay, lt: endOfDay }
+                  });
+                } else if (filterValue === 'yesterday') {
+                  const yesterday = new Date(today);
+                  yesterday.setDate(today.getDate() - 1);
+                  const startOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+                  const endOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1);
+                  updatedAtConditions.push({
+                    updatedAt: { gte: startOfYesterday, lt: endOfYesterday }
+                  });
+                } else if (filterValue === 'last-3-days') {
+                  const threeDaysAgo = new Date(today);
+                  threeDaysAgo.setDate(today.getDate() - 3);
+                  const startOfThreeDaysAgo = new Date(threeDaysAgo.getFullYear(), threeDaysAgo.getMonth(), threeDaysAgo.getDate());
+                  updatedAtConditions.push({
+                    updatedAt: { gte: startOfThreeDaysAgo }
+                  });
+                } else if (filterValue === 'last-7-days') {
+                  const sevenDaysAgo = new Date(today);
+                  sevenDaysAgo.setDate(today.getDate() - 7);
+                  const startOfSevenDaysAgo = new Date(sevenDaysAgo.getFullYear(), sevenDaysAgo.getMonth(), sevenDaysAgo.getDate());
+                  updatedAtConditions.push({
+                    updatedAt: { gte: startOfSevenDaysAgo }
+                  });
+                } else if (filterValue === 'last-30-days') {
+                  const thirtyDaysAgo = new Date(today);
+                  thirtyDaysAgo.setDate(today.getDate() - 30);
+                  const startOfThirtyDaysAgo = new Date(thirtyDaysAgo.getFullYear(), thirtyDaysAgo.getMonth(), thirtyDaysAgo.getDate());
+                  updatedAtConditions.push({
+                    updatedAt: { gte: startOfThirtyDaysAgo }
+                  });
+                } else if (filterValue.includes(':')) {
+                  // Handle custom date range (format: "YYYY-MM-DD:YYYY-MM-DD")
+                  try {
+                    const [startStr, endStr] = filterValue.split(':');
+                    const startDate = new Date(startStr + 'T00:00:00');
+                    const endDate = new Date(endStr + 'T23:59:59');
+                    
+                    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+                      updatedAtConditions.push({
+                        updatedAt: { gte: startDate, lte: endDate }
+                      });
+                    }
+                  } catch (error) {
+                    console.warn('Invalid date range format:', filterValue);
+                  }
+                }
+              });
+              
+              // If we have conditions, combine them with OR logic (union of all date ranges)
+              if (updatedAtConditions.length > 0) {
+                if (updatedAtConditions.length === 1) {
+                  // Single condition, apply directly
+                  Object.assign(issuesQuery.where, updatedAtConditions[0]);
+                } else {
+                  // Multiple conditions, use OR
+                  if (!issuesQuery.where.OR) {
+                    issuesQuery.where.OR = [];
+                  }
+                  issuesQuery.where.OR.push(...updatedAtConditions);
+                }
+              }
+              break;
           }
         }
       });
