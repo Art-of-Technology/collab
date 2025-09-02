@@ -277,8 +277,8 @@ export default function ViewRenderer({
     return Array.from(issueMap.values());
   }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
 
-  // Use merged issues for filtering (memoized to prevent reference changes)
-  const issues = useMemo(() => allIssues, [allIssues]);
+  // Use merged issues for filtering
+  const issues = allIssues;
   
   // Track the last saved state to properly detect changes
   const [lastSavedState, setLastSavedState] = useState({
