@@ -19,6 +19,11 @@ export function useActionFilteredIssues({
   // Check if we have action filters to apply
   const hasActionFilters = actionFilters.length > 0;
 
+  // Memoize the serialized action filters to prevent unnecessary API calls
+  const serializedActionFilters = useMemo(() => {
+    return JSON.stringify(actionFilters);
+  }, [actionFilters]);
+
   // Fetch matching issue IDs when action filters change
   useEffect(() => {
     if (!hasActionFilters) {
@@ -69,7 +74,7 @@ export function useActionFilteredIssues({
     return () => {
       isCancelled = true;
     };
-  }, [actionFilters, workspaceId, hasActionFilters]);
+  }, [serializedActionFilters, workspaceId, hasActionFilters]);
 
   // Apply the action filtering to the issues
   const filteredIssues = useMemo(() => {
