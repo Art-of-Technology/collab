@@ -68,6 +68,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   workspaceId,
   onSelectionUpdate,
   onKeyDown,
+  onUpdate,
   additionalExtensions = []
 }, ref) => {
   const { currentWorkspace } = useWorkspace();
@@ -200,6 +201,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       
       // Check for mention triggers
       checkForMentionTrigger();
+      
+      // Call external update callback
+      onUpdate?.(editor);
     },
     onSelectionUpdate: ({ editor }) => {
       // Handle text selection for floating menu (only in floating mode)

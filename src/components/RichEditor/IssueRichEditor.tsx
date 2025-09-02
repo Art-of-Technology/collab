@@ -505,6 +505,28 @@ export function IssueRichEditor({
         onAiImprove={onAiImprove}
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
+        onUpdate={(editor) => {
+          // Handle slash command query updates
+          if (showSlashMenu) {
+            const { from } = editor.state.selection;
+            const beforeText = editor.state.doc.textBetween(Math.max(0, from - 50), from, ' ', ' ');
+            const slashIndex = beforeText.lastIndexOf('/');
+            
+            // Check if there's a slash at the expected position and no spaces after it
+            if (slashIndex !== -1) {
+              const textAfterSlash = beforeText.substring(slashIndex + 1);
+              // Only keep menu open if there are no spaces after the slash (which would break the command)
+              if (!textAfterSlash.includes(' ')) {
+                setSlashQuery(textAfterSlash);
+                setSelectedSlashIndex(0);
+              } else {
+                handleHideSlashMenu();
+              }
+            } else {
+              handleHideSlashMenu();
+            }
+          }
+        }}
         additionalExtensions={additionalExtensions}
         // Disable internal floating toolbar to avoid duplication; we'll render our own
         toolbarMode="static"
