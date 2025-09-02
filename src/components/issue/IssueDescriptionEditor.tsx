@@ -13,6 +13,7 @@ import Heading from "@tiptap/extension-heading";
 import Color from "@tiptap/extension-color";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
+import { handleSlashCommandUpdate } from "@/utils/slash-command-utils";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -284,23 +285,11 @@ export function IssueDescriptionEditor({
 
       // Handle slash command query updates
       if (showSlashMenu) {
-        const { from } = editor.state.selection;
-        const beforeText = editor.state.doc.textBetween(Math.max(0, from - 50), from, ' ', ' ');
-        const slashIndex = beforeText.lastIndexOf('/');
-        
-        // Check if there's a slash at the expected position and no spaces after it
-        if (slashIndex !== -1) {
-          const textAfterSlash = beforeText.substring(slashIndex + 1);
-          // Only keep menu open if there are no spaces after the slash (which would break the command)
-          if (!textAfterSlash.includes(' ')) {
-            setSlashQuery(textAfterSlash);
-            setSelectedSlashIndex(0);
-          } else {
-            setShowSlashMenu(false);
-          }
-        } else {
-          setShowSlashMenu(false);
-        }
+        handleSlashCommandUpdate(editor, {
+          setSlashQuery,
+          setSelectedSlashIndex,
+          hideSlashMenu: () => setShowSlashMenu(false),
+        });
       }
     },
     onSelectionUpdate: ({ editor }) => {

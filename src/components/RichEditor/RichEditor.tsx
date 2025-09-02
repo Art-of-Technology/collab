@@ -142,6 +142,48 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         ),
       },
       handleKeyDown: (view, event) => {
+        // First, call the parent's onKeyDown handler if provided
+        if (onKeyDown) {
+          let eventHandled = false;
+          
+          // Create React-compatible event object
+          const reactEvent = {
+            key: event.key,
+            code: event.code,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            preventDefault: () => {
+              event.preventDefault();
+              eventHandled = true;
+            },
+            stopPropagation: () => {
+              event.stopPropagation();
+              eventHandled = true;
+            },
+            defaultPrevented: event.defaultPrevented,
+            // Add minimal required React event properties
+            nativeEvent: event,
+            currentTarget: event.target,
+            target: event.target,
+            bubbles: event.bubbles,
+            cancelable: event.cancelable,
+            type: event.type,
+            timeStamp: event.timeStamp,
+            isDefaultPrevented: () => event.defaultPrevented || eventHandled,
+            isPropagationStopped: () => eventHandled,
+            persist: () => {},
+          } as unknown as React.KeyboardEvent;
+
+          onKeyDown(reactEvent);
+          
+          // If the event was handled, return true to stop processing
+          if (eventHandled || event.defaultPrevented) {
+            return true;
+          }
+        }
+        
         // Handle @ and # for mentions
         if (event.key === '@' || event.key === '#') {
           setTimeout(() => {
@@ -243,6 +285,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
   // Image upload hook
   const { isUploading: isUploadingImage, uploadAndInsertImage } = useImageUpload(editor);
+
+
 
   // Mention trigger check
   const checkForMentionTrigger = useCallback(() => {

@@ -570,6 +570,9 @@ export function IssueDetailContent({
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
+        } else if (showUnsavedChangesModal) {
+          // Close the unsaved changes modal if it's open
+          setShowUnsavedChangesModal(false);
         } else if (descriptionHasChanges) {
           // Show unsaved changes modal if there are unsaved description changes
           setShowUnsavedChangesModal(true);
@@ -581,7 +584,7 @@ export function IssueDetailContent({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription]);
+  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription, showUnsavedChangesModal]);
 
   // Loading state
   if (isLoading) {

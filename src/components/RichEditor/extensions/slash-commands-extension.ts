@@ -14,6 +14,7 @@ export interface SlashCommandsOptions {
   onShowMenu?: (position: { top: number; left: number }, query: string, commands: SlashCommand[]) => void;
   onHideMenu?: () => void;
   onSelectCommand?: (index: number) => void;
+  isMenuOpen?: () => boolean;
 }
 
 export const SlashCommandsExtension = Extension.create<SlashCommandsOptions>({
@@ -25,6 +26,7 @@ export const SlashCommandsExtension = Extension.create<SlashCommandsOptions>({
       onShowMenu: undefined,
       onHideMenu: undefined,
       onSelectCommand: undefined,
+      isMenuOpen: undefined,
     };
   },
 
@@ -38,7 +40,13 @@ export const SlashCommandsExtension = Extension.create<SlashCommandsOptions>({
             const { state } = view;
             const { selection } = state;
             
-            // Handle slash key
+            // If menu is open, let React component handle ALL keys
+            const isMenuOpen = this.options.isMenuOpen?.();
+            if (isMenuOpen) {
+              return false; // Let React handle everything when menu is open
+            }
+            
+            // Handle slash key only when menu is not open
             if (event.key === '/') {
               const { from } = selection;
               const beforeText = state.doc.textBetween(Math.max(0, from - 10), from, ' ', ' ');
@@ -56,13 +64,7 @@ export const SlashCommandsExtension = Extension.create<SlashCommandsOptions>({
               }
             }
 
-            // Handle escape
-            if (event.key === 'Escape') {
-              this.options.onHideMenu?.();
-              return true;
-            }
-
-            // Handle arrow keys and enter will be managed by the UI component
+            // Let React component handle all other keys
             return false;
           },
         },
@@ -79,30 +81,27 @@ export const SlashCommandsExtension = Extension.create<SlashCommandsOptions>({
 
   addCommands() {
     return {
-      executeSlashCommand: (command: SlashCommand) => ({ editor, tr }: { editor: Editor; tr: any }) => {
-        // Get current selection position
-        const { from } = tr.selection;
-        const beforeText = tr.doc.textBetween(Math.max(0, from - 20), from, ' ', ' ');
-        const slashIndex = beforeText.lastIndexOf('/');
-        
-        // Calculate the range to delete (slash + query)
-        let deleteFrom = from;
-        let deleteTo = from;
-        
-        if (slashIndex !== -1) {
-          deleteFrom = from - (beforeText.length - slashIndex);
-          deleteTo = from;
-        }
-        
-        // Remove the slash and query text in the same transaction
-        if (deleteFrom < deleteTo) {
-          tr.delete(deleteFrom, deleteTo);
-        }
-        
-        // Hide the menu
+      executeSlashCommand: (command: SlashCommand) => ({ editor, tr, dispatch }: { editor: Editor; tr: any; dispatch: any }) => {
+        // Hide the menu first
         this.options.onHideMenu?.();
         
-        // Execute the actual command after the transaction completes
+        // Get current selection position
+        const { from } = tr.selection;
+        const beforeText = tr.doc.textBetween(Math.max(0, from - 50), from, ' ', ' ');
+        const slashIndex = beforeText.lastIndexOf('/');
+        
+        // Remove the slash and query text in the same transaction
+        if (slashIndex !== -1) {
+          const deleteFrom = from - (beforeText.length - slashIndex);
+          tr.delete(deleteFrom, from);
+        }
+        
+        // Dispatch the transaction with the deletion
+        if (dispatch) {
+          dispatch(tr);
+        }
+        
+        // Execute the actual command after a brief delay to ensure the deletion transaction is applied
         setTimeout(() => {
           command.command(editor);
         }, 0);

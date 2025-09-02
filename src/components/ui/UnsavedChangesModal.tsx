@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,23 @@ export function UnsavedChangesModal({
   saveLabel = "Save and close",
   discardLabel = "Discard changes",
 }: UnsavedChangesModalProps) {
+  // Handle ESC key press when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
+
+    // Add event listener with capture to ensure it fires first
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen, onClose]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
