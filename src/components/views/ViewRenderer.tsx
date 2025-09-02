@@ -212,7 +212,7 @@ export default function ViewRenderer({
   const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
 
   // Determine which projects are newly selected (not in original view)
-  const originalProjectIds = useMemo(() => view.projects.map(p => p.id), [view.projects]);
+  const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
   const additionalProjectIds = useMemo(() => {
     return tempProjectIds.filter(id => !originalProjectIds.includes(id));
   }, [tempProjectIds, originalProjectIds]);
@@ -277,8 +277,8 @@ export default function ViewRenderer({
     return Array.from(issueMap.values());
   }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
 
-  // Use merged issues for filtering
-  const issues = allIssues;
+  // Use merged issues for filtering (memoized to prevent reference changes)
+  const issues = useMemo(() => allIssues, [allIssues]);
   
   // Track the last saved state to properly detect changes
   const [lastSavedState, setLastSavedState] = useState({
@@ -348,15 +348,26 @@ export default function ViewRenderer({
     return combinedFilters;
   }, [view.filters, tempFilters]);
 
+  // Memoize action filters to prevent reference instability
+  const actionFilters = useMemo(() => {
+    return allFilters.actions as ActionFilter[] || [];
+  }, [allFilters.actions]);
+
   // Apply action filters first (async filtering)
   const { 
     filteredIssues: actionFilteredIssues, 
     isLoading: isActionFilterLoading 
   } = useActionFilteredIssues({
     issues,
-    actionFilters: allFilters.actions as ActionFilter[] || [],
+    actionFilters,
     workspaceId: workspace.id
   });
+
+  // Use the existing originalProjectIds from above (no duplicate needed)
+  
+  const sortedTempProjectIds = useMemo(() => 
+    [...tempProjectIds].sort(), [tempProjectIds]
+  );
 
   // Apply view filters and search
   const filteredIssues = useMemo(() => {
@@ -364,9 +375,7 @@ export default function ViewRenderer({
     let filtered = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
     
     // Apply project filtering if tempProjectIds differs from original view projects
-    const originalProjectIds = view.projects.map(p => p.id).sort();
-    const currentProjectIds = tempProjectIds.sort();
-    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
     
     if (projectSelectionChanged) {
       if (tempProjectIds.length === 0) {
@@ -375,7 +384,7 @@ export default function ViewRenderer({
       } else {
         // Filter to selected projects
         filtered = filtered.filter(issue => {
-          return tempProjectIds.includes(issue.projectId);
+          return sortedTempProjectIds.includes(issue.projectId);
         });
       }
     }
@@ -528,7 +537,7 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, tempProjectIds, view.projects]);
+  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -693,14 +702,12 @@ export default function ViewRenderer({
     let countingIssues = [...actionFilteredIssues];
 
     // Project selection (same logic as filteredIssues)
-    const originalProjectIds = view.projects.map(p => p.id).sort();
-    const currentProjectIds = tempProjectIds.sort();
-    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
     if (projectSelectionChanged) {
-      if (tempProjectIds.length === 0) {
+      if (sortedTempProjectIds.length === 0) {
         countingIssues = [];
       } else {
-        countingIssues = countingIssues.filter(issue => tempProjectIds.includes(issue.projectId));
+        countingIssues = countingIssues.filter(issue => sortedTempProjectIds.includes(issue.projectId));
       }
     }
 
@@ -784,7 +791,7 @@ export default function ViewRenderer({
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [actionFilteredIssues, tempProjectIds, view.projects, searchQuery, allFilters, viewFiltersState]);
+  }, [actionFilteredIssues, sortedTempProjectIds, originalProjectIds, searchQuery, allFilters, viewFiltersState]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
