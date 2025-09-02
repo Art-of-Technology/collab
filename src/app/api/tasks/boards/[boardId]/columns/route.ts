@@ -43,6 +43,7 @@ export async function POST(
     // Check if user has admin rights in the workspace
     const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: currentUser.id,
         workspaceId: board.workspaceId,
       },
@@ -131,9 +132,10 @@ export async function GET(
     });
 
     const isWorkspaceOwner = workspace?.ownerId === currentUser.id;
-    
+
     const hasAccess = isWorkspaceOwner || await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: currentUser.id,
         workspaceId: board.workspaceId,
       },

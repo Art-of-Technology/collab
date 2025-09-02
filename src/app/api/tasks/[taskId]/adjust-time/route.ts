@@ -48,6 +48,7 @@ export async function POST(
     const isWorkspaceOwner = task.workspace.ownerId === userId;
     const workspaceMember = await prisma.workspaceMember.findUnique({
       where: {
+        status: true,
         userId_workspaceId: {
           userId: userId,
           workspaceId: task.workspaceId,
@@ -88,7 +89,7 @@ export async function POST(
 
     // Session-based approach: Find the most recent session and adjust it
     // This maintains data integrity while allowing precise time adjustments
-    
+
     if (adjustmentMs !== 0) {
       // Get all user events for this task to find sessions that can be adjusted
       const userEvents = await prisma.userEvent.findMany({
@@ -102,11 +103,11 @@ export async function POST(
 
       // Find the most recent completed session to adjust
       let adjustedSessionFound = false;
-      
+
       for (let i = 0; i < userEvents.length - 1; i++) {
         const endEvent = userEvents[i];
         const startEvent = userEvents[i + 1];
-        
+
         // Look for a STOP/PAUSE followed by a START (most recent session)
         if (
           (endEvent.eventType === 'TASK_STOP' || endEvent.eventType === 'TASK_PAUSE') &&
@@ -114,11 +115,11 @@ export async function POST(
         ) {
           const sessionDurationMs = endEvent.startedAt.getTime() - startEvent.startedAt.getTime();
           const newSessionDurationMs = sessionDurationMs + adjustmentMs;
-          
+
           if (newSessionDurationMs > 0) {
             // Adjust the session by modifying the end time
             const newEndTime = new Date(startEvent.startedAt.getTime() + newSessionDurationMs);
-            
+
             await prisma.userEvent.update({
               where: { id: endEvent.id },
               data: {
@@ -132,19 +133,19 @@ export async function POST(
                 },
               },
             });
-            
+
             adjustedSessionFound = true;
             break;
           }
         }
       }
-      
+
       // If no existing session could be adjusted, create a new adjustment session
       if (!adjustedSessionFound && adjustmentMs > 0) {
         // Create a new session with the adjustment time
         const now = new Date();
         const sessionStart = new Date(now.getTime() - adjustmentMs);
-        
+
         await prisma.userEvent.create({
           data: {
             userId,
@@ -161,7 +162,7 @@ export async function POST(
             },
           },
         });
-        
+
         await prisma.userEvent.create({
           data: {
             userId,

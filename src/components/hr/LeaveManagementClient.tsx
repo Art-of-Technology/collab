@@ -59,9 +59,9 @@ export default function LeaveManagementClient({ workspaceId }: LeaveManagementCl
         icon={Calendar} 
         actions={
           <Link href={`/${workspaceId}/leave-management/policies`}>
-            <Button variant="outline">
-              <Settings className="h-4 w-4" />
-              <span className="hidden md:inline ml-2">
+            <Button variant="outline" className="h-6 px-1 md:px-3 text-xs flex items-center justify-center border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10">
+              <Settings className="h-4 w-4 md:mr-2" />
+              <span data-text className="hidden md:inline ml-1">
                 Manage Policies
               </span>
             </Button>

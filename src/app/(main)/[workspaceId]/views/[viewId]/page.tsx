@@ -84,7 +84,12 @@ export default async function ViewPage({ params }: ViewPageProps) {
       id: true,
       name: true,
       slug: true,
-      issuePrefix: true
+      issuePrefix: true,
+      statuses: {
+        orderBy: {
+          order: 'asc'
+        }
+      },
     }
   });
 
@@ -262,7 +267,8 @@ export default async function ViewPage({ params }: ViewPageProps) {
       name: p.name,
       slug: p.slug,
       issuePrefix: p.issuePrefix,
-      color: '#3b82f6' // Default color since Project model doesn't have color field
+      color: '#3b82f6', // Default color since Project model doesn't have color field
+      statuses: p.statuses,
     })),
     isDefault: view.isDefault,
     isFavorite: view.isFavorite || false,

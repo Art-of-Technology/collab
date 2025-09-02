@@ -56,9 +56,12 @@ import { IssueLabelSelector } from "@/components/issue/selectors/IssueLabelSelec
 import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
+import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 // Import types
-import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime, PlayState } from "@/types/issue";
+import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
+
+type PlayState = "playing" | "paused" | "stopped";
 
 // Helper function for getting type color (still used for the type indicator dot)
 const getTypeColor = (type: string) => {
@@ -481,7 +484,7 @@ export function IssueDetailContent({
         if (issue.projectId && workspaceId) {
           router.push(`/${workspaceId}/projects/${issue.projectId}`);
         } else if (workspaceId) {
-          router.push(`/${workspaceId}/issues`);
+          router.push(`/${workspaceId}/views`);
         } else {
           router.push('/dashboard');
         }
@@ -518,7 +521,7 @@ export function IssueDetailContent({
       if (issue?.projectId && workspaceId) {
         router.push(`/${workspaceId}/projects/${issue.projectId}`);
       } else if (workspaceId) {
-        router.push(`/${workspaceId}/issues`);
+        router.push(`/${workspaceId}/views`);
       } else {
         router.back();
       }
@@ -580,7 +583,7 @@ export function IssueDetailContent({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
-          <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#8b949e]" />
+          <LoadingState size="md" className="mx-auto text-[#8b949e]" noPadding={true} />
           <p className="text-[#8b949e] text-sm">Loading issue...</p>
         </div>
       </div>
@@ -744,24 +747,24 @@ export function IssueDetailContent({
               variant="ghost"
               size="sm"
               onClick={handleCopyLink}
-              className="h-6 px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+              className="h-6 px-1 md:px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22] flex items-center justify-center"
             >
-              <Copy className="h-3 w-3 mr-1" />
-              Copy Link
+              <Copy className="h-3 w-3 md:mr-1" />
+              <span data-text className="hidden md:inline ml-1">Copy Link</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleDeleteIssue}
               disabled={deleteIssueMutation.isPending}
-              className="h-6 px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]"
+              className="h-6 px-1 md:px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22] flex items-center justify-center"
             >
               {deleteIssueMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                <Loader2 className="h-3 w-3 animate-spin md:mr-1" />
               ) : (
-                <Trash2 className="h-3 w-3 mr-1" />
+                <Trash2 className="h-3 w-3 md:mr-1" />
               )}
-              Delete
+              <span data-text className="hidden md:inline ml-1">Delete</span>
             </Button>
           </div>
         }
@@ -999,7 +1002,7 @@ export function IssueDetailContent({
                 onChange={handleDescriptionChange}
                 placeholder="Add a description..."
                 onAiImprove={handleAiImprove}
-                className="min-h-[400px] w-full"
+                className="w-full"
                 enableSlashCommands={true}
                 enableFloatingMenu={true}
                 enableSaveDiscard={true}
@@ -1013,6 +1016,7 @@ export function IssueDetailContent({
                   setDescriptionHasChanges(false);
                 }}
                 minHeight="400px"
+                maxHeight="none"
               />
             </div>
 

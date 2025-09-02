@@ -33,7 +33,8 @@ export async function GET(
     const hasAccess = await prisma.workspaceMember.findFirst({
       where: {
         user: { email: session.user.email },
-        workspaceId: project.workspaceId
+        workspaceId: project.workspaceId,
+        status: true
       }
     });
 
@@ -120,7 +121,8 @@ export async function POST(
     const hasAccess = await prisma.workspaceMember.findFirst({
       where: {
         user: { email: session.user.email },
-        workspaceId: project.workspaceId
+        workspaceId: project.workspaceId,
+        status: true
       }
     });
 

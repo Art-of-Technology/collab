@@ -17,8 +17,11 @@ export default function KanbanBoard({
   projects,
   workspaceId,
   currentUserId,
+  draggedIssue,
+  hoverState,
   onDragEnd,
   onDragStart,
+  onDragUpdate,
   onIssueClick,
   onCreateIssue,
   onStartCreatingIssue,
@@ -45,7 +48,7 @@ export default function KanbanBoard({
   }
 
   return (
-    <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
+    <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart} onDragUpdate={onDragUpdate}>
       <Droppable droppableId="board" direction="horizontal" type="column">
         {(provided) => (
           <div
@@ -67,6 +70,8 @@ export default function KanbanBoard({
                 projects={projects}
                 workspaceId={workspaceId}
                 currentUserId={currentUserId}
+                draggedIssue={draggedIssue}
+                hoverState={hoverState}
                 onIssueClick={onIssueClick}
                 onCreateIssue={onCreateIssue}
                 onStartCreatingIssue={onStartCreatingIssue}

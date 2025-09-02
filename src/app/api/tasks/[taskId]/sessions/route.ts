@@ -78,6 +78,7 @@ export async function GET(
     const isWorkspaceOwner = task.workspace.ownerId === userId;
     const workspaceMember = await prisma.workspaceMember.findUnique({
       where: {
+        status: true,
         userId_workspaceId: {
           userId: userId,
           workspaceId: task.workspaceId,
@@ -123,7 +124,7 @@ export async function GET(
     for (let i = 0; i < userEvents.length; i++) {
       const event = userEvents[i];
       const currentUserId = event.userId;
-      
+
       if (event.eventType === 'TASK_START') {
         userSessionStates[currentUserId] = event;
       } else if (
@@ -133,16 +134,16 @@ export async function GET(
         const currentStart = userSessionStates[currentUserId];
         const durationMs = event.startedAt.getTime() - currentStart.startedAt.getTime();
         const oneMinuteMs = 60 * 1000; // 1 minute in milliseconds
-        
+
         // Skip sessions shorter than 1 minute (these are test sessions)
         if (durationMs < oneMinuteMs) {
           userSessionStates[currentUserId] = null;
           continue;
         }
-        
+
         // Check if either start or end event has been edited
         const isAdjusted = !!(event.metadata as any)?.editedAt || !!(currentStart.metadata as any)?.editedAt;
-        
+
         // Check if this is a pause followed by a stop (user paused then completed work)
         let effectiveEventType = event.eventType;
         if (event.eventType === 'TASK_PAUSE') {
@@ -153,7 +154,7 @@ export async function GET(
             effectiveEventType = 'TASK_STOP';
           }
         }
-        
+
         sessions.push({
           id: `${currentStart.id}-${event.id}`,
           user: {
@@ -194,7 +195,7 @@ export async function GET(
             adjustedAt: (event.metadata as any).editedAt || (currentStart.metadata as any)?.editedAt,
           } : undefined,
         });
-        
+
         userSessionStates[currentUserId] = null;
       }
     }
@@ -248,4 +249,3 @@ export async function GET(
   }
 }
 
- 

@@ -8,13 +8,13 @@ export async function POST(
 ) {
   try {
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
-    
+
     const { taskId, commentId } = params;
-    
+
     // Check if comment exists and belongs to the task
     const comment = await prisma.taskComment.findFirst({
       where: {
@@ -22,11 +22,11 @@ export async function POST(
         taskId: taskId,
       },
     });
-    
+
     if (!comment) {
       return new NextResponse("Comment not found", { status: 404 });
     }
-    
+
     // Check if user has access to the task's workspace
     const task = await prisma.task.findUnique({
       where: { id: taskId },
@@ -39,6 +39,7 @@ export async function POST(
 
     const hasAccess = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: user.id,
         workspaceId: task.workspaceId,
       },
@@ -47,7 +48,7 @@ export async function POST(
     if (!hasAccess) {
       return new NextResponse("Access denied", { status: 403 });
     }
-    
+
     // Check if the user already liked this comment
     const existingReaction = await prisma.taskCommentReaction.findFirst({
       where: {
@@ -56,13 +57,13 @@ export async function POST(
         type: "LIKE"
       },
     });
-    
+
     // If reaction exists, remove it (toggle off)
     if (existingReaction) {
       await prisma.taskCommentReaction.delete({
         where: { id: existingReaction.id },
       });
-      
+
       // Return the updated comment with reactions
       const updatedComment = await prisma.taskComment.findUnique({
         where: { id: commentId },
@@ -87,14 +88,14 @@ export async function POST(
           }
         }
       });
-      
-      return NextResponse.json({ 
+
+      return NextResponse.json({
         status: "removed",
         message: "Like removed",
         comment: updatedComment
       });
     }
-    
+
     // Otherwise, create the reaction (toggle on)
     await prisma.taskCommentReaction.create({
       data: {
@@ -103,7 +104,7 @@ export async function POST(
         authorId: user.id,
       },
     });
-    
+
     // Return the updated comment with reactions
     const updatedComment = await prisma.taskComment.findUnique({
       where: { id: commentId },
@@ -128,13 +129,13 @@ export async function POST(
         }
       }
     });
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       status: "added",
       message: "Like added",
       comment: updatedComment
     });
-    
+
   } catch (error) {
     console.error("Task comment like error:", error);
     return new NextResponse("Internal error", { status: 500 });
@@ -145,9 +146,9 @@ export async function GET(
   req: Request,
   { params }: { params: { taskId: string; commentId: string } }
 ) {
-  try { 
+  try {
     const { commentId } = params;
-    
+
     const likes = await prisma.taskCommentReaction.findMany({
       where: {
         taskCommentId: commentId,
@@ -163,7 +164,7 @@ export async function GET(
         },
       },
     });
-    
+
     return NextResponse.json({ likes });
   } catch (error) {
     console.error("Get task comment likes error:", error);

@@ -7,8 +7,7 @@ import { DropResult } from "@hello-pangea/dnd";
 import { createColumns, countIssuesByType } from '../utils';
 import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
 import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
-import { useUpdateIssue, useCreateIssue, issueKeys } from '@/hooks/queries/useIssues';
-import { useQueryClient } from '@tanstack/react-query';
+import { useUpdateIssue } from '@/hooks/queries/useIssues';
 import type { 
   KanbanViewRendererProps 
 } from '../types';
@@ -24,9 +23,7 @@ export const useKanbanState = ({
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const updateIssueMutation = useUpdateIssue();
-  const createIssueMutation = useCreateIssue();
   
   // State management with optimistic updates
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
@@ -34,13 +31,18 @@ export const useKanbanState = ({
   const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
   const [newIssueTitle, setNewIssueTitle] = useState('');
   const [showSubIssues, setShowSubIssues] = useState(true);
+
+  const [hoverState, setHoverState] = useState<{ canDrop: boolean, columnId: string }>({ canDrop: true, columnId: '' });
   
   // Local state for immediate UI updates during drag & drop
   const [localIssues, setLocalIssues] = useState(issues);
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
+  const previousIssuesRef = useRef<any[] | null>(null);
   
-  // Update local issues when props change (from server)
+  // Update local issues when props change (from server),
+  // but don't override while a drag/drop optimistic update is in-flight
   useEffect(() => {
+    if (isDraggingRef.current) return;
     setLocalIssues(issues);
   }, [issues]);
   
@@ -69,10 +71,12 @@ export const useKanbanState = ({
     const baseColumns = createColumns(filteredIssues, view, projectStatuses);
     if (localColumnOrder && view.grouping?.field === 'status') {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
-      return baseColumns.map((col: any) => ({
-        ...col,
-        order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
-      }));
+      return baseColumns
+        .map((col: any) => ({
+          ...col,
+          order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
+        }))
+        .sort((a: any, b: any) => a.order - b.order);
     }
     return baseColumns;
   }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder]);
@@ -82,13 +86,82 @@ export const useKanbanState = ({
     return countIssuesByType(issues);
   }, [issues]);
 
+  // Helper function to validate if an issue can be moved to a target column
+  const canIssueMoveTo = useCallback((issue: any, targetColumnId: string): boolean => {
+    // Allow movement within the same column (reordering)
+    if (issue.status === targetColumnId || issue.statusValue === targetColumnId) {
+      return true;
+    }
+
+    // If we don't have project statuses data, allow movement (fallback behavior)
+    if (!projectStatusData?.projectStatuses) {
+      return true;
+    }
+
+    // Find the project-specific statuses for the issue's project
+    const projectSpecificStatuses = projectStatusData.projectStatuses.filter(
+      (ps: any) => ps.projectId === issue.projectId
+    );
+
+    // If no project-specific statuses found, allow movement to common columns
+    if (projectSpecificStatuses.length === 0) {
+      return true;
+    }
+
+    // Check if the target column exists in the issue's project statuses
+    const targetStatusExists = projectSpecificStatuses.some(
+      (ps: any) => ps.name === targetColumnId
+    );
+
+    return targetStatusExists;
+  }, [projectStatusData]);
+
+  // Track the currently dragged issue and hover state for visual feedback
+  const [draggedIssue, setDraggedIssue] = useState<any>(null);
+
   // Drag and drop handlers
-  const handleDragStart = useCallback(() => {
+  const handleDragStart = useCallback((start: any) => {
     isDraggingRef.current = true;
-  }, []);
+    if (start.type === 'issue') {
+      const issue = localIssues.find((i: any) => i.id === start.draggableId);
+      setDraggedIssue(issue);
+    }
+  }, [localIssues]);
+
+  const handleDragUpdate = useCallback((update: any) => {
+    if (!update.destination) {
+      setHoverState({ canDrop: true, columnId: '' });
+      return;
+    }
+    
+    if (update.type === 'issue' && update.destination) {
+      const targetColumnId = update.destination.droppableId;
+      
+      // Find the dragged issue and check if it can be moved to the target column
+      if (draggedIssue) {
+        const canDrop = canIssueMoveTo(draggedIssue, targetColumnId);
+
+        setHoverState({ canDrop, columnId: targetColumnId });
+      }
+    } else {
+      setHoverState({ canDrop: true, columnId: '' });
+    }
+  }, [draggedIssue, canIssueMoveTo]);
 
   const handleDragEnd = useCallback(async (result: DropResult) => {
     const { destination, source, draggableId, type } = result;
+
+    if (!hoverState.canDrop) {
+      isDraggingRef.current = false;
+      setHoverState({ canDrop: true, columnId: '' });
+      toast({
+        title: "Cannot drop issue",
+        description: `Issue ${draggedIssue?.title} cannot be dropped to column ${hoverState.columnId}`,
+        variant: "destructive"
+      });
+      
+      return;
+    }
 
     if (!destination) {
       isDraggingRef.current = false;
@@ -128,6 +201,9 @@ export const useKanbanState = ({
       const isSameColumn = source.droppableId === destination.droppableId;
       const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
 
+      // Snapshot for rollback
+      previousIssuesRef.current = localIssues;
+
       const newLocalIssues = [...localIssues];
       const issueIndex = newLocalIssues.findIndex((i: any) => i.id === draggableId);
       if (issueIndex === -1) { isDraggingRef.current = false; return; }
@@ -153,26 +229,46 @@ export const useKanbanState = ({
       if (!isSameColumn) {
         updatedIssue.status = targetColumnId;
         updatedIssue.statusValue = targetColumnId;
+        if ((view?.grouping?.field || 'status') === 'status') {
+          updatedIssue.projectStatus = { name: targetColumnId, displayName: targetColumn.name };
+        }
       }
       newLocalIssues[issueIndex] = updatedIssue;
       setLocalIssues(newLocalIssues);
 
-      try {
-        if (!isSameColumn) {
-          await updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue });
-        }
-        await fetch(`/api/views/${view.id}/issue-positions`, {
+      const requests: Promise<any>[] = [];
+      if (!isSameColumn) {
+        requests.push(updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue }));
+      }
+      requests.push(
+        fetch(`/api/views/${view.id}/issue-positions`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ issueId: draggableId, columnId: targetColumnId, position: newPosition })
-        });
-      } catch (err) {
+        })
+      );
+      Promise.all(requests).catch((err) => {
         console.error('Failed to persist reorder:', err);
-      }
+        // Rollback on failure
+        if (previousIssuesRef.current) {
+          setLocalIssues(previousIssuesRef.current);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Reorder failed',
+          description: 'Could not save new position. Restored previous order.'
+        });
+      }).finally(() => {
+        isDraggingRef.current = false;
+      });
+      return;
     }
     
+    // Clear dragged issue and hover state
+    setDraggedIssue(null);
+    setHoverState({ canDrop: true, columnId: '' });
     isDraggingRef.current = false;
-  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, toast, view.id, queryClient, workspace.id]);
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field]);
 
   // Issue handlers
   const handleIssueClick = useCallback((issueIdOrKey: string) => {
@@ -231,8 +327,11 @@ export const useKanbanState = ({
     setShowSubIssues(prev => !prev);
   }, []);
 
-  // Display properties
-  const displayProperties = view.fields || DEFAULT_DISPLAY_PROPERTIES;
+  // Display properties: use raw values; respect empty array; fallback only if undefined
+  const displayProperties = useMemo(() => {
+    if (Array.isArray(view.fields)) return view.fields;
+    return DEFAULT_DISPLAY_PROPERTIES;
+  }, [view.fields]);
 
   // Event handlers for UI interactions
   const handleStartCreatingIssue = useCallback((columnId: string) => {
@@ -286,9 +385,12 @@ export const useKanbanState = ({
     displayProperties,
     showSubIssues,
     isLoadingStatuses,
+    draggedIssue,
+    hoverState,
     
     // Handlers
     handleDragStart,
+    handleDragUpdate,
     handleDragEnd,
     handleIssueClick,
     handleCreateIssue,

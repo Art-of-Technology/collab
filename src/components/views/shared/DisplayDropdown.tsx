@@ -21,7 +21,7 @@ import {
 
 const DISPLAY_PROPERTIES = {
   LIST: ['Priority', 'ID', 'Labels', 'Project', 'Due date', 'Assignee', 'Updated', 'Comments', 'Sub-issues'],
-  KANBAN: ['Assignee', 'Priority', 'Labels', 'Due Date', 'Story Points', 'Reporter'],
+  KANBAN: ['Assignee', 'Priority', 'Labels', 'Project', 'Status', 'Due Date', 'Story Points', 'Reporter', 'Created', 'Updated'],
   TIMELINE: ['Priority', 'Assignee', 'Status', 'Due Date', 'Start Date', 'Progress'],
   TABLE: ['Priority', 'ID', 'Status', 'Labels', 'Project', 'Milestone', 'Due date', 'Links', 'Assignee', 'Created', 'Updated']
 };

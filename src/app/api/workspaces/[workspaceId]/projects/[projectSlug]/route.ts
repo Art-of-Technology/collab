@@ -201,7 +201,7 @@ export async function PATCH(
             
             // Generate internal name if it's a new temporary status
             let internalName: string;
-            if (status.id.startsWith('status-')) {
+            if (status.id.startsWith('status-') || status.name) {
               // New status - generate internal name from display name using utility
               internalName = generateInternalStatusName(status.name);
             } else {

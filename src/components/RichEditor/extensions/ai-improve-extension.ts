@@ -41,12 +41,7 @@ export const AIImproveExtension = Extension.create<AIImproveOptions>({
       improveSelection:
         () =>
         ({ editor, commands }) => {
-          console.log('AIImproveExtension: improveSelection command called');
           const { from, to, empty } = editor.state.selection;
-          
-          console.log('Selection:', { from, to, empty });
-          console.log('onAiImprove callback available:', !!this.options.onAiImprove);
-          
           // Only work with selected text
           if (empty || !this.options.onAiImprove) {
             console.log('AIImproveExtension: No selection or no callback, returning false');
@@ -59,17 +54,6 @@ export const AIImproveExtension = Extension.create<AIImproveOptions>({
           // Extract markdown-formatted content
           const selectedMarkdown = extractSelectionAsMarkdown(editor, from, to);
           
-          console.log('AIImproveExtension: Selected content details:', {
-            plainText: selectedText,
-            markdown: selectedMarkdown,
-            from,
-            to,
-            length: selectedText.length,
-            trimmedLength: selectedText.trim().length,
-            editorHTML: editor.getHTML(),
-            editorText: editor.getText()
-          });
-          
           if (!selectedText.trim()) {
             console.log('AIImproveExtension: No text selected, returning false');
             return false;
@@ -77,18 +61,10 @@ export const AIImproveExtension = Extension.create<AIImproveOptions>({
 
           // Use markdown if it's different from plain text (has formatting), otherwise use plain text
           const contentToImprove = selectedMarkdown && selectedMarkdown !== selectedText ? selectedMarkdown : selectedText;
-          const isMarkdown = selectedMarkdown && selectedMarkdown !== selectedText;
-          
+   
           // Save the selection position and original text
           this.storage.savedSelection = { from, to, originalText: selectedText };
           this.storage.isImproving = true;
-          
-          console.log('AIImproveExtension: Saved selection:', this.storage.savedSelection);
-          console.log('AIImproveExtension: Sending to AI:', { 
-            content: contentToImprove, 
-            isMarkdown,
-            originalText: selectedText 
-          });
 
           // Call the AI improve function with the formatted content
           this.options.onAiImprove(contentToImprove)

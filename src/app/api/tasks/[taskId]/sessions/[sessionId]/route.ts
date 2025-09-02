@@ -66,6 +66,7 @@ export async function PATCH(
     const isWorkspaceOwner = task.workspace.ownerId === userId;
     const workspaceMember = await prisma.workspaceMember.findUnique({
       where: {
+        status: true,
         userId_workspaceId: {
           userId: userId,
           workspaceId: task.workspaceId,
@@ -79,7 +80,7 @@ export async function PATCH(
 
     // Parse session ID to get start and end event IDs
     const [startEventId, endEventId] = sessionId.split('-');
-    
+
     if (!startEventId || (!endEventId || endEventId === 'ongoing')) {
       return new NextResponse("Cannot edit ongoing session", { status: 400 });
     }

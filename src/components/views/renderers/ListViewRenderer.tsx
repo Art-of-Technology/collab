@@ -143,12 +143,12 @@ export default function ListViewRenderer({
   });
 
   // Display settings - use props from parent (view.fields comes from tempDisplayProperties in ViewRenderer)
-  const displaySettings = {
+  const displaySettings = useMemo(() => ({
     grouping: view.grouping?.field || 'status',
     ordering: view.ordering || 'updated',
     displayProperties: view.fields || displayProperties || ['ID', 'Priority', 'Labels', 'Project', 'Assignee'],
     showSubIssues: showSubIssues
-  };
+  }), [view.grouping?.field, view.ordering, view.fields, displayProperties, showSubIssues]);
 
 
 
@@ -344,74 +344,108 @@ export default function ListViewRenderer({
     
     return (
       <div 
-        className="sticky top-0 z-20 bg-[#101011] border-b border-[#1f1f1f] cursor-pointer"
+        className={cn(
+          "sticky top-0 z-20 cursor-pointer transition-colors",
+          // Mobile: Glassmorphism header
+          "bg-black/60 backdrop-blur-xl border-b border-white/10",
+          // Desktop: Original styling
+          "md:bg-[#101011] md:backdrop-blur-none md:border-[#1f1f1f]"
+        )}
         onClick={() => handleGroupToggle(groupKey)}
       >
-        <div className="flex items-center gap-2 px-6 py-3 hover:bg-[#0f1011] transition-colors">
+        <div className={cn(
+          "flex items-center gap-2 py-3 transition-colors",
+          "px-4 hover:bg-white/10",
+          "md:px-6 md:hover:bg-[#0f1011] md:hover:bg-white/0"
+        )}>
           {isCollapsed ? (
-            <ChevronRight className="h-4 w-4 text-[#8b949e]" />
+            <ChevronRight className="h-4 w-4 text-gray-400" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-[#8b949e]" />
+            <ChevronDown className="h-4 w-4 text-gray-400" />
           )}
           <div className="flex items-center gap-2">
             {displaySettings.grouping === 'status' && getStatusIcon(group.name)}
-            <span className="text-[#e6edf3] text-sm font-medium">{group.name}</span>
-            <span className="text-[#8b949e] text-xs">{group.count}</span>
+            <span className="text-white text-sm font-medium">{group.name}</span>
+            <span className="text-gray-400 text-xs">{group.count}</span>
           </div>
         </div>
       </div>
     );
   };
 
-  // Issue Row Component - Linear style
+  // Issue Row Component - Mobile-first responsive design
   const IssueRow = ({ issue }: { issue: Issue }) => (
     <div 
       className={cn(
-        "group flex items-center px-6 py-2 border-b border-[#1f1f1f] transition-all duration-150 cursor-pointer",
-        "hover:bg-[#0f1011] hover:border-[#333]",
-        hoveredIssueId === issue.id && "bg-[#0f1011]"
+        "group relative cursor-pointer transition-all duration-200",
+        // Mobile-first: Card-like design with glassmorphism
+        "mx-3 mb-3 p-4 rounded-xl",
+        "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
+        "border border-white/10 hover:border-white/20",
+        // Desktop: More compact list style
+        "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
+        "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]",
+        hoveredIssueId === issue.id && "md:bg-[#0f1011]"
       )}
       onMouseEnter={() => setHoveredIssueId(issue.id)}
       onMouseLeave={() => setHoveredIssueId(null)}
       onClick={() => handleIssueClick(issue.issueKey || issue.id)}
     >
-      {/* Status Icon */}
-      <div className="flex items-center w-6 mr-3 flex-shrink-0">
-        {getStatusIcon(issue.status)}
-      </div>
-
-      {/* Issue Key */}
-      {displaySettings.displayProperties.includes('ID') && (
-        <div className="w-20 flex-shrink-0 mr-3">
-          <span className="text-[#8b949e] text-xs font-mono font-medium">
-            {issue.issueKey}
-          </span>
-        </div>
-      )}
-
-      {/* Priority and Title section */}
-      <div className="flex-1 min-w-0 mr-4">
-        <div className="flex items-center gap-2">
-          {/* Priority Icon */}
-          {displaySettings.displayProperties.includes('Priority') && issue.priority && (
-            <div className="flex items-center flex-shrink-0">
-              {getPriorityIcon(issue.priority)}
+      {/* Mobile Layout */}
+      <div className="md:hidden">
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Status Icon */}
+            <div className="flex items-center shrink-0">
+              {getStatusIcon(issue.status)}
             </div>
-          )}
-          
-          {/* Title */}
-          <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
-            {issue.title}
-          </span>
+            
+            {/* Priority Icon */}
+            {displaySettings.displayProperties.includes('Priority') && issue.priority && (
+              <div className="flex items-center shrink-0">
+                {getPriorityIcon(issue.priority)}
+              </div>
+            )}
+            
+            {/* Issue Key */}
+            {displaySettings.displayProperties.includes('ID') && (
+              <span className="text-gray-400 text-xs font-mono font-medium shrink-0">
+                {issue.issueKey}
+              </span>
+            )}
+            
+            {/* Assignee Avatar */}
+            {displaySettings.displayProperties.includes('Assignee') && (
+              <div className="flex items-center shrink-0 ml-auto">
+                {issue.assignee ? (
+                  <Avatar className="h-5 w-5">
+                    <AvatarImage src={issue.assignee.image} />
+                    <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                      {issue.assignee.name?.charAt(0)?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
+                    <User className="h-2.5 w-2.5 text-[#666]" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         
-        {/* Labels - shown on same line in Linear style */}
+        {/* Title */}
+        <h3 className="text-white text-sm font-medium mb-2 line-clamp-2">
+          {issue.title}
+        </h3>
+        
+        {/* Labels */}
         {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
-          <div className="flex gap-1 mt-0.5">
-            {issue.labels.slice(0, 2).map((label) => (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {issue.labels.slice(0, 3).map((label) => (
               <Badge 
                 key={label.id}
-                className="h-3.5 px-1 text-[9px] font-medium leading-none border-0 rounded-sm"
+                className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-sm"
                 style={{ 
                   backgroundColor: label.color + '20',
                   color: label.color || '#8b949e'
@@ -420,80 +454,181 @@ export default function ListViewRenderer({
                 {label.name}
               </Badge>
             ))}
-            {issue.labels.length > 2 && (
-              <span className="text-[9px] text-[#6e7681] px-1">+{issue.labels.length - 2}</span>
+            {issue.labels.length > 3 && (
+              <span className="text-xs text-gray-500 px-1">+{issue.labels.length - 3}</span>
             )}
           </div>
         )}
+        
+        {/* Meta badges row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Project Badge */}
+            {displaySettings.displayProperties.includes('Project') && issue.project && (
+              <Badge 
+                className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-md"
+                style={{ 
+                  backgroundColor: (issue.project.color || '#6e7681') + '30',
+                  color: issue.project.color || '#8b949e'
+                }}
+              >
+                {issue.project.name}
+              </Badge>
+            )}
+
+            {/* Due Date */}
+            {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
+              <Badge className="h-5 px-2 text-xs font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md">
+                {format(new Date(issue.dueDate), 'MMM d')}
+              </Badge>
+            )}
+
+            {/* Comments Meta */}
+            {displaySettings.displayProperties.includes('Comments') && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
+                <MessageSquare className="h-3 w-3" />
+                <span className="text-xs font-medium">{issue._count?.comments || 0}</span>
+              </div>
+            )}
+
+            {/* Sub-issues Meta */}
+            {displaySettings.displayProperties.includes('Sub-issues') && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+                <ArrowRight className="h-3 w-3" />
+                <span className="text-xs font-medium">{issue._count?.children || 0}</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Updated Date */}
+          {displaySettings.displayProperties.includes('Updated') && (
+            <span className="text-gray-500 text-xs">
+              {format(new Date(issue.updatedAt), 'MMM d')}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Project, Due Date, and Meta section */}
-      <div className="flex items-center gap-2 flex-shrink-0 mr-4">
-        {/* Project Badge */}
-        {displaySettings.displayProperties.includes('Project') && issue.project && (
-          <Badge 
-            className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
-            style={{ 
-              backgroundColor: (issue.project.color || '#6e7681') + '30',
-              color: issue.project.color || '#8b949e'
-            }}
-          >
-            {issue.project.name}
-          </Badge>
-        )}
+      {/* Desktop Layout - Original structure */}
+      <div className="hidden md:flex md:items-center">
+        {/* Status Icon */}
+        <div className="flex items-center w-6 mr-3 flex-shrink-0">
+          {getStatusIcon(issue.status)}
+        </div>
 
-        {/* Due Date */}
-        {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
-          <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md hover:bg-orange-500/40 transition-all">
-            {format(new Date(issue.dueDate), 'MMM d')}
-          </Badge>
-        )}
-
-        {/* Comments Meta */}
-        {displaySettings.displayProperties.includes('Comments') && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
-            <MessageSquare className="h-3 w-3" />
-            <span className="text-[10px] font-medium">{issue._count?.comments || 0}</span>
+        {/* Issue Key */}
+        {displaySettings.displayProperties.includes('ID') && (
+          <div className="w-20 flex-shrink-0 mr-3">
+            <span className="text-[#8b949e] text-xs font-mono font-medium">
+              {issue.issueKey}
+            </span>
           </div>
         )}
 
-        {/* Sub-issues Meta */}
-        {displaySettings.displayProperties.includes('Sub-issues') && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
-            <ArrowRight className="h-3 w-3" />
-            <span className="text-[10px] font-medium">{issue._count?.children || 0}</span>
+        {/* Priority and Title section */}
+        <div className="flex-1 min-w-0 mr-4">
+          <div className="flex items-center gap-2">
+            {/* Priority Icon */}
+            {displaySettings.displayProperties.includes('Priority') && issue.priority && (
+              <div className="flex items-center flex-shrink-0">
+                {getPriorityIcon(issue.priority)}
+              </div>
+            )}
+            
+            {/* Title */}
+            <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+              {issue.title}
+            </span>
           </div>
-        )}
-      </div>
-
-      {/* Assignee */}
-      {displaySettings.displayProperties.includes('Assignee') && (
-        <div className="flex items-center w-8 mr-3 flex-shrink-0">
-          {issue.assignee ? (
-            <Avatar className="h-6 w-6">
-              <AvatarImage src={issue.assignee.image} />
-              <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
-                {issue.assignee.name?.charAt(0)?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          ) : (
-            <div className="h-6 w-6 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-              <User className="h-3 w-3 text-[#666]" />
+          
+          {/* Labels - shown on same line in Linear style */}
+          {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
+            <div className="flex gap-1 mt-0.5">
+              {issue.labels.slice(0, 2).map((label) => (
+                <Badge 
+                  key={label.id}
+                  className="h-3.5 px-1 text-[9px] font-medium leading-none border-0 rounded-sm"
+                  style={{ 
+                    backgroundColor: label.color + '20',
+                    color: label.color || '#8b949e'
+                  }}
+                >
+                  {label.name}
+                </Badge>
+              ))}
+              {issue.labels.length > 2 && (
+                <span className="text-[9px] text-[#6e7681] px-1">+{issue.labels.length - 2}</span>
+              )}
             </div>
           )}
         </div>
-      )}
 
-      {/* Updated Date */}
-      {displaySettings.displayProperties.includes('Updated') && (
-        <div className="flex-shrink-0 w-12">
-          <span className="text-[#6e7681] text-xs">
-            {format(new Date(issue.updatedAt), 'MMM d')}
-          </span>
+        {/* Project, Due Date, and Meta section */}
+        <div className="flex items-center gap-2 flex-shrink-0 mr-4">
+          {/* Project Badge */}
+          {displaySettings.displayProperties.includes('Project') && issue.project && (
+            <Badge 
+              className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
+              style={{ 
+                backgroundColor: (issue.project.color || '#6e7681') + '30',
+                color: issue.project.color || '#8b949e'
+              }}
+            >
+              {issue.project.name}
+            </Badge>
+          )}
+
+          {/* Due Date */}
+          {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
+            <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md hover:bg-orange-500/40 transition-all">
+              {format(new Date(issue.dueDate), 'MMM d')}
+            </Badge>
+          )}
+
+          {/* Comments Meta */}
+          {displaySettings.displayProperties.includes('Comments') && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
+              <MessageSquare className="h-3 w-3" />
+              <span className="text-[10px] font-medium">{issue._count?.comments || 0}</span>
+            </div>
+          )}
+
+          {/* Sub-issues Meta */}
+          {displaySettings.displayProperties.includes('Sub-issues') && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+              <ArrowRight className="h-3 w-3" />
+              <span className="text-[10px] font-medium">{issue._count?.children || 0}</span>
+            </div>
+          )}
         </div>
-      )}
 
+        {/* Assignee */}
+        {displaySettings.displayProperties.includes('Assignee') && (
+          <div className="flex items-center w-8 mr-3 flex-shrink-0">
+            {issue.assignee ? (
+              <Avatar className="h-6 w-6">
+                <AvatarImage src={issue.assignee.image} />
+                <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                  {issue.assignee.name?.charAt(0)?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div className="h-6 w-6 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
+                <User className="h-3 w-3 text-[#666]" />
+              </div>
+            )}
+          </div>
+        )}
 
+        {/* Updated Date */}
+        {displaySettings.displayProperties.includes('Updated') && (
+          <div className="flex-shrink-0 w-12">
+            <span className="text-[#6e7681] text-xs">
+              {format(new Date(issue.updatedAt), 'MMM d')}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -532,7 +667,7 @@ export default function ListViewRenderer({
             </div>
           </div>
         ) : (
-          <div>
+          <div className="pb-20 md:pb-16">
             {groupedIssues.map((group, index) => {
               const groupKey = `${displaySettings.grouping}-${group.name}`;
               const isCollapsed = collapsedGroups.has(groupKey);
@@ -546,7 +681,12 @@ export default function ListViewRenderer({
                   
                   {/* Group Issues */}
                   {!isCollapsed && (
-                    <div>
+                    <div className={cn(
+                      // Mobile: No dividers between cards
+                      "",
+                      // Desktop: Dividers between rows
+                      "md:divide-y md:divide-[#1a1a1a]"
+                    )}>
                       {group.issues.map((issue: Issue) => (
                         <IssueRow key={issue.id} issue={issue} />
                       ))}
