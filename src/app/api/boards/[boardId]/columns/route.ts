@@ -31,6 +31,7 @@ export async function GET(
       where: {
         userId: user.id,
         workspaceId: board.workspaceId,
+        status: true
       },
     });
 

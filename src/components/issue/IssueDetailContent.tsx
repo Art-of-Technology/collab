@@ -56,6 +56,7 @@ import { IssueLabelSelector } from "@/components/issue/selectors/IssueLabelSelec
 import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
+import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 // Import types
 import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
@@ -582,7 +583,7 @@ export function IssueDetailContent({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
-          <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#8b949e]" />
+          <LoadingState size="md" className="mx-auto text-[#8b949e]" noPadding={true} />
           <p className="text-[#8b949e] text-sm">Loading issue...</p>
         </div>
       </div>

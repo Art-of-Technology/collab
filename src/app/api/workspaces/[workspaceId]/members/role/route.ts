@@ -34,6 +34,7 @@ export async function GET(
     // Check user's role in the workspace
     const membership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: user.id,
         workspaceId,
       },
