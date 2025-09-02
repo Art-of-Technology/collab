@@ -8,8 +8,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Tags, Search, X, Plus } from "lucide-react";
+import { Tags, Search, X, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createLabel } from "@/actions/label";
+import { useToast } from "@/hooks/use-toast";
 
 interface LabelsSelectorProps {
   value: string[];
@@ -20,6 +22,8 @@ interface LabelsSelectorProps {
     name: string;
     color: string;
   }>;
+  workspaceId?: string;
+  onLabelCreated?: (label: { id: string; name: string; color: string }) => void;
 }
 
 export function LabelsSelector({
@@ -27,9 +31,13 @@ export function LabelsSelector({
   onChange,
   disabled = false,
   labels = [],
+  workspaceId,
+  onLabelCreated,
 }: LabelsSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const { toast } = useToast();
 
   const selectedLabels = labels.filter(label => value.includes(label.id));
   const filteredLabels = labels.filter(label => 
@@ -41,6 +49,67 @@ export function LabelsSelector({
       onChange(value.filter(id => id !== labelId));
     } else {
       onChange([...value, labelId]);
+    }
+  };
+
+  const DEFAULT_COLORS = [
+    "#6366F1", // Indigo
+    "#8B5CF6", // Violet  
+    "#EC4899", // Pink
+    "#EF4444", // Red
+    "#F97316", // Orange
+    "#EAB308", // Yellow
+    "#22C55E", // Green
+    "#06B6D4", // Cyan
+    "#3B82F6", // Blue
+    "#6B7280", // Gray
+  ];
+
+  const handleCreateLabel = async (labelName: string) => {
+    if (!labelName.trim() || !workspaceId) {
+      toast({
+        title: "Error",
+        description: !labelName.trim() ? "Label name is required" : "Workspace ID is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      const randomColor = DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)];
+      
+      const newLabel = await createLabel({
+        name: labelName.trim(),
+        color: randomColor,
+        workspaceId,
+      });
+
+      // Add the new label to selected values
+      onChange([...value, newLabel.id]);
+      
+      // Notify parent component about the new label
+      if (onLabelCreated) {
+        onLabelCreated(newLabel);
+      }
+      
+      // Clear search and close popover
+      setSearchQuery("");
+      setIsOpen(false);
+      
+      toast({
+        title: "Success",
+        description: `Label "${newLabel.name}" created successfully`,
+      });
+    } catch (error: any) {
+      console.error("Failed to create label:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create label",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -158,12 +227,15 @@ export function LabelsSelector({
                   variant="outline"
                   size="sm"
                   className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
-                  onClick={() => {
-                    console.log("Create label:", searchQuery);
-                  }}
+                  onClick={() => handleCreateLabel(searchQuery)}
+                  disabled={isCreating}
                 >
-                  <Plus className="h-3 w-3" />
-                  Create "{searchQuery}"
+                  {isCreating ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
+                  {isCreating ? "Creating..." : `Create "${searchQuery}"`}
                 </Button>
               </div>
             </div>
@@ -175,12 +247,15 @@ export function LabelsSelector({
                   variant="outline"
                   size="sm"
                   className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
-                  onClick={() => {
-                    console.log("Create first label");
-                  }}
+                  onClick={() => handleCreateLabel("New Label")}
+                  disabled={isCreating}
                 >
-                  <Plus className="h-3 w-3" />
-                  Create label
+                  {isCreating ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
+                  {isCreating ? "Creating..." : "Create label"}
                 </Button>
               </div>
             </div>

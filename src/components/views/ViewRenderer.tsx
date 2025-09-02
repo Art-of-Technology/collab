@@ -1185,6 +1185,11 @@ export default function ViewRenderer({
                   }
                 }}
                 labels={workspaceLabels}
+                workspaceId={workspace.id}
+                onLabelCreated={(newLabel) => {
+                  // Invalidate and refetch workspace labels
+                  queryClient.invalidateQueries({ queryKey: ['workspace-labels', workspace.id] });
+                }}
               />
               <ViewUpdatedAtSelector
                 value={allFilters.updatedAt || []}
