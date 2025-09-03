@@ -585,9 +585,15 @@ export async function PUT(
       const actorId = currentUser.id;
       const recipients = Array.from(recipientIds).filter(id => id !== actorId);
       if (recipients.length > 0) {
+        // Gather project followers for type selection
+        const projectFollowers = await prisma.projectFollower.findMany({
+          where: { projectId: updatedIssue.projectId },
+          select: { userId: true }
+        });
+        const pfSet = new Set(projectFollowers.map(pf => pf.userId));
         await prisma.notification.createMany({
           data: recipients.map(userId => ({
-            type: 'ISSUE_UPDATED',
+            type: pfSet.has(userId) ? 'PROJECT_ISSUE_UPDATED' : 'ISSUE_UPDATED',
             content: `@[${currentUser.name}](${currentUser.id}) updated an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`,
             userId,
             senderId: actorId
@@ -702,9 +708,15 @@ export async function DELETE(
     // Send deletion notifications
     try {
       if (deletionRecipients.length > 0) {
+        // Build project follower set
+        const projectFollowers = await prisma.projectFollower.findMany({
+          where: { projectId: (existingIssue as any).projectId as string },
+          select: { userId: true }
+        });
+        const pfSet = new Set(projectFollowers.map(pf => pf.userId));
         await prisma.notification.createMany({
           data: deletionRecipients.map(userId => ({
-            type: 'ISSUE_DELETED',
+            type: pfSet.has(userId) ? 'PROJECT_ISSUE_DELETED' : 'ISSUE_DELETED',
             content: `@[${currentUser.name}](${currentUser.id}) deleted an issue #[${(existingIssue as any).issueKey}](${existingIssue.id})`,
             userId,
             senderId: currentUser.id

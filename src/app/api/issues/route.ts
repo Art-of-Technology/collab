@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
       if (recipients.length > 0) {
         await prisma.notification.createMany({
           data: recipients.map(userId => ({
-            type: 'ISSUE_CREATED',
+            type: projectFollowers.some(pf => pf.userId === userId) ? 'PROJECT_ISSUE_CREATED' : 'ISSUE_CREATED',
             content: `@[${session.user.name}](${session.user.id}) created an issue #[${created.issueKey}](${created.id})`,
             userId,
             senderId: session.user.id

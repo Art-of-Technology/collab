@@ -70,6 +70,9 @@ export enum NotificationType {
   ISSUE_CREATED = "ISSUE_CREATED",
   ISSUE_UPDATED = "ISSUE_UPDATED",
   ISSUE_DELETED = "ISSUE_DELETED",
+  PROJECT_ISSUE_CREATED = "PROJECT_ISSUE_CREATED",
+  PROJECT_ISSUE_UPDATED = "PROJECT_ISSUE_UPDATED",
+  PROJECT_ISSUE_DELETED = "PROJECT_ISSUE_DELETED",
   POST_COMMENT_ADDED = "POST_COMMENT_ADDED",
   POST_BLOCKER_CREATED = "POST_BLOCKER_CREATED",
   POST_RESOLVED = "POST_RESOLVED",
@@ -133,7 +136,7 @@ export class NotificationService {
             notification.userId,
             notificationType,
             notification.content,
-            additionalData.taskId,
+            additionalData.issueId,
             additionalData.postId
           )
         );
@@ -166,14 +169,14 @@ export class NotificationService {
     userId: string,
     notificationType: NotificationType,
     content: string,
-    taskId?: string,
+    issueId?: string,
     postId?: string
   ): Promise<void> {
     try {
       // Build the URL based on notification type
       let url = "/";
-      if (taskId) {
-        url = `/tasks/${taskId}`;
+      if (issueId) {
+        url = `/issues/${issueId}`;
       } else if (postId) {
         url = `/posts/${postId}`;
       }
@@ -379,7 +382,15 @@ export class NotificationService {
     preferences: any,
     notificationType: NotificationType
   ): boolean {
-    const typeToPreferenceMap = {
+    const typeToPreferenceMap: Partial<Record<NotificationType, keyof typeof preferences>> = {
+      // Issue notifications mapped to legacy task preferences for now
+      [NotificationType.ISSUE_CREATED]: "taskCreated",
+      [NotificationType.ISSUE_UPDATED]: "taskUpdated",
+      [NotificationType.ISSUE_DELETED]: "taskDeleted",
+      // Project-level issue notifications map to board-level legacy prefs
+      [NotificationType.PROJECT_ISSUE_CREATED]: "boardTaskCreated",
+      [NotificationType.PROJECT_ISSUE_UPDATED]: "boardTaskStatusChanged",
+      [NotificationType.PROJECT_ISSUE_DELETED]: "boardTaskDeleted",
       [NotificationType.POST_COMMENT_ADDED]: "postCommentAdded",
       [NotificationType.POST_BLOCKER_CREATED]: "postBlockerCreated",
       [NotificationType.POST_RESOLVED]: "postResolved",
@@ -708,9 +719,9 @@ export class NotificationService {
   /**
    * Create mention notifications for task comments
    */
-  static async createTaskCommentMentionNotifications(
-    taskId: string,
-    taskCommentId: string,
+  static async createIssueCommentMentionNotifications(
+    issueId: string,
+    issueCommentId: string,
     mentionedUserIds: string[],
     senderId: string,
     content: string
@@ -724,13 +735,13 @@ export class NotificationService {
         .filter((userId) => userId !== senderId) // Don't notify the sender
         .map((userId) => ({
           type: NotificationType.ISSUE_MENTION.toString(),
-          content: `mentioned you in a task comment: "${
+          content: `mentioned you in an issue comment: "${
             safeContent.length > 100 ? safeContent.substring(0, 97) + "..." : safeContent
           }"`,
           userId,
           senderId,
-          taskId,
-          taskCommentId,
+          issueId,
+          issueCommentId,
           read: false,
         }));
 
@@ -738,33 +749,33 @@ export class NotificationService {
         await prisma.notification.createMany({
           data: notifications,
         });
-        logger.info("Task comment mention notifications created", {
+        logger.info("Issue comment mention notifications created", {
           count: notifications.length,
-          taskId,
-          taskCommentId,
+          issueId,
+          issueCommentId,
         });
 
         // Send push notifications for mentions
         const pushPromises = notifications.map((notification) =>
           this.sendPushNotificationForUser(
             notification.userId,
-            NotificationType.TASK_COMMENT_MENTION,
+            NotificationType.ISSUE_MENTION,
             notification.content,
-            taskId
+            issueId
           )
         );
         await Promise.allSettled(pushPromises);
       }
 
-      // Auto-follow mentioned users to the task
-      await this.autoFollowTask(taskId, mentionedUserIds);
+      // Auto-follow mentioned users to the issue
+      await this.autoFollowIssue(issueId, mentionedUserIds);
     } catch (error) {
       logger.error(
-        "Failed to create task comment mention notifications",
+        "Failed to create issue comment mention notifications",
         error,
         {
-          taskId,
-          taskCommentId,
+          issueId,
+          issueCommentId,
           mentionedUserCount: mentionedUserIds.length,
         }
       );
