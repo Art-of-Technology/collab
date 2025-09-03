@@ -88,10 +88,6 @@ export function IssueMentionSuggestion({
       try {
         const params = new URLSearchParams({ q: query || '' });
 
-        // Don't pass workspaceId to search across all accessible workspaces
-        // if (workspaceId) {
-        //   params.append('workspace', workspaceId);
-        // }
 
         const response = await fetch(`/api/issues/search?${params}`);
         if (response.ok) {

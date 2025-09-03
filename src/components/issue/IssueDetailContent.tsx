@@ -502,25 +502,24 @@ export function IssueDetailContent({
   }, [issue, deleteIssueMutation, toast, router, viewSlug, workspaceId]);
 
   // Handle back navigation
-  const handleBackNavigation = useCallback(() => {
-    if (viewSlug && workspaceId) {
-      router.push(`/${workspaceId}/views/${viewSlug}`);
-    } else {
-      // Try to detect if we came from a view by checking referrer
-      const referrer = document.referrer;
-      if (referrer && workspaceId) {
-        const url = new URL(referrer);
-        const pathSegments = url.pathname.split('/').filter(Boolean);
+  const handleBackNavigation = useCallback(async () => {
+    if (!workspaceId) {
+      router.back();
+      return;
+    }
 
-        // Check if referrer is a view page: /workspace/views/viewSlug
-        if (pathSegments.length >= 3 && pathSegments[1] === 'views') {
-          router.push(referrer);
-          return;
-        }
-      }
-
-      // Fallback based on issue context
-      if (issue?.projectId && workspaceId) {
+    try {
+      // Import the helper function dynamically to avoid circular imports
+      const { generateBackNavigationUrl } = await import('@/lib/navigation-helpers');
+      const backUrl = await generateBackNavigationUrl(workspaceId, issue, viewSlug);
+      router.push(backUrl);
+    } catch (error) {
+      console.error('Error generating back navigation URL:', error);
+      
+      // Fallback to original logic if helper fails
+      if (viewSlug && workspaceId) {
+        router.push(`/${workspaceId}/views/${viewSlug}`);
+      } else if (issue?.projectId && workspaceId) {
         router.push(`/${workspaceId}/projects/${issue.projectId}`);
       } else if (workspaceId) {
         router.push(`/${workspaceId}/views`);
@@ -671,7 +670,7 @@ export function IssueDetailContent({
             className="flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] transition-colors text-sm"
           >
             <ArrowLeft className="h-3 w-3" />
-            <span>Back to {viewName || 'View'}</span>
+            <span>Back to {viewName || (issue?.project?.name ? `${issue.project.name}: Default` : 'Views')}</span>
           </button>
         }
         actions={

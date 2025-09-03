@@ -576,6 +576,36 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     }
   }, [editor, value]);
 
+  // Handle issue mention clicks with workspace resolution
+  const handleIssueMentionClick = useCallback(async (issueKey: string) => {
+    try {
+      const response = await fetch(`/api/issues/resolve?issueKey=${encodeURIComponent(issueKey)}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const workspaceSlug = data.workspace?.slug;
+        
+        if (workspaceSlug) {
+          const issueUrl = `/${workspaceSlug}/issues/${issueKey}`;
+          window.open(issueUrl, '_blank');
+        } else {
+          // Fallback to current workspace
+          const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
+          window.open(fallbackUrl, '_blank');
+        }
+      } else {
+        // Fallback to current workspace
+        const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
+        window.open(fallbackUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error resolving issue:', error);
+      // Fallback to current workspace
+      const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
+      window.open(fallbackUrl, '_blank');
+    }
+  }, [currentWorkspace?.slug, currentWorkspace?.id]);
+
   // Click outside handler and mention click handler
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -609,9 +639,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
         if (dataType === 'issue-mention') {
           const issueKey = mentionElement.getAttribute('data-issue-key') || mentionElement.getAttribute('data-label');
-          if (issueKey && currentWorkspace?.slug) {
-            const issueUrl = `/${currentWorkspace.slug}/issues/${issueKey}`;
-            window.open(issueUrl, '_blank');
+          if (issueKey) {
+            // Resolve the issue to its correct workspace
+            handleIssueMentionClick(issueKey);
           }
         }
       }
@@ -661,7 +691,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         currentEditorRef.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
       }
     };
-  }, [currentWorkspace, toast]);
+  }, [currentWorkspace, toast, handleIssueMentionClick]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
