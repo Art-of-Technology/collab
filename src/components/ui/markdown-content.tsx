@@ -56,7 +56,7 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
       // Issue mentions: #[key](id) -> clickable mention
       processed = processed.replace(
         /#\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span class="mention mention-link" data-issue-id="$2"><span class="mention-symbol">#</span>$1</span>'
+        `<a href="/${currentWorkspace?.slug}/issues/$2" class="mention mention-link" data-issue-id="$2"><span class="mention-symbol">#</span>$1</a>`
       );
       
       // Convert newlines to <br> tags if needed

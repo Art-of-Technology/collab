@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
+import { NotificationService, NotificationType } from "@/lib/notification-service";
 // Reuse a compact include set similar to the detail route
 const LIST_INCLUDE = {
   project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true } },
@@ -294,14 +295,33 @@ export async function POST(request: NextRequest) {
       const recipients = Array.from(recipientIds).filter(id => id !== session.user.id);
       if (recipients.length > 0) {
         const pfSet = new Set(projectFollowerList.map(pf => pf.userId));
-        await prisma.notification.createMany({
-          data: recipients.map(userId => ({
-            type: pfSet.has(userId) ? 'PROJECT_ISSUE_CREATED' : 'ISSUE_CREATED',
-            content: `@[${session.user.name}](${session.user.id}) created an issue #[${created.issueKey}](${created.id})`,
-            userId,
-            senderId: session.user.id
-          }))
-        });
+        const projectType = NotificationType.PROJECT_ISSUE_CREATED;
+        const issueType = NotificationType.ISSUE_CREATED;
+        const content = `@[${session.user.name}](${session.user.id}) created an issue #[${created.issueKey}](${created.id})`;
+
+        // Send project-level notifications to project followers
+        const projectFollowerRecipients = recipients.filter((id) => pfSet.has(id));
+        if (projectFollowerRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            projectFollowerRecipients,
+            projectType,
+            content,
+            session.user.id,
+            { issueId: created.id }
+          );
+        }
+
+        // Send standard issue notifications to the rest
+        const standardRecipients = recipients.filter((id) => !pfSet.has(id));
+        if (standardRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            standardRecipients,
+            issueType,
+            content,
+            session.user.id,
+            { issueId: created.id }
+          );
+        }
       }
     } catch (notificationError) {
       console.warn('[ISSUES_POST_NOTIFY]', notificationError);
@@ -313,14 +333,13 @@ export async function POST(request: NextRequest) {
         const mentionedUserIds = extractMentionUserIds(description);
         const recipients = mentionedUserIds.filter((id) => id !== session.user.id);
         if (recipients.length > 0) {
-          await prisma.notification.createMany({
-            data: recipients.map((userId) => ({
-              type: 'ISSUE_MENTION',
-              content: `@[${session.user.name}](${session.user.id}) mentioned you in an issue #[${created.issueKey}](${created.id})`,
-              userId,
-              senderId: session.user.id,
-            }))
-          });
+          await NotificationService.notifyUsers(
+            recipients,
+            NotificationType.ISSUE_MENTION,
+            `@[${session.user.name}](${session.user.id}) mentioned you in an issue #[${created.issueKey}](${created.id})`,
+            session.user.id,
+            { issueId: created.id }
+          );
         }
       }
     } catch (e) {

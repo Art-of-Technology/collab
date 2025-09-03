@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { trackFieldChanges, compareObjects } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
+import { NotificationService, NotificationType } from "@/lib/notification-service";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -300,14 +301,13 @@ export async function PUT(
         const mentionedUserIds = extractMentionUserIds((updateData as any).description);
         const recipients = mentionedUserIds.filter((id: string) => id !== currentUser.id);
         if (recipients.length > 0) {
-          await prisma.notification.createMany({
-            data: recipients.map((userId: string) => ({
-              type: 'ISSUE_MENTION',
-              content: `@[${currentUser.name}](${currentUser.id}) mentioned you in an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`,
-              userId,
-              senderId: currentUser.id,
-            }))
-          });
+          await NotificationService.notifyUsers(
+            recipients,
+            NotificationType.ISSUE_MENTION,
+            `@[${currentUser.name}](${currentUser.id}) mentioned you in an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`,
+            currentUser.id,
+            { issueId: updatedIssue.id }
+          );
         }
       }
     } catch (e) {
@@ -354,14 +354,28 @@ export async function PUT(
       const actorId = currentUser.id;
       const recipients = Array.from(recipientIds).filter(id => id !== actorId);
       if (recipients.length > 0) {
-        await prisma.notification.createMany({
-          data: recipients.map(userId => ({
-            type: pfSet.has(userId) ? 'PROJECT_ISSUE_UPDATED' : 'ISSUE_UPDATED',
-            content: `@[${currentUser.name}](${currentUser.id}) updated an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`,
-            userId,
-            senderId: actorId
-          }))
-        });
+        const content = `@[${currentUser.name}](${currentUser.id}) updated an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`;
+        const projectRecipients = recipients.filter((id) => pfSet.has(id));
+        const standardRecipients = recipients.filter((id) => !pfSet.has(id));
+
+        if (projectRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            projectRecipients,
+            NotificationType.PROJECT_ISSUE_UPDATED,
+            content,
+            actorId,
+            { issueId: updatedIssue.id }
+          );
+        }
+        if (standardRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            standardRecipients,
+            NotificationType.ISSUE_UPDATED,
+            content,
+            actorId,
+            { issueId: updatedIssue.id }
+          );
+        }
       }
     } catch (notificationError) {
       console.warn('[ISSUES_PUT_NOTIFY]', notificationError);
@@ -457,20 +471,34 @@ export async function DELETE(
     // Send deletion notifications
     try {
       if (deletionRecipients.length > 0) {
-        // Build project follower set
         const projectFollowers = await prisma.projectFollower.findMany({
           where: { projectId: (existingIssue as any).projectId as string },
           select: { userId: true }
         });
         const pfSet = new Set(projectFollowers.map(pf => pf.userId));
-        await prisma.notification.createMany({
-          data: deletionRecipients.map(userId => ({
-            type: pfSet.has(userId) ? 'PROJECT_ISSUE_DELETED' : 'ISSUE_DELETED',
-            content: `@[${currentUser.name}](${currentUser.id}) deleted an issue #[${(existingIssue as any).issueKey}](${existingIssue.id})`,
-            userId,
-            senderId: currentUser.id
-          }))
-        });
+        const content = `@[${currentUser.name}](${currentUser.id}) deleted an issue #[${(existingIssue as any).issueKey}](${existingIssue.id})`;
+
+        const projectRecipients = deletionRecipients.filter((id) => pfSet.has(id));
+        const standardRecipients = deletionRecipients.filter((id) => !pfSet.has(id));
+
+        if (projectRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            projectRecipients,
+            NotificationType.PROJECT_ISSUE_DELETED,
+            content,
+            currentUser.id,
+            { issueId: (existingIssue as any).id as string }
+          );
+        }
+        if (standardRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            standardRecipients,
+            NotificationType.ISSUE_DELETED,
+            content,
+            currentUser.id,
+            { issueId: (existingIssue as any).id as string }
+          );
+        }
       }
     } catch (notificationError) {
       console.warn('[ISSUES_DELETE_NOTIFY]', notificationError);

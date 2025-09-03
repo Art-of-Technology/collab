@@ -376,21 +376,16 @@ export async function createPost(data: {
 
   if (mentionedUserIds.length > 0) {
     try {
-      // Create mention notifications
       const notificationContent = `@[${user.name}](${user.id}) mentioned you in a post: ${message.replace(/<[^>]*>?/g, '')}`;
-      await prisma.notification.createMany({
-        data: mentionedUserIds.map(userId => ({
-          type: "post_mention",
-          content: notificationContent,
-          userId: userId,
-          senderId: user.id,
-          read: false,
-          postId: post.id,
-        }))
-      });
+      await NotificationService.notifyUsers(
+        mentionedUserIds.filter((id) => id !== user.id),
+        'post_mention',
+        notificationContent,
+        user.id,
+        { postId: post.id }
+      );
 
-
-      if(post.type === 'BLOCKER') {
+      if (post.type === 'BLOCKER') {
         await NotificationService.notifyPostFollowers({
           postId: post.id,
           senderId: user.id,
@@ -401,7 +396,6 @@ export async function createPost(data: {
       }
     } catch (error) {
       console.error("Failed to create mention notifications or auto-follow:", error);
-      // Don't fail the post creation if mentions fail
     }
   }
   

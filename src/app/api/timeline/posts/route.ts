@@ -53,23 +53,17 @@ export async function POST(req: Request) {
     const mentionedUserIds = extractMentionUserIds((content || "").trim());
     if (mentionedUserIds.length > 0) {
       try {
-        // Create notifications for mentioned users
-        await prisma.notification.createMany({
-          data: mentionedUserIds.map(userId => ({
-            type: "post_mention",
-            content: `mentioned you in a post: "${sanitizedContent.length > 100 ? sanitizedContent.substring(0, 97) + '...' : sanitizedContent}"`,
-            userId: userId,
-            senderId: session.user.id,
-            read: false,
-            postId: post.id,
-          }))
-        });
+        await NotificationService.notifyUsers(
+          mentionedUserIds.filter((id) => id !== session.user.id),
+          'post_mention',
+          `mentioned you in a post: "${sanitizedContent.length > 100 ? sanitizedContent.substring(0, 97) + '...' : sanitizedContent}"`,
+          session.user.id,
+          { postId: post.id }
+        );
 
-        // Auto-follow mentioned users to the post
         await NotificationService.autoFollowPost(post.id, mentionedUserIds);
       } catch (error) {
         console.error("Failed to create mention notifications or auto-follow:", error);
-        // Don't fail the post creation if mentions fail
       }
     }
 

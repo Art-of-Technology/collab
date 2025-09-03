@@ -8,6 +8,10 @@ export function sanitizeHtmlToPlainText(input: unknown): string {
     const first = String(name).trim().split(/\s+/)[0] || name;
     return `@${first}`;
   });
+  // Normalize issue tokens like #[KEY](...) -> #KEY
+  sanitized = sanitized.replaceAll(/#\[([^\]]+)\]\([^\)]+\)/g, (_m, key: string) => {
+    return `#${String(key).trim()}`;
+  });
   // Collapse whitespace
   sanitized = sanitized.replace(/\s+/g, ' ').trim();
   return sanitized;
