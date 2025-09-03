@@ -248,7 +248,7 @@ export async function createComment(data: {
       postId: postId,
       senderId: user.id,
       type: NotificationType.POST_COMMENT_ADDED,
-      content: `added a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
+      content: `@[${user.name}](${user.id}) added a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
       excludeUserIds: mentionedUserIds, // Exclude mentioned users as they already got mention notifications
     });
   } catch (error) {

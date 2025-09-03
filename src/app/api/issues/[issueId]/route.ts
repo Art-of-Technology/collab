@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { trackFieldChanges, createActivity, compareObjects } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
+import { extractMentionUserIds } from "@/utils/mentions";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -524,6 +526,78 @@ export async function PUT(
       updatedAt: updatedIssue.updatedAt
     });
 
+    // Mentions in updated description (notify tagged users)
+    try {
+      if (typeof (updateData as any).description === 'string' && (updateData as any).description.trim().length > 0) {
+        const mentionedUserIds = extractMentionUserIds((updateData as any).description);
+        const recipients = mentionedUserIds.filter((id: string) => id !== currentUser.id);
+        if (recipients.length > 0) {
+          await prisma.notification.createMany({
+            data: recipients.map((userId: string) => ({
+              type: 'ISSUE_MENTION',
+              content: `@[${currentUser.name}](${currentUser.id}) mentioned you in an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`,
+              userId,
+              senderId: currentUser.id,
+            }))
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[ISSUES_PUT_MENTIONS]', e);
+    }
+
+    try {
+      const recipientIds = new Set<string>();
+
+      // Issue followers
+      const followers = await prisma.issueFollower.findMany({
+        where: { issueId: updatedIssue.id },
+        select: { userId: true }
+      });
+      followers.forEach(f => recipientIds.add(f.userId));
+
+      // Assignee and reporter
+      if (updatedIssue.assigneeId) recipientIds.add(updatedIssue.assigneeId);
+      if (updatedIssue.reporterId) recipientIds.add(updatedIssue.reporterId);
+
+      // Board followers via legacy column->board mapping, if any
+      if (updatedIssue.columnId) {
+        const column = await prisma.taskColumn.findUnique({
+          where: { id: updatedIssue.columnId },
+          select: { taskBoardId: true }
+        });
+        if (column?.taskBoardId) {
+          const boardFollowers = await prisma.boardFollower.findMany({
+            where: { boardId: column.taskBoardId },
+            select: { userId: true }
+          });
+          boardFollowers.forEach(bf => recipientIds.add(bf.userId));
+        }
+      }
+
+      // Project followers
+      const projectFollowers = await (prisma as any).projectFollower.findMany({
+        where: { projectId: updatedIssue.projectId },
+        select: { userId: true }
+      });
+      projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
+
+      const actorId = currentUser.id;
+      const recipients = Array.from(recipientIds).filter(id => id !== actorId);
+      if (recipients.length > 0) {
+        await prisma.notification.createMany({
+          data: recipients.map(userId => ({
+            type: 'ISSUE_UPDATED',
+            content: `@[${currentUser.name}](${currentUser.id}) updated an issue #[${updatedIssue.issueKey}](${updatedIssue.id})`,
+            userId,
+            senderId: actorId
+          }))
+        });
+      }
+    } catch (notificationError) {
+      console.warn('[ISSUES_PUT_NOTIFY]', notificationError);
+    }
+
     return NextResponse.json({ issue: updatedIssue });
 
   } catch (error) {
@@ -582,10 +656,64 @@ export async function DELETE(
       );
     }
 
+    // Prepare notifications before deletion
+    let deletionRecipients: string[] = [];
+    try {
+      const recipientIds = new Set<string>();
+      // Issue followers
+      const followers = await prisma.issueFollower.findMany({
+        where: { issueId: existingIssue.id },
+        select: { userId: true }
+      });
+      followers.forEach(f => recipientIds.add(f.userId));
+      // Assignee and reporter
+      if ((existingIssue as any).assigneeId) recipientIds.add((existingIssue as any).assigneeId as string);
+      if ((existingIssue as any).reporterId) recipientIds.add((existingIssue as any).reporterId as string);
+      // Board followers via legacy column->board mapping, if any
+      if ((existingIssue as any).columnId) {
+        const column = await prisma.taskColumn.findUnique({
+          where: { id: (existingIssue as any).columnId as string },
+          select: { taskBoardId: true }
+        });
+        if (column?.taskBoardId) {
+          const boardFollowers = await prisma.boardFollower.findMany({
+            where: { boardId: column.taskBoardId },
+            select: { userId: true }
+          });
+          boardFollowers.forEach(bf => recipientIds.add(bf.userId));
+        }
+      }
+      // Project followers
+      const projectFollowers = await (prisma as any).projectFollower.findMany({
+        where: { projectId: (existingIssue as any).projectId as string },
+        select: { userId: true }
+      });
+      projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
+      deletionRecipients = Array.from(recipientIds).filter(id => id !== currentUser.id);
+    } catch (prepErr) {
+      console.warn('[ISSUES_DELETE_NOTIFY_PREP]', prepErr);
+    }
+
     // Delete the issue
     await prisma.issue.delete({
       where: { id: existingIssue.id }
     });
+
+    // Send deletion notifications
+    try {
+      if (deletionRecipients.length > 0) {
+        await prisma.notification.createMany({
+          data: deletionRecipients.map(userId => ({
+            type: 'ISSUE_DELETED',
+            content: `@[${currentUser.name}](${currentUser.id}) deleted an issue #[${(existingIssue as any).issueKey}](${existingIssue.id})`,
+            userId,
+            senderId: currentUser.id
+          }))
+        });
+      }
+    } catch (notificationError) {
+      console.warn('[ISSUES_DELETE_NOTIFY]', notificationError);
+    }
 
     return NextResponse.json({ message: "Issue deleted successfully" });
 

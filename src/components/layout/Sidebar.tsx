@@ -390,16 +390,24 @@ export default function Sidebar({
                 <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="start" alignOffset={0} forceMount>
                   <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
                     <h3 className="font-medium text-white">Notifications</h3>
-                    {unreadCount > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                        asChild
+                      >
+                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/notifications`}>Open inbox</Link>
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-xs h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                         onClick={() => markAllNotificationsAsRead()}
                       >
-                        Mark all as read
+                        Read all
                       </Button>
-                    )}
+                    </div>
                   </div>
 
                   <ScrollArea className="h-80">
@@ -454,6 +462,15 @@ export default function Sidebar({
                       </div>
                     )}
                   </ScrollArea>
+                  <div className="p-2 border-t border-[#1f1f1f] bg-[#090909]">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center h-8 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      asChild
+                    >
+                      <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/notifications`}>Open Inbox</Link>
+                    </Button>
+                  </div>
                 </PopoverContent>
               </Popover>
             )}
@@ -623,16 +640,16 @@ export default function Sidebar({
                 <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="start" alignOffset={0} forceMount>
                   <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
                     <h3 className="font-medium text-white">Notifications</h3>
-                    {unreadCount > 0 && (
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-xs h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                         onClick={() => markAllNotificationsAsRead()}
                       >
-                        Mark all as read
+                        Read all
                       </Button>
-                    )}
+                    </div>
                   </div>
 
                   <ScrollArea className="h-80">
@@ -687,6 +704,15 @@ export default function Sidebar({
                       </div>
                     )}
                   </ScrollArea>
+                  <div className="p-2 border-t border-[#1f1f1f] bg-[#090909]">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center h-8 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      asChild
+                    >
+                      <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/notifications`}>Show all notifications</Link>
+                    </Button>
+                  </div>
                 </PopoverContent>
               </Popover>
             )}

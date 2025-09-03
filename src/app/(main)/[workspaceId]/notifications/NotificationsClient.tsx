@@ -16,7 +16,7 @@ import NotificationsList from "./components/NotificationsList";
 import NotificationsSidebar from "./components/NotificationsSidebar";
 
 type QuickFilter = "all" | "unread";
-type GroupBy = "date" | "user" | "taskboard";
+type GroupBy = "date" | "user" | "project";
 
 export default function NotificationsClient() {
   const { currentWorkspace } = useWorkspace();
@@ -32,8 +32,8 @@ export default function NotificationsClient() {
   const mobileCategories: { id: string; label: string }[] = [
     { id: "inbox", label: "Inbox" },
     { id: "mentioned", label: "Mentioned" },
-    { id: "task-related", label: "Task notifications" },
-    { id: "board-related", label: "Board notifications" },
+    { id: "issue-related", label: "Issue notifications" },
+    { id: "project-related", label: "Project notifications" },
   ];
   
   // Fetch notifications via unified hook
@@ -48,10 +48,27 @@ export default function NotificationsClient() {
         switch (selectedCategory) {
           case "mentioned":
             return notification.type?.toLowerCase().includes("mention");
-          case "task-related":
-            return notification.type?.toLowerCase().startsWith("task_");
-          case "board-related":
-            return notification.type?.toLowerCase().startsWith("board_");
+          case "issue-related": {
+            const t = notification.type?.toLowerCase() || "";
+            return Boolean(
+              notification.issueId ||
+              notification.issue?.id ||
+              t.startsWith("issue_") ||
+              t.includes("issue") ||
+              // legacy fallback
+              t.startsWith("task_")
+            );
+          }
+          case "project-related": {
+            const t = notification.type?.toLowerCase() || "";
+            return Boolean(
+              notification.issue?.project?.id ||
+              t.startsWith("project_") ||
+              t.includes("project") ||
+              // legacy fallback
+              t.startsWith("board_")
+            );
+          }
           case "team-mentions":
             return notification.type?.toLowerCase().includes("team_");
           default:
@@ -132,13 +149,13 @@ export default function NotificationsClient() {
       <div className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
         <div className="border-b border-border/50 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="px-4 md:px-6 py-3 md:py-4">
+          <div className="px-3 md:px-4 py-2 md:py-2">
             {/* Responsive controls */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {/* Mobile category select */}
               <div className="md:hidden">
                 <Select value={selectedCategory} onValueChange={(v) => handleCategoryChange(v)}>
-                  <SelectTrigger className="w-44 h-9 text-sm">
+                  <SelectTrigger className="w-44 h-8 text-xs md:text-sm">
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -150,13 +167,13 @@ export default function NotificationsClient() {
               </div>
 
               {/* Search - takes up remaining space */}
-              <div className="relative flex-1 min-w-[200px] order-2 md:order-none">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative flex-1 min-w-[180px] order-2 md:order-none">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Search notifications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-9 md:h-8 text-sm border-border/50"
+                  className="pl-8 h-8 text-xs md:text-sm border-border/50"
                 />
               </div>
 
@@ -166,7 +183,7 @@ export default function NotificationsClient() {
                   variant={quickFilter === "all" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setQuickFilter("all")}
-                  className="h-8 px-3 text-sm"
+                  className="h-8 px-2.5 text-xs md:text-sm"
                 >
                   All
                 </Button>
@@ -174,11 +191,11 @@ export default function NotificationsClient() {
                   variant={quickFilter === "unread" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setQuickFilter("unread")}
-                  className="h-8 px-3 text-sm gap-2"
+                  className="h-8 px-2.5 text-xs md:text-sm gap-1.5"
                 >
                   Unread
                   {unreadCount > 0 && (
-                    <Badge variant="secondary" className="h-4 px-1 text-xs">
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
                       {unreadCount}
                     </Badge>
                   )}
@@ -188,26 +205,26 @@ export default function NotificationsClient() {
               {/* Group by selector */}
               <div className="hidden md:block order-4 md:order-none">
                 <Select value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)}>
-                  <SelectTrigger className="w-36 md:w-32 h-8 text-sm flex-shrink-0">
+                  <SelectTrigger className="w-32 md:w-28 h-8 text-xs md:text-sm flex-shrink-0">
                     <SelectValue placeholder="Group by" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="date">Date</SelectItem>
                     <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="taskboard">Task/Board</SelectItem>
+                    <SelectItem value="project">Project</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Bulk actions */}
-              <div className="flex items-center gap-2 flex-shrink-0 ml-auto order-5 md:order-none -mb-16 md:mb-0">
+              <div className="flex items-center gap-2 flex-shrink-0 ml-auto order-5 md:order-none">
                 {selectedNotifications.size > 0 && (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={markSelectedAsRead}
-                      className="h-8 px-3 text-sm gap-2"
+                      className="h-8 px-2.5 text-xs md:text-sm gap-1.5"
                     >
                       <Check className="h-3 w-3" />
                       Mark as read
@@ -222,7 +239,7 @@ export default function NotificationsClient() {
                     variant="outline"
                     size="sm"
                     onClick={handleMarkAllAsRead}
-                    className="inline-flex h-8 px-3 text-sm gap-2"
+                    className="inline-flex h-8 px-2.5 text-xs md:text-sm gap-1.5"
                   >
                     <CheckCheck className="h-3 w-3" />
                     Mark all read

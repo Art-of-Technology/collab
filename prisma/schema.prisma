@@ -87,6 +87,7 @@ model User {
   taskFollowers          TaskFollower[]
   postFollowers          PostFollower[]
   boardFollowers         BoardFollower[]
+  projectFollowers       ProjectFollower[]
   issueFollowers         IssueFollower[]
   viewFollowers          ViewFollower[]
   
@@ -418,6 +419,7 @@ model Project {
   workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issues          Issue[]
   statuses        ProjectStatus[] // New status system
+  followers       ProjectFollower[]
   
   // Legacy relationships for migration (will be removed after migration)
   columns         TaskColumn[]    // Legacy column system
@@ -1265,6 +1267,21 @@ model BoardFollower {
   @@index([userId])
   @@index([createdAt])
   @@index([boardId, createdAt])
+}
+
+model ProjectFollower {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([projectId, createdAt])
 }
 
 model IssueFollower {

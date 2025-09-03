@@ -26,13 +26,13 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
     let processed = htmlContent;
     
     // If content looks like text (contains mention patterns but not HTML), process it
-    if (processed.includes('@[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![')) {
+    if (processed.includes('@[') || processed.includes('#[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![')) {
       // Convert text-based mentions to HTML spans
       
-      // User mentions: @[name](id) -> HTML span
+      // User mentions: @[name](id) -> clickable mention
       processed = processed.replace(
         /@\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span class="mention-block" data-user-id="$2"><span class="mention-symbol">@</span>$1</span>'
+        '<span class="mention mention-link" data-user-id="$2"><span class="mention-symbol">@</span>$1</span>'
       );
       
       // Epic mentions: ~[name](id) -> HTML span  
@@ -53,10 +53,10 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         '<span class="milestone-mention" data-id="$2"><span class="mention-symbol">!</span>$1</span>'
       );
       
-      // Task mentions: #[name](id) -> HTML span
+      // Issue mentions: #[key](id) -> clickable mention
       processed = processed.replace(
         /#\[([^\]]+)\]\(([^)]+)\)/g,
-        '<span class="task-mention" data-id="$2"><span class="mention-symbol">#</span>$1</span>'
+        '<span class="mention mention-link" data-issue-id="$2"><span class="mention-symbol">#</span>$1</span>'
       );
       
       // Convert newlines to <br> tags if needed
@@ -78,29 +78,40 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
     const style = document.createElement('style');
     style.setAttribute('data-markdown-content-css', '');
     style.textContent = `
-      .mention-block {
+      .mention-link {
         display: inline-flex;
         align-items: center;
-        background-color: rgba(59, 130, 246, 0.1);
-        border-radius: 0.25rem;
-        padding: 0.125rem 0.25rem;
-        margin: 0 0.125rem;
-        color: #3b82f6;
+        background-color: rgba(31, 41, 55, 0.45);
+        color: rgba(255, 255, 255, 0.95);
+        border-radius: 3px;
+        padding: 0.05rem 0.25rem;
+        margin: 0 1px;
+        font-size: 0.875rem;
         font-weight: 500;
-        white-space: nowrap;
         cursor: pointer;
+        transition: all 0.18s ease;
+        border: 1px solid rgba(55, 65, 81, 0.4);
+        line-height: 1.2;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+        text-decoration: none;
+        pointer-events: auto;
       }
       
-      .mention-block:hover {
-        text-decoration: underline;
+      .mention-link:hover {
+        background-color: rgba(55, 65, 81, 0.7);
+        color: #fff;
+        border-color: rgba(75, 85, 99, 0.5);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(34, 197, 94, 0.2);
+        transform: translateY(-1px);
       }
       
-      .mention-block .mention-symbol {
-        opacity: 0.7;
-        margin-right: 0.125rem;
+      .mention-link .mention-symbol {
+        color: hsl(var(--primary));
+        font-weight: 600;
+        margin-right: 0.1rem;
       }
-      
-      /* Epic, Story, Milestone mentions */
+
+      /* Epic, Story, Milestone, Issue mentions */
       .epic-mention {
         display: inline-flex;
         align-items: center;
@@ -140,14 +151,14 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         cursor: pointer;
       }
       
-      .task-mention {
+      .issue-mention {
         display: inline-flex;
         align-items: center;
-        background-color: rgba(59, 130, 246, 0.1);
+        background-color: rgba(34, 197, 94, 0.1);
         border-radius: 0.25rem;
         padding: 0.125rem 0.25rem;
         margin: 0 0.125rem;
-        color: #3b82f6;
+        color: #22c55e;
         font-weight: 500;
         white-space: nowrap;
         cursor: pointer;
@@ -156,14 +167,14 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
       .epic-mention:hover,
       .story-mention:hover,
       .milestone-mention:hover,
-      .task-mention:hover {
+      .issue-mention:hover {
         text-decoration: underline;
       }
       
       .epic-mention .mention-symbol,
       .story-mention .mention-symbol,
       .milestone-mention .mention-symbol,
-      .task-mention .mention-symbol {
+      .issue-mention .mention-symbol {
         opacity: 0.7;
         margin-right: 0.125rem;
       }
@@ -185,11 +196,11 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
     const target = event.target as HTMLElement;
     
     // Check for different types of mentions
-    const userMention = target.closest('.mention-block');
+    const userMention = target.closest('.mention-link[data-user-id]');
     const epicMention = target.closest('.epic-mention');
     const storyMention = target.closest('.story-mention');
     const milestoneMention = target.closest('.milestone-mention');
-    const taskMention = target.closest('.task-mention');
+    const issueMention = target.closest('.issue-mention');
     
     if (userMention) {
       const userId = userMention.getAttribute('data-user-id');
@@ -219,12 +230,12 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         event.stopPropagation();
         router.push(`/${currentWorkspace.id}/milestones/${milestoneId}`);
       }
-    } else if (taskMention) {
-      const taskId = taskMention.getAttribute('data-id');
-      if (taskId && currentWorkspace) {
+    } else if (issueMention) {
+      const issueId = issueMention.getAttribute('data-issue-id');
+      if (issueId && currentWorkspace) {
         event.preventDefault();
         event.stopPropagation();
-        router.push(`/${currentWorkspace.id}/tasks/${taskId}`);
+        router.push(`/${currentWorkspace.id}/issues/${issueId}`);
       }
     }
   };

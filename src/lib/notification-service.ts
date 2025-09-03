@@ -217,6 +217,103 @@ export class NotificationService {
     }
   }
 
+  // === ISSUE FOLLOWER METHODS ===
+
+  /**
+   * Add a user as a follower of an issue
+   * @param issueId - Issue ID to follow
+   * @param userId - User ID to add as follower
+   */
+  static async addIssueFollower(issueId: string, userId: string): Promise<void> {
+    try {
+      await prisma.issueFollower.upsert({
+        where: {
+          issueId_userId: {
+            issueId,
+            userId,
+          },
+        },
+        update: {},
+        create: {
+          issueId,
+          userId,
+        },
+      });
+    } catch (error) {
+      logger.error("Failed to add issue follower", error, { issueId, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a user as a follower of an issue
+   * @param issueId - Issue ID to unfollow
+   * @param userId - User ID to remove as follower
+   */
+  static async removeIssueFollower(issueId: string, userId: string): Promise<void> {
+    try {
+      await prisma.issueFollower.deleteMany({
+        where: {
+          issueId,
+          userId,
+        },
+      });
+    } catch (error) {
+      logger.error("Failed to remove issue follower", error, { issueId, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all followers (userIds) of an issue
+   */
+  static async getIssueFollowers(issueId: string): Promise<string[]> {
+    try {
+      const followers = await prisma.issueFollower.findMany({
+        where: { issueId },
+        select: { userId: true },
+      });
+      return followers.map((f) => f.userId);
+    } catch (error) {
+      logger.error("Failed to get issue followers", error, { issueId });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a user is following an issue
+   */
+  static async isUserFollowingIssue(issueId: string, userId: string): Promise<boolean> {
+    try {
+      const follower = await prisma.issueFollower.findUnique({
+        where: {
+          issueId_userId: {
+            issueId,
+            userId,
+          },
+        },
+      });
+      return !!follower;
+    } catch (error) {
+      logger.error("Failed to check if user is following issue", error, { issueId, userId });
+      return false;
+    }
+  }
+
+  /**
+   * Auto-follow issue for a set of users
+   */
+  static async autoFollowIssue(issueId: string, userIds: string[]): Promise<void> {
+    try {
+      if (!userIds || userIds.length === 0) return;
+      const data = userIds.map((userId) => ({ issueId, userId }));
+      await prisma.issueFollower.createMany({ data, skipDuplicates: true });
+    } catch (error) {
+      logger.error("Failed to auto-follow issue", error, { issueId, userCount: userIds.length });
+      throw error;
+    }
+  }
+
   /**
    * Get user notification preferences or return defaults
    * @param userId - User ID to get preferences for

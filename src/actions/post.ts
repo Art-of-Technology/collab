@@ -377,10 +377,11 @@ export async function createPost(data: {
   if (mentionedUserIds.length > 0) {
     try {
       // Create mention notifications
+      const notificationContent = `@[${user.name}](${user.id}) mentioned you in a post: ${message.replace(/<[^>]*>?/g, '')}`;
       await prisma.notification.createMany({
         data: mentionedUserIds.map(userId => ({
           type: "post_mention",
-          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`,
+          content: notificationContent,
           userId: userId,
           senderId: user.id,
           read: false,

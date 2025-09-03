@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
+import { extractMentionUserIds } from "@/utils/mentions";
+import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
@@ -331,6 +333,63 @@ export async function POST(request: NextRequest) {
       statusId: created.statusId ?? undefined,
       statusValue: created.statusValue ?? undefined,
     });
+
+    // Minimal notifications for followers, assignee and reporter, and board/project followers
+    try {
+      const recipientIds = new Set<string>();
+
+      // Issue followers
+      const followers = await prisma.issueFollower.findMany({
+        where: { issueId: created.id },
+        select: { userId: true }
+      });
+      followers.forEach(f => recipientIds.add(f.userId));
+
+      // Assignee and reporter
+      if (created.assigneeId && created.assigneeId !== session.user.id) recipientIds.add(created.assigneeId);
+      if (created.reporterId && created.reporterId !== session.user.id) recipientIds.add(created.reporterId);
+
+      // Project followers
+      const projectFollowers = await prisma.projectFollower.findMany({
+        where: { projectId: created.projectId },
+        select: { userId: true }
+      });
+      projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
+
+      const recipients = Array.from(recipientIds).filter(id => id !== session.user.id);
+      if (recipients.length > 0) {
+        await prisma.notification.createMany({
+          data: recipients.map(userId => ({
+            type: 'ISSUE_CREATED',
+            content: `@[${session.user.name}](${session.user.id}) created an issue #[${created.issueKey}](${created.id})`,
+            userId,
+            senderId: session.user.id
+          }))
+        });
+      }
+    } catch (notificationError) {
+      console.warn('[ISSUES_POST_NOTIFY]', notificationError);
+    }
+
+    // Mentions in description (notify tagged users)
+    try {
+      if (description && typeof description === 'string') {
+        const mentionedUserIds = extractMentionUserIds(description);
+        const recipients = mentionedUserIds.filter((id) => id !== session.user.id);
+        if (recipients.length > 0) {
+          await prisma.notification.createMany({
+            data: recipients.map((userId) => ({
+              type: 'ISSUE_MENTION',
+              content: `@[${session.user.name}](${session.user.id}) mentioned you in an issue #[${created.issueKey}](${created.id})`,
+              userId,
+              senderId: session.user.id,
+            }))
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[ISSUES_POST_MENTIONS]', e);
+    }
 
     return NextResponse.json({ issue: created }, { status: 201 });
   } catch (error) {

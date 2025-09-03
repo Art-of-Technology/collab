@@ -44,6 +44,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import React, { useEffect } from 'react';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
+import { Bell, BellOff } from 'lucide-react';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
 
@@ -109,6 +110,8 @@ export default function ViewRenderer({
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
+  const [isFollowingProject, setIsFollowingProject] = useState(false);
+  const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const pendingColumnOrdersRef = useRef<Record<string, number>>({});
   const commitColumnOrderRef = useRef<any>(null);
   
@@ -175,6 +178,8 @@ export default function ViewRenderer({
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  
+
   // Fetch view-specific issue positions for proper ordering
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(view.id, view.displayType === 'KANBAN');
 
@@ -204,6 +209,38 @@ export default function ViewRenderer({
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
+  // Load project follow status (for the primary project of this view)
+  const primaryProjectId = useMemo(() => (tempProjectIds?.[0] || view.projects?.[0]?.id || ''), [tempProjectIds, view.projects]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!primaryProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${primaryProjectId}/follow`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (active) setIsFollowingProject(!!data.isFollowing);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => { active = false; };
+  }, [primaryProjectId]);
+
+  const toggleProjectFollow = useCallback(async () => {
+    if (!primaryProjectId || isTogglingFollow) return;
+    setIsTogglingFollow(true);
+    try {
+      const method = isFollowingProject ? 'DELETE' : 'POST';
+      const res = await fetch(`/api/projects/${primaryProjectId}/follow`, { method });
+      if (res.ok) {
+        setIsFollowingProject(prev => !prev);
+      }
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
   const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
   const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
@@ -886,6 +923,28 @@ export default function ViewRenderer({
         }
         actions={
           <>
+            {/* Follow Project Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleProjectFollow}
+              className={cn(
+                pageHeaderButtonStyles.ghost,
+                isFollowingProject ? "text-red-400 hover:bg-red-500/10" : "text-green-400 hover:bg-green-500/10"
+              )}
+              disabled={isTogglingFollow}
+              aria-pressed={isFollowingProject}
+              aria-label={isFollowingProject ? 'Unfollow' : 'Follow'}
+            >
+              {isFollowingProject ? (
+                <BellOff className="h-3 w-3 md:mr-1" />
+              ) : (
+                <Bell className="h-3 w-3 md:mr-1" />
+              )}
+              <span className="hidden md:inline ml-1">
+                {isFollowingProject ? 'Unfollow' : 'Follow'}
+              </span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"

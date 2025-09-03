@@ -7,10 +7,12 @@ import { formatDistanceToNow } from "date-fns";
 import { Loader2 } from "lucide-react";
 import React, { useMemo, useRef } from 'react';
 import { Notification } from "@/context/MentionContext";
+import { CollabText } from "@/components/ui/collab-text";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface VirtualNotificationsListProps {
   notifications: Notification[];
-  groupBy: "date" | "user" | "taskboard";
+  groupBy: "date" | "user" | "project";
   selectedNotifications: Set<string>;
   onSelectionChange: (selected: Set<string>) => void;
   onNotificationClick: (notification: Notification, e: React.MouseEvent) => void;
@@ -38,7 +40,7 @@ export default function VirtualNotificationsList({
   isLoading = false,
 }: VirtualNotificationsListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
-  console.log(notifications)
+  
   
   const groupNotifications = React.useCallback((notifications: Notification[]): GroupedNotifications => {
     const grouped: GroupedNotifications = {};
@@ -66,14 +68,17 @@ export default function VirtualNotificationsList({
           groupKey = notification.sender?.name || "System";
           break;
           
-        case "taskboard":
-          if (notification.taskId) {
-            groupKey = notification.task?.title || `Task ${notification.taskId}`;
-          } else if (notification.type?.startsWith("BOARD_")) {
-            groupKey = "Board Activity";
+        case "project": {
+          const t = notification.type?.toLowerCase() || "";
+          if (notification.issue?.project?.name) {
+            groupKey = notification.issue.project.name;
+          } else if (t.startsWith("project_") || t.includes("project") || t.startsWith("board_")) {
+            groupKey = "Project Activity";
           } else {
             groupKey = "General";
           }
+          break;
+        }
           break;
           
         default:
@@ -189,9 +194,9 @@ export default function VirtualNotificationsList({
     estimateSize: (index) => {
       const item = virtualItems[index];
       if (item.type === 'group-header') {
-        return item.groupKey === 'select-all' ? 48 : 40; // Select all header is taller
+        return item.groupKey === 'select-all' ? 40 : 36;
       }
-      return 62; // Estimated height for notification items
+      return 56;
     },
     overscan: 10,
   });
@@ -249,12 +254,12 @@ export default function VirtualNotificationsList({
                   </div>
                 ) : (
                   // Group header
-                  <div className="px-3 md:px-4 py-2 bg-muted/30">
+                  <div className="px-3 md:px-4 py-1.5 bg-muted/30">
                     <button
                       onClick={() => toggleGroup(item.groupKey!)}
                       className="flex items-center justify-between w-full text-left"
                     >
-                      <h3 className="text-sm font-medium text-muted-foreground truncate">
+                      <h3 className="text-xs md:text-sm font-medium text-muted-foreground truncate">
                         {item.groupKey} ({item.groupNotifications!.length})
                       </h3>
                       <span className="text-muted-foreground">
@@ -267,10 +272,10 @@ export default function VirtualNotificationsList({
                 // Notification item
                 <div
                   className={cn(
-                    "flex gap-3 md:gap-4 items-center px-3 md:px-4 py-3 hover:bg-muted/30 cursor-pointer border-l-2  transition-colors",
+                    "flex gap-3 md:gap-3 items-center px-3 md:px-4 py-2 hover:bg-muted/30 cursor-pointer border-l-2 transition-colors",
                     item.notification!.read 
                       ? "border-l-transparent" 
-                      : "border-l-green-500 bg-primary/5"
+                      : "border-l-primary bg-primary/5"
                   )}
                   onClick={(e) => onNotificationClick(item.notification!, e)}
                 >
@@ -278,19 +283,23 @@ export default function VirtualNotificationsList({
                   <Checkbox
                     checked={selectedNotifications.has(item.notification!.id)}
                     onCheckedChange={(checked) => handleCheckboxChange(item.notification!.id, checked === true)}
-                    className="-mt-4 w-4 h-4 md:mt-1"
+                    className="w-4 h-4"
                     data-checkbox
                     onClick={(e) => e.stopPropagation()}
                   />
                   
                   {/* Content */}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-start gap-1.5">
                       <p className={cn(
-                        "flex flex-row items-center gap-2 text-sm leading-relaxed flex-1",
+                        "flex flex-row items-center gap-1.5 text-xs md:text-sm leading-relaxed flex-1",
                         item.notification!.read ? "text-muted-foreground" : "text-foreground"
                       )}>     
-                        {item.notification!.content?.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')}
+                        { (item.notification!.content || '').includes('@[') || (item.notification!.content || '').includes('#[') || /<[^>]+>/.test(item.notification!.content || "") ? (
+                          <MarkdownContent htmlContent={item.notification!.content} className="inline text-xs md:text-sm" asSpan />
+                        ) : (
+                          <CollabText content={item.notification!.content} small asSpan />
+                        )}
                       </p>
                       
                       {/* Time next to content */}
@@ -300,9 +309,9 @@ export default function VirtualNotificationsList({
                     </div>
                     
                     {/* Task/Post info */}
-                    {(item.notification!.taskId || item.notification!.postId) && (
+                    {(item.notification!.issueId || item.notification!.postId) && (
                     <div className="text-[11px] md:text-xs text-muted-foreground leading-none truncate">
-                      {item.notification!.task?.title ? `Task ${item.notification!.task?.title}` : `Post at Timeline`}
+                      {item.notification!.issue?.title ? `Issue ${item.notification!.issue?.title}` : `Post at Timeline`}
                     </div>
                   )}
                   </div>

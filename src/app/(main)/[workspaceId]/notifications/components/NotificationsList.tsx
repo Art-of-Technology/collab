@@ -7,7 +7,7 @@ import VirtualNotificationsList from "./VirtualNotificationsList";
 
 interface NotificationsListProps {
   notifications: Notification[];
-  groupBy: "date" | "user" | "taskboard";
+  groupBy: "date" | "user" | "project";
   isLoading: boolean;
   searchQuery: string;
   selectedNotifications: Set<string>;
@@ -52,8 +52,8 @@ export default function NotificationsList({
   // Show loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
   }
@@ -61,12 +61,12 @@ export default function NotificationsList({
   // Show empty state
   if (notifications.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <BellOff className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium text-muted-foreground mb-2">
+      <div className="flex flex-col items-center justify-center h-56 text-center">
+        <BellOff className="h-10 w-10 text-muted-foreground mb-3" />
+        <h3 className="text-base font-medium text-muted-foreground mb-1.5">
           No notifications
         </h3>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {searchQuery ? 'No notifications match your search.' : 'You\'re all caught up!'}
         </p>
       </div>

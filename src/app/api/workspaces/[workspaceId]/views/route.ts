@@ -24,7 +24,7 @@ export async function GET(
         members: {
           some: {
             user: {
-              email: session.user.email
+              id: session.user.id
             }
           }
         }
