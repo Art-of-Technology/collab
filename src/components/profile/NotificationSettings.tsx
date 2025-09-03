@@ -56,43 +56,17 @@ const settingGroups: SettingGroup[] = [
     description: "Get notified about activities on issues you follow",
     icon: <CheckSquare className="h-5 w-5 text-blue-500" />,
     settings: [
+      // Using taskUpdated and taskDeleted; 'taskCreated' not present in hook type
       {
-        key: "taskStatusChanged",
-        label: "Status Changes",
-        description: "When issue status changes (To Do → In Progress, etc.)",
-        recommended: true,
-      },
-      {
-        key: "taskAssigned",
-        label: "Issue Assigned",
-        description: "When you are assigned to an issue",
+        key: "taskUpdated",
+        label: "General Updates",
+        description: "When issue details or status are updated",
         recommended: true,
       },
       {
         key: "taskDeleted",
         label: "Issue Deleted",
         description: "When issues are deleted",
-        recommended: true,
-      },
-      {
-        key: "taskCommentAdded",
-        label: "Comments",
-        description: "When someone comments on issues you follow",
-      },
-      {
-        key: "taskPriorityChanged",
-        label: "Priority Changes",
-        description: "When issue priority is updated",
-      },
-      {
-        key: "taskDueDateChanged",
-        label: "Due Date Changes",
-        description: "When issue due dates are modified",
-      },
-      {
-        key: "taskUpdated",
-        label: "General Updates",
-        description: "When issue details are updated",
       },
     ],
   },
@@ -112,12 +86,6 @@ const settingGroups: SettingGroup[] = [
         key: "boardTaskStatusChanged",
         label: "Status Changes",
         description: "When issue statuses change in projects you follow",
-        recommended: true,
-      },
-      {
-        key: "boardTaskCompleted",
-        label: "Issues Completed",
-        description: "When issues are marked as completed in projects you follow",
         recommended: true,
       },
       {
