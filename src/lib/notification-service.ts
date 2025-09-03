@@ -66,22 +66,13 @@ export interface LeaveRequestActionContext {
 }
 
 export enum NotificationType {
-  TASK_CREATED = "TASK_CREATED",
-  TASK_STATUS_CHANGED = "TASK_STATUS_CHANGED",
-  TASK_COMMENT_ADDED = "TASK_COMMENT_ADDED",
-  TASK_COMMENT_MENTION = "TASK_COMMENT_MENTION",
-  TASK_ASSIGNED = "TASK_ASSIGNED",
-  TASK_UPDATED = "TASK_UPDATED",
-  TASK_PRIORITY_CHANGED = "TASK_PRIORITY_CHANGED",
-  TASK_DUE_DATE_CHANGED = "TASK_DUE_DATE_CHANGED",
-  TASK_DELETED = "TASK_DELETED",
+  ISSUE_MENTION = "ISSUE_MENTION",
+  ISSUE_CREATED = "ISSUE_CREATED",
+  ISSUE_UPDATED = "ISSUE_UPDATED",
+  ISSUE_DELETED = "ISSUE_DELETED",
   POST_COMMENT_ADDED = "POST_COMMENT_ADDED",
   POST_BLOCKER_CREATED = "POST_BLOCKER_CREATED",
   POST_RESOLVED = "POST_RESOLVED",
-  BOARD_TASK_CREATED = "BOARD_TASK_CREATED",
-  BOARD_TASK_STATUS_CHANGED = "BOARD_TASK_STATUS_CHANGED",
-  BOARD_TASK_COMPLETED = "BOARD_TASK_COMPLETED",
-  BOARD_TASK_DELETED = "BOARD_TASK_DELETED",
   LEAVE_REQUEST_STATUS_CHANGED = "LEAVE_REQUEST_STATUS_CHANGED",
   LEAVE_REQUEST_EDITED = "LEAVE_REQUEST_EDITED",
   LEAVE_REQUEST_MANAGER_ALERT = "LEAVE_REQUEST_MANAGER_ALERT",
@@ -389,23 +380,9 @@ export class NotificationService {
     notificationType: NotificationType
   ): boolean {
     const typeToPreferenceMap = {
-      [NotificationType.TASK_CREATED]: "taskCreated",
-      [NotificationType.TASK_STATUS_CHANGED]: "taskStatusChanged",
-      [NotificationType.TASK_COMMENT_ADDED]: "taskCommentAdded",
-      [NotificationType.TASK_COMMENT_MENTION]: "taskMentioned",
-      [NotificationType.TASK_ASSIGNED]: "taskAssigned",
-      [NotificationType.TASK_UPDATED]: "taskUpdated",
-      [NotificationType.TASK_PRIORITY_CHANGED]: "taskPriorityChanged",
-      [NotificationType.TASK_DUE_DATE_CHANGED]: "taskDueDateChanged",
-      [NotificationType.TASK_DELETED]: "taskDeleted",
       [NotificationType.POST_COMMENT_ADDED]: "postCommentAdded",
       [NotificationType.POST_BLOCKER_CREATED]: "postBlockerCreated",
       [NotificationType.POST_RESOLVED]: "postResolved",
-      [NotificationType.BOARD_TASK_CREATED]: "boardTaskCreated",
-      [NotificationType.BOARD_TASK_STATUS_CHANGED]: "boardTaskStatusChanged",
-      [NotificationType.BOARD_TASK_COMPLETED]: "boardTaskCompleted",
-      [NotificationType.BOARD_TASK_DELETED]: "boardTaskDeleted",
-
       // Leave request notification mappings
       [NotificationType.LEAVE_REQUEST_STATUS_CHANGED]:
         "leaveRequestStatusChanged",
@@ -746,7 +723,7 @@ export class NotificationService {
       const notifications = mentionedUserIds
         .filter((userId) => userId !== senderId) // Don't notify the sender
         .map((userId) => ({
-          type: NotificationType.TASK_COMMENT_MENTION.toString(),
+          type: NotificationType.ISSUE_MENTION.toString(),
           content: `mentioned you in a task comment: "${
             safeContent.length > 100 ? safeContent.substring(0, 97) + "..." : safeContent
           }"`,

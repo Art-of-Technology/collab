@@ -51,79 +51,79 @@ interface SettingGroup {
 
 const settingGroups: SettingGroup[] = [
   {
-    id: "tasks",
-    title: "Task Notifications",
-    description: "Get notified about individual task activities (when following tasks)",
+    id: "issues",
+    title: "Issue Notifications",
+    description: "Get notified about activities on issues you follow",
     icon: <CheckSquare className="h-5 w-5 text-blue-500" />,
     settings: [
       {
         key: "taskStatusChanged",
         label: "Status Changes",
-        description: "When task status changes (To Do → In Progress, etc.)",
+        description: "When issue status changes (To Do → In Progress, etc.)",
         recommended: true,
       },
       {
         key: "taskAssigned",
-        label: "Task Assigned",
-        description: "When you are assigned to a task",
+        label: "Issue Assigned",
+        description: "When you are assigned to an issue",
         recommended: true,
       },
       {
         key: "taskDeleted",
-        label: "Task Deleted",
-        description: "When tasks are deleted",
+        label: "Issue Deleted",
+        description: "When issues are deleted",
         recommended: true,
       },
       {
         key: "taskCommentAdded",
         label: "Comments",
-        description: "When someone comments on tasks you follow",
+        description: "When someone comments on issues you follow",
       },
       {
         key: "taskPriorityChanged",
         label: "Priority Changes",
-        description: "When task priority is updated",
+        description: "When issue priority is updated",
       },
       {
         key: "taskDueDateChanged",
         label: "Due Date Changes",
-        description: "When task due dates are modified",
+        description: "When issue due dates are modified",
       },
       {
         key: "taskUpdated",
         label: "General Updates",
-        description: "When task details are updated",
+        description: "When issue details are updated",
       },
     ],
   },
   {
-    id: "boards",
-    title: "Board Notifications",
-    description: "Get notified about activities on boards you follow (board-level notifications only)",
+    id: "projects",
+    title: "Project Notifications",
+    description: "Get notified about activities on projects you follow (project-level notifications only)",
     icon: <Calendar className="h-5 w-5 text-purple-500" />,
     settings: [
       {
         key: "boardTaskCreated",
-        label: "New Tasks",
-        description: "When new tasks are created on boards you follow",
+        label: "New Issues",
+        description: "When new issues are created in projects you follow",
         recommended: true,
       },
       {
         key: "boardTaskStatusChanged",
         label: "Status Changes",
-        description: "When task statuses change on boards you follow",
+        description: "When issue statuses change in projects you follow",
         recommended: true,
       },
       {
         key: "boardTaskCompleted",
-        label: "Tasks Completed",
-        description: "When tasks are marked as completed on boards you follow",
+        label: "Issues Completed",
+        description: "When issues are marked as completed in projects you follow",
         recommended: true,
       },
       {
         key: "boardTaskDeleted",
-        label: "Tasks Deleted",
-        description: "When tasks are deleted from boards you follow",
+        label: "Issues Deleted",
+        description: "When issues are deleted in projects you follow",
         recommended: true,
       },
     ],
@@ -197,7 +197,7 @@ export default function NotificationSettings() {
   const { data: preferences, isLoading } = useNotificationPreferences();
   const updateMutation = useUpdateNotificationPreferences();
   const resetMutation = useResetNotificationPreferences();
-  const [openSections, setOpenSections] = useState<string[]>(["tasks", "boards", "leave"]);
+  const [openSections, setOpenSections] = useState<string[]>(["issues", "projects", "leave"]);
   const {
     isSupported: isPushSupported,
     isSubscribed: isPushSubscribed,
@@ -463,12 +463,11 @@ export default function NotificationSettings() {
             <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="space-y-1">
               <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                Task vs Board Notifications
+                Issue vs Project Notifications
               </p>
               <p className="text-xs text-amber-700/80 dark:text-amber-300/80 leading-relaxed">
-                <strong>Task notifications</strong> apply when you follow individual tasks.
-                <strong>Board notifications</strong> apply when you follow entire boards and only notify for task status changes.
-                Column moves are disabled by default due to frequency.
+                <strong>Issue notifications</strong> apply when you follow individual issues.
+                <strong>Project notifications</strong> apply when you follow entire projects and generally notify for key status changes.
               </p>
             </div>
           </div>
