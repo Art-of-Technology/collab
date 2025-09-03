@@ -5,7 +5,18 @@ import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
-import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
+// Reuse a compact include set similar to the detail route
+const LIST_INCLUDE = {
+  project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true } },
+  assignee: { select: { id: true, name: true, email: true, image: true } },
+  reporter: { select: { id: true, name: true, email: true, image: true } },
+  labels: { select: { id: true, name: true, color: true } },
+  parent: { select: { id: true, title: true, issueKey: true, type: true } },
+  children: { select: { id: true, title: true, issueKey: true, type: true, status: true } },
+  column: { select: { id: true, name: true, color: true, order: true } },
+  projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
+  _count: { select: { children: true, comments: true } }
+} as const;
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
@@ -51,84 +62,8 @@ export async function GET(request: NextRequest) {
 
     const issues = await prisma.issue.findMany({
       where: whereClause,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            issuePrefix: true,
-            description: true
-          }
-        },
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true
-          }
-        },
-        reporter: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true
-          }
-        },
-        labels: {
-          select: {
-            id: true,
-            name: true,
-            color: true
-          }
-        },
-        parent: {
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            type: true
-          }
-        },
-        children: {
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            type: true,
-            status: true
-          }
-        },
-        column: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            order: true
-          }
-        },
-        projectStatus: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            color: true,
-            order: true,
-            isDefault: true
-          }
-        },
-        _count: {
-          select: {
-            children: true,
-            comments: true
-          }
-        }
-      },
-      orderBy: {
-        updatedAt: 'desc'
-      }
+      include: LIST_INCLUDE,
+      orderBy: { updatedAt: 'desc' }
     });
 
     return NextResponse.json({ issues }, { status: 200 });
@@ -350,17 +285,18 @@ export async function POST(request: NextRequest) {
       if (created.reporterId && created.reporterId !== session.user.id) recipientIds.add(created.reporterId);
 
       // Project followers
-      const projectFollowers = await prisma.projectFollower.findMany({
+      const projectFollowerList = await prisma.projectFollower.findMany({
         where: { projectId: created.projectId },
         select: { userId: true }
       });
-      projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
+      projectFollowerList.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
 
       const recipients = Array.from(recipientIds).filter(id => id !== session.user.id);
       if (recipients.length > 0) {
+        const pfSet = new Set(projectFollowerList.map(pf => pf.userId));
         await prisma.notification.createMany({
           data: recipients.map(userId => ({
-            type: projectFollowers.some(pf => pf.userId === userId) ? 'PROJECT_ISSUE_CREATED' : 'ISSUE_CREATED',
+            type: pfSet.has(userId) ? 'PROJECT_ISSUE_CREATED' : 'ISSUE_CREATED',
             content: `@[${session.user.name}](${session.user.id}) created an issue #[${created.issueKey}](${created.id})`,
             userId,
             senderId: session.user.id

@@ -1,18 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { trackFieldChanges, createActivity, compareObjects } from "@/lib/board-item-activity-service";
+import { trackFieldChanges, compareObjects } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
-import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Shared helpers and constants to reduce duplication
+const ISSUE_ID_REGEX = /^[A-Z]+[0-9]*-[A-Z]*\d+$/;
+const isIssueKeyFormat = (value: string) => ISSUE_ID_REGEX.test(value);
+
+const ISSUE_INCLUDE = {
+  assignee: {
+    select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
+  },
+  reporter: {
+    select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
+  },
+  column: {
+    select: { id: true, name: true, color: true, order: true }
+  },
+  project: {
+    select: { id: true, name: true, slug: true, issuePrefix: true, description: true }
+  },
+  workspace: {
+    select: { id: true, name: true, slug: true }
+  },
+  labels: {
+    select: { id: true, name: true, color: true }
+  },
+  parent: {
+    select: { id: true, title: true, issueKey: true, type: true }
+  },
+  children: {
+    select: { id: true, title: true, issueKey: true, type: true, status: true }
+  },
+  projectStatus: {
+    select: { id: true, name: true, displayName: true, color: true, iconName: true, order: true }
+  },
+  comments: {
+    include: {
+      author: { select: { id: true, name: true, email: true, image: true, useCustomAvatar: true } }
+    },
+    orderBy: { createdAt: 'asc' as const }
+  },
+  _count: { select: { children: true, comments: true } }
+} as const;
+
+async function userHasWorkspaceAccess(userId: string, workspaceId: string) {
+  return prisma.workspace.findFirst({
+    where: {
+      id: workspaceId,
+      OR: [
+        { ownerId: userId },
+        { members: { some: { userId } } }
+      ]
+    }
+  });
+}
+
+async function findIssueByIdOrKey(idOrKey: string) {
+  return isIssueKeyFormat(idOrKey)
+    ? prisma.issue.findFirst({ where: { issueKey: idOrKey } })
+    : prisma.issue.findUnique({ where: { id: idOrKey } });
+}
+
 // GET /api/issues/[issueId] - Get issue details
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ issueId: string }> }
+  { params }: { params: { issueId: string } }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -24,202 +82,11 @@ export async function GET(
       );
     }
 
-    const resolvedParams = await params;
-    const { issueId } = resolvedParams;
-    
-    // Check if issueId is an issue key (e.g., WZB-1, MA-T140, DNN1-T2) or a regular ID
-    const isIssueKey = /^[A-Z]+[0-9]*-[A-Z]*\d+$/.test(issueId);
-    
-    console.log(`API: Resolving issueId: ${issueId}, isIssueKey: ${isIssueKey}`);
-  
-    // Fetch the issue either by ID or issue key
-    const issue = isIssueKey 
-      ? await prisma.issue.findFirst({
-          where: { issueKey: issueId },
-          include: {
-            assignee: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-                useCustomAvatar: true
-              }
-            },
-            reporter: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-                useCustomAvatar: true
-              }
-            },
-            column: {
-              select: {
-                id: true,
-                name: true,
-                color: true,
-                order: true
-              }
-            },
-            project: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                issuePrefix: true,
-                description: true
-              }
-            },
-            workspace: {
-              select: {
-                id: true,
-                name: true,
-                slug: true
-              }
-            },
-            labels: {
-              select: {
-                id: true,
-                name: true,
-                color: true
-              }
-            },
-            parent: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-                type: true
-              }
-            },
-            children: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-                type: true,
-                status: true
-              }
-            },
-            comments: {
-              include: {
-                author: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    image: true,
-                    useCustomAvatar: true
-                  }
-                }
-              },
-              orderBy: {
-                createdAt: 'asc'
-              }
-            },
-            _count: {
-              select: {
-                children: true,
-                comments: true
-              }
-            }
-          }
-        })
-      : await prisma.issue.findUnique({
-          where: { id: issueId },
-          include: {
-            assignee: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-                useCustomAvatar: true
-              }
-            },
-            reporter: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-                useCustomAvatar: true
-              }
-            },
-            column: {
-              select: {
-                id: true,
-                name: true,
-                color: true,
-                order: true
-              }
-            },
-            project: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                issuePrefix: true,
-                description: true
-              }
-            },
-            workspace: {
-              select: {
-                id: true,
-                name: true,
-                slug: true
-              }
-            },
-            labels: {
-              select: {
-                id: true,
-                name: true,
-                color: true
-              }
-            },
-            parent: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-                type: true
-              }
-            },
-            children: {
-              select: {
-                id: true,
-                title: true,
-                issueKey: true,
-                type: true,
-                status: true
-              }
-            },
-            comments: {
-              include: {
-                author: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    image: true,
-                    useCustomAvatar: true
-                  }
-                }
-              },
-              orderBy: {
-                createdAt: 'asc'
-              }
-            },
-            _count: {
-              select: {
-                children: true,
-                comments: true
-              }
-            }
-          }
-        });
+    const { issueId } = params;
+    const isIssueKey = isIssueKeyFormat(issueId);
+    const issue = isIssueKey
+      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, include: ISSUE_INCLUDE })
+      : await prisma.issue.findUnique({ where: { id: issueId }, include: ISSUE_INCLUDE });
 
     if (!issue) {
       return NextResponse.json(
@@ -229,15 +96,7 @@ export async function GET(
     }
 
     // Check if user has access to the workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } }
-        ]
-      }
-    });
+    const hasAccess = await userHasWorkspaceAccess(currentUser.id, issue.workspaceId);
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -260,7 +119,7 @@ export async function GET(
 // PUT /api/issues/[issueId] - Update issue
 export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ issueId: string }> }
+  { params }: { params: { issueId: string } }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -268,18 +127,11 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const { issueId } = resolvedParams;
+    const { issueId } = params;
     const body = await req.json();
 
-    // Check if issueId is an issue key or ID
-    // Pattern matches formats like: ABC-123, ABC-T123, CHAT-T1, DNN1-T2, etc.
-    const isIssueKey = /^[A-Z]+[0-9]*-[A-Z]*\d+$/.test(issueId);
-    
     // Find the issue first
-    const existingIssue = isIssueKey 
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId } })
-      : await prisma.issue.findUnique({ where: { id: issueId } });
+    const existingIssue = await findIssueByIdOrKey(issueId);
 
     if (!existingIssue) {
       return NextResponse.json({ 
@@ -289,15 +141,7 @@ export async function PUT(
     }
 
     // Check workspace access
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: existingIssue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } }
-        ]
-      }
-    });
+    const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -368,84 +212,8 @@ export async function PUT(
           ...updateData,
           ...(Object.keys(relationalUpdates).length > 0 ? relationalUpdates : {}),
         },
-        include: {
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            useCustomAvatar: true
-          }
-        },
-        reporter: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            useCustomAvatar: true
-          }
-        },
-        column: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            order: true
-          }
-        },
-        project: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            issuePrefix: true,
-            description: true
-          }
-        },
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-            slug: true
-          }
-        },
-        projectStatus: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            color: true,
-            iconName: true,
-            order: true
-          }
-        },
-        labels: {
-          select: {
-            id: true,
-            name: true,
-            color: true
-          }
-        },
-        parent: {
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            type: true
-          }
-        },
-        children: {
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            type: true,
-            status: true
-          }
-        }
-      }});
+        include: ISSUE_INCLUDE
+      });
 
       // Handle assignee changes - create/update IssueAssignee records
       if (assigneeChanged) {
@@ -575,22 +343,17 @@ export async function PUT(
         }
       }
 
-      // Project followers
-      const projectFollowers = await (prisma as any).projectFollower.findMany({
+      // Project followers and type selection set
+      const projectFollowerList = await prisma.projectFollower.findMany({
         where: { projectId: updatedIssue.projectId },
         select: { userId: true }
       });
-      projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
+      const pfSet = new Set(projectFollowerList.map(pf => pf.userId));
+      projectFollowerList.forEach(pf => recipientIds.add(pf.userId));
 
       const actorId = currentUser.id;
       const recipients = Array.from(recipientIds).filter(id => id !== actorId);
       if (recipients.length > 0) {
-        // Gather project followers for type selection
-        const projectFollowers = await prisma.projectFollower.findMany({
-          where: { projectId: updatedIssue.projectId },
-          select: { userId: true }
-        });
-        const pfSet = new Set(projectFollowers.map(pf => pf.userId));
         await prisma.notification.createMany({
           data: recipients.map(userId => ({
             type: pfSet.has(userId) ? 'PROJECT_ISSUE_UPDATED' : 'ISSUE_UPDATED',
@@ -621,7 +384,7 @@ export async function PUT(
 // DELETE /api/issues/[issueId] - Delete issue
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ issueId: string }> }
+  { params }: { params: { issueId: string } }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -629,31 +392,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const { issueId } = resolvedParams;
+    const { issueId } = params;
 
-    // Check if issueId is an issue key or ID
-    const isIssueKey = /^[A-Z]+[0-9]*-[A-Z]*\d+$/.test(issueId);
-    
     // Find the issue first
-    const existingIssue = isIssueKey 
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId } })
-      : await prisma.issue.findUnique({ where: { id: issueId } });
+    const existingIssue = await findIssueByIdOrKey(issueId);
 
     if (!existingIssue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
 
     // Check workspace access and ownership
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: existingIssue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } }
-        ]
-      }
-    });
+    const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -690,7 +439,7 @@ export async function DELETE(
         }
       }
       // Project followers
-      const projectFollowers = await (prisma as any).projectFollower.findMany({
+      const projectFollowers = await prisma.projectFollower.findMany({
         where: { projectId: (existingIssue as any).projectId as string },
         select: { userId: true }
       });

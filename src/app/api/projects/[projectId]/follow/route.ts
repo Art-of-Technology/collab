@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: { projectId: string } }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -12,8 +12,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const { projectId } = resolvedParams;
+    const { projectId } = params;
 
     // Check if project exists and user has access
     const project = await prisma.project.findFirst({
@@ -56,7 +55,7 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: { projectId: string } }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -64,8 +63,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const { projectId } = resolvedParams;
+    const { projectId } = params;
 
     // Check if project exists and user has access
     const project = await prisma.project.findFirst({
@@ -101,7 +99,7 @@ export async function DELETE(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: { projectId: string } }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -109,8 +107,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const { projectId } = resolvedParams;
+    const { projectId } = params;
 
     // Check if project exists and user has access
     const project = await prisma.project.findFirst({
@@ -129,44 +126,22 @@ export async function GET(
       return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
     }
 
-    // Check if user is following the project
-    const isFollowing = await prisma.projectFollower.findUnique({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId: currentUser.id
-        }
-      }
-    });
-
-    // Get all followers
-    const followers = await prisma.projectFollower.findMany({
-      where: { projectId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            useCustomAvatar: true,
-            avatarSkinTone: true,
-            avatarEyes: true,
-            avatarBrows: true,
-            avatarMouth: true,
-            avatarNose: true,
-            avatarHair: true,
-            avatarEyewear: true,
-            avatarAccessory: true,
+    // Return lightweight follow status and count only
+    const [followRecord, count] = await Promise.all([
+      prisma.projectFollower.findUnique({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId: currentUser.id
           }
         }
-      }
-    });
+      }),
+      prisma.projectFollower.count({ where: { projectId } })
+    ]);
 
     return NextResponse.json({
-      isFollowing: !!isFollowing,
-      followers: followers.map(f => f.user),
-      count: followers.length
+      isFollowing: !!followRecord,
+      count
     });
   } catch (error) {
     console.error("Error getting project follow status:", error);
