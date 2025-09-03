@@ -874,6 +874,7 @@ export class NotificationService {
     const managers = await prisma.workspaceMember.findMany({
       where: {
         workspaceId,
+        status: true,
         role: {
           in: [
             WorkspaceRole.PROJECT_MANAGER,
@@ -912,6 +913,7 @@ export class NotificationService {
       where: {
         workspaceId,
         role: WorkspaceRole.HR.toString(),
+        status: true,
       },
       select: {
         userId: true,

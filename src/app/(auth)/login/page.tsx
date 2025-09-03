@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { prisma } from "@/lib/prisma";
+import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
 
 export const dynamic = 'force-dynamic';
 
@@ -11,27 +11,10 @@ export default async function LoginPage() {
   const user = await getCurrentUser();
 
   if (user) {
-    // Check if user has any workspaces
-    const userWorkspaces = await prisma.workspace.findMany({
-      where: {
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
-      },
-      select: { id: true, slug: true },
-      orderBy: { createdAt: 'asc' },
-      take: 1
-    });
-
-    // If user has no workspaces, redirect to welcome page
-    if (userWorkspaces.length === 0) {
+    const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: user.id });
+    if (!workspaceSlugOrId) {
       redirect("/welcome");
     }
-
-    // Otherwise, redirect to the first workspace's timeline using slug if available
-    const workspace = userWorkspaces[0];
-    const workspaceSlugOrId = workspace.slug || workspace.id;
     redirect(`/${workspaceSlugOrId}/timeline`);
   }
 

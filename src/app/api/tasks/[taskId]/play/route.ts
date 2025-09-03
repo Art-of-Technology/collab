@@ -33,6 +33,7 @@ export async function POST(
     // Check if user is part of the workspace
     const workspaceMember = await prisma.workspaceMember.findUnique({
       where: {
+        status: true,
         userId_workspaceId: {
           userId,
           workspaceId: task.workspaceId,
@@ -41,12 +42,12 @@ export async function POST(
     });
 
     if (!workspaceMember && task.reporterId !== userId && task.assigneeId !== userId) {
-        // Allow reporter or assignee even if not a general workspace member
-        // (though typically they would be members)
-        const workspace = await prisma.workspace.findUnique({ where: { id: task.workspaceId } });
-        if (workspace?.ownerId !== userId) {
-            return new NextResponse("Forbidden: You are not authorized to perform this action on this task's workspace.", { status: 403 });
-        }
+      // Allow reporter or assignee even if not a general workspace member
+      // (though typically they would be members)
+      const workspace = await prisma.workspace.findUnique({ where: { id: task.workspaceId } });
+      if (workspace?.ownerId !== userId) {
+        return new NextResponse("Forbidden: You are not authorized to perform this action on this task's workspace.", { status: 403 });
+      }
     }
 
     // Use the new activity service to start task

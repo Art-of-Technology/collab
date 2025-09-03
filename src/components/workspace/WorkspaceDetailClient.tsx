@@ -174,10 +174,6 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
           <Button variant="outline" size="sm" className="flex gap-1.5">
             <Users className="h-4 w-4" />
             <span>
-              {localWorkspace?.members.filter((m: any) => m.status).length + 1 || workspace?.members.filter((m: any) => m.status).length + 1 || workspaceData.members.filter((m: any) => m.status).length + 1} active
-              {(localWorkspace?.members.some((m: any) => !m.status) || workspace?.members.some((m: any) => !m.status) || workspaceData.members.some((m: any) => !m.status)) && (
-                <span className="text-muted-foreground"> / {(localWorkspace?.members.length || workspace?.members.length || workspaceData.members.length) + 1} total</span>
-              )}
               {(() => {
                 const counts =
                   localWorkspace && localWorkspace.members
@@ -225,32 +221,6 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <div className="space-y-2">
-                {/* Owner */}
-                <div className="p-3 border border-border/20 rounded flex justify-between items-center hover:bg-muted/30 transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    {(localWorkspace?.owner.useCustomAvatar || workspace?.owner.useCustomAvatar || workspaceData.owner.useCustomAvatar) ? (
-                      <CustomAvatar user={localWorkspace?.owner || workspace?.owner || workspaceData.owner} size="lg" className="h-8 w-8 border border-primary/20" />
-                    ) : (
-                      <Avatar className="h-8 w-8 border border-primary/20">
-                        {(localWorkspace?.owner.image || workspace?.owner.image || workspaceData.owner.image) ? (
-                          <AvatarImage src={localWorkspace?.owner.image || workspace?.owner.image || workspaceData.owner.image} alt={(localWorkspace?.owner.name || workspace?.owner.name || workspaceData.owner.name) || ""} />
-                        ) : (
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {(localWorkspace?.owner.name || workspace?.owner.name || workspaceData.owner.name)?.substring(0, 2).toUpperCase() || "U"}
-                          </AvatarFallback>
-                        )}
-                      </Avatar>
-                    )}
-                    <div>
-                      <div className="font-medium text-sm">{localWorkspace?.owner.name || workspace?.owner.name || workspaceData.owner.name}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        {localWorkspace?.owner.email || workspace?.owner.email || workspaceData.owner.email}
-                      </div>
-                    </div>
-                  </div>
-                  <Badge className="bg-primary hover:bg-primary/90 h-5 px-2 text-xs">Owner</Badge>
-                </div>
 
                 {/* Members */}
                 {(localWorkspace?.members.filter((member: any) => member.status) || workspace?.members.filter((member: any) => member.status) || workspaceData.members.filter((member: any) => member.status)).map((member: any) => (
@@ -281,18 +251,24 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <MemberStatusToggle
-                        memberId={member.id}
-                        workspaceId={workspaceId}
-                        currentStatus={member.status}
-                        memberName={member.user.name || member.user.email}
-                        canManage={isWorkspaceAdmin || isWorkspaceOwner}
-                        isOwner={false}
-                        onStatusChange={handleMemberStatusChange}
-                      />
-                      <Badge variant="outline" className="bg-muted/30 h-5 px-2 text-xs">
-                        {member.role}
-                      </Badge>
+                      {member.user.id === (localWorkspace?.ownerId || workspace?.ownerId || workspaceData.ownerId) ? (
+                        <Badge className="bg-primary hover:bg-primary/90 h-5 px-2 text-xs">Owner</Badge>
+                      ) : (
+                        <>
+                          <MemberStatusToggle
+                            memberId={member.id}
+                            workspaceId={workspaceId}
+                            currentStatus={member.status}
+                            memberName={member.user.name || member.user.email}
+                            canManage={canManage}
+                            isOwner={false}
+                            onStatusChange={handleMemberStatusChange}
+                          />
+                          <Badge variant="outline" className="bg-muted/30 h-5 px-2 text-xs">
+                            {member.role}
+                          </Badge>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -334,20 +310,24 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {(isWorkspaceAdmin || isWorkspaceOwner) && (
-                            <MemberStatusToggle
-                              memberId={member.id}
-                              workspaceId={workspaceId}
-                              currentStatus={member.status}
-                              memberName={member.user.name || member.user.email}
-                              canManage={isWorkspaceAdmin || isWorkspaceOwner}
-                              isOwner={false}
-                              onStatusChange={handleMemberStatusChange}
-                            />
+                          {member.user.id === (localWorkspace?.ownerId || workspace?.ownerId || workspaceData.ownerId) ? (
+                            <Badge className="bg-primary hover:bg-primary/90 h-5 px-2 text-xs">Owner</Badge>
+                          ) : (
+                            <>
+                              <MemberStatusToggle
+                                memberId={member.id}
+                                workspaceId={workspaceId}
+                                currentStatus={member.status}
+                                memberName={member.user.name || member.user.email}
+                                canManage={canManage}
+                                isOwner={false}
+                                onStatusChange={handleMemberStatusChange}
+                              />
+                              <Badge variant="outline" className="bg-muted/30 h-5 px-2 text-xs">
+                                {member.role}
+                              </Badge>
+                            </>
                           )}
-                          <Badge variant="outline" className="bg-muted/30 h-5 px-2 text-xs">
-                            {member.role}
-                          </Badge>
                         </div>
                       </div>
                     ))}

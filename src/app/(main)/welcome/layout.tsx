@@ -2,7 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import { getAuthSession } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getWorkspaceId } from "@/lib/workspace-helpers";
 
 export default async function WelcomeLayout({
   children,
@@ -16,19 +16,9 @@ export default async function WelcomeLayout({
     redirect("/login");
   }
   
-  // Check if user has any workspaces
-  const userWorkspaces = await prisma.workspace.findMany({
-    where: {
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
-    },
-    select: { id: true },
-    take: 1
-  });
-  
-  const hasWorkspaces = userWorkspaces.length > 0;
+  // Check if user has a valid current workspace (cookie or fallback)
+  const workspaceId = await getWorkspaceId({ id: session.user.id });
+  const hasWorkspaces = !!workspaceId;
   
   return (
     <>

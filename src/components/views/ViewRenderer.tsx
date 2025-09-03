@@ -32,11 +32,14 @@ import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
 import { ViewOrderingSelector } from './selectors/ViewOrderingSelector';
 import { ViewDisplayPropertiesSelector } from './selectors/ViewDisplayPropertiesSelector';
+import { ViewUpdatedAtSelector } from './selectors/ViewUpdatedAtSelector';
 import { StatusSelector } from './selectors/StatusSelector';
 import { PrioritySelector } from './selectors/PrioritySelector';
 import { TypeSelector } from './selectors/TypeSelector';
 import { AssigneeSelector } from './selectors/AssigneeSelector';
 import { LabelsSelector } from './selectors/LabelsSelector';
+import { ActionFiltersSelector, type ActionFilter } from './selectors/ActionFiltersSelector';
+import { useActionFilteredIssues } from '@/hooks/useActionFilteredIssues';
 import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
 import { useProjects } from '@/hooks/queries/useProjects';
@@ -203,7 +206,7 @@ export default function ViewRenderer({
   useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
 
   // Temporary state for filters and display (resets on refresh)
-  const [tempFilters, setTempFilters] = useState<Record<string, string[]>>({});
+  const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
@@ -246,15 +249,30 @@ export default function ViewRenderer({
   const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
 
   // Determine which projects are newly selected (not in original view)
-  const originalProjectIds = useMemo(() => view.projects.map(p => p.id), [view.projects]);
+  const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
   const additionalProjectIds = useMemo(() => {
     return tempProjectIds.filter(id => !originalProjectIds.includes(id));
   }, [tempProjectIds, originalProjectIds]);
 
+  // Check if view has active filters (other than just project filtering)
+  const hasActiveFilters = useMemo(() => {
+    if (!view.filters || typeof view.filters !== 'object') return false;
+    
+    const filters = view.filters as Record<string, any>;
+    return Object.entries(filters).some(([key, value]) => {
+      // Skip project filtering as that's handled separately
+      if (key === 'project') return false;
+      return Array.isArray(value) && value.length > 0;
+    });
+  }, [view.filters]);
+
+  // Only fetch live data if view has NO active filters to avoid overriding server-side filtering
+  const shouldFetchLiveData = !hasActiveFilters;
+  
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
-    workspace.id,
-    tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)
+    shouldFetchLiveData ? workspace.id : '',
+    shouldFetchLiveData ? (tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)) : undefined
   );
 
   // Fetch issues from additional projects if any are selected
@@ -280,8 +298,11 @@ export default function ViewRenderer({
 
   // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // Use live data if available, otherwise fall back to initialIssues
-    const baseIssues = liveIssuesData?.issues || initialIssues;
+    // When view has filters, prioritize server-side filtered initialIssues
+    // When no filters, use live data for real-time updates
+    const baseIssues = hasActiveFilters 
+      ? initialIssues 
+      : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
     
     // Remove duplicates by ID when merging
@@ -291,7 +312,7 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
 
   // Use merged issues for filtering
   const issues = allIssues;
@@ -364,15 +385,33 @@ export default function ViewRenderer({
     return combinedFilters;
   }, [view.filters, tempFilters]);
 
+  // Memoize action filters to prevent reference instability
+  const actionFilters = useMemo(() => {
+    return allFilters.actions as ActionFilter[] || [];
+  }, [allFilters.actions]);
+
+  // Apply action filters first (async filtering)
+  const { 
+    filteredIssues: actionFilteredIssues, 
+    isLoading: isActionFilterLoading 
+  } = useActionFilteredIssues({
+    issues,
+    actionFilters,
+    workspaceId: workspace.id
+  });
+
+  // Create a sorted copy of tempProjectIds for stable comparison and filtering
+  const sortedTempProjectIds = useMemo(() => 
+    [...tempProjectIds].sort(), [tempProjectIds]
+  );
+
   // Apply view filters and search
   const filteredIssues = useMemo(() => {
-    // Merge issues with view-specific positions first
-    let filtered = mergeIssuesWithViewPositions(issues, viewPositionsData?.positions || []);
+    // Start with action-filtered issues instead of all issues
+    let filtered = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
     
     // Apply project filtering if tempProjectIds differs from original view projects
-    const originalProjectIds = view.projects.map(p => p.id).sort();
-    const currentProjectIds = tempProjectIds.sort();
-    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
     
     if (projectSelectionChanged) {
       if (tempProjectIds.length === 0) {
@@ -381,7 +420,7 @@ export default function ViewRenderer({
       } else {
         // Filter to selected projects
         filtered = filtered.filter(issue => {
-          return tempProjectIds.includes(issue.projectId);
+          return sortedTempProjectIds.includes(issue.projectId);
         });
       }
     }
@@ -439,6 +478,56 @@ export default function ViewRenderer({
               return issue.labels.some((label: any) => filterValues.includes(label.id));
             case 'project':
               return filterValues.includes(issue.projectId);
+            case 'updatedAt':
+              // Handle updatedAt filters
+              if (!issue.updatedAt) return false;
+              
+              const issueUpdatedAt = new Date(issue.updatedAt);
+              const today = new Date();
+              
+              return filterValues.some(filterValue => {
+                if (filterValue === 'today') {
+                  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                  return issueUpdatedAt >= startOfDay && issueUpdatedAt < endOfDay;
+                } else if (filterValue === 'yesterday') {
+                  const yesterday = new Date(today);
+                  yesterday.setDate(today.getDate() - 1);
+                  const startOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+                  const endOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1);
+                  return issueUpdatedAt >= startOfYesterday && issueUpdatedAt < endOfYesterday;
+                } else if (filterValue === 'last-3-days') {
+                  const threeDaysAgo = new Date(today);
+                  threeDaysAgo.setDate(today.getDate() - 3);
+                  const startOfThreeDaysAgo = new Date(threeDaysAgo.getFullYear(), threeDaysAgo.getMonth(), threeDaysAgo.getDate());
+                  return issueUpdatedAt >= startOfThreeDaysAgo;
+                } else if (filterValue === 'last-7-days') {
+                  const sevenDaysAgo = new Date(today);
+                  sevenDaysAgo.setDate(today.getDate() - 7);
+                  const startOfSevenDaysAgo = new Date(sevenDaysAgo.getFullYear(), sevenDaysAgo.getMonth(), sevenDaysAgo.getDate());
+                  return issueUpdatedAt >= startOfSevenDaysAgo;
+                } else if (filterValue === 'last-30-days') {
+                  const thirtyDaysAgo = new Date(today);
+                  thirtyDaysAgo.setDate(today.getDate() - 30);
+                  const startOfThirtyDaysAgo = new Date(thirtyDaysAgo.getFullYear(), thirtyDaysAgo.getMonth(), thirtyDaysAgo.getDate());
+                  return issueUpdatedAt >= startOfThirtyDaysAgo;
+                } else if (filterValue.includes(':')) {
+                  // Handle custom date range (format: "YYYY-MM-DD:YYYY-MM-DD")
+                  try {
+                    const [startStr, endStr] = filterValue.split(':');
+                    const startDate = new Date(startStr + 'T00:00:00');
+                    const endDate = new Date(endStr + 'T23:59:59');
+                    
+                    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+                      return issueUpdatedAt >= startDate && issueUpdatedAt <= endDate;
+                    }
+                  } catch (error) {
+                    console.warn('Invalid date range format:', filterValue);
+                  }
+                }
+                return false;
+              });
+
             default:
               return true;
           }
@@ -484,7 +573,7 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [issues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, tempProjectIds, view.projects]);
+  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -646,17 +735,15 @@ export default function ViewRenderer({
 
   // Count issues for filter buttons (must match PageHeader filtering semantics)
   const issueCounts = useMemo(() => {
-    let countingIssues = [...issues];
+    let countingIssues = [...actionFilteredIssues];
 
     // Project selection (same logic as filteredIssues)
-    const originalProjectIds = view.projects.map(p => p.id).sort();
-    const currentProjectIds = tempProjectIds.sort();
-    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(currentProjectIds);
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
     if (projectSelectionChanged) {
-      if (tempProjectIds.length === 0) {
+      if (sortedTempProjectIds.length === 0) {
         countingIssues = [];
       } else {
-        countingIssues = countingIssues.filter(issue => tempProjectIds.includes(issue.projectId));
+        countingIssues = countingIssues.filter(issue => sortedTempProjectIds.includes(issue.projectId));
       }
     }
 
@@ -692,6 +779,7 @@ export default function ViewRenderer({
               return issue.labels.some((label: any) => filterValues.includes(label.id));
             case 'project':
               return filterValues.includes(issue.projectId);
+
             default:
               return true;
           }
@@ -739,7 +827,7 @@ export default function ViewRenderer({
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [issues, tempProjectIds, view.projects, searchQuery, allFilters, viewFiltersState]);
+  }, [actionFilteredIssues, sortedTempProjectIds, originalProjectIds, searchQuery, allFilters, viewFiltersState]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
@@ -1162,6 +1250,39 @@ export default function ViewRenderer({
                   }
                 }}
                 labels={workspaceLabels}
+                workspaceId={workspace.id}
+                onLabelCreated={(newLabel) => {
+                  // Invalidate and refetch workspace labels
+                  queryClient.invalidateQueries({ queryKey: ['workspace-labels', workspace.id] });
+                }}
+              />
+              <ViewUpdatedAtSelector
+                value={allFilters.updatedAt || []}
+                onChange={(updatedAtFilters) => {
+                  const viewUpdatedAt = view.filters?.updatedAt || [];
+                  const isDifferent = JSON.stringify(updatedAtFilters.sort()) !== JSON.stringify(viewUpdatedAt.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, updatedAt: updatedAtFilters }));
+                  } else {
+                    const { updatedAt, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+              />
+              <ActionFiltersSelector
+                value={allFilters.actions || []}
+                onChange={(actionFilters: ActionFilter[]) => {
+                  const viewActions = view.filters?.actions || [];
+                  const isDifferent = JSON.stringify(actionFilters) !== JSON.stringify(viewActions);
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, actions: actionFilters }));
+                  } else {
+                    const { actions, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+                projectIds={tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)}
+                workspaceMembers={workspaceMembers}
               />
             </div>
 

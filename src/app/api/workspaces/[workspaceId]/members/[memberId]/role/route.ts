@@ -66,7 +66,8 @@ export async function PUT(
     const member = await prisma.workspaceMember.findUnique({
       where: { 
         id: memberId,
-        workspaceId 
+        workspaceId,
+        status: true 
       },
       include: {
         user: {

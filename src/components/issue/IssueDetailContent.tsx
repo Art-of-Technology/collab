@@ -50,6 +50,7 @@ import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHis
 import { IssueTabs } from "./sections/IssueTabs";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
+import { UnsavedChangesModal } from "@/components/ui/UnsavedChangesModal";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
@@ -58,6 +59,7 @@ import { IssueLabelSelector } from "@/components/issue/selectors/IssueLabelSelec
 import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
+import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 // Import types
 import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
@@ -105,6 +107,7 @@ export function IssueDetailContent({
   const [descriptionHasChanges, setDescriptionHasChanges] = useState(false);
   const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
   const [labels, setLabels] = useState<any[]>([]);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const { toast } = useToast();
 
   // Session and activity hooks
@@ -611,6 +614,12 @@ export function IssueDetailContent({
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
+        } else if (showUnsavedChangesModal) {
+          // Close the unsaved changes modal if it's open
+          setShowUnsavedChangesModal(false);
+        } else if (descriptionHasChanges) {
+          // Show unsaved changes modal if there are unsaved description changes
+          setShowUnsavedChangesModal(true);
         } else {
           onClose?.();
         }
@@ -619,14 +628,14 @@ export function IssueDetailContent({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription]);
+  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription, showUnsavedChangesModal]);
 
   // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
-          <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#8b949e]" />
+          <LoadingState size="md" className="mx-auto text-[#8b949e]" noPadding={true} />
           <p className="text-[#8b949e] text-sm">Loading issue...</p>
         </div>
       </div>
@@ -1174,6 +1183,27 @@ export function IssueDetailContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unsaved Changes Modal */}
+      <UnsavedChangesModal
+        isOpen={showUnsavedChangesModal}
+        onClose={() => setShowUnsavedChangesModal(false)}
+        onSave={async () => {
+          await handleSaveDescription();
+          setShowUnsavedChangesModal(false);
+          onClose?.();
+        }}
+        onDiscard={() => {
+          setDescription(issue?.description || '');
+          setDescriptionHasChanges(false);
+          setShowUnsavedChangesModal(false);
+          onClose?.();
+        }}
+        title="Unsaved description changes"
+        description="You have unsaved changes in the issue description. Would you like to save them before closing?"
+        saveLabel="Save and close"
+        discardLabel="Discard changes"
+      />
     </div>
   );
 } 

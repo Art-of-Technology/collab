@@ -61,6 +61,7 @@ export async function PATCH(
     // Get workspace membership for permission check
     const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: currentUser.id,
         workspaceId: column.taskBoard.workspaceId,
       },
@@ -158,6 +159,7 @@ export async function DELETE(
     // Get workspace membership for permission check
     const userWorkspaceMembership = await prisma.workspaceMember.findFirst({
       where: {
+        status: true,
         userId: currentUser.id,
         workspaceId: column.taskBoard.workspaceId,
       },

@@ -4,9 +4,10 @@ import { JobStatus } from '@/lib/job-storage';
 import { useTaskGeneration } from '@/context/TaskGenerationContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { LoadingState } from '@/components/issue/sections/activity/components/LoadingState';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Clock, CheckCircle, AlertCircle, Loader2, Eye, X, Zap } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, Eye, X, Zap } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 
@@ -41,7 +42,7 @@ export default function TaskGenerationStatus() {
       case 'PENDING':
         return <Clock className="w-4 h-4 text-yellow-500" />;
       case 'GENERATING_TASKS':
-        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+        return <LoadingState size="sm" className="w-4 h-4 text-blue-500" noPadding={true} />;
       case 'COMPLETED':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'FAILED':

@@ -1,3 +1,4 @@
+export { ViewUpdatedAtSelector } from './ViewUpdatedAtSelector';
 export { StatusSelector } from './StatusSelector';
 export { PrioritySelector } from './PrioritySelector';
 export { TypeSelector } from './TypeSelector';

@@ -15,6 +15,7 @@ export interface RichEditorProps {
   // Additional callbacks for enhanced functionality
   onSelectionUpdate?: (editor: any) => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  onUpdate?: (editor: any) => void;
   additionalExtensions?: any[];
 }
 

@@ -207,7 +207,7 @@ export default function WorkspacesClient({
                         {/* Member Count Badge */}
                         <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-[#58a6ff]/20 text-[#58a6ff] border-0 rounded flex items-center gap-1">
                           <Users className="h-2 w-2" />
-                          {workspace.members.length + 1}
+                          {workspace.members.length}
                         </Badge>
 
                         {/* Creation Date */}
