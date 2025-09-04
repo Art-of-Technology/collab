@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { z } from "zod";
 import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
+import { NotificationService } from "@/lib/notification-service";
 
 // Validation schema for mention requests
 const mentionSchema = z.object({
@@ -43,55 +44,42 @@ export async function POST(req: NextRequest) {
     const { userIds, sourceType, sourceId, content } = validationResult.data;
     const sanitizedContent = sanitizeHtmlToPlainText(content);
     
-    // Create notification promises
-    const notificationPromises = userIds.map(async (userId) => {
-      // Skip mentions of the current user
-      if (userId === currentUser.id) return null;
-      
-      // Create notification for the mentioned user
-      const notificationType = `${sourceType}_mention`;
-      
-      let taskIdForNotification: string | null = null;
-      
-      // If the mention is from a taskComment, find the parent task ID
-      if (sourceType === "taskComment") {
-        const taskComment = await prisma.taskComment.findUnique({
-          where: { id: sourceId },
-          select: { taskId: true },
-        });
-        if (taskComment) {
-          taskIdForNotification = taskComment.taskId;
-        }
-      }
-      
-      return prisma.notification.create({
-        data: {
-          type: notificationType,
-          content: sanitizedContent,
-          userId: userId,
-          senderId: currentUser.id,
-          read: false,
-          // Dynamically set the appropriate ID field based on source type
-          ...(sourceType === "post" && { postId: sourceId }),
-          ...(sourceType === "comment" && { commentId: sourceId }),
-          ...(sourceType === "taskComment" && { 
-            taskCommentId: sourceId,
-            // Also include taskId if we found it
-            ...(taskIdForNotification && { taskId: taskIdForNotification })
-          }), 
-          ...(sourceType === "feature" && { featureRequestId: sourceId }),
-          // Ensure direct task mentions also link taskId
-          ...(sourceType === "task" && { taskId: sourceId }),
-          ...(sourceType === "epic" && { epicId: sourceId }),
-          ...(sourceType === "story" && { storyId: sourceId }),
-          ...(sourceType === "milestone" && { milestoneId: sourceId }),
-        },
+    // Create notifications using the service
+    const recipientIds = userIds.filter((id) => id !== currentUser.id);
+
+    let relationOptions: any = {};
+    if (sourceType === "taskComment") {
+      const taskComment = await prisma.taskComment.findUnique({
+        where: { id: sourceId },
+        select: { taskId: true },
       });
-    });
-    
-    // Wait for all notification operations to complete
-    const results = await Promise.all(notificationPromises);
-    const notificationCount = results.filter(Boolean).length;
+      relationOptions = {
+        taskCommentId: sourceId,
+        ...(taskComment?.taskId ? { taskId: taskComment.taskId } : {}),
+      };
+    } else if (sourceType === "post") {
+      relationOptions = { postId: sourceId };
+    } else if (sourceType === "comment") {
+      relationOptions = { commentId: sourceId };
+    } else if (sourceType === "feature") {
+      relationOptions = { featureRequestId: sourceId };
+    } else if (sourceType === "task") {
+      relationOptions = { taskId: sourceId };
+    } else if (sourceType === "epic") {
+      relationOptions = { epicId: sourceId };
+    } else if (sourceType === "story") {
+      relationOptions = { storyId: sourceId };
+    } else if (sourceType === "milestone") {
+      relationOptions = { milestoneId: sourceId };
+    }
+
+    const notificationCount = await NotificationService.notifyUsers(
+      recipientIds,
+      `${sourceType}_mention`,
+      sanitizedContent,
+      currentUser.id,
+      relationOptions
+    );
     
     // Note: We are not creating a generic 'Mention' record anymore,
     // as notifications serve the primary purpose for mentions across different types.

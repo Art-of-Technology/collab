@@ -122,15 +122,13 @@ export async function POST(
     });
 
     // Create notification for the helper
-    await prisma.notification.create({
-      data: {
-        type: action === "approve" ? "ISSUE_HELP_APPROVED" : "ISSUE_HELP_REJECTED",
-        content: `Your help request for issue "${issue.title}" (${issue.issueKey || issue.id}) has been ${action}d by ${currentUser.name}`,
-        userId: helperId,
-        senderId: currentUser.id
-        // Note: When issueId field is added to Notification model, include: issueId: issue.id
-      }
-    });
+    await NotificationService.notifyUsers(
+      [helperId],
+      action === "approve" ? "ISSUE_HELP_APPROVED" : "ISSUE_HELP_REJECTED",
+      `Your help request for issue "${issue.title}" (${issue.issueKey || issue.id}) has been ${action}d by ${currentUser.name}`,
+      currentUser.id,
+      { issueId: issue.id }
+    );
 
     return NextResponse.json({ 
       message: `Help request ${action}d successfully`,

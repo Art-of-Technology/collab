@@ -10,11 +10,11 @@ export const metadata: Metadata = {
 
 export default function NotificationsPage() {
   return (
-    <div>
+    <div className="h-full">
       <Suspense
         fallback={
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         }
       >

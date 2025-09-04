@@ -125,18 +125,15 @@ export async function POST(
     });
 
     // Create notification for assignee and reporter  
-    const notificationRecipients = [issue.assigneeId, issue.reporterId].filter(id => id && id !== currentUser.id);
-    
+    const notificationRecipients = [issue.assigneeId, issue.reporterId].filter(id => id && id !== currentUser.id) as string[];
     if (notificationRecipients.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationRecipients.map(recipientId => ({
-          type: "ISSUE_HELP_REQUEST",
-          content: `${currentUser.name} requested to help with issue: ${issue.title} (${issue.issueKey || issue.id})`,
-          userId: recipientId!,
-          senderId: currentUser.id
-          // Note: When issueId field is added to Notification model, include: issueId: issue.id
-        }))
-      });
+      await NotificationService.notifyUsers(
+        notificationRecipients,
+        'ISSUE_HELP_REQUEST',
+        `${currentUser.name} requested to help with issue: ${issue.title} (${issue.issueKey || issue.id})`,
+        currentUser.id,
+        { issueId: issue.id }
+      );
     }
 
     return NextResponse.json({ 

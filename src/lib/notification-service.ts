@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { extractMentionUserIds } from "@/utils/mentions";
 import {
   sendPushNotification,
   PushNotificationPayload,
@@ -57,31 +56,31 @@ export interface LeaveRequestNotificationData {
   };
 }
 
-export interface LeaveRequestActionContext {
-  requestId: string;
-  actionById: string;
-  actionType: "SUBMITTED" | "APPROVED" | "REJECTED" | "EDITED" | "CANCELLED";
-  previousStatus?: string;
-  notes?: string;
-}
+// Removed unused LeaveRequestActionContext
 
 export enum NotificationType {
+  ISSUE_MENTION = "ISSUE_MENTION",
+  // Task-centric types (legacy compatibility)
   TASK_CREATED = "TASK_CREATED",
   TASK_STATUS_CHANGED = "TASK_STATUS_CHANGED",
-  TASK_COMMENT_ADDED = "TASK_COMMENT_ADDED",
-  TASK_COMMENT_MENTION = "TASK_COMMENT_MENTION",
   TASK_ASSIGNED = "TASK_ASSIGNED",
+  TASK_COMMENT_ADDED = "TASK_COMMENT_ADDED",
   TASK_UPDATED = "TASK_UPDATED",
-  TASK_PRIORITY_CHANGED = "TASK_PRIORITY_CHANGED",
-  TASK_DUE_DATE_CHANGED = "TASK_DUE_DATE_CHANGED",
   TASK_DELETED = "TASK_DELETED",
-  POST_COMMENT_ADDED = "POST_COMMENT_ADDED",
-  POST_BLOCKER_CREATED = "POST_BLOCKER_CREATED",
-  POST_RESOLVED = "POST_RESOLVED",
+  // Board-level task notifications
   BOARD_TASK_CREATED = "BOARD_TASK_CREATED",
   BOARD_TASK_STATUS_CHANGED = "BOARD_TASK_STATUS_CHANGED",
   BOARD_TASK_COMPLETED = "BOARD_TASK_COMPLETED",
   BOARD_TASK_DELETED = "BOARD_TASK_DELETED",
+  ISSUE_CREATED = "ISSUE_CREATED",
+  ISSUE_UPDATED = "ISSUE_UPDATED",
+  ISSUE_DELETED = "ISSUE_DELETED",
+  PROJECT_ISSUE_CREATED = "PROJECT_ISSUE_CREATED",
+  PROJECT_ISSUE_UPDATED = "PROJECT_ISSUE_UPDATED",
+  PROJECT_ISSUE_DELETED = "PROJECT_ISSUE_DELETED",
+  POST_COMMENT_ADDED = "POST_COMMENT_ADDED",
+  POST_BLOCKER_CREATED = "POST_BLOCKER_CREATED",
+  POST_RESOLVED = "POST_RESOLVED",
   LEAVE_REQUEST_STATUS_CHANGED = "LEAVE_REQUEST_STATUS_CHANGED",
   LEAVE_REQUEST_EDITED = "LEAVE_REQUEST_EDITED",
   LEAVE_REQUEST_MANAGER_ALERT = "LEAVE_REQUEST_MANAGER_ALERT",
@@ -89,6 +88,116 @@ export enum NotificationType {
 }
 
 export class NotificationService {
+  /**
+   * Create notifications for a specific list of users, optionally filtering by preferences.
+   * Returns the number of notifications created. Also sends push notifications when
+   * postId or issueId are provided (used for URL generation).
+   */
+  static async notifyUsers(
+    userIds: string[],
+    type: NotificationType | string,
+    content: string,
+    senderId: string,
+    options: {
+      filterPreferences?: boolean;
+      // Relation fields on Notification model
+      postId?: string;
+      commentId?: string;
+      taskId?: string;
+      taskCommentId?: string;
+      featureRequestId?: string;
+      epicId?: string;
+      storyId?: string;
+      milestoneId?: string;
+      leaveRequestId?: string;
+      // Non-persistent helper fields
+      issueId?: string;
+    } = {}
+  ): Promise<number> {
+    if (!userIds || userIds.length === 0) return 0;
+
+    const {
+      filterPreferences = false,
+      postId,
+      commentId,
+      taskId,
+      taskCommentId,
+      featureRequestId,
+      epicId,
+      storyId,
+      milestoneId,
+      leaveRequestId,
+      issueId,
+    } = options;
+
+    try {
+      // Build base notification rows with allowed relation fields only
+      const baseData = {
+        type: typeof type === 'string' ? type : String(type),
+        content,
+        senderId,
+        read: false,
+        ...(postId ? { postId } : {}),
+        ...(commentId ? { commentId } : {}),
+        ...(taskId ? { taskId } : {}),
+        ...(taskCommentId ? { taskCommentId } : {}),
+        ...(featureRequestId ? { featureRequestId } : {}),
+        ...(epicId ? { epicId } : {}),
+        ...(storyId ? { storyId } : {}),
+        ...(milestoneId ? { milestoneId } : {}),
+        ...(leaveRequestId ? { leaveRequestId } : {}),
+      } as any;
+
+      let recipientIds = [...new Set(userIds)];
+
+      if (filterPreferences) {
+        const filtered: string[] = [];
+        for (const userId of recipientIds) {
+          const preferences = await this.getUserPreferences(userId);
+          // For string types not in enum mapping, shouldNotifyUser defaults to true
+          const shouldNotify = this.shouldNotifyUser(
+            preferences as any,
+            (type as unknown) as NotificationType
+          );
+          if (shouldNotify) filtered.push(userId);
+        }
+        recipientIds = filtered;
+      }
+
+      if (recipientIds.length === 0) return 0;
+
+      const data = recipientIds.map((userId) => ({
+        ...baseData,
+        userId,
+      }));
+
+      const result = await prisma.notification.createMany({ data });
+
+      // Push notifications (best-effort)
+      if (issueId || postId) {
+        const pushPromises = recipientIds.map((userId) =>
+          this.sendPushNotificationForUser(
+            userId,
+            (type as unknown) as NotificationType,
+            content,
+            issueId,
+            postId
+          )
+        );
+        await Promise.allSettled(pushPromises);
+      }
+
+      logger.info("Direct user notifications created", {
+        count: result.count ?? recipientIds.length,
+        type,
+      });
+
+      return result.count ?? recipientIds.length;
+    } catch (error) {
+      logger.error("Failed to notify users", error, { type });
+      return 0;
+    }
+  }
   /**
    * Base method for creating notifications with followers
    * @param followerQuery - Prisma query to get followers
@@ -142,7 +251,7 @@ export class NotificationService {
             notification.userId,
             notificationType,
             notification.content,
-            additionalData.taskId,
+            additionalData.issueId,
             additionalData.postId
           )
         );
@@ -175,14 +284,14 @@ export class NotificationService {
     userId: string,
     notificationType: NotificationType,
     content: string,
-    taskId?: string,
+    issueId?: string,
     postId?: string
   ): Promise<void> {
     try {
       // Build the URL based on notification type
       let url = "/";
-      if (taskId) {
-        url = `/tasks/${taskId}`;
+      if (issueId) {
+        url = `/issues/${issueId}`;
       } else if (postId) {
         url = `/posts/${postId}`;
       }
@@ -216,6 +325,55 @@ export class NotificationService {
       // Don't throw - push notification failure shouldn't break the main flow
     }
   }
+
+  // === ISSUE FOLLOWER METHODS ===
+
+  /**
+   * Add a user as a follower of an issue
+   * @param issueId - Issue ID to follow
+   * @param userId - User ID to add as follower
+   */
+  static async addIssueFollower(issueId: string, userId: string): Promise<void> {
+    try {
+      await prisma.issueFollower.upsert({
+        where: {
+          issueId_userId: {
+            issueId,
+            userId,
+          },
+        },
+        update: {},
+        create: {
+          issueId,
+          userId,
+        },
+      });
+    } catch (error) {
+      logger.error("Failed to add issue follower", error, { issueId, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a user as a follower of an issue
+   * @param issueId - Issue ID to unfollow
+   * @param userId - User ID to remove as follower
+   */
+  static async removeIssueFollower(issueId: string, userId: string): Promise<void> {
+    try {
+      await prisma.issueFollower.deleteMany({
+        where: {
+          issueId,
+          userId,
+        },
+      });
+    } catch (error) {
+      logger.error("Failed to remove issue follower", error, { issueId, userId });
+      throw error;
+    }
+  }
+
+  // Removed unused: getIssueFollowers, isUserFollowingIssue, autoFollowIssue
 
   /**
    * Get user notification preferences or return defaults
@@ -291,24 +449,32 @@ export class NotificationService {
     preferences: any,
     notificationType: NotificationType
   ): boolean {
-    const typeToPreferenceMap = {
+    const typeToPreferenceMap: Partial<Record<NotificationType, keyof typeof preferences>> = {
+      // Mentions
+      [NotificationType.ISSUE_MENTION]: "taskMentioned",
+      // Task-centric mappings
       [NotificationType.TASK_CREATED]: "taskCreated",
       [NotificationType.TASK_STATUS_CHANGED]: "taskStatusChanged",
-      [NotificationType.TASK_COMMENT_ADDED]: "taskCommentAdded",
-      [NotificationType.TASK_COMMENT_MENTION]: "taskMentioned",
       [NotificationType.TASK_ASSIGNED]: "taskAssigned",
+      [NotificationType.TASK_COMMENT_ADDED]: "taskCommentAdded",
       [NotificationType.TASK_UPDATED]: "taskUpdated",
-      [NotificationType.TASK_PRIORITY_CHANGED]: "taskPriorityChanged",
-      [NotificationType.TASK_DUE_DATE_CHANGED]: "taskDueDateChanged",
       [NotificationType.TASK_DELETED]: "taskDeleted",
-      [NotificationType.POST_COMMENT_ADDED]: "postCommentAdded",
-      [NotificationType.POST_BLOCKER_CREATED]: "postBlockerCreated",
-      [NotificationType.POST_RESOLVED]: "postResolved",
+      // Board/task at board-level
       [NotificationType.BOARD_TASK_CREATED]: "boardTaskCreated",
       [NotificationType.BOARD_TASK_STATUS_CHANGED]: "boardTaskStatusChanged",
       [NotificationType.BOARD_TASK_COMPLETED]: "boardTaskCompleted",
       [NotificationType.BOARD_TASK_DELETED]: "boardTaskDeleted",
-
+      // Issue notifications mapped to legacy task preferences for now
+      [NotificationType.ISSUE_CREATED]: "taskCreated",
+      [NotificationType.ISSUE_UPDATED]: "taskUpdated",
+      [NotificationType.ISSUE_DELETED]: "taskDeleted",
+      // Project-level issue notifications map to board-level legacy prefs
+      [NotificationType.PROJECT_ISSUE_CREATED]: "boardTaskCreated",
+      [NotificationType.PROJECT_ISSUE_UPDATED]: "boardTaskStatusChanged",
+      [NotificationType.PROJECT_ISSUE_DELETED]: "boardTaskDeleted",
+      [NotificationType.POST_COMMENT_ADDED]: "postCommentAdded",
+      [NotificationType.POST_BLOCKER_CREATED]: "postBlockerCreated",
+      [NotificationType.POST_RESOLVED]: "postResolved",
       // Leave request notification mappings
       [NotificationType.LEAVE_REQUEST_STATUS_CHANGED]:
         "leaveRequestStatusChanged",
@@ -411,27 +577,8 @@ export class NotificationService {
   }
 
   /**
-   * Get all followers of a task
-   * @param taskId - Task ID to get followers for
-   * @returns Array of user IDs following the task
+   * Removed unused: getTaskFollowers
    */
-  static async getTaskFollowers(taskId: string): Promise<string[]> {
-    try {
-      const followers = await prisma.taskFollower.findMany({
-        where: {
-          taskId,
-        },
-        select: {
-          userId: true,
-        },
-      });
-
-      return followers.map((f) => f.userId);
-    } catch (error) {
-      logger.error("Failed to get task followers", error, { taskId });
-      throw error;
-    }
-  }
 
   /**
    * Check if a user is following a task
@@ -563,23 +710,7 @@ export class NotificationService {
     }
   }
 
-  static async getPostFollowers(postId: string): Promise<string[]> {
-    try {
-      const followers = await prisma.postFollower.findMany({
-        where: {
-          postId,
-        },
-        select: {
-          userId: true,
-        },
-      });
-
-      return followers.map((f) => f.userId);
-    } catch (error) {
-      logger.error("Failed to get post followers", error, { postId });
-      throw error;
-    }
-  }
+  // Removed unused: getPostFollowers
 
   static async isUserFollowingPost(
     postId: string,
@@ -645,11 +776,10 @@ export class NotificationService {
 
     try {
       const safeContent = sanitizeHtmlToPlainText(content);
-      // Create mention notifications
       const notifications = mentionedUserIds
-        .filter((userId) => userId !== senderId) // Don't notify the sender
+        .filter((userId) => userId !== senderId)
         .map((userId) => ({
-          type: NotificationType.TASK_COMMENT_MENTION.toString(),
+          type: NotificationType.ISSUE_MENTION.toString(),
           content: `mentioned you in a task comment: "${
             safeContent.length > 100 ? safeContent.substring(0, 97) + "..." : safeContent
           }"`,
@@ -661,39 +791,30 @@ export class NotificationService {
         }));
 
       if (notifications.length > 0) {
-        await prisma.notification.createMany({
-          data: notifications,
-        });
+        await prisma.notification.createMany({ data: notifications });
         logger.info("Task comment mention notifications created", {
           count: notifications.length,
           taskId,
           taskCommentId,
         });
 
-        // Send push notifications for mentions
-        const pushPromises = notifications.map((notification) =>
+        const pushPromises = notifications.map((n) =>
           this.sendPushNotificationForUser(
-            notification.userId,
-            NotificationType.TASK_COMMENT_MENTION,
-            notification.content,
-            taskId
+            n.userId,
+            NotificationType.ISSUE_MENTION,
+            n.content
           )
         );
         await Promise.allSettled(pushPromises);
       }
 
-      // Auto-follow mentioned users to the task
       await this.autoFollowTask(taskId, mentionedUserIds);
     } catch (error) {
-      logger.error(
-        "Failed to create task comment mention notifications",
-        error,
-        {
-          taskId,
-          taskCommentId,
-          mentionedUserCount: mentionedUserIds.length,
-        }
-      );
+      logger.error("Failed to create task comment mention notifications", error, {
+        taskId,
+        taskCommentId,
+        mentionedUserCount: mentionedUserIds.length,
+      });
       throw error;
     }
   }
@@ -740,117 +861,7 @@ export class NotificationService {
       additionalData
     );
   }
-
-  static async addBoardFollower(
-    boardId: string,
-    userId: string
-  ): Promise<void> {
-    try {
-      await prisma.boardFollower.upsert({
-        where: {
-          boardId_userId: {
-            boardId,
-            userId,
-          },
-        },
-        update: {}, // No updates needed if already exists
-        create: {
-          boardId,
-          userId,
-        },
-      });
-    } catch (error) {
-      logger.error("Failed to add board follower", error, { boardId, userId });
-      throw error;
-    }
-  }
-
-  static async removeBoardFollower(
-    boardId: string,
-    userId: string
-  ): Promise<void> {
-    try {
-      await prisma.boardFollower.deleteMany({
-        where: {
-          boardId,
-          userId,
-        },
-      });
-    } catch (error) {
-      logger.error("Failed to remove board follower", error, {
-        boardId,
-        userId,
-      });
-      throw error;
-    }
-  }
-
-  static async getBoardFollowers(boardId: string): Promise<string[]> {
-    try {
-      const followers = await prisma.boardFollower.findMany({
-        where: {
-          boardId,
-        },
-        select: {
-          userId: true,
-        },
-      });
-
-      return followers.map((f) => f.userId);
-    } catch (error) {
-      logger.error("Failed to get board followers", error, { boardId });
-      throw error;
-    }
-  }
-
-  static async isUserFollowingBoard(
-    boardId: string,
-    userId: string
-  ): Promise<boolean> {
-    try {
-      const follower = await prisma.boardFollower.findUnique({
-        where: {
-          boardId_userId: {
-            boardId,
-            userId,
-          },
-        },
-      });
-
-      return !!follower;
-    } catch (error) {
-      logger.error("Failed to check if user is following board", error, {
-        boardId,
-        userId,
-      });
-      return false;
-    }
-  }
-
-  // Auto-follow board for certain users
-  static async autoFollowBoard(
-    boardId: string,
-    userIds: string[]
-  ): Promise<void> {
-    try {
-      const followData = userIds.map((userId) => ({
-        boardId,
-        userId,
-      }));
-
-      // Use createMany with skipDuplicates to avoid conflicts
-      await prisma.boardFollower.createMany({
-        data: followData,
-        skipDuplicates: true,
-      });
-    } catch (error) {
-      logger.error("Failed to auto-follow board", error, {
-        boardId,
-        userCount: userIds.length,
-      });
-      throw error;
-    }
-  }
+  // Removed unused board follower helpers: add/remove/get/isFollowing/autoFollow
 
   // ====== LEAVE REQUEST NOTIFICATION METHODS ======
 

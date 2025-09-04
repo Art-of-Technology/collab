@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
 import BoardItemActivityService from "@/lib/board-item-activity-service";
 import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
+import { NotificationService } from "@/lib/notification-service";
 
 export async function POST(
   req: Request,
@@ -116,15 +117,13 @@ export async function POST(
     const notificationRecipients = [task.assigneeId, task.reporterId].filter(id => id && id !== session.user.id);
     
     if (notificationRecipients.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationRecipients.map(recipientId => ({
-          type: "TASK_HELP_REQUEST",
-          content: sanitizeHtmlToPlainText(`${session.user.name} requested to help with task: ${task.title}`),
-          userId: recipientId!,
-          senderId: session.user.id,
-          taskId: taskId
-        }))
-      });
+      await NotificationService.notifyUsers(
+        notificationRecipients as string[],
+        'TASK_HELP_REQUEST',
+        sanitizeHtmlToPlainText(`${session.user.name} requested to help with task: ${task.title}`),
+        session.user.id,
+        { taskId }
+      );
     }
 
     return NextResponse.json({ 

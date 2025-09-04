@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authConfig } from "@/lib/auth";
 import BoardItemActivityService from "@/lib/board-item-activity-service";
 import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
+import { NotificationService } from "@/lib/notification-service";
 
 export async function POST(
   req: Request,
@@ -104,19 +105,17 @@ export async function POST(
     );
 
     // Create notification for the helper
-    await prisma.notification.create({
-      data: {
-        type: action === 'approve' ? "TASK_HELP_APPROVED" : "TASK_HELP_REJECTED",
-        content: sanitizeHtmlToPlainText(
-          action === 'approve' 
-            ? `Your help request for task "${task.title}" has been approved`
-            : `Your help request for task "${task.title}" has been rejected`
-        ),
-        userId: helperId,
-        senderId: session.user.id,
-        taskId: taskId
-      }
-    });
+    await NotificationService.notifyUsers(
+      [helperId],
+      action === 'approve' ? 'TASK_HELP_APPROVED' : 'TASK_HELP_REJECTED',
+      sanitizeHtmlToPlainText(
+        action === 'approve'
+          ? `Your help request for task "${task.title}" has been approved`
+          : `Your help request for task "${task.title}" has been rejected`
+      ),
+      session.user.id,
+      { taskId }
+    );
 
     return NextResponse.json({ 
       message: `Help request ${action}d successfully`,

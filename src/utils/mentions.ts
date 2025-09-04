@@ -38,26 +38,25 @@ export function extractMentionUserIds(text: string): string[] {
 
   const userIds = new Set<string>(); // Use a Set to avoid duplicates
 
-  // Regex to find mention spans in HTML: <span ... data-id="userId" ...>
-  const htmlMentionRegex = /<span[^>]*data-mention=(?:"true"|'true')[^>]*data-id=(?:"([^"]*)"|'([^']*)')[^>]*>/gi;
-  let htmlMatch;
-  
-  while ((htmlMatch = htmlMentionRegex.exec(text)) !== null) {
-    const userId = htmlMatch[1] || htmlMatch[2]; // Get ID from double or single quotes
-    if (userId) {
-      userIds.add(userId);
-    }
+  // Be flexible: detect mention spans by data-type="mention", data-mention="true", or class contains "mention"
+  const spanRegex = /<span[^>]*>/gi;
+  let spanMatch: RegExpExecArray | null;
+  while ((spanMatch = spanRegex.exec(text)) !== null) {
+    const spanTag = spanMatch[0];
+    const looksLikeMention = /data-type=(?:"mention"|'mention')|data-mention=(?:"true"|'true')|class=(?:"[^"]*\bmention\b[^"]*"|'[^']*\bmention\b[^']*')/i.test(spanTag);
+    if (!looksLikeMention) continue;
+
+    // Prefer data-user-id, fallback to data-id
+    const idMatch = /data-user-id=(?:"([^"]+)"|'([^']+)')/i.exec(spanTag) || /data-id=(?:"([^"]+)"|'([^']+)')/i.exec(spanTag);
+    const userId = (idMatch && (idMatch[1] || idMatch[2])) || null;
+    if (userId) userIds.add(userId);
   }
 
   // Also check for the raw format @[username](userId) as a fallback
-  // This might be useful if HTML parsing fails or raw text is sometimes used
   const rawMentionRegex = /@\[[^\]]+\]\(([^)]+)\)/g;
-  let rawMatch;
-  
+  let rawMatch: RegExpExecArray | null;
   while ((rawMatch = rawMentionRegex.exec(text)) !== null) {
-    if (rawMatch[1]) {
-      userIds.add(rawMatch[1]); // Add ID from raw format
-    }
+    if (rawMatch[1]) userIds.add(rawMatch[1]);
   }
   
   return Array.from(userIds); // Convert Set back to Array

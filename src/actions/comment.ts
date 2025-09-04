@@ -221,24 +221,18 @@ export async function createComment(data: {
   const previewBase = sanitizeHtmlToPlainText(message);
   if (mentionedUserIds.length > 0) {
     try {
-      // Create mention notifications
-      await prisma.notification.createMany({
-        data: mentionedUserIds.map(userId => ({
-          type: "comment_mention",
-          content: `mentioned you in a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
-          userId: userId,
-          senderId: user.id,
-          read: false,
-          postId: postId,
-          commentId: comment.id,
-        }))
-      });
+      await NotificationService.notifyUsers(
+        mentionedUserIds.filter((id) => id !== user.id),
+        'comment_mention',
+        `mentioned you in a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
+        user.id,
+        { postId, commentId: comment.id }
+      );
 
       // Auto-follow mentioned users to the post
       await NotificationService.autoFollowPost(postId, mentionedUserIds);
     } catch (error) {
       console.error("Failed to create mention notifications or auto-follow:", error);
-      // Don't fail the comment creation if mentions fail
     }
   }
 
@@ -248,7 +242,7 @@ export async function createComment(data: {
       postId: postId,
       senderId: user.id,
       type: NotificationType.POST_COMMENT_ADDED,
-      content: `added a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
+      content: `@[${user.name}](${user.id}) added a comment: "${previewBase.length > 100 ? previewBase.substring(0, 97) + '...' : previewBase}"`,
       excludeUserIds: mentionedUserIds, // Exclude mentioned users as they already got mention notifications
     });
   } catch (error) {

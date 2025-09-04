@@ -39,13 +39,13 @@ const filterCategories: FilterCategory[] = [
     icon: <AtSign className="h-4 w-4" />,
   },
   {
-    id: "task-related",
-    label: "Task notifications",
+    id: "issue-related",
+    label: "Issue notifications",
     icon: <CheckSquare className="h-4 w-4" />,
   },
   {
-    id: "board-related",
-    label: "Board notifications", 
+    id: "project-related",
+    label: "Project notifications", 
     icon: <Briefcase className="h-4 w-4" />,
   },
 ];
@@ -63,7 +63,7 @@ export default function NotificationsSidebar({
   return (
     <div className="h-full overflow-y-auto">
       {/* Main Navigation */}
-      <div className="p-4 space-y-1">
+      <div className="p-3 space-y-0.5">
         {filterCategories.map((category) => {
           const isSelected = selectedCategory === category.id;
           return (
@@ -72,14 +72,14 @@ export default function NotificationsSidebar({
               variant={"ghost"}
               size="sm"
               className={cn(
-                "w-full justify-start gap-3 h-8 px-3 text-sm font-normal",
+                "w-full justify-start gap-2.5 h-8 px-2.5 text-xs md:text-sm font-normal",
                 !isSelected && "hover:text-primary hover:bg-transparent",
                 isSelected && "text-primary hover:text-primary hover:bg-transparent"
               )}
               onClick={() => onCategoryChange(category.id)}
             >
               {category.icon}
-              <span className="flex-1 text-left">{category.label}</span>
+              <span className="flex-1 text-left leading-none">{category.label}</span>
               {category.count && (
                 <Badge variant="outline" className="h-4 px-1.5 text-xs ml-auto">
                   {category.count}
@@ -137,10 +137,10 @@ export default function NotificationsSidebar({
 
       
       {/* Manage notifications */}
-      <div className="p-4 border-t border-border/50">
+      <div className="p-3 border-t border-border/50">
         <Link
           href={`/${currentWorkspace?.id}/profile`}
-          className="flex flex-row gap-2 w-full text-center h-7 px-3 text-sm font-normal text-muted-foreground"
+          className="flex flex-row gap-2 w-full text-center h-8 px-2.5 text-xs md:text-sm font-normal text-muted-foreground"
         >
           <Settings className="h-4 w-4 relative top-0.5" />
           Manage notifications

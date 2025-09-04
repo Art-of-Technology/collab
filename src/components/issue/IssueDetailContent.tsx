@@ -24,13 +24,15 @@ import {
   ArrowLeft,
   Play,
   Pause,
-  StopCircle
+  StopCircle,
+  Bell,
+  BellOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useDeleteIssue } from "@/hooks/queries/useIssues";
-import PageHeader from "@/components/layout/PageHeader";
+import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { useSession } from "next-auth/react";
 import { useActivity } from "@/context/ActivityContext";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
@@ -120,6 +122,10 @@ export function IssueDetailContent({
   const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
   const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
   const [showHelperModal, setShowHelperModal] = useState(false);
+
+  // Follow state
+  const [isFollowingIssue, setIsFollowingIssue] = useState(false);
+  const [isTogglingIssueFollow, setIsTogglingIssueFollow] = useState(false);
 
   // Time tracking utilities
   const canControlTimer = useMemo(() => {
@@ -311,6 +317,44 @@ export function IssueDetailContent({
       fetchTotalPlayTime();
     }
   }, [issue?.id, fetchTotalPlayTime, onRefresh]);
+
+  // Fetch follow status for this issue
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!issue?.id) return;
+      try {
+        const res = await fetch(`/api/issues/${issue.id}/follow`, { cache: 'no-store' });
+        if (!active) return;
+        if (res.ok) {
+          const data = await res.json();
+          if (active) setIsFollowingIssue(!!data.isFollowing);
+        }
+      } catch (e) {
+        // Ignore fetch errors
+      }
+    })();
+    return () => { active = false; };
+  }, [issue?.id]);
+
+  const toggleIssueFollow = useCallback(async () => {
+    if (!issue?.id || isTogglingIssueFollow) return;
+    setIsTogglingIssueFollow(true);
+    try {
+      const method = isFollowingIssue ? 'DELETE' : 'POST';
+      const res = await fetch(`/api/issues/${issue.id}/follow`, { method });
+      if (res.ok) {
+        setIsFollowingIssue(prev => !prev);
+      } else {
+        const err = await res.json().catch(() => ({} as any));
+        toast({ title: 'Error', description: err.error || 'Failed to toggle follow', variant: 'destructive' });
+      }
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to toggle follow', variant: 'destructive' });
+    } finally {
+      setIsTogglingIssueFollow(false);
+    }
+  }, [issue?.id, isFollowingIssue, isTogglingIssueFollow, toast]);
 
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
@@ -750,6 +794,31 @@ export function IssueDetailContent({
                 )}
               </div>
             )}
+
+            {/* Follow Issue Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleIssueFollow}
+              className={cn(
+                pageHeaderButtonStyles.ghost,
+                isFollowingIssue ? "text-red-400 hover:bg-red-500/10" : "text-green-400 hover:bg-green-500/10"
+              )}
+              disabled={isTogglingIssueFollow}
+              aria-pressed={isFollowingIssue}
+              aria-label={isFollowingIssue ? 'Unfollow' : 'Follow'}
+            >
+              {isTogglingIssueFollow ? (
+                <Loader2 className="h-3 w-3 animate-spin md:mr-1" />
+              ) : isFollowingIssue ? (
+                <BellOff className="h-3 w-3 md:mr-1" />
+              ) : (
+                <Bell className="h-3 w-3 md:mr-1" />
+              )}
+              <span data-text className="hidden md:inline ml-1">
+                {isFollowingIssue ? 'Unfollow' : 'Follow'}
+              </span>
+            </Button>
 
             <Button
               variant="ghost"

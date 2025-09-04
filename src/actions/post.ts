@@ -6,6 +6,19 @@ import { getServerSession } from 'next-auth';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
 
+
+/**
+ * Iteratively strips all HTML tags from a string, to ensure complete removal
+ */
+function stripHtmlTags(input: string): string {
+  let previous: string;
+  do {
+    previous = input;
+    input = input.replace(/<[^>]*>?/g, '');
+  } while (input !== previous);
+  return input;
+}
+
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED';
 type PostPriority = 'normal' | 'high' | 'critical';
 
@@ -376,20 +389,16 @@ export async function createPost(data: {
 
   if (mentionedUserIds.length > 0) {
     try {
-      // Create mention notifications
-      await prisma.notification.createMany({
-        data: mentionedUserIds.map(userId => ({
-          type: "post_mention",
-          content: `mentioned you in a post: "${message.length > 100 ? message.substring(0, 97) + '...' : message}"`,
-          userId: userId,
-          senderId: user.id,
-          read: false,
-          postId: post.id,
-        }))
-      });
+      const notificationContent = `@[${user.name}](${user.id}) mentioned you in a post: ${stripHtmlTags(message)}`;
+      await NotificationService.notifyUsers(
+        mentionedUserIds.filter((id) => id !== user.id),
+        'post_mention',
+        notificationContent,
+        user.id,
+        { postId: post.id }
+      );
 
-
-      if(post.type === 'BLOCKER') {
+      if (post.type === 'BLOCKER') {
         await NotificationService.notifyPostFollowers({
           postId: post.id,
           senderId: user.id,
@@ -400,7 +409,6 @@ export async function createPost(data: {
       }
     } catch (error) {
       console.error("Failed to create mention notifications or auto-follow:", error);
-      // Don't fail the post creation if mentions fail
     }
   }
   

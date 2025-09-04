@@ -4,6 +4,20 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
+import { extractMentionUserIds } from "@/utils/mentions";
+import { NotificationService, NotificationType } from "@/lib/notification-service";
+// Reuse a compact include set similar to the detail route
+const LIST_INCLUDE = {
+  project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true } },
+  assignee: { select: { id: true, name: true, email: true, image: true } },
+  reporter: { select: { id: true, name: true, email: true, image: true } },
+  labels: { select: { id: true, name: true, color: true } },
+  parent: { select: { id: true, title: true, issueKey: true, type: true } },
+  children: { select: { id: true, title: true, issueKey: true, type: true, status: true } },
+  column: { select: { id: true, name: true, color: true, order: true } },
+  projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
+  _count: { select: { children: true, comments: true } }
+} as const;
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
@@ -49,84 +63,8 @@ export async function GET(request: NextRequest) {
 
     const issues = await prisma.issue.findMany({
       where: whereClause,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            issuePrefix: true,
-            description: true
-          }
-        },
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true
-          }
-        },
-        reporter: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true
-          }
-        },
-        labels: {
-          select: {
-            id: true,
-            name: true,
-            color: true
-          }
-        },
-        parent: {
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            type: true
-          }
-        },
-        children: {
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            type: true,
-            status: true
-          }
-        },
-        column: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            order: true
-          }
-        },
-        projectStatus: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            color: true,
-            order: true,
-            isDefault: true
-          }
-        },
-        _count: {
-          select: {
-            children: true,
-            comments: true
-          }
-        }
-      },
-      orderBy: {
-        updatedAt: 'desc'
-      }
+      include: LIST_INCLUDE,
+      orderBy: { updatedAt: 'desc' }
     });
 
     return NextResponse.json({ issues }, { status: 200 });
@@ -331,6 +269,82 @@ export async function POST(request: NextRequest) {
       statusId: created.statusId ?? undefined,
       statusValue: created.statusValue ?? undefined,
     });
+
+    // Minimal notifications for followers, assignee and reporter, and board/project followers
+    try {
+      const recipientIds = new Set<string>();
+
+      // Issue followers
+      const followers = await prisma.issueFollower.findMany({
+        where: { issueId: created.id },
+        select: { userId: true }
+      });
+      followers.forEach(f => recipientIds.add(f.userId));
+
+      // Assignee and reporter
+      if (created.assigneeId && created.assigneeId !== session.user.id) recipientIds.add(created.assigneeId);
+      if (created.reporterId && created.reporterId !== session.user.id) recipientIds.add(created.reporterId);
+
+      // Project followers
+      const projectFollowerList = await prisma.projectFollower.findMany({
+        where: { projectId: created.projectId },
+        select: { userId: true }
+      });
+      projectFollowerList.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
+
+      const recipients = Array.from(recipientIds).filter(id => id !== session.user.id);
+      if (recipients.length > 0) {
+        const pfSet = new Set(projectFollowerList.map(pf => pf.userId));
+        const projectType = NotificationType.PROJECT_ISSUE_CREATED;
+        const issueType = NotificationType.ISSUE_CREATED;
+        const content = `@[${session.user.name}](${session.user.id}) created an issue #[${created.issueKey}](${created.id})`;
+
+        // Send project-level notifications to project followers
+        const projectFollowerRecipients = recipients.filter((id) => pfSet.has(id));
+        if (projectFollowerRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            projectFollowerRecipients,
+            projectType,
+            content,
+            session.user.id,
+            { issueId: created.id }
+          );
+        }
+
+        // Send standard issue notifications to the rest
+        const standardRecipients = recipients.filter((id) => !pfSet.has(id));
+        if (standardRecipients.length > 0) {
+          await NotificationService.notifyUsers(
+            standardRecipients,
+            issueType,
+            content,
+            session.user.id,
+            { issueId: created.id }
+          );
+        }
+      }
+    } catch (notificationError) {
+      console.warn('[ISSUES_POST_NOTIFY]', notificationError);
+    }
+
+    // Mentions in description (notify tagged users)
+    try {
+      if (description && typeof description === 'string') {
+        const mentionedUserIds = extractMentionUserIds(description);
+        const recipients = mentionedUserIds.filter((id) => id !== session.user.id);
+        if (recipients.length > 0) {
+          await NotificationService.notifyUsers(
+            recipients,
+            NotificationType.ISSUE_MENTION,
+            `@[${session.user.name}](${session.user.id}) mentioned you in an issue #[${created.issueKey}](${created.id})`,
+            session.user.id,
+            { issueId: created.id }
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[ISSUES_POST_MENTIONS]', e);
+    }
 
     return NextResponse.json({ issue: created }, { status: 201 });
   } catch (error) {

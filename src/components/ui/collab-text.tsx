@@ -45,6 +45,14 @@ export function CollabText({
       '<span class="mention"><span class="mention-symbol">@</span>$1</span>'
     )
     
+    // Convert #[issueKey](issueId) to styled span (avoid href to prevent wrong routing context)
+    formatted = formatted.replace(
+      /#\[([^\]]+)\]\(([^)]+)\)/g,
+      (_, key, id) => {
+        return `<span class="mention mention-link" data-issue-id="${id}"><span class="mention-symbol">#</span>${key}</span>`
+      }
+    )
+    
     // Convert newlines to <br> tags
     formatted = formatted.replace(/\n/g, '<br />')
     
