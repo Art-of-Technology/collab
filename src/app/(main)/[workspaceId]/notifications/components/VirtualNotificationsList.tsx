@@ -63,12 +63,10 @@ export default function VirtualNotificationsList({
             groupKey = date.toLocaleDateString();
           }
           break;
-          
         case "user":
           groupKey = notification.sender?.name || "System";
           break;
-          
-        case "project": {
+        case "project": 
           const t = notification.type?.toLowerCase() || "";
           if (notification.issue?.project?.name) {
             groupKey = notification.issue.project.name;
