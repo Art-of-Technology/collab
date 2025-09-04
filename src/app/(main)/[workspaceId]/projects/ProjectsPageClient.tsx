@@ -26,11 +26,7 @@ import { cn } from '@/lib/utils';
 import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
 import { format } from 'date-fns';
 
-interface ProjectsPageClientProps {
-  workspaceId: string;
-}
-
-export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientProps) {
+export default function ProjectsPageClient() {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,12 +34,12 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: projects = [], isLoading } = useProjects({
-    workspaceId,
+    workspaceId: currentWorkspace?.id,
     includeStats: true
   });
 
   const { data: views = [] } = useViews({
-    workspaceId,
+    workspaceId: currentWorkspace?.id,
     includeStats: true,
   });
 
@@ -466,10 +462,9 @@ export default function ProjectsPageClient({ workspaceId }: ProjectsPageClientPr
         <CreateProjectModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
-          workspaceId={workspaceId}
+          workspaceId={currentWorkspace?.id || ""}
           onProjectCreated={(project) => {
             console.log("Project created:", project);
-            // The useCreateProject hook will automatically invalidate queries
           }}
         />
       )}
