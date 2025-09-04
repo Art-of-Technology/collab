@@ -77,9 +77,6 @@ export default function VirtualNotificationsList({
           } else {
             groupKey = "General";
           }
-          break;
-        }
-          break;
           
         default:
           groupKey = "All";
