@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
 import { SlashCommandsExtension, SubIssueCreationExtension, SaveDiscardExtension, AIImproveExtension } from './extensions';
@@ -18,6 +18,12 @@ import {
 import type { SlashCommand } from './extensions/slash-commands-extension';
 import type { RichEditorRef } from './types';
 import { handleSlashCommandUpdate } from '@/utils/slash-command-utils';
+import { HocuspocusManager } from '@/lib/collaboration/provider';
+import type { HocuspocusConfig } from '@/lib/collaboration/types';
+import { createCollaborationUser } from '@/lib/collaboration/utils';
+import { useSession } from 'next-auth/react';
+import { useCurrentUser } from '@/hooks/queries/useUser';
+import { useWorkspace } from '@/context/WorkspaceContext';
 
 interface IssueRichEditorProps {
   value: string;
@@ -26,6 +32,7 @@ interface IssueRichEditorProps {
   className?: string;
   minHeight?: string;
   maxHeight?: string;
+  collabDocumentId?: string;
   
   // Feature flags
   enableSlashCommands?: boolean;
@@ -125,10 +132,16 @@ export function IssueRichEditor({
   onContentChange,
   originalContent,
   onKeyDown,
+  collabDocumentId,
 }: IssueRichEditorProps) {
   const editorRef = useRef<RichEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+  const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
+  const [collabReady, setCollabReady] = useState(0);
+  const { data: session } = useSession();
+  const { data: currentUser } = useCurrentUser();
+  const collaborationUser = useMemo(() => createCollaborationUser(session, currentUser), [session, currentUser]);
+  const { currentWorkspace } = useWorkspace();
   // Slash commands state
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
@@ -453,7 +466,32 @@ export function IssueRichEditor({
       editor.view.dom.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
       editor.view.dom.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
     };
-  }, [editorRef.current]);
+  }, [collabReady]);
+
+  // Initialize collaboration (Hocuspocus) when document id is provided
+  useEffect(() => {
+    if (!collabDocumentId) return;
+
+    const initializeCollaboration = async () => {
+      if (hocuspocusManagerRef.current) return;
+
+      const config: HocuspocusConfig = { documentId: collabDocumentId || '' };
+      const manager = new HocuspocusManager(config);
+      hocuspocusManagerRef.current = manager;
+      try {
+        await manager.initialize();
+        setCollabReady((v) => v + 1);
+      } catch (e) {
+        console.error('Failed to initialize collaboration:', e);
+      }
+    };
+
+    initializeCollaboration();
+    return () => {
+      hocuspocusManagerRef.current?.destroy();
+      hocuspocusManagerRef.current = null;
+    };
+  }, [collabDocumentId]);
 
   // Build extensions array
   const additionalExtensions = [];
@@ -498,9 +536,20 @@ export function IssueRichEditor({
     );
   }
 
+  // Add collaboration extensions when ready
+  if (collabDocumentId && hocuspocusManagerRef.current) {
+    try {
+      const collabExts = hocuspocusManagerRef.current.getCollaborationExtensions(collaborationUser);
+      additionalExtensions.push(...collabExts);
+    } catch (err) {
+      // noop: manager may not be ready yet
+    }
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <RichEditor
+        key={collabDocumentId ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
         ref={editorRef}
         value={value}
         onChange={onChange}

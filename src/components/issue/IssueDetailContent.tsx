@@ -356,6 +356,13 @@ export function IssueDetailContent({
     }
   }, [issue?.id, isFollowingIssue, isTogglingIssueFollow, toast]);
 
+  // Build collaboration document id using workspace slug and issue key
+  const collabDocumentId = issue?.issueKey && workspaceId
+    ? `${workspaceId}.${issue.issueKey}.description`
+    : undefined;
+
+  console.log('collabDocumentId', collabDocumentId);
+
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
     if (!issue) return;
@@ -700,6 +707,8 @@ export function IssueDetailContent({
       </div>
     );
   }
+
+  
 
   return (
     <div className={cn(
@@ -1092,6 +1101,7 @@ export function IssueDetailContent({
                   setDescription(issue?.description || '');
                   setDescriptionHasChanges(false);
                 }}
+                collabDocumentId={collabDocumentId}
                 minHeight="400px"
                 maxHeight="none"
               />
