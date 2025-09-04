@@ -198,8 +198,14 @@ export default function ListViewRenderer({
       
       switch (displaySettings.grouping) {
         case 'status':
-          groupKey = normalizeStatus(issue.status || 'Todo');
-          groupName = groupKey;
+          // Use projectStatus if available, otherwise fallback to legacy fields
+          if (issue.projectStatus?.name) {
+            groupKey = issue.projectStatus.name;
+            groupName = issue.projectStatus.displayName || issue.projectStatus.name;
+          } else {
+            groupKey = normalizeStatus(issue.statusValue || issue.status || 'Todo');
+            groupName = groupKey;
+          }
           break;
         case 'priority':
           groupKey = issue.priority || 'MEDIUM';

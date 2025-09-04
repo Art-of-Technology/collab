@@ -429,17 +429,21 @@ export default function ViewRenderer({
     switch (issueFilterType) {
       case 'active':
         filtered = filtered.filter(issue => {
-          const status = (issue.statusValue || issue.status || '').toLowerCase();
-          return status !== 'done' && 
-                 status !== 'backlog' && 
-                 status !== 'cancelled' &&
-                 status !== 'todo'; // Todo items should be in backlog, not active
+          // Use projectStatus if available, otherwise fallback to legacy fields
+          const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
+          const statusLower = status.toLowerCase();
+          return statusLower !== 'done' && 
+                 statusLower !== 'backlog' && 
+                 statusLower !== 'cancelled' &&
+                 statusLower !== 'todo'; // Todo items should be in backlog, not active
         });
         break;
       case 'backlog':
         filtered = filtered.filter(issue => {
-          const status = (issue.statusValue || issue.status || '').toLowerCase();
-          return status === 'backlog' || status === 'todo';
+          // Use projectStatus if available, otherwise fallback to legacy fields
+          const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
+          const statusLower = status.toLowerCase();
+          return statusLower === 'backlog' || statusLower === 'todo';
         });
         break;
       default:
@@ -818,12 +822,16 @@ export default function ViewRenderer({
     // Now compute counts per tab from the filtered dataset
     const allIssuesCount = countingIssues.length;
     const activeIssuesCount = countingIssues.filter((issue: any) => {
-      const status = (issue.statusValue || issue.status || '').toLowerCase();
-      return status !== 'done' && status !== 'backlog' && status !== 'cancelled' && status !== 'todo';
+      // Use projectStatus if available, otherwise fallback to legacy fields
+      const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
+      const statusLower = status.toLowerCase();
+      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'todo';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
-      const status = (issue.statusValue || issue.status || '').toLowerCase();
-      return status === 'backlog' || status === 'todo';
+      // Use projectStatus if available, otherwise fallback to legacy fields  
+      const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
+      const statusLower = status.toLowerCase();
+      return statusLower === 'backlog' || statusLower === 'todo';
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };

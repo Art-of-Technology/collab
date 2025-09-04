@@ -258,9 +258,9 @@ export const IssueMentionSuggestion = forwardRef<HTMLDivElement, IssueMentionSug
                             <Badge className={cn("text-xs", getTypeColor(issue.type))}>
                               {issue.type.toLowerCase()}
                             </Badge>
-                            {issue.status && (
-                              <Badge className={cn("text-xs", getStatusColor(issue.status))}>
-                                {issue.status}
+                            {(issue.projectStatus?.displayName || issue.statusValue || issue.status) && (
+                              <Badge className={cn("text-xs", getStatusColor(issue.projectStatus?.displayName || issue.statusValue || issue.status || 'Todo'))}>
+                                {issue.projectStatus?.displayName || issue.statusValue || issue.status}
                               </Badge>
                             )}
                             <Badge className={cn("text-xs", getPriorityColor(issue.priority))}>

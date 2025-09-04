@@ -939,6 +939,7 @@ export function IssueDetailContent({
                 value={issue.status}
                 onChange={(value) => handleUpdate({ status: value })}
                 projectId={issue.projectId}
+                currentStatus={issue.projectStatus}
                 disabled={isUpdating}
               />
 
