@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/context/WorkspaceContext';
 
@@ -12,6 +12,35 @@ interface RichTextRendererProps {
 export function RichTextRenderer({ content, className }: RichTextRendererProps) {
   const { currentWorkspace } = useWorkspace();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleIssueMentionClick = useCallback(async (issueKey: string) => {
+    try {
+      const response = await fetch(`/api/issues/resolve?issueKey=${encodeURIComponent(issueKey)}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const workspaceSlug = data.workspace?.slug;
+        
+        if (workspaceSlug) {
+          const issueUrl = `/${workspaceSlug}/issues/${issueKey}`;
+          window.open(issueUrl, '_blank');
+        } else {
+          // Fallback to current workspace
+          const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
+          window.open(fallbackUrl, '_blank');
+        }
+      } else {
+        // Fallback to current workspace
+        const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
+        window.open(fallbackUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error resolving issue:', error);
+      // Fallback to current workspace
+      const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
+      window.open(fallbackUrl, '_blank');
+    }
+  }, [currentWorkspace?.slug, currentWorkspace?.id]);
 
   useEffect(() => {
     const handleMentionClick = (event: MouseEvent) => {
@@ -37,9 +66,10 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
 
         if (dataType === 'issue-mention') {
           const issueKey = mentionElement.getAttribute('data-issue-key') || mentionElement.getAttribute('data-label');
-          if (issueKey && currentWorkspace?.slug) {
-            const issueUrl = `/${currentWorkspace.slug}/issues/${issueKey}`;
-            window.open(issueUrl, '_blank');
+          
+          if (issueKey) {
+            // Resolve the issue to its correct workspace
+            handleIssueMentionClick(issueKey);
           }
         }
       }
@@ -53,7 +83,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         container.removeEventListener('click', handleMentionClick, true);
       };
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspace?.slug, handleIssueMentionClick]);
 
   return (
     <>
