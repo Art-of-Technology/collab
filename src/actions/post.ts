@@ -6,6 +6,19 @@ import { getServerSession } from 'next-auth';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
 
+
+/**
+ * Iteratively strips all HTML tags from a string, to ensure complete removal
+ */
+function stripHtmlTags(input: string): string {
+  let previous: string;
+  do {
+    previous = input;
+    input = input.replace(/<[^>]*>?/g, '');
+  } while (input !== previous);
+  return input;
+}
+
 type PostType = 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION' | 'RESOLVED';
 type PostPriority = 'normal' | 'high' | 'critical';
 
@@ -376,7 +389,7 @@ export async function createPost(data: {
 
   if (mentionedUserIds.length > 0) {
     try {
-      const notificationContent = `@[${user.name}](${user.id}) mentioned you in a post: ${message.replace(/<[^>]*>?/g, '')}`;
+      const notificationContent = `@[${user.name}](${user.id}) mentioned you in a post: ${stripHtmlTags(message)}`;
       await NotificationService.notifyUsers(
         mentionedUserIds.filter((id) => id !== user.id),
         'post_mention',
