@@ -475,7 +475,7 @@ export function IssueRichEditor({
     const initializeCollaboration = async () => {
       if (hocuspocusManagerRef.current) return;
 
-      const config: HocuspocusConfig = { documentId: collabDocumentId || '' };
+      const config: HocuspocusConfig = { documentId: collabDocumentId };
       const manager = new HocuspocusManager(config);
       hocuspocusManagerRef.current = manager;
       try {
