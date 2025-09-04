@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * Find the default view for a project
  */
-export async function getDefaultViewForProject(projectId: string): Promise<{ id: string; slug: string | null } | null> {
+export async function getDefaultViewForProject(projectId: string): Promise<{ id: string; slug: string | null; name: string } | null> {
   try {
     const defaultView = await prisma.view.findFirst({
       where: {
@@ -27,7 +27,7 @@ export async function getDefaultViewForProject(projectId: string): Promise<{ id:
 /**
  * Find the default view for a project by project slug
  */
-export async function getDefaultViewForProjectSlug(projectSlug: string, workspaceId: string): Promise<{ id: string; slug: string | null } | null> {
+export async function getDefaultViewForProjectSlug(projectSlug: string, workspaceId: string): Promise<{ id: string; slug: string | null; name: string } | null> {
   try {
     // First find the project
     const project = await prisma.project.findFirst({

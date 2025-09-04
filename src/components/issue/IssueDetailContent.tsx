@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
+
 import {
   Loader2,
   X,
@@ -14,13 +14,9 @@ import {
   PenLine,
   MessageSquare,
   Copy,
-  ExternalLink,
-  MoreHorizontal,
   Trash2,
-  Star,
   Command,
   Clock,
-  Plus,
   ArrowLeft,
   Play,
   Pause,
@@ -44,10 +40,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-import BoardItemActivityHistory from "@/components/activity/BoardItemActivityHistory";
 import { IssueTabs } from "./sections/IssueTabs";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
+import { generateBackNavigationUrl } from "@/lib/navigation-helpers";
 import { UnsavedChangesModal } from "@/components/ui/UnsavedChangesModal";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
@@ -60,7 +56,7 @@ import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelecto
 import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 // Import types
-import type { Issue, IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
+import type { IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
 
 type PlayState = "playing" | "paused" | "stopped";
 
@@ -509,8 +505,6 @@ export function IssueDetailContent({
     }
 
     try {
-      // Import the helper function dynamically to avoid circular imports
-      const { generateBackNavigationUrl } = await import('@/lib/navigation-helpers');
       const backUrl = await generateBackNavigationUrl(workspaceId, issue, viewSlug);
       router.push(backUrl);
     } catch (error) {

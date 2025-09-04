@@ -1,5 +1,10 @@
 import { getWorkspaceSlug } from './client-slug-resolvers';
 
+// Cache for default views to avoid repeated API calls
+const defaultViewCache = new Map<string, { id: string; slug: string | null; name: string }>();
+const cacheExpiry = new Map<string, number>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Generate back navigation URL for issue detail pages
  * Handles cases with/without view context and resolves workspace slugs
@@ -30,13 +35,31 @@ export async function generateBackNavigationUrl(
     // If no viewSlug but we have an issue with projectId, try to find default view
     if (issue?.projectId) {
       try {
-        const response = await fetch(`/api/projects/${issue.projectId}/default-view`);
+        const projectId = issue.projectId;
+        const now = Date.now();
         
-        if (response.ok) {
-          const defaultView = await response.json();
+        // Check cache first
+        const cachedView = defaultViewCache.get(projectId);
+        const expiry = cacheExpiry.get(projectId);
+        
+        if (cachedView && expiry && now < expiry) {
+          if (cachedView.slug) {
+            return `/${workspaceSlug}/views/${cachedView.slug}`;
+          }
+        } else {
+          // Cache miss or expired, fetch from API
+          const response = await fetch(`/api/projects/${projectId}/default-view`);
           
-          if (defaultView?.slug) {
-            return `/${workspaceSlug}/views/${defaultView.slug}`;
+          if (response.ok) {
+            const defaultView = await response.json();
+            
+            // Cache the result
+            defaultViewCache.set(projectId, defaultView);
+            cacheExpiry.set(projectId, now + CACHE_DURATION);
+            
+            if (defaultView?.slug) {
+              return `/${workspaceSlug}/views/${defaultView.slug}`;
+            }
           }
         }
       } catch (error) {
