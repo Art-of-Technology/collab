@@ -706,8 +706,6 @@ export function IssueDetailContent({
     );
   }
 
-  
-
   return (
     <div className={cn(
       "h-full flex flex-col",
