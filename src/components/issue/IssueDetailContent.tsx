@@ -361,8 +361,6 @@ export function IssueDetailContent({
     ? `${workspaceId}.${issue.issueKey}.description`
     : undefined;
 
-  console.log('collabDocumentId', collabDocumentId);
-
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
     if (!issue) return;
