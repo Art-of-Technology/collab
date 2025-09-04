@@ -185,7 +185,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         groupKey = groupValue.toLowerCase();
         break;
       default:
-        groupValue = issue.statusValue || issue.status || 'todo';
+        groupValue = issue.projectStatus?.displayName || issue.statusValue || issue.status || 'todo';
         groupKey = groupValue;
     }
     
@@ -233,15 +233,19 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
 
 export const countIssuesByType = (issues: any[]) => {
   const allIssuesCount = issues.length;
-  const activeIssuesCount = issues.filter(issue => 
-    issue.status !== 'Done' && 
-    issue.status !== 'Backlog' && 
-    issue.status !== 'Cancelled'
-  ).length;
-  const backlogIssuesCount = issues.filter(issue => 
-    issue.status === 'Backlog' || 
-    issue.status === 'Todo'
-  ).length;
+  const activeIssuesCount = issues.filter(issue => {
+    const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
+    const statusLower = status.toLowerCase();
+    return statusLower !== 'done' && 
+           statusLower !== 'backlog' && 
+           statusLower !== 'cancelled';
+  }).length;
+  const backlogIssuesCount = issues.filter(issue => {
+    const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
+    const statusLower = status.toLowerCase();
+    return statusLower === 'backlog' || 
+           statusLower === 'todo';
+  }).length;
 
   return {
     allIssuesCount,

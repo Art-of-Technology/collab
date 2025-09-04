@@ -239,10 +239,10 @@ export default function TableViewRenderer({
                       variant="outline" 
                       className={cn(
                         "text-xs border-current/20 bg-current/5",
-                        getStatusColor(issue.status)
+                        getStatusColor(issue.projectStatus?.displayName || issue.statusValue || issue.status || 'Todo')
                       )}
                     >
-                      {issue.status || 'Todo'}
+                      {issue.projectStatus?.displayName || issue.statusValue || issue.status || 'Todo'}
                     </Badge>
                   </div>
 

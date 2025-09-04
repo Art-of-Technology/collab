@@ -331,10 +331,19 @@ export async function PUT(
       const statusValue = body.status || body.statusValue;
       
       // Find the ProjectStatus record for this status in this project
+      // Try multiple ways to find the status: by name, displayName, or similar variations
       const projectStatus = await prisma.projectStatus.findFirst({
         where: {
           projectId: existingIssue.projectId,
-          name: statusValue,
+          OR: [
+            { name: statusValue },
+            { displayName: statusValue },
+            // Handle case variations and underscore/space differences
+            { name: statusValue.toLowerCase().replace(/\s+/g, '_') },
+            { displayName: statusValue.toLowerCase().replace(/\s+/g, '_') },
+            { name: statusValue.toLowerCase().replace(/_/g, ' ') },
+            { displayName: statusValue.toLowerCase().replace(/_/g, ' ') }
+          ],
           isActive: true
         }
       });
@@ -342,12 +351,13 @@ export async function PUT(
       if (projectStatus) {
         // Update both statusId and statusValue for the new system
         updateData.statusId = projectStatus.id;
-        updateData.statusValue = statusValue;
-        updateData.status = statusValue; // Keep legacy field for compatibility
+        updateData.statusValue = projectStatus.name; // Use the canonical name
+        updateData.status = projectStatus.name; // Keep legacy field for compatibility
       } else {
         // No ProjectStatus found, just update the legacy status field
         updateData.status = statusValue;
         updateData.statusValue = statusValue;
+        console.warn(`No ProjectStatus found for status "${statusValue}" in project ${existingIssue.projectId}`);
       }
     }
 

@@ -210,7 +210,7 @@ export function IssueMentionSuggestion({
           >
             {/* Status Icon */}
             <div className="flex items-center w-5 mr-1 flex-shrink-0">
-              {getStatusIcon(issue.status || 'todo')}
+              {getStatusIcon(issue.projectStatus?.displayName || issue.statusValue || issue.status || 'todo')}
             </div>
 
             {/* Issue Key */}

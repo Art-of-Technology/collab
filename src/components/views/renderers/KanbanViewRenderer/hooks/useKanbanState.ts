@@ -89,7 +89,9 @@ export const useKanbanState = ({
   // Helper function to validate if an issue can be moved to a target column
   const canIssueMoveTo = useCallback((issue: any, targetColumnId: string): boolean => {
     // Allow movement within the same column (reordering)
-    if (issue.status === targetColumnId || issue.statusValue === targetColumnId) {
+    if (issue.projectStatus?.name === targetColumnId || 
+        issue.statusValue === targetColumnId || 
+        issue.status === targetColumnId) {
       return true;
     }
 

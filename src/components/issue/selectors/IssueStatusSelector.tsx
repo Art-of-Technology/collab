@@ -22,6 +22,15 @@ interface ProjectStatus {
 
 interface IssueStatusSelectorProps extends IssueSelectorProps {
   projectId?: string;
+  // Optional current status data from the issue
+  currentStatus?: {
+    id: string;
+    name: string;
+    displayName: string;
+    color?: string;
+    iconName?: string;
+    order: number;
+  } | null;
 }
 
 // Default status icons (can be overridden by column settings)
@@ -70,6 +79,7 @@ export function IssueStatusSelector({
   disabled = false,
   readonly = false,
   projectId,
+  currentStatus,
 }: IssueStatusSelectorProps) {
   const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,10 +119,58 @@ export function IssueStatusSelector({
     fetchColumns();
   }, [projectId]);
 
+  // Find current status to display
+  const getDisplayStatus = () => {
+    // First try to use the currentStatus prop if available
+    if (currentStatus) {
+      return {
+        displayName: currentStatus.displayName,
+        name: currentStatus.name,
+        color: currentStatus.color,
+        iconName: currentStatus.iconName
+      };
+    }
+
+    // Otherwise try to find it in the fetched statuses by matching the value
+    if (value && statuses.length > 0) {
+      // Try to find by ID first (if value is a UUID)
+      let foundStatus = statuses.find(s => s.id === value);
+      
+      // If not found by ID, try by name
+      if (!foundStatus) {
+        foundStatus = statuses.find(s => s.name === value);
+      }
+      
+      // If not found by name, try by displayName
+      if (!foundStatus) {
+        foundStatus = statuses.find(s => s.displayName === value);
+      }
+
+      if (foundStatus) {
+        return {
+          displayName: foundStatus.displayName || foundStatus.name,
+          name: foundStatus.name,
+          color: foundStatus.color,
+          iconName: foundStatus.iconName
+        };
+      }
+    }
+
+    // Fallback to the raw value
+    return {
+      displayName: value || '',
+      name: value || '',
+      color: undefined,
+      iconName: undefined
+    };
+  };
+
+  const displayStatus = getDisplayStatus();
+
   // Create status badge component
-  const StatusBadge = ({ status, customColor }: { status: string; customColor?: string }) => {
-    const Icon = getStatusIcon(status);
-    const colorClass = getStatusColor(status, customColor);
+  const StatusBadge = ({ statusDisplay, customColor }: { statusDisplay: ReturnType<typeof getDisplayStatus>; customColor?: string }) => {
+    const Icon = getStatusIcon(statusDisplay.displayName);
+    const colorClass = getStatusColor(statusDisplay.displayName, customColor || statusDisplay.color);
 
     return (
       <Badge 
@@ -125,7 +183,7 @@ export function IssueStatusSelector({
         )}
       >
         <Icon className="h-3.5 w-3.5" />
-        {status}
+        {statusDisplay.displayName}
       </Badge>
     );
   };
@@ -143,9 +201,9 @@ export function IssueStatusSelector({
   }
 
   // If readonly, just return the same styling as the button but non-interactive
-  if (readonly && value) {
-    const Icon = getStatusIcon(value);
-    const colorClass = getStatusColor(value);
+  if (readonly && (value || currentStatus)) {
+    const Icon = getStatusIcon(displayStatus.displayName);
+    const colorClass = getStatusColor(displayStatus.displayName, displayStatus.color);
     return (
       <div
         className={cn(
@@ -155,7 +213,7 @@ export function IssueStatusSelector({
         )}
       >
         <Icon className={cn("h-3 w-3", colorClass)} />
-        <span className="text-[#cccccc] text-xs">{value}</span>
+        <span className="text-[#cccccc] text-xs">{displayStatus.displayName}</span>
       </div>
     );
   }
@@ -173,14 +231,14 @@ export function IssueStatusSelector({
             (disabled || readonly) && "opacity-50 cursor-not-allowed"
           )}
         >
-          {value ? (
+          {(value || currentStatus) ? (
             <>
               {(() => {
-                const Icon = getStatusIcon(value);
-                const colorClass = getStatusColor(value);
+                const Icon = getStatusIcon(displayStatus.displayName);
+                const colorClass = getStatusColor(displayStatus.displayName, displayStatus.color);
                 return <Icon className={cn("h-3 w-3", colorClass)} />;
               })()}
-              <span className="text-[#cccccc] text-xs">{value}</span>
+              <span className="text-[#cccccc] text-xs">{displayStatus.displayName}</span>
             </>
           ) : (
             <>
@@ -215,11 +273,11 @@ export function IssueStatusSelector({
                     key={s.id}
                     type="button"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-                    onClick={() => onChange(statusName)}
+                    onClick={() => onChange(s.name)}
                   >
                     <Icon className={cn("h-3.5 w-3.5", colorClass)} />
                     <span className="text-[#cccccc] flex-1">{statusName}</span>
-                    {value === statusName && (
+                    {(value === s.name || value === s.id || value === statusName || displayStatus.name === s.name) && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
                   </button>
@@ -228,20 +286,24 @@ export function IssueStatusSelector({
           ) : (
             // Fallback options
             <>
-              {["Todo", "In Progress", "Done"].map((status) => {
-                const Icon = getStatusIcon(status);
-                const colorClass = getStatusColor(status);
+              {[
+                { name: "todo", displayName: "Todo" },
+                { name: "in_progress", displayName: "In Progress" }, 
+                { name: "done", displayName: "Done" }
+              ].map((status) => {
+                const Icon = getStatusIcon(status.displayName);
+                const colorClass = getStatusColor(status.displayName);
                 
                 return (
                   <button
-                    key={status}
+                    key={status.name}
                     type="button"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-                    onClick={() => onChange(status)}
+                    onClick={() => onChange(status.name)}
                   >
                     <Icon className={cn("h-3.5 w-3.5", colorClass)} />
-                    <span className="text-[#cccccc] flex-1">{status}</span>
-                    {value === status && (
+                    <span className="text-[#cccccc] flex-1">{status.displayName}</span>
+                    {(value === status.name || value === status.displayName) && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
                   </button>

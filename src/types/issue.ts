@@ -89,6 +89,17 @@ export interface Issue {
   columnId?: string;
   column?: IssueColumn;
   
+  // Status system
+  statusId?: string;
+  projectStatus?: {
+    id: string;
+    name: string;
+    displayName: string;
+    color?: string;
+    iconName?: string;
+    order: number;
+  } | null;
+  
   // Dates
   dueDate?: Date;
   startDate?: Date;
