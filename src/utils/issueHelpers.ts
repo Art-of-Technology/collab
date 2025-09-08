@@ -254,16 +254,7 @@ export function formatIssueRelativeDate(date: Date | string | null | undefined):
 }
 
 // Issue key helpers
-export function parseIssueKey(issueKey: string): { prefix: string; number: string } | null {
-  // Updated to handle new format without type letters: PREFIX-NUMBER
-  const match = issueKey.match(/^([A-Z]+)-(\d+)$/);
-  if (!match) return null;
-  
-  return {
-    prefix: match[1],
-    number: match[2]
-  };
-}
+// Note: parseIssueKey function is available in @/lib/url-utils for consistent typing
 
 // Issue hierarchy helpers
 export function canHaveChildren(type: IssueType): boolean {
