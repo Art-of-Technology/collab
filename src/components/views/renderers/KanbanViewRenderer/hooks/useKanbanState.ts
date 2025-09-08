@@ -18,7 +18,8 @@ export const useKanbanState = ({
   workspace,
   onIssueUpdate,
   onColumnUpdate,
-  onCreateIssue
+  onCreateIssue,
+  activeFilters
 }: KanbanViewRendererProps) => {
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
@@ -68,7 +69,26 @@ export const useKanbanState = ({
     }
 
     const projectStatuses = projectStatusData?.statuses || [];
-    const baseColumns = createColumns(filteredIssues, view, projectStatuses);
+    // Map selected status IDs (from filters) to status names across projects
+    let allowedStatusNames: string[] | undefined = undefined;
+    if (groupField === 'status') {
+      const selectedStatusIds: string[] = Array.isArray((activeFilters as any)?.status)
+        ? ((activeFilters as any).status as string[])
+        : [];
+      if (selectedStatusIds.length > 0 && Array.isArray(projectStatusData?.projectStatuses)) {
+        const idSet = new Set(selectedStatusIds);
+        const namesSet = new Set<string>();
+        projectStatusData.projectStatuses.forEach((ps: any) => {
+          // dbId added in useProjectStatuses to keep original database id
+          if (ps.dbId && idSet.has(ps.dbId)) {
+            namesSet.add(ps.name);
+          }
+        });
+        allowedStatusNames = Array.from(namesSet);
+      }
+    }
+
+    const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames);
     if (localColumnOrder && view.grouping?.field === 'status') {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
       return baseColumns
@@ -79,7 +99,7 @@ export const useKanbanState = ({
         .sort((a: any, b: any) => a.order - b.order);
     }
     return baseColumns;
-  }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder]);
+  }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder, activeFilters]);
 
   // Count issues for filter buttons
   const issueCounts = useMemo(() => {

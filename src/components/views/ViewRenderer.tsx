@@ -926,6 +926,7 @@ export default function ViewRenderer({
       issues: sortedIssues,
       workspace,
       currentUser,
+      activeFilters: allFilters,
       // Additional props needed by KanbanViewRenderer  
       projectId: tempProjectIds?.[0] || view.projects?.[0]?.id || '',
       workspaceId: workspace.id,
