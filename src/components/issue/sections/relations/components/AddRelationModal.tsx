@@ -15,7 +15,7 @@ import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelecto
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
 import type { AddRelationModalProps, RelationItem, RelatedItemType, IssueRelationType } from "../types/relation";
 import { getRelationConfig } from "../utils/relationConfig";
-import { useRelationSearch } from "../hooks/useRelationSearch";
+import { useCrossWorkspaceRelationSearch } from "../hooks/useCrossWorkspaceRelationSearch";
 import { SearchRelationItem } from "./SearchRelationItem";
 import { SelectedRelationItem } from "./SelectedRelationItem";
 
@@ -50,9 +50,8 @@ export function AddRelationModal({
     ...selectedItems.map(item => item.id)
   ], [currentIssueId, excludeIds, selectedItems]);
 
-  // Search hook
-  const { data: searchResults = [], isLoading } = useRelationSearch(
-    workspaceId,
+  // Cross-workspace search hook
+  const { data: searchResults = [], isLoading } = useCrossWorkspaceRelationSearch(
     searchQuery,
     searchFilters,
     allExcludeIds,

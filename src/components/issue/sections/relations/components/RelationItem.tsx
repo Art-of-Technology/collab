@@ -61,7 +61,10 @@ export function RelationItem({
   canRemove = false,
   compact = false
 }: RelationItemProps) {
-  const itemUrl = getRelationItemUrl(item, workspaceId);
+  // Use the target issue's workspace slug if available (for cross-workspace relations),
+  // otherwise fall back to the current workspace
+  const targetWorkspaceSlug = item.workspace?.slug || workspaceId;
+  const itemUrl = getRelationItemUrl(item, targetWorkspaceSlug);
   
   return (
     <div className="group flex items-center px-2 py-1.5 transition-all duration-150 rounded-md hover:bg-[#0f1011] relative">
@@ -98,8 +101,17 @@ export function RelationItem({
           </div>
         </div>
 
-        {/* Project and Meta section */}
-        <div className="flex items-center gap-2 flex-shrink-0 mr-3">
+        {/* Workspace and Project section */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 mr-3">
+          {/* Workspace Badge */}
+          {item.workspace && (
+            <Badge 
+              className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#333] text-[#9ca3af]"
+            >
+              {item.workspace.name}
+            </Badge>
+          )}
+          
           {/* Project Badge */}
           {item.project && (
             <Badge 

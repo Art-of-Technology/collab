@@ -60,19 +60,45 @@ export async function POST(
       );
     }
 
-    // Validate all target issues exist
+    // Validate all target issues exist and user has access to their workspaces
     const targetIssueIds = relations.map((r: any) => r.targetIssueId);
     const targetIssues = await prisma.issue.findMany({
       where: {
-        id: { in: targetIssueIds },
-        workspaceId: workspace.id
+        id: { in: targetIssueIds }
+      },
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            ownerId: true,
+            members: {
+              where: { userId: session.user.id },
+              select: { id: true }
+            }
+          }
+        }
       }
     });
+
 
     if (targetIssues.length !== targetIssueIds.length) {
       return NextResponse.json(
         { error: "One or more target issues not found" },
         { status: 404 }
+      );
+    }
+
+    // Verify user has access to all target issue workspaces
+    const inaccessibleIssues = targetIssues.filter(issue => 
+      issue.workspace.ownerId !== session.user.id && 
+      issue.workspace.members.length === 0
+    );
+
+    if (inaccessibleIssues.length > 0) {
+      return NextResponse.json(
+        { error: "Access denied to one or more target issue workspaces" },
+        { status: 403 }
       );
     }
 
