@@ -254,28 +254,7 @@ export function formatIssueRelativeDate(date: Date | string | null | undefined):
 }
 
 // Issue key helpers
-export function getIssueKeyPrefix(type: IssueType): string {
-  const prefixMap = {
-    EPIC: 'E',
-    STORY: 'S', 
-    TASK: 'T',
-    BUG: 'D',
-    MILESTONE: 'M',
-    SUBTASK: 'ST'
-  };
-  return prefixMap[type];
-}
-
-export function parseIssueKey(issueKey: string): { prefix: string; type: string; number: string } | null {
-  const match = issueKey.match(/^([A-Z]+)-([A-Z]+)(\d+)$/);
-  if (!match) return null;
-  
-  return {
-    prefix: match[1],
-    type: match[2],
-    number: match[3]
-  };
-}
+// Note: parseIssueKey function is available in @/lib/url-utils for consistent typing
 
 // Issue hierarchy helpers
 export function canHaveChildren(type: IssueType): boolean {
