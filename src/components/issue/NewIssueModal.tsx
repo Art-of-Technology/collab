@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -14,7 +14,44 @@ import { IssueDateSelector } from "./selectors/IssueDateSelector";
 import { IssueProjectSelector } from "./selectors/IssueProjectSelector";
 import { IssueTypeSelector } from "./selectors/IssueTypeSelector";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
-import { SubIssueManager, SubIssue } from "./SubIssueManager";
+import { IssueRelationsManager } from "./IssueRelationsManager";
+
+export interface IssueRelation {
+  id: string;
+  type: 'create' | 'link';
+  relationType: 'parent' | 'child' | 'blocks' | 'blocked_by' | 'relates_to' | 'duplicates' | 'duplicated_by';
+  // For creating new issues
+  title?: string;
+  description?: string;
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  issueType?: "TASK" | "EPIC" | "STORY" | "MILESTONE" | "BUG" | "SUBTASK";
+  assigneeId?: string;
+  labels?: string[];
+  // For linking existing issues
+  targetIssue?: {
+    id: string;
+    title: string;
+    issueKey: string;
+    type: string;
+    status?: string;
+    priority?: string;
+    assignee?: {
+      id: string;
+      name: string;
+      avatarUrl?: string;
+    };
+    workspace?: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+    project?: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  };
+}
 import { IssueTitleInput, type IssueTitleInputRef } from "./IssueTitleInput";
 import { useCreateIssue } from "@/hooks/queries/useIssues";
 import { cn } from "@/lib/utils";
@@ -55,7 +92,7 @@ export default function NewIssueModal({
   const [creating, setCreating] = useState(false);
   const [createMore, setCreateMore] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
-  const [subIssues, setSubIssues] = useState<SubIssue[]>([]);
+  const [relations, setRelations] = useState<IssueRelation[]>([]);
 
   const titleRef = useRef<IssueTitleInputRef>(null);
   const createIssueMutation = useCreateIssue();
@@ -107,36 +144,18 @@ export default function NewIssueModal({
     }
   }, [isImproving, toast]);
 
-  // Sub-issue management
+  // Relations management
   const handleCreateSubIssue = useCallback((selectedText: string) => {
-    const newSubIssue: SubIssue = {
+    const newRelation: IssueRelation = {
       id: `temp-${Date.now()}`,
+      type: 'create',
+      relationType: 'child',
       title: selectedText,
-      type: "SUBTASK",
+      issueType: "SUBTASK",
       priority: "MEDIUM",
-      status: status || defaultStatus,
     };
-    setSubIssues(prev => [...prev, newSubIssue]);
-  }, [status, defaultStatus]);
-
-  const handleSubIssueUpdate = useCallback((id: string, updates: Partial<SubIssue>) => {
-    setSubIssues(prev => prev.map(sub => sub.id === id ? { ...sub, ...updates } : sub));
+    setRelations(prev => [...prev, newRelation]);
   }, []);
-
-  const handleSubIssueRemove = useCallback((id: string) => {
-    setSubIssues(prev => prev.filter(sub => sub.id !== id));
-  }, []);
-
-  const handleSubIssueAdd = useCallback((title: string) => {
-    const newSubIssue: SubIssue = {
-      id: `temp-${Date.now()}`,
-      title,
-      type: "SUBTASK",
-      priority: "MEDIUM",
-      status: status || defaultStatus,
-    };
-    setSubIssues(prev => [...prev, newSubIssue]);
-  }, [status, defaultStatus]);
 
   // Auto-focus title when modal opens
   useEffect(() => {
@@ -166,46 +185,68 @@ export default function NewIssueModal({
       });
       
       const mainIssueId = result.issue?.id || result.id;
+      const mainIssueKey = result.issue?.issueKey || result.issueKey;
       
-      // Create sub-issues sequentially if any (to avoid race conditions with issue key generation)
-      if (subIssues.length > 0) {
-        for (const subIssue of subIssues) {
-          const childResult = await createIssueMutation.mutateAsync({
-            title: subIssue.title,
-            type: subIssue.type || "SUBTASK",
-            status: subIssue.status || status,
-            priority: subIssue.priority || "MEDIUM",
-            projectId: selectedProjectId,
-            workspaceId,
-            assigneeId: subIssue.assigneeId,
-            reporterId: reporterId || currentUserId,
-            labels: subIssue.labels || [],
-            parentId: mainIssueId, // Link to parent issue
-          });
-
-          const childIssueId = childResult.issue?.id || childResult.id;
-
-          // Create the parent-child relation record for the relations system
-          try {
-            await fetch(`/api/workspaces/${workspaceId}/issues/${result.issue?.issueKey || result.issueKey}/relations`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                targetIssueId: childIssueId,
-                relationType: 'child'
-              }),
+      // Process relations if any
+      if (relations.length > 0) {
+        for (const relation of relations) {
+          if (relation.type === 'create') {
+            // Create new issue
+            const childResult = await createIssueMutation.mutateAsync({
+              title: relation.title!,
+              description: relation.description,
+              type: relation.issueType || "SUBTASK",
+              status: status,
+              priority: relation.priority || "MEDIUM",
+              projectId: selectedProjectId,
+              workspaceId,
+              assigneeId: relation.assigneeId,
+              reporterId: reporterId || currentUserId,
+              labels: relation.labels || [],
+              parentId: relation.relationType === 'child' ? mainIssueId : undefined,
             });
-          } catch (relationError) {
-            console.error('Failed to create parent-child relation:', relationError);
-            // Don't fail the whole operation if relation creation fails
+
+            const childIssueId = childResult.issue?.id || childResult.id;
+
+            // Create the relation record
+            try {
+              await fetch(`/api/workspaces/${workspaceId}/issues/${mainIssueKey}/relations`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  targetIssueId: childIssueId,
+                  relationType: relation.relationType
+                }),
+              });
+            } catch (relationError) {
+              console.error('Failed to create relation:', relationError);
+              // Don't fail the whole operation if relation creation fails
+            }
+          } else if (relation.type === 'link' && relation.targetIssue) {
+            // Link existing issue
+            try {
+              await fetch(`/api/workspaces/${workspaceId}/issues/${mainIssueKey}/relations`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  targetIssueId: relation.targetIssue.id,
+                  relationType: relation.relationType
+                }),
+              });
+            } catch (relationError) {
+              console.error('Failed to create relation:', relationError);
+              // Don't fail the whole operation if relation creation fails
+            }
           }
         }
 
-        // Invalidate relations query so the new sub-issues appear in the issue detail view
+        // Invalidate relations query so the new relations appear in the issue detail view
         queryClient.invalidateQueries({
-          queryKey: ["issue-relations", workspaceId, result.issue?.issueKey || result.issueKey],
+          queryKey: ["issue-relations", workspaceId, mainIssueKey],
         });
       }
       
@@ -219,7 +260,7 @@ export default function NewIssueModal({
         setReporterId(currentUserId); // Keep reporter as current user
         setLabels([]);
         setDueDate(undefined);
-        setSubIssues([]); // Clear sub-issues
+        setRelations([]); // Clear relations
         // Keep project and type the same
         setTimeout(() => titleRef.current?.focus(), 100);
       } else {
@@ -235,12 +276,12 @@ export default function NewIssueModal({
         setDueDate(undefined);
         setIssueType("TASK");
         setSelectedProjectId(projectId || undefined);
-        setSubIssues([]);
+        setRelations([]);
       }
       
       toast({
         title: "Success",
-        description: `Issue created${subIssues.length > 0 ? ` with ${subIssues.length} sub-issue${subIssues.length === 1 ? '' : 's'}` : ''}`,
+        description: `Issue created${relations.length > 0 ? ` with ${relations.length} relation${relations.length === 1 ? '' : 's'}` : ''}`,
       });
       
       onCreated?.(mainIssueId);
@@ -261,7 +302,7 @@ export default function NewIssueModal({
     } finally {
       setCreating(false);
     }
-  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, reporterId, currentUserId, labels, dueDate, subIssues, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast]);
+  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, reporterId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -287,7 +328,7 @@ export default function NewIssueModal({
         </div>
 
         {/* Content */}
-        <div className="px-4 py-4 flex-1 min-h-0">
+        <div className="px-4 py-4 flex-1 min-h-0 overflow-y-auto">
           {/* Title Input - No borders on focus */}
           <IssueTitleInput
             ref={titleRef}
@@ -365,15 +406,13 @@ export default function NewIssueModal({
             />
           </div>
 
-          {/* Sub-issues Section */}
-          <SubIssueManager
-            subIssues={subIssues}
-            onSubIssueUpdate={handleSubIssueUpdate}
-            onSubIssueRemove={handleSubIssueRemove}
-            onSubIssueAdd={handleSubIssueAdd}
+          {/* Relations Section */}
+          <IssueRelationsManager
+            relations={relations}
+            onRelationsChange={setRelations}
             workspaceId={workspaceId}
             projectId={selectedProjectId}
-            className="mb-6"
+            currentUserId={currentUserId}
           />
 
         </div>

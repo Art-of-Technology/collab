@@ -60,7 +60,10 @@ export async function GET(
               select: { id: true, name: true, image: true }
             },
             project: {
-              select: { id: true, name: true, color: true }
+              select: { id: true, name: true, slug: true, color: true }
+            },
+            workspace: {
+              select: { id: true, name: true, slug: true }
             },
             _count: {
               select: {
@@ -85,7 +88,10 @@ export async function GET(
               select: { id: true, name: true, image: true }
             },
             project: {
-              select: { id: true, name: true, color: true }
+              select: { id: true, name: true, slug: true, color: true }
+            },
+            workspace: {
+              select: { id: true, name: true, slug: true }
             },
             _count: {
               select: {
@@ -128,6 +134,7 @@ export async function GET(
         type: relation.targetIssue.type.toLowerCase(),
         assignee: relation.targetIssue.assignee,
         project: relation.targetIssue.project,
+        workspace: relation.targetIssue.workspace,
         createdAt: relation.targetIssue.createdAt.toISOString(),
         updatedAt: relation.targetIssue.updatedAt.toISOString(),
         dueDate: relation.targetIssue.dueDate?.toISOString(),
@@ -163,6 +170,7 @@ export async function GET(
         type: relation.sourceIssue.type.toLowerCase(),
         assignee: relation.sourceIssue.assignee,
         project: relation.sourceIssue.project,
+        workspace: relation.sourceIssue.workspace,
         createdAt: relation.sourceIssue.createdAt.toISOString(),
         updatedAt: relation.sourceIssue.updatedAt.toISOString(),
         dueDate: relation.sourceIssue.dueDate?.toISOString(),
@@ -264,11 +272,23 @@ export async function POST(
       );
     }
 
-    // Find target issue
+    // Find target issue and verify user has access to its workspace
     const targetIssue = await prisma.issue.findFirst({
       where: {
-        id: targetIssueId,
-        workspaceId: workspace.id
+        id: targetIssueId
+      },
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            ownerId: true,
+            members: {
+              where: { userId: session.user.id },
+              select: { id: true }
+            }
+          }
+        }
       }
     });
 
@@ -276,6 +296,17 @@ export async function POST(
       return NextResponse.json(
         { error: "Target issue not found" },
         { status: 404 }
+      );
+    }
+
+    // Verify user has access to target issue's workspace
+    const hasAccess = targetIssue.workspace.ownerId === session.user.id || 
+                     targetIssue.workspace.members.length > 0;
+
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "Access denied to target issue workspace" },
+        { status: 403 }
       );
     }
 

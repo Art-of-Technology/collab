@@ -27,7 +27,13 @@ export interface RelationItem {
   project?: {
     id: string;
     name: string;
+    slug?: string;
     color?: string;
+  };
+  workspace?: {
+    id: string;
+    name: string;
+    slug: string;
   };
   createdAt: string;
   updatedAt: string;

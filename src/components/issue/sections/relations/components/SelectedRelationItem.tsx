@@ -102,9 +102,19 @@ export function SelectedRelationItem({
         </div>
       </div>
 
-      {/* Project Badge */}
-      {item.project && (
-        <div className="flex items-center mr-3 flex-shrink-0">
+      {/* Workspace and Project Badges */}
+      <div className="flex items-center gap-1.5 mr-3 flex-shrink-0">
+        {/* Workspace Badge */}
+        {item.workspace && (
+          <Badge 
+            className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#333] text-[#9ca3af]"
+          >
+            {item.workspace.name}
+          </Badge>
+        )}
+        
+        {/* Project Badge */}
+        {item.project && (
           <Badge 
             className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-opacity-80"
             style={{ 
@@ -114,8 +124,8 @@ export function SelectedRelationItem({
           >
             {item.project.name}
           </Badge>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Assignee */}
       <div className="flex items-center w-6 mr-3 flex-shrink-0">

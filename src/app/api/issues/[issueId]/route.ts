@@ -71,7 +71,7 @@ async function findIssueByIdOrKey(idOrKey: string) {
 // GET /api/issues/[issueId] - Get issue details
 export async function GET(
   req: NextRequest,
-  { params }: { params: { issueId: string } }
+  { params }: { params: Promise<{ issueId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -83,7 +83,7 @@ export async function GET(
       );
     }
 
-    const { issueId } = params;
+    const { issueId } = await params;
     const isIssueKey = isIssueKeyFormat(issueId);
     const issue = isIssueKey
       ? await prisma.issue.findFirst({ where: { issueKey: issueId }, include: ISSUE_INCLUDE })
@@ -120,7 +120,7 @@ export async function GET(
 // PUT /api/issues/[issueId] - Update issue
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { issueId: string } }
+  { params }: { params: Promise<{ issueId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -128,7 +128,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { issueId } = params;
+    const { issueId } = await params;
     const body = await req.json();
 
     // Find the issue first
@@ -279,8 +279,8 @@ export async function PUT(
           updatedIssue.id,
           currentUser.id,
           updatedIssue.workspaceId,
-          oldAssignee,
-          newAssignee
+          oldAssignee ? { id: oldAssignee.id, name: oldAssignee.name || 'Unknown User' } : null,
+          newAssignee ? { id: newAssignee.id, name: newAssignee.name || 'Unknown User' } : null
         );
       }
 
@@ -461,7 +461,7 @@ export async function PUT(
 // DELETE /api/issues/[issueId] - Delete issue
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { issueId: string } }
+  { params }: { params: Promise<{ issueId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -469,7 +469,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { issueId } = params;
+    const { issueId } = await params;
 
     // Find the issue first
     const existingIssue = await findIssueByIdOrKey(issueId);

@@ -102,8 +102,17 @@ export function SearchRelationItem({
         </div>
       </div>
 
-      {/* Project and Meta section */}
-      <div className="flex items-center gap-2 flex-shrink-0 mr-3">
+      {/* Workspace and Project section */}
+      <div className="flex items-center gap-1.5 flex-shrink-0 mr-3">
+        {/* Workspace Badge */}
+        {item.workspace && (
+          <Badge 
+            className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#333] text-[#9ca3af]"
+          >
+            {item.workspace.name}
+          </Badge>
+        )}
+        
         {/* Project Badge */}
         {item.project && (
           <Badge 
