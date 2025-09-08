@@ -38,6 +38,7 @@ export default async function DashboardPage() {
   try {
     workspaceId = await verifyWorkspaceAccess(session.user);
   } catch (error) {
+    console.error("Error verifying workspace access:", error);
     redirect("/welcome");
   }
 
