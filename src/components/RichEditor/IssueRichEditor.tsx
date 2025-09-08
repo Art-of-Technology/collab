@@ -147,17 +147,22 @@ export function IssueRichEditor({
   const [slashQuery, setSlashQuery] = useState("");
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
-  
+
   // Floating menu state
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
-  
+
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [improvedText, setImprovedText] = useState<string>('');
   const [improvePosition, setImprovePosition] = useState({ top: 0, left: 0 });
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
+
+  // Collaboration state
+  const [hasActiveCollaborators, setHasActiveCollaborators] = useState(false);
+  const [useCollaborativeContent, setUseCollaborativeContent] = useState(false);
+  const [collaborativeContent, setCollaborativeContent] = useState<string>('');
 
   // Get filtered commands based on query
   const filteredCommands = DEFAULT_SLASH_COMMANDS.filter(cmd => 
@@ -481,6 +486,25 @@ export function IssueRichEditor({
       try {
         await manager.initialize();
         setCollabReady((v) => v + 1);
+
+        // Check for active collaborators after initialization
+        setTimeout(() => {
+          if (manager) {
+            const hasCollaborators = manager.hasActiveCollaborators();
+            setHasActiveCollaborators(hasCollaborators);
+
+            // If there are active collaborators, we should use their content
+            // If not, we can safely use the DB content
+            setUseCollaborativeContent(hasCollaborators);
+
+            if (hasCollaborators) {
+              console.log('Active collaborators detected, will use collaborative content');
+            } else {
+              console.log('No active collaborators, will use DB content');
+            }
+          }
+        }, 1000); // Give some time for collaborators to connect
+
       } catch (e) {
         console.error('Failed to initialize collaboration:', e);
       }
@@ -492,6 +516,21 @@ export function IssueRichEditor({
       hocuspocusManagerRef.current = null;
     };
   }, [collabDocumentId]);
+
+  // Get collaborative content when editor is ready and collaborators are present
+  useEffect(() => {
+    if (!collabDocumentId || !useCollaborativeContent || !editorRef.current) return;
+
+    const editor = editorRef.current.getEditor();
+    if (!editor) return;
+
+    // Get the current collaborative content
+    const currentContent = editor.getHTML();
+    if (currentContent && currentContent !== collaborativeContent) {
+      setCollaborativeContent(currentContent);
+      console.log('Updated collaborative content:', currentContent);
+    }
+  }, [collabReady, useCollaborativeContent, collabDocumentId, collaborativeContent]);
 
   // Build extensions array
   const additionalExtensions = [];
@@ -546,12 +585,22 @@ export function IssueRichEditor({
     }
   }
 
+  // Determine which content to use based on collaboration state
+  const editorValue = useMemo(() => {
+    // If collaboration is enabled and we should use collaborative content
+    if (collabDocumentId && useCollaborativeContent && collaborativeContent) {
+      return collaborativeContent;
+    }
+    // Otherwise, use the DB value (original behavior)
+    return value;
+  }, [collabDocumentId, useCollaborativeContent, collaborativeContent, value]);
+
   return (
     <div ref={containerRef} className="relative">
       <RichEditor
         key={collabDocumentId ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
         ref={editorRef}
-        value={value}
+        value={editorValue}
         onChange={onChange}
         placeholder={placeholder}
         className={className}
@@ -560,6 +609,7 @@ export function IssueRichEditor({
         onAiImprove={onAiImprove}
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
+        respectCollaboration={!!collabDocumentId}
         onUpdate={(editor) => {
           // Handle slash command query updates
           if (showSlashMenu) {

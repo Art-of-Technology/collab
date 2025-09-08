@@ -154,4 +154,50 @@ export class HocuspocusManager {
   getProvider(): HocuspocusProvider | null {
     return this.provider;
   }
+
+  /**
+   * Check if there are other active collaborators on this document
+   */
+  hasActiveCollaborators(): boolean {
+    if (!this.provider) return false;
+
+    try {
+      const awareness = (this.provider as any).awareness;
+      if (!awareness) return false;
+
+      const states = awareness.getStates();
+      return states.size > 1; // More than just the current user
+    } catch (error) {
+      console.error('Error checking for active collaborators:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get the current collaborative document content as HTML
+   * This method should be called when you have access to the TipTap editor
+   */
+  getCollaborativeContent(editor?: any): string {
+    if (!this.ydoc) return '';
+
+    try {
+      // If we have an editor instance, use it to get the current content
+      // This ensures we get the content from the collaborative state
+      if (editor && typeof editor.getHTML === 'function') {
+        return editor.getHTML();
+      }
+
+      // Fallback: try to reconstruct content from Yjs document
+      // This is more complex and may not work perfectly
+      const prosemirrorType = this.ydoc.getXmlFragment('prosemirror');
+      if (!prosemirrorType) return '';
+
+      // For now, return empty and let the caller handle getting content from editor
+      // A proper implementation would require deserializing the Yjs XML fragment
+      return '';
+    } catch (error) {
+      console.error('Error getting collaborative content:', error);
+      return '';
+    }
+  }
 }

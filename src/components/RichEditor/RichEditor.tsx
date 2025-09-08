@@ -66,6 +66,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   showAiImprove = false,
   onAiImprove,
   workspaceId,
+  respectCollaboration = false,
   onSelectionUpdate,
   onKeyDown,
   onUpdate,
@@ -568,13 +569,38 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   useEffect(() => {
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
+
+      // If respecting collaboration, only sync if the content is actually different
+      // and we're not in a collaborative session where the content might be managed by Yjs
       if (value !== currentContent) {
-        setTimeout(() => {
-          editor.commands.setContent(value || '');
-        }, 0);
+        // For collaborative editors, be more careful about when to sync
+        if (respectCollaboration) {
+          // Only sync if the editor appears to be empty or if it's clearly a different document
+          const isEditorEmpty = !currentContent || currentContent === '<p></p>' || currentContent === '<p><br></p>';
+          const isValueEmpty = !value || value === '<p></p>' || value === '<p><br></p>';
+
+          if (isEditorEmpty && !isValueEmpty) {
+            // Editor is empty but we have content - this might be initialization
+            console.log('Collaborative editor: syncing because editor is empty');
+            setTimeout(() => {
+              editor.commands.setContent(value || '');
+            }, 0);
+          } else if (!isEditorEmpty && isValueEmpty) {
+            // Editor has content but value is empty - this shouldn't happen in collaboration
+            console.log('Collaborative editor: not syncing empty value over existing content');
+          } else if (currentContent !== value) {
+            // Content is different - log for debugging but don't automatically sync
+            console.log('Collaborative editor: content differs but not syncing to preserve collaboration');
+          }
+        } else {
+          // Non-collaborative editor - sync normally
+          setTimeout(() => {
+            editor.commands.setContent(value || '');
+          }, 0);
+        }
       }
     }
-  }, [editor, value]);
+  }, [editor, value, respectCollaboration]);
 
   // Handle issue mention clicks with workspace resolution
   const handleIssueMentionClick = useCallback(async (issueKey: string) => {

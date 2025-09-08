@@ -11,7 +11,8 @@ export interface RichEditorProps {
   showAiImprove?: boolean;
   onAiImprove?: (text: string) => Promise<string>;
   workspaceId?: string;
-  
+  respectCollaboration?: boolean; // Whether to respect collaborative state and avoid overriding with prop value
+
   // Additional callbacks for enhanced functionality
   onSelectionUpdate?: (editor: any) => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
