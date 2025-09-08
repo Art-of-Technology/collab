@@ -102,6 +102,7 @@ export function IssueDetailContent({
   const [description, setDescription] = useState('');
   const [descriptionHasChanges, setDescriptionHasChanges] = useState(false);
   const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
+  const [skipNextDescriptionHydrate, setSkipNextDescriptionHydrate] = useState(false);
   const [labels, setLabels] = useState<any[]>([]);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const { toast } = useToast();
@@ -237,15 +238,27 @@ export function IssueDetailContent({
     setShowHelperModal(false);
   };
 
+  // Build collaboration document id using workspace slug and issue key
+  const collabDocumentId = issue?.issueKey && workspaceId
+    ? `${workspaceId}.${issue.issueKey}.description`
+    : undefined;
+
   // Initialize local state from issue data
   useEffect(() => {
     if (issue) {
       setTitle(issue.title || '');
-      setDescription(issue.description || '');
-      setDescriptionHasChanges(false);
+      if (skipNextDescriptionHydrate && collabDocumentId) {
+        // We just saved description locally in collaborative editor;
+        // avoid hydrating from DB once to prevent duplication
+        setDescriptionHasChanges(false);
+        setSkipNextDescriptionHydrate(false);
+      } else {
+        setDescription(issue.description || '');
+        setDescriptionHasChanges(false);
+      }
 
     }
-  }, [issue]);
+  }, [issue, collabDocumentId, skipNextDescriptionHydrate]);
 
   // Fetch labels for the workspace
   useEffect(() => {
@@ -352,11 +365,6 @@ export function IssueDetailContent({
     }
   }, [issue?.id, isFollowingIssue, isTogglingIssueFollow, toast]);
 
-  // Build collaboration document id using workspace slug and issue key
-  const collabDocumentId = issue?.issueKey && workspaceId
-    ? `${workspaceId}.${issue.issueKey}.description`
-    : undefined;
-
   // Handle field updates with optimistic UI
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
     if (!issue) return;
@@ -387,6 +395,10 @@ export function IssueDetailContent({
       });
 
       // Refresh the issue data
+      if ('description' in updates) {
+        // Prevent the immediate DB hydrate from overriding collaborative content
+        setSkipNextDescriptionHydrate(true);
+      }
       onRefresh();
     } catch (error) {
       console.error('Failed to update issue:', error);
