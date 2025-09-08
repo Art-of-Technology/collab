@@ -138,14 +138,21 @@ export async function POST(request: NextRequest) {
         throw new Error("Project not found in transaction");
       }
 
-      // Find a unique issue key by checking existing keys and incrementing if needed
-      let nextNum = (currentProject.nextIssueNumbers as any)?.[type] || 1;
+      // Use TASK counter value for all issue types, but generate keys without type letters
+      let nextNum: number;
+      if (typeof currentProject.nextIssueNumbers === 'object' && currentProject.nextIssueNumbers !== null) {
+        const counters = currentProject.nextIssueNumbers as any;
+        nextNum = counters.TASK || 1;
+      } else {
+        nextNum = 1;
+      }
+
       let issueKey: string;
       let attempts = 0;
       const maxAttempts = 100; // Prevent infinite loop
 
       do {
-        issueKey = `${currentProject.issuePrefix}-${type.charAt(0)}${nextNum}`;
+        issueKey = `${currentProject.issuePrefix}-${nextNum}`;
         
         // Check if this key already exists
         const existingIssue = await tx.issue.findFirst({
@@ -229,9 +236,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Update the counter to be at least one more than what we used
+      // Update the TASK counter to be one more than what we used (all types use TASK counter now)
       const updatedNext = { ...(currentProject.nextIssueNumbers as any) };
-      updatedNext[type] = Math.max(nextNum + 1, updatedNext[type] || 1);
+      updatedNext.TASK = nextNum + 1;
       await tx.project.update({
         where: { id: projectId },
         data: { nextIssueNumbers: updatedNext as any },

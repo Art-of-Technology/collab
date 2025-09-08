@@ -254,26 +254,14 @@ export function formatIssueRelativeDate(date: Date | string | null | undefined):
 }
 
 // Issue key helpers
-export function getIssueKeyPrefix(type: IssueType): string {
-  const prefixMap = {
-    EPIC: 'E',
-    STORY: 'S', 
-    TASK: 'T',
-    BUG: 'D',
-    MILESTONE: 'M',
-    SUBTASK: 'ST'
-  };
-  return prefixMap[type];
-}
-
-export function parseIssueKey(issueKey: string): { prefix: string; type: string; number: string } | null {
-  const match = issueKey.match(/^([A-Z]+)-([A-Z]+)(\d+)$/);
+export function parseIssueKey(issueKey: string): { prefix: string; number: string } | null {
+  // Updated to handle new format without type letters: PREFIX-NUMBER
+  const match = issueKey.match(/^([A-Z]+)-(\d+)$/);
   if (!match) return null;
   
   return {
     prefix: match[1],
-    type: match[2],
-    number: match[3]
+    number: match[2]
   };
 }
 

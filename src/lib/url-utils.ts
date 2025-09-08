@@ -72,6 +72,7 @@ export function getIssueKeyFromParams(searchParams: URLSearchParams): string | n
  * Parse issue key into prefix and number
  */
 export function parseIssueKey(issueKey: string): { prefix: string; number: number } | null {
+  // Updated to handle new format without type letters: PREFIX-NUMBER  
   const match = issueKey.match(/^([A-Za-z]+)-(\d+)$/);
   if (match) {
     return {
