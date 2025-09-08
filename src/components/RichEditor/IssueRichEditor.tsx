@@ -163,6 +163,8 @@ export function IssueRichEditor({
   const [hasActiveCollaborators, setHasActiveCollaborators] = useState(false);
   const [useCollaborativeContent, setUseCollaborativeContent] = useState(false);
   const [collaborativeContent, setCollaborativeContent] = useState<string>('');
+  // We defer deciding which content to render until we know collaborator presence
+  const [collabPresenceChecked, setCollabPresenceChecked] = useState<boolean>(!collabDocumentId);
 
   // Get filtered commands based on query
   const filteredCommands = DEFAULT_SLASH_COMMANDS.filter(cmd => 
@@ -487,24 +489,6 @@ export function IssueRichEditor({
         await manager.initialize();
         setCollabReady((v) => v + 1);
 
-        // Check for active collaborators after initialization
-        setTimeout(() => {
-          if (manager) {
-            const hasCollaborators = manager.hasActiveCollaborators();
-            setHasActiveCollaborators(hasCollaborators);
-
-            // If there are active collaborators, we should use their content
-            // If not, we can safely use the DB content
-            setUseCollaborativeContent(hasCollaborators);
-
-            if (hasCollaborators) {
-              console.log('Active collaborators detected, will use collaborative content');
-            } else {
-              console.log('No active collaborators, will use DB content');
-            }
-          }
-        }, 1000); // Give some time for collaborators to connect
-
       } catch (e) {
         console.error('Failed to initialize collaboration:', e);
       }
@@ -516,6 +500,54 @@ export function IssueRichEditor({
       hocuspocusManagerRef.current = null;
     };
   }, [collabDocumentId]);
+
+  // Setup presence listeners to decide DB vs Hocuspocus content
+  useEffect(() => {
+    if (!collabDocumentId) return;
+    if (!hocuspocusManagerRef.current) return;
+    const provider = hocuspocusManagerRef.current.getProvider();
+    if (!provider) return;
+
+    const updatePresence = () => {
+      try {
+        const awareness: any = (provider as any)?.awareness;
+        const states: Map<number, any> | undefined = awareness?.getStates?.();
+        const clientID: number | undefined = awareness?.clientID;
+        const myUserId = (collaborationUser as any)?.id;
+        let differentUserCount = 0;
+        if (states && typeof (states as any).forEach === 'function' && clientID !== undefined) {
+          (states as any).forEach((state: any, key: number) => {
+            if (key === clientID) return; // skip self
+            const remoteUserId = state?.user?.id;
+            // Treat same-user duplicate tabs as collaborators too? We want real collaborators, so require different user id
+            if (remoteUserId && myUserId && remoteUserId !== myUserId) {
+              differentUserCount += 1;
+            }
+          });
+        }
+        const hasCollaborators = differentUserCount > 0;
+        setHasActiveCollaborators(hasCollaborators);
+        setUseCollaborativeContent(hasCollaborators);
+        setCollabPresenceChecked(true);
+      } catch {
+        // ignore
+      }
+    };
+
+    const delayedInitial = setTimeout(updatePresence, 600);
+    (provider as any)?.on?.('synced', updatePresence);
+    (provider as any)?.on?.('awarenessUpdate', updatePresence);
+    (provider as any)?.on?.('awarenessChange', updatePresence);
+
+    return () => {
+      clearTimeout(delayedInitial);
+      try {
+        (provider as any)?.off?.('synced', updatePresence);
+        (provider as any)?.off?.('awarenessUpdate', updatePresence);
+        (provider as any)?.off?.('awarenessChange', updatePresence);
+      } catch {}
+    };
+  }, [collabDocumentId, collabReady, collaborationUser]);
 
   // Get collaborative content when editor is ready and collaborators are present
   useEffect(() => {
@@ -530,7 +562,26 @@ export function IssueRichEditor({
       setCollaborativeContent(currentContent);
       console.log('Updated collaborative content:', currentContent);
     }
-  }, [collabReady, useCollaborativeContent, collabDocumentId, collaborativeContent]);
+  }, [collabReady, useCollaborativeContent, collabDocumentId, collaborativeContent, collaborationUser]);
+
+  // When there are no collaborators, ensure the collaborative document reflects DB content
+  useEffect(() => {
+    if (!collabDocumentId) return;
+    if (!collabPresenceChecked) return;
+    if (useCollaborativeContent) return; // don't touch when collaborators are active
+    const editor = editorRef.current?.getEditor();
+    if (!editor) return;
+    try {
+      const dbContent = value || '';
+      const current = editor.getHTML();
+      if (current !== dbContent) {
+        editor.commands.setContent(dbContent);
+        console.log('Reset collaborative doc from DB content (no collaborators).');
+      }
+    } catch (e) {
+      console.warn('Failed to reset collaborative doc from DB:', e);
+    }
+  }, [collabDocumentId, collabPresenceChecked, useCollaborativeContent, value, collabReady]);
 
   // Build extensions array
   const additionalExtensions = [];
@@ -587,13 +638,18 @@ export function IssueRichEditor({
 
   // Determine which content to use based on collaboration state
   const editorValue = useMemo(() => {
+    // While collaborator presence is unknown, default to DB content
+    if (collabDocumentId && !collabPresenceChecked) {
+      return value;
+    }
     // If collaboration is enabled and we should use collaborative content
-    if (collabDocumentId && useCollaborativeContent && collaborativeContent) {
-      return collaborativeContent;
+    if (collabDocumentId && useCollaborativeContent) {
+      // Use current collab content if known, otherwise empty and let Yjs populate
+      return collaborativeContent || '';
     }
     // Otherwise, use the DB value (original behavior)
     return value;
-  }, [collabDocumentId, useCollaborativeContent, collaborativeContent, value]);
+  }, [collabDocumentId, useCollaborativeContent, collaborativeContent, value, collabPresenceChecked]);
 
   return (
     <div ref={containerRef} className="relative">
@@ -609,7 +665,7 @@ export function IssueRichEditor({
         onAiImprove={onAiImprove}
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
-        respectCollaboration={!!collabDocumentId}
+        respectCollaboration={!!collabDocumentId && useCollaborativeContent}
         onUpdate={(editor) => {
           // Handle slash command query updates
           if (showSlashMenu) {
