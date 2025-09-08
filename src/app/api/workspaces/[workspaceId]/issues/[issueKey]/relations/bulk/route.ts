@@ -81,7 +81,6 @@ export async function POST(
       }
     });
 
-    console.log("Target issues found:", targetIssues.length, "of", targetIssueIds.length);
 
     if (targetIssues.length !== targetIssueIds.length) {
       return NextResponse.json(

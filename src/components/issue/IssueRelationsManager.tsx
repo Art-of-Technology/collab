@@ -173,7 +173,7 @@ export function IssueRelationsManager({
   const handleSelectSearchResult = useCallback((item: RelationItem) => {
     // Add as link relation
     const relation: IssueRelation = {
-      id: `link-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `link-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'link',
       relationType: selectedRelationType,
       targetIssue: {
@@ -215,7 +215,7 @@ export function IssueRelationsManager({
 
     // Add as create relation
     const relation: IssueRelation = {
-      id: `create-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `create-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'create',
       relationType: selectedRelationType,
       title: inputValue.trim(),

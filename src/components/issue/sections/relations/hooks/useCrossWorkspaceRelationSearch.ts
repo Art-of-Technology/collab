@@ -65,23 +65,28 @@ export function useCrossWorkspaceRelationSearch(
       // Filter out excluded IDs and transform to RelationItem format with workspace info
       const filteredIssues = issues
         .filter((issue: any) => !excludeIds.includes(issue.id))
-        .map((issue: any) => ({
-          id: issue.id,
-          title: issue.title,
-          issueKey: issue.issueKey,
-          status: issue.status,
-          priority: issue.priority,
-          type: issue.type?.toLowerCase() === 'task' ? 'issue' : 
-                issue.type?.toLowerCase() === 'bug' ? 'defect' :
-                issue.type?.toLowerCase() || 'issue',
-          assignee: issue.assignee,
-          project: issue.project,
-          workspace: issue.workspace, // Include workspace information for cross-workspace context
-          createdAt: issue.createdAt || new Date().toISOString(),
-          updatedAt: issue.updatedAt || new Date().toISOString(),
-          dueDate: issue.dueDate,
-          _count: issue._count
-        }));
+        .map((issue: any) => {
+          const typeMap: Record<string, string> = {
+            'task': 'issue',
+            'bug': 'defect',
+          };
+          const issueType = issue.type?.toLowerCase();
+          return {
+            id: issue.id,
+            title: issue.title,
+            issueKey: issue.issueKey,
+            status: issue.status,
+            priority: issue.priority,
+            type: issueType ? (typeMap[issueType] || issueType) : 'issue',
+            assignee: issue.assignee,
+            project: issue.project,
+            workspace: issue.workspace, // Include workspace information for cross-workspace context
+            createdAt: issue.createdAt || new Date().toISOString(),
+            updatedAt: issue.updatedAt || new Date().toISOString(),
+            dueDate: issue.dueDate,
+            _count: issue._count
+          };
+        });
       
       return filteredIssues;
     },
