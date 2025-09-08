@@ -343,7 +343,7 @@ export default function Sidebar({
         <div className="p-2 border-b border-[#1f1f1f] space-y-2">
           {/* Logo */}
           <div className="flex justify-center">
-            <Link href="/" className="flex items-center">
+            <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
               <Image src="/logo-v2.png" width={32} height={32} alt="Collab" className="h-8 w-auto" />
             </Link>
           </div>
@@ -594,7 +594,7 @@ export default function Sidebar({
       <div className="p-3 border-b border-[#1f1f1f]">
         <div className="flex items-center justify-between mb-3">
           {/* Logo */}
-          <Link href="/" className="flex items-center">
+          <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
             <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
           </Link>
 

@@ -34,7 +34,12 @@ export default async function DashboardPage() {
   }
 
   // Verify workspace access and redirect if needed
-  const workspaceId = await verifyWorkspaceAccess(session.user);
+  let workspaceId = "";
+  try {
+    workspaceId = await verifyWorkspaceAccess(session.user);
+  } catch (error) {
+    redirect("/welcome");
+  }
 
   // Fetch initial data for hydration
   const [

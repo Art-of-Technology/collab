@@ -232,7 +232,7 @@ export default function Navbar({
           </Button>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center">
+          <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
             <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
           </Link>
         </div>
