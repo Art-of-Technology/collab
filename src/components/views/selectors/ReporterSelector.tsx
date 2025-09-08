@@ -27,7 +27,7 @@ interface ReporterSelectorProps {
 
 export function ReporterSelector({
   value = [],
-  onChange,
+  onChange = () => {},
   disabled = false,
   reporters = [],
 }: ReporterSelectorProps) {
@@ -37,9 +37,10 @@ export function ReporterSelector({
   const selectedReporters = reporters.filter(r => value.includes(r.id));
   
   // Filter reporters based on search query
+  const searchQueryLower = searchQuery.toLowerCase();
   const filteredReporters = reporters.filter(reporter =>
-    reporter.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    reporter.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    reporter.name?.toLowerCase().includes(searchQueryLower) ||
+    reporter.email?.toLowerCase().includes(searchQueryLower)
   );
 
   const toggleReporter = (reporterId: string) => {
@@ -73,7 +74,7 @@ export function ReporterSelector({
                 <CustomAvatar user={selectedReporters[0]} size="sm" />
               ) : (
                 <Avatar className="h-3.5 w-3.5">
-                  {selectedReporters[0].image && <AvatarImage src={selectedReporters[0].image} alt={selectedReporters[0].name} />}
+                  {selectedReporters[0].image && <AvatarImage src={selectedReporters[0].image} alt={selectedReporters[0].name || "User Avatar"} />}
                   <AvatarFallback className="text-xs font-medium">
                     {selectedReporters[0].name?.charAt(0) || "U"}
                   </AvatarFallback>
@@ -161,7 +162,7 @@ export function ReporterSelector({
                 <CustomAvatar user={reporter} size="sm" />
               ) : (
                 <Avatar className="h-5 w-5">
-                  {reporter.image && <AvatarImage src={reporter.image} alt={reporter.name} />}
+                  {reporter.image && <AvatarImage src={reporter.image} alt={reporter.name || "User Avatar"} />}
                   <AvatarFallback className="text-xs font-medium">
                     {reporter.name?.charAt(0) || "U"}
                   </AvatarFallback>
