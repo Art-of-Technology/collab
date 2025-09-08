@@ -7,6 +7,7 @@ export { StatusSelector } from './StatusSelector';
 export { PrioritySelector } from './PrioritySelector';
 export { TypeSelector } from './TypeSelector';
 export { AssigneeSelector } from './AssigneeSelector';
+export { ReporterSelector } from './ReporterSelector';
 export { LabelsSelector } from './LabelsSelector';
 export { ViewUpdatedAtSelector } from './ViewUpdatedAtSelector';
 export { ActionFiltersSelector, type ActionFilter } from './ActionFiltersSelector';
