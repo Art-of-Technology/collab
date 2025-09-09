@@ -239,6 +239,11 @@ export function IssueRichEditor({
     // Use the AIImproveExtension command
     const result = editor.commands.improveSelection();
     console.log('AIImproveExtension command result:', result);
+    
+    // If the command returned false, reset the loading state
+    if (!result) {
+      setIsImproving(false);
+    }
   }, [onAiImprove, isImproving]);
 
   // Handle applying AI improvement
@@ -426,46 +431,52 @@ export function IssueRichEditor({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle AI improve events
+  // Handle AI improve events - set up listeners when editor is ready
   useEffect(() => {
-    const editor = editorRef.current?.getEditor();
-    if (!editor) return;
-
-    const handleAiImproveReady = (event: CustomEvent) => {
-      console.log('AI Improve Ready event received:', event.detail);
-      const { improvedText, savedSelection: eventSavedSelection } = event.detail;
-      setImprovedText(improvedText);
-      setSavedSelection(eventSavedSelection);
-      setIsImproving(false);
-      setShowFloatingMenu(false); // Hide floating menu when showing popover
-      
-      // Calculate position for the popover
-      if (eventSavedSelection) {
-        const coords = editor.view.coordsAtPos(eventSavedSelection.from);
-        setImprovePosition({
-          top: coords.top - 100,
-          left: coords.left,
-        });
-        console.log('Popover position set:', { top: coords.top - 100, left: coords.left });
+    const setupEventListeners = () => {
+      const editor = editorRef.current?.getEditor();
+      if (!editor) {
+        // If editor is not ready, try again in next tick
+        setTimeout(setupEventListeners, 100);
+        return;
       }
-      
-      setShowImprovePopover(true);
-      console.log('Show improve popover set to true');
+
+      const handleAiImproveReady = (event: CustomEvent) => {
+        const { improvedText, savedSelection: eventSavedSelection } = event.detail;
+        setImprovedText(improvedText);
+        setSavedSelection(eventSavedSelection);
+        setIsImproving(false);
+        setShowFloatingMenu(false); // Hide floating menu when showing popover
+        
+        // Calculate position for the popover
+        if (eventSavedSelection) {
+          const coords = editor.view.coordsAtPos(eventSavedSelection.from);
+          setImprovePosition({
+            top: coords.top - 100,
+            left: coords.left,
+          });
+        }
+        
+        setShowImprovePopover(true);
+        console.log('Show improve popover set to true');
+      };
+
+      const handleAiImproveError = (event: CustomEvent) => {
+        console.error('AI improve error:', event.detail.error);
+        setIsImproving(false);
+        setShowImprovePopover(false);
+      };
+      editor.view.dom.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
+      editor.view.dom.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
+
+      return () => {
+        editor.view.dom.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
+        editor.view.dom.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
+      };
     };
 
-    const handleAiImproveError = (event: CustomEvent) => {
-      console.error('AI improve error:', event.detail.error);
-      setIsImproving(false);
-      setShowImprovePopover(false);
-    };
-
-    editor.view.dom.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
-    editor.view.dom.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
-
-    return () => {
-      editor.view.dom.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
-      editor.view.dom.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
-    };
+    const cleanup = setupEventListeners();
+    return cleanup;
   }, [collabReady]);
 
   // Initialize collaboration (Hocuspocus) when document id is provided
