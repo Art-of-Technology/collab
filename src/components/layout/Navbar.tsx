@@ -232,7 +232,19 @@ export default function Navbar({
           </Button>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center">
+          {/*
+            Compute a safe workspace path: use slug or id if available, otherwise fallback to '/dashboard'
+          */}
+          <Link
+            href={
+              currentWorkspace?.slug
+                ? `/${currentWorkspace.slug}/dashboard`
+                : currentWorkspace?.id
+                ? `/${currentWorkspace.id}/dashboard`
+                : `/dashboard`
+            }
+            className="flex items-center"
+          >
             <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
           </Link>
         </div>
