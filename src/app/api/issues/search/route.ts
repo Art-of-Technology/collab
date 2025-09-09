@@ -130,9 +130,9 @@ export async function GET(request: NextRequest) {
               contains: query,
               mode: 'insensitive'
             },
-            NOT: {
-              id: { in: exactIssueKeyMatches.map(issue => issue.id) }
-            }
+            ...(exactIssueKeyMatches.length > 0 && {
+              NOT: { id: { in: exactIssueKeyMatches.map(issue => issue.id) } }
+            })
           },
           include: includeClause,
           take: 10 - exactIssueKeyMatches.length
@@ -151,9 +151,9 @@ export async function GET(request: NextRequest) {
               contains: query,
               mode: 'insensitive'
             },
-            NOT: {
-              id: { in: existingIds }
-            }
+            ...(existingIds.length > 0 && {
+              NOT: { id: { in: existingIds } }
+            })
           },
           include: includeClause,
           take: 10 - currentCount
@@ -172,9 +172,9 @@ export async function GET(request: NextRequest) {
               contains: query,
               mode: 'insensitive'
             },
-            NOT: {
-              id: { in: existingIds }
-            }
+            ...(existingIds.length > 0 && {
+              NOT: { id: { in: existingIds } }
+            })
           },
           include: includeClause,
           take: 10 - finalCount
