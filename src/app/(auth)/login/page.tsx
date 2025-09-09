@@ -14,8 +14,9 @@ export default async function LoginPage() {
     const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: user.id });
     if (!workspaceSlugOrId) {
       redirect("/welcome");
+    } else {
+      redirect(`/${workspaceSlugOrId}/timeline`);
     }
-    redirect(`/${workspaceSlugOrId}/timeline`);
   }
 
   return (

@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
-import { checkUserHasWorkspaces, getPendingInvitations } from "@/actions/invitation";
-import WelcomeClient from "@/components/welcome/WelcomeClient";
-import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
+import { getPendingInvitations } from "@/actions/invitation";
+import StreamlinedWelcomeClient from "@/components/welcome/StreamlinedWelcomeClient";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,24 +12,11 @@ export default async function WelcomePage() {
     redirect("/login");
   }
 
-  // Check if user has any workspaces using server action
-  const hasWorkspaces = await checkUserHasWorkspaces().catch(() => false);
-
-  // If user has workspaces, redirect to currentWorkspace (cookie) or fallback to an accessible one
-  if (hasWorkspaces) {
-    const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
-    if (workspaceSlugOrId) {
-      redirect(`/${workspaceSlugOrId}/dashboard`);
-    }
-  }
-
   // Get pending invitations for the user using server action
   const pendingInvitations = await getPendingInvitations(session.user.email || '')
     .catch(() => []);
 
   return (
-    <div className="container max-w-4xl py-8">
-      <WelcomeClient initialInvitations={pendingInvitations} />
-    </div>
+    <StreamlinedWelcomeClient initialInvitations={pendingInvitations} />
   );
 } 

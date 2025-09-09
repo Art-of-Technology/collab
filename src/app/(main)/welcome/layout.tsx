@@ -1,8 +1,6 @@
 import React from "react";
 import { redirect } from "next/navigation";
-import Navbar from "@/components/layout/Navbar";
 import { getAuthSession } from "@/lib/auth";
-import { getWorkspaceId } from "@/lib/workspace-helpers";
 
 export default async function WelcomeLayout({
   children,
@@ -16,27 +14,10 @@ export default async function WelcomeLayout({
     redirect("/login");
   }
   
-  // Check if user has a valid current workspace (cookie or fallback)
-  const workspaceId = await getWorkspaceId({ id: session.user.id });
-  const hasWorkspaces = !!workspaceId;
-  
+  // Streamlined layout - no navbar, full screen experience
   return (
     <>
-      {/* Top navbar - full width */}
-      <Navbar 
-        hasWorkspaces={hasWorkspaces}
-        shouldShowSearch={false}
-        userEmail={session.user.email || ''}
-        userName={session.user.name || ''}
-        userImage={session.user.image || ''}
-      />
-      
-      {/* Main content area - full width */}
-      <main className="pt-20 pb-[90px] px-4 overflow-y-auto bg-[#191919]">
-        <div className="mx-auto w-full p-12">
-          {children}
-        </div>
-      </main>
+      {children}
     </>
   );
 } 

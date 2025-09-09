@@ -13,7 +13,14 @@ export default async function Home() {
   try {
     // Determine current workspace using cookie (fallback to any accessible one)
     const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
-    redirect(`/${workspaceSlugOrId}/dashboard`);
+    
+    // If user has a workspace, redirect to it
+    if (workspaceSlugOrId) {
+      redirect(`/${workspaceSlugOrId}/dashboard`);
+    } else {
+      // No workspace found, redirect to welcome page
+      redirect("/welcome");
+    }
   } catch (error) {
     console.error("Error loading workspace:", error);
     redirect("/welcome");
