@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
-import { SlashCommandsExtension, SubIssueCreationExtension, SaveDiscardExtension, AIImproveExtension } from './extensions';
+import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension } from './extensions';
 import { parseMarkdownToTipTap } from './utils/ai-improve';
 import {
   Heading1,
@@ -38,17 +38,10 @@ interface IssueRichEditorProps {
   enableSlashCommands?: boolean;
   enableFloatingMenu?: boolean;
   enableSubIssueCreation?: boolean;
-  enableSaveDiscard?: boolean;
   
   // Callbacks
   onAiImprove?: (text: string) => Promise<string>;
   onCreateSubIssue?: (selectedText: string) => void;
-  onSave?: () => void;
-  onDiscard?: () => void;
-  onContentChange?: (content: string, hasChanges: boolean) => void;
-  
-  // Save/Discard specific
-  originalContent?: string;
   
   // Keyboard shortcuts
   onKeyDown?: (e: React.KeyboardEvent) => void;
@@ -124,13 +117,8 @@ export function IssueRichEditor({
   enableSlashCommands = true,
   enableFloatingMenu = true,
   enableSubIssueCreation = false,
-  enableSaveDiscard = false,
   onAiImprove,
   onCreateSubIssue,
-  onSave,
-  onDiscard,
-  onContentChange,
-  originalContent,
   onKeyDown,
   collabDocumentId,
 }: IssueRichEditorProps) {
@@ -511,17 +499,6 @@ export function IssueRichEditor({
     additionalExtensions.push(
       SubIssueCreationExtension.configure({
         onCreateSubIssue,
-      })
-    );
-  }
-  
-  if (enableSaveDiscard) {
-    additionalExtensions.push(
-      SaveDiscardExtension.configure({
-        onContentChange,
-        onSave,
-        onDiscard,
-        originalContent,
       })
     );
   }
