@@ -12,7 +12,6 @@ export default async function Home() {
 
   try {
     // Determine current workspace using cookie (fallback to any accessible one)
-
       const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
       redirect(`/${workspaceSlugOrId}/dashboard`);
     } catch (error) {
