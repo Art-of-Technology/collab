@@ -433,12 +433,24 @@ export function IssueRichEditor({
 
   // Handle AI improve events - set up listeners when editor is ready
   useEffect(() => {
-    const setupEventListeners = () => {
+    let timeoutId: NodeJS.Timeout;
+    let retryCount = 0;
+    const maxRetries = 50; // Maximum 5 seconds (50 * 100ms)
+
+    const setupEventListeners = (): (() => void) => {
       const editor = editorRef.current?.getEditor();
       if (!editor) {
-        // If editor is not ready, try again in next tick
-        setTimeout(setupEventListeners, 100);
-        return;
+        // If editor is not ready, try again with retry limit
+        if (retryCount < maxRetries) {
+          retryCount++;
+          timeoutId = setTimeout(setupEventListeners, 100);
+        }
+        // Always return a cleanup function
+        return () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        };
       }
 
       const handleAiImproveReady = (event: CustomEvent) => {
@@ -466,6 +478,7 @@ export function IssueRichEditor({
         setIsImproving(false);
         setShowImprovePopover(false);
       };
+      
       editor.view.dom.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
       editor.view.dom.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
 
