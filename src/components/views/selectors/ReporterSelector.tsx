@@ -27,7 +27,7 @@ interface ReporterSelectorProps {
 
 export function ReporterSelector({
   value = [],
-  onChange = () => {},
+  onChange,
   disabled = false,
   reporters = [],
 }: ReporterSelectorProps) {

@@ -72,8 +72,8 @@ export const useKanbanState = ({
     // Map selected status IDs (from filters) to status names across projects
     let allowedStatusNames: string[] | undefined = undefined;
     if (groupField === 'status') {
-      const selectedStatusIds: string[] = Array.isArray((activeFilters as any)?.status)
-        ? ((activeFilters as any).status as string[])
+      const selectedStatusIds: string[] = Array.isArray(activeFilters?.status)
+        ? (activeFilters.status)
         : [];
       if (selectedStatusIds.length > 0 && Array.isArray(projectStatusData?.projectStatuses)) {
         const idSet = new Set(selectedStatusIds);
