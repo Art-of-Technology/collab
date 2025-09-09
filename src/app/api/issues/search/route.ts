@@ -79,33 +79,10 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Add search query filter
+    let allIssues: any[] = [];
+    
     if (query.trim()) {
-      whereClause.OR = [
-        {
-          title: {
-            contains: query,
-            mode: 'insensitive'
-          }
-        },
-        {
-          issueKey: {
-            contains: query,
-            mode: 'insensitive'
-          }
-        },
-        {
-          description: {
-            contains: query,
-            mode: 'insensitive'
-          }
-        }
-      ];
-    }
-
-    const issues = await prisma.issue.findMany({
-      where: whereClause,
-      include: {
+      const includeClause = {
         project: {
           select: {
             id: true,
@@ -128,16 +105,127 @@ export async function GET(request: NextRequest) {
             image: true
           }
         }
-      },
-      orderBy: [
-        { updatedAt: 'desc' },
-        { createdAt: 'desc' }
-      ],
-      take: 10 // Limit results for mention suggestions
-    });
+      };
+
+      // 1. Exact issueKey matches (highest priority)
+      const exactIssueKeyMatches = await prisma.issue.findMany({
+        where: {
+          ...whereClause,
+          issueKey: {
+            equals: query,
+            mode: 'insensitive'
+          }
+        },
+        include: includeClause,
+        take: 10
+      });
+
+      // 2. Partial issueKey matches (if we don't have enough exact matches)
+      let partialIssueKeyMatches: any[] = [];
+      if (exactIssueKeyMatches.length < 10) {
+        partialIssueKeyMatches = await prisma.issue.findMany({
+          where: {
+            ...whereClause,
+            issueKey: {
+              contains: query,
+              mode: 'insensitive'
+            },
+            NOT: {
+              id: { in: exactIssueKeyMatches.map(issue => issue.id) }
+            }
+          },
+          include: includeClause,
+          take: 10 - exactIssueKeyMatches.length
+        });
+      }
+
+      // 3. Title matches (if we still need more results)
+      let titleMatches: any[] = [];
+      const currentCount = exactIssueKeyMatches.length + partialIssueKeyMatches.length;
+      if (currentCount < 10) {
+        const existingIds = [...exactIssueKeyMatches, ...partialIssueKeyMatches].map(issue => issue.id);
+        titleMatches = await prisma.issue.findMany({
+          where: {
+            ...whereClause,
+            title: {
+              contains: query,
+              mode: 'insensitive'
+            },
+            NOT: {
+              id: { in: existingIds }
+            }
+          },
+          include: includeClause,
+          take: 10 - currentCount
+        });
+      }
+
+      // 4. Description matches (if we still need more results)
+      let descriptionMatches: any[] = [];
+      const finalCount = exactIssueKeyMatches.length + partialIssueKeyMatches.length + titleMatches.length;
+      if (finalCount < 10) {
+        const existingIds = [...exactIssueKeyMatches, ...partialIssueKeyMatches, ...titleMatches].map(issue => issue.id);
+        descriptionMatches = await prisma.issue.findMany({
+          where: {
+            ...whereClause,
+            description: {
+              contains: query,
+              mode: 'insensitive'
+            },
+            NOT: {
+              id: { in: existingIds }
+            }
+          },
+          include: includeClause,
+          take: 10 - finalCount
+        });
+      }
+
+      // Combine results in priority order
+      allIssues = [
+        ...exactIssueKeyMatches,
+        ...partialIssueKeyMatches,
+        ...titleMatches,
+        ...descriptionMatches
+      ];
+    } else {
+      // If no query, just get recent issues
+      allIssues = await prisma.issue.findMany({
+        where: whereClause,
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              issuePrefix: true,
+            }
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            }
+          },
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+              image: true
+            }
+          }
+        },
+        orderBy: [
+          { updatedAt: 'desc' },
+          { createdAt: 'desc' }
+        ],
+        take: 10
+      });
+    }
 
     // Transform issues to match the expected format
-    const transformedIssues = issues.map(issue => ({
+    const transformedIssues = allIssues.map(issue => ({
       id: issue.id,
       title: issue.title,
       issueKey: issue.issueKey,
