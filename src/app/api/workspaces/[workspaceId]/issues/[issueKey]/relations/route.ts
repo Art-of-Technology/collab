@@ -127,6 +127,7 @@ export async function GET(
     sourceRelations.forEach(relation => {
       const relatedIssue = {
         id: relation.targetIssue.id,
+        dbId: relation.id,
         title: relation.targetIssue.title,
         issueKey: relation.targetIssue.issueKey,
         status: relation.targetIssue.status,
@@ -169,6 +170,7 @@ export async function GET(
     targetRelations.forEach(relation => {
       const relatedIssue = {
         id: relation.sourceIssue.id,
+        dbId: relation.id,
         title: relation.sourceIssue.title,
         issueKey: relation.sourceIssue.issueKey,
         status: relation.sourceIssue.status,

@@ -112,7 +112,7 @@ export function RelationGroup({
             item={relation}
             workspaceId={workspaceId}
             relationType={relationType}
-            onRemove={() => handleRemoveRelation(relation.id)}
+            onRemove={() => handleRemoveRelation(relation.dbId)}
             canRemove={canEdit}
             compact={true}
           />
