@@ -48,7 +48,14 @@ export async function GET(
           // Immediately notify disabled state
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'realtime.disabled' })}\n\n`));
           const signal = request.signal as AbortSignal | undefined;
-          if (signal) signal.addEventListener('abort', () => { clearInterval(interval); controller.close(); });
+          if (signal) signal.addEventListener('abort', () => { 
+            clearInterval(interval); 
+            try {
+              if (controller.desiredSize !== null) {
+                controller.close();
+              }
+            } catch {}
+          });
           return;
         }
 
@@ -86,7 +93,12 @@ export async function GET(
           try {
             await subscriber.quit();
           } catch {}
-          controller.close();
+          try {
+            // Check if controller is still open before closing
+            if (controller.desiredSize !== null) {
+              controller.close();
+            }
+          } catch {}
         };
 
         // Close on client abort

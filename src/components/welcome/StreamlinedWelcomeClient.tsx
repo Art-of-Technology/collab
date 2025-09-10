@@ -51,7 +51,20 @@ export default function StreamlinedWelcomeClient({ initialInvitations }: Streaml
       });
 
       if (!result.ok) {
-        throw new Error('Failed to create workspace');
+        const errorData = await result.json().catch(() => ({ error: 'Unknown error' }));
+        
+        // Handle specific error cases
+        if (result.status === 409) {
+          // Workspace already exists - redirect to home page to find existing workspace
+          toast.success("🎉 You already have a workspace! Redirecting...");
+          setTimeout(() => {
+            router.push("/");
+            router.refresh();
+          }, 1500);
+          return;
+        }
+        
+        throw new Error(errorData.error || 'Failed to create workspace');
       }
 
       const data = await result.json();
@@ -59,11 +72,11 @@ export default function StreamlinedWelcomeClient({ initialInvitations }: Streaml
       // Success! Redirect to home page which will route to workspace
       toast.success("🎉 Your workspace is ready!");
       
-      // Add a small delay to let the user see the completion
+      // Add a longer delay to ensure workspace is fully created and propagated
       setTimeout(() => {
-        router.push("/");
-        router.refresh();
-      }, 1000);
+        // Force a hard refresh to ensure all data is fresh
+        window.location.href = "/";
+      }, 2000);
       
     } catch (error) {
       console.error('Error creating workspace:', error);

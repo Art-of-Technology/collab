@@ -9,11 +9,11 @@ export default async function WelcomeLayout({
 }>) {
   // Get the current user session
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     redirect("/login");
   }
-  
+
   // Streamlined layout - no navbar, full screen experience
   return (
     <>
