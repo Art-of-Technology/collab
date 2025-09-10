@@ -246,8 +246,6 @@ export default function ViewRenderer({
     }
   }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
-  const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
-  const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
 
   // Determine which projects are newly selected (not in original view)
   const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
@@ -267,8 +265,31 @@ export default function ViewRenderer({
     });
   }, [view.filters]);
 
-  // Only fetch live data if view has NO active filters to avoid overriding server-side filtering
-  const shouldFetchLiveData = !hasActiveFilters;
+  // Check if any temp filters differ from the view's original filters
+  const tempFiltersChanged = useMemo(() => {
+    if (Object.keys(tempFilters).length === 0) return false;
+    
+    // Check each temp filter against the original view filter
+    return Object.entries(tempFilters).some(([filterKey, tempValues]) => {
+      const viewValues = view.filters?.[filterKey] || [];
+      
+      // Handle ActionFilter[] type for actions
+      if (filterKey === 'actions') {
+        return JSON.stringify(tempValues) !== JSON.stringify(viewValues);
+      }
+      
+      // Handle string[] type for other filters
+      const tempArray = Array.isArray(tempValues) ? tempValues : [];
+      const viewArray = Array.isArray(viewValues) ? viewValues : [];
+      
+      return JSON.stringify(tempArray.sort()) !== JSON.stringify(viewArray.sort());
+    });
+  }, [tempFilters, view.filters]);
+  
+  // Fetch live data if:
+  // 1. View has no active filters, OR
+  // 2. User has added/changed any filters that weren't in the original view
+  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged;
   
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
@@ -299,9 +320,9 @@ export default function ViewRenderer({
 
   // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // When view has filters, prioritize server-side filtered initialIssues
-    // When no filters, use live data for real-time updates
-    const baseIssues = hasActiveFilters 
+    // When view has filters and no temp filters changed, prioritize server-side filtered initialIssues
+    // When no filters OR temp filters changed, use live data for real-time updates
+    const baseIssues = (hasActiveFilters && !tempFiltersChanged)
       ? initialIssues 
       : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
@@ -313,10 +334,28 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-    }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
-  
-    // Use merged issues for filtering
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged]);
+
+  // Use merged issues for filtering
   const issues = allIssues;
+  
+  // Helper function to handle filter changes and trigger data refetch when needed
+  const handleFilterChange = useCallback((filterKey: string, newValues: string[] | ActionFilter[], originalValues: string[] | ActionFilter[]) => {
+    const isDifferent = JSON.stringify(newValues) !== JSON.stringify(originalValues);
+    
+    if (isDifferent) {
+      setTempFilters(prev => ({ ...prev, [filterKey]: newValues }));
+      
+      // Invalidate and refetch workspace issues to get newly filtered issues
+      queryClient.invalidateQueries({ 
+        queryKey: [...issueKeys.byWorkspace(workspace.id)] 
+      });
+    } else {
+      // Remove the filter if it matches the original view filter
+      const { [filterKey]: removed, ...rest } = tempFilters;
+      setTempFilters(rest);
+    }
+  }, [queryClient, workspace.id, tempFilters]);
   
   // Track the last saved state to properly detect changes
   const [lastSavedState, setLastSavedState] = useState({
@@ -376,8 +415,6 @@ export default function ViewRenderer({
     setTempDisplayProperties(lastSavedState.displayProperties);
     setTempProjectIds(view.projects.map(p => p.id));
     setTempShowSubIssues(true);
-    setTempShowEmptyGroups(true);
-    setTempCompletedIssues('all');
   };
 
   // Apply all filters (view + temp)
@@ -581,7 +618,7 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds]);
+  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds, tempProjectIds.length]);
 
   // Apply sorting
   const sortedIssues = useMemo(() => {
@@ -625,22 +662,6 @@ export default function ViewRenderer({
     return sorted;
   }, [filteredIssues, tempOrdering]);
 
-  const ViewIcon = VIEW_TYPE_ICONS[tempDisplayType as keyof typeof VIEW_TYPE_ICONS] || List;
-
-  const handleFavoriteToggle = async () => {
-    try {
-      const response = await fetch(`/api/views/${view.id}/favorite`, {
-        method: 'POST'
-      });
-      
-      if (response.ok) {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    }
-  };
-
   const handleUpdateView = async () => {
     try {
       const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
@@ -679,6 +700,8 @@ export default function ViewRenderer({
         // Invalidate and refetch views to get updated data
         queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
         queryClient.refetchQueries({ queryKey: ['views', workspace.id] });
+
+        router.refresh();
       }
     } catch (error) {
       console.error('Error updating view:', error);
@@ -1205,52 +1228,28 @@ export default function ViewRenderer({
                 projectIds={tempProjectIds}
                 onChange={(statuses) => {
                   const viewStatuses = view.filters?.status || [];
-                  const isDifferent = JSON.stringify(statuses.sort()) !== JSON.stringify(viewStatuses.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, status: statuses }));
-                  } else {
-                    const { status, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('status', statuses.sort(), viewStatuses.sort());
                 }}
               />
               <PrioritySelector
                 value={allFilters.priority || []}
                 onChange={(priorities) => {
                   const viewPriorities = view.filters?.priority || [];
-                  const isDifferent = JSON.stringify(priorities.sort()) !== JSON.stringify(viewPriorities.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, priority: priorities }));
-                  } else {
-                    const { priority, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('priority', priorities.sort(), viewPriorities.sort());
                 }}
               />
               <TypeSelector
                 value={allFilters.type || []}
                 onChange={(types) => {
                   const viewTypes = view.filters?.type || [];
-                  const isDifferent = JSON.stringify(types.sort()) !== JSON.stringify(viewTypes.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, type: types }));
-                  } else {
-                    const { type, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('type', types.sort(), viewTypes.sort());
                 }}
               />
               <AssigneeSelector
                 value={allFilters.assignee || []}
                 onChange={(assignees) => {
                   const viewAssignees = view.filters?.assignee || [];
-                  const isDifferent = JSON.stringify(assignees.sort()) !== JSON.stringify(viewAssignees.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, assignee: assignees }));
-                  } else {
-                    const { assignee, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('assignee', assignees.sort(), viewAssignees.sort());
                 }}
                 assignees={workspaceMembers}
               />
@@ -1258,13 +1257,7 @@ export default function ViewRenderer({
                 value={allFilters.reporter || []}
                 onChange={(reporters) => {
                   const viewReporters = view.filters?.reporter || [];
-                  const isDifferent = JSON.stringify(reporters.sort()) !== JSON.stringify(viewReporters.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, reporter: reporters }));
-                  } else {
-                    const { reporter, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('reporter', reporters.sort(), viewReporters.sort());
                 }}
                 reporters={workspaceMembers}
               />
@@ -1272,13 +1265,7 @@ export default function ViewRenderer({
                 value={allFilters.labels || []}
                 onChange={(labels) => {
                   const viewLabels = view.filters?.labels || [];
-                  const isDifferent = JSON.stringify(labels.sort()) !== JSON.stringify(viewLabels.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, labels }));
-                  } else {
-                    const { labels, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('labels', labels.sort(), viewLabels.sort());
                 }}
                 labels={workspaceLabels}
                 workspaceId={workspace.id}
@@ -1291,26 +1278,14 @@ export default function ViewRenderer({
                 value={allFilters.updatedAt || []}
                 onChange={(updatedAtFilters) => {
                   const viewUpdatedAt = view.filters?.updatedAt || [];
-                  const isDifferent = JSON.stringify(updatedAtFilters.sort()) !== JSON.stringify(viewUpdatedAt.sort());
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, updatedAt: updatedAtFilters }));
-                  } else {
-                    const { updatedAt, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('updatedAt', updatedAtFilters.sort(), viewUpdatedAt.sort());
                 }}
               />
               <ActionFiltersSelector
                 value={allFilters.actions || []}
                 onChange={(actionFilters: ActionFilter[]) => {
                   const viewActions = view.filters?.actions || [];
-                  const isDifferent = JSON.stringify(actionFilters) !== JSON.stringify(viewActions);
-                  if (isDifferent) {
-                    setTempFilters(prev => ({ ...prev, actions: actionFilters }));
-                  } else {
-                    const { actions, ...rest } = tempFilters;
-                    setTempFilters(rest);
-                  }
+                  handleFilterChange('actions', actionFilters, viewActions);
                 }}
                 projectIds={tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)}
                 workspaceMembers={workspaceMembers}

@@ -193,8 +193,12 @@ export default async function ViewPage({ params }: ViewPageProps) {
         if (Array.isArray(filterValues) && filterValues.length > 0) {
           switch (filterKey) {
             case 'status':
-              // Use statusValue for backward compatibility (issues use this field)
-              issuesQuery.where.statusValue = { in: filterValues };
+              // Check both statusId and statusValue for compatibility
+              issuesQuery.where.OR = [
+                ...(issuesQuery.where.OR || []),
+                { statusId: { in: filterValues } },
+                { statusValue: { in: filterValues } }
+              ];
               break;
             case 'priority':
               issuesQuery.where.priority = { in: filterValues };
