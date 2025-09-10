@@ -246,8 +246,6 @@ export default function ViewRenderer({
     }
   }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
-  const [tempShowEmptyGroups, setTempShowEmptyGroups] = useState(true);
-  const [tempCompletedIssues, setTempCompletedIssues] = useState('all');
 
   // Determine which projects are newly selected (not in original view)
   const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
@@ -417,8 +415,6 @@ export default function ViewRenderer({
     setTempDisplayProperties(lastSavedState.displayProperties);
     setTempProjectIds(view.projects.map(p => p.id));
     setTempShowSubIssues(true);
-    setTempShowEmptyGroups(true);
-    setTempCompletedIssues('all');
   };
 
   // Apply all filters (view + temp)
