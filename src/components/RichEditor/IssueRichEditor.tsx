@@ -575,7 +575,7 @@ export function IssueRichEditor({
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
         onUpdate={(editor) => {
-          setCanUndo(!!editor?.can?.().undo?.());
+          setCanUndo(editor?.can()?.undo() ?? false);  
           // Handle slash command query updates
           if (showSlashMenu) {
             handleSlashCommandUpdate(editor, {
