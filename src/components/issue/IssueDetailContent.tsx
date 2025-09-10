@@ -327,7 +327,7 @@ export function IssueDetailContent({
       }
     };
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = () => {
       if (latestDescriptionRef.current !== lastSavedDescription) {
         const endpoint = `/api/issues/${issue.issueKey || issue.id}`;
         const payload = JSON.stringify({ description: latestDescriptionRef.current });
@@ -339,7 +339,9 @@ export function IssueDetailContent({
             body: payload,
             keepalive: true,
           }).catch(() => { });
-        } catch { }
+        } catch (error) {
+          console.error('Error saving description:', error);
+        }
       }
     };
 
