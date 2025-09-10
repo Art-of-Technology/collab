@@ -14,6 +14,7 @@ import {
   Quote,
   Code,
   Minus,
+  Command,
 } from 'lucide-react';
 import type { SlashCommand } from './extensions/slash-commands-extension';
 import type { RichEditorRef } from './types';
@@ -24,6 +25,8 @@ import { createCollaborationUser } from '@/lib/collaboration/utils';
 import { useSession } from 'next-auth/react';
 import { useCurrentUser } from '@/hooks/queries/useUser';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import * as Y from 'yjs';
+import { Button } from '@/components/ui/button';
 
 interface IssueRichEditorProps {
   value: string;
@@ -158,6 +161,18 @@ export function IssueRichEditor({
   const [improvedText, setImprovedText] = useState<string>('');
   const [improvePosition, setImprovePosition] = useState({ top: 0, left: 0 });
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
+  const [isMac, setIsMac] = useState(true);
+  const [canUndo, setCanUndo] = useState(false);
+
+  useEffect(() => {
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
+      const platform = (nav?.userAgentData?.platform || nav?.platform || nav?.userAgent || '').toLowerCase();
+      setIsMac(platform.includes('mac'));
+    } catch {
+      setIsMac(true);
+    }
+  }, []);
 
   // Get filtered commands based on query
   const filteredCommands = DEFAULT_SLASH_COMMANDS.filter(cmd => 
@@ -561,6 +576,7 @@ export function IssueRichEditor({
         onSelectionUpdate={handleSelectionUpdate}
         onKeyDown={handleKeyDown}
         onUpdate={(editor) => {
+          setCanUndo(!!editor?.can?.().undo?.());
           // Handle slash command query updates
           if (showSlashMenu) {
             handleSlashCommandUpdate(editor, {
@@ -609,6 +625,40 @@ export function IssueRichEditor({
           onCancel={handleCancelImprovement}
           isImproving={isImproving}
         />
+      )}
+      {/* Bottom-right controls: Undo | History */}
+      {canUndo && (
+      <div className="absolute bottom-2 right-2 z-[999] flex items-center gap-1.5">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-6 pl-2 pr-1 text-[11px] bg-white/5 text-[#cbd5e1] hover:bg-white/10 hover:text-[#e5e7eb] border border-white/5"
+          onClick={() => {
+            const editor = editorRef.current?.getEditor();
+            editor?.chain().focus().undo().run();
+          }}
+        >
+          <span className="flex items-center justify-between gap-2">
+            <span>Undo</span>
+            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-black/40 border border-white/10 rounded text-[#94a3b8]">
+              {isMac ? (
+                <>
+                  <Command className="!size-2.5" />
+                  <span>+</span>
+                  <span>z</span>
+                </>
+              ) : (
+                <>
+                  <span>Ctrl</span>
+                  <span>+</span>
+                  <span>z</span>
+                </>
+              )}
+            </span>
+          </span>
+        </Button>
+      </div>
       )}
       
     </div>
