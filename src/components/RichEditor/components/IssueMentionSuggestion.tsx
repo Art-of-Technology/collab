@@ -11,7 +11,7 @@ import {
   ArrowUp 
 } from 'lucide-react';
 
-import { Issue } from '../types';
+import { Issue } from '@/types/issue';
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge } from "@/utils/issueHelpers";
 
@@ -206,7 +206,7 @@ export function IssueMentionSuggestion({
           >
             {/* Status Icon */}
             <div className="flex items-center w-5 mr-1 flex-shrink-0">
-              {getStatusIcon(issue.projectStatus?.displayName || issue.statusValue || issue.status || 'todo')}
+              {getStatusIcon(issue.projectStatus?.displayName || issue.status || 'todo')}
             </div>
 
             {/* Issue Key */}
