@@ -165,8 +165,14 @@ export function IssueRichEditor({
 
   useEffect(() => {
     try {
-      const nav: any = typeof navigator !== 'undefined' ? navigator : undefined;
-      const platform = (nav?.userAgentData?.platform || nav?.platform || nav?.userAgent || '').toLowerCase();
+      const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+      const userAgentData = (nav as any)?.userAgentData; // Cast only when necessary for newer API
+      const platform = (
+        userAgentData?.platform || 
+        nav?.platform || 
+        (nav?.userAgent?.toLowerCase().includes('mac') ? 'mac' : '') ||
+        ''
+      ).toLowerCase();
       setIsMac(platform.includes('mac'));
     } catch {
       setIsMac(true);
