@@ -25,7 +25,6 @@ import { createCollaborationUser } from '@/lib/collaboration/utils';
 import { useSession } from 'next-auth/react';
 import { useCurrentUser } from '@/hooks/queries/useUser';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import * as Y from 'yjs';
 import { Button } from '@/components/ui/button';
 
 interface IssueRichEditorProps {
