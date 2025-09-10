@@ -60,19 +60,13 @@ export default async function WorkspaceLayout({
     redirect("/welcome");
   }
   
-
-  
-  // Workspace routes should always show sidebar
-  console.log('Layout rendering with workspaceId:', workspaceId);
-  
   return (
     <SidebarProvider>
       <BoardGenerationProvider workspaceId={workspaceId}>
         <TaskGenerationProvider workspaceId={workspaceId}>
           <StoryGenerationProvider workspaceId={workspaceId}>
             <LayoutWithSidebar 
-              pathname={`/${workspaceId}`} 
-              session={session}
+              pathname={`/${workspaceId}`}
             >
               {children}
               <BoardGenerationStatus />

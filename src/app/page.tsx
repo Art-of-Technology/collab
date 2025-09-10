@@ -10,12 +10,14 @@ export default async function Home() {
     redirect("/home");
   } 
 
-  try {
-    // Determine current workspace using cookie (fallback to any accessible one)
-    const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
+  // Determine current workspace using cookie (fallback to any accessible one)
+  const workspaceSlugOrId = await getWorkspaceSlugOrId({ id: session.user.id });
+  
+  // If user has a workspace, redirect to it
+  if (workspaceSlugOrId) {
     redirect(`/${workspaceSlugOrId}/dashboard`);
-  } catch (error) {
-    console.error("Error loading workspace:", error);
+  } else {
+    // No workspace found, redirect to welcome page
     redirect("/welcome");
   }
 }

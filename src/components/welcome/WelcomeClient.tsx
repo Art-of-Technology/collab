@@ -35,7 +35,7 @@ export default function WelcomeClient({ initialInvitations }: WelcomeClientProps
         <Building2 className="h-16 w-16 text-primary mb-4" />
         <h1 className="text-3xl font-bold">Welcome to Collab</h1>
         <p className="text-muted-foreground mt-2 max-w-lg">
-          You don&apos;t have access to any workspaces yet. Create a new workspace or accept an invitation to get started.
+          Let&apos;s get you set up! Create a new workspace or accept an invitation to start collaborating.
         </p>
       </div>
 
@@ -57,7 +57,7 @@ export default function WelcomeClient({ initialInvitations }: WelcomeClientProps
             <CardHeader>
               <CardTitle>Create a new workspace</CardTitle>
               <CardDescription>
-                Create your own workspace to collaborate with your team
+                Set up a workspace to collaborate with your team
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -115,7 +115,7 @@ export default function WelcomeClient({ initialInvitations }: WelcomeClientProps
                   <Mail className="h-12 w-12 text-muted-foreground" />
                   <p className="text-lg font-medium">No pending invitations</p>
                   <p className="text-muted-foreground max-w-sm">
-                    You don&apos;t have any pending workspace invitations. Ask a workspace admin to invite you.
+                    No pending invitations at the moment. You can create your own workspace or ask someone to invite you.
                   </p>
                 </div>
               )}
