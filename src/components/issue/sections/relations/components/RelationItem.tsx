@@ -152,7 +152,7 @@ export function RelationItem({
         <ExternalLink className="h-3 w-3 text-[#666] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2" />
       </Link>
       
-      {canRemove && onRemove && (
+      {onRemove && (
         <Button
           variant="ghost"
           size="sm"
@@ -162,6 +162,7 @@ export function RelationItem({
             e.stopPropagation();
             onRemove();
           }}
+          disabled={!canRemove}
         >
           <X className="h-3 w-3" />
         </Button>
