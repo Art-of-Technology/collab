@@ -2,7 +2,6 @@
 export { IssueRelationsSection } from "./IssueRelationsSection";
 
 // Components
-export { RelationItem } from "./components/RelationItem";
 export { RelationGroup } from "./components/RelationGroup";
 export { AddRelationModal } from "./components/AddRelationModal";
 export { SearchRelationItem } from "./components/SearchRelationItem";
