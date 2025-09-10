@@ -340,7 +340,7 @@ export default function ViewRenderer({
   const issues = allIssues;
   
   // Helper function to handle filter changes and trigger data refetch when needed
-  const handleFilterChange = useCallback((filterKey: string, newValues: any, originalValues: any) => {
+  const handleFilterChange = useCallback((filterKey: string, newValues: string[] | ActionFilter[], originalValues: string[] | ActionFilter[]) => {
     const isDifferent = JSON.stringify(newValues) !== JSON.stringify(originalValues);
     
     if (isDifferent) {
