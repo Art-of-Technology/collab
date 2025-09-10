@@ -41,6 +41,10 @@ export const authOptions: AuthOptions = {
           // Don't throw error to avoid blocking user creation
         }
       }
+
+      // Note: We don't create workspaces automatically anymore
+      // OAuth users will be directed to welcome page to create workspace manually
+      console.log(`✅ OAuth user created successfully: ${user.email}`);
     },
     async linkAccount({ user, account, profile }) {
       // Handle profile image processing when linking Google account

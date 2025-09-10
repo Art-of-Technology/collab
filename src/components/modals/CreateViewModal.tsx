@@ -36,7 +36,8 @@ import {
   TypeSelector,
   AssigneeSelector,
   LabelsSelector,
-  ViewUpdatedAtSelector
+  ViewUpdatedAtSelector,
+  ReporterSelector
 } from '@/components/views/selectors';
 import { ActionFiltersSelector, type ActionFilter } from '@/components/views/selectors/ActionFiltersSelector';
 import { useCreateView } from '@/hooks/queries/useViews';
@@ -121,6 +122,7 @@ export default function CreateViewModal({
       priority: [] as string[],
       type: [] as string[],
       assignee: [] as string[],
+      reporter: [] as string[],
       labels: [] as string[],
       updatedAt: [] as string[],
       actions: [] as ActionFilter[]
@@ -349,6 +351,13 @@ export default function CreateViewModal({
                 setFormData(prev => ({ ...prev, filters: { ...prev.filters, assignee } }));
               }}
               assignees={workspaceMembers}
+            />
+            <ReporterSelector
+              value={formData.filters.reporter}
+              onChange={(reporter) => {
+                setFormData(prev => ({ ...prev, filters: { ...prev.filters, reporter } }));
+              }}
+              reporters={workspaceMembers}
             />
             <LabelsSelector
               value={formData.filters.labels}

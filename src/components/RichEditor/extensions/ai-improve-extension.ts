@@ -43,8 +43,13 @@ export const AIImproveExtension = Extension.create<AIImproveOptions>({
         ({ editor, commands }) => {
           const { from, to, empty } = editor.state.selection;
           // Only work with selected text
-          if (empty || !this.options.onAiImprove) {
-            console.log('AIImproveExtension: No selection or no callback, returning false');
+          if (empty) {
+            console.log('AIImproveExtension: No selection, returning false');
+            return false;
+          }
+          
+          if (!this.options.onAiImprove) {
+            console.log('AIImproveExtension: No callback provided, returning false');
             return false;
           }
 
@@ -66,36 +71,61 @@ export const AIImproveExtension = Extension.create<AIImproveOptions>({
           this.storage.savedSelection = { from, to, originalText: selectedText };
           this.storage.isImproving = true;
 
-          // Call the AI improve function with the formatted content
-          this.options.onAiImprove(contentToImprove)
-            .then((result) => {
-              console.log('AIImproveExtension: AI improve result received:', result);
-              this.storage.improvedText = result;
-              this.storage.showImprovePopover = true;
+          try {
+            const improvePromise = this.options.onAiImprove(contentToImprove);
+            
+            if (!improvePromise || typeof improvePromise.then !== 'function') {
               this.storage.isImproving = false;
-              
-              // Emit a custom event to notify the UI
-              console.log('AIImproveExtension: Dispatching ai-improve-ready event');
-              editor.view.dom.dispatchEvent(
-                new CustomEvent('ai-improve-ready', {
-                  detail: {
-                    improvedText: result,
-                    savedSelection: this.storage.savedSelection,
-                  },
-                })
-              );
-            })
-            .catch((error) => {
-              console.error('Error improving text:', error);
-              this.storage.isImproving = false;
-              
-              // Emit error event
               editor.view.dom.dispatchEvent(
                 new CustomEvent('ai-improve-error', {
-                  detail: { error },
+                  detail: { error: new Error('onAiImprove did not return a promise') },
                 })
               );
-            });
+              return false;
+            }
+            
+            improvePromise
+              .then((result) => {
+                if (!result || typeof result !== 'string') {
+                  this.storage.isImproving = false;
+                  editor.view.dom.dispatchEvent(
+                    new CustomEvent('ai-improve-error', {
+                      detail: { error: new Error('Invalid result received from AI improve') },
+                    })
+                  );
+                  return;
+                }
+                
+                this.storage.improvedText = result;
+                this.storage.showImprovePopover = true;
+                this.storage.isImproving = false;
+                editor.view.dom.dispatchEvent(
+                  new CustomEvent('ai-improve-ready', {
+                    detail: {
+                      improvedText: result,
+                      savedSelection: this.storage.savedSelection,
+                    },
+                  })
+                );
+              })
+              .catch((error) => {
+                this.storage.isImproving = false;
+                
+                editor.view.dom.dispatchEvent(
+                  new CustomEvent('ai-improve-error', {
+                    detail: { error },
+                  })
+                );
+              });
+          } catch (error) {
+            this.storage.isImproving = false;
+            editor.view.dom.dispatchEvent(
+              new CustomEvent('ai-improve-error', {
+                detail: { error },
+              })
+            );
+            return false;
+          }
 
           return true;
         },

@@ -35,17 +35,6 @@ export default function KanbanBoard({
   onColumnNameChange,
   onIssueCreated,
 }: KanbanBoardProps) {
-  if (issues.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64 text-[#999]">
-        <div className="text-center">
-          <Plus className="h-12 w-12 mx-auto mb-4 text-[#666]" />
-          <p className="text-base">No issues found in this board</p>
-          <p className="text-sm text-[#666] mt-1">Create a new issue or adjust your filters</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart} onDragUpdate={onDragUpdate}>

@@ -55,8 +55,8 @@ export default function RegisterForm() {
         password: formData.password,
       });
 
-      // Redirect to welcome page to let the user create or join a workspace
-      router.push("/welcome");
+      // Redirect to home page which will route to workspace or welcome as appropriate
+      router.push("/");
       router.refresh();
     } catch (error: any) {
       console.error("Registration error:", error);

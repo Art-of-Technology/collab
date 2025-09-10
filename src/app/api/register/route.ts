@@ -57,6 +57,10 @@ export async function POST(req: Request) {
       }
     });
 
+    // Note: We don't create workspaces automatically anymore
+    // Users will be directed to welcome page to create workspace manually
+    console.log(`✅ User registered successfully: ${user.email}`);
+
     // Create a sanitized version without the password
     const { ...userWithoutPassword } = user;
 

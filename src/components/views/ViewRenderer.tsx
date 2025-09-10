@@ -37,6 +37,7 @@ import { StatusSelector } from './selectors/StatusSelector';
 import { PrioritySelector } from './selectors/PrioritySelector';
 import { TypeSelector } from './selectors/TypeSelector';
 import { AssigneeSelector } from './selectors/AssigneeSelector';
+import { ReporterSelector } from './selectors/ReporterSelector';
 import { LabelsSelector } from './selectors/LabelsSelector';
 import { ActionFiltersSelector, type ActionFilter } from './selectors/ActionFiltersSelector';
 import { useActionFilteredIssues } from '@/hooks/useActionFilteredIssues';
@@ -312,9 +313,9 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
-
-  // Use merged issues for filtering
+    }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters]);
+  
+    // Use merged issues for filtering
   const issues = allIssues;
   
   // Track the last saved state to properly detect changes
@@ -475,6 +476,9 @@ export default function ViewRenderer({
             case 'assignee':
               const assigneeId = issue.assigneeId || 'unassigned';
               return filterValues.includes(assigneeId);
+            case 'reporter':
+              const reporterId = issue.reporterId || 'unassigned';
+              return filterValues.includes(reporterId);
             case 'labels':
               if (!issue.labels || issue.labels.length === 0) {
                 return filterValues.includes('no-labels');
@@ -776,6 +780,10 @@ export default function ViewRenderer({
               const assigneeId = issue.assigneeId || 'unassigned';
               return filterValues.includes(assigneeId);
             }
+            case 'reporter': {
+              const reporterId = issue.reporterId || 'unassigned';
+              return filterValues.includes(reporterId);
+            }
             case 'labels':
               if (!issue.labels || issue.labels.length === 0) {
                 return filterValues.includes('no-labels');
@@ -918,6 +926,7 @@ export default function ViewRenderer({
       issues: sortedIssues,
       workspace,
       currentUser,
+      activeFilters: allFilters,
       // Additional props needed by KanbanViewRenderer  
       projectId: tempProjectIds?.[0] || view.projects?.[0]?.id || '',
       workspaceId: workspace.id,
@@ -1244,6 +1253,20 @@ export default function ViewRenderer({
                   }
                 }}
                 assignees={workspaceMembers}
+              />
+              <ReporterSelector
+                value={allFilters.reporter || []}
+                onChange={(reporters) => {
+                  const viewReporters = view.filters?.reporter || [];
+                  const isDifferent = JSON.stringify(reporters.sort()) !== JSON.stringify(viewReporters.sort());
+                  if (isDifferent) {
+                    setTempFilters(prev => ({ ...prev, reporter: reporters }));
+                  } else {
+                    const { reporter, ...rest } = tempFilters;
+                    setTempFilters(rest);
+                  }
+                }}
+                reporters={workspaceMembers}
               />
               <LabelsSelector
                 value={allFilters.labels || []}
