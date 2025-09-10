@@ -194,7 +194,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
           switch (filterKey) {
             case 'status':
               // Use statusValue for backward compatibility (issues use this field)
-              issuesQuery.where.statusValue = { in: filterValues };
+              issuesQuery.where.statusId = { in: filterValues };
               break;
             case 'priority':
               issuesQuery.where.priority = { in: filterValues };
