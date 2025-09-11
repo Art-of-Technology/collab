@@ -41,7 +41,6 @@ import { CustomAvatar } from '@/components/ui/custom-avatar';
 import { ActivityIcon } from '@/components/issue/sections/activity/components/ActivityIcon';
 import { getActionText } from '@/components/issue/sections/activity/utils/activityHelpers';
 import { formatDistanceToNow } from 'date-fns';
-import { a } from 'framer-motion/dist/types.d-CtuPurYT';
 import { useToast } from '@/hooks/use-toast';
 
 interface IssueRichEditorProps {
