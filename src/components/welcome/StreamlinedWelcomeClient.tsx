@@ -101,8 +101,9 @@ export default function StreamlinedWelcomeClient({ initialInvitations }: Streaml
           <Image 
             src="/logo-v2.png" 
             alt="Collab" 
-            width={100} 
-            height={100} 
+            width={112} 
+            height={32}
+            className="h-auto w-[112px]"
           />
         </div>
         
