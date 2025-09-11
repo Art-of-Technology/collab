@@ -31,7 +31,5 @@ export default async function WelcomePage() {
       .catch(() => []);
   }
 
-  return (
-      <StreamlinedWelcomeClient initialInvitations={pendingInvitations} />
-  );
+  return <StreamlinedWelcomeClient initialInvitations={pendingInvitations} />;
 } 
