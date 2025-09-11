@@ -8,9 +8,9 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user) {
+    if (!session?.user || !session.user.email) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized or missing email' },
         { status: 401 }
       );
     }
@@ -18,7 +18,7 @@ export async function GET() {
     // Get all pending invitations for the user's email
     const pendingInvitations = await prisma.workspaceInvitation.findMany({
       where: {
-        email: session.user.email || '',
+        email: session.user.email,
         status: 'pending',
         expiresAt: {
           gte: new Date()
