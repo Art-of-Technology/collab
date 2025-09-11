@@ -155,7 +155,7 @@ export function IssueRelationsSection({
               workspaceId={relations?.workspace?.slug || workspaceId}
               onAddRelation={handleAddRelation}
               onRemoveRelation={handleRemoveRelation}
-              canEdit={true}
+              canEdit={!removeRelationMutation.isPending}
             />
           );
         })}

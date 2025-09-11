@@ -14,6 +14,7 @@ export type RelatedItemType = 'issue' | 'epic' | 'story' | 'milestone' | 'task' 
 // Core relation item structure
 export interface RelationItem {
   id: string;
+  dbId: string;
   title: string;
   issueKey?: string;
   status?: string;

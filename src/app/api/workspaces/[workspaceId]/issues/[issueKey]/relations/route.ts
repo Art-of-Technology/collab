@@ -127,6 +127,7 @@ export async function GET(
     sourceRelations.forEach(relation => {
       const relatedIssue = {
         id: relation.targetIssue.id,
+        dbId: relation.id,
         title: relation.targetIssue.title,
         issueKey: relation.targetIssue.issueKey,
         status: relation.targetIssue.status,
@@ -149,11 +150,17 @@ export async function GET(
         case 'BLOCKS':
           relations.blocks.push(relatedIssue);
           break;
+        case 'BLOCKED_BY':
+          relations.blocked_by.push(relatedIssue);
+          break;
         case 'RELATES_TO':
           relations.relates_to.push(relatedIssue);
           break;
         case 'DUPLICATES':
           relations.duplicates.push(relatedIssue);
+          break;
+        case 'DUPLICATED_BY':
+          relations.duplicated_by.push(relatedIssue);
           break;
         // Intentionally ignore 'CHILD' type going forward; parent/child is represented via 'PARENT'
       }
@@ -163,6 +170,7 @@ export async function GET(
     targetRelations.forEach(relation => {
       const relatedIssue = {
         id: relation.sourceIssue.id,
+        dbId: relation.id,
         title: relation.sourceIssue.title,
         issueKey: relation.sourceIssue.issueKey,
         status: relation.sourceIssue.status,
@@ -185,11 +193,17 @@ export async function GET(
         case 'BLOCKS':
           relations.blocked_by.push(relatedIssue);
           break;
+        case 'BLOCKED_BY':
+          relations.blocks.push(relatedIssue);
+          break;
         case 'RELATES_TO':
           relations.relates_to.push(relatedIssue);
           break;
         case 'DUPLICATES':
           relations.duplicated_by.push(relatedIssue);
+          break;
+        case 'DUPLICATED_BY':
+          relations.duplicates.push(relatedIssue);
           break;
         // Ignore legacy 'CHILD' entries
       }

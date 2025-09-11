@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
-import { SlashCommandsExtension, SubIssueCreationExtension, SaveDiscardExtension, AIImproveExtension } from './extensions';
+import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension } from './extensions';
 import { parseMarkdownToTipTap } from './utils/ai-improve';
 import {
   Heading1,
@@ -38,17 +38,10 @@ interface IssueRichEditorProps {
   enableSlashCommands?: boolean;
   enableFloatingMenu?: boolean;
   enableSubIssueCreation?: boolean;
-  enableSaveDiscard?: boolean;
   
   // Callbacks
   onAiImprove?: (text: string) => Promise<string>;
   onCreateSubIssue?: (selectedText: string) => void;
-  onSave?: () => void;
-  onDiscard?: () => void;
-  onContentChange?: (content: string, hasChanges: boolean) => void;
-  
-  // Save/Discard specific
-  originalContent?: string;
   
   // Keyboard shortcuts
   onKeyDown?: (e: React.KeyboardEvent) => void;
@@ -124,13 +117,8 @@ export function IssueRichEditor({
   enableSlashCommands = true,
   enableFloatingMenu = true,
   enableSubIssueCreation = false,
-  enableSaveDiscard = false,
   onAiImprove,
   onCreateSubIssue,
-  onSave,
-  onDiscard,
-  onContentChange,
-  originalContent,
   onKeyDown,
   collabDocumentId,
 }: IssueRichEditorProps) {
@@ -239,6 +227,11 @@ export function IssueRichEditor({
     // Use the AIImproveExtension command
     const result = editor.commands.improveSelection();
     console.log('AIImproveExtension command result:', result);
+    
+    // If the command returned false, reset the loading state
+    if (!result) {
+      setIsImproving(false);
+    }
   }, [onAiImprove, isImproving]);
 
   // Handle applying AI improvement
@@ -426,46 +419,65 @@ export function IssueRichEditor({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle AI improve events
+  // Handle AI improve events - set up listeners when editor is ready
   useEffect(() => {
-    const editor = editorRef.current?.getEditor();
-    if (!editor) return;
+    let timeoutId: NodeJS.Timeout;
+    let retryCount = 0;
+    const maxRetries = 50; // Maximum 5 seconds (50 * 100ms)
 
-    const handleAiImproveReady = (event: CustomEvent) => {
-      console.log('AI Improve Ready event received:', event.detail);
-      const { improvedText, savedSelection: eventSavedSelection } = event.detail;
-      setImprovedText(improvedText);
-      setSavedSelection(eventSavedSelection);
-      setIsImproving(false);
-      setShowFloatingMenu(false); // Hide floating menu when showing popover
-      
-      // Calculate position for the popover
-      if (eventSavedSelection) {
-        const coords = editor.view.coordsAtPos(eventSavedSelection.from);
-        setImprovePosition({
-          top: coords.top - 100,
-          left: coords.left,
-        });
-        console.log('Popover position set:', { top: coords.top - 100, left: coords.left });
+    const setupEventListeners = (): (() => void) => {
+      const editor = editorRef.current?.getEditor();
+      if (!editor) {
+        // If editor is not ready, try again with retry limit
+        if (retryCount < maxRetries) {
+          retryCount++;
+          timeoutId = setTimeout(setupEventListeners, 100);
+        }
+        // Always return a cleanup function
+        return () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        };
       }
+
+      const handleAiImproveReady = (event: CustomEvent) => {
+        const { improvedText, savedSelection: eventSavedSelection } = event.detail;
+        setImprovedText(improvedText);
+        setSavedSelection(eventSavedSelection);
+        setIsImproving(false);
+        setShowFloatingMenu(false); // Hide floating menu when showing popover
+        
+        // Calculate position for the popover
+        if (eventSavedSelection) {
+          const coords = editor.view.coordsAtPos(eventSavedSelection.from);
+          setImprovePosition({
+            top: coords.top - 100,
+            left: coords.left,
+          });
+        }
+        
+        setShowImprovePopover(true);
+        console.log('Show improve popover set to true');
+      };
+
+      const handleAiImproveError = (event: CustomEvent) => {
+        console.error('AI improve error:', event.detail.error);
+        setIsImproving(false);
+        setShowImprovePopover(false);
+      };
       
-      setShowImprovePopover(true);
-      console.log('Show improve popover set to true');
+      editor.view.dom.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
+      editor.view.dom.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
+
+      return () => {
+        editor.view.dom.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
+        editor.view.dom.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
+      };
     };
 
-    const handleAiImproveError = (event: CustomEvent) => {
-      console.error('AI improve error:', event.detail.error);
-      setIsImproving(false);
-      setShowImprovePopover(false);
-    };
-
-    editor.view.dom.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
-    editor.view.dom.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
-
-    return () => {
-      editor.view.dom.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
-      editor.view.dom.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
-    };
+    const cleanup = setupEventListeners();
+    return cleanup;
   }, [collabReady]);
 
   // Initialize collaboration (Hocuspocus) when document id is provided
@@ -511,17 +523,6 @@ export function IssueRichEditor({
     additionalExtensions.push(
       SubIssueCreationExtension.configure({
         onCreateSubIssue,
-      })
-    );
-  }
-  
-  if (enableSaveDiscard) {
-    additionalExtensions.push(
-      SaveDiscardExtension.configure({
-        onContentChange,
-        onSave,
-        onDiscard,
-        originalContent,
       })
     );
   }
