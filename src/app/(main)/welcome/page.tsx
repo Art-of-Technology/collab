@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { checkUserHasWorkspaces, getPendingInvitations } from "@/actions/invitation";
-import WelcomeClient from "@/components/welcome/WelcomeClient";
 import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
 import StreamlinedWelcomeClient from "@/components/welcome/StreamlinedWelcomeClient";
 
@@ -33,8 +32,6 @@ export default async function WelcomePage() {
   }
 
   return (
-    <div className="container max-w-4xl py-8">
-      <WelcomeClient initialInvitations={pendingInvitations} />
-    </div>
+      <StreamlinedWelcomeClient initialInvitations={pendingInvitations} />
   );
 } 
