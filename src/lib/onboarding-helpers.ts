@@ -182,24 +182,23 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
     const welcomeIssue = await tx.issue.create({
       data: {
         title: "Welcome to your personal workspace! 👋",
-        description: `Hi ${userName}! 
-
-Welcome to your personal workspace. This is your own space where you can:
-
-- Create and manage tasks
-- Track your personal projects
-- Organize your work with different views
-- Collaborate when you're ready to invite others
-
-**Getting Started:**
-1. Create your first task by clicking the "+" button
-2. Try different view types (Kanban, List, Table)
-3. Customize your workspace settings
-4. Invite team members when ready
-
-Feel free to edit or delete this welcome message once you're comfortable with the system.
-
-Happy organizing! ✨`,
+        description: `<p>Hi ${userName}!</p>
+<p>Welcome to your personal workspace. This is your own space where you can:</p>
+<ul>
+  <li>Create and manage tasks</li>
+  <li>Track your personal projects</li>
+  <li>Organize your work with different views</li>
+  <li>Collaborate when you're ready to invite others</li>
+</ul>
+<p><strong>Getting Started:</strong></p>
+<ol>
+  <li>Create your first task by clicking the "+" button</li>
+  <li>Try different view types (Kanban, List, Table)</li>
+  <li>Customize your workspace settings</li>
+  <li>Invite team members when ready</li>
+</ol>
+<p>Feel free to edit or delete this welcome message once you're comfortable with the system.</p>
+<p>Happy organizing! ✨</p>`,
         type: 'TASK',
         priority: "medium",
         assigneeId: userId,

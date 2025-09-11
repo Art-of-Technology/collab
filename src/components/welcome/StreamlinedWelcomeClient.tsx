@@ -101,11 +101,10 @@ export default function StreamlinedWelcomeClient({ initialInvitations }: Streaml
           <Image 
             src="/logo-v2.png" 
             alt="Collab" 
-            width={32} 
-            height={32} 
-            className="h-8 w-8"
+            width={112} 
+            height={32}
+            className="h-auto w-[112px]"
           />
-          <span className="ml-2 text-lg font-semibold text-foreground">collab</span>
         </div>
         
         {session?.user?.image && (
