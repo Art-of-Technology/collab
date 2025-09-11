@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { IssueActivity } from '../types/activity';
+import { ActivityAction, IssueActivity } from '../types/activity';
 import { filterActivities } from '../utils/activityHelpers';
 
 interface UseIssueActivitiesOptions {
   issueId: string;
   limit?: number;
+  action?: ActivityAction;
 }
 
 interface UseIssueActivitiesReturn {
@@ -18,7 +19,8 @@ interface UseIssueActivitiesReturn {
 
 export function useIssueActivities({ 
   issueId, 
-  limit = 50 
+  limit = 50,
+  action
 }: UseIssueActivitiesOptions): UseIssueActivitiesReturn {
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export function useIssueActivities({
       setError(null);
 
       const response = await fetch(
-        `/api/board-items/issue/${issueId}/activities?limit=${limit}`
+        `/api/board-items/issue/${issueId}/activities?limit=${limit}&action=${action}`
       );
 
       if (!response.ok) {

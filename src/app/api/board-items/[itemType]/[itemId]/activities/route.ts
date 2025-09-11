@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getItemActivities, BoardItemType } from "@/lib/board-item-activity-service";
+import { getItemActivities, BoardItemType, ActivityAction } from "@/lib/board-item-activity-service";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { itemType: string; itemId: string } }
+  { params }: { params: { itemType: string; itemId: string, action?: ActivityAction } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const _params = await params;
-    const { itemType, itemId } = _params;
+    const { itemType, itemId, action } = _params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
@@ -103,7 +103,7 @@ export async function GET(
     }
 
     // Get activities for the item
-    const activities = await getItemActivities(boardItemType, itemId, limit);
+    const activities = await getItemActivities(boardItemType, itemId, limit, action);
 
     return NextResponse.json(activities);
   } catch (error) {

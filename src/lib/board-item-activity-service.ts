@@ -213,13 +213,18 @@ export async function trackAssignment(
 export async function getItemActivities(
   itemType: BoardItemType,
   itemId: string,
-  limit: number = 50
+  limit: number = 50,
+  action?: ActivityAction,
 ) {
+  let where = {
+    itemType,
+    itemId,
+  } as any;
+  if (action) {
+    where.action = action;
+  }
   const activities = await prisma.boardItemActivity.findMany({
-    where: {
-      itemType,
-      itemId,
-    },
+    where,
     include: {
       user: {
         select: {

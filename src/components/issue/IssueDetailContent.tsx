@@ -1153,6 +1153,7 @@ export function IssueDetailContent({
                 collabDocumentId={collabDocumentId}
                 minHeight="400px"
                 maxHeight="none"
+                issueId={issue.id}
               />
             </div>
 
