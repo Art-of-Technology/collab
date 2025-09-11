@@ -3,6 +3,7 @@ import { getAuthSession } from "@/lib/auth";
 import { checkUserHasWorkspaces, getPendingInvitations } from "@/actions/invitation";
 import WelcomeClient from "@/components/welcome/WelcomeClient";
 import { getWorkspaceSlugOrId } from "@/lib/workspace-helpers";
+import StreamlinedWelcomeClient from "@/components/welcome/StreamlinedWelcomeClient";
 
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +26,11 @@ export default async function WelcomePage() {
   }
 
   // Get pending invitations for the user using server action
-  const pendingInvitations = await getPendingInvitations(session.user.email || '')
-    .catch(() => []);
+  let pendingInvitations: any[] = [];
+  if (session.user.email) {
+    pendingInvitations = await getPendingInvitations(session.user.email)
+      .catch(() => []);
+  }
 
   return (
     <div className="container max-w-4xl py-8">
