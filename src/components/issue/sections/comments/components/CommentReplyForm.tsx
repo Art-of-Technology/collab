@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RichEditor } from "@/components/RichEditor";
-import { useAddIssueComment } from "../hooks/useAddIssueComment";
+import { useAddIssueComment } from "@/hooks/queries/useIssueComment";
 
 interface CommentReplyFormProps {
   issueId: string;

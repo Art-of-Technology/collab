@@ -10,8 +10,13 @@ export { EmptyCommentsState } from "./components/EmptyCommentsState";
 export { LoadingState } from "./components/LoadingState";
 
 // Hooks
-export { useIssueComments } from "./hooks/useIssueComments";
-export { useAddIssueComment } from "./hooks/useAddIssueComment";
+export { 
+  useIssueComments, 
+  useAddIssueComment, 
+  useUpdateIssueComment, 
+  useDeleteIssueComment, 
+  useToggleIssueCommentLike 
+} from "@/hooks/queries/useIssueComment";
 
 // Utils
 export { organizeCommentsIntoTree, hasUserLikedComment, getLikeCount } from "./utils/commentHelpers";

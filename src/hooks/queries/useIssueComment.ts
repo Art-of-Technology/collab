@@ -42,6 +42,7 @@ export function useIssueComments(issueId: string) {
 export function useAddIssueComment() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: session } = useSession();
 
   return useMutation({
     mutationFn: async ({
@@ -70,19 +71,73 @@ export function useAddIssueComment() {
 
       return response.json();
     },
-    onSuccess: (_, variables) => {
-      // Use consistent query key
-      queryClient.invalidateQueries({
-        queryKey: issueCommentKeys.list(variables.issueId),
+    onMutate: async ({ issueId, content, html, parentId }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: issueCommentKeys.list(issueId) });
+
+      // Snapshot the previous value
+      const previousComments = queryClient.getQueryData(issueCommentKeys.list(issueId));
+
+      // Create optimistic comment
+      const optimisticComment = {
+        id: `temp-${Date.now()}`,
+        content,
+        html: html || content,
+        createdAt: new Date().toISOString(),
+        author: {
+          id: session?.user?.id || 'unknown',
+          name: session?.user?.name || 'Unknown User',
+          image: session?.user?.image || null,
+        },
+        reactions: [],
+        parentId: parentId || null,
+        replies: [],
+      };
+
+      // Optimistically update the cache
+      queryClient.setQueryData(issueCommentKeys.list(issueId), (old: any) => {
+        if (!old) return [optimisticComment];
+        
+        if (parentId) {
+          // If it's a reply, add it to the parent's replies
+          return old.map((comment: any) => {
+            if (comment.id === parentId) {
+              return {
+                ...comment,
+                replies: [...(comment.replies || []), optimisticComment],
+              };
+            }
+            return comment;
+          });
+        } else {
+          // If it's a top-level comment, add it to the list
+          return [...old, optimisticComment];
+        }
       });
+
+      return { previousComments };
     },
-    onError: (error) => {
-      console.error("Error adding comment:", error);
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousComments) {
+        queryClient.setQueryData(issueCommentKeys.list(variables.issueId), context.previousComments);
+      }
+      console.error("Error adding comment:", err);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add comment",
+        description: err instanceof Error ? err.message : "Failed to add comment",
         variant: "destructive",
       });
+    },
+    onSuccess: (newComment, { issueId }) => {
+      toast({
+        title: "Success",
+        description: "Comment added successfully",
+      });
+    },
+    onSettled: (_, __, { issueId }) => {
+      // Refetch to ensure we have the latest data and replace optimistic updates
+      queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
     },
   });
 }
@@ -161,6 +216,8 @@ export function useToggleIssueCommentLike() {
     onSettled: (_, __, { issueId }) => {
       // Refetch to ensure we have the latest data
       queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
+      // Also invalidate broader queries
+      queryClient.invalidateQueries({ queryKey: issueCommentKeys.all });
     },
   });
 }
@@ -179,18 +236,47 @@ export function useUpdateIssueComment() {
       content: string; 
       html?: string; 
     }) => updateIssueComment(issueId, commentId, { content, html }),
-    onSuccess: (_, { issueId }) => {
-      queryClient.invalidateQueries({
-        queryKey: issueCommentKeys.list(issueId),
+    onMutate: async ({ issueId, commentId, content, html }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: issueCommentKeys.list(issueId) });
+
+      // Snapshot the previous value
+      const previousComments = queryClient.getQueryData(issueCommentKeys.list(issueId));
+
+      // Optimistically update the cache
+      queryClient.setQueryData(issueCommentKeys.list(issueId), (old: any) => {
+        if (!old) return old;
+        
+        return old.map((comment: any) => {
+          if (comment.id === commentId) {
+            return {
+              ...comment,
+              content,
+              html: html || comment.html,
+            };
+          }
+          return comment;
+        });
       });
+
+      return { previousComments };
     },
-    onError: (error) => {
-      console.error("Error updating comment:", error);
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousComments) {
+        queryClient.setQueryData(issueCommentKeys.list(variables.issueId), context.previousComments);
+      }
+      console.error("Error updating comment:", err);
       toast({
         title: "Error",
         description: "Failed to update comment",
         variant: "destructive",
       });
+    },
+    onSettled: (_, __, { issueId }) => {
+      // Refetch to ensure we have the latest data
+      queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
+      queryClient.invalidateQueries({ queryKey: issueCommentKeys.all });
     },
   });
 }
@@ -205,18 +291,56 @@ export function useDeleteIssueComment() {
   return useMutation({
     mutationFn: ({ issueId, commentId }: { issueId: string; commentId: string }) => 
       deleteIssueComment(issueId, commentId),
-    onSuccess: (result, { issueId }) => {
-      queryClient.invalidateQueries({
-        queryKey: issueCommentKeys.list(issueId),
+    onMutate: async ({ issueId, commentId }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: issueCommentKeys.list(issueId) });
+
+      // Snapshot the previous value
+      const previousComments = queryClient.getQueryData(issueCommentKeys.list(issueId));
+
+      // Optimistically remove the comment from cache
+      queryClient.setQueryData(issueCommentKeys.list(issueId), (old: any) => {
+        if (!old) return old;
+        
+        // Filter out the deleted comment and any of its replies
+        const filterComments = (comments: any[]): any[] => {
+          return comments.filter(comment => {
+            // Remove the comment itself
+            if (comment.id === commentId) return false;
+            
+            // Remove replies to the deleted comment
+            if (comment.parentId === commentId) return false;
+            
+            // Recursively filter nested replies
+            if (comment.replies) {
+              comment.replies = filterComments(comment.replies);
+            }
+            
+            return true;
+          });
+        };
+        
+        return filterComments(old);
       });
+
+      return { previousComments };
     },
-    onError: (error) => {
-      console.error("Error deleting comment:", error);
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousComments) {
+        queryClient.setQueryData(issueCommentKeys.list(variables.issueId), context.previousComments);
+      }
+      console.error("Error deleting comment:", err);
       toast({
         title: "Error",
         description: "Failed to delete comment",
         variant: "destructive",
       });
+    },
+    onSettled: (_, __, { issueId }) => {
+      // Refetch to ensure we have the latest data
+      queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
+      queryClient.invalidateQueries({ queryKey: issueCommentKeys.all });
     },
   });
 }

@@ -13,9 +13,8 @@ comments/
 │   ├── CommentActions.tsx      # Like, reply, edit, delete actions
 │   ├── EmptyCommentsState.tsx  # Empty state display
 │   └── LoadingState.tsx        # Loading spinner
-├── hooks/              # Custom React hooks
-│   ├── useIssueComments.ts     # Fetch comments data
-│   └── useAddIssueComment.ts   # Add new comments
+├── hooks/              # (Removed - now uses centralized hooks)
+│   # All hooks moved to @/hooks/queries/useIssueComment.ts
 ├── types/              # TypeScript definitions
 │   └── comment.ts              # Comment interfaces
 ├── utils/              # Utility functions
@@ -60,8 +59,12 @@ import { IssueCommentsSection } from "@/components/issue/sections/comments";
 - **LoadingState**: Loading spinner during data fetch
 
 ### Hooks
+All hooks have been moved to centralized location `@/hooks/queries/useIssueComment.ts`:
 - **useIssueComments**: Fetches and manages comment data
 - **useAddIssueComment**: Handles comment creation with optimistic updates
+- **useUpdateIssueComment**: Handles comment editing with optimistic updates
+- **useDeleteIssueComment**: Handles comment deletion with optimistic updates
+- **useToggleIssueCommentLike**: Handles comment likes with optimistic updates
 
 ### Utilities
 - **organizeCommentsIntoTree**: Converts flat comment list to nested structure
