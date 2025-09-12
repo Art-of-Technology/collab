@@ -46,9 +46,19 @@ export async function GET(
         author: {
           select: { id: true, name: true, image: true, useCustomAvatar: true },
         },
+        reactions: {
+          include: {
+            author: { select: { id: true, name: true, image: true } }
+          }
+        },
         replies: {
           include: {
             author: { select: { id: true, name: true, image: true, useCustomAvatar: true } },
+            reactions: {
+              include: {
+                author: { select: { id: true, name: true, image: true } }
+              }
+            },
           },
         },
       },

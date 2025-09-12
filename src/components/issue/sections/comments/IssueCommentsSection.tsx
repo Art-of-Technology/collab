@@ -3,8 +3,7 @@
 import { useMemo, useCallback } from "react";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import type { IssueCommentsSectionProps } from "./types/comment";
-import { useIssueComments } from "./hooks/useIssueComments";
-import { useAddIssueComment } from "./hooks/useAddIssueComment";
+import { useIssueComments, useAddIssueComment } from "@/hooks/queries/useIssueComment";
 import { organizeCommentsIntoTree } from "./utils/commentHelpers";
 import { CommentItem } from "./components/CommentItem";
 import { CommentForm } from "./components/CommentForm";
