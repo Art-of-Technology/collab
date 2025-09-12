@@ -75,10 +75,6 @@ export function useAddIssueComment() {
       queryClient.invalidateQueries({
         queryKey: issueCommentKeys.list(variables.issueId),
       });
-      toast({
-        title: "Success",
-        description: "Comment added successfully",
-      });
     },
     onError: (error) => {
       console.error("Error adding comment:", error);
@@ -165,8 +161,6 @@ export function useToggleIssueCommentLike() {
     onSettled: (_, __, { issueId }) => {
       // Refetch to ensure we have the latest data
       queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
-      // Also invalidate broader queries
-      queryClient.invalidateQueries({ queryKey: issueCommentKeys.all });
     },
   });
 }
@@ -185,19 +179,9 @@ export function useUpdateIssueComment() {
       content: string; 
       html?: string; 
     }) => updateIssueComment(issueId, commentId, { content, html }),
-    onSuccess: (updatedComment, { issueId }) => {
-      // Invalidate and refetch the comments instead of manual cache updates
+    onSuccess: (_, { issueId }) => {
       queryClient.invalidateQueries({
         queryKey: issueCommentKeys.list(issueId),
-      });
-      // Also invalidate any broader queries
-      queryClient.invalidateQueries({
-        queryKey: issueCommentKeys.all,
-      });
-
-      toast({
-        title: "Success",
-        description: "Comment updated successfully",
       });
     },
     onError: (error) => {
@@ -222,18 +206,8 @@ export function useDeleteIssueComment() {
     mutationFn: ({ issueId, commentId }: { issueId: string; commentId: string }) => 
       deleteIssueComment(issueId, commentId),
     onSuccess: (result, { issueId }) => {
-      // Invalidate and refetch the comments instead of manual cache updates
       queryClient.invalidateQueries({
         queryKey: issueCommentKeys.list(issueId),
-      });
-      // Also invalidate any broader queries
-      queryClient.invalidateQueries({
-        queryKey: issueCommentKeys.all,
-      });
-
-      toast({
-        title: "Success",
-        description: "Comment deleted successfully",
       });
     },
     onError: (error) => {
