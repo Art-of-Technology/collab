@@ -1,3 +1,5 @@
+// DEPRECATED - USE /api/issues/[issueId]/comments/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
