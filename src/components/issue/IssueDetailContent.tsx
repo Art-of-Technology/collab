@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,6 @@ import {
   MessageSquare,
   Copy,
   Trash2,
-  Command,
   Clock,
   ArrowLeft,
   Play,
@@ -46,7 +45,6 @@ import { IssueTabs } from "./sections/IssueTabs";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
 import { generateBackNavigationUrl } from "@/lib/navigation-helpers";
-import { UnsavedChangesModal } from "@/components/ui/UnsavedChangesModal";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
@@ -100,10 +98,13 @@ export function IssueDetailContent({
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [descriptionHasChanges, setDescriptionHasChanges] = useState(false);
-  const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
+  // Autosave state
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("saved");
+  const [lastSavedDescription, setLastSavedDescription] = useState("");
+  const [showSavedIndicator, setShowSavedIndicator] = useState(false);
+  const autosaveErrorToastShownRef = useRef(false);
+  const latestDescriptionRef = useRef("");
   const [labels, setLabels] = useState<any[]>([]);
-  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const { toast } = useToast();
 
   // Session and activity hooks
@@ -242,10 +243,115 @@ export function IssueDetailContent({
     if (issue) {
       setTitle(issue.title || '');
       setDescription(issue.description || '');
-      setDescriptionHasChanges(false);
-
+      setLastSavedDescription(issue.description || '');
+      setAutosaveStatus("saved");
+      setTimeout(() => {
+        setAutosaveStatus("idle");
+      }, 600);
     }
   }, [issue]);
+
+  // Keep a ref of the latest description to avoid race conditions when saving
+  useEffect(() => {
+    latestDescriptionRef.current = description;
+  }, [description]);
+
+  // Autosave function (direct API call to avoid noisy toasts and page dimming)
+  const autosaveDescription = useCallback(async (content: string) => {
+    if (!issue) return;
+    setAutosaveStatus("saving");
+    try {
+      const response = await fetch(`/api/issues/${issue.issueKey || issue.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ description: content }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || `Autosave failed (${response.status})`);
+      }
+
+      // Only mark saved if this response corresponds to the latest content
+      if (content === latestDescriptionRef.current) {
+        setLastSavedDescription(content);
+      }
+
+      setAutosaveStatus("saved");
+      setTimeout(() => {
+        setAutosaveStatus("idle");
+      }, 600);
+      setShowSavedIndicator(true);
+      setTimeout(() => setShowSavedIndicator(false), 1500);
+      autosaveErrorToastShownRef.current = false;
+    } catch (error: any) {
+      setAutosaveStatus("error");
+      if (!autosaveErrorToastShownRef.current) {
+        toast({
+          title: "Autosave failed",
+          description: error?.message || "Could not save changes. We will retry when you continue editing.",
+          variant: "destructive",
+        });
+        autosaveErrorToastShownRef.current = true;
+      }
+    }
+  }, [issue, toast]);
+
+  // Debounced autosave on description changes
+  useEffect(() => {
+    if (!issue) return;
+    if (description === lastSavedDescription) return;
+
+    const handle = setTimeout(() => {
+      autosaveDescription(description);
+    }, 800);
+
+    return () => clearTimeout(handle);
+  }, [description, lastSavedDescription, autosaveDescription, issue]);
+
+  // Flush autosave on tab hide or before unload for reliability
+  useEffect(() => {
+    if (!issue) return;
+
+    const flushIfPending = () => {
+      if (latestDescriptionRef.current !== lastSavedDescription) {
+        autosaveDescription(latestDescriptionRef.current);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        flushIfPending();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (latestDescriptionRef.current !== lastSavedDescription) {
+        const endpoint = `/api/issues/${issue.issueKey || issue.id}`;
+        const payload = JSON.stringify({ description: latestDescriptionRef.current });
+        try {
+          // Prefer keepalive PUT to match API
+          fetch(endpoint, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true,
+          }).catch(() => { });
+        } catch (error) {
+          console.error('Error saving description:', error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [issue, lastSavedDescription, autosaveDescription]);
 
   // Fetch labels for the workspace
   useEffect(() => {
@@ -420,29 +526,9 @@ export function IssueDetailContent({
     }
   }, [title, handleUpdate, toast]);
 
-  // Handle description save
-  const handleSaveDescription = useCallback(async () => {
-    if (!descriptionHasChanges) return;
-
-    setIsDescriptionSaving(true);
-    try {
-      await handleUpdate({ description });
-      setDescriptionHasChanges(false);
-      toast({
-        title: "Description saved",
-        description: "Issue description has been updated",
-      });
-    } catch (error) {
-      // Error already handled in handleUpdate
-    } finally {
-      setIsDescriptionSaving(false);
-    }
-  }, [description, handleUpdate, descriptionHasChanges, toast]);
-
   // Handle description change and detect changes
   const handleDescriptionChange = useCallback((newDescription: string) => {
     setDescription(newDescription);
-    setDescriptionHasChanges(newDescription !== (issue?.description || ''));
   }, [issue?.description]);
 
   // AI Improve function for description editor
@@ -558,7 +644,7 @@ export function IssueDetailContent({
       router.push(backUrl);
     } catch (error) {
       console.error('Error generating back navigation URL:', error);
-      
+
       // Fallback to original logic if helper fails
       if (viewSlug && workspaceId) {
         router.push(`/${workspaceId}/views/${viewSlug}`);
@@ -593,12 +679,6 @@ export function IssueDetailContent({
               }
             }
             break;
-          case 's':
-            if (descriptionHasChanges && !isDescriptionSaving) {
-              event.preventDefault();
-              handleSaveDescription();
-            }
-            break;
           case 'Enter':
             if (editingTitle) {
               event.preventDefault();
@@ -612,12 +692,6 @@ export function IssueDetailContent({
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
-        } else if (showUnsavedChangesModal) {
-          // Close the unsaved changes modal if it's open
-          setShowUnsavedChangesModal(false);
-        } else if (descriptionHasChanges) {
-          // Show unsaved changes modal if there are unsaved description changes
-          setShowUnsavedChangesModal(true);
         } else {
           onClose?.();
         }
@@ -626,7 +700,7 @@ export function IssueDetailContent({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose, descriptionHasChanges, isDescriptionSaving, handleSaveDescription, showUnsavedChangesModal]);
+  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose]);
 
   // Loading state
   if (isLoading) {
@@ -999,23 +1073,65 @@ export function IssueDetailContent({
               />
             </div>
 
-            {/* Created info */}
-            <div className="flex items-center gap-2 text-xs text-[#6e7681]">
-              <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
-              {issue.reporter && (
-                <>
-                  <span>by</span>
-                  <div className="flex items-center gap-1">
-                    <Avatar className="h-4 w-4">
-                      <AvatarImage src={issue.reporter.image} />
-                      <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
-                        {issue.reporter.name?.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span>{issue.reporter.name}</span>
-                  </div>
-                </>
-              )}
+            <div className="flex items-center justify-between">
+              {/* Created info */}
+              <div className="flex items-center gap-2 text-xs text-[#6e7681]">
+                <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
+                {issue.reporter && (
+                  <>
+                    <span>by</span>
+                    <div className="flex items-center gap-1">
+                      <Avatar className="h-4 w-4">
+                        <AvatarImage src={issue.reporter.image} />
+                        <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
+                          {issue.reporter.name?.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{issue.reporter.name}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Autosave status indicator */}
+              <div className="flex items-center gap-2 text-xs text-[#8b949e]">
+                <div className="flex items-center gap-2">
+                  {autosaveStatus === "idle" && (
+                    <>
+                      <span className="text-[#8b949e]">Autosave is active</span>
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    </>
+                  )}
+
+                  {autosaveStatus === "saving" && (
+                    <>
+                      <span>Saving…</span>
+                      <Loader2 className="h-2 w-2 animate-spin text-green-500" />
+                    </>
+                  )}
+                  {autosaveStatus === "saved" && showSavedIndicator && (
+                    <>
+                      <span>Saved</span>
+                      <Check className="h-2 w-2 text-green-500 animate-pulse" />
+                    </>
+                  )}
+
+                  {autosaveStatus === "error" && (
+                    <>
+                      <X className="h-3 w-3" />
+                      <span>Autosave failed</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-[#ff6b6b] hover:bg-[#2a1212]"
+                        onClick={() => autosaveDescription(description)}
+                      >
+                        Retry
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1025,53 +1141,6 @@ export function IssueDetailContent({
           <div className="space-y-6 pb-8">
             {/* Seamless Description Editor - Full Width */}
             <div className="w-full relative">
-              {/* Save Changes Button - Positioned at top right of editor */}
-              {descriptionHasChanges && (
-                <div className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 bg-[#0d1117] border border-[#21262d] rounded-md shadow-sm">
-                  <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
-                    <div className="h-1.5 w-1.5 bg-orange-400 rounded-full" />
-                    <span>Unsaved</span>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setDescription(issue?.description || '');
-                        setDescriptionHasChanges(false);
-                      }}
-                      disabled={isDescriptionSaving}
-                      className="h-6 px-2 text-xs text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3] pointer-events-auto"
-                    >
-                      Discard
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveDescription}
-                      disabled={isDescriptionSaving}
-                      className="h-6 px-2 text-xs bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] pointer-events-auto"
-                    >
-                      {isDescriptionSaving ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs">Save</span>
-                          <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#161b22] border border-[#30363d] rounded text-[10px] text-[#8b949e]">
-                            {typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? (
-                              <>
-                                <Command className="h-2.5 w-2.5" />
-                                <span>S</span>
-                              </>
-                            ) : (
-                              <span className="font-mono">Ctrl+S</span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               <IssueRichEditor
                 value={description}
@@ -1081,16 +1150,6 @@ export function IssueDetailContent({
                 className="w-full"
                 enableSlashCommands={true}
                 enableFloatingMenu={true}
-                enableSaveDiscard={true}
-                originalContent={issue?.description || ''}
-                onContentChange={(content, hasChanges) => {
-                  setDescriptionHasChanges(hasChanges);
-                }}
-                onSave={handleSaveDescription}
-                onDiscard={() => {
-                  setDescription(issue?.description || '');
-                  setDescriptionHasChanges(false);
-                }}
                 collabDocumentId={collabDocumentId}
                 minHeight="400px"
                 maxHeight="none"
@@ -1184,26 +1243,7 @@ export function IssueDetailContent({
         </DialogContent>
       </Dialog>
 
-      {/* Unsaved Changes Modal */}
-      <UnsavedChangesModal
-        isOpen={showUnsavedChangesModal}
-        onClose={() => setShowUnsavedChangesModal(false)}
-        onSave={async () => {
-          await handleSaveDescription();
-          setShowUnsavedChangesModal(false);
-          onClose?.();
-        }}
-        onDiscard={() => {
-          setDescription(issue?.description || '');
-          setDescriptionHasChanges(false);
-          setShowUnsavedChangesModal(false);
-          onClose?.();
-        }}
-        title="Unsaved description changes"
-        description="You have unsaved changes in the issue description. Would you like to save them before closing?"
-        saveLabel="Save and close"
-        discardLabel="Discard changes"
-      />
+      {/* Autosave is always on; no unsaved changes modal */}
     </div>
   );
 } 

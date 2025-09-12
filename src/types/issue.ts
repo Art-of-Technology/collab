@@ -86,6 +86,11 @@ export interface Issue {
   projectId: string;
   project?: IssueProject;
   workspaceId: string;
+  workspace?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   columnId?: string;
   column?: IssueColumn;
   

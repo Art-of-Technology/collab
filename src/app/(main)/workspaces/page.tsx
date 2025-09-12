@@ -16,10 +16,10 @@ export default async function WorkspacesPage() {
 
   try {
     // Fetch initial data using server actions
-    const [workspacesData, pendingInvitations] = await Promise.all([
-      getUserWorkspaces(),
-      getPendingInvitations(session.user.email || '')
-    ]);
+    const workspacesData = await getUserWorkspaces();
+    const pendingInvitations = session.user.email 
+      ? await getPendingInvitations(session.user.email)
+      : [];
 
     return (
       <div className="h-full bg-[#101011]">

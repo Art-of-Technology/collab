@@ -60,7 +60,8 @@ export function useMultipleProjectStatuses(projectIds: string[], enabled: boolea
           const uniqueStatus = {
             ...status,
             id: `${projectIds[index]}-${status.name}`, // Create unique ID for cross-project grouping
-            projectId: projectIds[index]
+            projectId: projectIds[index],
+            dbId: status.id // preserve original database id for mapping filters
           };
           allStatuses.push(uniqueStatus);
           statusNames.add(status.name);

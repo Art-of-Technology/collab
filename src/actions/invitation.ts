@@ -48,7 +48,8 @@ export async function checkUserHasWorkspaces() {
 
   const count = await prisma.workspaceMember.count({
     where: {
-      userId: session.user.id
+      userId: session.user.id,
+      status: true
     }
   });
 

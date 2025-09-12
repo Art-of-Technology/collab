@@ -79,14 +79,19 @@ export const filterIssues = (
   return filtered;
 };
 
-export const createColumns = (filteredIssues: any[], view: any, projectStatuses?: any[]): Column[] => {
+export const createColumns = (filteredIssues: any[], view: any, projectStatuses?: any[], allowedStatusNames?: string[]): Column[] => {
   const groupField = view.grouping?.field || 'status';
   const columnsMap = new Map(); // Use ID as key to prevent duplicates
   
   // Handle status grouping with database-driven project statuses
   if (groupField === 'status' && projectStatuses && projectStatuses.length > 0) {
     // Initialize columns from project statuses
+    const allowedSet = Array.isArray(allowedStatusNames) && allowedStatusNames.length > 0
+      ? new Set(allowedStatusNames)
+      : null;
+
     projectStatuses.forEach((status) => {
+      if (allowedSet && !allowedSet.has(status.name)) return;
       columnsMap.set(status.name, {
         id: status.name,
         name: status.displayName,
@@ -189,6 +194,14 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         groupKey = groupValue;
     }
     
+    // If allowed statuses are provided, skip issues not in the allowed set (for status grouping)
+    if (groupField === 'status' && Array.isArray(allowedStatusNames) && allowedStatusNames.length > 0) {
+      const allowedSet = new Set(allowedStatusNames);
+      if (!allowedSet.has(groupKey)) {
+        return;
+      }
+    }
+
     // Create column if it doesn't exist (for dynamic values)
     // Only create dynamic columns for non-status grouping or when no project statuses exist
     if (!columnsMap.has(groupKey)) {
