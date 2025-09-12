@@ -83,7 +83,7 @@ export default async function RootLayout({
                       <UiProvider>
                         <CustomThemeProvider>
                           <DockProvider>
-                            <main className="h-screen flex flex-col overflow-hidden">
+                            <main className="h-screen flex flex-col">
                               {children}
                             </main>
                             <Toaster />

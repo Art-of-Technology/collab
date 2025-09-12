@@ -27,6 +27,7 @@ import {
   Bell,
   Search as SearchIcon,
   Calendar,
+  Book,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { formatDistanceToNow } from "date-fns";
@@ -1019,6 +1020,12 @@ export default function Sidebar({
               <Link href="/workspaces" className="text-gray-300 hover:text-white">
                 <Users className="mr-2 h-4 w-4" />
                 Manage Workspaces
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/docs"  rel="noopener noreferrer" target="_blank" className="text-gray-300 hover:text-white">
+                <Book className="mr-2 h-4 w-4" />
+                API Documentation
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-[#1f1f1f]" />
