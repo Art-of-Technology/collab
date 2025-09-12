@@ -14,6 +14,12 @@ import {
   Quote,
   Code,
   Minus,
+  Undo,
+  Redo,
+  History as HistoryIcon,
+  X,
+  ChevronRight,
+  ArrowLeft,
 } from 'lucide-react';
 import type { SlashCommand } from './extensions/slash-commands-extension';
 import type { RichEditorRef } from './types';
@@ -23,7 +29,19 @@ import type { HocuspocusConfig } from '@/lib/collaboration/types';
 import { createCollaborationUser } from '@/lib/collaboration/utils';
 import { useSession } from 'next-auth/react';
 import { useCurrentUser } from '@/hooks/queries/useUser';
-import { useWorkspace } from '@/context/WorkspaceContext';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import DOMPurify from 'isomorphic-dompurify';
+import { cn } from '@/lib/utils';
+import { useIssueActivities } from '@/components/issue/sections/activity/hooks/useIssueActivities';
+import type { ActivityAction } from '@/lib/board-item-activity-service';
+import { CustomAvatar } from '@/components/ui/custom-avatar';
+import { ActivityIcon } from '@/components/issue/sections/activity/components/ActivityIcon';
+import { getActionText } from '@/components/issue/sections/activity/utils/activityHelpers';
+import { formatDistanceToNow } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface IssueRichEditorProps {
   value: string;
@@ -33,75 +51,76 @@ interface IssueRichEditorProps {
   minHeight?: string;
   maxHeight?: string;
   collabDocumentId?: string;
-  
+  issueId?: string;
+
   // Feature flags
   enableSlashCommands?: boolean;
   enableFloatingMenu?: boolean;
   enableSubIssueCreation?: boolean;
-  
+
   // Callbacks
   onAiImprove?: (text: string) => Promise<string>;
   onCreateSubIssue?: (selectedText: string) => void;
-  
+
   // Keyboard shortcuts
   onKeyDown?: (e: React.KeyboardEvent) => void;
 }
 
 // Default slash commands
 const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
-  { 
-    id: 'heading1', 
-    label: 'Heading 1', 
-    icon: Heading1, 
+  {
+    id: 'heading1',
+    label: 'Heading 1',
+    icon: Heading1,
     description: 'Big section heading',
     command: (editor: any) => editor.chain().focus().toggleHeading({ level: 1 }).run()
   },
-  { 
-    id: 'heading2', 
-    label: 'Heading 2', 
-    icon: Heading2, 
+  {
+    id: 'heading2',
+    label: 'Heading 2',
+    icon: Heading2,
     description: 'Medium section heading',
     command: (editor: any) => editor.chain().focus().toggleHeading({ level: 2 }).run()
   },
-  { 
-    id: 'heading3', 
-    label: 'Heading 3', 
-    icon: Heading3, 
+  {
+    id: 'heading3',
+    label: 'Heading 3',
+    icon: Heading3,
     description: 'Small section heading',
     command: (editor: any) => editor.chain().focus().toggleHeading({ level: 3 }).run()
   },
-  { 
-    id: 'bulletlist', 
-    label: 'Bulleted list', 
-    icon: List, 
+  {
+    id: 'bulletlist',
+    label: 'Bulleted list',
+    icon: List,
     description: 'Create a simple bulleted list',
     command: (editor: any) => editor.chain().focus().toggleBulletList().run()
   },
-  { 
-    id: 'numberedlist', 
-    label: 'Numbered list', 
-    icon: ListOrdered, 
+  {
+    id: 'numberedlist',
+    label: 'Numbered list',
+    icon: ListOrdered,
     description: 'Create a list with numbering',
     command: (editor: any) => editor.chain().focus().toggleOrderedList().run()
   },
-  { 
-    id: 'quote', 
-    label: 'Quote', 
-    icon: Quote, 
+  {
+    id: 'quote',
+    label: 'Quote',
+    icon: Quote,
     description: 'Capture a quote',
     command: (editor: any) => editor.chain().focus().toggleBlockquote().run()
   },
-  { 
-    id: 'code', 
-    label: 'Code block', 
-    icon: Code, 
+  {
+    id: 'code',
+    label: 'Code block',
+    icon: Code,
     description: 'Capture a code snippet',
     command: (editor: any) => editor.chain().focus().toggleCodeBlock().run()
   },
-  { 
-    id: 'divider', 
-    label: 'Divider', 
-    icon: Minus, 
+  {
+    id: 'divider',
+    label: 'Divider',
+    icon: Minus,
     description: 'Visually divide blocks',
     command: (editor: any) => editor.chain().focus().setHorizontalRule().run()
   },
@@ -121,25 +140,26 @@ export function IssueRichEditor({
   onCreateSubIssue,
   onKeyDown,
   collabDocumentId,
+  issueId,
 }: IssueRichEditorProps) {
   const editorRef = useRef<RichEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);
+  const { toast } = useToast();
   const { data: session } = useSession();
   const { data: currentUser } = useCurrentUser();
   const collaborationUser = useMemo(() => createCollaborationUser(session, currentUser), [session, currentUser]);
-  const { currentWorkspace } = useWorkspace();
   // Slash commands state
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
-  
+
   // Floating menu state
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
-  
+
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
@@ -147,8 +167,68 @@ export function IssueRichEditor({
   const [improvePosition, setImprovePosition] = useState({ top: 0, left: 0 });
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
 
+  // History modal state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [historyPreview, setHistoryPreview] = useState<{ id: string; html: string; meta: any } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const htmlFromSnapshot = useCallback((snapshot: any) => {
+    try {
+      if (typeof snapshot === 'string') {
+        const trimmed = snapshot.trim();
+        if (trimmed.startsWith('<')) return trimmed;
+        try {
+          const asJson = JSON.parse(trimmed);
+          // If consumers still pass JSON doc, render fallback to simple text
+          return `<div>${DOMPurify.sanitize(JSON.stringify(asJson))}</div>`;
+        } catch {
+          return `<p>${DOMPurify.sanitize(trimmed)}</p>`;
+        }
+      }
+      if (snapshot && typeof snapshot === 'object') {
+        // If object, try to use displayNewValue/newValue if present
+        const html = snapshot.displayNewValue || snapshot.newValue || snapshot.description;
+        if (typeof html === 'string') return html;
+      }
+      return '<p>(unable to render)</p>';
+    } catch {
+      return '<p>(unable to render)</p>';
+    }
+  }, []);
+
+  const openHistoryPreview = useCallback(async (entry: any) => {
+    setPreviewError(null);
+    setPreviewLoading(true);
+    try {
+      const content = entry?.content ?? entry?.details?.displayNewValue ?? entry?.details?.newValue;
+      const html = DOMPurify.sanitize(htmlFromSnapshot(content));
+      setHistoryPreview({ id: String(entry.id), html, meta: entry });
+    } catch (e: any) {
+      setPreviewError(e?.message || 'Failed to load history entry');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [htmlFromSnapshot]);
+
+  // Activities (DESCRIPTION_UPDATED) via hook
+  const { activities, loading: activitiesLoading, error: activitiesError } = useIssueActivities({
+    issueId: issueId || '',
+    limit: 100,
+    action: 'DESCRIPTION_UPDATED' as any,
+  });
+
+  // Auto-select last activity when opening or when list updates
+  useEffect(() => {
+    if (!isHistoryOpen) return;
+    if (!selectedEntryId && activities && activities.length > 0) {
+      setSelectedEntryId(activities[0].id);
+    }
+  }, [isHistoryOpen, activities, selectedEntryId]);
+
   // Get filtered commands based on query
-  const filteredCommands = DEFAULT_SLASH_COMMANDS.filter(cmd => 
+  const filteredCommands = DEFAULT_SLASH_COMMANDS.filter(cmd =>
     cmd.label.toLowerCase().includes(slashQuery.toLowerCase())
   );
 
@@ -176,25 +256,22 @@ export function IssueRichEditor({
   // Handle floating menu for text selection
   const handleSelectionUpdate = useCallback((editor: any) => {
     if (!enableFloatingMenu) return;
-    
+
     const { from, to, empty } = editor.state.selection;
-    
+
     if (!empty && from !== to) {
       const selectedText = editor.state.doc.textBetween(from, to, ' ');
       if (selectedText.trim().length > 0) {
         setTimeout(() => {
           const coords = editor.view.coordsAtPos(from);
-          const editorRect = editor.view.dom.getBoundingClientRect();
-          
+
           // Account for any scrollable containers
           const scrollContainer = editor.view.dom.closest('.overflow-y-auto');
           let scrollTop = 0;
           if (scrollContainer) {
             scrollTop = scrollContainer.scrollTop;
           }
-          
 
-          
           // Use viewport coordinates for a fixed-position, portaled menu
           setFloatingMenuPosition({
             top: Math.max(8, coords.top - 60 - scrollTop),
@@ -211,23 +288,23 @@ export function IssueRichEditor({
   // Handle AI improve
   const handleAiImprove = useCallback(() => {
     if (!onAiImprove || isImproving) return;
-    
+
     const editor = editorRef.current?.getEditor();
     if (!editor) return;
-    
+
     const { from, to, empty } = editor.state.selection;
     if (empty) return;
-    
+
     const selectedText = editor.state.doc.textBetween(from, to, ' ');
     if (!selectedText.trim()) return;
-    
+
     console.log('AI Improve clicked, selected text:', selectedText);
     setIsImproving(true);
-    
+
     // Use the AIImproveExtension command
     const result = editor.commands.improveSelection();
     console.log('AIImproveExtension command result:', result);
-    
+
     // If the command returned false, reset the loading state
     if (!result) {
       setIsImproving(false);
@@ -249,20 +326,20 @@ export function IssueRichEditor({
       hasImprovedText: !!improvedText,
       hasSavedSelection: !!savedSelection
     });
-    
+
     if (savedSelection && improvedText) {
       const { from, to, originalText } = savedSelection;
       console.log('Saved selection:', { from, to, originalText });
-      
+
       // Get current selection to compare
       const currentSelection = editor.state.selection;
       console.log('Current selection:', { from: currentSelection.from, to: currentSelection.to });
-      
+
       try {
         // Check what type of content we're replacing
         const originalTextContent = editor.state.doc.textBetween(from, to, ' ');
         const isSimpleText = originalTextContent === originalText && !originalTextContent.includes('\n');
-        
+
         console.log('Content replacement context:', {
           originalText,
           originalTextContent,
@@ -270,24 +347,24 @@ export function IssueRichEditor({
           improvedText,
           selectionRange: { from, to }
         });
-        
+
         // Parse the improved text as markdown to HTML for better formatting
         const htmlContent = parseMarkdownToTipTap(improvedText);
         console.log('Parsed improved content:', { original: improvedText, parsed: htmlContent });
-        
+
         // For simple text replacements, try to use plain text first to avoid extra formatting
         const contentToInsert = isSimpleText && !htmlContent.includes('<') ? improvedText : htmlContent;
         console.log('Content to insert:', contentToInsert);
-        
+
         // Method 1: Try direct replacement
         let result = editor.chain()
           .focus()
           .setTextSelection({ from, to })
           .insertContent(contentToInsert)
           .run();
-        
+
         console.log('Method 1 - Direct replacement result:', result);
-        
+
         // If that didn't work, try method 2: delete then insert
         if (!result) {
           console.log('Trying method 2: delete then insert');
@@ -297,17 +374,17 @@ export function IssueRichEditor({
             .deleteSelection()
             .insertContent(contentToInsert)
             .run();
-          
+
           console.log('Method 2 - Delete then insert result:', result);
         }
-        
+
         // If still not working, try method 3: replace range
         if (!result) {
           console.log('Trying method 3: replace range');
           const replaceResult = editor.commands.insertContentAt({ from, to }, contentToInsert);
           console.log('Method 3 result:', replaceResult);
         }
-        
+
         // Method 4: Try with plain text only if we were using HTML
         if (!result && contentToInsert !== improvedText) {
           console.log('Trying method 4: fallback to plain text');
@@ -319,7 +396,7 @@ export function IssueRichEditor({
             .run();
           console.log('Method 4 result:', textResult);
         }
-        
+
         // Method 5: Final fallback - structured text insertion
         if (!result) {
           console.log('Trying method 5: structured text replacement');
@@ -331,7 +408,7 @@ export function IssueRichEditor({
             .run();
           console.log('Method 5 result:', testResult);
         }
-        
+
       } catch (error) {
         console.error('Error replacing text:', error);
       }
@@ -358,7 +435,7 @@ export function IssueRichEditor({
   // Handle sub-issue creation
   const handleCreateSubIssue = useCallback(() => {
     if (!onCreateSubIssue) return;
-    
+
     const editor = editorRef.current?.getEditor();
     if (editor) {
       editor.commands.createSubIssueFromSelection();
@@ -372,19 +449,19 @@ export function IssueRichEditor({
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         e.stopPropagation(); // Prevent event from bubbling up
-        
+
         if (e.key === 'ArrowDown') {
-          setSelectedSlashIndex(prev => 
+          setSelectedSlashIndex(prev =>
             prev < filteredCommands.length - 1 ? prev + 1 : 0
           );
         } else {
-          setSelectedSlashIndex(prev => 
+          setSelectedSlashIndex(prev =>
             prev > 0 ? prev - 1 : filteredCommands.length - 1
           );
         }
         return;
       }
-      
+
       if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation(); // Prevent event from bubbling up
@@ -393,7 +470,7 @@ export function IssueRichEditor({
         }
         return;
       }
-      
+
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation(); // Prevent event from bubbling up
@@ -401,7 +478,7 @@ export function IssueRichEditor({
         return;
       }
     }
-    
+
     // Pass through to parent only if slash menu is not handling the event
     onKeyDown?.(e);
   }, [showSlashMenu, filteredCommands, selectedSlashIndex, handleSlashCommandSelect, handleHideSlashMenu, onKeyDown]);
@@ -447,7 +524,7 @@ export function IssueRichEditor({
         setSavedSelection(eventSavedSelection);
         setIsImproving(false);
         setShowFloatingMenu(false); // Hide floating menu when showing popover
-        
+
         // Calculate position for the popover
         if (eventSavedSelection) {
           const coords = editor.view.coordsAtPos(eventSavedSelection.from);
@@ -456,7 +533,7 @@ export function IssueRichEditor({
             left: coords.left,
           });
         }
-        
+
         setShowImprovePopover(true);
         console.log('Show improve popover set to true');
       };
@@ -466,7 +543,7 @@ export function IssueRichEditor({
         setIsImproving(false);
         setShowImprovePopover(false);
       };
-      
+
       editor.view.dom.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
       editor.view.dom.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
 
@@ -507,7 +584,7 @@ export function IssueRichEditor({
 
   // Build extensions array
   const additionalExtensions = [];
-  
+
   if (enableSlashCommands) {
     additionalExtensions.push(
       SlashCommandsExtension.configure({
@@ -518,7 +595,7 @@ export function IssueRichEditor({
       })
     );
   }
-  
+
   if (enableSubIssueCreation) {
     additionalExtensions.push(
       SubIssueCreationExtension.configure({
@@ -526,7 +603,7 @@ export function IssueRichEditor({
       })
     );
   }
-  
+
   // Always add AI improve extension if onAiImprove is provided
   if (onAiImprove) {
     additionalExtensions.push(
@@ -549,6 +626,61 @@ export function IssueRichEditor({
 
   return (
     <div ref={containerRef} className="relative">
+      {/* Mini-toolbar: Undo / Redo / History */}
+      {collabDocumentId && (
+        <div className="absolute top-2 right-2 z-50 flex items-center gap-1">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-white/10"
+                  onClick={() => editorRef.current?.getEditor()?.chain().focus().undo().run()}
+                  disabled={!(editorRef.current?.getEditor()?.can().undo())}
+                >
+                  <Undo className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-white/5 py-1 px-2 text-xs">Undo</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-white/10"
+                  onClick={() => editorRef.current?.getEditor()?.chain().focus().redo().run()}
+                  disabled={!(editorRef.current?.getEditor()?.can().redo())}
+                >
+                  <Redo className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-white/5 py-1 px-2 text-xs">Redo</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-white/10"
+                  onClick={() => {
+                    setIsHistoryOpen(true);
+                  }}
+                >
+                  <HistoryIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-white/5 py-1 px-2 text-xs">History</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
       <RichEditor
         key={collabDocumentId ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
         ref={editorRef}
@@ -611,7 +743,167 @@ export function IssueRichEditor({
           isImproving={isImproving}
         />
       )}
-      
+
+      {/* History Modal */}
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>History</DialogTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-white/10"
+                onClick={() => setIsHistoryOpen(false)}
+                aria-label="Close history"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          {activitiesError && (
+            <div className="text-sm text-red-400 mb-2">{activitiesError}</div>
+          )}
+          {/* List view vs Preview view */}
+          {historyPreview ? (
+            <div className="flex flex-col gap-3">
+              {/* Preview header */}
+              <div className="flex items-center justify-start gap-4">
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" className="hover:bg-white/10"  onClick={() => { setHistoryPreview(null); setPreviewError(null); }}>
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                  </Button>
+                </div>
+                <div className="flex gap-2.5 items-center">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <CustomAvatar user={historyPreview.meta?.user} size="xs" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-[#c9d1d9] leading-tight tracking-tight">
+                        {historyPreview.meta?.actor} made changes
+                      </span>
+                      <span className="text-[10px] text-[#7d8590] leading-tight tracking-tight">
+                        {formatDistanceToNow(new Date(historyPreview.meta?.ts || Date.now()), { addSuffix: true })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {previewError && (
+                <div className="text-sm text-red-400">{previewError}</div>
+              )}
+
+              <div className="border rounded-md overflow-hidden">
+                <ScrollArea className="h-72">
+                  <div className="p-3">
+                    {previewLoading ? (
+                      <div className="p-3 text-sm text-muted-foreground">Loading preview...</div>
+                    ) : (
+                      <RichEditor
+                        value={historyPreview.html}
+                        onChange={undefined}
+                        placeholder={""}
+                        className="w-96"
+                        minHeight="160px"
+                        maxHeight="none"
+                        readOnly={true}
+                        showToolbar={false}
+                        toolbarMode="static"
+                      />
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="hover:bg-white/10"
+                  onClick={() => {
+                    try {
+                      const html = historyPreview?.html || '';
+                      const editor = editorRef.current;
+                      if (editor && typeof editor.setContent === 'function') {
+                        editor.setContent(html);
+                      } else {
+                        editorRef.current?.getEditor()?.commands.setContent(html);
+                      }
+                      const username = historyPreview?.meta?.actor || historyPreview?.meta?.user?.name || 'unknown';
+                      const dateStr = new Date(historyPreview?.meta?.ts || Date.now()).toLocaleString();
+                      setIsHistoryOpen(false);
+                      setHistoryPreview(null);
+                      setPreviewError(null);
+                      toast({
+                        title: 'Reverted',
+                        description: `Successfully returned into ${username}'s version ${dateStr}`,
+                      });
+                    } catch (e) {
+                      toast({ title: 'Error', description: 'Failed to revert', variant: 'destructive' });
+                    }
+                  }}
+                >
+                  Revert to this version
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="border rounded-md overflow-hidden">
+              <ScrollArea className="h-[378px]">
+                <div className="divide-y divide-border/50">
+                  {activitiesLoading ? (
+                    <div className="p-3 text-sm text-muted-foreground">Loading...</div>
+                  ) : activities.length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">No history entries</div>
+                  ) : (
+                    activities.map((a) => (
+                      <button
+                        key={a.id}
+                        className={cn(
+                          "w-full text-left p-3 hover:bg-[#0d0d0d]",
+                          selectedEntryId === a.id ? "bg-muted/60" : ""
+                        )}
+                        onClick={() => {
+                          setSelectedEntryId(a.id);
+                          openHistoryPreview({
+                            id: a.id,
+                            content: a.details?.displayNewValue || a.details?.newValue || a.newValue,
+                            user: a.user,
+                            actor: a.user?.name,
+                            ts: new Date(a.createdAt).getTime(),
+                          });
+                        }}
+                      >
+                        <div className="flex gap-2.5 items-center">
+                          <div className="flex-shrink-0 mt-0.5">
+                            <CustomAvatar user={a.user} size="xs" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-xs text-[#c9d1d9]">
+                                {a.user.name} made changes
+                              </span>
+                              <span className="text-[10px] text-[#7d8590]">
+                                {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
