@@ -194,78 +194,6 @@
     },
     {
       "method": "GET",
-      "url": "/api/taskboards",
-      "file": "src\\app\\api\\taskboards\\route.ts",
-      "title": "List Taskboards",
-      "description": "Retrieve a list of taskboardss",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "taskboards"
-      ],
-      "summary": "Retrieve a list of taskboardss"
-    },
-    {
-      "method": "POST",
-      "url": "/api/taskboards",
-      "file": "src\\app\\api\\taskboards\\route.ts",
-      "title": "Create Taskboards",
-      "description": "Create a new taskboards",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "taskboards"
-      ],
-      "summary": "Create a new taskboards"
-    },
-    {
-      "method": "GET",
       "url": "/api/stories",
       "file": "src\\app\\api\\stories\\route.ts",
       "title": "List Stories",
@@ -337,6 +265,35 @@
       "summary": "Create a new stories"
     },
     {
+      "method": "GET",
+      "url": "/api/search",
+      "file": "src\\app\\api\\search\\route.ts",
+      "title": "List Search",
+      "description": "Retrieve a list of searchs",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "search"
+      ],
+      "summary": "Retrieve a list of searchs"
+    },
+    {
       "method": "POST",
       "url": "/api/sidebar",
       "file": "src\\app\\api\\sidebar\\route.ts",
@@ -381,10 +338,10 @@
     },
     {
       "method": "GET",
-      "url": "/api/search",
-      "file": "src\\app\\api\\search\\route.ts",
-      "title": "List Search",
-      "description": "Retrieve a list of searchs",
+      "url": "/api/taskboards",
+      "file": "src\\app\\api\\taskboards\\route.ts",
+      "title": "List Taskboards",
+      "description": "Retrieve a list of taskboardss",
       "parameters": [],
       "responses": {
         "200": {
@@ -404,9 +361,52 @@
       },
       "requestHeaders": [],
       "tags": [
-        "search"
+        "taskboards"
       ],
-      "summary": "Retrieve a list of searchs"
+      "summary": "Retrieve a list of taskboardss"
+    },
+    {
+      "method": "POST",
+      "url": "/api/taskboards",
+      "file": "src\\app\\api\\taskboards\\route.ts",
+      "title": "Create Taskboards",
+      "description": "Create a new taskboards",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "taskboards"
+      ],
+      "summary": "Create a new taskboards"
     },
     {
       "method": "GET",
@@ -511,107 +511,6 @@
     },
     {
       "method": "GET",
-      "url": "/api/notifications",
-      "file": "src\\app\\api\\notifications\\route.ts",
-      "title": "List Notifications",
-      "description": "Retrieve a list of notificationss",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "notifications"
-      ],
-      "summary": "Retrieve a list of notificationss"
-    },
-    {
-      "method": "GET",
-      "url": "/api/milestones",
-      "file": "src\\app\\api\\milestones\\route.ts",
-      "title": "List Milestones",
-      "description": "Retrieve a list of milestoness",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "milestones"
-      ],
-      "summary": "Retrieve a list of milestoness"
-    },
-    {
-      "method": "POST",
-      "url": "/api/milestones",
-      "file": "src\\app\\api\\milestones\\route.ts",
-      "title": "Create Milestones",
-      "description": "Create a new milestones",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "milestones"
-      ],
-      "summary": "Create a new milestones"
-    },
-    {
-      "method": "GET",
       "url": "/api/posts",
       "file": "src\\app\\api\\posts\\route.ts",
       "title": "List Posts",
@@ -683,54 +582,11 @@
       "summary": "Create a new posts"
     },
     {
-      "method": "POST",
-      "url": "/api/mentions",
-      "file": "src\\app\\api\\mentions\\route.ts",
-      "title": "Create Mentions",
-      "description": "Create a new mentions",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "mentions"
-      ],
-      "summary": "Create a new mentions"
-    },
-    {
       "method": "GET",
-      "url": "/api/features",
-      "file": "src\\app\\api\\features\\route.ts",
-      "title": "List Features",
-      "description": "Retrieve a list of featuress",
+      "url": "/api/notifications",
+      "file": "src\\app\\api\\notifications\\route.ts",
+      "title": "List Notifications",
+      "description": "Retrieve a list of notificationss",
       "parameters": [],
       "responses": {
         "200": {
@@ -750,124 +606,9 @@
       },
       "requestHeaders": [],
       "tags": [
-        "features"
+        "notifications"
       ],
-      "summary": "Retrieve a list of featuress"
-    },
-    {
-      "method": "POST",
-      "url": "/api/features",
-      "file": "src\\app\\api\\features\\route.ts",
-      "title": "Create Features",
-      "description": "Create a new features",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "features"
-      ],
-      "summary": "Create a new features"
-    },
-    {
-      "method": "GET",
-      "url": "/api/issues",
-      "file": "src\\app\\api\\issues\\route.ts",
-      "title": "List Issues",
-      "description": "Retrieve a list of issuess",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "issues"
-      ],
-      "summary": "Retrieve a list of issuess"
-    },
-    {
-      "method": "POST",
-      "url": "/api/issues",
-      "file": "src\\app\\api\\issues\\route.ts",
-      "title": "Create Issues",
-      "description": "Create a new issues",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "issues"
-      ],
-      "summary": "Create a new issues"
+      "summary": "Retrieve a list of notificationss"
     },
     {
       "method": "GET",
@@ -943,10 +684,10 @@
     },
     {
       "method": "GET",
-      "url": "/api/epics",
-      "file": "src\\app\\api\\epics\\route.ts",
-      "title": "List Epics",
-      "description": "Retrieve a list of epicss",
+      "url": "/api/milestones",
+      "file": "src\\app\\api\\milestones\\route.ts",
+      "title": "List Milestones",
+      "description": "Retrieve a list of milestoness",
       "parameters": [],
       "responses": {
         "200": {
@@ -966,16 +707,16 @@
       },
       "requestHeaders": [],
       "tags": [
-        "epics"
+        "milestones"
       ],
-      "summary": "Retrieve a list of epicss"
+      "summary": "Retrieve a list of milestoness"
     },
     {
       "method": "POST",
-      "url": "/api/epics",
-      "file": "src\\app\\api\\epics\\route.ts",
-      "title": "Create Epics",
-      "description": "Create a new epics",
+      "url": "/api/milestones",
+      "file": "src\\app\\api\\milestones\\route.ts",
+      "title": "Create Milestones",
+      "description": "Create a new milestones",
       "parameters": [],
       "responses": {
         "200": {
@@ -1009,9 +750,196 @@
         "example": {}
       },
       "tags": [
-        "epics"
+        "milestones"
       ],
-      "summary": "Create a new epics"
+      "summary": "Create a new milestones"
+    },
+    {
+      "method": "POST",
+      "url": "/api/mentions",
+      "file": "src\\app\\api\\mentions\\route.ts",
+      "title": "Create Mentions",
+      "description": "Create a new mentions",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "mentions"
+      ],
+      "summary": "Create a new mentions"
+    },
+    {
+      "method": "GET",
+      "url": "/api/issues",
+      "file": "src\\app\\api\\issues\\route.ts",
+      "title": "List Issues",
+      "description": "Retrieve a list of issuess",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "issues"
+      ],
+      "summary": "Retrieve a list of issuess"
+    },
+    {
+      "method": "POST",
+      "url": "/api/issues",
+      "file": "src\\app\\api\\issues\\route.ts",
+      "title": "Create Issues",
+      "description": "Create a new issues",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "issues"
+      ],
+      "summary": "Create a new issues"
+    },
+    {
+      "method": "GET",
+      "url": "/api/features",
+      "file": "src\\app\\api\\features\\route.ts",
+      "title": "List Features",
+      "description": "Retrieve a list of featuress",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "features"
+      ],
+      "summary": "Retrieve a list of featuress"
+    },
+    {
+      "method": "POST",
+      "url": "/api/features",
+      "file": "src\\app\\api\\features\\route.ts",
+      "title": "Create Features",
+      "description": "Create a new features",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "features"
+      ],
+      "summary": "Create a new features"
     },
     {
       "method": "GET",
@@ -1094,11 +1022,40 @@
       "summary": "Create a new conversations"
     },
     {
+      "method": "GET",
+      "url": "/api/epics",
+      "file": "src\\app\\api\\epics\\route.ts",
+      "title": "List Epics",
+      "description": "Retrieve a list of epicss",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "epics"
+      ],
+      "summary": "Retrieve a list of epicss"
+    },
+    {
       "method": "POST",
-      "url": "/api/create-personal-workspace",
-      "file": "src\\app\\api\\create-personal-workspace\\route.ts",
-      "title": "Create Create-personal-workspace",
-      "description": "Create a new create-personal-workspace",
+      "url": "/api/epics",
+      "file": "src\\app\\api\\epics\\route.ts",
+      "title": "Create Epics",
+      "description": "Create a new epics",
       "parameters": [],
       "responses": {
         "200": {
@@ -1132,9 +1089,9 @@
         "example": {}
       },
       "tags": [
-        "create-personal-workspace"
+        "epics"
       ],
-      "summary": "Create a new create-personal-workspace"
+      "summary": "Create a new epics"
     },
     {
       "method": "POST",
@@ -1186,6 +1143,49 @@
         "chat-token"
       ],
       "summary": "Create a new chat-token"
+    },
+    {
+      "method": "POST",
+      "url": "/api/create-personal-workspace",
+      "file": "src\\app\\api\\create-personal-workspace\\route.ts",
+      "title": "Create Create-personal-workspace",
+      "description": "Create a new create-personal-workspace",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "create-personal-workspace"
+      ],
+      "summary": "Create a new create-personal-workspace"
     },
     {
       "method": "GET",
@@ -1342,6 +1342,236 @@
       "summary": "Retrieve workspaces invitations information"
     },
     {
+      "method": "PATCH",
+      "url": "/api/user/profile",
+      "file": "src\\app\\api\\user\\profile\\route.ts",
+      "title": "Update User Profile",
+      "description": "Partially update an existing user profile",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "user"
+      ],
+      "summary": "Partially update an existing user profile"
+    },
+    {
+      "method": "GET",
+      "url": "/api/user/notification-preferences",
+      "file": "src\\app\\api\\user\\notification-preferences\\route.ts",
+      "title": "Get User Notification-preferences",
+      "description": "Retrieve user notification-preferences information",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "user"
+      ],
+      "summary": "Retrieve user notification-preferences information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/notification-preferences",
+      "file": "src\\app\\api\\user\\notification-preferences\\route.ts",
+      "title": "Create User Notification-preferences",
+      "description": "Create a new user notification-preferences",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "user"
+      ],
+      "summary": "Create a new user notification-preferences"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/user/notification-preferences",
+      "file": "src\\app\\api\\user\\notification-preferences\\route.ts",
+      "title": "Update User Notification-preferences",
+      "description": "Partially update an existing user notification-preferences",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "user"
+      ],
+      "summary": "Partially update an existing user notification-preferences"
+    },
+    {
+      "method": "GET",
+      "url": "/api/user/me",
+      "file": "src\\app\\api\\user\\me\\route.ts",
+      "title": "Get User Me",
+      "description": "Retrieve user me information",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "user"
+      ],
+      "summary": "Retrieve user me information"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/user/avatar",
+      "file": "src\\app\\api\\user\\avatar\\route.ts",
+      "title": "Update User Avatar",
+      "description": "Partially update an existing user avatar",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "user"
+      ],
+      "summary": "Partially update an existing user avatar"
+    },
+    {
       "method": "GET",
       "url": "/api/views/{viewId}",
       "file": "src\\app\\api\\views\\[viewId]\\route.ts",
@@ -1496,6 +1726,92 @@
       "summary": "Retrieve users search information"
     },
     {
+      "method": "POST",
+      "url": "/api/users/lookup",
+      "file": "src\\app\\api\\users\\lookup\\route.ts",
+      "title": "Create Users Lookup",
+      "description": "Create a new users lookup",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "users"
+      ],
+      "summary": "Create a new users lookup"
+    },
+    {
+      "method": "POST",
+      "url": "/api/timeline/posts",
+      "file": "src\\app\\api\\timeline\\posts\\route.ts",
+      "title": "Create Timeline Posts",
+      "description": "Create a new timeline posts",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "timeline"
+      ],
+      "summary": "Create a new timeline posts"
+    },
+    {
       "method": "GET",
       "url": "/api/users/me",
       "file": "src\\app\\api\\users\\me\\route.ts",
@@ -1569,322 +1885,6 @@
     },
     {
       "method": "POST",
-      "url": "/api/users/lookup",
-      "file": "src\\app\\api\\users\\lookup\\route.ts",
-      "title": "Create Users Lookup",
-      "description": "Create a new users lookup",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "users"
-      ],
-      "summary": "Create a new users lookup"
-    },
-    {
-      "method": "PATCH",
-      "url": "/api/user/profile",
-      "file": "src\\app\\api\\user\\profile\\route.ts",
-      "title": "Update User Profile",
-      "description": "Partially update an existing user profile",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "user"
-      ],
-      "summary": "Partially update an existing user profile"
-    },
-    {
-      "method": "GET",
-      "url": "/api/user/me",
-      "file": "src\\app\\api\\user\\me\\route.ts",
-      "title": "Get User Me",
-      "description": "Retrieve user me information",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "user"
-      ],
-      "summary": "Retrieve user me information"
-    },
-    {
-      "method": "PATCH",
-      "url": "/api/user/avatar",
-      "file": "src\\app\\api\\user\\avatar\\route.ts",
-      "title": "Update User Avatar",
-      "description": "Partially update an existing user avatar",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "user"
-      ],
-      "summary": "Partially update an existing user avatar"
-    },
-    {
-      "method": "GET",
-      "url": "/api/user/notification-preferences",
-      "file": "src\\app\\api\\user\\notification-preferences\\route.ts",
-      "title": "Get User Notification-preferences",
-      "description": "Retrieve user notification-preferences information",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "user"
-      ],
-      "summary": "Retrieve user notification-preferences information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/user/notification-preferences",
-      "file": "src\\app\\api\\user\\notification-preferences\\route.ts",
-      "title": "Create User Notification-preferences",
-      "description": "Create a new user notification-preferences",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "user"
-      ],
-      "summary": "Create a new user notification-preferences"
-    },
-    {
-      "method": "PATCH",
-      "url": "/api/user/notification-preferences",
-      "file": "src\\app\\api\\user\\notification-preferences\\route.ts",
-      "title": "Update User Notification-preferences",
-      "description": "Partially update an existing user notification-preferences",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "user"
-      ],
-      "summary": "Partially update an existing user notification-preferences"
-    },
-    {
-      "method": "POST",
-      "url": "/api/upload/image",
-      "file": "src\\app\\api\\upload\\image\\route.ts",
-      "title": "Create Upload Image",
-      "description": "API route handler for uploading images to Cloudinary",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "upload"
-      ],
-      "summary": "API route handler for uploading images to Cloudinary"
-    },
-    {
-      "method": "POST",
       "url": "/api/upload/profile-image",
       "file": "src\\app\\api\\upload\\profile-image\\route.ts",
       "title": "Create Upload Profile-image",
@@ -1928,10 +1928,10 @@
     },
     {
       "method": "POST",
-      "url": "/api/timeline/posts",
-      "file": "src\\app\\api\\timeline\\posts\\route.ts",
-      "title": "Create Timeline Posts",
-      "description": "Create a new timeline posts",
+      "url": "/api/upload/image",
+      "file": "src\\app\\api\\upload\\image\\route.ts",
+      "title": "Create Upload Image",
+      "description": "API route handler for uploading images to Cloudinary",
       "parameters": [],
       "responses": {
         "200": {
@@ -1965,9 +1965,9 @@
         "example": {}
       },
       "tags": [
-        "timeline"
+        "upload"
       ],
-      "summary": "Create a new timeline posts"
+      "summary": "API route handler for uploading images to Cloudinary"
     },
     {
       "method": "GET",
@@ -2071,131 +2071,6 @@
         "tasks"
       ],
       "summary": "Retrieve tasks search information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/taskboards/{taskBoardId}",
-      "file": "src\\app\\api\\taskboards\\[taskBoardId]\\route.ts",
-      "title": "Get Taskboards {taskBoardId}",
-      "description": "Retrieve taskboards {taskboardid} information",
-      "parameters": [
-        {
-          "name": "taskBoardId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskBoardId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "taskboards"
-      ],
-      "summary": "Retrieve taskboards {taskboardid} information"
-    },
-    {
-      "method": "DELETE",
-      "url": "/api/taskboards/{taskBoardId}",
-      "file": "src\\app\\api\\taskboards\\[taskBoardId]\\route.ts",
-      "title": "Delete Taskboards {taskBoardId}",
-      "description": "Remove a taskboards {taskboardid}",
-      "parameters": [
-        {
-          "name": "taskBoardId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskBoardId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "taskboards"
-      ],
-      "summary": "Remove a taskboards {taskboardid}"
-    },
-    {
-      "method": "PATCH",
-      "url": "/api/taskboards/{taskBoardId}",
-      "file": "src\\app\\api\\taskboards\\[taskBoardId]\\route.ts",
-      "title": "Update Taskboards {taskBoardId}",
-      "description": "Partially update an existing taskboards {taskboardid}",
-      "parameters": [
-        {
-          "name": "taskBoardId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskBoardId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "taskboards"
-      ],
-      "summary": "Partially update an existing taskboards {taskboardid}"
     },
     {
       "method": "GET",
@@ -2389,6 +2264,256 @@
       "summary": "Create a new slack my-tasks"
     },
     {
+      "method": "GET",
+      "url": "/api/taskboards/{taskBoardId}",
+      "file": "src\\app\\api\\taskboards\\[taskBoardId]\\route.ts",
+      "title": "Get Taskboards {taskBoardId}",
+      "description": "Retrieve taskboards {taskboardid} information",
+      "parameters": [
+        {
+          "name": "taskBoardId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskBoardId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "taskboards"
+      ],
+      "summary": "Retrieve taskboards {taskboardid} information"
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/taskboards/{taskBoardId}",
+      "file": "src\\app\\api\\taskboards\\[taskBoardId]\\route.ts",
+      "title": "Delete Taskboards {taskBoardId}",
+      "description": "Remove a taskboards {taskboardid}",
+      "parameters": [
+        {
+          "name": "taskBoardId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskBoardId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "taskboards"
+      ],
+      "summary": "Remove a taskboards {taskboardid}"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/taskboards/{taskBoardId}",
+      "file": "src\\app\\api\\taskboards\\[taskBoardId]\\route.ts",
+      "title": "Update Taskboards {taskBoardId}",
+      "description": "Partially update an existing taskboards {taskboardid}",
+      "parameters": [
+        {
+          "name": "taskBoardId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskBoardId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "taskboards"
+      ],
+      "summary": "Partially update an existing taskboards {taskboardid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/posts/{postId}",
+      "file": "src\\app\\api\\posts\\[postId]\\route.ts",
+      "title": "Get Posts {postId}",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/posts/{postId}",
+      "file": "src\\app\\api\\posts\\[postId]\\route.ts",
+      "title": "Delete Posts {postId}",
+      "description": "Remove a posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Remove a posts {postid}"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/posts/{postId}",
+      "file": "src\\app\\api\\posts\\[postId]\\route.ts",
+      "title": "Update Posts {postId}",
+      "description": "Partially update an existing posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "posts"
+      ],
+      "summary": "Partially update an existing posts {postid}"
+    },
+    {
       "method": "PATCH",
       "url": "/api/notifications/{id}",
       "file": "src\\app\\api\\notifications\\[id]\\route.ts",
@@ -2475,6 +2600,203 @@
         "notifications"
       ],
       "summary": "Create a new notifications read-all"
+    },
+    {
+      "method": "GET",
+      "url": "/api/notes/{id}",
+      "file": "src\\app\\api\\notes\\[id]\\route.ts",
+      "title": "Get Notes {id}",
+      "description": "Retrieve notes {id} information",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: id"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "notes"
+      ],
+      "summary": "Retrieve notes {id} information"
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/notes/{id}",
+      "file": "src\\app\\api\\notes\\[id]\\route.ts",
+      "title": "Delete Notes {id}",
+      "description": "Remove a notes {id}",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: id"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "notes"
+      ],
+      "summary": "Remove a notes {id}"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/notes/{id}",
+      "file": "src\\app\\api\\notes\\[id]\\route.ts",
+      "title": "Update Notes {id}",
+      "description": "Partially update an existing notes {id}",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: id"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "notes"
+      ],
+      "summary": "Partially update an existing notes {id}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/notes/tags",
+      "file": "src\\app\\api\\notes\\tags\\route.ts",
+      "title": "Get Notes Tags",
+      "description": "Retrieve notes tags information",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "notes"
+      ],
+      "summary": "Retrieve notes tags information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/notes/tags",
+      "file": "src\\app\\api\\notes\\tags\\route.ts",
+      "title": "Create Notes Tags",
+      "description": "Create a new notes tags",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "notes"
+      ],
+      "summary": "Create a new notes tags"
     },
     {
       "method": "GET",
@@ -2629,131 +2951,6 @@
         "milestones"
       ],
       "summary": "Retrieve milestones search information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}",
-      "file": "src\\app\\api\\posts\\[postId]\\route.ts",
-      "title": "Get Posts {postId}",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
-    },
-    {
-      "method": "DELETE",
-      "url": "/api/posts/{postId}",
-      "file": "src\\app\\api\\posts\\[postId]\\route.ts",
-      "title": "Delete Posts {postId}",
-      "description": "Remove a posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Remove a posts {postid}"
-    },
-    {
-      "method": "PATCH",
-      "url": "/api/posts/{postId}",
-      "file": "src\\app\\api\\posts\\[postId]\\route.ts",
-      "title": "Update Posts {postId}",
-      "description": "Partially update an existing posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "posts"
-      ],
-      "summary": "Partially update an existing posts {postid}"
     },
     {
       "method": "GET",
@@ -2927,131 +3124,6 @@
         "leave"
       ],
       "summary": "GET /api/leave/balances?workspaceId=xxx&year=2024 - Get user's leave balances for a workspace"
-    },
-    {
-      "method": "GET",
-      "url": "/api/features/{id}",
-      "file": "src\\app\\api\\features\\[id]\\route.ts",
-      "title": "Get Features {id}",
-      "description": "Retrieve features {id} information",
-      "parameters": [
-        {
-          "name": "id",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: id"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "features"
-      ],
-      "summary": "Retrieve features {id} information"
-    },
-    {
-      "method": "DELETE",
-      "url": "/api/features/{id}",
-      "file": "src\\app\\api\\features\\[id]\\route.ts",
-      "title": "Delete Features {id}",
-      "description": "Remove a features {id}",
-      "parameters": [
-        {
-          "name": "id",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: id"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "features"
-      ],
-      "summary": "Remove a features {id}"
-    },
-    {
-      "method": "PATCH",
-      "url": "/api/features/{id}",
-      "file": "src\\app\\api\\features\\[id]\\route.ts",
-      "title": "Update Features {id}",
-      "description": "Partially update an existing features {id}",
-      "parameters": [
-        {
-          "name": "id",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: id"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "features"
-      ],
-      "summary": "Partially update an existing features {id}"
     },
     {
       "method": "GET",
@@ -3267,10 +3339,10 @@
     },
     {
       "method": "GET",
-      "url": "/api/notes/{id}",
-      "file": "src\\app\\api\\notes\\[id]\\route.ts",
-      "title": "Get Notes {id}",
-      "description": "Retrieve notes {id} information",
+      "url": "/api/features/{id}",
+      "file": "src\\app\\api\\features\\[id]\\route.ts",
+      "title": "Get Features {id}",
+      "description": "Retrieve features {id} information",
       "parameters": [
         {
           "name": "id",
@@ -3298,16 +3370,16 @@
       },
       "requestHeaders": [],
       "tags": [
-        "notes"
+        "features"
       ],
-      "summary": "Retrieve notes {id} information"
+      "summary": "Retrieve features {id} information"
     },
     {
       "method": "DELETE",
-      "url": "/api/notes/{id}",
-      "file": "src\\app\\api\\notes\\[id]\\route.ts",
-      "title": "Delete Notes {id}",
-      "description": "Remove a notes {id}",
+      "url": "/api/features/{id}",
+      "file": "src\\app\\api\\features\\[id]\\route.ts",
+      "title": "Delete Features {id}",
+      "description": "Remove a features {id}",
       "parameters": [
         {
           "name": "id",
@@ -3335,16 +3407,16 @@
       },
       "requestHeaders": [],
       "tags": [
-        "notes"
+        "features"
       ],
-      "summary": "Remove a notes {id}"
+      "summary": "Remove a features {id}"
     },
     {
       "method": "PATCH",
-      "url": "/api/notes/{id}",
-      "file": "src\\app\\api\\notes\\[id]\\route.ts",
-      "title": "Update Notes {id}",
-      "description": "Partially update an existing notes {id}",
+      "url": "/api/features/{id}",
+      "file": "src\\app\\api\\features\\[id]\\route.ts",
+      "title": "Update Features {id}",
+      "description": "Partially update an existing features {id}",
       "parameters": [
         {
           "name": "id",
@@ -3386,81 +3458,9 @@
         "example": {}
       },
       "tags": [
-        "notes"
+        "features"
       ],
-      "summary": "Partially update an existing notes {id}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/notes/tags",
-      "file": "src\\app\\api\\notes\\tags\\route.ts",
-      "title": "Get Notes Tags",
-      "description": "Retrieve notes tags information",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "notes"
-      ],
-      "summary": "Retrieve notes tags information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/notes/tags",
-      "file": "src\\app\\api\\notes\\tags\\route.ts",
-      "title": "Create Notes Tags",
-      "description": "Create a new notes tags",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "notes"
-      ],
-      "summary": "Create a new notes tags"
+      "summary": "Partially update an existing features {id}"
     },
     {
       "method": "GET",
@@ -3703,33 +3703,47 @@
       "summary": "Create a new ai shorten"
     },
     {
-      "method": "GET",
-      "url": "/api/ai/jobs",
-      "file": "src\\app\\api\\ai\\jobs\\route.ts",
-      "title": "Get Ai Jobs",
-      "description": "Retrieve ai jobs information",
+      "method": "POST",
+      "url": "/api/ai/improve",
+      "file": "src\\app\\api\\ai\\improve\\route.ts",
+      "title": "Create Ai Improve",
+      "description": "Create a new ai improve",
       "parameters": [],
       "responses": {
         "200": {
           "statusCode": "200",
           "description": "Success",
           "example": {
-            "data": []
+            "success": true
           }
         },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
           "example": {
-            "error": "Resource not found"
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
           }
         }
       },
       "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
       "tags": [
         "ai"
       ],
-      "summary": "Retrieve ai jobs information"
+      "summary": "Create a new ai improve"
     },
     {
       "method": "POST",
@@ -3775,90 +3789,33 @@
       "summary": "Create a new ai generate-tasks"
     },
     {
-      "method": "POST",
-      "url": "/api/ai/generate-stories",
-      "file": "src\\app\\api\\ai\\generate-stories\\route.ts",
-      "title": "Create Ai Generate-stories",
-      "description": "Create a new ai generate-stories",
+      "method": "GET",
+      "url": "/api/ai/jobs",
+      "file": "src\\app\\api\\ai\\jobs\\route.ts",
+      "title": "Get Ai Jobs",
+      "description": "Retrieve ai jobs information",
       "parameters": [],
       "responses": {
         "200": {
           "statusCode": "200",
           "description": "Success",
           "example": {
-            "success": true
+            "data": []
           }
         },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
           "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
+            "error": "Resource not found"
           }
         }
       },
       "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
       "tags": [
         "ai"
       ],
-      "summary": "Create a new ai generate-stories"
-    },
-    {
-      "method": "POST",
-      "url": "/api/ai/improve",
-      "file": "src\\app\\api\\ai\\improve\\route.ts",
-      "title": "Create Ai Improve",
-      "description": "Create a new ai improve",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "ai"
-      ],
-      "summary": "Create a new ai improve"
+      "summary": "Retrieve ai jobs information"
     },
     {
       "method": "POST",
@@ -3902,6 +3859,49 @@
         "ai"
       ],
       "summary": "Create a new ai generate-and-create-tasks"
+    },
+    {
+      "method": "POST",
+      "url": "/api/ai/generate-stories",
+      "file": "src\\app\\api\\ai\\generate-stories\\route.ts",
+      "title": "Create Ai Generate-stories",
+      "description": "Create a new ai generate-stories",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "ai"
+      ],
+      "summary": "Create a new ai generate-stories"
     },
     {
       "method": "POST",
@@ -4056,78 +4056,6 @@
       "summary": "Retrieve activities status information"
     },
     {
-      "method": "GET",
-      "url": "/api/activities/history",
-      "file": "src\\app\\api\\activities\\history\\route.ts",
-      "title": "Get Activities History",
-      "description": "Retrieve activities history information",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "activities"
-      ],
-      "summary": "Retrieve activities history information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/activities/end",
-      "file": "src\\app\\api\\activities\\end\\route.ts",
-      "title": "Create Activities End",
-      "description": "Create a new activities end",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "activities"
-      ],
-      "summary": "Create a new activities end"
-    },
-    {
       "method": "POST",
       "url": "/api/activities/start",
       "file": "src\\app\\api\\activities\\start\\route.ts",
@@ -4172,6 +4100,35 @@
     },
     {
       "method": "GET",
+      "url": "/api/activities/history",
+      "file": "src\\app\\api\\activities\\history\\route.ts",
+      "title": "Get Activities History",
+      "description": "Retrieve activities history information",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "activities"
+      ],
+      "summary": "Retrieve activities history information"
+    },
+    {
+      "method": "GET",
       "url": "/api/activities/daily-breakdown",
       "file": "src\\app\\api\\activities\\daily-breakdown\\route.ts",
       "title": "Get Activities Daily-breakdown",
@@ -4198,6 +4155,49 @@
         "activities"
       ],
       "summary": "Retrieve activities daily-breakdown information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/activities/end",
+      "file": "src\\app\\api\\activities\\end\\route.ts",
+      "title": "Create Activities End",
+      "description": "Create a new activities end",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "activities"
+      ],
+      "summary": "Create a new activities end"
     },
     {
       "method": "GET",
@@ -4576,43 +4576,6 @@
     },
     {
       "method": "GET",
-      "url": "/api/workspaces/{workspaceId}/search-issues",
-      "file": "src\\app\\api\\workspaces\\[workspaceId]\\search-issues\\route.ts",
-      "title": "Get Workspaces {workspaceId} by ID",
-      "description": "Retrieve workspaces {workspaceid} information",
-      "parameters": [
-        {
-          "name": "workspaceId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: workspaceId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "workspaces"
-      ],
-      "summary": "Retrieve workspaces {workspaceid} information"
-    },
-    {
-      "method": "GET",
       "url": "/api/workspaces/{workspaceId}/projects",
       "file": "src\\app\\api\\workspaces\\[workspaceId]\\projects\\route.ts",
       "title": "Get Workspaces {workspaceId} by ID",
@@ -4701,8 +4664,8 @@
     },
     {
       "method": "GET",
-      "url": "/api/workspaces/{workspaceId}/milestones",
-      "file": "src\\app\\api\\workspaces\\[workspaceId]\\milestones\\route.ts",
+      "url": "/api/workspaces/{workspaceId}/search-issues",
+      "file": "src\\app\\api\\workspaces\\[workspaceId]\\search-issues\\route.ts",
       "title": "Get Workspaces {workspaceId} by ID",
       "description": "Retrieve workspaces {workspaceid} information",
       "parameters": [
@@ -4874,6 +4837,43 @@
         "workspaces"
       ],
       "summary": "Update an existing workspaces {workspaceid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/workspaces/{workspaceId}/milestones",
+      "file": "src\\app\\api\\workspaces\\[workspaceId]\\milestones\\route.ts",
+      "title": "Get Workspaces {workspaceId} by ID",
+      "description": "Retrieve workspaces {workspaceid} information",
+      "parameters": [
+        {
+          "name": "workspaceId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: workspaceId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "workspaces"
+      ],
+      "summary": "Retrieve workspaces {workspaceid} information"
     },
     {
       "method": "GET",
@@ -5509,6 +5509,51 @@
       "summary": "Update an existing views {viewid}"
     },
     {
+      "method": "POST",
+      "url": "/api/views/{viewId}/favorite",
+      "file": "src\\app\\api\\views\\[viewId]\\favorite\\route.ts",
+      "title": "Create Views {viewId} by ID",
+      "description": "Create a new views {viewid}",
+      "parameters": [
+        {
+          "name": "viewId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: viewId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "views"
+      ],
+      "summary": "Create a new views {viewid}"
+    },
+    {
       "method": "GET",
       "url": "/api/views/{viewId}/follow",
       "file": "src\\app\\api\\views\\[viewId]\\follow\\route.ts",
@@ -5629,8 +5674,8 @@
     },
     {
       "method": "GET",
-      "url": "/api/users/{userId}/assigned-tasks",
-      "file": "src\\app\\api\\users\\[userId]\\assigned-tasks\\route.ts",
+      "url": "/api/users/{userId}/assigned-issues",
+      "file": "src\\app\\api\\users\\[userId]\\assigned-issues\\route.ts",
       "title": "Get Users {userId} by ID",
       "description": "Retrieve users {userid} information",
       "parameters": [
@@ -5665,54 +5710,9 @@
       "summary": "Retrieve users {userid} information"
     },
     {
-      "method": "POST",
-      "url": "/api/views/{viewId}/favorite",
-      "file": "src\\app\\api\\views\\[viewId]\\favorite\\route.ts",
-      "title": "Create Views {viewId} by ID",
-      "description": "Create a new views {viewid}",
-      "parameters": [
-        {
-          "name": "viewId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: viewId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "views"
-      ],
-      "summary": "Create a new views {viewid}"
-    },
-    {
       "method": "GET",
-      "url": "/api/users/{userId}/assigned-issues",
-      "file": "src\\app\\api\\users\\[userId]\\assigned-issues\\route.ts",
+      "url": "/api/users/{userId}/assigned-tasks",
+      "file": "src\\app\\api\\users\\[userId]\\assigned-tasks\\route.ts",
       "title": "Get Users {userId} by ID",
       "description": "Retrieve users {userid} information",
       "parameters": [
@@ -5796,6 +5796,80 @@
         "tasks"
       ],
       "summary": "Create a new tasks {taskid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/tasks/{taskId}/sessions",
+      "file": "src\\app\\api\\tasks\\[taskId]\\sessions\\route.ts",
+      "title": "Get Tasks {taskId} by ID",
+      "description": "Retrieve tasks {taskid} information",
+      "parameters": [
+        {
+          "name": "taskId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Retrieve tasks {taskid} information"
+    },
+    {
+      "method": "GET",
+      "url": "/api/tasks/{taskId}/playtime",
+      "file": "src\\app\\api\\tasks\\[taskId]\\playtime\\route.ts",
+      "title": "Get Tasks {taskId} by ID",
+      "description": "Retrieve tasks {taskid} information",
+      "parameters": [
+        {
+          "name": "taskId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Retrieve tasks {taskid} information"
     },
     {
       "method": "POST",
@@ -5888,83 +5962,9 @@
       "summary": "Create a new tasks {taskid}"
     },
     {
-      "method": "GET",
-      "url": "/api/tasks/{taskId}/sessions",
-      "file": "src\\app\\api\\tasks\\[taskId]\\sessions\\route.ts",
-      "title": "Get Tasks {taskId} by ID",
-      "description": "Retrieve tasks {taskid} information",
-      "parameters": [
-        {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Retrieve tasks {taskid} information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/tasks/{taskId}/playtime",
-      "file": "src\\app\\api\\tasks\\[taskId]\\playtime\\route.ts",
-      "title": "Get Tasks {taskId} by ID",
-      "description": "Retrieve tasks {taskid} information",
-      "parameters": [
-        {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Retrieve tasks {taskid} information"
-    },
-    {
       "method": "POST",
-      "url": "/api/tasks/{taskId}/play",
-      "file": "src\\app\\api\\tasks\\[taskId]\\play\\route.ts",
+      "url": "/api/tasks/{taskId}/pause",
+      "file": "src\\app\\api\\tasks\\[taskId]\\pause\\route.ts",
       "title": "Create Tasks {taskId} by ID",
       "description": "Create a new tasks {taskid}",
       "parameters": [
@@ -6008,8 +6008,8 @@
     },
     {
       "method": "POST",
-      "url": "/api/tasks/{taskId}/pause",
-      "file": "src\\app\\api\\tasks\\[taskId]\\pause\\route.ts",
+      "url": "/api/tasks/{taskId}/play",
+      "file": "src\\app\\api\\tasks\\[taskId]\\play\\route.ts",
       "title": "Create Tasks {taskId} by ID",
       "description": "Create a new tasks {taskid}",
       "parameters": [
@@ -6140,57 +6140,6 @@
       "summary": "Retrieve tasks {taskid} information"
     },
     {
-      "method": "PATCH",
-      "url": "/api/tasks/{taskId}/edit",
-      "file": "src\\app\\api\\tasks\\[taskId]\\edit\\route.ts",
-      "title": "Update Tasks {taskId} by ID",
-      "description": "Partially update an existing tasks {taskid}",
-      "parameters": [
-        {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PATCH patching resource",
-        "example": {}
-      },
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Partially update an existing tasks {taskid}"
-    },
-    {
       "method": "GET",
       "url": "/api/tasks/{taskId}/follow",
       "file": "src\\app\\api\\tasks\\[taskId]\\follow\\route.ts",
@@ -6308,6 +6257,108 @@
         "tasks"
       ],
       "summary": "Remove a tasks {taskid}"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/tasks/{taskId}/edit",
+      "file": "src\\app\\api\\tasks\\[taskId]\\edit\\route.ts",
+      "title": "Update Tasks {taskId} by ID",
+      "description": "Partially update an existing tasks {taskid}",
+      "parameters": [
+        {
+          "name": "taskId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PATCH patching resource",
+        "example": {}
+      },
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Partially update an existing tasks {taskid}"
+    },
+    {
+      "method": "POST",
+      "url": "/api/tasks/{taskId}/adjust-time",
+      "file": "src\\app\\api\\tasks\\[taskId]\\adjust-time\\route.ts",
+      "title": "Create Tasks {taskId} by ID",
+      "description": "Create a new tasks {taskid}",
+      "parameters": [
+        {
+          "name": "taskId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Create a new tasks {taskid}"
     },
     {
       "method": "GET",
@@ -6484,57 +6535,6 @@
         "tasks"
       ],
       "summary": "Retrieve tasks {taskid} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/tasks/{taskId}/adjust-time",
-      "file": "src\\app\\api\\tasks\\[taskId]\\adjust-time\\route.ts",
-      "title": "Create Tasks {taskId} by ID",
-      "description": "Create a new tasks {taskid}",
-      "parameters": [
-        {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Create a new tasks {taskid}"
     },
     {
       "method": "DELETE",
@@ -6975,6 +6975,553 @@
       "summary": "Retrieve projects {projectid} information"
     },
     {
+      "method": "GET",
+      "url": "/api/posts/{postId}/tasks",
+      "file": "src\\app\\api\\posts\\[postId]\\tasks\\route.ts",
+      "title": "Get Posts {postId} by ID",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/posts/{postId}/resolve",
+      "file": "src\\app\\api\\posts\\[postId]\\resolve\\route.ts",
+      "title": "Update Posts {postId} by ID",
+      "description": "Partially update an existing posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Partially update an existing posts {postid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/posts/{postId}/follow",
+      "file": "src\\app\\api\\posts\\[postId]\\follow\\route.ts",
+      "title": "Get Posts {postId} by ID",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/posts/{postId}/follow",
+      "file": "src\\app\\api\\posts\\[postId]\\follow\\route.ts",
+      "title": "Create Posts {postId} by ID",
+      "description": "Create a new posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Create a new posts {postid}"
+    },
+    {
+      "method": "DELETE",
+      "url": "/api/posts/{postId}/follow",
+      "file": "src\\app\\api\\posts\\[postId]\\follow\\route.ts",
+      "title": "Delete Posts {postId} by ID",
+      "description": "Remove a posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Remove a posts {postid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/posts/{postId}/reactions",
+      "file": "src\\app\\api\\posts\\[postId]\\reactions\\route.ts",
+      "title": "Get Posts {postId} by ID",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/posts/{postId}/reactions",
+      "file": "src\\app\\api\\posts\\[postId]\\reactions\\route.ts",
+      "title": "Create Posts {postId} by ID",
+      "description": "Create a new posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "posts"
+      ],
+      "summary": "Create a new posts {postid}"
+    },
+    {
+      "method": "PUT",
+      "url": "/api/posts/{postId}/pin",
+      "file": "src\\app\\api\\posts\\[postId]\\pin\\route.ts",
+      "title": "Update Posts {postId} by ID",
+      "description": "Update an existing posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for PUT updating resource",
+        "example": {}
+      },
+      "tags": [
+        "posts"
+      ],
+      "summary": "Update an existing posts {postid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/posts/{postId}/comments",
+      "file": "src\\app\\api\\posts\\[postId]\\comments\\route.ts",
+      "title": "Get Posts {postId} by ID",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/posts/{postId}/comments",
+      "file": "src\\app\\api\\posts\\[postId]\\comments\\route.ts",
+      "title": "Create Posts {postId} by ID",
+      "description": "Create a new posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "posts"
+      ],
+      "summary": "Create a new posts {postid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/posts/{postId}/bookmarks",
+      "file": "src\\app\\api\\posts\\[postId]\\bookmarks\\route.ts",
+      "title": "Get Posts {postId} by ID",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/posts/{postId}/bookmarks",
+      "file": "src\\app\\api\\posts\\[postId]\\bookmarks\\route.ts",
+      "title": "Create Posts {postId} by ID",
+      "description": "Create a new posts {postid}",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Create a new posts {postid}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/posts/{postId}/actions",
+      "file": "src\\app\\api\\posts\\[postId]\\actions\\route.ts",
+      "title": "Get Posts {postId} by ID",
+      "description": "Retrieve posts {postid} information",
+      "parameters": [
+        {
+          "name": "postId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: postId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "posts"
+      ],
+      "summary": "Retrieve posts {postid} information"
+    },
+    {
       "method": "POST",
       "url": "/api/notifications/push/test",
       "file": "src\\app\\api\\notifications\\push\\test\\route.ts",
@@ -7185,270 +7732,18 @@
       "summary": "Get available options for notifications push"
     },
     {
-      "method": "PATCH",
-      "url": "/api/posts/{postId}/resolve",
-      "file": "src\\app\\api\\posts\\[postId]\\resolve\\route.ts",
-      "title": "Update Posts {postId} by ID",
-      "description": "Partially update an existing posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Partially update an existing posts {postid}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}/tasks",
-      "file": "src\\app\\api\\posts\\[postId]\\tasks\\route.ts",
-      "title": "Get Posts {postId} by ID",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}/reactions",
-      "file": "src\\app\\api\\posts\\[postId]\\reactions\\route.ts",
-      "title": "Get Posts {postId} by ID",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/posts/{postId}/reactions",
-      "file": "src\\app\\api\\posts\\[postId]\\reactions\\route.ts",
-      "title": "Create Posts {postId} by ID",
-      "description": "Create a new posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "posts"
-      ],
-      "summary": "Create a new posts {postid}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}/follow",
-      "file": "src\\app\\api\\posts\\[postId]\\follow\\route.ts",
-      "title": "Get Posts {postId} by ID",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/posts/{postId}/follow",
-      "file": "src\\app\\api\\posts\\[postId]\\follow\\route.ts",
-      "title": "Create Posts {postId} by ID",
-      "description": "Create a new posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Create a new posts {postid}"
-    },
-    {
       "method": "DELETE",
-      "url": "/api/posts/{postId}/follow",
-      "file": "src\\app\\api\\posts\\[postId]\\follow\\route.ts",
-      "title": "Delete Posts {postId} by ID",
-      "description": "Remove a posts {postid}",
+      "url": "/api/notes/tags/{tagId}",
+      "file": "src\\app\\api\\notes\\tags\\[tagId]\\route.ts",
+      "title": "Delete Notes Tags by ID",
+      "description": "Remove a notes tags",
       "parameters": [
         {
-          "name": "postId",
+          "name": "tagId",
           "type": "string",
           "required": true,
           "location": "path",
-          "description": "Path parameter: postId"
+          "description": "Path parameter: tagId"
         }
       ],
       "responses": {
@@ -7469,216 +7764,9 @@
       },
       "requestHeaders": [],
       "tags": [
-        "posts"
+        "notes"
       ],
-      "summary": "Remove a posts {postid}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}/bookmarks",
-      "file": "src\\app\\api\\posts\\[postId]\\bookmarks\\route.ts",
-      "title": "Get Posts {postId} by ID",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/posts/{postId}/bookmarks",
-      "file": "src\\app\\api\\posts\\[postId]\\bookmarks\\route.ts",
-      "title": "Create Posts {postId} by ID",
-      "description": "Create a new posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Create a new posts {postid}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}/comments",
-      "file": "src\\app\\api\\posts\\[postId]\\comments\\route.ts",
-      "title": "Get Posts {postId} by ID",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/posts/{postId}/comments",
-      "file": "src\\app\\api\\posts\\[postId]\\comments\\route.ts",
-      "title": "Create Posts {postId} by ID",
-      "description": "Create a new posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "posts"
-      ],
-      "summary": "Create a new posts {postid}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/posts/{postId}/actions",
-      "file": "src\\app\\api\\posts\\[postId]\\actions\\route.ts",
-      "title": "Get Posts {postId} by ID",
-      "description": "Retrieve posts {postid} information",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "posts"
-      ],
-      "summary": "Retrieve posts {postid} information"
+      "summary": "Remove a notes tags"
     },
     {
       "method": "PUT",
@@ -7818,57 +7906,6 @@
         "leave"
       ],
       "summary": "PATCH /api/leave/requests/[requestId] - Update leave request status (approve/reject)"
-    },
-    {
-      "method": "PUT",
-      "url": "/api/posts/{postId}/pin",
-      "file": "src\\app\\api\\posts\\[postId]\\pin\\route.ts",
-      "title": "Update Posts {postId} by ID",
-      "description": "Update an existing posts {postid}",
-      "parameters": [
-        {
-          "name": "postId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: postId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for PUT updating resource",
-        "example": {}
-      },
-      "tags": [
-        "posts"
-      ],
-      "summary": "Update an existing posts {postid}"
     },
     {
       "method": "GET",
@@ -8026,145 +8063,6 @@
     },
     {
       "method": "POST",
-      "url": "/api/features/{id}/vote",
-      "file": "src\\app\\api\\features\\[id]\\vote\\route.ts",
-      "title": "Create Features {id} by ID",
-      "description": "Create a new features {id}",
-      "parameters": [
-        {
-          "name": "id",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: id"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "features"
-      ],
-      "summary": "Create a new features {id}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/features/{id}/comments",
-      "file": "src\\app\\api\\features\\[id]\\comments\\route.ts",
-      "title": "Get Features {id} by ID",
-      "description": "Retrieve features {id} information",
-      "parameters": [
-        {
-          "name": "id",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: id"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "features"
-      ],
-      "summary": "Retrieve features {id} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/features/{id}/comments",
-      "file": "src\\app\\api\\features\\[id]\\comments\\route.ts",
-      "title": "Create Features {id} by ID",
-      "description": "Create a new features {id}",
-      "parameters": [
-        {
-          "name": "id",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: id"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "features"
-      ],
-      "summary": "Create a new features {id}"
-    },
-    {
-      "method": "POST",
       "url": "/api/issues/{issueId}/stop-with-adjustment",
       "file": "src\\app\\api\\issues\\[issueId]\\stop-with-adjustment\\route.ts",
       "title": "Create Issues {issueId} by ID",
@@ -8209,51 +8107,6 @@
         "description": "Request body for POST creating resource",
         "example": {}
       },
-      "tags": [
-        "issues"
-      ],
-      "summary": "Create a new issues {issueid}"
-    },
-    {
-      "method": "POST",
-      "url": "/api/issues/{issueId}/request-help",
-      "file": "src\\app\\api\\issues\\[issueId]\\request-help\\route.ts",
-      "title": "Create Issues {issueId} by ID",
-      "description": "Create a new issues {issueid}",
-      "parameters": [
-        {
-          "name": "issueId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: issueId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
       "tags": [
         "issues"
       ],
@@ -8377,6 +8230,51 @@
         "issues"
       ],
       "summary": "Retrieve issues {issueid} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/issues/{issueId}/request-help",
+      "file": "src\\app\\api\\issues\\[issueId]\\request-help\\route.ts",
+      "title": "Create Issues {issueId} by ID",
+      "description": "Create a new issues {issueid}",
+      "parameters": [
+        {
+          "name": "issueId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: issueId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "issues"
+      ],
+      "summary": "Create a new issues {issueid}"
     },
     {
       "method": "GET",
@@ -8637,18 +8535,18 @@
       "summary": "Create a new issues {issueid}"
     },
     {
-      "method": "DELETE",
-      "url": "/api/notes/tags/{tagId}",
-      "file": "src\\app\\api\\notes\\tags\\[tagId]\\route.ts",
-      "title": "Delete Notes Tags by ID",
-      "description": "Remove a notes tags",
+      "method": "POST",
+      "url": "/api/features/{id}/vote",
+      "file": "src\\app\\api\\features\\[id]\\vote\\route.ts",
+      "title": "Create Features {id} by ID",
+      "description": "Create a new features {id}",
       "parameters": [
         {
-          "name": "tagId",
+          "name": "id",
           "type": "string",
           "required": true,
           "location": "path",
-          "description": "Path parameter: tagId"
+          "description": "Path parameter: id"
         }
       ],
       "responses": {
@@ -8657,6 +8555,57 @@
           "description": "Success",
           "example": {
             "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "features"
+      ],
+      "summary": "Create a new features {id}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/features/{id}/comments",
+      "file": "src\\app\\api\\features\\[id]\\comments\\route.ts",
+      "title": "Get Features {id} by ID",
+      "description": "Retrieve features {id} information",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: id"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
           }
         },
         "404": {
@@ -8669,9 +8618,60 @@
       },
       "requestHeaders": [],
       "tags": [
-        "notes"
+        "features"
       ],
-      "summary": "Remove a notes tags"
+      "summary": "Retrieve features {id} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/features/{id}/comments",
+      "file": "src\\app\\api\\features\\[id]\\comments\\route.ts",
+      "title": "Create Features {id} by ID",
+      "description": "Create a new features {id}",
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: id"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "features"
+      ],
+      "summary": "Create a new features {id}"
     },
     {
       "method": "GET",
@@ -8925,121 +8925,6 @@
       "summary": "Retrieve boards {boardid} information"
     },
     {
-      "method": "POST",
-      "url": "/api/ai/create-tasks/start",
-      "file": "src\\app\\api\\ai\\create-tasks\\start\\route.ts",
-      "title": "Create Ai Create-tasks by ID",
-      "description": "Create a new ai create-tasks",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "ai"
-      ],
-      "summary": "Create a new ai create-tasks"
-    },
-    {
-      "method": "GET",
-      "url": "/api/ai/create-tasks/jobs",
-      "file": "src\\app\\api\\ai\\create-tasks\\jobs\\route.ts",
-      "title": "Get Ai Create-tasks by ID",
-      "description": "Retrieve ai create-tasks information",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "ai"
-      ],
-      "summary": "Retrieve ai create-tasks information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/ai/create-stories/start",
-      "file": "src\\app\\api\\ai\\create-stories\\start\\route.ts",
-      "title": "Create Ai Create-stories by ID",
-      "description": "Create a new ai create-stories",
-      "parameters": [],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "requestBody": {
-        "type": "application/json",
-        "schema": {},
-        "description": "Request body for POST creating resource",
-        "example": {}
-      },
-      "tags": [
-        "ai"
-      ],
-      "summary": "Create a new ai create-stories"
-    },
-    {
       "method": "GET",
       "url": "/api/ai/create-stories/jobs",
       "file": "src\\app\\api\\ai\\create-stories\\jobs\\route.ts",
@@ -9099,6 +8984,121 @@
     },
     {
       "method": "POST",
+      "url": "/api/ai/create-stories/start",
+      "file": "src\\app\\api\\ai\\create-stories\\start\\route.ts",
+      "title": "Create Ai Create-stories by ID",
+      "description": "Create a new ai create-stories",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "ai"
+      ],
+      "summary": "Create a new ai create-stories"
+    },
+    {
+      "method": "GET",
+      "url": "/api/ai/board-generation/jobs",
+      "file": "src\\app\\api\\ai\\board-generation\\jobs\\route.ts",
+      "title": "Get Ai Board-generation by ID",
+      "description": "Retrieve ai board-generation information",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "ai"
+      ],
+      "summary": "Retrieve ai board-generation information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/ai/create-tasks/start",
+      "file": "src\\app\\api\\ai\\create-tasks\\start\\route.ts",
+      "title": "Create Ai Create-tasks by ID",
+      "description": "Create a new ai create-tasks",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "requestBody": {
+        "type": "application/json",
+        "schema": {},
+        "description": "Request body for POST creating resource",
+        "example": {}
+      },
+      "tags": [
+        "ai"
+      ],
+      "summary": "Create a new ai create-tasks"
+    },
+    {
+      "method": "POST",
       "url": "/api/ai/board-generation/start",
       "file": "src\\app\\api\\ai\\board-generation\\start\\route.ts",
       "title": "Create Ai Board-generation by ID",
@@ -9142,10 +9142,10 @@
     },
     {
       "method": "GET",
-      "url": "/api/ai/board-generation/jobs",
-      "file": "src\\app\\api\\ai\\board-generation\\jobs\\route.ts",
-      "title": "Get Ai Board-generation by ID",
-      "description": "Retrieve ai board-generation information",
+      "url": "/api/ai/create-tasks/jobs",
+      "file": "src\\app\\api\\ai\\create-tasks\\jobs\\route.ts",
+      "title": "Get Ai Create-tasks by ID",
+      "description": "Retrieve ai create-tasks information",
       "parameters": [],
       "responses": {
         "200": {
@@ -9167,7 +9167,7 @@
       "tags": [
         "ai"
       ],
-      "summary": "Retrieve ai board-generation information"
+      "summary": "Retrieve ai create-tasks information"
     },
     {
       "method": "POST",
@@ -9762,6 +9762,43 @@
     },
     {
       "method": "GET",
+      "url": "/api/tasks/boards/{boardId}/tasks",
+      "file": "src\\app\\api\\tasks\\boards\\[boardId]\\tasks\\route.ts",
+      "title": "Get Tasks Boards by ID",
+      "description": "Retrieve tasks boards information",
+      "parameters": [
+        {
+          "name": "boardId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: boardId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Retrieve tasks boards information"
+    },
+    {
+      "method": "GET",
       "url": "/api/tasks/boards/{boardId}/columns",
       "file": "src\\app\\api\\tasks\\boards\\[boardId]\\columns\\route.ts",
       "title": "Get Tasks Boards by ID",
@@ -9849,117 +9886,6 @@
       "summary": "Create a new tasks boards"
     },
     {
-      "method": "GET",
-      "url": "/api/tasks/boards/{boardId}/tasks",
-      "file": "src\\app\\api\\tasks\\boards\\[boardId]\\tasks\\route.ts",
-      "title": "Get Tasks Boards by ID",
-      "description": "Retrieve tasks boards information",
-      "parameters": [
-        {
-          "name": "boardId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: boardId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Retrieve tasks boards information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/realtime/workspace/{workspaceId}/stream",
-      "file": "src\\app\\api\\realtime\\workspace\\[workspaceId]\\stream\\route.ts",
-      "title": "Get Realtime Workspace by ID",
-      "description": "Retrieve realtime workspace information",
-      "parameters": [
-        {
-          "name": "workspaceId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: workspaceId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "realtime"
-      ],
-      "summary": "Retrieve realtime workspace information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/realtime/view/{viewId}/stream",
-      "file": "src\\app\\api\\realtime\\view\\[viewId]\\stream\\route.ts",
-      "title": "Get Realtime View by ID",
-      "description": "Retrieve realtime view information",
-      "parameters": [
-        {
-          "name": "viewId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: viewId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "realtime"
-      ],
-      "summary": "Retrieve realtime view information"
-    },
-    {
       "method": "PATCH",
       "url": "/api/projects/{projectId}/statuses/reorder",
       "file": "src\\app\\api\\projects\\[projectId]\\statuses\\reorder\\route.ts",
@@ -10022,6 +9948,80 @@
     },
     {
       "method": "GET",
+      "url": "/api/realtime/view/{viewId}/stream",
+      "file": "src\\app\\api\\realtime\\view\\[viewId]\\stream\\route.ts",
+      "title": "Get Realtime View by ID",
+      "description": "Retrieve realtime view information",
+      "parameters": [
+        {
+          "name": "viewId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: viewId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "realtime"
+      ],
+      "summary": "Retrieve realtime view information"
+    },
+    {
+      "method": "GET",
+      "url": "/api/realtime/workspace/{workspaceId}/stream",
+      "file": "src\\app\\api\\realtime\\workspace\\[workspaceId]\\stream\\route.ts",
+      "title": "Get Realtime Workspace by ID",
+      "description": "Retrieve realtime workspace information",
+      "parameters": [
+        {
+          "name": "workspaceId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: workspaceId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "realtime"
+      ],
+      "summary": "Retrieve realtime workspace information"
+    },
+    {
+      "method": "GET",
       "url": "/api/ai/create-tasks/status/{jobId}",
       "file": "src\\app\\api\\ai\\create-tasks\\status\\[jobId]\\route.ts",
       "title": "Get Ai Create-tasks by ID",
@@ -10056,50 +10056,6 @@
         "ai"
       ],
       "summary": "Retrieve ai create-tasks information"
-    },
-    {
-      "method": "GET",
-      "url": "/api/board-items/{itemType}/{itemId}/activities",
-      "file": "src\\app\\api\\board-items\\[itemType]\\[itemId]\\activities\\route.ts",
-      "title": "Get Board-items {itemType} by ID",
-      "description": "Retrieve board-items {itemtype} information",
-      "parameters": [
-        {
-          "name": "itemType",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: itemType"
-        },
-        {
-          "name": "itemId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: itemId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "board-items"
-      ],
-      "summary": "Retrieve board-items {itemtype} information"
     },
     {
       "method": "GET",
@@ -10325,6 +10281,146 @@
     },
     {
       "method": "GET",
+      "url": "/api/board-items/{itemType}/{itemId}/activities",
+      "file": "src\\app\\api\\board-items\\[itemType]\\[itemId]\\activities\\route.ts",
+      "title": "Get Board-items {itemType} by ID",
+      "description": "Retrieve board-items {itemtype} information",
+      "parameters": [
+        {
+          "name": "itemType",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: itemType"
+        },
+        {
+          "name": "itemId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: itemId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "board-items"
+      ],
+      "summary": "Retrieve board-items {itemtype} information"
+    },
+    {
+      "method": "GET",
+      "url": "/api/tasks/{taskId}/comments/{commentId}/like",
+      "file": "src\\app\\api\\tasks\\[taskId]\\comments\\[commentId]\\like\\route.ts",
+      "title": "Get Tasks {taskId} by ID",
+      "description": "Retrieve tasks {taskid} information",
+      "parameters": [
+        {
+          "name": "taskId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskId"
+        },
+        {
+          "name": "commentId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: commentId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "data": []
+          }
+        },
+        "404": {
+          "statusCode": "404",
+          "description": "Not found",
+          "example": {
+            "error": "Resource not found"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Retrieve tasks {taskid} information"
+    },
+    {
+      "method": "POST",
+      "url": "/api/tasks/{taskId}/comments/{commentId}/like",
+      "file": "src\\app\\api\\tasks\\[taskId]\\comments\\[commentId]\\like\\route.ts",
+      "title": "Create Tasks {taskId} by ID",
+      "description": "Create a new tasks {taskid}",
+      "parameters": [
+        {
+          "name": "taskId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: taskId"
+        },
+        {
+          "name": "commentId",
+          "type": "string",
+          "required": true,
+          "location": "path",
+          "description": "Path parameter: commentId"
+        }
+      ],
+      "responses": {
+        "200": {
+          "statusCode": "200",
+          "description": "Success",
+          "example": {
+            "success": true
+          }
+        },
+        "201": {
+          "statusCode": "201",
+          "description": "Created",
+          "example": {
+            "id": "123",
+            "success": true
+          }
+        },
+        "400": {
+          "statusCode": "400",
+          "description": "Bad request",
+          "example": {
+            "error": "Invalid input"
+          }
+        }
+      },
+      "requestHeaders": [],
+      "tags": [
+        "tasks"
+      ],
+      "summary": "Create a new tasks {taskid}"
+    },
+    {
+      "method": "GET",
       "url": "/api/workspaces/{workspaceId}/issues/{issueKey}/relations",
       "file": "src\\app\\api\\workspaces\\[workspaceId]\\issues\\[issueKey]\\relations\\route.ts",
       "title": "Get Workspaces {workspaceId} by ID",
@@ -10424,102 +10520,6 @@
         "workspaces"
       ],
       "summary": "Create a new workspaces {workspaceid}"
-    },
-    {
-      "method": "GET",
-      "url": "/api/tasks/{taskId}/comments/{commentId}/like",
-      "file": "src\\app\\api\\tasks\\[taskId]\\comments\\[commentId]\\like\\route.ts",
-      "title": "Get Tasks {taskId} by ID",
-      "description": "Retrieve tasks {taskid} information",
-      "parameters": [
-        {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskId"
-        },
-        {
-          "name": "commentId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: commentId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "data": []
-          }
-        },
-        "404": {
-          "statusCode": "404",
-          "description": "Not found",
-          "example": {
-            "error": "Resource not found"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Retrieve tasks {taskid} information"
-    },
-    {
-      "method": "POST",
-      "url": "/api/tasks/{taskId}/comments/{commentId}/like",
-      "file": "src\\app\\api\\tasks\\[taskId]\\comments\\[commentId]\\like\\route.ts",
-      "title": "Create Tasks {taskId} by ID",
-      "description": "Create a new tasks {taskid}",
-      "parameters": [
-        {
-          "name": "taskId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: taskId"
-        },
-        {
-          "name": "commentId",
-          "type": "string",
-          "required": true,
-          "location": "path",
-          "description": "Path parameter: commentId"
-        }
-      ],
-      "responses": {
-        "200": {
-          "statusCode": "200",
-          "description": "Success",
-          "example": {
-            "success": true
-          }
-        },
-        "201": {
-          "statusCode": "201",
-          "description": "Created",
-          "example": {
-            "id": "123",
-            "success": true
-          }
-        },
-        "400": {
-          "statusCode": "400",
-          "description": "Bad request",
-          "example": {
-            "error": "Invalid input"
-          }
-        }
-      },
-      "requestHeaders": [],
-      "tags": [
-        "tasks"
-      ],
-      "summary": "Create a new tasks {taskid}"
     },
     {
       "method": "PATCH",
@@ -10881,5 +10881,5 @@
     }
   ],
   "totalEndpoints": 262,
-  "generatedAt": "2025-09-15T15:09:12.849Z"
+  "generatedAt": "2025-09-15T15:30:10.949Z"
 }
