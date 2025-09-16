@@ -20,14 +20,7 @@ export async function PUT(
     const resolvedParams = await params;
     const { viewId } = resolvedParams;
     const body = await request.json();
-    const { issueId, columnId, position } = body;
-
-    if (!issueId || !columnId || position === undefined) {
-      return NextResponse.json(
-        { error: 'Missing required fields: issueId, columnId, position' },
-        { status: 400 }
-      );
-    }
+    const { issueId, columnId, position, bulk } = body;
 
     // Verify view access
     const view = await prisma.view.findFirst({
@@ -61,7 +54,47 @@ export async function PUT(
       return NextResponse.json({ error: 'Issue not found or access denied' }, { status: 404 });
     }
 
-    // Upsert view-specific position
+    // Bulk upsert support for reindex operations
+    if (Array.isArray(bulk) && bulk.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        for (const item of bulk) {
+          if (!item.issueId || !item.columnId || item.position === undefined) {
+            throw new Error('Invalid bulk item');
+          }
+          await tx.viewIssuePosition.upsert({
+            where: {
+              viewId_issueId_columnId: {
+                viewId,
+                issueId: item.issueId,
+                columnId: item.columnId
+              }
+            },
+            update: { position: item.position },
+            create: {
+              viewId,
+              issueId: item.issueId,
+              columnId: item.columnId,
+              position: item.position
+            }
+          });
+        }
+      });
+      await publishEvent(`workspace:${view.workspaceId}:events`, {
+        type: 'view.issue-position.updated',
+        workspaceId: view.workspaceId,
+        viewId,
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    if (!issueId || !columnId || position === undefined) {
+      return NextResponse.json(
+        { error: 'Missing required fields: issueId, columnId, position' },
+        { status: 400 }
+      );
+    }
+
+    // Upsert single view-specific position
     const viewPosition = await prisma.viewIssuePosition.upsert({
       where: {
         viewId_issueId_columnId: {
@@ -90,10 +123,7 @@ export async function PUT(
       position
     });
 
-    return NextResponse.json({ 
-      success: true,
-      viewPosition 
-    });
+    return NextResponse.json({ success: true, viewPosition });
 
   } catch (error) {
     console.error('Error updating view issue position:', error);

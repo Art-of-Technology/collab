@@ -146,10 +146,27 @@ export const useKanbanState = ({
   const handleDragStart = useCallback((start: any) => {
     isDraggingRef.current = true;
     if (start.type === 'issue') {
+      // Preserve current visual order when switching to manual by applying ephemeral positions
+      if ((view?.ordering || view?.sorting?.field) !== 'manual') {
+        const POSITION_GAP = 1024;
+        const positionById = new Map<string, number>();
+        columns.forEach((col) => {
+          col.issues.forEach((it: any, idx: number) => {
+            positionById.set(it.id, (idx + 1) * POSITION_GAP);
+          });
+        });
+        setLocalIssues((prev) => prev.map((it: any) => {
+          const pos = positionById.get(it.id);
+          if (pos !== undefined) {
+            return { ...it, viewPosition: pos, position: pos };
+          }
+          return it;
+        }));
+      }
       const issue = localIssues.find((i: any) => i.id === start.draggableId);
       setDraggedIssue(issue);
     }
-  }, [localIssues]);
+  }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
   const handleDragUpdate = useCallback((update: any) => {
     if (!update.destination) {
@@ -221,7 +238,7 @@ export const useKanbanState = ({
     }
 
     if (type === 'issue') {
-      // Immediately switch ordering to manual to prevent re-sorting flicker after drop
+      // Immediately switch ordering to manual, but preserve existing visual order
       if (typeof onOrderingChange === 'function' && (view?.ordering !== 'manual' && view?.sorting?.field !== 'manual')) {
         onOrderingChange('manual');
       }
@@ -239,19 +256,34 @@ export const useKanbanState = ({
       const targetColumn = columns.find(col => col.id === targetColumnId);
       if (!targetColumn) { isDraggingRef.current = false; return; }
 
-      // Build neighbor context and compute a middle position
+      // Compute neighbor context using currently rendered order
+      const POSITION_GAP = 1024;
       const items = targetColumn.issues.filter((i: any) => i.id !== draggableId);
       const destIndex = isSameColumn && destination.index > source.index ? destination.index - 1 : destination.index;
       const getPos = (it: any) => (it?.viewPosition ?? it?.position ?? 0);
       const prev = destIndex > 0 ? items[destIndex - 1] : undefined;
       const next = destIndex < items.length ? items[destIndex] : undefined;
-      const newPosition = prev && next
-        ? (getPos(prev) + getPos(next)) / 2
-        : prev
-          ? getPos(prev) + 1
-          : next
-            ? getPos(next) - 1
-            : 0;
+
+      let newPosition: number;
+      let shouldReindex = false;
+
+      if (prev && next) {
+        const gap = getPos(next) - getPos(prev);
+        if (!Number.isFinite(gap) || gap <= 1) {
+          shouldReindex = true;
+          newPosition = getPos(prev) + 1; // temporary; will be replaced by reindexing
+        } else {
+          newPosition = getPos(prev) + Math.floor(gap / 2);
+        }
+      } else if (prev && !next) {
+        const prevPos = getPos(prev);
+        newPosition = Number.isFinite(prevPos) ? prevPos + POSITION_GAP : POSITION_GAP;
+      } else if (!prev && next) {
+        const nextPos = getPos(next);
+        newPosition = Number.isFinite(nextPos) ? nextPos - POSITION_GAP : 0;
+      } else {
+        newPosition = POSITION_GAP; // first item in empty column
+      }
 
       const updatedIssue: any = { ...newLocalIssues[issueIndex], viewPosition: newPosition, position: newPosition };
       if (!isSameColumn) {
@@ -261,23 +293,46 @@ export const useKanbanState = ({
           updatedIssue.projectStatus = { name: targetColumnId, displayName: targetColumn.name };
         }
       }
+
+      // Optimistically update UI
       newLocalIssues[issueIndex] = updatedIssue;
       setLocalIssues(newLocalIssues);
 
-      const requests: Promise<any>[] = [];
-      if (!isSameColumn) {
-        requests.push(updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue, skipInvalidate: true }));
-      }
-      requests.push(
-        fetch(`/api/views/${view.id}/issue-positions`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issueId: draggableId, columnId: targetColumnId, position: newPosition })
-        })
-      );
-      Promise.all(requests).catch((err) => {
+      try {
+        // Persist in a safe order: status first (if changed), then positions
+        if (!isSameColumn) {
+          await updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue, skipInvalidate: true });
+        }
+
+        if (shouldReindex) {
+          // Build final order for the entire target column including dragged issue
+          const finalItems = [...items];
+          finalItems.splice(destIndex, 0, updatedIssue);
+          const bulk = finalItems.map((it, idx) => ({ issueId: it.id, columnId: targetColumnId, position: (idx + 1) * POSITION_GAP }));
+          await fetch(`/api/views/${view.id}/issue-positions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bulk })
+          });
+          // Reflect deterministic positions locally
+          const updatedMap = new Map<string, number>();
+          bulk.forEach((b) => updatedMap.set(b.issueId, b.position));
+          setLocalIssues((prevIssues) => prevIssues.map((it: any) => {
+            if (updatedMap.has(it.id)) {
+              const pos = updatedMap.get(it.id) as number;
+              return { ...it, viewPosition: pos, position: pos };
+            }
+            return it;
+          }));
+        } else {
+          await fetch(`/api/views/${view.id}/issue-positions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ issueId: draggableId, columnId: targetColumnId, position: newPosition })
+          });
+        }
+      } catch (err) {
         console.error('Failed to persist reorder:', err);
-        // Rollback on failure
         if (previousIssuesRef.current) {
           setLocalIssues(previousIssuesRef.current);
         }
@@ -286,9 +341,11 @@ export const useKanbanState = ({
           title: 'Reorder failed',
           description: 'Could not save new position. Restored previous order.'
         });
-      }).finally(() => {
+      } finally {
+        setDraggedIssue(null);
+        setHoverState({ canDrop: true, columnId: '' });
         isDraggingRef.current = false;
-      });
+      }
       return;
     }
     
@@ -296,7 +353,7 @@ export const useKanbanState = ({
     setDraggedIssue(null);
     setHoverState({ canDrop: true, columnId: '' });
     isDraggingRef.current = false;
-  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field]);
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field, onOrderingChange, view?.ordering, view?.sorting?.field]);
 
   // Issue handlers
   const handleIssueClick = useCallback((issueIdOrKey: string) => {

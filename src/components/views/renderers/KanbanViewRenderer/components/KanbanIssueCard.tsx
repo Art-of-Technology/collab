@@ -67,7 +67,7 @@ const KanbanIssueCard = React.memo(({
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-all duration-150 cursor-pointer",
+            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-colors duration-150 cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
           onClick={handleCardClick}

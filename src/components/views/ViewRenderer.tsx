@@ -614,18 +614,8 @@ export default function ViewRenderer({
     const sortField = tempOrdering;
 
     if (sortField === 'manual') {
-      // Sort by view-specific position first, then fallback to global position, then createdAt
-      sorted.sort((a: any, b: any) => {
-        const posA = (a.viewPosition ?? a.position ?? Number.MAX_SAFE_INTEGER) as number;
-        const posB = (b.viewPosition ?? b.position ?? Number.MAX_SAFE_INTEGER) as number;
-        if (posA !== posB) return posA - posB; // ascending
-        const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return aCreated - bCreated;
-      });
       return sorted;
     }
-
     if (sortField) {
       sorted.sort((a, b) => {
         let aValue: any;
@@ -815,7 +805,7 @@ export default function ViewRenderer({
         countingIssues = countingIssues.filter(issue => {
           switch (filterKey) {
             case 'status':
-              return filterValues.includes(issue.statusValue || issue.status);
+              return filterValues.includes(issue.statusId);
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
@@ -959,6 +949,11 @@ export default function ViewRenderer({
   };
 
   const renderViewContent = () => {
+    // Single source of truth for Kanban sorting:
+    // Kanban/Board receives unsorted, position-merged issues. Other views get globally sorted issues.
+    const issuesForRenderer = (tempDisplayType === 'KANBAN' || tempDisplayType === 'BOARD')
+      ? filteredIssues
+      : sortedIssues;
     const sharedProps = {
       view: {
         ...view,
@@ -968,7 +963,7 @@ export default function ViewRenderer({
         sorting: { field: tempOrdering, direction: 'desc' },
         fields: tempDisplayProperties
       },
-      issues: sortedIssues,
+      issues: issuesForRenderer,
       workspace,
       currentUser,
       activeFilters: allFilters,
@@ -1034,7 +1029,7 @@ export default function ViewRenderer({
       <PageHeader
         icon={VIEW_TYPE_ICONS[view.type as keyof typeof VIEW_TYPE_ICONS] || List}
         title={view.name}
-        subtitle={`${sortedIssues.length} ${sortedIssues.length === 1 ? 'issue' : 'issues'}`}
+        subtitle={`${filteredIssues.length} ${filteredIssues.length === 1 ? 'issue' : 'issues'}`}
         leftContent={
           hasChanges && (
             <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
