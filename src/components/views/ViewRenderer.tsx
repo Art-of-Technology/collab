@@ -184,26 +184,8 @@ export default function ViewRenderer({
 
   
 
-  // Fetch view-specific issue positions for proper ordering
-  const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(view.id, view.displayType === 'KANBAN');
-
-  // Listen for position invalidation events
-  useEffect(() => {
-    const handleInvalidatePositions = (event: CustomEvent) => {
-      if (event.detail?.viewId === view.id) {
-        // Immediate invalidation and refetch
-        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
-        queryClient.refetchQueries({ queryKey: ['viewPositions', view.id] });
-      }
-    };
-
-    window.addEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
-    return () => {
-      window.removeEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
-    };
-  }, [view.id, queryClient]);
-
   // Realtime: subscribe to workspace-level events to keep issues and positions fresh
+  // Allow invalidations so view positions update after drag-and-drop
   useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
 
   // Temporary state for filters and display (resets on refresh)
@@ -213,6 +195,12 @@ export default function ViewRenderer({
   const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
+  
+  // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
+  const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
+    view.id,
+    view.displayType === 'KANBAN' || tempOrdering === 'manual'
+  );
   // Load project follow status (for the primary project of this view)
   const primaryProjectId = useMemo(() => (tempProjectIds?.[0] || view.projects?.[0]?.id || ''), [tempProjectIds, view.projects]);
   useEffect(() => {
@@ -623,42 +611,75 @@ export default function ViewRenderer({
   // Apply sorting
   const sortedIssues = useMemo(() => {
     const sorted = [...filteredIssues];
-    
     const sortField = tempOrdering;
-    if (sortField && sortField !== 'manual') {
+
+    if (sortField === 'manual') {
+      // Sort by view-specific position first, then fallback to global position, then createdAt
+      sorted.sort((a: any, b: any) => {
+        const posA = (a.viewPosition ?? a.position ?? Number.MAX_SAFE_INTEGER) as number;
+        const posB = (b.viewPosition ?? b.position ?? Number.MAX_SAFE_INTEGER) as number;
+        if (posA !== posB) return posA - posB; // ascending
+        const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return aCreated - bCreated;
+      });
+      return sorted;
+    }
+
+    if (sortField) {
       sorted.sort((a, b) => {
         let aValue: any;
         let bValue: any;
-        
+
         switch (sortField) {
-          case 'priority':
-            const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-            aValue = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
-            bValue = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
+          case 'priority': {
+            const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 } as const;
+            aValue = priorityOrder[(a.priority as keyof typeof priorityOrder) || ''] || 0;
+            bValue = priorityOrder[(b.priority as keyof typeof priorityOrder) || ''] || 0;
             break;
+          }
           case 'created':
           case 'createdAt':
-            aValue = new Date(a.createdAt).getTime();
-            bValue = new Date(b.createdAt).getTime();
+            aValue = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            bValue = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             break;
           case 'updated':
           case 'updatedAt':
-            aValue = new Date(a.updatedAt).getTime();
-            bValue = new Date(b.updatedAt).getTime();
+            aValue = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            bValue = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
             break;
           case 'dueDate':
             aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
             bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
             break;
+          case 'startDate':
+            aValue = a.startDate ? new Date(a.startDate).getTime() : 0;
+            bValue = b.startDate ? new Date(b.startDate).getTime() : 0;
+            break;
+          case 'assignee': {
+            const aName = (a.assignee?.name || '').toLowerCase();
+            const bName = (b.assignee?.name || '').toLowerCase();
+            aValue = aName;
+            bValue = bName;
+            break;
+          }
+          case 'title': {
+            const aTitle = (a.title || '').toLowerCase();
+            const bTitle = (b.title || '').toLowerCase();
+            aValue = aTitle;
+            bValue = bTitle;
+            break;
+          }
           default:
-            aValue = a[sortField] || '';
-            bValue = b[sortField] || '';
+            aValue = (a as any)[sortField] || '';
+            bValue = (b as any)[sortField] || '';
         }
-        
+
+        // Descending by default
         return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
       });
     }
-    
+
     return sorted;
   }, [filteredIssues, tempOrdering]);
 
@@ -943,6 +964,7 @@ export default function ViewRenderer({
         ...view,
         displayType: tempDisplayType,
         grouping: { field: tempGrouping },
+        ordering: tempOrdering,
         sorting: { field: tempOrdering, direction: 'desc' },
         fields: tempDisplayProperties
       },
@@ -986,7 +1008,15 @@ export default function ViewRenderer({
             </div>
           );
         }
-        return <KanbanViewRenderer {...sharedProps} />;
+        return (
+          <KanbanViewRenderer 
+            {...sharedProps}
+            onOrderingChange={(ordering: string) => {
+              // Avoid flicker: update state first, then rely on existing manual-position sorts
+              setTempOrdering(ordering);
+            }}
+          />
+        );
       case 'LIST':
         return <ListViewRenderer {...sharedProps} />;
       case 'TABLE':
@@ -1201,28 +1231,31 @@ export default function ViewRenderer({
           {/* Mobile: Filters and View Type in Column */}
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2 md:flex-1">
             {/* Badge-like selectors - wrap on mobile */}
-            <div className="flex flex-wrap gap-1.5 md:gap-1">
-              <ViewProjectSelector
-                value={tempProjectIds}
-                onChange={(projectIds) => {
-                  setTempProjectIds(projectIds);
-                }}
-                projects={allProjects}
-              />
-              <ViewGroupingSelector
-                value={tempGrouping}
-                onChange={setTempGrouping}
-                displayType={tempDisplayType}
-              />
-              <ViewOrderingSelector
-                value={tempOrdering}
-                onChange={setTempOrdering}
-                displayType={tempDisplayType}
-              />
-              <ViewDisplayPropertiesSelector
-                value={tempDisplayProperties}
-                onChange={setTempDisplayProperties}
-              />
+            <div className="flex flex-wrap gap-3 md:gap-4">
+              <div className="flex flex-wrap gap-1.5 md:gap-1">
+                <ViewProjectSelector
+                  value={tempProjectIds}
+                  onChange={(projectIds) => {
+                    setTempProjectIds(projectIds);
+                  }}
+                  projects={allProjects}
+                />
+                <ViewGroupingSelector
+                  value={tempGrouping}
+                  onChange={setTempGrouping}
+                  displayType={tempDisplayType}
+                />
+                <ViewOrderingSelector
+                  value={tempOrdering}
+                  onChange={setTempOrdering}
+                  displayType={tempDisplayType}
+                />
+                <ViewDisplayPropertiesSelector
+                  value={tempDisplayProperties}
+                  onChange={setTempDisplayProperties}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 md:gap-1">
               <StatusSelector
                 value={allFilters.status || []}
                 projectIds={tempProjectIds}
@@ -1290,6 +1323,7 @@ export default function ViewRenderer({
                 projectIds={tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)}
                 workspaceMembers={workspaceMembers}
               />
+              </div>
             </div>
 
             {/* View Type Toggle - Right aligned on desktop, left on mobile */}

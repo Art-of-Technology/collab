@@ -8,6 +8,7 @@ export interface KanbanViewRendererProps {
   onIssueUpdate?: (issueId: string, updates: any) => void;
   onColumnUpdate?: (columnId: string, updates: any) => void;
   onCreateIssue?: (columnId: string, issueData: any) => void;
+  onOrderingChange?: (ordering: string) => void;
 }
 
 

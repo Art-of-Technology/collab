@@ -227,16 +227,69 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
     }
   });
 
-  // Sort issues within each column by view-specific position for proper ordering
+  // Sort issues within each column based on selected ordering (default: manual by position)
   const sortedColumns = Array.from(columnsMap.values()).map((column: Column) => ({
     ...column,
     issues: column.issues.sort((a: any, b: any) => {
-      // Sort by view-specific position first, fallback to global position, then creation date
+      const orderingField = (view?.ordering || view?.sorting?.field || 'manual') as string;
+
+      if (orderingField === 'priority') {
+        const priorityOrder: Record<string, number> = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+        const aVal = priorityOrder[(a.priority || '').toUpperCase()] || 0;
+        const bVal = priorityOrder[(b.priority || '').toUpperCase()] || 0;
+        if (aVal !== bVal) return bVal - aVal; // Descending: URGENT -> LOW
+        // Tie-breaker: manual position
+        const posA = a.viewPosition ?? a.position ?? 999999;
+        const posB = b.viewPosition ?? b.position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        // Final tie-breaker: createdAt asc
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      
+      if (orderingField === 'created' || orderingField === 'createdAt') {
+        const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (aDate !== bDate) return bDate - aDate; // Newest first
+        const posA = a.viewPosition ?? a.position ?? 999999;
+        const posB = b.viewPosition ?? b.position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        return 0;
+      }
+
+      if (orderingField === 'updated' || orderingField === 'updatedAt') {
+        const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        if (aDate !== bDate) return bDate - aDate; // Most recently updated first
+        const posA = a.viewPosition ?? a.position ?? 999999;
+        const posB = b.viewPosition ?? b.position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        return 0;
+      }
+
+      if (orderingField === 'dueDate') {
+        const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        if (aDate !== bDate) return aDate - bDate; // Earliest due first
+        const posA = a.viewPosition ?? a.position ?? 999999;
+        const posB = b.viewPosition ?? b.position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        return 0;
+      }
+
+      if (orderingField === 'startDate') {
+        const aDate = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY;
+        const bDate = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY;
+        if (aDate !== bDate) return aDate - bDate; // Earliest start first
+        const posA = a.viewPosition ?? a.position ?? 999999;
+        const posB = b.viewPosition ?? b.position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        return 0;
+      }
+
+      // Default/manual: position first, then createdAt
       const posA = a.viewPosition ?? a.position ?? 999999;
       const posB = b.viewPosition ?? b.position ?? 999999;
       if (posA !== posB) return posA - posB;
-      
-      // Fallback to creation date if positions are the same
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     })
   }));

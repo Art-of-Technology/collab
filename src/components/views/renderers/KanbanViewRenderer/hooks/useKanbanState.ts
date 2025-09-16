@@ -19,7 +19,8 @@ export const useKanbanState = ({
   onIssueUpdate,
   onColumnUpdate,
   onCreateIssue,
-  activeFilters
+  activeFilters,
+  onOrderingChange
 }: KanbanViewRendererProps) => {
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
@@ -220,6 +221,11 @@ export const useKanbanState = ({
     }
 
     if (type === 'issue') {
+      // Immediately switch ordering to manual to prevent re-sorting flicker after drop
+      if (typeof onOrderingChange === 'function' && (view?.ordering !== 'manual' && view?.sorting?.field !== 'manual')) {
+        onOrderingChange('manual');
+      }
+
       const isSameColumn = source.droppableId === destination.droppableId;
       const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
 
@@ -260,7 +266,7 @@ export const useKanbanState = ({
 
       const requests: Promise<any>[] = [];
       if (!isSameColumn) {
-        requests.push(updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue }));
+        requests.push(updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue, skipInvalidate: true }));
       }
       requests.push(
         fetch(`/api/views/${view.id}/issue-positions`, {

@@ -15,7 +15,12 @@ interface ViewPositionsResponse {
 }
 
 async function fetchViewPositions(viewId: string): Promise<ViewPositionsResponse> {
-  const response = await fetch(`/api/views/${viewId}/issue-positions`);
+  const response = await fetch(`/api/views/${viewId}/issue-positions`, {
+    cache: 'no-store',
+    headers: {
+      'cache-control': 'no-store'
+    }
+  });
   
   if (!response.ok) {
     throw new Error('Failed to fetch view positions');
@@ -29,9 +34,13 @@ export function useViewPositions(viewId: string, enabled: boolean = true) {
     queryKey: ['viewPositions', viewId],
     queryFn: () => fetchViewPositions(viewId),
     enabled: enabled && !!viewId,
-    staleTime: 5000, // 5 seconds - balance between freshness and performance
+    // No caching: always stale and clear immediately
+    staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnReconnect: true,
+    refetchOnMount: 'always',
+    retry: false,
   });
 }
 
