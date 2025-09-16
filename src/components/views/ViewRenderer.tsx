@@ -199,7 +199,7 @@ export default function ViewRenderer({
   // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
     view.id,
-    view.displayType === 'KANBAN' || tempOrdering === 'manual'
+    view.displayType === 'KANBAN' || tempOrdering === 'manual',
   );
   // Load project follow status (for the primary project of this view)
   const primaryProjectId = useMemo(() => (tempProjectIds?.[0] || view.projects?.[0]?.id || ''), [tempProjectIds, view.projects]);
@@ -642,20 +642,16 @@ export default function ViewRenderer({
             aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
             bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
             break;
-          case 'startDate':
-            aValue = a.startDate ? new Date(a.startDate).getTime() : 0;
-            bValue = b.startDate ? new Date(b.startDate).getTime() : 0;
-            break;
           case 'assignee': {
-            const aName = (a.assignee?.name || '').toLowerCase();
-            const bName = (b.assignee?.name || '').toLowerCase();
+            const aName = (a.assignee?.email);
+            const bName = (b.assignee?.email);
             aValue = aName;
             bValue = bName;
             break;
           }
           case 'title': {
-            const aTitle = (a.title || '').toLowerCase();
-            const bTitle = (b.title || '').toLowerCase();
+            const aTitle = (a.issueKey || '').toLowerCase();
+            const bTitle = (b.issueKey || '').toLowerCase();
             aValue = aTitle;
             bValue = bTitle;
             break;
@@ -951,9 +947,7 @@ export default function ViewRenderer({
   const renderViewContent = () => {
     // Single source of truth for Kanban sorting:
     // Kanban/Board receives unsorted, position-merged issues. Other views get globally sorted issues.
-    const issuesForRenderer = (tempDisplayType === 'KANBAN' || tempDisplayType === 'BOARD')
-      ? filteredIssues
-      : sortedIssues;
+    const issuesForRenderer = sortedIssues
     const sharedProps = {
       view: {
         ...view,
