@@ -19,6 +19,7 @@ import type { KanbanColumnProps } from '../types';
 
 export default function KanbanColumn({
   column,
+  issues,
   index,
   groupField,
   displayProperties,
@@ -154,9 +155,8 @@ export default function KanbanColumn({
                     onCreated={onIssueCreated}
                   />
                 )}
-
                 {/* Issues */}
-                {column.issues.map((issue: any, index: number) => (
+                {issues.filter((i: any) => column.issues.map((c: any) => c.id).includes(i.id)).map((issue: any, index: number) => (
                   <KanbanIssueCard
                     key={issue.id}
                     issue={issue}

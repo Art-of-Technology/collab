@@ -20,7 +20,7 @@ export async function PUT(
     const resolvedParams = await params;
     const { viewId } = resolvedParams;
     const body = await request.json();
-    const { issueId, columnId, position, bulk } = body;
+    const { issueId, columnId, position, bulk, cleanup } = body as any;
 
     // Verify view access
     const view = await prisma.view.findFirst({
@@ -38,25 +38,20 @@ export async function PUT(
       return NextResponse.json({ error: 'View not found or access denied' }, { status: 404 });
     }
 
-    // Verify issue exists and user has access
-    const issue = await prisma.issue.findFirst({
-      where: {
-        id: issueId,
-        workspace: {
-          members: {
-            some: { userId: currentUser.id }
-          }
-        }
-      }
-    });
-
-    if (!issue) {
-      return NextResponse.json({ error: 'Issue not found or access denied' }, { status: 404 });
-    }
-
-    // Bulk upsert support for reindex operations
+    // Bulk upsert support for reindex operations (with optional cleanup of stale positions)
     if (Array.isArray(bulk) && bulk.length > 0) {
       await prisma.$transaction(async (tx) => {
+        // Optional cleanup: remove old assignments for provided issues outside the destination column
+        if (cleanup?.issueIds?.length && cleanup?.keepColumnId) {
+          await tx.viewIssuePosition.deleteMany({
+            where: {
+              viewId,
+              issueId: { in: cleanup.issueIds as string[] },
+              columnId: { not: cleanup.keepColumnId as string }
+            }
+          });
+        }
+
         for (const item of bulk) {
           if (!item.issueId || !item.columnId || item.position === undefined) {
             throw new Error('Invalid bulk item');
@@ -92,6 +87,22 @@ export async function PUT(
         { error: 'Missing required fields: issueId, columnId, position' },
         { status: 400 }
       );
+    }
+
+    // Verify issue exists and user has access (single update path)
+    const issue = await prisma.issue.findFirst({
+      where: {
+        id: issueId,
+        workspace: {
+          members: {
+            some: { userId: currentUser.id }
+          }
+        }
+      }
+    });
+
+    if (!issue) {
+      return NextResponse.json({ error: 'Issue not found or access denied' }, { status: 404 });
     }
 
     // Upsert single view-specific position

@@ -7,7 +7,10 @@ import {
   MessageSquare, 
   ArrowRight,
   User,
-  Circle
+  ArrowDown,
+  Minus,
+  ArrowUp,
+  Flag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable } from "@hello-pangea/dnd";
@@ -25,16 +28,6 @@ const getTypeColor = (type: string) => {
     'SUBTASK': '#6b7280'
   };
   return colors[type as keyof typeof colors] || '#6b7280';
-};
-
-const getPriorityColor = (priority: string) => {
-  const colors = {
-    'URGENT': '#ef4444',
-    'HIGH': '#f97316', 
-    'MEDIUM': '#eab308',
-    'LOW': '#22c55e'
-  };
-  return colors[priority as keyof typeof colors] || '#6b7280';
 };
 
 const KanbanIssueCard = React.memo(({
@@ -77,7 +70,7 @@ const KanbanIssueCard = React.memo(({
             <div className="flex items-center gap-2">
               {/* Issue Key - More readable */}
               <span className="text-xs font-mono text-[#8b949e] font-medium">
-                {issue.issueKey}
+                {issue.issueKey} - {issue.viewPosition} - {issue.position}
               </span>
               
               {/* Type Indicator */}
@@ -88,10 +81,11 @@ const KanbanIssueCard = React.memo(({
               
               {/* Priority Indicator - Only show if enabled and not medium */}
               {showPriority && issue.priority && issue.priority !== 'MEDIUM' && (
-                <div 
-                  className="h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: getPriorityColor(issue.priority) }}
-                />
+                <>              
+                {issue.priority === 'URGENT' && <Flag className="h-3 w-3 text-red-600" />}
+                {issue.priority === 'HIGH' && <ArrowUp className="h-3 w-3 text-amber-600" />}
+                {issue.priority === 'LOW' && <ArrowDown className="h-3 w-3 text-slate-500" />}
+                </>
               )}
             </div>
             

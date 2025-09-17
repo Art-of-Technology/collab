@@ -40,6 +40,7 @@ export interface KanbanState {
 
 export interface KanbanColumnProps {
   column: Column;
+  issues: any[];
   index: number;
   groupField: string;
   displayProperties: string[];

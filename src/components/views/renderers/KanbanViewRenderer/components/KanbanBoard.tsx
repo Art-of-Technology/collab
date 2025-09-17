@@ -49,6 +49,7 @@ export default function KanbanBoard({
               <KanbanColumn
                 key={column.id}
                 column={column}
+                issues={issues}
                 index={index}
                 groupField={groupField}
                 displayProperties={displayProperties}

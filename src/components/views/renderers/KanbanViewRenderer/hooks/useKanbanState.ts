@@ -304,33 +304,35 @@ export const useKanbanState = ({
           await updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue, skipInvalidate: true });
         }
 
-        if (shouldReindex) {
-          // Build final order for the entire target column including dragged issue
-          const finalItems = [...items];
-          finalItems.splice(destIndex, 0, updatedIssue);
-          const bulk = finalItems.map((it, idx) => ({ issueId: it.id, columnId: targetColumnId, position: (idx + 1) * POSITION_GAP }));
-          await fetch(`/api/views/${view.id}/issue-positions`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bulk })
-          });
-          // Reflect deterministic positions locally
-          const updatedMap = new Map<string, number>();
-          bulk.forEach((b) => updatedMap.set(b.issueId, b.position));
-          setLocalIssues((prevIssues) => prevIssues.map((it: any) => {
-            if (updatedMap.has(it.id)) {
-              const pos = updatedMap.get(it.id) as number;
-              return { ...it, viewPosition: pos, position: pos };
+        // Always reindex the destination column to assign deterministic positions
+        const finalItems = [...items];
+        finalItems.splice(destIndex, 0, updatedIssue);
+        const bulk = finalItems.map((it, idx) => ({ issueId: it.id, columnId: targetColumnId, position: (idx + 1) * POSITION_GAP }));
+
+        // If moved across columns, also cleanup stale viewPosition assignments for moved issues
+        const cleanup = !isSameColumn
+          ? {
+              issueIds: bulk.map((b) => b.issueId),
+              keepColumnId: targetColumnId,
             }
-            return it;
-          }));
-        } else {
-          await fetch(`/api/views/${view.id}/issue-positions`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ issueId: draggableId, columnId: targetColumnId, position: newPosition })
-          });
-        }
+          : undefined;
+
+        await fetch(`/api/views/${view.id}/issue-positions`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanup ? { bulk, cleanup } : { bulk })
+        });
+
+        // Reflect deterministic positions locally
+        const updatedMap = new Map<string, number>();
+        bulk.forEach((b) => updatedMap.set(b.issueId, b.position));
+        setLocalIssues((prevIssues) => prevIssues.map((it: any) => {
+          if (updatedMap.has(it.id)) {
+            const pos = updatedMap.get(it.id) as number;
+            return { ...it, viewPosition: pos, position: pos };
+          }
+          return it;
+        }));
       } catch (err) {
         console.error('Failed to persist reorder:', err);
         if (previousIssuesRef.current) {

@@ -49,22 +49,11 @@ export function mergeIssuesWithViewPositions(
   issues: any[], 
   positions: ViewIssuePosition[] = []
 ): any[] {
-  const positionMap = new Map<string, number>();
-  
   // Create a map of issueId -> position for the current column/status
-  positions.forEach(pos => {
-    const key = `${pos.issueId}_${pos.columnId}`;
-    positionMap.set(key, pos.position);
-  });
-  
   return issues.map(issue => {
-    const currentStatus = issue.projectStatus?.name || issue.statusValue || issue.status || 'todo';
-    const positionKey = `${issue.id}_${currentStatus}`;
-    const viewPosition = positionMap.get(positionKey);
-    
     return {
       ...issue,
-      viewPosition: viewPosition
+      viewPosition: positions.find(pos => pos.issueId === issue.id)?.position
     };
   });
 }

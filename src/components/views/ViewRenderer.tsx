@@ -235,6 +235,21 @@ export default function ViewRenderer({
   }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
 
+  // Reset positions when sorting changes away from manual to remove tie-breaker bias
+  const handleOrderingChange = useCallback(async (newOrdering: string) => {
+    if (newOrdering === tempOrdering) return;
+    setTempOrdering(newOrdering);
+
+    try {
+      // Proactively invalidate caches; realtime will also broadcast
+      queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
+      queryClient.invalidateQueries({ queryKey: [...issueKeys.byWorkspace(workspace.id)] });
+      queryClient.invalidateQueries({ queryKey: ['additional-issues', workspace.id] });
+    } catch (e) {
+      // no-op; not critical for UX if event-based invalidation handles it
+    }
+  }, [tempOrdering, workspace.id, view.id, queryClient]);
+
   // Determine which projects are newly selected (not in original view)
   const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
   const additionalProjectIds = useMemo(() => {
@@ -435,7 +450,6 @@ export default function ViewRenderer({
   const filteredIssues = useMemo(() => {
     // Start with action-filtered issues instead of all issues
     let filtered = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
-    
     // Apply project filtering if tempProjectIds differs from original view projects
     const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
     
@@ -614,9 +628,12 @@ export default function ViewRenderer({
     const sortField = tempOrdering;
 
     if (sortField === 'manual') {
-      return sorted;
+      return sorted.sort((a, b) => {
+        return a.viewPosition - b.viewPosition;
+      });
     }
     if (sortField) {
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
       sorted.sort((a, b) => {
         let aValue: any;
         let bValue: any;
@@ -643,18 +660,16 @@ export default function ViewRenderer({
             bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
             break;
           case 'assignee': {
-            const aName = (a.assignee?.email);
-            const bName = (b.assignee?.email);
-            aValue = aName;
-            bValue = bName;
-            break;
+            const aName = (a.assignee?.email || '');
+            const bName = (b.assignee?.email || '');
+            // Natural, case-insensitive, numeric-aware; descending by default
+            return collator.compare(bName, aName);
           }
           case 'title': {
-            const aTitle = (a.issueKey || '').toLowerCase();
-            const bTitle = (b.issueKey || '').toLowerCase();
-            aValue = aTitle;
-            bValue = bTitle;
-            break;
+            const aTitle = (a.title || '').toLowerCase();
+            const bTitle = (b.title || '').toLowerCase();
+            // Natural, case-insensitive, numeric-aware; descending by default
+            return collator.compare(bTitle, aTitle);
           }
           default:
             aValue = (a as any)[sortField] || '';
@@ -946,8 +961,6 @@ export default function ViewRenderer({
 
   const renderViewContent = () => {
     // Single source of truth for Kanban sorting:
-    // Kanban/Board receives unsorted, position-merged issues. Other views get globally sorted issues.
-    const issuesForRenderer = sortedIssues
     const sharedProps = {
       view: {
         ...view,
@@ -957,7 +970,7 @@ export default function ViewRenderer({
         sorting: { field: tempOrdering, direction: 'desc' },
         fields: tempDisplayProperties
       },
-      issues: issuesForRenderer,
+      issues: sortedIssues,
       workspace,
       currentUser,
       activeFilters: allFilters,
@@ -1001,7 +1014,7 @@ export default function ViewRenderer({
           <KanbanViewRenderer 
             {...sharedProps}
             onOrderingChange={(ordering: string) => {
-              // Avoid flicker: update state first, then rely on existing manual-position sorts
+              // Avoid flicker and skip global reset when switching to manual via drag
               setTempOrdering(ordering);
             }}
           />
@@ -1236,7 +1249,7 @@ export default function ViewRenderer({
                 />
                 <ViewOrderingSelector
                   value={tempOrdering}
-                  onChange={setTempOrdering}
+                  onChange={handleOrderingChange}
                   displayType={tempDisplayType}
                 />
                 <ViewDisplayPropertiesSelector
