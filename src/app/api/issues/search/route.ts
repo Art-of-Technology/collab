@@ -117,6 +117,7 @@ export async function GET(request: NextRequest) {
           }
         },
         include: includeClause,
+        orderBy: { createdAt: 'desc' },
         take: 10
       });
 
@@ -135,6 +136,7 @@ export async function GET(request: NextRequest) {
             })
           },
           include: includeClause,
+          orderBy: { createdAt: 'desc' },
           take: 10 - exactIssueKeyMatches.length
         });
       }
@@ -156,6 +158,7 @@ export async function GET(request: NextRequest) {
             })
           },
           include: includeClause,
+          orderBy: { createdAt: 'desc' },
           take: 10 - currentCount
         });
       }
@@ -177,6 +180,7 @@ export async function GET(request: NextRequest) {
             })
           },
           include: includeClause,
+          orderBy: { createdAt: 'desc' },
           take: 10 - finalCount
         });
       }
@@ -235,6 +239,10 @@ export async function GET(request: NextRequest) {
       project: issue.project,
       workspace: issue.workspace,
       assignee: issue.assignee,
+      createdAt: issue.createdAt,
+      updatedAt: issue.updatedAt,
+      dueDate: issue.dueDate,
+      _count: issue._count
     }));
 
     return NextResponse.json(transformedIssues, { status: 200 });

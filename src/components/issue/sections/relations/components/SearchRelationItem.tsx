@@ -144,7 +144,7 @@ export function SearchRelationItem({
       </div>
 
       {/* Updated Date */}
-      <div className="flex-shrink-0 w-10">
+      <div className="flex-shrink-0 w-12">
         <span className="text-[#6e7681] text-xs">
           {format(new Date(item.updatedAt), 'MMM d')}
         </span>
