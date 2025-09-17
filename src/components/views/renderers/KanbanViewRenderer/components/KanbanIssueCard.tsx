@@ -70,7 +70,7 @@ const KanbanIssueCard = React.memo(({
             <div className="flex items-center gap-2">
               {/* Issue Key - More readable */}
               <span className="text-xs font-mono text-[#8b949e] font-medium">
-                {issue.issueKey} - {issue.viewPosition} - {issue.position}
+                {issue.issueKey}
               </span>
               
               {/* Type Indicator */}
