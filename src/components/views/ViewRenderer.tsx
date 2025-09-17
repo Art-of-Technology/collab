@@ -668,8 +668,8 @@ export default function ViewRenderer({
           case 'title': {
             const aTitle = (a.title || '').toLowerCase();
             const bTitle = (b.title || '').toLowerCase();
-            // Natural, case-insensitive, numeric-aware; descending by default
-            return collator.compare(bTitle, aTitle);
+            // Natural, case-insensitive, numeric-aware; ascending
+            return collator.compare(aTitle, bTitle);
           }
           default:
             aValue = (a as any)[sortField] || '';
