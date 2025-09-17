@@ -276,10 +276,28 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         return 0;
       }
 
-      if (orderingField === 'startDate') {
-        const aDate = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY;
-        const bDate = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY;
-        if (aDate !== bDate) return aDate - bDate; // Earliest start first
+      if (orderingField === 'assignee') {
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        const aName = (a.assignee?.email || '');
+        const bName = (b.assignee?.email || '');
+        // Natural, case-insensitive, numeric-aware; descending by default
+        const compareResult = collator.compare(bName, aName);
+        if (compareResult !== 0) return compareResult;
+        // Tie-breaker: manual position
+        const posA = a.viewPosition ?? a.position ?? 999999;
+        const posB = b.viewPosition ?? b.position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        return 0;
+      }
+
+      if (orderingField === 'title') {
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        const aTitle = (a.title || '').toLowerCase();
+        const bTitle = (b.title || '').toLowerCase();
+        // Natural, case-insensitive, numeric-aware; ascending
+        const compareResult = collator.compare(aTitle, bTitle);
+        if (compareResult !== 0) return compareResult;
+        // Tie-breaker: manual position
         const posA = a.viewPosition ?? a.position ?? 999999;
         const posB = b.viewPosition ?? b.position ?? 999999;
         if (posA !== posB) return posA - posB;

@@ -156,7 +156,7 @@ export default function KanbanColumn({
                   />
                 )}
                 {/* Issues */}
-                {issues.filter((i: any) => column.issues.map((c: any) => c.id).includes(i.id)).map((issue: any, index: number) => (
+                {column.issues.map((issue: any, index: number) => (
                   <KanbanIssueCard
                     key={issue.id}
                     issue={issue}
