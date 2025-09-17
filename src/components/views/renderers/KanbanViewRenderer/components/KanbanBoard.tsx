@@ -1,6 +1,5 @@
 "use client";
 
-import { Plus } from "lucide-react";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import KanbanColumn from "./KanbanColumn";
 import type { KanbanBoardProps } from "../types";

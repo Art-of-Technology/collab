@@ -235,7 +235,7 @@ export default function ViewRenderer({
   }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
 
-  // Reset positions when sorting changes away from manual to remove tie-breaker bias
+  // Update ordering selection and invalidate caches; positions are not reset here
   const handleOrderingChange = useCallback(async (newOrdering: string) => {
     if (newOrdering === tempOrdering) return;
     setTempOrdering(newOrdering);
@@ -634,55 +634,73 @@ export default function ViewRenderer({
     }
     if (sortField) {
       const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-      sorted.sort((a, b) => {
-        let aValue: any;
-        let bValue: any;
+      const persistedDirection = (view?.sorting?.direction || '').toString().toLowerCase();
+      const defaultDirectionByField: Record<string, 'asc' | 'desc'> = {
+        priority: 'desc',
+        created: 'desc',
+        createdAt: 'desc',
+        updated: 'desc',
+        updatedAt: 'desc',
+        dueDate: 'asc',
+        assignee: 'asc',
+        title: 'asc',
+      };
+      const direction: 'asc' | 'desc' = (persistedDirection === 'asc' || persistedDirection === 'desc')
+        ? (persistedDirection as 'asc' | 'desc')
+        : (defaultDirectionByField[sortField] || 'asc');
+      const applyDirection = (cmp: number) => direction === 'asc' ? cmp : -cmp;
 
+      sorted.sort((a, b) => {
         switch (sortField) {
           case 'priority': {
             const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 } as const;
-            aValue = priorityOrder[(a.priority as keyof typeof priorityOrder) || ''] || 0;
-            bValue = priorityOrder[(b.priority as keyof typeof priorityOrder) || ''] || 0;
-            break;
+            const aVal = priorityOrder[(a.priority as keyof typeof priorityOrder) || ''] || 0;
+            const bVal = priorityOrder[(b.priority as keyof typeof priorityOrder) || ''] || 0;
+            if (aVal !== bVal) return applyDirection(aVal - bVal);
+            return 0;
           }
           case 'created':
-          case 'createdAt':
-            aValue = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            bValue = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            break;
+          case 'createdAt': {
+            const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (aDate !== bDate) return applyDirection(aDate - bDate);
+            return 0;
+          }
           case 'updated':
-          case 'updatedAt':
-            aValue = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-            bValue = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-            break;
-          case 'dueDate':
-            aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-            bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-            break;
+          case 'updatedAt': {
+            const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            if (aDate !== bDate) return applyDirection(aDate - bDate);
+            return 0;
+          }
+          case 'dueDate': {
+            const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+            const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+            if (aDate !== bDate) return applyDirection(aDate - bDate);
+            return 0;
+          }
           case 'assignee': {
             const aName = (a.assignee?.email || '');
             const bName = (b.assignee?.email || '');
-            // Natural, case-insensitive, numeric-aware; descending by default
-            return collator.compare(bName, aName);
+            return direction === 'asc' ? collator.compare(aName, bName) : collator.compare(bName, aName);
           }
           case 'title': {
             const aTitle = (a.title || '').toLowerCase();
             const bTitle = (b.title || '').toLowerCase();
-            // Natural, case-insensitive, numeric-aware; ascending
-            return collator.compare(aTitle, bTitle);
+            return direction === 'asc' ? collator.compare(aTitle, bTitle) : collator.compare(bTitle, aTitle);
           }
-          default:
-            aValue = (a as any)[sortField] || '';
-            bValue = (b as any)[sortField] || '';
+          default: {
+            const aValue = (a as any)[sortField] || '';
+            const bValue = (b as any)[sortField] || '';
+            if (aValue === bValue) return 0;
+            return applyDirection(aValue > bValue ? 1 : -1);
+          }
         }
-
-        // Descending by default
-        return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
       });
     }
 
     return sorted;
-  }, [filteredIssues, tempOrdering]);
+  }, [filteredIssues, tempOrdering, view?.sorting?.direction]);
 
   const handleUpdateView = async () => {
     try {
@@ -970,7 +988,8 @@ export default function ViewRenderer({
         sorting: { field: tempOrdering, direction: 'desc' },
         fields: tempDisplayProperties
       },
-      issues: sortedIssues,
+      // Pass filtered (unsorted) issues to Kanban; Kanban columns handle sorting per selected ordering
+      issues: filteredIssues,
       workspace,
       currentUser,
       activeFilters: allFilters,

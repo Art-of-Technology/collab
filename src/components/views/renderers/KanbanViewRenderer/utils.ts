@@ -83,6 +83,24 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
   const groupField = view.grouping?.field || 'status';
   const columnsMap = new Map(); // Use ID as key to prevent duplicates
   
+  // Build status order map if project statuses are available
+  const statusOrderMap: Record<string, number> = {};
+  if (Array.isArray(projectStatuses) && projectStatuses.length > 0) {
+    projectStatuses.forEach((ps: any, idx: number) => {
+      const key = (ps.name || '').toString();
+      if (key) statusOrderMap[key] = typeof ps.order === 'number' ? ps.order : idx;
+    });
+  }
+  // Fallback status order when no project status order is available
+  const fallbackStatusOrder: Record<string, number> = {
+    backlog: 0,
+    todo: 1,
+    in_progress: 2,
+    review: 3,
+    blocked: 3,
+    done: 4
+  };
+  
   // Handle status grouping with database-driven project statuses
   if (groupField === 'status' && projectStatuses && projectStatuses.length > 0) {
     // Initialize columns from project statuses
@@ -232,12 +250,27 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
     ...column,
     issues: column.issues.sort((a: any, b: any) => {
       const orderingField = (view?.ordering || view?.sorting?.field || 'manual') as string;
+      const persistedDirection = (view?.sorting?.direction || '').toString().toLowerCase();
+      const defaultDirectionByField: Record<string, 'asc' | 'desc'> = {
+        priority: 'desc',
+        created: 'desc',
+        createdAt: 'desc',
+        updated: 'desc',
+        updatedAt: 'desc',
+        dueDate: 'asc',
+        assignee: 'asc',
+        title: 'asc',
+      };
+      const direction: 'asc' | 'desc' = (persistedDirection === 'asc' || persistedDirection === 'desc')
+        ? (persistedDirection as 'asc' | 'desc')
+        : (defaultDirectionByField[orderingField] || 'asc');
+      const applyDirection = (cmp: number) => direction === 'asc' ? cmp : -cmp;
 
       if (orderingField === 'priority') {
         const priorityOrder: Record<string, number> = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
         const aVal = priorityOrder[(a.priority || '').toUpperCase()] || 0;
         const bVal = priorityOrder[(b.priority || '').toUpperCase()] || 0;
-        if (aVal !== bVal) return bVal - aVal; // Descending: URGENT -> LOW
+        if (aVal !== bVal) return applyDirection(aVal - bVal);
         // Tie-breaker: manual position
         const posA = a.viewPosition ?? a.position ?? 999999;
         const posB = b.viewPosition ?? b.position ?? 999999;
@@ -249,7 +282,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
       if (orderingField === 'created' || orderingField === 'createdAt') {
         const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        if (aDate !== bDate) return bDate - aDate; // Newest first
+        if (aDate !== bDate) return applyDirection(aDate - bDate);
         const posA = a.viewPosition ?? a.position ?? 999999;
         const posB = b.viewPosition ?? b.position ?? 999999;
         if (posA !== posB) return posA - posB;
@@ -259,7 +292,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
       if (orderingField === 'updated' || orderingField === 'updatedAt') {
         const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        if (aDate !== bDate) return bDate - aDate; // Most recently updated first
+        if (aDate !== bDate) return applyDirection(aDate - bDate);
         const posA = a.viewPosition ?? a.position ?? 999999;
         const posB = b.viewPosition ?? b.position ?? 999999;
         if (posA !== posB) return posA - posB;
@@ -269,7 +302,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
       if (orderingField === 'dueDate') {
         const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
         const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-        if (aDate !== bDate) return aDate - bDate; // Earliest due first
+        if (aDate !== bDate) return applyDirection(aDate - bDate);
         const posA = a.viewPosition ?? a.position ?? 999999;
         const posB = b.viewPosition ?? b.position ?? 999999;
         if (posA !== posB) return posA - posB;
@@ -280,8 +313,8 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
         const aName = (a.assignee?.email || '');
         const bName = (b.assignee?.email || '');
-        // Natural, case-insensitive, numeric-aware; descending by default
-        const compareResult = collator.compare(bName, aName);
+        // Natural, case-insensitive, numeric-aware
+        const compareResult = direction === 'asc' ? collator.compare(aName, bName) : collator.compare(bName, aName);
         if (compareResult !== 0) return compareResult;
         // Tie-breaker: manual position
         const posA = a.viewPosition ?? a.position ?? 999999;
@@ -294,8 +327,8 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
         const aTitle = (a.title || '').toLowerCase();
         const bTitle = (b.title || '').toLowerCase();
-        // Natural, case-insensitive, numeric-aware; ascending
-        const compareResult = collator.compare(aTitle, bTitle);
+        // Natural, case-insensitive, numeric-aware
+        const compareResult = direction === 'asc' ? collator.compare(aTitle, bTitle) : collator.compare(bTitle, aTitle);
         if (compareResult !== 0) return compareResult;
         // Tie-breaker: manual position
         const posA = a.viewPosition ?? a.position ?? 999999;

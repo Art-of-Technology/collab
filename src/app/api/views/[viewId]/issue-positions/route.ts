@@ -40,6 +40,35 @@ export async function PUT(
 
     // Bulk upsert support for reindex operations (with optional cleanup of stale positions)
     if (Array.isArray(bulk) && bulk.length > 0) {
+      // Validate payload shape and size early
+      if (bulk.length > 500) {
+        return NextResponse.json({ error: 'Bulk size exceeds limit (max 500).' }, { status: 400 });
+      }
+
+      // Validate all items are well-formed and positions are finite integers
+      for (const item of bulk) {
+        if (!item || typeof item.issueId !== 'string' || typeof item.columnId !== 'string' || item.position === undefined) {
+          return NextResponse.json({ error: 'Invalid bulk item: issueId, columnId, and position are required.' }, { status: 400 });
+        }
+        if (!Number.isFinite(item.position) || !Number.isInteger(item.position) || item.position < 0) {
+          return NextResponse.json({ error: `Invalid position for issue ${item.issueId}. Position must be a non-negative integer.` }, { status: 400 });
+        }
+      }
+
+      // Access check: ensure all issues belong to the same workspace and user has access
+      const uniqueIssueIds = Array.from(new Set(bulk.map((b: any) => b.issueId)));
+      const accessibleIssues = await prisma.issue.findMany({
+        where: {
+          id: { in: uniqueIssueIds },
+          workspaceId: view.workspaceId,
+          workspace: { members: { some: { userId: currentUser.id } } }
+        },
+        select: { id: true }
+      });
+      if (accessibleIssues.length !== uniqueIssueIds.length) {
+        return NextResponse.json({ error: 'One or more issues not found or access denied.' }, { status: 404 });
+      }
+
       await prisma.$transaction(async (tx) => {
         // Optional cleanup: remove old assignments for provided issues outside the destination column
         if (cleanup?.issueIds?.length && cleanup?.keepColumnId) {
@@ -53,9 +82,6 @@ export async function PUT(
         }
 
         for (const item of bulk) {
-          if (!item.issueId || !item.columnId || item.position === undefined) {
-            throw new Error('Invalid bulk item');
-          }
           await tx.viewIssuePosition.upsert({
             where: {
               viewId_issueId_columnId: {

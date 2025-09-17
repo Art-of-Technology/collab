@@ -16,7 +16,6 @@ export const useKanbanState = ({
   view,
   issues,
   workspace,
-  onIssueUpdate,
   onColumnUpdate,
   onCreateIssue,
   activeFilters,
@@ -317,11 +316,14 @@ export const useKanbanState = ({
             }
           : undefined;
 
-        await fetch(`/api/views/${view.id}/issue-positions`, {
+        const res = await fetch(`/api/views/${view.id}/issue-positions`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cleanup ? { bulk, cleanup } : { bulk })
         });
+        if (!res.ok) {
+          throw new Error(`Failed to persist positions: ${res.status}`);
+        }
 
         // Reflect deterministic positions locally
         const updatedMap = new Map<string, number>();
