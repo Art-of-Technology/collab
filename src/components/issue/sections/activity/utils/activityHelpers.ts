@@ -32,6 +32,7 @@ export const getActionDisplayName = (action: string): string => {
     'HELP_REQUEST_SENT': 'Help Request Sent',
     'HELP_REQUEST_APPROVED': 'Help Request Approved',
     'HELP_REQUEST_REJECTED': 'Help Request Rejected',
+    'VIEWED': 'Viewed',
   };
 
   return actionMap[action] || action.replace(/_/g, ' ').toLowerCase();
@@ -40,6 +41,16 @@ export const getActionDisplayName = (action: string): string => {
 export const getActionText = (activity: IssueActivity, itemType: string = 'issue'): string => {
   const userName = activity.user.name || 'Unknown User';
   const actionName = getActionDisplayName(activity.action).toLowerCase();
+  
+  // Handle aggregated view activities
+  if (activity.action === 'VIEWED' && activity.details?.aggregated) {
+    const viewCount = activity.details.viewCount || 1;
+    if (viewCount === 1) {
+      return `${userName} ${actionName} this ${itemType}`;
+    } else {
+      return `${userName} ${actionName} this ${itemType} (${viewCount} times)`;
+    }
+  }
   
   return `${userName} ${actionName} this ${itemType}`;
 };
@@ -142,15 +153,74 @@ export const formatValue = (value: any, activity?: IssueActivity): string => {
 };
 
 export const filterActivities = (activities: IssueActivity[]): IssueActivity[] => {
+  // First, aggregate view activities by user
+  const viewActivities = activities.filter(activity => activity.action === 'VIEWED');
+  const otherActivities = activities.filter(activity => activity.action !== 'VIEWED');
+  
+  if (viewActivities.length === 0) {
+    // No view activities to aggregate, just filter column changes
+    return otherActivities.filter((activity, index) => {
+      if (activity.action === 'COLUMN_CHANGED') {
+        const fiveMinutesInMs = 5 * 60 * 1000;
+        const activityTime = new Date(activity.createdAt).getTime();
+        
+        const hasNearbyStatusChange = otherActivities.some((other, otherIndex) => {
+          if (other.action === 'STATUS_CHANGED' && otherIndex !== index) {
+            const otherTime = new Date(other.createdAt).getTime();
+            return Math.abs(activityTime - otherTime) <= fiveMinutesInMs;
+          }
+          return false;
+        });
+        
+        return !hasNearbyStatusChange;
+      }
+      return true;
+    });
+  }
+  
+  // Group view activities by userId
+  const viewsByUser = viewActivities.reduce((acc, activity) => {
+    const userId = activity.user.id;
+    if (!acc[userId]) {
+      acc[userId] = [];
+    }
+    acc[userId].push(activity);
+    return acc;
+  }, {} as Record<string, IssueActivity[]>);
+  
+  // Create aggregated view activities (one per user with count)
+  const aggregatedViews: IssueActivity[] = Object.entries(viewsByUser).map(([userId, userViews]) => {
+    // Sort by creation date to get the latest view
+    const sortedViews = userViews.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const latestView = sortedViews[0];
+    const viewCount = userViews.length;
+    
+    // Create an aggregated view activity
+    return {
+      ...latestView,
+      id: `${latestView.id}-aggregated`,
+      details: {
+        ...latestView.details,
+        viewCount,
+        aggregated: true,
+      }
+    };
+  });
+  
+  // Combine aggregated views with other activities
+  const combinedActivities = [...aggregatedViews, ...otherActivities];
+  
   // Filter out redundant COLUMN_CHANGED activities
-  return activities.filter((activity, index) => {
+  return combinedActivities.filter((activity, index) => {
     // If this is a COLUMN_CHANGED activity, check if there's a STATUS_CHANGED activity nearby
     if (activity.action === 'COLUMN_CHANGED') {
       const fiveMinutesInMs = 5 * 60 * 1000;
       const activityTime = new Date(activity.createdAt).getTime();
       
       // Check for STATUS_CHANGED activities within 5 minutes
-      const hasNearbyStatusChange = activities.some((other, otherIndex) => {
+      const hasNearbyStatusChange = combinedActivities.some((other, otherIndex) => {
         if (other.action === 'STATUS_CHANGED' && otherIndex !== index) {
           const otherTime = new Date(other.createdAt).getTime();
           return Math.abs(activityTime - otherTime) <= fiveMinutesInMs;

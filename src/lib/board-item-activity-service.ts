@@ -32,7 +32,8 @@ export type ActivityAction =
   | 'SESSION_EDITED'
   | 'HELP_REQUEST_SENT'
   | 'HELP_REQUEST_APPROVED'
-  | 'HELP_REQUEST_REJECTED';
+  | 'HELP_REQUEST_REJECTED'
+  | 'VIEWED';
 
 interface ActivityOptions {
   itemType: BoardItemType;
@@ -204,6 +205,29 @@ export async function trackAssignment(
     fieldName: 'assigneeId',
     oldValue: oldAssignee?.id || null,
     newValue: newAssignee?.id || null,
+  });
+}
+
+/**
+ * Track item view - records every view for counting
+ */
+export async function trackView(
+  itemType: BoardItemType,
+  itemId: string,
+  userId: string,
+  workspaceId: string,
+  boardId?: string
+) {
+  return await createActivity({
+    itemType,
+    itemId,
+    action: 'VIEWED',
+    userId,
+    workspaceId,
+    boardId,
+    details: {
+      viewedAt: new Date().toISOString(),
+    },
   });
 }
 
@@ -501,6 +525,7 @@ const boardItemActivityService = {
   trackFieldChanges,
   trackMove,
   trackAssignment,
+  trackView,
   getItemActivities,
   getWorkspaceActivities,
   getBoardActivities,

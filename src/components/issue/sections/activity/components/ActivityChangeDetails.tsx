@@ -3,6 +3,7 @@
 import { ArrowRight } from 'lucide-react';
 import { ActivityChangeDetailsProps } from '../types/activity';
 import { formatValue } from '../utils/activityHelpers';
+import { TextDiff } from './TextDiff';
 
 export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) {
   const { action, details, oldValue, newValue } = activity;
@@ -90,6 +91,38 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
       );
     } catch {
       return null;
+    }
+  }
+
+  // Special handling for description changes with diff view
+  if (action === 'DESCRIPTION_UPDATED' && oldValue !== undefined && newValue !== undefined) {
+    try {
+      const oldText = typeof oldValue === 'string' ? oldValue : JSON.stringify(oldValue);
+      const newText = typeof newValue === 'string' ? newValue : JSON.stringify(newValue);
+      
+      // Only show diff if texts are meaningfully different
+      if (oldText.trim() !== newText.trim()) {
+        return <TextDiff oldText={oldText} newText={newText} />;
+      }
+    } catch (error) {
+      console.warn('Error parsing description values for diff:', error);
+      // Fall back to generic display
+    }
+  }
+
+  // Special handling for title changes with compact diff view
+  if (action === 'TITLE_UPDATED' && oldValue !== undefined && newValue !== undefined) {
+    try {
+      const oldText = typeof oldValue === 'string' ? oldValue : JSON.stringify(oldValue);
+      const newText = typeof newValue === 'string' ? newValue : JSON.stringify(newValue);
+      
+      // For titles, show a more compact view
+      if (oldText.trim() !== newText.trim()) {
+        return <TextDiff oldText={oldText} newText={newText} maxHeight={120} />;
+      }
+    } catch (error) {
+      console.warn('Error parsing title values for diff:', error);
+      // Fall back to generic display
     }
   }
 

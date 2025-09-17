@@ -27,7 +27,7 @@ export function IssueActivitySection({ issueId, limit = 50 }: IssueActivitySecti
   }
 
   return (
-    <div className="space-y-0.5 max-h-96 overflow-y-auto">
+    <div className="space-y-0.5">
       {activities.map((activity) => (
         <ActivityItem
           key={activity.id}
