@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { IssueDetailContent } from "@/components/issue/IssueDetailContent";
-import { getWorkspaceIdFromClient } from "@/lib/client-workspace";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useViewTracking } from "@/hooks/useViewTracking";
 import { Loader2 } from "lucide-react";
 
 export default function IssuePage() {
@@ -60,6 +60,13 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [issue, setIssue] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Track view when issue is successfully loaded
+  useViewTracking({
+    itemType: 'issue',
+    itemId: issueId,
+    enabled: !isLoading && !error && !!issue,
+  });
 
   const fetchIssue = useCallback(async () => {
     if (!issueId) return;

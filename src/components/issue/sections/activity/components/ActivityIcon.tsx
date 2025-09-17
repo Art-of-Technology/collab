@@ -15,7 +15,8 @@ import {
   Move,
   Play,
   Pause,
-  Square
+  Square,
+  Eye
 } from 'lucide-react';
 import { ActivityIconProps } from '../types/activity';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,8 @@ export function ActivityIcon({ action, className }: ActivityIconProps) {
       case 'HELP_REQUEST_APPROVED':
       case 'HELP_REQUEST_REJECTED':
         return <User className="h-3 w-3 text-purple-500" />;
+      case 'VIEWED':
+        return <Eye className="h-3 w-3 text-slate-500" />;
       default:
         return <Clock className="h-3 w-3 text-[#666]" />;
     }

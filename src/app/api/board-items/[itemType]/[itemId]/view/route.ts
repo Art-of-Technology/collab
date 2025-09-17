@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getItemActivities, BoardItemType, ActivityAction } from "@/lib/board-item-activity-service";
+import { trackView, BoardItemType } from "@/lib/board-item-activity-service";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(
+export async function POST(
   request: NextRequest,
-  { params }: { params: { itemType: string; itemId: string, action?: ActivityAction } }
+  { params }: { params: { itemType: string; itemId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const _params = await params;
-    const { itemType, itemId, action } = _params;
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
 
-    // Validate item type (include ISSUE for unified model)
+    const _params = await params;
+    const { itemType, itemId } = _params;
+
+    // Validate item type
     const validItemTypes: Record<string, BoardItemType> = {
       'issue': 'ISSUE',
       'task': 'TASK',
@@ -108,15 +107,27 @@ export async function GET(
       );
     }
 
-    // Get activities for the item using the actual database ID
-    const activities = await getItemActivities(boardItemType, item.id, limit, action);
+    // Track the view using the actual database ID
+    const activity = await trackView(
+      boardItemType,
+      item.id, // Use the actual database ID, not the issueKey
+      session.user.id,
+      workspaceId
+    );
 
-    return NextResponse.json(activities);
+    return NextResponse.json({ 
+      success: true,
+      activity: activity ? {
+        id: activity.id,
+        action: activity.action,
+        createdAt: activity.createdAt
+      } : null
+    });
   } catch (error) {
-    console.error('Error fetching board item activities:', error);
+    console.error('Error tracking view:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch activities' },
+      { error: 'Failed to track view' },
       { status: 500 }
     );
   }
-} 
+}
