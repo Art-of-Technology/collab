@@ -41,7 +41,7 @@ export function useRelationSearch(
               apiType = 'BUG';
               break;
             default:
-              apiType = type.toUpperCase();
+              apiType = String(type).toUpperCase();
           }
           searchParams.append("type", apiType);
         });
