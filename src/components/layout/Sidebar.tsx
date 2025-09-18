@@ -23,7 +23,6 @@ import {
   Bookmark,
   Tag,
   Lightbulb,
-  Timer,
   Bell,
   Search as SearchIcon,
   Calendar,
@@ -289,12 +288,6 @@ export default function Sidebar({
       current: pathname.includes("/timeline"),
     },
     {
-      name: "Timesheet",
-      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timesheet` : "#",
-      icon: Timer,
-      current: pathname.includes("/timesheet"),
-    },
-    {
       name: "Notes",
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/notes` : "#",
       icon: FileText,
@@ -305,12 +298,6 @@ export default function Sidebar({
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/bookmarks` : "#",
       icon: Bookmark,
       current: pathname.includes("/bookmarks"),
-    },
-    {
-      name: "Messages",
-      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/messages` : "#",
-      icon: MessageSquare,
-      current: pathname.includes("/messages"),
     },
     {
       name: "Tags",
