@@ -62,10 +62,16 @@ async function userHasWorkspaceAccess(userId: string, workspaceId: string) {
   });
 }
 
-async function findIssueByIdOrKey(idOrKey: string) {
-  return isIssueKeyFormat(idOrKey)
-    ? prisma.issue.findFirst({ where: { issueKey: idOrKey } })
-    : prisma.issue.findUnique({ where: { id: idOrKey } });
+async function findIssueByIdOrKey(idOrKey: string, workspaceId?: string) {
+  if (isIssueKeyFormat(idOrKey)) {
+    const whereClause: any = { issueKey: idOrKey };
+    if (workspaceId) {
+      whereClause.workspaceId = workspaceId;
+    }
+    return prisma.issue.findFirst({ where: whereClause });
+  } else {
+    return prisma.issue.findUnique({ where: { id: idOrKey } });
+  }
 }
 
 // GET /api/issues/[issueId] - Get issue details
@@ -84,9 +90,18 @@ export async function GET(
     }
 
     const { issueId } = await params;
+    const url = new URL(req.url);
+    const workspaceId = url.searchParams.get('workspaceId');
+    
     const isIssueKey = isIssueKeyFormat(issueId);
     const issue = isIssueKey
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, include: ISSUE_INCLUDE })
+      ? await prisma.issue.findFirst({ 
+          where: { 
+            issueKey: issueId,
+            ...(workspaceId && { workspaceId })
+          }, 
+          include: ISSUE_INCLUDE 
+        })
       : await prisma.issue.findUnique({ where: { id: issueId }, include: ISSUE_INCLUDE });
 
     if (!issue) {
@@ -98,7 +113,6 @@ export async function GET(
 
     // Check if user has access to the workspace
     const hasAccess = await userHasWorkspaceAccess(currentUser.id, issue.workspaceId);
-
     if (!hasAccess) {
       return NextResponse.json(
         { error: "You don't have permission to view this issue" },
@@ -130,9 +144,11 @@ export async function PUT(
 
     const { issueId } = await params;
     const body = await req.json();
+    const url = new URL(req.url);
+    const workspaceId = url.searchParams.get('workspaceId');
 
     // Find the issue first
-    const existingIssue = await findIssueByIdOrKey(issueId);
+    const existingIssue = await findIssueByIdOrKey(issueId, workspaceId || undefined);
 
     if (!existingIssue) {
       return NextResponse.json({ 
@@ -470,9 +486,11 @@ export async function DELETE(
     }
 
     const { issueId } = await params;
+    const url = new URL(req.url);
+    const workspaceId = url.searchParams.get('workspaceId');
 
     // Find the issue first
-    const existingIssue = await findIssueByIdOrKey(issueId);
+    const existingIssue = await findIssueByIdOrKey(issueId, workspaceId || undefined);
 
     if (!existingIssue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
