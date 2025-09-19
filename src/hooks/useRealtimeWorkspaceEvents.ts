@@ -49,7 +49,7 @@ function getOrCreateWorkspaceConnection(workspaceId: string): WorkspaceConnectio
   return conn;
 }
 
-export function useRealtimeWorkspaceEvents(options: RealtimeOptions) {
+export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInvalidations: null | boolean = false) {
   const { workspaceId, boardId, viewId } = options;
   const queryClient = useQueryClient();
 
@@ -61,6 +61,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions) {
 
     const handleEvent = (data: any) => {
       try {
+        if (suppressInvalidations) return;
         if (data?.type === 'issue.updated') {
           if (data.workspaceId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(String(data.workspaceId)) });

@@ -54,16 +54,29 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
         ...(projectIds && projectIds.length > 0 && { projectIds: projectIds.join(',') })
       });
       
-      const response = await fetch(`/api/issues?${params}`);
+      const response = await fetch(`/api/issues?${params}`,
+        {
+          // Ensure network fetch every time and avoid browser-level caching
+          cache: 'no-store',
+          headers: {
+            'cache-control': 'no-store'
+          }
+        }
+      );
       if (!response.ok) {
         throw new Error('Failed to fetch issues');
       }
       return response.json();
     },
     enabled: !!workspaceId,
-    staleTime: 1000 * 5,
+    // Disable React Query caching: always treat data as stale and garbage collect immediately
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    // Do not retry to avoid hidden stale replays
+    retry: false,
   });
 }
 
@@ -132,8 +145,8 @@ export function useUpdateIssue() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: UpdateIssueData): Promise<any> => {
-      const { id, ...updateData } = data;
+    mutationFn: async (data: UpdateIssueData & { skipInvalidate?: boolean }): Promise<any> => {
+      const { id, skipInvalidate, ...updateData } = data;
       // Normalize issue type casing
       if (updateData.type) {
         updateData.type = updateData.type.toUpperCase();
@@ -152,16 +165,7 @@ export function useUpdateIssue() {
       }
 
       return response.json();
-    },
-    onSuccess: (data, variables) => {
-      // Update the specific issue in cache
-      queryClient.setQueryData(issueKeys.detail(variables.id), data);
-      
-      // Normal invalidation - now that we use local state, this won't cause flicker
-      queryClient.invalidateQueries({ queryKey: issueKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(data.issue.workspaceId) });
-      queryClient.invalidateQueries({ queryKey: issueKeys.byProject(data.issue.projectId) });
-    },
+    }
   });
 }
 
