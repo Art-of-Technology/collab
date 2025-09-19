@@ -264,12 +264,10 @@ export const useKanbanState = ({
       const next = destIndex < items.length ? items[destIndex] : undefined;
 
       let newPosition: number;
-      let shouldReindex = false;
 
       if (prev && next) {
         const gap = getPos(next) - getPos(prev);
         if (!Number.isFinite(gap) || gap <= 1) {
-          shouldReindex = true;
           newPosition = getPos(prev) + 1; // temporary; will be replaced by reindexing
         } else {
           newPosition = getPos(prev) + Math.floor(gap / 2);
