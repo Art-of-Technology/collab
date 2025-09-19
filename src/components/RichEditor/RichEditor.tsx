@@ -79,6 +79,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   // Guard to suppress transient checks during mention insertion
   const isInsertingMentionRef = useRef(false);
   
+  // Helper to release guards on the next tick after ProseMirror updates
+  const releaseMentionGuardsNextTick = () => {
+    setTimeout(() => {
+      isInsertingMentionRef.current = false;
+      isExternalUpdateRef.current = false;
+    }, 0);
+  };
+  
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
@@ -367,10 +375,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         trigger.char
       );
       // Release guards on next tick after ProseMirror updates
-      setTimeout(() => {
-        isInsertingMentionRef.current = false;
-        isExternalUpdateRef.current = false;
-      }, 0);
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -403,10 +408,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         trigger.char
       );
       // Release guards on next tick after ProseMirror updates
-      setTimeout(() => {
-        isInsertingMentionRef.current = false;
-        isExternalUpdateRef.current = false;
-      }, 0);
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
