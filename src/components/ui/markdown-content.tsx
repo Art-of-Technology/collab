@@ -53,10 +53,10 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         '<span class="milestone-mention" data-id="$2"><span class="mention-symbol">!</span>$1</span>'
       );
       
-      // Issue mentions: #[key](id) -> clickable mention
+      // Issue mentions: #[key](id) -> clickable mention span (routing handled via onClick)
       processed = processed.replace(
         /#\[([^\]]+)\]\(([^)]+)\)/g,
-        `<a href="/${currentWorkspace?.slug}/issues/$2" class="mention mention-link" data-issue-id="$2"><span class="mention-symbol">#</span>$1</a>`
+        '<span class="mention mention-link" data-issue-id="$2"><span class="mention-symbol">#</span>$1</span>'
       );
       
       // Convert newlines to <br> tags if needed
@@ -194,48 +194,26 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
   // Click handler for event delegation
   const handleClick = (event: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
     const target = event.target as HTMLElement;
-    
+
     // Check for different types of mentions
-    const userMention = target.closest('.mention-link[data-user-id]');
-    const epicMention = target.closest('.epic-mention');
-    const storyMention = target.closest('.story-mention');
-    const milestoneMention = target.closest('.milestone-mention');
-    const issueMention = target.closest('.issue-mention');
-    
-    if (userMention) {
+    const userMention = target.closest('.mention-link[data-user-id]') as HTMLElement | null;
+    const issueMention = target.closest('.mention-link[data-issue-id]') as HTMLElement | null;
+
+    if (userMention && currentWorkspace) {
       const userId = userMention.getAttribute('data-user-id');
-      if (userId && currentWorkspace) {
+      if (userId) {
         event.preventDefault();
         event.stopPropagation();
-        router.push(`/${currentWorkspace.id}/profile/${userId}`);
+        const workspaceSegment = currentWorkspace.slug || currentWorkspace.id;
+        router.push(`/${workspaceSegment}/profile/${userId}`);
       }
-    } else if (epicMention) {
-      const epicId = epicMention.getAttribute('data-id');
-      if (epicId && currentWorkspace) {
-        event.preventDefault();
-        event.stopPropagation();
-        router.push(`/${currentWorkspace.id}/epics/${epicId}`);
-      }
-    } else if (storyMention) {
-      const storyId = storyMention.getAttribute('data-id');
-      if (storyId && currentWorkspace) {
-        event.preventDefault();
-        event.stopPropagation();
-        router.push(`/${currentWorkspace.id}/stories/${storyId}`);
-      }
-    } else if (milestoneMention) {
-      const milestoneId = milestoneMention.getAttribute('data-id');
-      if (milestoneId && currentWorkspace) {
-        event.preventDefault();
-        event.stopPropagation();
-        router.push(`/${currentWorkspace.id}/milestones/${milestoneId}`);
-      }
-    } else if (issueMention) {
+    } else if (issueMention && currentWorkspace) {
       const issueId = issueMention.getAttribute('data-issue-id');
-      if (issueId && currentWorkspace) {
+      if (issueId) {
         event.preventDefault();
         event.stopPropagation();
-        router.push(`/${currentWorkspace.id}/issues/${issueId}`);
+        const workspaceSegment = currentWorkspace.slug || currentWorkspace.id;
+        router.push(`/${workspaceSegment}/issues/${issueId}`);
       }
     }
   };
