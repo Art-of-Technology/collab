@@ -67,16 +67,16 @@ export function CollabText({
     const target = event.target as HTMLElement
     const userMention = target.closest('.mention-link[data-user-id]') as HTMLElement | null
     const issueMention = target.closest('.mention-link[data-issue-id]') as HTMLElement | null
-    const workspaceSegment = currentWorkspace?.slug || currentWorkspace?.id
+    const workspaceSegment = currentWorkspace ? (currentWorkspace.slug || currentWorkspace.id) : undefined;
     
-    if (userMention && workspaceSegment) {
+    if (userMention && currentWorkspace && workspaceSegment) {
       const userId = userMention.getAttribute('data-user-id')
       if (userId) {
         event.preventDefault()
         event.stopPropagation()
         router.push(`/${workspaceSegment}/profile/${userId}`)
       }
-    } else if (issueMention && workspaceSegment) {
+    } else if (issueMention && currentWorkspace && workspaceSegment) {
       const issueId = issueMention.getAttribute('data-issue-id')
       if (issueId) {
         event.preventDefault()
