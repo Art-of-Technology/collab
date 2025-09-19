@@ -44,8 +44,6 @@ export interface KanbanColumnProps {
   displayProperties: string[];
   isCreatingIssue: boolean;
   newIssueTitle: string;
-  editingColumnId: string | null;
-  newColumnName: string;
   projects: Array<{
     id: string;
     name: string;
@@ -63,11 +61,6 @@ export interface KanbanColumnProps {
   onCancelCreatingIssue: () => void;
   onIssueKeyDown: (e: React.KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
-  onStartEditingColumn: (columnId: string, name: string) => void;
-  onColumnEdit: (columnId: string, name: string) => void;
-  onCancelEditingColumn: () => void;
-  onColumnKeyDown: (e: React.KeyboardEvent) => void;
-  onColumnNameChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
 
@@ -87,8 +80,6 @@ export interface KanbanBoardProps {
   groupField: string;
   isCreatingIssue: string | null;
   newIssueTitle: string;
-  editingColumnId: string | null;
-  newColumnName: string;
   projects: Array<{
     id: string;
     name: string;
@@ -109,10 +100,5 @@ export interface KanbanBoardProps {
   onCancelCreatingIssue: () => void;
   onIssueKeyDown: (e: React.KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
-  onStartEditingColumn: (columnId: string, name: string) => void;
-  onColumnEdit: (columnId: string, name: string) => void;
-  onCancelEditingColumn: () => void;
-  onColumnKeyDown: (e: React.KeyboardEvent) => void;
-  onColumnNameChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }

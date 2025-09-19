@@ -2,12 +2,9 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Plus,
   GripVertical,
-  Check,
-  X,
   AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,8 +21,6 @@ export default function KanbanColumn({
   displayProperties,
   isCreatingIssue,
   newIssueTitle,
-  editingColumnId,
-  newColumnName,
   projects,
   workspaceId,
   currentUserId,
@@ -37,11 +32,6 @@ export default function KanbanColumn({
   onCancelCreatingIssue,
   onIssueKeyDown,
   onIssueInputChange,
-  onStartEditingColumn,
-  onColumnEdit,
-  onCancelEditingColumn,
-  onColumnKeyDown,
-  onColumnNameChange,
   onIssueCreated
 }: KanbanColumnProps) {
 
@@ -68,48 +58,17 @@ export default function KanbanColumn({
             )}
           >
             <div className="flex items-center gap-3">
-              {editingColumnId === column.id ? (
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newColumnName}
-                    onChange={(e) => onColumnNameChange(e.target.value)}
-                    onKeyDown={onColumnKeyDown}
-                    className="h-8 text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onColumnEdit(column.id, newColumnName)}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onCancelEditingColumn}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+              <GripVertical className="h-4 w-4 text-[#666]" />
+              <h3 className="font-medium text-white">
+                {column.name}
+              </h3>
+              <Badge variant="secondary" className="text-xs bg-[#1f1f1f] text-[#999] border-0">
+                {column.issues.length}
+              </Badge>
+              {shouldShowDisabledState && (
+                <div title={cannotDropReason}>
+                  <AlertCircle className="h-4 w-4 text-red-400 ml-2" />
                 </div>
-              ) : (
-                <>
-                  <GripVertical className="h-4 w-4 text-[#666]" />
-                  <h3
-                    className="font-medium text-white cursor-pointer hover:text-[#0969da]"
-                    onDoubleClick={() => onStartEditingColumn(column.id, column.name)}
-                  >
-                    {column.name}
-                  </h3>
-                  <Badge variant="secondary" className="text-xs bg-[#1f1f1f] text-[#999] border-0">
-                    {column.issues.length}
-                  </Badge>
-                  {shouldShowDisabledState && (
-                    <div title={cannotDropReason}>
-                      <AlertCircle className="h-4 w-4 text-red-400 ml-2" />
-                    </div>
-                  )}
-                </>
               )}
             </div>
             <Button

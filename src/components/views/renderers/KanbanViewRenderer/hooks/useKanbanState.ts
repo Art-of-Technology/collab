@@ -27,8 +27,6 @@ export const useKanbanState = ({
   const updateIssueMutation = useUpdateIssue();
   
   // State management with optimistic updates
-  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
-  const [newColumnName, setNewColumnName] = useState('');
   const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
   const [newIssueTitle, setNewIssueTitle] = useState('');
   const [showSubIssues, setShowSubIssues] = useState(true);
@@ -335,14 +333,6 @@ export const useKanbanState = ({
     });
   }, [newIssueTitle, columns, onCreateIssue, toast]);
 
-  // Column handlers
-  const handleColumnEdit = useCallback((columnId: string, name: string) => {
-    if (onColumnUpdate) {
-      onColumnUpdate(columnId, { name });
-    }
-    setEditingColumnId(null);
-    setNewColumnName('');
-  }, [onColumnUpdate]);
 
   // Sub-issues toggle handler
   const handleToggleSubIssues = useCallback(() => {
@@ -373,29 +363,9 @@ export const useKanbanState = ({
     }
   }, [isCreatingIssue, handleCreateIssue, handleCancelCreatingIssue]);
 
-  const handleStartEditingColumn = useCallback((columnId: string, name: string) => {
-    setEditingColumnId(columnId);
-    setNewColumnName(name);
-  }, []);
-
-  const handleCancelEditingColumn = useCallback(() => {
-    setEditingColumnId(null);
-    setNewColumnName('');
-  }, []);
-
-  const handleColumnKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && editingColumnId) {
-      handleColumnEdit(editingColumnId, newColumnName);
-    } else if (e.key === 'Escape') {
-      handleCancelEditingColumn();
-    }
-  }, [editingColumnId, newColumnName, handleColumnEdit, handleCancelEditingColumn]);
 
   return {
     // State
-    editingColumnId,
-    newColumnName,
-    setNewColumnName,
     isCreatingIssue,
     newIssueTitle,
     setNewIssueTitle,
@@ -416,13 +386,9 @@ export const useKanbanState = ({
     handleDragEnd,
     handleIssueClick,
     handleCreateIssue,
-    handleColumnEdit,
     handleToggleSubIssues,
     handleStartCreatingIssue,
     handleCancelCreatingIssue,
-    handleIssueKeyDown,
-    handleStartEditingColumn,
-    handleCancelEditingColumn,
-    handleColumnKeyDown
+    handleIssueKeyDown
   };
 };
