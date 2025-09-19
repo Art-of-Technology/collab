@@ -8,6 +8,7 @@ import { createColumns, countIssuesByType } from '../utils';
 import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
 import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
 import { useUpdateIssue } from '@/hooks/queries/useIssues';
+import { VIEW_POSITION_GAP } from '@/constants/viewPositions';
 import type { 
   KanbanViewRendererProps 
 } from '../types';
@@ -39,6 +40,7 @@ export const useKanbanState = ({
   const [localIssues, setLocalIssues] = useState(issues);
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   const previousIssuesRef = useRef<any[] | null>(null);
+  const previousOrderingMethod = useRef<string | null>(null);
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
@@ -87,8 +89,8 @@ export const useKanbanState = ({
         allowedStatusNames = Array.from(namesSet);
       }
     }
-
-    const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames);
+    const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames, previousOrderingMethod.current);
+    previousOrderingMethod.current = view?.ordering || view?.sorting?.field || 'manual';
     if (localColumnOrder && view.grouping?.field === 'status') {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
       return baseColumns
@@ -147,11 +149,10 @@ export const useKanbanState = ({
     if (start.type === 'issue') {
       // Preserve current visual order when switching to manual by applying ephemeral positions
       if ((view?.ordering || view?.sorting?.field) !== 'manual') {
-        const POSITION_GAP = 1024;
         const positionById = new Map<string, number>();
         columns.forEach((col) => {
           col.issues.forEach((it: any, idx: number) => {
-            positionById.set(it.id, (idx + 1) * POSITION_GAP);
+            positionById.set(it.id, (idx + 1) * VIEW_POSITION_GAP);
           });
         });
         setLocalIssues((prev) => prev.map((it: any) => {
@@ -256,7 +257,6 @@ export const useKanbanState = ({
       if (!targetColumn) { isDraggingRef.current = false; return; }
 
       // Compute neighbor context using currently rendered order
-      const POSITION_GAP = 1024;
       const items = targetColumn.issues.filter((i: any) => i.id !== draggableId);
       const destIndex = isSameColumn && destination.index > source.index ? destination.index - 1 : destination.index;
       const getPos = (it: any) => (it?.viewPosition ?? it?.position ?? 0);
@@ -276,12 +276,12 @@ export const useKanbanState = ({
         }
       } else if (prev && !next) {
         const prevPos = getPos(prev);
-        newPosition = Number.isFinite(prevPos) ? prevPos + POSITION_GAP : POSITION_GAP;
+        newPosition = Number.isFinite(prevPos) ? prevPos + VIEW_POSITION_GAP : VIEW_POSITION_GAP;
       } else if (!prev && next) {
         const nextPos = getPos(next);
-        newPosition = Number.isFinite(nextPos) ? nextPos - POSITION_GAP : 0;
+        newPosition = Number.isFinite(nextPos) ? nextPos - VIEW_POSITION_GAP : 0;
       } else {
-        newPosition = POSITION_GAP; // first item in empty column
+        newPosition = VIEW_POSITION_GAP; // first item in empty column
       }
 
       const updatedIssue: any = { ...newLocalIssues[issueIndex], viewPosition: newPosition, position: newPosition };
@@ -306,7 +306,7 @@ export const useKanbanState = ({
         // Always reindex the destination column to assign deterministic positions
         const finalItems = [...items];
         finalItems.splice(destIndex, 0, updatedIssue);
-        const bulk = finalItems.map((it, idx) => ({ issueId: it.id, columnId: targetColumnId, position: (idx + 1) * POSITION_GAP }));
+        const bulk = finalItems.map((it, idx) => ({ issueId: it.id, columnId: targetColumnId, position: (idx + 1) * VIEW_POSITION_GAP }));
 
         // If moved across columns, also cleanup stale viewPosition assignments for moved issues
         const cleanup = !isSameColumn

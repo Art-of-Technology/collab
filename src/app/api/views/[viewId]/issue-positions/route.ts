@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { publishEvent } from '@/lib/redis';
+import { VIEW_POSITIONS_MAX_BULK_SIZE } from '@/constants/viewPositions';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,8 +42,8 @@ export async function PUT(
     // Bulk upsert support for reindex operations (with optional cleanup of stale positions)
     if (Array.isArray(bulk) && bulk.length > 0) {
       // Validate payload shape and size early
-      if (bulk.length > 500) {
-        return NextResponse.json({ error: 'Bulk size exceeds limit (max 500).' }, { status: 400 });
+      if (bulk.length > VIEW_POSITIONS_MAX_BULK_SIZE) {
+        return NextResponse.json({ error: `Bulk size exceeds limit (max ${VIEW_POSITIONS_MAX_BULK_SIZE}).` }, { status: 400 });
       }
 
       // Validate all items are well-formed and positions are finite integers

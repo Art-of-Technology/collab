@@ -49,11 +49,14 @@ export function mergeIssuesWithViewPositions(
   issues: any[], 
   positions: ViewIssuePosition[] = []
 ): any[] {
-  // Create a map of issueId -> position for the current column/status
-  return issues.map(issue => {
-    return {
-      ...issue,
-      viewPosition: positions.find(pos => pos.issueId === issue.id)?.position
-    };
-  });
+  // Create a lookup map of issueId -> position for O(n + m) merging
+  const positionByIssueId = new Map<string, number>();
+  for (const pos of positions) {
+    positionByIssueId.set(pos.issueId, pos.position);
+  }
+
+  return issues.map((issue) => ({
+    ...issue,
+    viewPosition: positionByIssueId.get(issue.id)
+  }));
 }

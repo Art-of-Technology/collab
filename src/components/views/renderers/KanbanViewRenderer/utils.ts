@@ -1,6 +1,9 @@
 import { COLUMN_COLORS, PRIORITY_COLORS, DEFAULT_COLUMNS } from './constants';
 import type { FilterType, FilterState, Column } from './types';
 
+// Create collator once to avoid instantiation on every comparison
+const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 export const getColumnColor = (columnName: string, groupField: string): string => {
   const colors = COLUMN_COLORS[groupField as keyof typeof COLUMN_COLORS];
   if (!colors) return 'border-gray-600';
@@ -79,7 +82,7 @@ export const filterIssues = (
   return filtered;
 };
 
-export const createColumns = (filteredIssues: any[], view: any, projectStatuses?: any[], allowedStatusNames?: string[]): Column[] => {
+export const createColumns = (filteredIssues: any[], view: any, projectStatuses?: any[], allowedStatusNames?: string[], previousOrderingMethod?: string | null): Column[] => {
   const groupField = view.grouping?.field || 'status';
   const columnsMap = new Map(); // Use ID as key to prevent duplicates
   
@@ -91,15 +94,6 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
       if (key) statusOrderMap[key] = typeof ps.order === 'number' ? ps.order : idx;
     });
   }
-  // Fallback status order when no project status order is available
-  const fallbackStatusOrder: Record<string, number> = {
-    backlog: 0,
-    todo: 1,
-    in_progress: 2,
-    review: 3,
-    blocked: 3,
-    done: 4
-  };
   
   // Handle status grouping with database-driven project statuses
   if (groupField === 'status' && projectStatuses && projectStatuses.length > 0) {
@@ -246,104 +240,109 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
   });
 
   // Sort issues within each column based on selected ordering (default: manual by position)
+  
   const sortedColumns = Array.from(columnsMap.values()).map((column: Column) => ({
-    ...column,
-    issues: column.issues.sort((a: any, b: any) => {
-      const orderingField = (view?.ordering || view?.sorting?.field || 'manual') as string;
-      const persistedDirection = (view?.sorting?.direction || '').toString().toLowerCase();
-      const defaultDirectionByField: Record<string, 'asc' | 'desc'> = {
-        priority: 'desc',
-        created: 'desc',
-        createdAt: 'desc',
-        updated: 'desc',
-        updatedAt: 'desc',
-        dueDate: 'asc',
-        assignee: 'asc',
-        title: 'asc',
-      };
-      const direction: 'asc' | 'desc' = (persistedDirection === 'asc' || persistedDirection === 'desc')
-        ? (persistedDirection as 'asc' | 'desc')
-        : (defaultDirectionByField[orderingField] || 'asc');
-      const applyDirection = (cmp: number) => direction === 'asc' ? cmp : -cmp;
+      ...column,
+      issues: column.issues.sort((a: any, b: any) => {
+        const orderingField = view?.ordering || view?.sorting?.field || 'manual';
+        const prevField = previousOrderingMethod || null;
+        // If we're in manual mode and positions exist (assigned on drag start), honor manual immediately.
+        const hasManualPositions = column.issues.some((it: any) => it?.viewPosition !== undefined || it?.position !== undefined);
+        const effectiveOrdering = (orderingField === 'manual'
+          ? (hasManualPositions ? 'manual' : (prevField && prevField !== 'manual' ? prevField : 'manual'))
+          : orderingField);
+        const persistedDirection = view?.sorting?.direction || 'desc';
+        const defaultDirectionByField: Record<string, 'asc' | 'desc'> = {
+          priority: 'desc',
+          created: 'desc',
+          createdAt: 'desc',
+          updated: 'desc',
+          updatedAt: 'desc',
+          dueDate: 'asc',
+          assignee: 'asc',
+          title: 'asc',
+        };
+        const direction: 'asc' | 'desc' = (persistedDirection === 'asc' || persistedDirection === 'desc')
+          ? (persistedDirection as 'asc' | 'desc')
+          : (defaultDirectionByField[effectiveOrdering] || 'asc');
+        const applyDirection = (cmp: number) => direction === 'asc' ? cmp : -cmp;
 
-      if (orderingField === 'priority') {
-        const priorityOrder: Record<string, number> = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-        const aVal = priorityOrder[(a.priority || '').toUpperCase()] || 0;
-        const bVal = priorityOrder[(b.priority || '').toUpperCase()] || 0;
-        if (aVal !== bVal) return applyDirection(aVal - bVal);
-        // Tie-breaker: manual position
+        if (effectiveOrdering === 'priority') {
+          const priorityOrder: Record<string, number> = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+          const aVal = priorityOrder[(a.priority || '').toUpperCase()] || 0;
+          const bVal = priorityOrder[(b.priority || '').toUpperCase()] || 0;
+          if (aVal !== bVal) return applyDirection(aVal - bVal);
+          // Tie-breaker: manual position
+          const posA = a.viewPosition ?? a.position ?? 999999;
+          const posB = b.viewPosition ?? b.position ?? 999999;
+          if (posA !== posB) return posA - posB;
+          // Final tie-breaker: createdAt asc
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }
+        
+        if (effectiveOrdering === 'created' || effectiveOrdering === 'createdAt') {
+          const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (aDate !== bDate) return applyDirection(aDate - bDate);
+          const posA = a.viewPosition ?? a.position ?? 999999;
+          const posB = b.viewPosition ?? b.position ?? 999999;
+          if (posA !== posB) return posA - posB;
+          return 0;
+        }
+
+        if (effectiveOrdering === 'updated' || effectiveOrdering === 'updatedAt') {
+          const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+          if (aDate !== bDate) return applyDirection(aDate - bDate);
+          const posA = a.viewPosition ?? a.position ?? 999999;
+          const posB = b.viewPosition ?? b.position ?? 999999;
+          if (posA !== posB) return posA - posB;
+          return 0;
+        }
+
+        if (effectiveOrdering === 'dueDate') {
+          const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          if (aDate !== bDate) return applyDirection(aDate - bDate);
+          const posA = a.viewPosition ?? a.position ?? 999999;
+          const posB = b.viewPosition ?? b.position ?? 999999;
+          if (posA !== posB) return posA - posB;
+          return 0;
+        }
+
+        if (effectiveOrdering === 'assignee') {
+          const aName = (a.assignee?.email || '');
+          const bName = (b.assignee?.email || '');
+          // Natural, case-insensitive, numeric-aware
+          const compareResult = direction === 'asc' ? naturalCollator.compare(aName, bName) : naturalCollator.compare(bName, aName);
+          if (compareResult !== 0) return compareResult;
+          // Tie-breaker: manual position
+          const posA = a.viewPosition ?? a.position ?? 999999;
+          const posB = b.viewPosition ?? b.position ?? 999999;
+          if (posA !== posB) return posA - posB;
+          return 0;
+        }
+
+        if (effectiveOrdering === 'title') {
+          const aTitle = (a.title || '').toLowerCase();
+          const bTitle = (b.title || '').toLowerCase();
+          // Natural, case-insensitive, numeric-aware
+          const compareResult = direction === 'asc' ? naturalCollator.compare(aTitle, bTitle) : naturalCollator.compare(bTitle, aTitle);
+          if (compareResult !== 0) return compareResult;
+          // Tie-breaker: manual position
+          const posA = a.viewPosition ?? a.position ?? 999999;
+          const posB = b.viewPosition ?? b.position ?? 999999;
+          if (posA !== posB) return posA - posB;
+          return 0;
+        }
+
+        // Default/manual: position first, then createdAt
         const posA = a.viewPosition ?? a.position ?? 999999;
         const posB = b.viewPosition ?? b.position ?? 999999;
         if (posA !== posB) return posA - posB;
-        // Final tie-breaker: createdAt asc
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      }
-      
-      if (orderingField === 'created' || orderingField === 'createdAt') {
-        const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        if (aDate !== bDate) return applyDirection(aDate - bDate);
-        const posA = a.viewPosition ?? a.position ?? 999999;
-        const posB = b.viewPosition ?? b.position ?? 999999;
-        if (posA !== posB) return posA - posB;
-        return 0;
-      }
-
-      if (orderingField === 'updated' || orderingField === 'updatedAt') {
-        const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        if (aDate !== bDate) return applyDirection(aDate - bDate);
-        const posA = a.viewPosition ?? a.position ?? 999999;
-        const posB = b.viewPosition ?? b.position ?? 999999;
-        if (posA !== posB) return posA - posB;
-        return 0;
-      }
-
-      if (orderingField === 'dueDate') {
-        const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
-        const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-        if (aDate !== bDate) return applyDirection(aDate - bDate);
-        const posA = a.viewPosition ?? a.position ?? 999999;
-        const posB = b.viewPosition ?? b.position ?? 999999;
-        if (posA !== posB) return posA - posB;
-        return 0;
-      }
-
-      if (orderingField === 'assignee') {
-        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-        const aName = (a.assignee?.email || '');
-        const bName = (b.assignee?.email || '');
-        // Natural, case-insensitive, numeric-aware
-        const compareResult = direction === 'asc' ? collator.compare(aName, bName) : collator.compare(bName, aName);
-        if (compareResult !== 0) return compareResult;
-        // Tie-breaker: manual position
-        const posA = a.viewPosition ?? a.position ?? 999999;
-        const posB = b.viewPosition ?? b.position ?? 999999;
-        if (posA !== posB) return posA - posB;
-        return 0;
-      }
-
-      if (orderingField === 'title') {
-        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-        const aTitle = (a.title || '').toLowerCase();
-        const bTitle = (b.title || '').toLowerCase();
-        // Natural, case-insensitive, numeric-aware
-        const compareResult = direction === 'asc' ? collator.compare(aTitle, bTitle) : collator.compare(bTitle, aTitle);
-        if (compareResult !== 0) return compareResult;
-        // Tie-breaker: manual position
-        const posA = a.viewPosition ?? a.position ?? 999999;
-        const posB = b.viewPosition ?? b.position ?? 999999;
-        if (posA !== posB) return posA - posB;
-        return 0;
-      }
-
-      // Default/manual: position first, then createdAt
-      const posA = a.viewPosition ?? a.position ?? 999999;
-      const posB = b.viewPosition ?? b.position ?? 999999;
-      if (posA !== posB) return posA - posB;
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    })
-  }));
+      })
+    }));
 
   return sortedColumns.sort((a, b) => a.order - b.order);
 };
