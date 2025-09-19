@@ -778,7 +778,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
-        // Key handling is managed via editorProps.handleKeyDown to avoid duplicate invocation
         style={{ 
           minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
           maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined
