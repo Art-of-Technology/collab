@@ -82,24 +82,26 @@ export async function PUT(
           });
         }
 
-        for (const item of bulk) {
-          await tx.viewIssuePosition.upsert({
-            where: {
-              viewId_issueId_columnId: {
+        await Promise.all(
+          bulk.map((item: any) =>
+            tx.viewIssuePosition.upsert({
+              where: {
+                viewId_issueId_columnId: {
+                  viewId,
+                  issueId: item.issueId,
+                  columnId: item.columnId
+                }
+              },
+              update: { position: item.position },
+              create: {
                 viewId,
                 issueId: item.issueId,
-                columnId: item.columnId
+                columnId: item.columnId,
+                position: item.position
               }
-            },
-            update: { position: item.position },
-            create: {
-              viewId,
-              issueId: item.issueId,
-              columnId: item.columnId,
-              position: item.position
-            }
-          });
-        }
+            })
+          )
+        );
       });
       await publishEvent(`workspace:${view.workspaceId}:events`, {
         type: 'view.issue-position.updated',
