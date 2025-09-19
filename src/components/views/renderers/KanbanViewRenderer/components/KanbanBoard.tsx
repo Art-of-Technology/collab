@@ -11,8 +11,6 @@ export default function KanbanBoard({
   groupField,
   isCreatingIssue,
   newIssueTitle,
-  editingColumnId,
-  newColumnName,
   projects,
   workspaceId,
   currentUserId,
@@ -27,11 +25,6 @@ export default function KanbanBoard({
   onCancelCreatingIssue,
   onIssueKeyDown,
   onIssueInputChange,
-  onStartEditingColumn,
-  onColumnEdit,
-  onCancelEditingColumn,
-  onColumnKeyDown,
-  onColumnNameChange,
   onIssueCreated,
 }: KanbanBoardProps) {
 
@@ -54,8 +47,6 @@ export default function KanbanBoard({
                 displayProperties={displayProperties}
                 isCreatingIssue={isCreatingIssue === column.id}
                 newIssueTitle={newIssueTitle}
-                editingColumnId={editingColumnId}
-                newColumnName={newColumnName}
                 projects={projects}
                 workspaceId={workspaceId}
                 currentUserId={currentUserId}
@@ -67,11 +58,6 @@ export default function KanbanBoard({
                 onCancelCreatingIssue={onCancelCreatingIssue}
                 onIssueKeyDown={onIssueKeyDown}
                 onIssueInputChange={onIssueInputChange}
-                onStartEditingColumn={onStartEditingColumn}
-                onColumnEdit={onColumnEdit}
-                onCancelEditingColumn={onCancelEditingColumn}
-                onColumnKeyDown={onColumnKeyDown}
-                onColumnNameChange={onColumnNameChange}
                 onIssueCreated={onIssueCreated}
               />
             ))}
