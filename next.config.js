@@ -39,19 +39,17 @@ const nextConfig = {
   // Remove old API config as App Router uses different mechanism
 }
 
-module.exports = nextConfig 
-
 // Injected content via Sentry wizard below
 
-const { withSentryConfig } = require("@sentry/nextjs");
+import { withSentryConfig } from "@sentry/nextjs";
 
-module.exports = withSentryConfig(
-  module.exports,
+export default withSentryConfig(
+  nextConfig,
   {
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-    org: "weezboo",
+    org: "stech-technology-uk-limited",
     project: "collab",
 
     // Only print logs for uploading source maps in CI
