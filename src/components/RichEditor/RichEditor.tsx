@@ -74,6 +74,18 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
+  // Guard to prevent onUpdate → onChange → setContent recursion
+  const isExternalUpdateRef = useRef(false);
+  // Guard to suppress transient checks during mention insertion
+  const isInsertingMentionRef = useRef(false);
+  
+  // Helper to release guards on the next tick after ProseMirror updates
+  const releaseMentionGuardsNextTick = () => {
+    setTimeout(() => {
+      isInsertingMentionRef.current = false;
+      isExternalUpdateRef.current = false;
+    }, 0);
+  };
   
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
@@ -233,16 +245,23 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       },
     },
     onUpdate: ({ editor }) => {
+      // Always compute current content
       const html = editor.getHTML();
       const text = editor.getText();
-      onChange?.(html, text);
-      
+
+      // Avoid feedback loops when we programmatically set content or insert mentions
+      if (!isExternalUpdateRef.current) {
+        onChange?.(html, text);
+      }
+
       // Check if editor is really empty (including just <p></p> or <p><br></p>)
       const isContentEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
       setIsEmpty(isContentEmpty);
       
       // Check for mention triggers
-      checkForMentionTrigger();
+      if (!isInsertingMentionRef.current) {
+        checkForMentionTrigger();
+      }
       
       // Call external update callback
       onUpdate?.(editor);
@@ -342,6 +361,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const label = user.name || user.email || 'Unknown User';
       
       // Use the insertMention utility
+      isInsertingMentionRef.current = true;
+      isExternalUpdateRef.current = true;
       insertMention(
         editor,
         {
@@ -353,6 +374,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         from,
         trigger.char
       );
+      // Release guards on next tick after ProseMirror updates
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -370,6 +393,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const title = issue.title || label;
       const type = issue.type || 'TASK';
       
+      isInsertingMentionRef.current = true;
+      isExternalUpdateRef.current = true;
       insertMention(
         editor,
         {
@@ -382,6 +407,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         from,
         trigger.char
       );
+      // Release guards on next tick after ProseMirror updates
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -569,8 +596,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
       if (value !== currentContent) {
+        // Prevent update feedback loop when syncing external value
+        isExternalUpdateRef.current = true;
         setTimeout(() => {
           editor.commands.setContent(value || '');
+          // Release guard after ProseMirror processes this transaction
+          setTimeout(() => {
+            isExternalUpdateRef.current = false;
+          }, 0);
         }, 0);
       }
     }
@@ -698,7 +731,13 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     focus: () => editor?.commands.focus(),
     getHTML: () => editor?.getHTML() || '',
     getText: () => editor?.getText() || '',
-    setContent: (content: string) => editor?.commands.setContent(content),
+    setContent: (content: string) => {
+      isExternalUpdateRef.current = true;
+      editor?.commands.setContent(content);
+      setTimeout(() => {
+        isExternalUpdateRef.current = false;
+      }, 0);
+    },
     insertText: (text: string) => editor?.commands.insertContent(text),
     clear: () => editor?.commands.clearContent(),
     getEditor: () => editor,
@@ -741,7 +780,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
-        onKeyDown={onKeyDown}
         style={{ 
           minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
           maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined

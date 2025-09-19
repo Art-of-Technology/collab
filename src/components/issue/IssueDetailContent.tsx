@@ -692,8 +692,6 @@ export function IssueDetailContent({
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
-        } else {
-          onClose?.();
         }
       }
     };

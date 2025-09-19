@@ -20,18 +20,14 @@ export default function KanbanColumn({
   groupField,
   displayProperties,
   isCreatingIssue,
-  newIssueTitle,
   projects,
   workspaceId,
   currentUserId,
   draggedIssue,
   hoverState,
   onIssueClick,
-  onCreateIssue,
   onStartCreatingIssue,
   onCancelCreatingIssue,
-  onIssueKeyDown,
-  onIssueInputChange,
   onIssueCreated
 }: KanbanColumnProps) {
 
@@ -113,7 +109,6 @@ export default function KanbanColumn({
                     onCreated={onIssueCreated}
                   />
                 )}
-
                 {/* Issues */}
                 {column.issues.map((issue: any, index: number) => (
                   <KanbanIssueCard

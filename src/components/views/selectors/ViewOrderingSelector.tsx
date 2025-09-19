@@ -28,6 +28,18 @@ const ORDERING_OPTIONS = {
   title: { label: "Title", description: "Alphabetical order" }
 } as const;
 
+// Only show canonical keys in the UI to avoid duplicates like created/createdAt
+const CANONICAL_ORDER_KEYS = [
+  'manual',
+  'priority',
+  'assignee',
+  'created',
+  'updated',
+  'dueDate',
+  'startDate',
+  'title'
+] as const;
+
 export function ViewOrderingSelector({
   value,
   onChange,
@@ -36,15 +48,17 @@ export function ViewOrderingSelector({
 }: ViewOrderingSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const selectedOption = ORDERING_OPTIONS[value as keyof typeof ORDERING_OPTIONS] || ORDERING_OPTIONS.manual;
+  // Normalize persisted values to canonical keys for display
+  const normalizedValue = (value === 'createdAt' ? 'created' : value === 'updatedAt' ? 'updated' : value) as keyof typeof ORDERING_OPTIONS;
+  const selectedOption = ORDERING_OPTIONS[normalizedValue] || ORDERING_OPTIONS.manual;
 
   // Get available options based on display type
   const getAvailableOptions = () => {
-    const allOptions = Object.keys(ORDERING_OPTIONS) as Array<keyof typeof ORDERING_OPTIONS>;
+    const allOptions = CANONICAL_ORDER_KEYS as unknown as Array<keyof typeof ORDERING_OPTIONS>;
     
     if (displayType === 'TIMELINE') {
       // Timeline typically uses date-based ordering
-      return allOptions.filter(key => ['startDate', 'dueDate', 'created', 'updated', 'priority'].includes(key));
+      return allOptions.filter(key => ['startDate', 'dueDate', 'created', 'updated', 'priority'].includes(key as string)) as Array<keyof typeof ORDERING_OPTIONS>;
     }
     
     return allOptions;
@@ -66,7 +80,7 @@ export function ViewOrderingSelector({
           )}
         >
           <ArrowUpDown className="h-3 w-3 text-[#f59e0b]" />
-          <span className="text-[#cccccc] text-xs">{selectedOption.label}</span>
+          <span className="text-[#cccccc] text-xs">Order by: {selectedOption.label}</span>
           <ChevronDown className="h-3 w-3 text-[#6e7681]" />
         </button>
       </PopoverTrigger>
@@ -100,7 +114,7 @@ export function ViewOrderingSelector({
                   <div className="text-[#e6edf3] font-medium">{option.label}</div>
                   <div className="text-xs text-[#6e7681] truncate">{option.description}</div>
                 </div>
-                {value === key && (
+                {(normalizedValue === key) && (
                   <span className="text-xs text-[#6e7681]">✓</span>
                 )}
               </button>

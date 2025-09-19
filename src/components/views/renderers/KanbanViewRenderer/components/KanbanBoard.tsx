@@ -1,6 +1,5 @@
 "use client";
 
-import { Plus } from "lucide-react";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import KanbanColumn from "./KanbanColumn";
 import type { KanbanBoardProps } from "../types";
@@ -42,6 +41,7 @@ export default function KanbanBoard({
               <KanbanColumn
                 key={column.id}
                 column={column}
+                issues={issues}
                 index={index}
                 groupField={groupField}
                 displayProperties={displayProperties}

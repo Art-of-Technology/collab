@@ -59,7 +59,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
           ) : (
           <KanbanBoard
             columns={columns}
-            issues={filteredIssues}
+            issues={issues}
             displayProperties={displayProperties}
             groupField={view.grouping?.field || 'status'}
             isCreatingIssue={isCreatingIssue}

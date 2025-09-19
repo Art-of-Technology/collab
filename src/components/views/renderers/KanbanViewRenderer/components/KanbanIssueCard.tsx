@@ -7,7 +7,10 @@ import {
   MessageSquare, 
   ArrowRight,
   User,
-  Circle
+  ArrowDown,
+  Minus,
+  ArrowUp,
+  Flag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable } from "@hello-pangea/dnd";
@@ -25,16 +28,6 @@ const getTypeColor = (type: string) => {
     'SUBTASK': '#6b7280'
   };
   return colors[type as keyof typeof colors] || '#6b7280';
-};
-
-const getPriorityColor = (priority: string) => {
-  const colors = {
-    'URGENT': '#ef4444',
-    'HIGH': '#f97316', 
-    'MEDIUM': '#eab308',
-    'LOW': '#22c55e'
-  };
-  return colors[priority as keyof typeof colors] || '#6b7280';
 };
 
 const KanbanIssueCard = React.memo(({
@@ -67,7 +60,7 @@ const KanbanIssueCard = React.memo(({
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-all duration-150 cursor-pointer",
+            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-colors duration-150 cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
           onClick={handleCardClick}
@@ -88,10 +81,11 @@ const KanbanIssueCard = React.memo(({
               
               {/* Priority Indicator - Only show if enabled and not medium */}
               {showPriority && issue.priority && issue.priority !== 'MEDIUM' && (
-                <div 
-                  className="h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: getPriorityColor(issue.priority) }}
-                />
+                <>              
+                {issue.priority === 'URGENT' && <Flag className="h-3 w-3 text-red-600" />}
+                {issue.priority === 'HIGH' && <ArrowUp className="h-3 w-3 text-amber-600" />}
+                {issue.priority === 'LOW' && <ArrowDown className="h-3 w-3 text-slate-500" />}
+                </>
               )}
             </div>
             
