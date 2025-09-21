@@ -73,10 +73,11 @@ export function getIssueKeyFromParams(searchParams: URLSearchParams): string | n
  */
 export function parseIssueKey(issueKey: string): { prefix: string; number: number } | null {
   // Updated to handle prefixes with spaces: PREFIX-NUMBER (e.g., "SPA PR-1")
-  const match = issueKey.match(/^([A-Za-z\s]+)-(\d+)$/);
+  // Ensures prefix starts and ends with letters, single spaces between words only
+  const match = issueKey.match(/^([A-Za-z]+(?:\s[A-Za-z]+)*)-(\d+)$/);
   if (match) {
     return {
-      prefix: match[1].trim(), // Trim any trailing spaces
+      prefix: match[1],
       number: parseInt(match[2], 10)
     };
   }
@@ -100,11 +101,11 @@ export function isValidBoardSlug(slug: string): boolean {
 }
 
 /**
- * Validate issue key format
+ * Validate issue key format - strict validation for new issue keys
  */
 export function isValidIssueKey(issueKey: string): boolean {
-  // Updated to allow spaces in prefixes (e.g., "SPA PR-1")
-  return /^[A-Za-z\s]+-\d+$/.test(issueKey);
+  // Updated to allow spaces in prefixes (e.g., "SPA PR-1"), but prefix must start and end with a letter, and only single spaces between words
+  return /^[A-Za-z]+(?:\s[A-Za-z]+)*-\d+$/.test(issueKey);
 }
 
 // Slug Generation Functions
