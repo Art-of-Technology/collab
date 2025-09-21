@@ -3,11 +3,11 @@
  */
 
 /**
- * Check if a string looks like an issue key (e.g., "UPG-123", "DNN1-T2") vs a database ID
+ * Check if a string looks like an issue key (e.g., "UPG-123", "DNN1-T2", "SPA PR-1") vs a database ID
  */
 export function isIssueKey(value: string): boolean {
-  // Issue keys should match pattern: PREFIX-NUMBER or PREFIX-TYPE+NUMBER (e.g., UPG-123, PROJ-5, DNN1-T2)
-  const issueKeyPattern = /^[A-Z]+[0-9]*-[A-Z]*\d+$/;
+  // Issue keys should match pattern: PREFIX-NUMBER or PREFIX-TYPE+NUMBER (e.g., UPG-123, PROJ-5, DNN1-T2, SPA PR-1)
+  const issueKeyPattern = /^[A-Z\s]+[0-9]*-[A-Z]*\d+$/;
   return issueKeyPattern.test(value);
 }
 
