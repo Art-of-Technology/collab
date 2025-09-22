@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { useCreateFeatureRequest } from "@/hooks/queries/useFeature";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { RichEditor } from "@/components/RichEditor";
 import { extractMentionUserIds } from "@/utils/mentions";
 import axios from "axios";
 
@@ -25,8 +25,6 @@ export default function CreateFeatureRequestButton() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [descriptionHtml, setDescriptionHtml] = useState("");
-  const [isImproving, setIsImproving] = useState(false);
   
   const createFeature = useCreateFeatureRequest();
 
@@ -45,7 +43,7 @@ export default function CreateFeatureRequestButton() {
     const formData = new FormData();
     formData.append("title", title);
     formData.append("description", description);
-    formData.append("html", descriptionHtml);
+    formData.append("html", description);
     
     try {
       createFeature.mutate(formData, {
@@ -77,7 +75,6 @@ export default function CreateFeatureRequestButton() {
           });
           setTitle("");
           setDescription("");
-          setDescriptionHtml("");
           setOpen(false);
         },
         onError: () => {
@@ -92,28 +89,6 @@ export default function CreateFeatureRequestButton() {
       console.error("Error submitting feature request:", error);
     }
   };
-
-  // AI Improve Handler
-  const handleAiImproveDescription = useCallback(async (text: string): Promise<string> => {
-    if (isImproving || !text.trim()) return text;
-    setIsImproving(true);
-    try {
-      const response = await fetch("/api/ai/improve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
-      });
-      if (!response.ok) throw new Error("Failed to improve text");
-      const data = await response.json();
-      return data.message || data.improvedText || text;
-    } catch (error) {
-      console.error("Error improving text:", error);
-      toast({ title: "Error", description: "Failed to improve text", variant: "destructive" });
-      return text;
-    } finally {
-      setIsImproving(false);
-    }
-  }, [isImproving, toast]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -145,15 +120,13 @@ export default function CreateFeatureRequestButton() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
-              <MarkdownEditor
-                initialValue={description}
-                onChange={(markdown, html) => {
-                  setDescription(markdown);
-                  setDescriptionHtml(html);
-                }}
+              <RichEditor
+                value={description}
+                onChange={(html, text) => setDescription(html)}
                 placeholder="Describe your feature idea in detail. What problem does it solve? How should it work?"
                 minHeight="180px"
-                onAiImprove={handleAiImproveDescription}
+                toolbarMode="static"
+                showAiImprove={true}
               />
             </div>
           </div>
