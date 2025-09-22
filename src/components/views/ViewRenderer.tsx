@@ -30,7 +30,6 @@ import TimelineViewRenderer from './renderers/TimelineViewRenderer';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
-import { ViewOrderingSelector } from './selectors/ViewOrderingSelector';
 import { ViewDisplayPropertiesSelector } from './selectors/ViewDisplayPropertiesSelector';
 import { ViewUpdatedAtSelector } from './selectors/ViewUpdatedAtSelector';
 import { StatusSelector } from './selectors/StatusSelector';
@@ -192,7 +191,7 @@ export default function ViewRenderer({
   const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
-  const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
+  const [tempOrdering, setTempOrdering] = useState('manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   
@@ -236,19 +235,10 @@ export default function ViewRenderer({
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
 
   // Update ordering selection and invalidate caches; positions are not reset here
-  const handleOrderingChange = useCallback(async (newOrdering: string) => {
-    if (newOrdering === tempOrdering) return;
-    setTempOrdering(newOrdering);
-
-    try {
-      // Proactively invalidate caches; realtime will also broadcast
-      queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
-      queryClient.invalidateQueries({ queryKey: [...issueKeys.byWorkspace(workspace.id)] });
-      queryClient.invalidateQueries({ queryKey: ['additional-issues', workspace.id] });
-    } catch (e) {
-      // no-op; not critical for UX if event-based invalidation handles it
-    }
-  }, [tempOrdering, workspace.id, view.id, queryClient]);
+  // Sorting is locked to manual; no-op for ordering changes
+  const handleOrderingChange = useCallback(async () => {
+    setTempOrdering('manual');
+  }, []);
 
   // Determine which projects are newly selected (not in original view)
   const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
@@ -364,7 +354,7 @@ export default function ViewRenderer({
   const [lastSavedState, setLastSavedState] = useState({
     displayType: view.displayType,
     grouping: view.grouping?.field || 'none',
-    ordering: view.sorting?.field || 'manual',
+    ordering: 'manual',
     displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
     filters: view.filters || {}
   });
@@ -374,7 +364,7 @@ export default function ViewRenderer({
     setLastSavedState({
       displayType: view.displayType,
       grouping: view.grouping?.field || 'none',
-      ordering: view.sorting?.field || 'manual',
+      ordering: 'manual',
       displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
       filters: view.filters || {}
     });
@@ -630,7 +620,7 @@ export default function ViewRenderer({
         body: JSON.stringify({
           displayType: tempDisplayType,
           filters: allFilters,
-          sorting: { field: tempOrdering, direction: 'desc' },
+          sorting: { field: 'manual', direction: 'desc' },
           grouping: { field: tempGrouping },
           fields: tempDisplayProperties,
           projectIds: tempProjectIds,
@@ -694,7 +684,7 @@ export default function ViewRenderer({
           visibility: 'PERSONAL',
           projectIds: tempProjectIds,
           filters: allFilters,
-          sorting: { field: tempOrdering, direction: 'desc' },
+          sorting: { field: 'manual', direction: 'desc' },
           grouping: { field: tempGrouping },
           fields: tempDisplayProperties,
         })
@@ -952,9 +942,9 @@ export default function ViewRenderer({
         return (
           <KanbanViewRenderer 
             {...sharedProps}
-            onOrderingChange={(ordering: string) => {
-              // Avoid flicker and skip global reset when switching to manual via drag
-              setTempOrdering(ordering);
+            onOrderingChange={() => {
+              // Sorting is locked; always enforce manual
+              setTempOrdering('manual');
             }}
           />
         );
@@ -1184,11 +1174,6 @@ export default function ViewRenderer({
                 <ViewGroupingSelector
                   value={tempGrouping}
                   onChange={setTempGrouping}
-                  displayType={tempDisplayType}
-                />
-                <ViewOrderingSelector
-                  value={tempOrdering}
-                  onChange={handleOrderingChange}
                   displayType={tempDisplayType}
                 />
                 <ViewDisplayPropertiesSelector
