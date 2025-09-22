@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from 'react';
-import type { JSX, MouseEvent } from 'react';
+import type { MouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -759,12 +759,12 @@ export default function ListViewRenderer({
     );
   };
 
-  const renderIssueRow = (issue: Issue, level = 0): JSX.Element[] => {
+  const renderIssueRow = (issue: Issue, level = 0) => {
     const subItems = resolveSubIssues(issue);
     const hasSubIssues = subItems.length > 0;
     const isExpanded = hasSubIssues && expandedIssues.has(issue.id);
 
-    const rows: JSX.Element[] = [
+    const rows = [
       <IssueRow key={`${issue.id}-${level}`} issue={issue} level={level} />
     ];
 
@@ -778,7 +778,7 @@ export default function ListViewRenderer({
   };
 
   // Calculate total issues count
-  const totalIssues = groupedIssues.reduce((sum, group) => sum + group.count, 0);
+  const totalIssues = groupedIssues.reduce((sum, group) => sum + group.issues.length, 0);
 
   // Empty state component
   if (issues.length === 0) {

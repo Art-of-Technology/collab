@@ -32,16 +32,6 @@ const getTypeColor = (type: string) => {
   return colors[type as keyof typeof colors] || '#6b7280';
 };
 
-const getPriorityColor = (priority: string) => {
-  const colors = {
-    'URGENT': '#ef4444',
-    'HIGH': '#f97316',
-    'MEDIUM': '#eab308',
-    'LOW': '#22c55e'
-  };
-  return colors[priority as keyof typeof colors] || '#6b7280';
-};
-
 const DEFAULT_STATUS_DISPLAY_NAME = 'Todo';
 
 
@@ -70,10 +60,6 @@ const KanbanIssueCard = React.memo(({
   const hasSubTasks = subTasks.length > 0;
   const [isExpanded, setIsExpanded] = useState(false);
   const subTaskCount = hasSubTasks ? subTasks.length : issue._count?.children || 0;
-
-  React.useEffect(() => {
-    setIsExpanded(false);
-  }, [issue.id]);
 
   const handleCardClick = useCallback(() => {
     const keyOrId = issue.issueKey || issue.id;
