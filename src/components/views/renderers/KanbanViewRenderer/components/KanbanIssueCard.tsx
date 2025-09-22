@@ -61,6 +61,8 @@ const KanbanIssueCard = React.memo(({
   const [isExpanded, setIsExpanded] = useState(false);
   const subTaskCount = hasSubTasks ? subTasks.length : issue._count?.children || 0;
 
+  console.log('subTaskCount', subTaskCount)
+
   const handleCardClick = useCallback(() => {
     const keyOrId = issue.issueKey || issue.id;
     onCardClick(keyOrId);
