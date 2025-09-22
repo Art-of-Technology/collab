@@ -705,7 +705,7 @@ export function IssueRichEditor({
         }}
         additionalExtensions={additionalExtensions}
         // Disable internal floating toolbar to avoid duplication; we'll render our own
-        toolbarMode="static"
+        toolbarMode="custom"
         showToolbar={false}
       />
 
@@ -811,7 +811,7 @@ export function IssueRichEditor({
                         maxHeight="none"
                         readOnly={true}
                         showToolbar={false}
-                        toolbarMode="static"
+                        toolbarMode="custom"
                       />
                     )}
                   </div>

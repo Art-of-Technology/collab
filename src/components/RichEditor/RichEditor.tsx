@@ -87,6 +87,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     }, 0);
   };
   
+  // Generate unique ID for this editor instance to avoid CSS conflicts
+  const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
+  
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
@@ -776,7 +779,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         className={cn(
           "relative cursor-text flex-1", 
           toolbarMode === 'static' ? "p-0" : "",
-          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : ""
+          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : "",
+          editorId // Add unique class for scoped CSS
         )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
@@ -790,9 +794,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           <div 
             className="absolute pointer-events-none text-[#6e7681] text-sm z-0"
             style={{ 
-              // In static mode, offset by the container's p-3 padding (12px)
-              top: toolbarMode === 'static' ? '0' : '0',
-              left: toolbarMode === 'static' ? '0' : '0',
+              // In static mode, offset by the container's p-2 padding (8px)
+              top: toolbarMode === 'static' ? '8px' : '0',
+              left: toolbarMode === 'static' ? '8px' : '0',
               lineHeight: '1.5',
               fontSize: '14px'
             }}
@@ -809,39 +813,39 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           )}
           style={{ 
             minHeight: toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight),
-            padding: toolbarMode === 'static' ? '0' : '0' // Remove any default padding
+            padding: toolbarMode === 'static' ? '8px' : '0' // Remove any default padding
           }}
         />
 
-        {/* Global CSS for TipTap styling */}
+        {/* Scoped CSS for this TipTap editor instance */}
         <style jsx global>{`
-          .ProseMirror {
+          .${editorId} .ProseMirror {
             min-height: ${toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight)};
             outline: none;
             padding: 0;
             line-height: 1.5;
           }
           
-          .ProseMirror:focus {
+          .${editorId} .ProseMirror:focus {
             outline: none;
             box-shadow: none;
           }
           
-          .ProseMirror p {
+          .${editorId} .ProseMirror p {
             margin: 0;
             padding: 0;
           }
           
-          .ProseMirror p:first-child {
+          .${editorId} .ProseMirror p:first-child {
             margin-top: 0;
           }
           
-          .ProseMirror p:last-child {
+          .${editorId} .ProseMirror p:last-child {
             margin-bottom: 0;
           }
           
           /* Placeholder for truly empty editor */
-          .ProseMirror.is-editor-empty:before {
+          .${editorId} .ProseMirror.is-editor-empty:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -853,7 +857,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           }
           
           /* Placeholder for editor with just empty paragraph */
-          .ProseMirror p:first-child:last-child:empty:before {
+          .${editorId} .ProseMirror p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -866,15 +870,15 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           
           /* Static toolbar mode specific styles */
           ${toolbarMode === 'static' ? `
-            .ProseMirror.is-editor-empty:before,
-            .ProseMirror p:first-child:last-child:empty:before {
+            .${editorId} .ProseMirror.is-editor-empty:before,
+            .${editorId} .ProseMirror p:first-child:last-child:empty:before {
               display: none !important;
             }
           ` : ''}
           
           /* Override any prose styles for placeholder */
-          .prose .ProseMirror.is-editor-empty:before,
-          .prose .ProseMirror p:first-child:last-child:empty:before {
+          .prose .${editorId} .ProseMirror.is-editor-empty:before,
+          .prose .${editorId} .ProseMirror p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             margin: 0 !important;
             padding: 0 !important;
