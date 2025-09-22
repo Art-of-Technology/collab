@@ -73,7 +73,7 @@ interface Issue {
 
 interface ListViewRendererProps {
   view: any;
-  issues: any[];
+  issues: Issue[];
   workspace: any;
   currentUser: any;
   activeFilters?: Record<string, string[]>;
@@ -83,12 +83,16 @@ interface ListViewRendererProps {
   showSubIssues?: boolean;
 }
 
+const DEFAULT_STATUS_DISPLAY_NAME = 'Todo';
+const INDENTATION_PER_LEVEL = 16;
+const MAX_INDENTATION_PX = 64;
+
 // Status normalization map - same as kanban to avoid duplicate columns
 const STATUS_NORMALIZATION_MAP: Record<string, string> = {
-  'todo': 'Todo',
-  'to do': 'Todo',
-  'to_do': 'Todo',
-  'ready': 'Todo',
+  'todo': DEFAULT_STATUS_DISPLAY_NAME,
+  'to do': DEFAULT_STATUS_DISPLAY_NAME,
+  'to_do': DEFAULT_STATUS_DISPLAY_NAME,
+  'ready': DEFAULT_STATUS_DISPLAY_NAME,
   'backlog': 'Backlog',
   'in progress': 'In Progress',
   'in_progress': 'In Progress',
@@ -118,7 +122,7 @@ const STATUS_NORMALIZATION_MAP: Record<string, string> = {
 };
 
 const normalizeStatus = (status: string): string => {
-  if (!status) return 'Todo';
+  if (!status) return DEFAULT_STATUS_DISPLAY_NAME;
   const normalized = STATUS_NORMALIZATION_MAP[status.toLowerCase()];
   return normalized || status;
 };
@@ -163,10 +167,27 @@ export default function ListViewRenderer({
 
 
 
+  const resolveSubIssues = useCallback((issue: Issue): Issue[] => {
+    if (!displaySettings.showSubIssues) {
+      return [];
+    }
+
+    if (Array.isArray(issue.children)) {
+      return issue.children;
+    }
+
+    if (Array.isArray(issue.subtasks)) {
+      return issue.subtasks;
+    }
+
+    return [];
+  }, [displaySettings.showSubIssues]);
+
   // Filter and group issues
   const groupedIssues = useMemo(() => {
-    let filtered = [...issues];
-    
+    let filtered: Issue[] = [...issues];
+    const childIssueIds = new Set<string>();
+
     // Apply filters
     if (selectedFilters.assignees.length > 0) {
       filtered = filtered.filter(issue => {
@@ -180,7 +201,7 @@ export default function ListViewRenderer({
         if (!issue.labels || issue.labels.length === 0) {
           return selectedFilters.labels.includes('no-labels');
         }
-        return issue.labels.some((label: any) => 
+        return issue.labels.some((label) =>
           selectedFilters.labels.includes(label.id)
         );
       });
@@ -214,7 +235,7 @@ export default function ListViewRenderer({
             groupKey = issue.projectStatus.name;
             groupName = issue.projectStatus.displayName || issue.projectStatus.name;
           } else {
-            groupKey = normalizeStatus(issue.statusValue || issue.status || 'Todo');
+            groupKey = normalizeStatus(issue.statusValue || issue.status || DEFAULT_STATUS_DISPLAY_NAME);
             groupName = groupKey;
           }
           break;
@@ -247,6 +268,29 @@ export default function ListViewRenderer({
       groups.get(groupKey)!.count++;
     });
 
+    if (displaySettings.showSubIssues) {
+      const collectChildIds = (items: Issue[]) => {
+        items.forEach((child) => {
+          if (!child || !child.id) {
+            return;
+          }
+
+          childIssueIds.add(child.id);
+          const nestedChildren = resolveSubIssues(child);
+          if (nestedChildren.length > 0) {
+            collectChildIds(nestedChildren);
+          }
+        });
+      };
+
+      filtered.forEach((issue) => {
+        const subItems = resolveSubIssues(issue);
+        if (subItems.length > 0) {
+          collectChildIds(subItems);
+        }
+      });
+    }
+
     // Sort issues within each group
     groups.forEach(group => {
       group.issues.sort((a, b) => {
@@ -270,10 +314,15 @@ export default function ListViewRenderer({
             return a.title.localeCompare(b.title);
         }
       });
+
+      if (displaySettings.showSubIssues && childIssueIds.size > 0) {
+        group.issues = group.issues.filter(issue => !childIssueIds.has(issue.id));
+        group.count = group.issues.length;
+      }
     });
-    
+
     return Array.from(groups.values());
-  }, [issues, selectedFilters, displaySettings]);
+  }, [issues, selectedFilters, displaySettings, resolveSubIssues]);
 
   // Handlers
   const handleIssueClick = (issueIdOrKey: string) => {
@@ -404,18 +453,13 @@ export default function ListViewRenderer({
 
   // Issue Row Component - Mobile-first responsive design with hierarchical support
   const IssueRow = ({ issue, level = 0 }: { issue: Issue; level?: number }) => {
-    const statusValue = issue.projectStatus?.displayName || issue.status || issue.statusValue || 'Todo';
-    const subItems = displaySettings.showSubIssues
-      ? (Array.isArray(issue.children)
-        ? issue.children
-        : Array.isArray(issue.subtasks)
-          ? issue.subtasks
-          : [])
-      : [];
+    const statusValue = issue.projectStatus?.displayName || issue.status || issue.statusValue || DEFAULT_STATUS_DISPLAY_NAME;
+    const subItems = resolveSubIssues(issue);
     const hasSubIssues = subItems.length > 0;
     const isExpanded = hasSubIssues && expandedIssues.has(issue.id);
     const subIssueCount = hasSubIssues ? subItems.length : issue._count?.children || 0;
-    const indentationStyle = level > 0 ? { paddingLeft: `${Math.min(level * 16, 64)}px` } : undefined;
+    const indentation = Math.min(level * INDENTATION_PER_LEVEL, MAX_INDENTATION_PX);
+    const indentationStyle = level > 0 ? { paddingLeft: `${indentation}px` } : undefined;
 
     const handleExpandClick = (event: MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -716,13 +760,7 @@ export default function ListViewRenderer({
   };
 
   const renderIssueRow = (issue: Issue, level = 0): JSX.Element[] => {
-    const subItems = displaySettings.showSubIssues
-      ? (Array.isArray(issue.children)
-        ? issue.children
-        : Array.isArray(issue.subtasks)
-          ? issue.subtasks
-          : [])
-      : [];
+    const subItems = resolveSubIssues(issue);
     const hasSubIssues = subItems.length > 0;
     const isExpanded = hasSubIssues && expandedIssues.has(issue.id);
 
@@ -732,7 +770,7 @@ export default function ListViewRenderer({
 
     if (hasSubIssues && isExpanded) {
       subItems.forEach((subIssue) => {
-        rows.push(...renderIssueRow(subIssue as Issue, level + 1));
+        rows.push(...renderIssueRow(subIssue, level + 1));
       });
     }
 

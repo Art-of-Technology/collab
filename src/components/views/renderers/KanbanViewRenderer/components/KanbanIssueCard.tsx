@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable } from "@hello-pangea/dnd";
-import type { KanbanIssueCardProps } from '../types';
+import type { KanbanIssueCardProps, KanbanIssue } from '../types';
 import { format } from 'date-fns';
 import { getStatusBadgeStyle } from '@/components/issue/sections/relations/utils/relationHelpers';
 
@@ -32,12 +32,14 @@ const getTypeColor = (type: string) => {
 const getPriorityColor = (priority: string) => {
   const colors = {
     'URGENT': '#ef4444',
-    'HIGH': '#f97316', 
+    'HIGH': '#f97316',
     'MEDIUM': '#eab308',
     'LOW': '#22c55e'
   };
   return colors[priority as keyof typeof colors] || '#6b7280';
 };
+
+const DEFAULT_STATUS_DISPLAY_NAME = 'Todo';
 
 const KanbanIssueCard = React.memo(({
   issue,
@@ -56,7 +58,7 @@ const KanbanIssueCard = React.memo(({
   const showCreated = displayProperties.includes('Created');
   const showUpdated = displayProperties.includes('Updated');
 
-  const subTasks = Array.isArray(issue.children)
+  const subTasks: KanbanIssue[] = Array.isArray(issue.children)
     ? issue.children
     : Array.isArray(issue.subtasks)
       ? issue.subtasks
@@ -81,7 +83,7 @@ const KanbanIssueCard = React.memo(({
     setIsExpanded(prev => !prev);
   }, [hasSubTasks]);
 
-  const handleSubtaskClick = useCallback((subtask: any, event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleSubtaskClick = useCallback((subtask: KanbanIssue, event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     const keyOrId = subtask.issueKey || subtask.id;
@@ -267,8 +269,8 @@ const KanbanIssueCard = React.memo(({
 
             {hasSubTasks && isExpanded && (
               <ul className="mt-3 space-y-2 border-l border-[#1f1f1f] pl-3">
-                {subTasks.map((subtask: any) => {
-                  const statusLabel = subtask.projectStatus?.displayName || subtask.status || subtask.statusValue || 'Todo';
+                {subTasks.map((subtask) => {
+                  const statusLabel = subtask.projectStatus?.displayName || subtask.status || subtask.statusValue || DEFAULT_STATUS_DISPLAY_NAME;
 
                   return (
                     <li
