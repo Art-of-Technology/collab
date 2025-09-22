@@ -21,7 +21,7 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
@@ -1040,7 +1040,7 @@ export default function ViewRenderer({
         }
         search={
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-[#666]" />
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground z-10" />
             <Input
               placeholder="Search issues..."
               value={searchQuery}
