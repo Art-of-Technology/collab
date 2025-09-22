@@ -791,7 +791,7 @@ export function IssueDetailContent({
         actions={
           <div className="flex items-center gap-2">
             {/* Time tracking controls - Only show if time tracking is enabled */}
-            {settings?.timeTrackingEnabled && (
+            {false && (
               <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm mr-2">
                 {currentPlayState === "stopped" && (
                   <Button
@@ -852,9 +852,9 @@ export function IssueDetailContent({
                     <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
                   </div>
                 ) : totalPlayTime ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime?.formattedTime}`}>
                     <Clock className="h-3.5 w-3.5" />
-                    <span>{totalPlayTime.formattedTime}</span>
+                    <span>{totalPlayTime?.formattedTime}</span>
                   </div>
                 ) : (
                   <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import * as BoardItemActivityService from "@/lib/board-item-activity-service";
+import { isIssueKey } from "@/lib/shared-issue-key-utils";
+import { NotificationService } from "@/lib/notification-service";
 
 // POST /api/issues/[issueId]/request-help - Request to help with an issue
 export async function POST(
@@ -17,8 +19,7 @@ export async function POST(
     const { issueId } = await params;
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ 
           where: { issueKey: issueId }, 
           include: { 

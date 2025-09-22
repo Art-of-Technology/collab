@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -16,8 +17,7 @@ export async function GET(
     const { issueId } = await params;
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
       : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
 
@@ -91,8 +91,7 @@ export async function POST(
     }
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ where: { issueKey: issueId } })
       : await prisma.issue.findUnique({ where: { id: issueId } });
 
