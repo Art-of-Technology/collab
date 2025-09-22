@@ -258,7 +258,7 @@ export const useKanbanState = ({
 
       // Compute neighbor context using currently rendered order
       const items = targetColumn.issues.filter((i: any) => i.id !== draggableId);
-      const destIndex = isSameColumn && destination.index > source.index ? destination.index - 1 : destination.index;
+      const destIndex = destination.index;
       const getPos = (it: any) => (it?.viewPosition ?? it?.position ?? 0);
       const prev = destIndex > 0 ? items[destIndex - 1] : undefined;
       const next = destIndex < items.length ? items[destIndex] : undefined;
