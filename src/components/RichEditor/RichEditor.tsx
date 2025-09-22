@@ -74,6 +74,21 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
+  // Guard to prevent onUpdate → onChange → setContent recursion
+  const isExternalUpdateRef = useRef(false);
+  // Guard to suppress transient checks during mention insertion
+  const isInsertingMentionRef = useRef(false);
+  
+  // Helper to release guards on the next tick after ProseMirror updates
+  const releaseMentionGuardsNextTick = () => {
+    setTimeout(() => {
+      isInsertingMentionRef.current = false;
+      isExternalUpdateRef.current = false;
+    }, 0);
+  };
+  
+  // Generate unique ID for this editor instance to avoid CSS conflicts
+  const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
   
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
@@ -233,16 +248,23 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       },
     },
     onUpdate: ({ editor }) => {
+      // Always compute current content
       const html = editor.getHTML();
       const text = editor.getText();
-      onChange?.(html, text);
-      
+
+      // Avoid feedback loops when we programmatically set content or insert mentions
+      if (!isExternalUpdateRef.current) {
+        onChange?.(html, text);
+      }
+
       // Check if editor is really empty (including just <p></p> or <p><br></p>)
       const isContentEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
       setIsEmpty(isContentEmpty);
       
       // Check for mention triggers
-      checkForMentionTrigger();
+      if (!isInsertingMentionRef.current) {
+        checkForMentionTrigger();
+      }
       
       // Call external update callback
       onUpdate?.(editor);
@@ -342,6 +364,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const label = user.name || user.email || 'Unknown User';
       
       // Use the insertMention utility
+      isInsertingMentionRef.current = true;
+      isExternalUpdateRef.current = true;
       insertMention(
         editor,
         {
@@ -353,6 +377,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         from,
         trigger.char
       );
+      // Release guards on next tick after ProseMirror updates
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -370,6 +396,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const title = issue.title || label;
       const type = issue.type || 'TASK';
       
+      isInsertingMentionRef.current = true;
+      isExternalUpdateRef.current = true;
       insertMention(
         editor,
         {
@@ -382,6 +410,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         from,
         trigger.char
       );
+      // Release guards on next tick after ProseMirror updates
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -569,8 +599,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
       if (value !== currentContent) {
+        // Prevent update feedback loop when syncing external value
+        isExternalUpdateRef.current = true;
         setTimeout(() => {
           editor.commands.setContent(value || '');
+          // Release guard after ProseMirror processes this transaction
+          setTimeout(() => {
+            isExternalUpdateRef.current = false;
+          }, 0);
         }, 0);
       }
     }
@@ -698,7 +734,13 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     focus: () => editor?.commands.focus(),
     getHTML: () => editor?.getHTML() || '',
     getText: () => editor?.getText() || '',
-    setContent: (content: string) => editor?.commands.setContent(content),
+    setContent: (content: string) => {
+      isExternalUpdateRef.current = true;
+      editor?.commands.setContent(content);
+      setTimeout(() => {
+        isExternalUpdateRef.current = false;
+      }, 0);
+    },
     insertText: (text: string) => editor?.commands.insertContent(text),
     clear: () => editor?.commands.clearContent(),
     getEditor: () => editor,
@@ -737,11 +779,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         className={cn(
           "relative cursor-text flex-1", 
           toolbarMode === 'static' ? "p-0" : "",
-          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : ""
+          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : "",
+          editorId // Add unique class for scoped CSS
         )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
-        onKeyDown={onKeyDown}
         style={{ 
           minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
           maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined
@@ -752,9 +794,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           <div 
             className="absolute pointer-events-none text-[#6e7681] text-sm z-0"
             style={{ 
-              // In static mode, offset by the container's p-3 padding (12px)
-              top: toolbarMode === 'static' ? '0' : '0',
-              left: toolbarMode === 'static' ? '0' : '0',
+              // In static mode, offset by the container's p-2 padding (8px)
+              top: toolbarMode === 'static' ? '8px' : '0',
+              left: toolbarMode === 'static' ? '8px' : '0',
               lineHeight: '1.5',
               fontSize: '14px'
             }}
@@ -771,39 +813,39 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           )}
           style={{ 
             minHeight: toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight),
-            padding: toolbarMode === 'static' ? '0' : '0' // Remove any default padding
+            padding: toolbarMode === 'static' ? '8px' : '0' // Remove any default padding
           }}
         />
 
-        {/* Global CSS for TipTap styling */}
+        {/* Scoped CSS for this TipTap editor instance */}
         <style jsx global>{`
-          .ProseMirror {
+          .${editorId} .ProseMirror {
             min-height: ${toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight)};
             outline: none;
             padding: 0;
             line-height: 1.5;
           }
           
-          .ProseMirror:focus {
+          .${editorId} .ProseMirror:focus {
             outline: none;
             box-shadow: none;
           }
           
-          .ProseMirror p {
+          .${editorId} .ProseMirror p {
             margin: 0;
             padding: 0;
           }
           
-          .ProseMirror p:first-child {
+          .${editorId} .ProseMirror p:first-child {
             margin-top: 0;
           }
           
-          .ProseMirror p:last-child {
+          .${editorId} .ProseMirror p:last-child {
             margin-bottom: 0;
           }
           
           /* Placeholder for truly empty editor */
-          .ProseMirror.is-editor-empty:before {
+          .${editorId} .ProseMirror.is-editor-empty:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -815,7 +857,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           }
           
           /* Placeholder for editor with just empty paragraph */
-          .ProseMirror p:first-child:last-child:empty:before {
+          .${editorId} .ProseMirror p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -828,15 +870,15 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           
           /* Static toolbar mode specific styles */
           ${toolbarMode === 'static' ? `
-            .ProseMirror.is-editor-empty:before,
-            .ProseMirror p:first-child:last-child:empty:before {
+            .${editorId} .ProseMirror.is-editor-empty:before,
+            .${editorId} .ProseMirror p:first-child:last-child:empty:before {
               display: none !important;
             }
           ` : ''}
           
           /* Override any prose styles for placeholder */
-          .prose .ProseMirror.is-editor-empty:before,
-          .prose .ProseMirror p:first-child:last-child:empty:before {
+          .prose .${editorId} .ProseMirror.is-editor-empty:before,
+          .prose .${editorId} .ProseMirror p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             margin: 0 !important;
             padding: 0 !important;

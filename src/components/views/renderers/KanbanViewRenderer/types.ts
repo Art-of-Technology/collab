@@ -59,9 +59,9 @@ export interface KanbanViewRendererProps {
   currentUser: any;
   activeFilters?: Record<string, string[]>;
   setActiveFilters?: (filters: Record<string, string[]>) => void;
-  onIssueUpdate?: (issueId: string, updates: any) => void;
   onColumnUpdate?: (columnId: string, updates: any) => void;
   onCreateIssue?: (columnId: string, issueData: any) => void;
+  onOrderingChange?: (ordering: string) => void;
 }
 
 
@@ -93,13 +93,12 @@ export interface KanbanState {
 
 export interface KanbanColumnProps {
   column: Column;
+  issues: any[];
   index: number;
   groupField: string;
   displayProperties: string[];
   isCreatingIssue: boolean;
   newIssueTitle: string;
-  editingColumnId: string | null;
-  newColumnName: string;
   projects: Array<{
     id: string;
     name: string;
@@ -141,8 +140,6 @@ export interface KanbanBoardProps {
   groupField: string;
   isCreatingIssue: string | null;
   newIssueTitle: string;
-  editingColumnId: string | null;
-  newColumnName: string;
   projects: Array<{
     id: string;
     name: string;

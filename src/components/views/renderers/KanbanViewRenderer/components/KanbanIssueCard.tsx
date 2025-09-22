@@ -8,7 +8,10 @@ import {
   ChevronDown,
   ChevronRight,
   User,
-  Circle
+  ArrowDown,
+  Minus,
+  ArrowUp,
+  Flag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable } from "@hello-pangea/dnd";
@@ -40,6 +43,7 @@ const getPriorityColor = (priority: string) => {
 };
 
 const DEFAULT_STATUS_DISPLAY_NAME = 'Todo';
+
 
 const KanbanIssueCard = React.memo(({
   issue,
@@ -100,7 +104,7 @@ const KanbanIssueCard = React.memo(({
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-all duration-150 cursor-pointer",
+            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-colors duration-150 cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
           onClick={handleCardClick}
@@ -121,10 +125,11 @@ const KanbanIssueCard = React.memo(({
               
               {/* Priority Indicator - Only show if enabled and not medium */}
               {showPriority && issue.priority && issue.priority !== 'MEDIUM' && (
-                <div 
-                  className="h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: getPriorityColor(issue.priority) }}
-                />
+                <>              
+                {issue.priority === 'URGENT' && <Flag className="h-3 w-3 text-red-600" />}
+                {issue.priority === 'HIGH' && <ArrowUp className="h-3 w-3 text-amber-600" />}
+                {issue.priority === 'LOW' && <ArrowDown className="h-3 w-3 text-slate-500" />}
+                </>
               )}
             </div>
             

@@ -15,7 +15,12 @@ interface ViewPositionsResponse {
 }
 
 async function fetchViewPositions(viewId: string): Promise<ViewPositionsResponse> {
-  const response = await fetch(`/api/views/${viewId}/issue-positions`);
+  const response = await fetch(`/api/views/${viewId}/issue-positions`, {
+    cache: 'no-store',
+    headers: {
+      'cache-control': 'no-store'
+    }
+  });
   
   if (!response.ok) {
     throw new Error('Failed to fetch view positions');
@@ -29,9 +34,13 @@ export function useViewPositions(viewId: string, enabled: boolean = true) {
     queryKey: ['viewPositions', viewId],
     queryFn: () => fetchViewPositions(viewId),
     enabled: enabled && !!viewId,
-    staleTime: 5000, // 5 seconds - balance between freshness and performance
+    // No caching: always stale and clear immediately
+    staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnReconnect: true,
+    refetchOnMount: 'always',
+    retry: false,
   });
 }
 
@@ -40,22 +49,14 @@ export function mergeIssuesWithViewPositions(
   issues: any[], 
   positions: ViewIssuePosition[] = []
 ): any[] {
-  const positionMap = new Map<string, number>();
-  
-  // Create a map of issueId -> position for the current column/status
-  positions.forEach(pos => {
-    const key = `${pos.issueId}_${pos.columnId}`;
-    positionMap.set(key, pos.position);
-  });
-  
-  return issues.map(issue => {
-    const currentStatus = issue.projectStatus?.name || issue.statusValue || issue.status || 'todo';
-    const positionKey = `${issue.id}_${currentStatus}`;
-    const viewPosition = positionMap.get(positionKey);
-    
-    return {
-      ...issue,
-      viewPosition: viewPosition
-    };
-  });
+  // Create a lookup map of issueId -> position for O(n + m) merging
+  const positionByIssueId = new Map<string, number>();
+  for (const pos of positions) {
+    positionByIssueId.set(pos.issueId, pos.position);
+  }
+
+  return issues.map((issue) => ({
+    ...issue,
+    viewPosition: positionByIssueId.get(issue.id)
+  }));
 }

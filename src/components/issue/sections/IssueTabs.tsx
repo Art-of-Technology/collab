@@ -6,8 +6,6 @@ import { IssueHelpersSection } from "./IssueHelpersSection";
 import { IssueWorkSessions } from "./IssueWorkSessions";
 import { IssueActivity } from "./IssueActivity";
 import { IssueRelationsSection } from "./IssueRelationsSection";
-
-import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import type { IssueComment } from "@/types/issue";
 
 interface IssueTabsProps {
@@ -25,13 +23,11 @@ export function IssueTabs({
   workspaceId,
   onRefresh,
 }: IssueTabsProps) {
-  const { settings } = useWorkspaceSettings();
-
   // Determine which tabs to show based on issue type and settings
   // Always show the Time tab; the inner content will display an informative
   // message when time tracking is disabled for the workspace.
-  const showSessions = true;
-  const showHelpers = true; // Show helpers for all issues
+  const showSessions = false;
+  const showHelpers = false; // Show helpers for all issues
   const showRelations = true; // Show relations for all issues
 
   // Calculate grid columns dynamically - Relations is now first (no comments)
