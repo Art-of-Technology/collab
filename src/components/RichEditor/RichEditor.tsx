@@ -739,7 +739,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       <div 
         className={cn(
           "relative cursor-text flex-1", 
-          toolbarMode === 'static' ? "0" : "",
+          toolbarMode === 'static' ? "p-0" : "",
           maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : "",
           editorId // Add unique class for scoped CSS
         )} 
