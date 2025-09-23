@@ -202,7 +202,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             checkForMentionTrigger();
           }, 0);
         }
-        
+
         // Update mention position while typing (check for any printable character or backspace)
         if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
           setTimeout(() => {
@@ -257,12 +257,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       // Check if editor is really empty (including just <p></p> or <p><br></p>)
       const isContentEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
       setIsEmpty(isContentEmpty);
-      
+
       // Check for mention triggers
       if (!isInsertingMentionRef.current) {
         checkForMentionTrigger();
       }
-      
+
       // Call external update callback
       onUpdate?.(editor);
     },
@@ -307,9 +307,17 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
 
 
-  // Mention trigger check
+  // Mention trigger check with safeguards against infinite loops
   const checkForMentionTrigger = useCallback(() => {
-    if (!editor || !editorRef.current) return;
+    // Early return with safety checks
+    if (!editor || !editorRef.current) {
+      return;
+    }
+
+    // Check if we're currently inserting a mention to avoid recursive calls
+    if (isInsertingMentionRef.current) {
+      return;
+    }
 
     const { from } = editor.state.selection;
     const trigger = findMentionTrigger(editor, from);
@@ -318,10 +326,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       // Use current cursor position (from), not trigger position
       const position = getCaretPosition(editor, from);
       const editorRect = editorRef.current.getBoundingClientRect();
-      
+
       // Improved bounds checking for right-side positioning
       let adjustedLeft = position.left;
-      
+
       // If popup would go off the right edge, position it to the left of cursor instead
       if (position.left + 320 > editorRect.width) {
         // Get cursor position again but for left side
@@ -333,12 +341,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           adjustedLeft = Math.max(5, position.left - 340);
         }
       }
-      
+
       const adjustedPosition = {
         top: Math.max(5, Math.min(position.top, editorRect.height - 200)), // Prevent vertical overflow
         left: adjustedLeft
       };
-      
+
       setMentionSuggestion({
         position: adjustedPosition,
         query: trigger.query,
@@ -436,104 +444,76 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
   const applyImprovedText = useCallback(() => {
     if (!editor || !improvedText || !savedSelection) {
-      console.log('applyImprovedText: Missing required data', { 
-        hasEditor: !!editor, 
-        hasImprovedText: !!improvedText, 
-        hasSavedSelection: !!savedSelection 
-      });
       return;
     }
-    
+
     const { from, to, originalText } = savedSelection;
     try {
       // Get current document state
       const currentDoc = editor.state.doc;
       const currentDocLength = currentDoc.content.size;
-      
-      console.log('applyImprovedText: Document info', {
-        currentDocLength,
-        from,
-        to,
-        isValidRange: from >= 0 && to <= currentDocLength
-      });
-      
+
       // Try direct replacement first
       if (from >= 0 && to <= currentDocLength && from <= to) {
         const currentTextAtPosition = currentDoc.textBetween(from, to, ' ');
-        console.log('applyImprovedText: Text at saved position', { 
-          currentTextAtPosition, 
-          originalText,
-          matches: currentTextAtPosition === originalText 
-        });
-        
+
         // Try the replacement regardless of whether text matches exactly
         // This handles cases where formatting might affect comparison
-        console.log('applyImprovedText: Attempting replacement at saved positions');
-        
         const result = editor.chain()
           .focus()
           .setTextSelection({ from, to })
           .deleteSelection()
           .insertContent(improvedText)
           .run();
-          
-        console.log('applyImprovedText: Replacement result', result);
-        
+
         if (result) {
-          console.log('applyImprovedText: Direct replacement successful');
           setImprovedText(null);
           setShowImprovePopover(false);
           setSavedSelection(null);
           return;
         }
       }
-      
+
       // Fallback 1: Search for the original text in the document
-      console.log('applyImprovedText: Direct replacement failed, searching for text');
       const fullText = editor.getText();
       const originalTextIndex = fullText.indexOf(originalText);
-      
+
       if (originalTextIndex !== -1) {
-        console.log('applyImprovedText: Found original text at index', originalTextIndex);
-        
         // Calculate character positions in the document
         // This is a simplified approach - for complex docs we'd need more sophisticated position mapping
         let charCount = 0;
         let foundFrom = -1;
         let foundTo = -1;
-        
+
         // Walk through the document to find the correct positions
         currentDoc.descendants((node, pos) => {
           if (node.isText) {
             const nodeText = node.text || '';
             const nodeStart = charCount;
             const nodeEnd = charCount + nodeText.length;
-            
+
             if (originalTextIndex >= nodeStart && originalTextIndex < nodeEnd) {
               foundFrom = pos + (originalTextIndex - nodeStart);
               foundTo = foundFrom + originalText.length;
               return false; // Stop traversing
             }
-            
+
             charCount += nodeText.length;
           } else if (node.isBlock) {
             charCount += 1; // Add space for block breaks
           }
           return true;
         });
-        
+
         if (foundFrom !== -1 && foundTo !== -1) {
-          console.log('applyImprovedText: Found positions', { foundFrom, foundTo });
-          
           const result = editor.chain()
             .focus()
             .setTextSelection({ from: foundFrom, to: foundTo })
             .deleteSelection()
             .insertContent(improvedText)
             .run();
-            
+
           if (result) {
-            console.log('applyImprovedText: Search-based replacement successful');
             setImprovedText(null);
             setShowImprovePopover(false);
             setSavedSelection(null);
@@ -541,40 +521,32 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           }
         }
       }
-      
+
       // Fallback 2: Replace current selection if any
-      console.log('applyImprovedText: Using current selection fallback');
       const { from: currentFrom, to: currentTo } = editor.state.selection;
-      
+
       if (currentFrom !== currentTo) {
-        console.log('applyImprovedText: Replacing current selection');
         editor.chain()
           .focus()
           .deleteSelection()
           .insertContent(improvedText)
           .run();
       } else {
-        console.log('applyImprovedText: Inserting at cursor position');
         editor.chain()
           .focus()
           .insertContent(improvedText)
           .run();
       }
-      
-      console.log('applyImprovedText: Fallback replacement completed');
-      
+
     } catch (error) {
-      console.error('applyImprovedText: Error during replacement', error);
-      
       // Final fallback: just insert the text
       try {
         editor.chain()
           .focus()
           .insertContent(improvedText)
           .run();
-        console.log('applyImprovedText: Final fallback successful');
       } catch (finalError) {
-        console.error('applyImprovedText: All replacement methods failed', finalError);
+        // Silent fallback - don't log errors
       }
     }
     

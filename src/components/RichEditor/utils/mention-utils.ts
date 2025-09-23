@@ -26,26 +26,50 @@ export function findMentionTrigger(
     if (node.isText) {
       const nodeText = node.textContent || '';
       let searchFromIndex = currentPosition - pos - 1;
-      
+
       // Check for trigger characters: @ for users, # for issues
       const triggers = ['@', '#'];
-      
+
       for (const trigger of triggers) {
+        // Track processed positions to avoid infinite loops
+        const processedPositions = new Set<number>();
         let relativeTriggerPos = nodeText.lastIndexOf(trigger, searchFromIndex);
-        
-        while (relativeTriggerPos !== -1) {
+        let iterationCount = 0;
+        const maxIterations = 100; // Prevent infinite loops
+
+        while (relativeTriggerPos !== -1 && relativeTriggerPos >= 0 && iterationCount < maxIterations) {
+          iterationCount++;
           const absoluteTriggerPos = pos + relativeTriggerPos;
+
+          // Skip if we've already processed this position
+          if (processedPositions.has(absoluteTriggerPos)) {
+            break;
+          }
+
           if (absoluteTriggerPos >= searchLimit && absoluteTriggerPos < currentPosition) {
             textAfterTrigger = editor.state.doc.textBetween(absoluteTriggerPos + 1, currentPosition, "");
+
             // Only trigger if there's no whitespace immediately after trigger and no nested triggers
             if (!textAfterTrigger.match(/^\s/) && !triggers.some(t => textAfterTrigger.includes(t))) {
               triggerPosition = absoluteTriggerPos;
               triggerChar = trigger;
               return false;
+            } else {
+              // Mark this position as processed and skip it
+              processedPositions.add(absoluteTriggerPos);
+
+              // Search for the next occurrence before this position
+              const nextSearchIndex = Math.max(0, relativeTriggerPos - 1);
+              relativeTriggerPos = nodeText.lastIndexOf(trigger, nextSearchIndex);
+              continue; // Skip to next iteration
             }
+          } else {
+            break; // Break out of while loop if position is outside range
           }
-          searchFromIndex = relativeTriggerPos - 1;
-          relativeTriggerPos = nodeText.lastIndexOf(trigger, searchFromIndex);
+
+          // Only search for the next occurrence if we didn't find a valid trigger
+          const nextSearchIndex = Math.max(0, relativeTriggerPos - 1);
+          relativeTriggerPos = nodeText.lastIndexOf(trigger, nextSearchIndex);
         }
       }
     }
@@ -54,7 +78,7 @@ export function findMentionTrigger(
 
   if (triggerPosition !== -1) {
     const type = triggerChar === '@' ? 'user' : 'issue';
-    
+
     return {
       position: triggerPosition,
       char: triggerChar,
@@ -96,7 +120,7 @@ export function insertMention(
       // User mention - create proper node
       const safeLabel = mention.label || 'Unknown User';
       const safeId = mention.id || '';
-      
+
       editor
         .chain()
         .focus()
@@ -116,7 +140,7 @@ export function insertMention(
       const safeType = mention.type || 'TASK';
       const safeTitle = mention.title || '';
       const safeId = mention.id || '';
-      
+
       editor
         .chain()
         .focus()
