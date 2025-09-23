@@ -56,10 +56,8 @@ export function handleMentionKeyEvents(
     if (editor) {
       // Immediately close any open mention suggestions/popovers
       const mentionPopovers = editor.view.dom.querySelectorAll('[data-mention-suggestion], .mention-suggestion, .floating-menu');
-      mentionPopovers.forEach((popover: any) => {
-        if (popover.parentNode) {
-          popover.parentNode.removeChild(popover);
-        }
+      mentionPopovers.forEach(popover => {
+        popover.remove();
       });
 
       // Dispatch custom event to close any active mention suggestions across all components
