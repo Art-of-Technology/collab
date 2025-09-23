@@ -66,10 +66,6 @@ export function findMentionTrigger(
           } else {
             break; // Break out of while loop if position is outside range
           }
-
-          // Only search for the next occurrence if we didn't find a valid trigger
-          const nextSearchIndex = Math.max(0, relativeTriggerPos - 1);
-          relativeTriggerPos = nodeText.lastIndexOf(trigger, nextSearchIndex);
         }
       }
     }

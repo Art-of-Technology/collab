@@ -52,11 +52,11 @@ export function handleMentionKeyEvents(
 
   // Handle space key - IMMEDIATELY stop ALL mention processing
   if (event.key === ' ') {
-    const editor = (event.target as any)?.editor;
+    const editor = (event.target as EventTarget & { editor: Editor })?.editor;
     if (editor) {
       // Immediately close any open mention suggestions/popovers
       const mentionPopovers = editor.view.dom.querySelectorAll('[data-mention-suggestion], .mention-suggestion, .floating-menu');
-      mentionPopovers.forEach(popover => {
+      mentionPopovers.forEach((popover: any) => {
         if (popover.parentNode) {
           popover.parentNode.removeChild(popover);
         }
@@ -85,7 +85,7 @@ export function handleMentionKeyEvents(
 
   // Handle consecutive hash keys to prevent markdown confusion
   if (event.key === '#') {
-    const editor = (event.target as any)?.editor;
+    const editor = (event.target as EventTarget & { editor: Editor })?.editor;
     if (editor) {
       const { from } = editor.state.selection;
       const textBeforeCursor = editor.state.doc.textBetween(Math.max(0, from - 6), from, "");
