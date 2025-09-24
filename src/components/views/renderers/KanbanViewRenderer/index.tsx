@@ -22,9 +22,6 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
 
   const {
     // State
-    editingColumnId,
-    newColumnName,
-    setNewColumnName,
     isCreatingIssue,
     newIssueTitle,
     setNewIssueTitle,
@@ -44,14 +41,10 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     handleDragEnd,
     handleIssueClick,
     handleCreateIssue,
-    handleColumnEdit,
     handleToggleSubIssues,
     handleStartCreatingIssue,
     handleCancelCreatingIssue,
-    handleIssueKeyDown,
-    handleStartEditingColumn,
-    handleCancelEditingColumn,
-    handleColumnKeyDown
+    handleIssueKeyDown
   } = useKanbanState(props);
 
   return (
@@ -66,13 +59,11 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
           ) : (
           <KanbanBoard
             columns={columns}
-            issues={filteredIssues}
+            issues={issues}
             displayProperties={displayProperties}
             groupField={view.grouping?.field || 'status'}
             isCreatingIssue={isCreatingIssue}
             newIssueTitle={newIssueTitle}
-            editingColumnId={editingColumnId}
-            newColumnName={newColumnName}
             projects={view.projects || []}
             workspaceId={workspaceId || workspace?.id || ''}
             currentUserId={currentUserId || ''}
@@ -87,11 +78,6 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             onCancelCreatingIssue={handleCancelCreatingIssue}
             onIssueKeyDown={handleIssueKeyDown}
             onIssueInputChange={setNewIssueTitle}
-            onStartEditingColumn={handleStartEditingColumn}
-            onColumnEdit={handleColumnEdit}
-            onCancelEditingColumn={handleCancelEditingColumn}
-            onColumnKeyDown={handleColumnKeyDown}
-            onColumnNameChange={setNewColumnName}
             onIssueCreated={onIssueCreated || (() => {})}
           />
           )}

@@ -118,6 +118,12 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
       });
     }
 
+    // Get the newly created project statuses to use their IDs
+    const projectStatuses = await tx.projectStatus.findMany({
+      where: { projectId: project.id },
+      orderBy: { order: 'asc' }
+    });
+
     // 4. Create the Default View for the project
     const viewName = `${projectName} - Default View`;
     let finalViewSlug = "default-view";
@@ -152,7 +158,7 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
         workspaceIds: [workspace.id],
         visibility: 'PERSONAL',
         isDefault: true,
-        isFavorite: true,
+        isFavorite: false,
         filters: {},
         sorting: { 
           field: 'position', 
@@ -179,6 +185,13 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
     });
 
     // 5. Create a welcome task/issue to help user get started
+    // Use the first project status (usually 'todo' or 'backlog') for the welcome issue
+    const defaultProjectStatus = projectStatuses.find(status => status.isDefault) || projectStatuses[0];
+    
+    if (!defaultProjectStatus) {
+      throw new Error('No project statuses found. Cannot create welcome issue.');
+    }
+    
     const welcomeIssue = await tx.issue.create({
       data: {
         title: "Welcome to your personal workspace! 👋",
@@ -205,6 +218,7 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
         reporterId: userId,
         projectId: project.id,
         workspaceId: workspace.id,
+        statusId: defaultProjectStatus.id,
         issueKey: `${issuePrefix}-1`,
         position: 1000
       }

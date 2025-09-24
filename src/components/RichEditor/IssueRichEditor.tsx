@@ -14,9 +14,6 @@ import {
   Quote,
   Code,
   Minus,
-  Undo,
-  Redo,
-  History as HistoryIcon,
   X,
   ChevronRight,
   ArrowLeft,
@@ -30,16 +27,12 @@ import { createCollaborationUser } from '@/lib/collaboration/utils';
 import { useSession } from 'next-auth/react';
 import { useCurrentUser } from '@/hooks/queries/useUser';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DOMPurify from 'isomorphic-dompurify';
 import { cn } from '@/lib/utils';
 import { useIssueActivities } from '@/components/issue/sections/activity/hooks/useIssueActivities';
-import type { ActivityAction } from '@/lib/board-item-activity-service';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
-import { ActivityIcon } from '@/components/issue/sections/activity/components/ActivityIcon';
-import { getActionText } from '@/components/issue/sections/activity/utils/activityHelpers';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -126,7 +119,7 @@ const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
   },
 ];
 
-export function IssueRichEditor({
+export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorProps>(({
   value,
   onChange,
   placeholder = "Add description...",
@@ -141,8 +134,19 @@ export function IssueRichEditor({
   onKeyDown,
   collabDocumentId,
   issueId,
-}: IssueRichEditorProps) {
+}, ref) => {
   const editorRef = useRef<RichEditorRef>(null);
+  
+  // Expose the editor ref to parent component
+  React.useImperativeHandle(ref, () => ({
+    focus: () => editorRef.current?.focus(),
+    getHTML: () => editorRef.current?.getHTML() || '',
+    getText: () => editorRef.current?.getText() || '',
+    setContent: (content: string) => editorRef.current?.setContent(content),
+    insertText: (text: string) => editorRef.current?.insertText(text),
+    clear: () => editorRef.current?.clear(),
+    getEditor: () => editorRef.current?.getEditor(),
+  }), []);
   const containerRef = useRef<HTMLDivElement>(null);
   const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);
@@ -626,61 +630,6 @@ export function IssueRichEditor({
 
   return (
     <div ref={containerRef} className="relative">
-      {/* Mini-toolbar: Undo / Redo / History */}
-      {collabDocumentId && (
-        <div className="absolute top-2 right-2 z-50 flex items-center gap-1">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 hover:bg-white/10"
-                  onClick={() => editorRef.current?.getEditor()?.chain().focus().undo().run()}
-                  disabled={!(editorRef.current?.getEditor()?.can().undo())}
-                >
-                  <Undo className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-white/5 py-1 px-2 text-xs">Undo</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 hover:bg-white/10"
-                  onClick={() => editorRef.current?.getEditor()?.chain().focus().redo().run()}
-                  disabled={!(editorRef.current?.getEditor()?.can().redo())}
-                >
-                  <Redo className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-white/5 py-1 px-2 text-xs">Redo</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 hover:bg-white/10"
-                  onClick={() => {
-                    setIsHistoryOpen(true);
-                  }}
-                >
-                  <HistoryIcon className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-white/5 py-1 px-2 text-xs">History</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      )}
       <RichEditor
         key={collabDocumentId ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
         ref={editorRef}
@@ -705,7 +654,7 @@ export function IssueRichEditor({
         }}
         additionalExtensions={additionalExtensions}
         // Disable internal floating toolbar to avoid duplication; we'll render our own
-        toolbarMode="static"
+        toolbarMode="custom"
         showToolbar={false}
       />
 
@@ -811,7 +760,7 @@ export function IssueRichEditor({
                         maxHeight="none"
                         readOnly={true}
                         showToolbar={false}
-                        toolbarMode="static"
+                        toolbarMode="custom"
                       />
                     )}
                   </div>
@@ -906,4 +855,6 @@ export function IssueRichEditor({
 
     </div>
   );
-}
+});
+
+IssueRichEditor.displayName = 'IssueRichEditor';

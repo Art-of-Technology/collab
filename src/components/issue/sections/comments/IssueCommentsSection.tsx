@@ -46,7 +46,7 @@ export function IssueCommentsSection({
       {organizedComments.length === 0 ? (
         <EmptyCommentsState />
       ) : (
-        <div className="space-y-0.5 max-h-96 overflow-y-auto">
+        <div className="space-y-0.5">
           {organizedComments.map((comment) => (
             <CommentItem
               key={comment.id}

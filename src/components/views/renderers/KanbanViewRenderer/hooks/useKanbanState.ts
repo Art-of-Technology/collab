@@ -8,6 +8,7 @@ import { createColumns, countIssuesByType } from '../utils';
 import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
 import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
 import { useUpdateIssue } from '@/hooks/queries/useIssues';
+import { VIEW_POSITION_GAP } from '@/constants/viewPositions';
 import type { 
   KanbanViewRendererProps 
 } from '../types';
@@ -16,10 +17,10 @@ export const useKanbanState = ({
   view,
   issues,
   workspace,
-  onIssueUpdate,
   onColumnUpdate,
   onCreateIssue,
-  activeFilters
+  activeFilters,
+  onOrderingChange
 }: KanbanViewRendererProps) => {
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
@@ -27,8 +28,6 @@ export const useKanbanState = ({
   const updateIssueMutation = useUpdateIssue();
   
   // State management with optimistic updates
-  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
-  const [newColumnName, setNewColumnName] = useState('');
   const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
   const [newIssueTitle, setNewIssueTitle] = useState('');
   const [showSubIssues, setShowSubIssues] = useState(true);
@@ -39,6 +38,7 @@ export const useKanbanState = ({
   const [localIssues, setLocalIssues] = useState(issues);
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   const previousIssuesRef = useRef<any[] | null>(null);
+  const previousOrderingMethod = useRef<string | null>(null);
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
@@ -87,8 +87,8 @@ export const useKanbanState = ({
         allowedStatusNames = Array.from(namesSet);
       }
     }
-
-    const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames);
+    const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames, previousOrderingMethod.current);
+    previousOrderingMethod.current = view?.ordering || view?.sorting?.field || 'manual';
     if (localColumnOrder && view.grouping?.field === 'status') {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
       return baseColumns
@@ -145,10 +145,26 @@ export const useKanbanState = ({
   const handleDragStart = useCallback((start: any) => {
     isDraggingRef.current = true;
     if (start.type === 'issue') {
+      // Preserve current visual order when switching to manual by applying ephemeral positions
+      if ((view?.ordering || view?.sorting?.field) !== 'manual') {
+        const positionById = new Map<string, number>();
+        columns.forEach((col) => {
+          col.issues.forEach((it: any, idx: number) => {
+            positionById.set(it.id, (idx + 1) * VIEW_POSITION_GAP);
+          });
+        });
+        setLocalIssues((prev) => prev.map((it: any) => {
+          const pos = positionById.get(it.id);
+          if (pos !== undefined) {
+            return { ...it, viewPosition: pos, position: pos };
+          }
+          return it;
+        }));
+      }
       const issue = localIssues.find((i: any) => i.id === start.draggableId);
       setDraggedIssue(issue);
     }
-  }, [localIssues]);
+  }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
   const handleDragUpdate = useCallback((update: any) => {
     if (!update.destination) {
@@ -220,6 +236,11 @@ export const useKanbanState = ({
     }
 
     if (type === 'issue') {
+      // Immediately switch ordering to manual, but preserve existing visual order
+      if (typeof onOrderingChange === 'function' && (view?.ordering !== 'manual' && view?.sorting?.field !== 'manual')) {
+        onOrderingChange('manual');
+      }
+
       const isSameColumn = source.droppableId === destination.droppableId;
       const targetColumnId = isSameColumn ? source.droppableId : destination.droppableId;
 
@@ -233,19 +254,31 @@ export const useKanbanState = ({
       const targetColumn = columns.find(col => col.id === targetColumnId);
       if (!targetColumn) { isDraggingRef.current = false; return; }
 
-      // Build neighbor context and compute a middle position
+      // Compute neighbor context using currently rendered order
       const items = targetColumn.issues.filter((i: any) => i.id !== draggableId);
-      const destIndex = isSameColumn && destination.index > source.index ? destination.index - 1 : destination.index;
+      const destIndex = destination.index;
       const getPos = (it: any) => (it?.viewPosition ?? it?.position ?? 0);
       const prev = destIndex > 0 ? items[destIndex - 1] : undefined;
       const next = destIndex < items.length ? items[destIndex] : undefined;
-      const newPosition = prev && next
-        ? (getPos(prev) + getPos(next)) / 2
-        : prev
-          ? getPos(prev) + 1
-          : next
-            ? getPos(next) - 1
-            : 0;
+
+      let newPosition: number;
+
+      if (prev && next) {
+        const gap = getPos(next) - getPos(prev);
+        if (!Number.isFinite(gap) || gap <= 1) {
+          newPosition = getPos(prev) + 1; // temporary; will be replaced by reindexing
+        } else {
+          newPosition = getPos(prev) + Math.floor(gap / 2);
+        }
+      } else if (prev && !next) {
+        const prevPos = getPos(prev);
+        newPosition = Number.isFinite(prevPos) ? prevPos + VIEW_POSITION_GAP : VIEW_POSITION_GAP;
+      } else if (!prev && next) {
+        const nextPos = getPos(next);
+        newPosition = Number.isFinite(nextPos) ? nextPos - VIEW_POSITION_GAP : 0;
+      } else {
+        newPosition = VIEW_POSITION_GAP; // first item in empty column
+      }
 
       const updatedIssue: any = { ...newLocalIssues[issueIndex], viewPosition: newPosition, position: newPosition };
       if (!isSameColumn) {
@@ -255,23 +288,51 @@ export const useKanbanState = ({
           updatedIssue.projectStatus = { name: targetColumnId, displayName: targetColumn.name };
         }
       }
+
+      // Optimistically update UI
       newLocalIssues[issueIndex] = updatedIssue;
       setLocalIssues(newLocalIssues);
 
-      const requests: Promise<any>[] = [];
-      if (!isSameColumn) {
-        requests.push(updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue }));
-      }
-      requests.push(
-        fetch(`/api/views/${view.id}/issue-positions`, {
+      try {
+        // Persist in a safe order: status first (if changed), then positions
+        if (!isSameColumn) {
+          await updateIssueMutation.mutateAsync({ id: draggableId, status: updatedIssue.status, statusValue: updatedIssue.statusValue, skipInvalidate: true });
+        }
+
+        // Always reindex the destination column to assign deterministic positions
+        const finalItems = [...items];
+        finalItems.splice(destIndex, 0, updatedIssue);
+        const bulk = finalItems.map((it, idx) => ({ issueId: it.id, columnId: targetColumnId, position: (idx + 1) * VIEW_POSITION_GAP }));
+
+        // If moved across columns, also cleanup stale viewPosition assignments for moved issues
+        const cleanup = !isSameColumn
+          ? {
+              issueIds: bulk.map((b) => b.issueId),
+              keepColumnId: targetColumnId,
+            }
+          : undefined;
+
+        const res = await fetch(`/api/views/${view.id}/issue-positions`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issueId: draggableId, columnId: targetColumnId, position: newPosition })
-        })
-      );
-      Promise.all(requests).catch((err) => {
+          body: JSON.stringify(cleanup ? { bulk, cleanup } : { bulk })
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to persist positions: ${res.status}`);
+        }
+
+        // Reflect deterministic positions locally
+        const updatedMap = new Map<string, number>();
+        bulk.forEach((b) => updatedMap.set(b.issueId, b.position));
+        setLocalIssues((prevIssues) => prevIssues.map((it: any) => {
+          if (updatedMap.has(it.id)) {
+            const pos = updatedMap.get(it.id) as number;
+            return { ...it, viewPosition: pos, position: pos };
+          }
+          return it;
+        }));
+      } catch (err) {
         console.error('Failed to persist reorder:', err);
-        // Rollback on failure
         if (previousIssuesRef.current) {
           setLocalIssues(previousIssuesRef.current);
         }
@@ -280,9 +341,11 @@ export const useKanbanState = ({
           title: 'Reorder failed',
           description: 'Could not save new position. Restored previous order.'
         });
-      }).finally(() => {
+      } finally {
+        setDraggedIssue(null);
+        setHoverState({ canDrop: true, columnId: '' });
         isDraggingRef.current = false;
-      });
+      }
       return;
     }
     
@@ -290,7 +353,7 @@ export const useKanbanState = ({
     setDraggedIssue(null);
     setHoverState({ canDrop: true, columnId: '' });
     isDraggingRef.current = false;
-  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field]);
+  }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field, onOrderingChange, view?.ordering, view?.sorting?.field]);
 
   // Issue handlers
   const handleIssueClick = useCallback((issueIdOrKey: string) => {
@@ -335,14 +398,6 @@ export const useKanbanState = ({
     });
   }, [newIssueTitle, columns, onCreateIssue, toast]);
 
-  // Column handlers
-  const handleColumnEdit = useCallback((columnId: string, name: string) => {
-    if (onColumnUpdate) {
-      onColumnUpdate(columnId, { name });
-    }
-    setEditingColumnId(null);
-    setNewColumnName('');
-  }, [onColumnUpdate]);
 
   // Sub-issues toggle handler
   const handleToggleSubIssues = useCallback(() => {
@@ -373,29 +428,9 @@ export const useKanbanState = ({
     }
   }, [isCreatingIssue, handleCreateIssue, handleCancelCreatingIssue]);
 
-  const handleStartEditingColumn = useCallback((columnId: string, name: string) => {
-    setEditingColumnId(columnId);
-    setNewColumnName(name);
-  }, []);
-
-  const handleCancelEditingColumn = useCallback(() => {
-    setEditingColumnId(null);
-    setNewColumnName('');
-  }, []);
-
-  const handleColumnKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && editingColumnId) {
-      handleColumnEdit(editingColumnId, newColumnName);
-    } else if (e.key === 'Escape') {
-      handleCancelEditingColumn();
-    }
-  }, [editingColumnId, newColumnName, handleColumnEdit, handleCancelEditingColumn]);
 
   return {
     // State
-    editingColumnId,
-    newColumnName,
-    setNewColumnName,
     isCreatingIssue,
     newIssueTitle,
     setNewIssueTitle,
@@ -416,13 +451,9 @@ export const useKanbanState = ({
     handleDragEnd,
     handleIssueClick,
     handleCreateIssue,
-    handleColumnEdit,
     handleToggleSubIssues,
     handleStartCreatingIssue,
     handleCancelCreatingIssue,
-    handleIssueKeyDown,
-    handleStartEditingColumn,
-    handleCancelEditingColumn,
-    handleColumnKeyDown
+    handleIssueKeyDown
   };
 };

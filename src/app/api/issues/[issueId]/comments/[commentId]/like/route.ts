@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
 export async function POST(
   req: Request,
@@ -18,8 +19,7 @@ export async function POST(
     const commentId = _params.commentId;
     
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
       : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
 

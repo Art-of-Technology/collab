@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useCreateProject } from '@/hooks/queries/useProjects';
+import { isValidNewIssuePrefix } from '@/lib/shared-issue-key-utils';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -52,6 +53,8 @@ export default function CreateProjectModal({
     issuePrefix: '',
   });
   
+  const [prefixError, setPrefixError] = useState<string | null>(null);
+  
   const { toast } = useToast();
   const createProjectMutation = useCreateProject();
 
@@ -62,6 +65,17 @@ export default function CreateProjectModal({
       toast({
         title: 'Error',
         description: 'Project name is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate issue prefix if provided
+    if (formData.issuePrefix && !isValidNewIssuePrefix(formData.issuePrefix)) {
+      setPrefixError('Issue prefix must start with a letter and contain only letters and numbers (no spaces). Example: "SPAPR", "PROJ", "TEAM1"');
+      toast({
+        title: 'Error',
+        description: 'Invalid issue prefix format',
         variant: 'destructive'
       });
       return;
@@ -95,6 +109,7 @@ export default function CreateProjectModal({
         color: DEFAULT_COLORS[0],
         issuePrefix: '',
       });
+      setPrefixError(null);
       
     } catch (error) {
       console.error('Error creating project:', error);
@@ -111,23 +126,34 @@ export default function CreateProjectModal({
       ...prev,
       [field]: value
     }));
+    
+    // Clear prefix error when user starts typing
+    if (field === 'issuePrefix') {
+      setPrefixError(null);
+    }
   };
 
-  // Generate preview of what the prefix would be
+  // Generate preview of what the prefix would be (no spaces allowed)
   const generatePreviewPrefix = (projectName: string): string => {
     if (!projectName.trim()) return '';
     
     const baseName = projectName.trim().toUpperCase();
     
-    // Try different strategies (same as backend)
+    // Try different strategies (remove spaces and special characters)
     const strategies = [
-      baseName.substring(0, 3),
-      baseName.substring(0, 4),
+      // Remove spaces and take first 3-4 characters
+      baseName.replace(/[\s-_]+/g, '').substring(0, 3),
+      baseName.replace(/[\s-_]+/g, '').substring(0, 4),
+      // Take first letter of each word
       baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join('').substring(0, 4),
       baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join(''),
     ];
     
-    return strategies.find(prefix => prefix.length >= 2) || baseName.substring(0, 3);
+    // Return first valid strategy (letters/numbers only, starts with letter)
+    return strategies.find(prefix => 
+      prefix.length >= 2 && 
+      /^[A-Z][A-Z0-9]*$/.test(prefix)
+    ) || baseName.replace(/[\s-_]+/g, '').substring(0, 3);
   };
 
   const previewPrefix = !formData.issuePrefix && formData.name 
@@ -142,6 +168,7 @@ export default function CreateProjectModal({
       color: DEFAULT_COLORS[0],
       issuePrefix: '',
     });
+    setPrefixError(null);
     onClose();
   };
 
@@ -210,23 +237,36 @@ export default function CreateProjectModal({
               <div className="relative">
                 <Input
                   value={formData.issuePrefix}
-                  onChange={(e) => handleInputChange('issuePrefix', e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    // Convert to uppercase first, then remove spaces and special characters
+                    const cleanValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    handleInputChange('issuePrefix', cleanValue);
+                  }}
                   placeholder={previewPrefix || "Auto-generated from project name"}
-                  className="bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] placeholder:text-[#8b949e] focus:border-[#0969da] focus:ring-[#0969da]"
-                  maxLength={6}
+                  className={cn(
+                    "bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] placeholder:text-[#8b949e] focus:border-[#0969da] focus:ring-[#0969da]",
+                    prefixError && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                  )}
+                  maxLength={10}
                 />
-                {previewPrefix && !formData.issuePrefix && (
+                {previewPrefix && !formData.issuePrefix && !prefixError && (
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-[#666] pointer-events-none">
                     Preview: {previewPrefix}
                   </div>
                 )}
               </div>
-              <p className="text-xs text-[#8b949e] mt-1">
-                {previewPrefix && !formData.issuePrefix 
-                  ? `Will auto-generate as "${previewPrefix}" (e.g. ${previewPrefix}-T1)`
-                  : "Used to prefix issue keys (e.g. PROJ-T1). Leave empty for automatic generation."
-                }
-              </p>
+              {prefixError ? (
+                <p className="text-xs text-red-400 mt-1">
+                  {prefixError}
+                </p>
+              ) : (
+                <p className="text-xs text-[#8b949e] mt-1">
+                  {previewPrefix && !formData.issuePrefix 
+                    ? `Will auto-generate as "${previewPrefix}" (e.g. ${previewPrefix}-1)`
+                    : "Used to prefix issue keys (e.g. PROJ-1, TEAM-5). No spaces allowed. Leave empty for automatic generation."
+                  }
+                </p>
+              )}
             </div>
           </div>
 

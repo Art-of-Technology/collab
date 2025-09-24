@@ -2,6 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
+import SidebarProvider from "@/components/providers/SidebarProvider";
 
 export default async function CreateWorkspaceLayout({
   children,
@@ -17,10 +18,10 @@ export default async function CreateWorkspaceLayout({
 
   const pathname = "/create-workspace";
   return (
-    <>
-      <LayoutWithSidebar session={session} pathname={pathname}>
+    <SidebarProvider>
+      <LayoutWithSidebar pathname={pathname}>
         <div className="mx-auto w-full h-full">{children}</div>
       </LayoutWithSidebar>
-    </>
+    </SidebarProvider>
   );
 } 
