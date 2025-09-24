@@ -44,6 +44,9 @@ import {
 import { IssueTabs } from "./sections/IssueTabs";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
+import { EditorMiniToolbar } from "@/components/RichEditor/components/EditorMiniToolbar";
+import { EditorHistoryModal } from "@/components/RichEditor/components/EditorHistoryModal";
+import type { RichEditorRef } from "@/components/RichEditor/types";
 import { generateBackNavigationUrl } from "@/lib/navigation-helpers";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
@@ -123,6 +126,12 @@ export function IssueDetailContent({
   // Follow state
   const [isFollowingIssue, setIsFollowingIssue] = useState(false);
   const [isTogglingIssueFollow, setIsTogglingIssueFollow] = useState(false);
+
+  // Editor reference for mini toolbar
+  const editorRef = useRef<RichEditorRef>(null);
+
+  // History modal state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Time tracking utilities
   const canControlTimer = useMemo(() => {
@@ -458,6 +467,11 @@ export function IssueDetailContent({
     }
   }, [issue?.id, isFollowingIssue, isTogglingIssueFollow, toast]);
 
+  // Handle history modal
+  const handleHistoryClick = useCallback(() => {
+    setIsHistoryOpen(true);
+  }, []);
+
   // Build collaboration document id using workspace slug and issue key
   const collabDocumentId = issue?.issueKey && workspaceId
     ? `${workspaceId}.${issue.issueKey}.description`
@@ -529,7 +543,7 @@ export function IssueDetailContent({
   // Handle description change and detect changes
   const handleDescriptionChange = useCallback((newDescription: string) => {
     setDescription(newDescription);
-  }, [issue?.description]);
+  }, []);
 
   // AI Improve function for description editor
   const handleAiImprove = useCallback(async (text: string): Promise<string> => {
@@ -1091,9 +1105,10 @@ export function IssueDetailContent({
                 )}
               </div>
               
-              {/* Autosave status indicator */}
-              <div className="flex items-center gap-2 text-xs text-[#8b949e]">
-                <div className="flex items-center gap-2">
+              {/* Autosave status indicator and Editor Controls */}
+              <div className="flex items-center gap-4 text-xs text-[#8b949e]">
+                {/* Autosave Status */}
+                <div className="flex items-center gap-2 border-r border-[#21262d] pr-4">
                   {autosaveStatus === "idle" && (
                     <>
                       <span className="text-[#8b949e]">Autosave is active</span>
@@ -1129,6 +1144,13 @@ export function IssueDetailContent({
                     </>
                   )}
                 </div>
+                {/* Editor Mini Toolbar */}
+                {collabDocumentId && (
+                  <EditorMiniToolbar
+                    editorRef={editorRef}
+                    onHistoryClick={handleHistoryClick}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1141,6 +1163,7 @@ export function IssueDetailContent({
             <div className="w-full relative">
 
               <IssueRichEditor
+                ref={editorRef}
                 value={description}
                 onChange={handleDescriptionChange}
                 placeholder="Add a description..."
@@ -1241,6 +1264,15 @@ export function IssueDetailContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* History Modal */}
+      <EditorHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        collabDocumentId={collabDocumentId}
+        issueId={issue?.id}
+        editorRef={editorRef}
+      />
 
       {/* Autosave is always on; no unsaved changes modal */}
     </div>
