@@ -130,7 +130,6 @@ export default function ViewRenderer({
     setWorkspace,
     setCurrentUser
   } = useViewFilters();
-
   // Fetch all workspace projects for the project selector
   const { data: allProjects = [] } = useProjects({
     workspaceId: workspace.id,
@@ -423,8 +422,7 @@ export default function ViewRenderer({
 
   // Apply action filters first (async filtering)
   const { 
-    filteredIssues: actionFilteredIssues, 
-    isLoading: isActionFilterLoading 
+    filteredIssues: actionFilteredIssues
   } = useActionFilteredIssues({
     issues,
     actionFilters,
@@ -465,7 +463,7 @@ export default function ViewRenderer({
           return statusLower !== 'done' && 
                  statusLower !== 'backlog' && 
                  statusLower !== 'cancelled' &&
-                 statusLower !== 'todo'; // Todo items should be in backlog, not active
+                 statusLower !== 'to_do'; // Todo items should be in backlog, not active
         });
         break;
       case 'backlog':
@@ -473,7 +471,7 @@ export default function ViewRenderer({
           // Use projectStatus if available, otherwise fallback to legacy fields
           const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
           const statusLower = status.toLowerCase();
-          return statusLower === 'backlog' || statusLower === 'todo';
+          return statusLower === 'backlog' || statusLower === 'to_do';
         });
         break;
       default:
@@ -806,13 +804,13 @@ export default function ViewRenderer({
       // Use projectStatus if available, otherwise fallback to legacy fields
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
       const statusLower = status.toLowerCase();
-      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'todo';
+      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'to_do';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
       // Use projectStatus if available, otherwise fallback to legacy fields  
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
       const statusLower = status.toLowerCase();
-      return statusLower === 'backlog' || statusLower === 'todo';
+      return statusLower === 'backlog' || statusLower === 'to_do';
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
@@ -1164,13 +1162,14 @@ export default function ViewRenderer({
             {/* Badge-like selectors - wrap on mobile */}
             <div className="flex flex-wrap gap-3 md:gap-4">
               <div className="flex flex-wrap gap-1.5 md:gap-1">
-                <ViewProjectSelector
+
+                {!view.isDefault && <ViewProjectSelector
                   value={tempProjectIds}
                   onChange={(projectIds) => {
                     setTempProjectIds(projectIds);
                   }}
                   projects={allProjects}
-                />
+                />}
                 <ViewGroupingSelector
                   value={tempGrouping}
                   onChange={setTempGrouping}
@@ -1258,7 +1257,7 @@ export default function ViewRenderer({
                 selectedType={tempDisplayType}
                 onTypeChange={setTempDisplayType}
                 variant="toolbar"
-                availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
+                availableTypes={['LIST', 'KANBAN']}
               />
             </div>
           </div>
