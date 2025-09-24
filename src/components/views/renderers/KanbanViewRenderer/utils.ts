@@ -1,5 +1,5 @@
 import { COLUMN_COLORS, PRIORITY_COLORS, DEFAULT_COLUMNS } from './constants';
-import type { FilterType, FilterState, Column } from './types';
+import type { FilterType, FilterState, Column, KanbanIssue } from './types';
 
 // Create collator once to avoid instantiation on every comparison
 const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -17,7 +17,7 @@ export const getPriorityColor = (priority: string): string => {
 };
 
 export const filterIssues = (
-  issues: any[],
+  issues: KanbanIssue[],
   filterType: FilterType,
   selectedFilters: FilterState
 ) => {
@@ -57,7 +57,7 @@ export const filterIssues = (
       if (!issue.labels || issue.labels.length === 0) {
         return selectedFilters.labels.includes('no-labels');
       }
-      return issue.labels.some((label: any) => 
+      return issue.labels.some((label) =>
         selectedFilters.labels.includes(label.id)
       );
     });
@@ -81,6 +81,7 @@ export const filterIssues = (
   
   return filtered;
 };
+
 
 export const createColumns = (filteredIssues: any[], view: any, projectStatuses?: any[], allowedStatusNames?: string[], previousOrderingMethod?: string | null): Column[] => {
   const groupField = view.grouping?.field || 'status';
@@ -141,7 +142,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
   }
 
   // Group filtered issues
-  filteredIssues.forEach((issue: any) => {
+  filteredIssues.forEach((issue) => {
     let groupValue: string;
     let groupKey: string;
     
@@ -347,7 +348,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
   return sortedColumns.sort((a, b) => a.order - b.order);
 };
 
-export const countIssuesByType = (issues: any[]) => {
+export const countIssuesByType = (issues: KanbanIssue[]) => {
   const allIssuesCount = issues.length;
   const activeIssuesCount = issues.filter(issue => {
     const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';

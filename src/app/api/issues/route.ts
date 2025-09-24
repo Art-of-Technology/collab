@@ -13,7 +13,24 @@ const LIST_INCLUDE = {
   reporter: { select: { id: true, name: true, email: true, image: true } },
   labels: { select: { id: true, name: true, color: true } },
   parent: { select: { id: true, title: true, issueKey: true, type: true } },
-  children: { select: { id: true, title: true, issueKey: true, type: true, status: true } },
+  children: {
+    select: {
+      id: true,
+      title: true,
+      issueKey: true,
+      type: true,
+      status: true,
+      statusValue: true,
+      priority: true,
+      dueDate: true,
+      assignee: { select: { id: true, name: true, email: true, image: true } },
+      reporter: { select: { id: true, name: true, email: true, image: true } },
+      project: { select: { id: true, name: true, slug: true, issuePrefix: true, color: true } },
+      projectStatus: { select: { id: true, name: true, displayName: true, color: true } },
+      labels: { select: { id: true, name: true, color: true } },
+      _count: { select: { children: true, comments: true } }
+    }
+  },
   column: { select: { id: true, name: true, color: true, order: true } },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
   _count: { select: { children: true, comments: true } }

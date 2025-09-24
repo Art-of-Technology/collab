@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import type { MouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,7 @@ interface Issue {
   type: string;
   priority: string;
   status: string;
+  statusValue?: string;
   description?: string;
   dueDate?: string;
   createdAt: string;
@@ -50,6 +52,12 @@ interface Issue {
     color?: string;
   };
   projectId?: string;
+  projectStatus?: {
+    id: string;
+    name: string;
+    displayName?: string;
+    color?: string;
+  };
   labels?: Array<{
     id: string;
     name: string;
@@ -59,11 +67,13 @@ interface Issue {
     comments?: number;
     children?: number;
   };
+  children?: Issue[];
+  subtasks?: Issue[];
 }
 
 interface ListViewRendererProps {
   view: any;
-  issues: any[];
+  issues: Issue[];
   workspace: any;
   currentUser: any;
   activeFilters?: Record<string, string[]>;
@@ -73,12 +83,16 @@ interface ListViewRendererProps {
   showSubIssues?: boolean;
 }
 
+const DEFAULT_STATUS_DISPLAY_NAME = 'Todo';
+const INDENTATION_PER_LEVEL = 16;
+const MAX_INDENTATION_PX = 64;
+
 // Status normalization map - same as kanban to avoid duplicate columns
 const STATUS_NORMALIZATION_MAP: Record<string, string> = {
-  'todo': 'Todo',
-  'to do': 'Todo',
-  'to_do': 'Todo',
-  'ready': 'Todo',
+  'todo': DEFAULT_STATUS_DISPLAY_NAME,
+  'to do': DEFAULT_STATUS_DISPLAY_NAME,
+  'to_do': DEFAULT_STATUS_DISPLAY_NAME,
+  'ready': DEFAULT_STATUS_DISPLAY_NAME,
   'backlog': 'Backlog',
   'in progress': 'In Progress',
   'in_progress': 'In Progress',
@@ -108,7 +122,7 @@ const STATUS_NORMALIZATION_MAP: Record<string, string> = {
 };
 
 const normalizeStatus = (status: string): string => {
-  if (!status) return 'Todo';
+  if (!status) return DEFAULT_STATUS_DISPLAY_NAME;
   const normalized = STATUS_NORMALIZATION_MAP[status.toLowerCase()];
   return normalized || status;
 };
@@ -130,6 +144,7 @@ export default function ListViewRenderer({
   // State management
   const [hoveredIssueId, setHoveredIssueId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedIssues, setExpandedIssues] = useState<Set<string>>(new Set());
   const [selectedFilters, setSelectedFilters] = useState<{
     assignees: string[];
     labels: string[];
@@ -152,10 +167,27 @@ export default function ListViewRenderer({
 
 
 
+  const resolveSubIssues = useCallback((issue: Issue): Issue[] => {
+    if (!displaySettings.showSubIssues) {
+      return [];
+    }
+
+    if (Array.isArray(issue.children)) {
+      return issue.children;
+    }
+
+    if (Array.isArray(issue.subtasks)) {
+      return issue.subtasks;
+    }
+
+    return [];
+  }, [displaySettings.showSubIssues]);
+
   // Filter and group issues
   const groupedIssues = useMemo(() => {
-    let filtered = [...issues];
-    
+    let filtered: Issue[] = [...issues];
+    const childIssueIds = new Set<string>();
+
     // Apply filters
     if (selectedFilters.assignees.length > 0) {
       filtered = filtered.filter(issue => {
@@ -169,7 +201,7 @@ export default function ListViewRenderer({
         if (!issue.labels || issue.labels.length === 0) {
           return selectedFilters.labels.includes('no-labels');
         }
-        return issue.labels.some((label: any) => 
+        return issue.labels.some((label) =>
           selectedFilters.labels.includes(label.id)
         );
       });
@@ -203,7 +235,7 @@ export default function ListViewRenderer({
             groupKey = issue.projectStatus.name;
             groupName = issue.projectStatus.displayName || issue.projectStatus.name;
           } else {
-            groupKey = normalizeStatus(issue.statusValue || issue.status || 'Todo');
+            groupKey = normalizeStatus(issue.statusValue || issue.status || DEFAULT_STATUS_DISPLAY_NAME);
             groupName = groupKey;
           }
           break;
@@ -236,6 +268,29 @@ export default function ListViewRenderer({
       groups.get(groupKey)!.count++;
     });
 
+    if (displaySettings.showSubIssues) {
+      const collectChildIds = (items: Issue[]) => {
+        items.forEach((child) => {
+          if (!child || !child.id) {
+            return;
+          }
+
+          childIssueIds.add(child.id);
+          const nestedChildren = resolveSubIssues(child);
+          if (nestedChildren.length > 0) {
+            collectChildIds(nestedChildren);
+          }
+        });
+      };
+
+      filtered.forEach((issue) => {
+        const subItems = resolveSubIssues(issue);
+        if (subItems.length > 0) {
+          collectChildIds(subItems);
+        }
+      });
+    }
+
     // Sort issues within each group
     groups.forEach(group => {
       group.issues.sort((a, b) => {
@@ -259,10 +314,15 @@ export default function ListViewRenderer({
             return a.title.localeCompare(b.title);
         }
       });
+
+      if (displaySettings.showSubIssues && childIssueIds.size > 0) {
+        group.issues = group.issues.filter(issue => !childIssueIds.has(issue.id));
+        group.count = group.issues.length;
+      }
     });
-    
+
     return Array.from(groups.values());
-  }, [issues, selectedFilters, displaySettings]);
+  }, [issues, selectedFilters, displaySettings, resolveSubIssues]);
 
   // Handlers
   const handleIssueClick = (issueIdOrKey: string) => {
@@ -292,6 +352,18 @@ export default function ListViewRenderer({
       return newSet;
     });
   };
+
+  const handleToggleIssueExpansion = useCallback((issueId: string) => {
+    setExpandedIssues(prev => {
+      const next = new Set(prev);
+      if (next.has(issueId)) {
+        next.delete(issueId);
+      } else {
+        next.add(issueId);
+      }
+      return next;
+    });
+  }, []);
 
 
 
@@ -379,101 +451,251 @@ export default function ListViewRenderer({
     );
   };
 
-  // Issue Row Component - Mobile-first responsive design
-  const IssueRow = ({ issue }: { issue: Issue }) => (
-    <div 
-      className={cn(
-        "group relative cursor-pointer transition-all duration-200",
-        // Mobile-first: Card-like design with glassmorphism
-        "mx-3 mb-3 p-4 rounded-xl",
-        "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
-        "border border-white/10 hover:border-white/20",
-        // Desktop: More compact list style
-        "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
-        "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]",
-        hoveredIssueId === issue.id && "md:bg-[#0f1011]"
-      )}
-      onMouseEnter={() => setHoveredIssueId(issue.id)}
-      onMouseLeave={() => setHoveredIssueId(null)}
-      onClick={() => handleIssueClick(issue.issueKey || issue.id)}
-    >
-      {/* Mobile Layout */}
-      <div className="md:hidden">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            {/* Status Icon */}
-            <div className="flex items-center shrink-0">
-              {getStatusIcon(issue.status)}
-            </div>
-            
-            {/* Priority Icon */}
-            {displaySettings.displayProperties.includes('Priority') && issue.priority && (
+  // Issue Row Component - Mobile-first responsive design with hierarchical support
+  const IssueRow = ({ issue, level = 0 }: { issue: Issue; level?: number }) => {
+    const statusValue = issue.projectStatus?.displayName || issue.status || issue.statusValue || DEFAULT_STATUS_DISPLAY_NAME;
+    const subItems = resolveSubIssues(issue);
+    const hasSubIssues = subItems.length > 0;
+    const isExpanded = hasSubIssues && expandedIssues.has(issue.id);
+    const subIssueCount = hasSubIssues ? subItems.length : issue._count?.children || 0;
+    const indentation = Math.min(level * INDENTATION_PER_LEVEL, MAX_INDENTATION_PX);
+    const indentationStyle = level > 0 ? { paddingLeft: `${indentation}px` } : undefined;
+
+    const handleExpandClick = (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (hasSubIssues) {
+        handleToggleIssueExpansion(issue.id);
+      }
+    };
+
+    return (
+      <div
+        className={cn(
+          "group relative cursor-pointer transition-all duration-200",
+          // Mobile-first: Card-like design with glassmorphism
+          "mx-3 mb-3 p-4 rounded-xl",
+          "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
+          "border border-white/10 hover:border-white/20",
+          // Desktop: More compact list style
+          "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
+          "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]",
+          hoveredIssueId === issue.id && "md:bg-[#0f1011]"
+        )}
+        style={indentationStyle}
+        onMouseEnter={() => setHoveredIssueId(issue.id)}
+        onMouseLeave={() => setHoveredIssueId(null)}
+        onClick={() => handleIssueClick(issue.issueKey || issue.id)}
+      >
+        {/* Mobile Layout */}
+        <div className="md:hidden">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {displaySettings.showSubIssues && hasSubIssues && (
+                <button
+                  type="button"
+                  onClick={handleExpandClick}
+                  aria-expanded={isExpanded}
+                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} sub-tasks for ${issue.issueKey || issue.title || 'issue'}`}
+                  className="flex items-center justify-center h-5 w-5 rounded text-gray-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 transition-colors"
+                >
+                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
+              )}
+
+              {/* Status Icon */}
               <div className="flex items-center shrink-0">
-                {getPriorityIcon(issue.priority)}
+                {getStatusIcon(statusValue)}
               </div>
-            )}
-            
-            {/* Issue Key */}
-            {displaySettings.displayProperties.includes('ID') && (
-              <span className="text-gray-400 text-xs font-mono font-medium shrink-0">
-                {issue.issueKey}
+
+              {/* Priority Icon */}
+              {displaySettings.displayProperties.includes('Priority') && issue.priority && (
+                <div className="flex items-center shrink-0">
+                  {getPriorityIcon(issue.priority)}
+                </div>
+              )}
+
+              {/* Issue Key */}
+              {displaySettings.displayProperties.includes('ID') && (
+                <span className="text-gray-400 text-xs font-mono font-medium shrink-0">
+                  {issue.issueKey}
+                </span>
+              )}
+
+              {/* Assignee Avatar */}
+              {displaySettings.displayProperties.includes('Assignee') && (
+                <div className="flex items-center shrink-0 ml-auto">
+                  {issue.assignee ? (
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={issue.assignee.image} />
+                      <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                        {issue.assignee.name?.charAt(0)?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
+                      <User className="h-2.5 w-2.5 text-[#666]" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Title */}
+          <h3 className="text-white text-sm font-medium mb-2 line-clamp-2">
+            {issue.title}
+          </h3>
+
+          {/* Labels */}
+          {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {issue.labels.slice(0, 3).map((label) => (
+                <Badge
+                  key={label.id}
+                  className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-sm"
+                  style={{
+                    backgroundColor: label.color + '20',
+                    color: label.color || '#8b949e'
+                  }}
+                >
+                  {label.name}
+                </Badge>
+              ))}
+              {issue.labels.length > 3 && (
+                <span className="text-xs text-gray-500 px-1">+{issue.labels.length - 3}</span>
+              )}
+            </div>
+          )}
+
+          {/* Meta badges row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Project Badge */}
+              {displaySettings.displayProperties.includes('Project') && issue.project && (
+                <Badge
+                  className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-md"
+                  style={{
+                    backgroundColor: (issue.project.color || '#6e7681') + '30',
+                    color: issue.project.color || '#8b949e'
+                  }}
+                >
+                  {issue.project.name}
+                </Badge>
+              )}
+
+              {/* Due Date */}
+              {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
+                <Badge className="h-5 px-2 text-xs font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md">
+                  {format(new Date(issue.dueDate), 'MMM d')}
+                </Badge>
+              )}
+
+              {/* Comments Meta */}
+              {displaySettings.displayProperties.includes('Comments') && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
+                  <MessageSquare className="h-3 w-3" />
+                  <span className="text-xs font-medium">{issue._count?.comments || 0}</span>
+                </div>
+              )}
+
+              {/* Sub-issues Meta */}
+              {displaySettings.displayProperties.includes('Sub-issues') && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+                  <ArrowRight className="h-3 w-3" />
+                  <span className="text-xs font-medium">{subIssueCount}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Updated Date */}
+            {displaySettings.displayProperties.includes('Updated') && (
+              <span className="text-gray-500 text-xs">
+                {format(new Date(issue.updatedAt), 'MMM d')}
               </span>
             )}
-            
-            {/* Assignee Avatar */}
-            {displaySettings.displayProperties.includes('Assignee') && (
-              <div className="flex items-center shrink-0 ml-auto">
-                {issue.assignee ? (
-                  <Avatar className="h-5 w-5">
-                    <AvatarImage src={issue.assignee.image} />
-                    <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
-                      {issue.assignee.name?.charAt(0)?.toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                ) : (
-                  <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                    <User className="h-2.5 w-2.5 text-[#666]" />
-                  </div>
+          </div>
+        </div>
+
+        {/* Desktop Layout - Original structure */}
+        <div className="hidden md:flex md:items-center">
+          {displaySettings.showSubIssues && (
+            <div className="flex items-center w-6 mr-2 flex-shrink-0">
+              {hasSubIssues ? (
+                <button
+                  type="button"
+                  onClick={handleExpandClick}
+                  aria-expanded={isExpanded}
+                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} sub-tasks for ${issue.issueKey || issue.title || 'issue'}`}
+                  className="flex items-center justify-center h-6 w-6 rounded text-[#8b949e] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 transition-colors"
+                >
+                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
+              ) : level === 0 ? (
+                <span className="w-6" aria-hidden="true" />
+              ) : null}
+            </div>
+          )}
+
+          {/* Status Icon */}
+          <div className="flex items-center w-6 mr-3 flex-shrink-0">
+            {getStatusIcon(statusValue)}
+          </div>
+
+          {/* Issue Key */}
+          {displaySettings.displayProperties.includes('ID') && (
+            <div className="w-20 flex-shrink-0 mr-3">
+              <span className="text-[#8b949e] text-xs font-mono font-medium">
+                {issue.issueKey}
+              </span>
+            </div>
+          )}
+
+          {/* Priority and Title section */}
+          <div className="flex-1 min-w-0 mr-4">
+            <div className="flex items-center gap-2">
+              {/* Priority Icon */}
+              {displaySettings.displayProperties.includes('Priority') && issue.priority && (
+                <div className="flex items-center flex-shrink-0">
+                  {getPriorityIcon(issue.priority)}
+                </div>
+              )}
+
+              {/* Title */}
+              <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+                {issue.title}
+              </span>
+            </div>
+
+            {/* Labels - shown on same line in Linear style */}
+            {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
+              <div className="flex gap-1 mt-0.5">
+                {issue.labels.slice(0, 2).map((label) => (
+                  <Badge
+                    key={label.id}
+                    className="h-3.5 px-1 text-[9px] font-medium leading-none border-0 rounded-sm"
+                    style={{
+                      backgroundColor: label.color + '20',
+                      color: label.color || '#8b949e'
+                    }}
+                  >
+                    {label.name}
+                  </Badge>
+                ))}
+                {issue.labels.length > 2 && (
+                  <span className="text-[9px] text-[#6e7681] px-1">+{issue.labels.length - 2}</span>
                 )}
               </div>
             )}
           </div>
-        </div>
-        
-        {/* Title */}
-        <h3 className="text-white text-sm font-medium mb-2 line-clamp-2">
-          {issue.title}
-        </h3>
-        
-        {/* Labels */}
-        {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {issue.labels.slice(0, 3).map((label) => (
-              <Badge 
-                key={label.id}
-                className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-sm"
-                style={{ 
-                  backgroundColor: label.color + '20',
-                  color: label.color || '#8b949e'
-                }}
-              >
-                {label.name}
-              </Badge>
-            ))}
-            {issue.labels.length > 3 && (
-              <span className="text-xs text-gray-500 px-1">+{issue.labels.length - 3}</span>
-            )}
-          </div>
-        )}
-        
-        {/* Meta badges row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
+
+          {/* Project, Due Date, and Meta section */}
+          <div className="flex items-center gap-2 flex-shrink-0 mr-4">
             {/* Project Badge */}
             {displaySettings.displayProperties.includes('Project') && issue.project && (
-              <Badge 
-                className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-md"
-                style={{ 
+              <Badge
+                className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
+                style={{
                   backgroundColor: (issue.project.color || '#6e7681') + '30',
                   color: issue.project.color || '#8b949e'
                 }}
@@ -484,7 +706,7 @@ export default function ListViewRenderer({
 
             {/* Due Date */}
             {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
-              <Badge className="h-5 px-2 text-xs font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md">
+              <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md hover:bg-orange-500/40 transition-all">
                 {format(new Date(issue.dueDate), 'MMM d')}
               </Badge>
             )}
@@ -493,7 +715,7 @@ export default function ListViewRenderer({
             {displaySettings.displayProperties.includes('Comments') && (
               <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
                 <MessageSquare className="h-3 w-3" />
-                <span className="text-xs font-medium">{issue._count?.comments || 0}</span>
+                <span className="text-[10px] font-medium">{issue._count?.comments || 0}</span>
               </div>
             )}
 
@@ -501,145 +723,62 @@ export default function ListViewRenderer({
             {displaySettings.displayProperties.includes('Sub-issues') && (
               <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
                 <ArrowRight className="h-3 w-3" />
-                <span className="text-xs font-medium">{issue._count?.children || 0}</span>
+                <span className="text-[10px] font-medium">{subIssueCount}</span>
               </div>
             )}
           </div>
-          
-          {/* Updated Date */}
-          {displaySettings.displayProperties.includes('Updated') && (
-            <span className="text-gray-500 text-xs">
-              {format(new Date(issue.updatedAt), 'MMM d')}
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* Desktop Layout - Original structure */}
-      <div className="hidden md:flex md:items-center">
-        {/* Status Icon */}
-        <div className="flex items-center w-6 mr-3 flex-shrink-0">
-          {getStatusIcon(issue.status)}
-        </div>
-
-        {/* Issue Key */}
-        {displaySettings.displayProperties.includes('ID') && (
-          <div className="w-20 flex-shrink-0 mr-3">
-            <span className="text-[#8b949e] text-xs font-mono font-medium">
-              {issue.issueKey}
-            </span>
-          </div>
-        )}
-
-        {/* Priority and Title section */}
-        <div className="flex-1 min-w-0 mr-4">
-          <div className="flex items-center gap-2">
-            {/* Priority Icon */}
-            {displaySettings.displayProperties.includes('Priority') && issue.priority && (
-              <div className="flex items-center flex-shrink-0">
-                {getPriorityIcon(issue.priority)}
-              </div>
-            )}
-            
-            {/* Title */}
-            <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
-              {issue.title}
-            </span>
-          </div>
-          
-          {/* Labels - shown on same line in Linear style */}
-          {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
-            <div className="flex gap-1 mt-0.5">
-              {issue.labels.slice(0, 2).map((label) => (
-                <Badge 
-                  key={label.id}
-                  className="h-3.5 px-1 text-[9px] font-medium leading-none border-0 rounded-sm"
-                  style={{ 
-                    backgroundColor: label.color + '20',
-                    color: label.color || '#8b949e'
-                  }}
-                >
-                  {label.name}
-                </Badge>
-              ))}
-              {issue.labels.length > 2 && (
-                <span className="text-[9px] text-[#6e7681] px-1">+{issue.labels.length - 2}</span>
+          {/* Assignee */}
+          {displaySettings.displayProperties.includes('Assignee') && (
+            <div className="flex items-center w-8 mr-3 flex-shrink-0">
+              {issue.assignee ? (
+                <Avatar className="h-6 w-6">
+                  <AvatarImage src={issue.assignee.image} />
+                  <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                    {issue.assignee.name?.charAt(0)?.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="h-6 w-6 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
+                  <User className="h-3 w-3 text-[#666]" />
+                </div>
               )}
             </div>
           )}
-        </div>
 
-        {/* Project, Due Date, and Meta section */}
-        <div className="flex items-center gap-2 flex-shrink-0 mr-4">
-          {/* Project Badge */}
-          {displaySettings.displayProperties.includes('Project') && issue.project && (
-            <Badge 
-              className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
-              style={{ 
-                backgroundColor: (issue.project.color || '#6e7681') + '30',
-                color: issue.project.color || '#8b949e'
-              }}
-            >
-              {issue.project.name}
-            </Badge>
-          )}
-
-          {/* Due Date */}
-          {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
-            <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md hover:bg-orange-500/40 transition-all">
-              {format(new Date(issue.dueDate), 'MMM d')}
-            </Badge>
-          )}
-
-          {/* Comments Meta */}
-          {displaySettings.displayProperties.includes('Comments') && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
-              <MessageSquare className="h-3 w-3" />
-              <span className="text-[10px] font-medium">{issue._count?.comments || 0}</span>
-            </div>
-          )}
-
-          {/* Sub-issues Meta */}
-          {displaySettings.displayProperties.includes('Sub-issues') && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
-              <ArrowRight className="h-3 w-3" />
-              <span className="text-[10px] font-medium">{issue._count?.children || 0}</span>
+          {/* Updated Date */}
+          {displaySettings.displayProperties.includes('Updated') && (
+            <div className="flex-shrink-0 w-12">
+              <span className="text-[#6e7681] text-xs">
+                {format(new Date(issue.updatedAt), 'MMM d')}
+              </span>
             </div>
           )}
         </div>
-
-        {/* Assignee */}
-        {displaySettings.displayProperties.includes('Assignee') && (
-          <div className="flex items-center w-8 mr-3 flex-shrink-0">
-            {issue.assignee ? (
-              <Avatar className="h-6 w-6">
-                <AvatarImage src={issue.assignee.image} />
-                <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
-                  {issue.assignee.name?.charAt(0)?.toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            ) : (
-              <div className="h-6 w-6 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                <User className="h-3 w-3 text-[#666]" />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Updated Date */}
-        {displaySettings.displayProperties.includes('Updated') && (
-          <div className="flex-shrink-0 w-12">
-            <span className="text-[#6e7681] text-xs">
-              {format(new Date(issue.updatedAt), 'MMM d')}
-            </span>
-          </div>
-        )}
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderIssueRow = (issue: Issue, level = 0) => {
+    const subItems = resolveSubIssues(issue);
+    const hasSubIssues = subItems.length > 0;
+    const isExpanded = hasSubIssues && expandedIssues.has(issue.id);
+
+    const rows = [
+      <IssueRow key={`${issue.id}-${level}`} issue={issue} level={level} />
+    ];
+
+    if (hasSubIssues && isExpanded) {
+      subItems.forEach((subIssue) => {
+        rows.push(...renderIssueRow(subIssue, level + 1));
+      });
+    }
+
+    return rows;
+  };
 
   // Calculate total issues count
-  const totalIssues = groupedIssues.reduce((sum, group) => sum + group.count, 0);
+  const totalIssues = groupedIssues.reduce((sum, group) => sum + group.issues.length, 0);
 
   // Empty state component
   if (issues.length === 0) {
@@ -674,7 +813,7 @@ export default function ListViewRenderer({
           </div>
         ) : (
           <div className="pb-20 md:pb-16">
-            {groupedIssues.map((group, index) => {
+            {groupedIssues.map((group) => {
               const groupKey = `${displaySettings.grouping}-${group.name}`;
               const isCollapsed = collapsedGroups.has(groupKey);
               
@@ -693,9 +832,7 @@ export default function ListViewRenderer({
                       // Desktop: Dividers between rows
                       "md:divide-y md:divide-[#1a1a1a]"
                     )}>
-                      {group.issues.map((issue: Issue) => (
-                        <IssueRow key={issue.id} issue={issue} />
-                      ))}
+                      {group.issues.flatMap((issue: Issue) => renderIssueRow(issue))}
                     </div>
                   )}
                 </div>

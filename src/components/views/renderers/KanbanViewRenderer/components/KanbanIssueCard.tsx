@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  MessageSquare, 
-  ArrowRight,
+import {
+  MessageSquare,
+  ChevronDown,
+  ChevronRight,
   User,
   ArrowDown,
   Minus,
@@ -14,8 +15,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable } from "@hello-pangea/dnd";
-import type { KanbanIssueCardProps } from '../types';
+import type { KanbanIssueCardProps, KanbanIssue } from '../types';
 import { format } from 'date-fns';
+import { getStatusBadgeStyle } from '@/components/issue/sections/relations/utils/relationHelpers';
 
 // Helper functions for issue styling
 const getTypeColor = (type: string) => {
@@ -29,6 +31,9 @@ const getTypeColor = (type: string) => {
   };
   return colors[type as keyof typeof colors] || '#6b7280';
 };
+
+const DEFAULT_STATUS_DISPLAY_NAME = 'Todo';
+
 
 const KanbanIssueCard = React.memo(({
   issue,
@@ -47,10 +52,37 @@ const KanbanIssueCard = React.memo(({
   const showCreated = displayProperties.includes('Created');
   const showUpdated = displayProperties.includes('Updated');
 
+  const subTasks: KanbanIssue[] = Array.isArray(issue.children)
+    ? issue.children
+    : Array.isArray(issue.subtasks)
+      ? issue.subtasks
+      : [];
+  const hasSubTasks = subTasks.length > 0;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const subTaskCount = hasSubTasks ? subTasks.length : issue._count?.children || 0;
+
+  console.log('subTaskCount', subTaskCount)
+
   const handleCardClick = useCallback(() => {
     const keyOrId = issue.issueKey || issue.id;
     onCardClick(keyOrId);
   }, [onCardClick, issue.issueKey, issue.id]);
+
+  const handleToggleSubtasks = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!hasSubTasks) return;
+    setIsExpanded(prev => !prev);
+  }, [hasSubTasks]);
+
+  const handleSubtaskClick = useCallback((subtask: KanbanIssue, event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const keyOrId = subtask.issueKey || subtask.id;
+    if (keyOrId) {
+      onCardClick(keyOrId);
+    }
+  }, [onCardClick]);
 
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index}>
@@ -196,9 +228,28 @@ const KanbanIssueCard = React.memo(({
 
             {/* Bottom Meta Row: Comments, Subtasks */}
             <div className="flex items-center justify-between">
-              <div className="flex-1"></div>
+              <div>
+                {hasSubTasks && (
+                  <button
+                    type="button"
+                    onClick={handleToggleSubtasks}
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? 'Collapse' : 'Expand'} sub-tasks for ${issue.issueKey || issue.title || 'issue'}`}
+                    className="flex items-center gap-1 text-[#8b949e] hover:text-white text-[11px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 rounded-sm"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )}
+                    <span>Sub-tasks</span>
+                    <span className="inline-flex items-center justify-center min-w-[1.25rem] rounded-full bg-[#1f1f1f] px-1 text-[10px] text-[#c9d1d9]">
+                      {subTaskCount}
+                    </span>
+                  </button>
+                )}
+              </div>
 
-              {/* Meta indicators */}
               <div className="flex items-center gap-1.5 text-[#6e7681]">
                 {issue._count?.comments > 0 && (
                   <div className="flex items-center gap-0.5">
@@ -206,15 +257,47 @@ const KanbanIssueCard = React.memo(({
                     <span className="text-[10px] font-medium">{issue._count.comments}</span>
                   </div>
                 )}
-                
-                {issue._count?.children > 0 && (
-                  <div className="flex items-center gap-0.5">
-                    <ArrowRight className="h-3 w-3" />
-                    <span className="text-[10px] font-medium">{issue._count.children}</span>
-                  </div>
-                )}
               </div>
             </div>
+
+            {hasSubTasks && isExpanded && (
+              <ul className="mt-3 space-y-2 border-l border-[#1f1f1f] pl-3">
+                {subTasks.map((subtask) => {
+                  const statusLabel = subtask.projectStatus?.displayName || subtask.status || subtask.statusValue || DEFAULT_STATUS_DISPLAY_NAME;
+
+                  return (
+                    <li
+                      key={subtask.id}
+                      className="flex items-center gap-2 justify-between text-[#c9d1d9]"
+                    >
+                      <button
+                        type="button"
+                        onClick={(event) => handleSubtaskClick(subtask, event)}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left text-xs hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 rounded-sm"
+                      >
+                        {subtask.issueKey && (
+                          <span className="text-[10px] font-mono text-[#8b949e] flex-shrink-0">
+                            {subtask.issueKey}
+                          </span>
+                        )}
+                        <span className="truncate leading-4">{subtask.title || 'Untitled sub-task'}</span>
+                      </button>
+
+                      {statusLabel && (
+                        <Badge
+                          className={cn(
+                            "kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none rounded-sm",
+                            getStatusBadgeStyle(statusLabel)
+                          )}
+                        >
+                          {statusLabel}
+                        </Badge>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       )}
