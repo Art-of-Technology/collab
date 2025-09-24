@@ -69,7 +69,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   onSelectionUpdate,
   onKeyDown,
   onUpdate,
-  additionalExtensions = []
+  additionalExtensions = [],
+  autofocus = false,
 }, ref) => {
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
@@ -89,6 +90,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   
   // Initialize editor with extensions
   const editor = useEditor({
+    autofocus: autofocus,
     extensions: [
       StarterKit.configure({
         heading: {
