@@ -332,7 +332,7 @@ export default function Sidebar({
           {/* Logo */}
           <div className="flex justify-center">
             <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/dashboard` : "/dashboard"} className="flex items-center">
-              <Image src="/logo-v2.png" width={32} height={32} alt="Collab" className="h-8 w-auto" />
+              <Image src="/logo-icon.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
             </Link>
           </div>
 
@@ -583,7 +583,7 @@ export default function Sidebar({
         <div className="flex items-center justify-between mb-3">
           {/* Logo */}
           <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
-            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
+            <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-7 w-auto" />
           </Link>
 
           {/* Action Buttons */}

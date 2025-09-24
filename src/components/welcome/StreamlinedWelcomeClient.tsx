@@ -99,7 +99,7 @@ export default function StreamlinedWelcomeClient({ initialInvitations }: Streaml
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-6 bg-background/80 backdrop-blur-sm border-b border-border/20">
         <div className="flex items-center">
           <Image 
-            src="/logo-v2.png" 
+            src="/logo-text.svg" 
             alt="Collab" 
             width={112} 
             height={32}
@@ -126,8 +126,8 @@ export default function StreamlinedWelcomeClient({ initialInvitations }: Streaml
           
           {/* Header */}
           <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 mb-6">
-              <Sparkles className="w-10 h-10 text-primary" />
+            <div className="inline-flex items-center justify-center mb-6">
+              <Image src="/logo-icon.svg" width={240} height={240} alt="Collab" className="h-24" />
             </div>
             
             <h1 className="text-4xl font-bold mb-4 bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
