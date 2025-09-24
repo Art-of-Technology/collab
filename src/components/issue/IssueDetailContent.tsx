@@ -30,7 +30,6 @@ import { useDeleteIssue } from "@/hooks/queries/useIssues";
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { useSession } from "next-auth/react";
 import { useActivity } from "@/context/ActivityContext";
-import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { formatLiveTime } from "@/utils/taskHelpers";
 import {
   Dialog,
@@ -59,7 +58,7 @@ import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelecto
 import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 // Import types
-import type { IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
+import type { IssueDetailProps, IssueFieldUpdate, IssueUser, PlayTime } from "@/types/issue";
 
 type PlayState = "playing" | "paused" | "stopped";
 
@@ -81,6 +80,7 @@ interface IssueDetailContentProps extends IssueDetailProps {
   issueId?: string;
   viewName?: string;
   viewSlug?: string;
+  createdByUser?: IssueUser;
 }
 
 export function IssueDetailContent({
@@ -93,7 +93,8 @@ export function IssueDetailContent({
   workspaceId,
   issueId,
   viewName,
-  viewSlug
+  viewSlug,
+  createdByUser
 }: IssueDetailContentProps) {
   const router = useRouter();
   const deleteIssueMutation = useDeleteIssue();
@@ -113,7 +114,6 @@ export function IssueDetailContent({
   // Session and activity hooks
   const { data: session } = useSession();
   const { userStatus, handleTaskAction } = useActivity();
-  const { settings } = useWorkspaceSettings();
   const currentUserId = session?.user?.id;
 
   // Time tracking state
@@ -1087,19 +1087,19 @@ export function IssueDetailContent({
 
             <div className="flex items-center justify-between">
               {/* Created info */}
-              <div className="flex items-center gap-2 text-xs text-[#6e7681]">
+              <div className="flex items-center gap-1 text-xs text-[#6e7681]">
                 <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
-                {issue.reporter && (
+                {createdByUser && (
                   <>
                     <span>by</span>
                     <div className="flex items-center gap-1">
                       <Avatar className="h-4 w-4">
-                        <AvatarImage src={issue.reporter.image} />
+                        <AvatarImage src={createdByUser?.image} />
                         <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
-                          {issue.reporter.name?.charAt(0)}
+                          {createdByUser?.name?.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      <span>{issue.reporter.name}</span>
+                      <span>{createdByUser?.name}</span>
                     </div>
                   </>
                 )}
