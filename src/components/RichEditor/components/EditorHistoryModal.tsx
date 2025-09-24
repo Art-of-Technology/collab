@@ -169,7 +169,7 @@ export function EditorHistoryModal({
                       value={historyPreview.html}
                       onChange={undefined}
                       placeholder={""}
-                      className="w-96"
+                      className="w-full max-w-[24rem]"
                       minHeight="160px"
                       maxHeight="none"
                       readOnly={true}
