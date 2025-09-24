@@ -89,6 +89,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   
   // Initialize editor with extensions
   const editor = useEditor({
+    autofocus: true,
     extensions: [
       StarterKit.configure({
         heading: {
