@@ -16,7 +16,7 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
   return await prisma.$transaction(async (tx) => {
     // 1. Create the Personal Workspace
     const workspaceName = `${userName}'s Personal Workspace`;
-    const workspaceSlug = `${userName.toLowerCase().replace(/\s+/g, '-')}-personal`;
+    const workspaceSlug = `${createSlug(userName)}-personal`;
     
     // Ensure unique slug by adding number suffix if needed
     let finalWorkspaceSlug = workspaceSlug;
@@ -304,10 +304,41 @@ export async function userHasWorkspace(userId: string): Promise<boolean> {
 }
 
 /**
+ * Normalizes text by converting accented characters and Turkish characters to ASCII equivalents
+ */
+function normalizeText(text: string): string {
+  // Turkish and common accented character mappings
+  const charMap: { [key: string]: string } = {
+    'ç': 'c', 'Ç': 'C',
+    'ğ': 'g', 'Ğ': 'G', 
+    'ı': 'i', 'I': 'I', 'İ': 'I',
+    'ö': 'o', 'Ö': 'O',
+    'ş': 's', 'Ş': 'S',
+    'ü': 'u', 'Ü': 'U',
+    // Common accented characters
+    'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a',
+    'À': 'A', 'Á': 'A', 'Â': 'A', 'Ã': 'A', 'Ä': 'A', 'Å': 'A',
+    'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+    'È': 'E', 'É': 'E', 'Ê': 'E', 'Ë': 'E',
+    'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+    'Ì': 'I', 'Í': 'I', 'Î': 'I', 'Ï': 'I',
+    'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ø': 'o',
+    'Ò': 'O', 'Ó': 'O', 'Ô': 'O', 'Õ': 'O', 'Ø': 'O',
+    'ù': 'u', 'ú': 'u', 'û': 'u',
+    'Ù': 'U', 'Ú': 'U', 'Û': 'U',
+    'ñ': 'n', 'Ñ': 'N',
+    'ý': 'y', 'ÿ': 'y', 'Ý': 'Y',
+    'ß': 'ss'
+  };
+
+  return text.replace(/[^\x00-\x7F]/g, (char) => charMap[char] || '');
+}
+
+/**
  * Creates a slugified version of a string suitable for URLs
  */
 export function createSlug(text: string): string {
-  return text
+  return normalizeText(text)
     .toLowerCase()
     .trim()
     .replace(/\s+/g, '-')
