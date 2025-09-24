@@ -332,7 +332,7 @@ export default function Sidebar({
           {/* Logo */}
           <div className="flex justify-center">
             <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/dashboard` : "/dashboard"} className="flex items-center">
-              <Image src="/logo-text.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
+              <Image src="/logo-icon.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
             </Link>
           </div>
 
