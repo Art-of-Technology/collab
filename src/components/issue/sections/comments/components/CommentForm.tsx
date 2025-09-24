@@ -13,6 +13,7 @@ export function CommentForm({
   isLoading = false,
   workspaceId,
   showUserInfo = true,
+  autofocus = false
 }: CommentFormProps) {
   const [content, setContent] = useState("");
   const { data: currentUser } = useCurrentUser();
@@ -38,6 +39,7 @@ export function CommentForm({
         toolbarMode="static"
         showAiImprove={true}
         workspaceId={workspaceId}
+        autofocus={autofocus}
       />
 
       <div className="flex justify-between">

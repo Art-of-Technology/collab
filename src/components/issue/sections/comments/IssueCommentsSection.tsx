@@ -14,7 +14,8 @@ export function IssueCommentsSection({
   issueId,
   initialComments = [],
   currentUserId,
-  workspaceId
+  workspaceId,
+  autofocus = false
 }: IssueCommentsSectionProps) {
   const { data: currentUser } = useCurrentUser();
   const { data: comments = [], isLoading } = useIssueComments(issueId);
@@ -64,6 +65,7 @@ export function IssueCommentsSection({
         onSubmit={handleAddComment}
         isLoading={addCommentMutation.isPending}
         workspaceId={workspaceId}
+        autofocus={autofocus}
       />
     </div>
   );

@@ -1184,6 +1184,7 @@ export function IssueDetailContent({
                 initialComments={(issue.comments || []) as any}
                 currentUserId={currentUserId}
                 workspaceId={workspaceId || ""}
+                autofocus={false}
               />
             </div>
           </div>

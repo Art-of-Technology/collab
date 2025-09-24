@@ -682,6 +682,7 @@ export function IssueRichEditor({
         </div>
       )}
       <RichEditor
+        autofocus={true}
         key={collabDocumentId ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
         ref={editorRef}
         value={value}

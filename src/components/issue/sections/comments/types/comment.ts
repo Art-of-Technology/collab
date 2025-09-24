@@ -29,6 +29,7 @@ export interface IssueCommentsSectionProps {
   initialComments?: IssueComment[];
   currentUserId?: string;
   workspaceId?: string;
+  autofocus?: boolean;
 }
 
 export interface CommentItemProps {
@@ -45,4 +46,5 @@ export interface CommentFormProps {
   isLoading?: boolean;
   workspaceId?: string;
   showUserInfo?: boolean;
+  autofocus?: boolean;
 }
