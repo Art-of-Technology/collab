@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import { issueKeys } from '@/hooks/queries/useIssues';
 import { boardItemsKeys } from '@/hooks/queries/useBoardItems';
 
@@ -114,6 +115,8 @@ export function hasPendingDragOperations(): boolean {
 export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInvalidations: null | boolean = false) {
   const { workspaceId, boardId, viewId } = options;
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   
   // Set global query client reference for delayed requests
   globalQueryClient = queryClient;
@@ -209,8 +212,11 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
             const isLatestSequence = currentSequence >= latestSequences.current.get(data.viewId)!;
             
             if (isLatestSequence) {
-              // Track affected issues from this drag operation
-              if (data.affectedIssues && Array.isArray(data.affectedIssues)) {
+              // Check if this update is from the current user (my action) or another user
+              const isMyAction = data.userId === currentUserId;
+              
+              // Track affected issues from this drag operation (only for my actions)
+              if (isMyAction && data.affectedIssues && Array.isArray(data.affectedIssues)) {
                 data.affectedIssues.forEach((issueId: string) => {
                   recentDragOperations.current.add(issueId);
                   globalDragOperations.add(issueId);
@@ -222,10 +228,11 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
                 });
               }
               
-              // Only trigger GET request if there are no pending drag operations
-              if (hasPendingDragOperations()) {
+              // If this is MY action, check for pending operations to avoid conflicts
+              // If this is ANOTHER USER's action, process immediately for real-time updates
+              if (isMyAction && hasPendingDragOperations()) {
                 addDelayedViewRequest(data.viewId, currentSequence);
-                return; // Don't schedule any GET request while operations are pending
+                return; // Don't schedule GET request while I have pending operations
               }
               
               // Check if this view was recently triggered by the delayed system
@@ -239,12 +246,12 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
                 clearTimeout(existingInvalidation.timeout);
               }
               
-              // Schedule invalidation with delay to ensure all operations are truly complete
-              const delayMs = 200; // Shorter delay since we already checked for pending operations
+              // Use shorter delay for other users' actions to ensure faster real-time updates
+              const delayMs = isMyAction ? 200 : 50; // Faster updates for other users
               
               const timeout = setTimeout(() => {
-                // Final check: ensure no operations started while we were waiting
-                if (hasPendingDragOperations()) {
+                // For my actions, check pending operations. For others, process immediately
+                if (isMyAction && hasPendingDragOperations()) {
                   pendingInvalidations.current.delete(data.viewId);
                   return;
                 }
