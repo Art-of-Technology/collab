@@ -263,6 +263,10 @@ export default function NewIssueModal({
         setRelations([]); // Clear relations
         // Keep project and type the same
         setTimeout(() => titleRef.current?.focus(), 100);
+        toast({
+          title: "Success",
+          description: `Issue created${relations.length > 0 ? ` with ${relations.length} relation${relations.length === 1 ? '' : 's'}` : ''}`,
+        });
       } else {
         onOpenChange(false);
         // Reset form
@@ -277,14 +281,14 @@ export default function NewIssueModal({
         setIssueType("TASK");
         setSelectedProjectId(projectId || undefined);
         setRelations([]);
+        
+        toast({
+          title: "Success",
+          description: `Issue created${relations.length > 0 ? ` with ${relations.length} relation${relations.length === 1 ? '' : 's'}` : ''}`,
+        });
+        
+        onCreated?.(mainIssueId);
       }
-      
-      toast({
-        title: "Success",
-        description: `Issue created${relations.length > 0 ? ` with ${relations.length} relation${relations.length === 1 ? '' : 's'}` : ''}`,
-      });
-      
-      onCreated?.(mainIssueId);
     } catch (error) {
       console.error("Failed to create issue:", error);
       
@@ -436,7 +440,6 @@ export default function NewIssueModal({
           </button>
           
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6e7681]">⌘↵</span>
             <Button 
               onClick={handleCreate} 
               disabled={!canCreate || creating || createIssueMutation.isPending}

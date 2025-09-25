@@ -36,12 +36,12 @@ export function RelationGroup({
   canEdit = true
 }: RelationGroupProps) {
   const config = getRelationConfig(relationType);
-  const IconComponent = RELATION_ICONS[relationType];
   const colorClass = RELATION_COLORS[relationType];
   const count = relations.length;
   const countText = getRelationCountText(relationType, count);
 
   const handleAddRelation = () => {
+    console.log('relationType', relationType);
     onAddRelation(relationType);
   };
 

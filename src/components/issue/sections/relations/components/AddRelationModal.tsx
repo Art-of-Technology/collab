@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { Search, X, Plus, CheckSquare, Circle, GitBranch, Bug, Flag, Square } from "lucide-react";
+import { Search, X, CheckSquare, Circle, GitBranch, Bug, Flag } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
 import type { AddRelationModalProps, RelationItem, RelatedItemType, IssueRelationType } from "../types/relation";
 import { getRelationConfig } from "../utils/relationConfig";
@@ -73,12 +72,12 @@ export function AddRelationModal({
         // Add to selected items with default relation type
         setSelectedRelationTypes(prevTypes => ({
           ...prevTypes,
-          [item.id]: 'child' // Default to child relation
+          [item.id]: relationType ?? 'child' // Default to child relation
         }));
         return [...prev, item];
       }
     });
-  }, []);
+  }, [relationType]);
 
   const handleRemoveSelected = useCallback((itemId: string) => {
     setSelectedItems(prev => prev.filter(item => item.id !== itemId));
@@ -104,7 +103,7 @@ export function AddRelationModal({
       // Prepare relations with their types
       const relations = selectedItems.map(item => ({
         item,
-        relationType: selectedRelationTypes[item.id] || 'child'
+        relationType: selectedRelationTypes[item.id] ?? relationType ?? 'child'
       }));
       await onAdd(relations);
       handleClose();
@@ -291,7 +290,8 @@ export function AddRelationModal({
                   <SelectedRelationItem
                     key={item.id}
                     item={item}
-                    relationType={selectedRelationTypes[item.id] || 'child'}
+                    relationType={relationType ?? selectedRelationTypes[item.id] ?? 'child'}
+                    canChangeRelationType={relationType === null}
                     onRelationTypeChange={handleRelationTypeChange}
                     onRemove={handleRemoveSelected}
                   />
