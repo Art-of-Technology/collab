@@ -140,6 +140,27 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
       try {
         if (suppressInvalidations) return;
         
+        // Handle connection status events
+        if (data?.type === 'connected') {
+          console.log(`📡 Real-time connection established for workspace`);
+          return;
+        }
+        
+        if (data?.type === 'realtime.ready') {
+          console.log(`✅ Real-time fully operational with Redis`);
+          return;
+        }
+        
+        if (data?.type === 'realtime.degraded') {
+          console.warn(`⚠️ Real-time running in degraded mode:`, data.reason);
+          return;
+        }
+        
+        if (data?.type === 'realtime.error') {
+          console.error(`❌ Real-time error:`, data.error);
+          return;
+        }
+
         // Process real-time events
         if (data?.type === 'issue.updated') {
           // Check if this is a recent drag operation - if so, skip bulk issues invalidation

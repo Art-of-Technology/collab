@@ -5,6 +5,7 @@ import { getRedisSubscriber } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 300; // Extend timeout to 5 minutes for streaming
 
 export async function GET(
   request: NextRequest,
@@ -39,76 +40,113 @@ export async function GET(
 
     const stream = new ReadableStream<Uint8Array>({
       start: async (controller) => {
-        const subscriber = await getRedisSubscriber();
-        if (!subscriber) {
-          // If Redis not available, open a stream that only pings
-          const interval = setInterval(() => {
-            controller.enqueue(encoder.encode(`: ping\n\n`));
-          }, 25000);
-          // Immediately notify disabled state
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'realtime.disabled' })}\n\n`));
-          const signal = request.signal as AbortSignal | undefined;
-          if (signal) signal.addEventListener('abort', () => { 
-            clearInterval(interval); 
-            try {
-              if (controller.desiredSize !== null) {
-                controller.close();
-              }
-            } catch {}
-          });
-          return;
-        }
-
         const sendEvent = (data: Record<string, unknown>) => {
-          const payload = `data: ${JSON.stringify(data)}\n\n`;
-          controller.enqueue(encoder.encode(payload));
+          try {
+            // Ensure controller is still active before sending
+            if (controller.desiredSize === null) {
+              return; // Stream is closed
+            }
+            const payload = `data: ${JSON.stringify(data)}\n\n`;
+            controller.enqueue(encoder.encode(payload));
+          } catch (error) {
+            console.error('Error sending SSE event:', error);
+            // Don't re-throw - just log and continue
+          }
         };
 
-        // Initial ping to open the stream
-        sendEvent({ type: 'connected', channel });
+        // CRITICAL: Send immediate connected event to establish stream quickly
+        sendEvent({ type: 'connected', channel, timestamp: Date.now() });
 
-        await subscriber.subscribe(channel, (message) => {
-          try {
-            const parsed = JSON.parse(message);
-            sendEvent(parsed);
-          } catch {
-            sendEvent({ type: 'message', message });
-          }
-        });
-
-        // Keep-alive pings
+        // Set up ping interval immediately to keep connection alive
         const pingInterval = setInterval(() => {
           try {
-            controller.enqueue(encoder.encode(`: ping\n\n`));
+            if (controller.desiredSize !== null) {
+              controller.enqueue(encoder.encode(`: ping\n\n`));
+            }
           } catch {
-            // ignore
+            // ignore - connection likely closed
           }
         }, 25000);
 
+        let subscriber: any = null;
+        let isRedisConnected = false;
+
+        // Set up Redis subscriber asynchronously to avoid blocking initial response
+        const setupRedisSubscriber = async () => {
+          try {
+            // Add timeout for Redis connection (5 seconds max)
+            const redisTimeout = setTimeout(() => {
+              console.warn('Redis subscriber setup timed out after 5 seconds');
+              sendEvent({ type: 'realtime.degraded', reason: 'redis_timeout' });
+            }, 5000);
+
+            subscriber = await getRedisSubscriber();
+            clearTimeout(redisTimeout);
+
+            if (!subscriber) {
+              console.warn('Redis subscriber not available, running in degraded mode');
+              sendEvent({ type: 'realtime.degraded', reason: 'redis_unavailable' });
+              return;
+            }
+
+            // Subscribe to Redis channel
+            await subscriber.subscribe(channel, (message: string) => {
+              try {
+                // Ensure message is defined and not null
+                if (message && typeof message === 'string') {
+                  const parsed = JSON.parse(message);
+                  sendEvent(parsed);
+                }
+              } catch (parseError) {
+                // Handle parsing errors gracefully
+                if (message) {
+                  sendEvent({ type: 'message', message: String(message) });
+                }
+              }
+            });
+
+            isRedisConnected = true;
+            sendEvent({ type: 'realtime.ready', channel });
+            console.log(`SSE Redis subscriber connected for workspace ${workspaceId}`);
+          } catch (error) {
+            console.error('Error setting up Redis subscriber:', error);
+            sendEvent({ type: 'realtime.error', error: 'Failed to connect to Redis' });
+          }
+        };
+
+        // Start Redis setup asynchronously (don't await)
+        setupRedisSubscriber();
+
         const onClose = async () => {
           clearInterval(pingInterval);
+          if (subscriber && isRedisConnected) {
+            try {
+              await subscriber.unsubscribe(channel);
+              await subscriber.quit();
+              console.log(`SSE Redis subscriber disconnected for workspace ${workspaceId}`);
+            } catch (error) {
+              console.error('Error closing Redis subscriber:', error);
+            }
+          }
           try {
-            await subscriber.unsubscribe(channel);
-          } catch {}
-          try {
-            await subscriber.quit();
-          } catch {}
-          try {
-            // Check if controller is still open before closing
             if (controller.desiredSize !== null) {
               controller.close();
             }
           } catch {}
         };
 
-        // Close on client abort
+        // Handle client disconnect
         const signal = request.signal as AbortSignal | undefined;
         if (signal) {
           signal.addEventListener('abort', onClose);
         }
+
+        // Note: ReadableStreamDefaultController doesn't have a settable error property
+        // Error handling is done through try/catch blocks and the cancel callback
       },
-      cancel: () => {
-        // Handled in onClose
+      cancel: async () => {
+        // Additional cleanup if needed
+        console.log(`SSE stream cancelled for workspace ${workspaceId}`);
       }
     });
 

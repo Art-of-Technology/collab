@@ -497,9 +497,9 @@ export const useKanbanState = ({
       // Check if we're creating a position conflict (placing at top when items have small positions)
       const needsRepositioning = (
         // Placing before first item AND first item has small position
-        (!prev && next && getPos(next) <= 512) ||
+        (!prev && next && getPos(next) <= 8) ||
         // Or if optimistic position would conflict with existing positions
-        (optimisticPosition <= 512 && visualColumnItems.some(item => getPos(item) <= 512))
+        (optimisticPosition <= 8 && visualColumnItems.some(item => getPos(item) <= 8))
       );
       
       if (needsRepositioning) {
