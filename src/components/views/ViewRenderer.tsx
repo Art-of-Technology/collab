@@ -130,7 +130,6 @@ export default function ViewRenderer({
     setWorkspace,
     setCurrentUser
   } = useViewFilters();
-
   // Fetch all workspace projects for the project selector
   const { data: allProjects = [] } = useProjects({
     workspaceId: workspace.id,
@@ -194,6 +193,15 @@ export default function ViewRenderer({
   const [tempOrdering, setTempOrdering] = useState('manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
+  const [recentIssueCreated, setRecentIssueCreated] = useState(false);
+  
+  // Reset recentIssueCreated flag after a delay
+  useEffect(() => {
+    if (recentIssueCreated) {
+      const timeout = setTimeout(() => setRecentIssueCreated(false), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [recentIssueCreated]);
   
   // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
@@ -281,8 +289,9 @@ export default function ViewRenderer({
   
   // Fetch live data if:
   // 1. View has no active filters, OR
-  // 2. User has added/changed any filters that weren't in the original view
-  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged;
+  // 2. User has added/changed any filters that weren't in the original view, OR
+  // 3. An issue was recently created (to ensure new issues appear in filtered views)
+  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged || recentIssueCreated;
   
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
@@ -313,9 +322,9 @@ export default function ViewRenderer({
 
   // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // When view has filters and no temp filters changed, prioritize server-side filtered initialIssues
-    // When no filters OR temp filters changed, use live data for real-time updates
-    const baseIssues = (hasActiveFilters && !tempFiltersChanged)
+    // When view has filters and no temp filters changed AND no recent issue creation, prioritize server-side filtered initialIssues
+    // When no filters OR temp filters changed OR recent issue created, use live data for real-time updates
+    const baseIssues = (hasActiveFilters && !tempFiltersChanged && !recentIssueCreated)
       ? initialIssues 
       : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
@@ -327,10 +336,9 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged, recentIssueCreated]);
 
-  // Use merged issues for filtering
-  const issues = allIssues;
+  // Use merged issues for filtering directly
   
   // Helper function to handle filter changes and trigger data refetch when needed
   const handleFilterChange = useCallback((filterKey: string, newValues: string[] | ActionFilter[], originalValues: string[] | ActionFilter[]) => {
@@ -377,10 +385,10 @@ export default function ViewRenderer({
   // Update ViewFilters context with current data
   useEffect(() => {
     setCurrentView(view);
-    setIssues(issues);
+    setIssues(allIssues);
     setWorkspace(workspace);
     setCurrentUser(currentUser);
-  }, [view, issues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
+  }, [view, allIssues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
 
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
@@ -418,15 +426,14 @@ export default function ViewRenderer({
 
   // Memoize action filters to prevent reference instability
   const actionFilters = useMemo(() => {
-    return allFilters.actions as ActionFilter[] || [];
-  }, [allFilters.actions]);
+    return (allFilters.actions as ActionFilter[]) || [];
+  }, [JSON.stringify(allFilters.actions || [])]);
 
   // Apply action filters first (async filtering)
   const { 
-    filteredIssues: actionFilteredIssues, 
-    isLoading: isActionFilterLoading 
+    filteredIssues: actionFilteredIssues
   } = useActionFilteredIssues({
-    issues,
+    issues: allIssues,
     actionFilters,
     workspaceId: workspace.id
   });
@@ -465,7 +472,7 @@ export default function ViewRenderer({
           return statusLower !== 'done' && 
                  statusLower !== 'backlog' && 
                  statusLower !== 'cancelled' &&
-                 statusLower !== 'todo'; // Todo items should be in backlog, not active
+                 statusLower !== 'to_do'; // Todo items should be in backlog, not active
         });
         break;
       case 'backlog':
@@ -473,7 +480,7 @@ export default function ViewRenderer({
           // Use projectStatus if available, otherwise fallback to legacy fields
           const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
           const statusLower = status.toLowerCase();
-          return statusLower === 'backlog' || statusLower === 'todo';
+          return statusLower === 'backlog' || statusLower === 'to_do';
         });
         break;
       default:
@@ -610,7 +617,17 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds, tempProjectIds.length]);
+  }, [
+    actionFilteredIssues, 
+    issueFilterType, 
+    searchQuery, 
+    JSON.stringify(allFilters), 
+    JSON.stringify(viewFiltersState), 
+    viewPositionsData?.positions, 
+    sortedTempProjectIds, 
+    JSON.stringify(originalProjectIds), 
+    tempProjectIds.length
+  ]);
 
   const handleUpdateView = async () => {
     try {
@@ -806,17 +823,24 @@ export default function ViewRenderer({
       // Use projectStatus if available, otherwise fallback to legacy fields
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
       const statusLower = status.toLowerCase();
-      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'todo';
+      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'to_do';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
       // Use projectStatus if available, otherwise fallback to legacy fields  
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
       const statusLower = status.toLowerCase();
-      return statusLower === 'backlog' || statusLower === 'todo';
+      return statusLower === 'backlog' || statusLower === 'to_do';
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [actionFilteredIssues, sortedTempProjectIds, originalProjectIds, searchQuery, allFilters, viewFiltersState]);
+  }, [
+    actionFilteredIssues, 
+    sortedTempProjectIds, 
+    JSON.stringify(originalProjectIds), 
+    searchQuery, 
+    JSON.stringify(allFilters), 
+    JSON.stringify(viewFiltersState)
+  ]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
@@ -908,6 +932,9 @@ export default function ViewRenderer({
       workspaceId: workspace.id,
       currentUserId: currentUser.id,
       onIssueCreated: () => {
+        // Set flag to force using live data for recent issue creations
+        setRecentIssueCreated(true);
+        
         // Invalidate queries to refresh data - use the correct query keys
         const currentProjectIds = tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id);
         queryClient.invalidateQueries({ 
@@ -1164,13 +1191,14 @@ export default function ViewRenderer({
             {/* Badge-like selectors - wrap on mobile */}
             <div className="flex flex-wrap gap-3 md:gap-4">
               <div className="flex flex-wrap gap-1.5 md:gap-1">
-                <ViewProjectSelector
+
+                {!view.isDefault && <ViewProjectSelector
                   value={tempProjectIds}
                   onChange={(projectIds) => {
                     setTempProjectIds(projectIds);
                   }}
                   projects={allProjects}
-                />
+                />}
                 <ViewGroupingSelector
                   value={tempGrouping}
                   onChange={setTempGrouping}
@@ -1258,7 +1286,7 @@ export default function ViewRenderer({
                 selectedType={tempDisplayType}
                 onTypeChange={setTempDisplayType}
                 variant="toolbar"
-                availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
+                availableTypes={['LIST', 'KANBAN']}
               />
             </div>
           </div>

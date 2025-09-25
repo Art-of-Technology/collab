@@ -8,8 +8,6 @@ import { ViewFiltersProvider } from "@/context/ViewFiltersContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import AssistantWrapper from "@/components/layout/AssistantWrapper";
-import ChatboxWrapper from "./ChatboxWrapper";
-import { AppDock } from "@/components/dock";
 import { useCommandMenu, CommandMenu } from "@/components/ui/command-menu";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 
@@ -110,7 +108,6 @@ export default function LayoutWithSidebar({
 
         {/* AI Assistant, Chatbox, and Navigation */}
         <AssistantWrapper />
-        <ChatboxWrapper />
         {/* <AppDock /> */}
         <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
         

@@ -12,12 +12,12 @@ export const RELATION_CONFIGS: Record<IssueRelationType, RelationConfig> = {
     },
     child: {
         type: 'child',
-        label: 'Relations',
-        description: 'Add relations to other issues',
+        label: 'Sub-issues',
+        description: 'This issue is a parent of another issue',
         icon: 'arrow-down',
         color: 'green',
         canHaveMultiple: true,
-        searchPlaceholder: 'Search for issues to relate...'
+        searchPlaceholder: 'Search for sub-issues...'
     },
     blocks: {
         type: 'blocks',
@@ -69,7 +69,16 @@ export const RELATION_CONFIGS: Record<IssueRelationType, RelationConfig> = {
 /**
  * Get relation configuration by type
  */
-export function getRelationConfig(type: IssueRelationType): RelationConfig {
+export function getRelationConfig(type: IssueRelationType | null): RelationConfig {
+    if (!type) return {
+        type: 'relates_to',
+        label: 'Related Issues',
+        description: 'Find related issues and choose the relation type',
+        icon: 'link',
+        color: 'gray',
+        canHaveMultiple: true,
+        searchPlaceholder: 'Search for related issues...'
+    }
     return RELATION_CONFIGS[type];
 }
 

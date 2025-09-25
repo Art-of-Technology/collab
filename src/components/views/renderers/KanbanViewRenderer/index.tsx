@@ -34,6 +34,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     isLoadingStatuses,
     draggedIssue,
     hoverState,
+    operationsInProgress,
     
     // Handlers
     handleDragStart,
@@ -69,6 +70,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             currentUserId={currentUserId || ''}
             draggedIssue={draggedIssue}
             hoverState={hoverState}
+            operationsInProgress={operationsInProgress}
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
             onDragUpdate={handleDragUpdate}
