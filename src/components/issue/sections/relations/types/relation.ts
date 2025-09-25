@@ -101,7 +101,7 @@ export interface AddRelationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => Promise<void>;
-  relationType: IssueRelationType;
+  relationType: IssueRelationType | null;
   workspaceId: string;
   currentIssueId: string;
   excludeIds?: string[];

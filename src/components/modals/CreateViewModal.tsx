@@ -188,7 +188,6 @@ export default function CreateViewModal({
       switch (newType) {
         case 'LIST': return ['Priority', 'Status', 'Assignee'];
         case 'KANBAN': return ['Assignee', 'Priority', 'Labels'];
-        case 'TIMELINE': return ['Priority', 'Assignee', 'Status'];
         default: return ['Priority', 'Status', 'Assignee'];
       }
     })();
@@ -305,7 +304,7 @@ export default function CreateViewModal({
           {/* Properties - Badge Selectors like NewIssueModal */}
           <div className="flex flex-wrap gap-1 mt-2 mb-6">
             <ViewTypeSelector
-              value={formData.displayType as "LIST" | "KANBAN" | "TIMELINE"}
+              value={formData.displayType as "LIST" | "KANBAN"}
               onChange={handleDisplayTypeChange}
             />
             <ViewProjectSelector
