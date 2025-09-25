@@ -117,7 +117,8 @@ export async function PUT(
         batchId: batchId || `single-${Date.now()}`,
         sequence: sequence || 0,
         affectedIssues: bulk.map((item: any) => item.issueId),
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        userId: currentUser.id // Add user context to distinguish actions
       });
       
       return NextResponse.json({ 
@@ -176,7 +177,8 @@ export async function PUT(
       viewId,
       issueId,
       columnId,
-      position
+      position,
+      userId: currentUser.id // Add user context to distinguish actions
     });
 
     return NextResponse.json({ success: true, viewPosition });
