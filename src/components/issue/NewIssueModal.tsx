@@ -57,8 +57,7 @@ import { useCreateIssue } from "@/hooks/queries/useIssues";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-
-type IssueType = "TASK" | "EPIC" | "STORY" | "MILESTONE" | "BUG" | "SUBTASK";
+import type { IssueType } from "@/constants/issue-types";
 
 interface NewIssueModalProps {
   open: boolean;

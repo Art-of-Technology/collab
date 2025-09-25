@@ -194,6 +194,15 @@ export default function ViewRenderer({
   const [tempOrdering, setTempOrdering] = useState('manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
+  const [recentIssueCreated, setRecentIssueCreated] = useState(false);
+  
+  // Reset recentIssueCreated flag after a delay
+  useEffect(() => {
+    if (recentIssueCreated) {
+      const timeout = setTimeout(() => setRecentIssueCreated(false), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [recentIssueCreated]);
   
   // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
@@ -281,8 +290,9 @@ export default function ViewRenderer({
   
   // Fetch live data if:
   // 1. View has no active filters, OR
-  // 2. User has added/changed any filters that weren't in the original view
-  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged;
+  // 2. User has added/changed any filters that weren't in the original view, OR
+  // 3. An issue was recently created (to ensure new issues appear in filtered views)
+  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged || recentIssueCreated;
   
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
@@ -313,9 +323,9 @@ export default function ViewRenderer({
 
   // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // When view has filters and no temp filters changed, prioritize server-side filtered initialIssues
-    // When no filters OR temp filters changed, use live data for real-time updates
-    const baseIssues = (hasActiveFilters && !tempFiltersChanged)
+    // When view has filters and no temp filters changed AND no recent issue creation, prioritize server-side filtered initialIssues
+    // When no filters OR temp filters changed OR recent issue created, use live data for real-time updates
+    const baseIssues = (hasActiveFilters && !tempFiltersChanged && !recentIssueCreated)
       ? initialIssues 
       : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
@@ -327,7 +337,7 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged, recentIssueCreated]);
 
   // Use merged issues for filtering
   const issues = allIssues;
@@ -908,6 +918,9 @@ export default function ViewRenderer({
       workspaceId: workspace.id,
       currentUserId: currentUser.id,
       onIssueCreated: () => {
+        // Set flag to force using live data for recent issue creations
+        setRecentIssueCreated(true);
+        
         // Invalidate queries to refresh data - use the correct query keys
         const currentProjectIds = tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id);
         queryClient.invalidateQueries({ 

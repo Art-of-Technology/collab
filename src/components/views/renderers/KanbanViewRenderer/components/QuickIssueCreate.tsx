@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/popover";
 import { FolderOpen, ChevronDown } from "lucide-react";
 import { cn } from '@/lib/utils';
-import type { IssuePriority, IssueType } from '@/types/issue';
+import type { IssuePriority } from '@/types/issue';
+import type { IssueType } from '@/constants/issue-types';
 
 interface QuickIssueCreateProps {
   columnId: string;
@@ -78,7 +79,7 @@ export default function QuickIssueCreate({
         setSelectedProjectId('');
       }
 
-      // Notify parent component
+      // Notify parent component (ViewRenderer handles query invalidation)
       onCreated(result.issue);
     } catch (error) {
       console.error('Failed to create issue:', error);
