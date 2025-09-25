@@ -46,7 +46,7 @@ const KanbanIssueCard = React.memo(({
   const TypeIcon = typeConfig.icon;
 
   const isIssueBeingProcessed = operationsInProgress?.has(issue.id) || false;
-  
+
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index} isDragDisabled={isIssueBeingProcessed}>
       {(provided, snapshot) => (
@@ -56,8 +56,8 @@ const KanbanIssueCard = React.memo(({
           {...provided.dragHandleProps}
           className={cn(
             "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
-            isIssueBeingProcessed 
-              ? "opacity-60 cursor-not-allowed" 
+            isIssueBeingProcessed
+              ? "opacity-60 cursor-not-allowed"
               : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
@@ -83,7 +83,7 @@ const KanbanIssueCard = React.memo(({
               )}
               {/* Issue Key - More readable */}
               <span className="text-xs font-mono text-[#8b949e] font-medium">
-                {issue.issueKey} - {issue.viewPosition}
+                {issue.issueKey}
               </span>
             </div>
 
