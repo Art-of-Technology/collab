@@ -11,6 +11,32 @@ import { useUpdateIssue } from '@/hooks/queries/useIssues';
 import { VIEW_POSITION_GAP } from '@/constants/viewPositions';
 import { markIssueAsDragging, markOperationCompleted } from '@/hooks/useRealtimeWorkspaceEvents';
 import { flushSync } from 'react-dom';
+
+// Helper function to detect tight spacing or position conflicts that require repositioning
+function detectTightSpacing(bulk: Array<{issueId: string, columnId: string, position: number}>): boolean {
+  if (bulk.length <= 1) return false;
+  
+  // Sort by position to check gaps
+  const sortedBulk = [...bulk].sort((a, b) => a.position - b.position);
+  
+  // Check for duplicates (exact position conflicts)
+  const positions = sortedBulk.map(item => item.position);
+  const uniquePositions = new Set(positions);
+  if (uniquePositions.size !== positions.length) {
+    return true; // Found duplicate positions
+  }
+  
+  // Check for tight spacing (gaps smaller than minimum threshold)
+  const minGap = VIEW_POSITION_GAP / 2; // 512 - anything tighter needs repositioning
+  for (let i = 0; i < sortedBulk.length - 1; i++) {
+    const gap = sortedBulk[i + 1].position - sortedBulk[i].position;
+    if (gap < minGap) {
+      return true; // Found tight spacing
+    }
+  }
+  
+  return false; // Spacing is fine
+}
 import type { 
   KanbanViewRendererProps 
 } from '../types';
@@ -449,18 +475,38 @@ export const useKanbanState = ({
         optimisticPosition = Number.isFinite(prevPos) ? prevPos + VIEW_POSITION_GAP : VIEW_POSITION_GAP;
       } else if (!prev && next) {
         const nextPos = getPos(next);
-        // Ensure we don't go negative - use half of nextPos or a minimum value
+        // When placing before the first item, ensure we create a unique position
         if (nextPos > VIEW_POSITION_GAP) {
+          // If next position is large, use half
+          optimisticPosition = Math.floor(nextPos / 2);
+        } else if (nextPos > 512) {
+          // If next position is medium, use half
           optimisticPosition = Math.floor(nextPos / 2);
         } else {
-          optimisticPosition = Math.max(1, nextPos - 512); // Use smaller gap to avoid negatives
+          // If next position is too small (≤512), we need to reposition all items
+          // Instead of trying to squeeze in, we'll push everything down
+          optimisticPosition = 1; // Temporary - will trigger repositioning
         }
       } else {
         optimisticPosition = VIEW_POSITION_GAP; // first item in empty column
       }
       
-      // Ensure position is always positive
-      optimisticPosition = Math.max(1, optimisticPosition);
+      // Ensure position is always positive (integers only for database compatibility)
+      optimisticPosition = Math.max(1, Math.floor(optimisticPosition));
+      
+      // Check if we're creating a position conflict (placing at top when items have small positions)
+      const needsRepositioning = (
+        // Placing before first item AND first item has small position
+        (!prev && next && getPos(next) <= 512) ||
+        // Or if optimistic position would conflict with existing positions
+        (optimisticPosition <= 512 && visualColumnItems.some(item => getPos(item) <= 512))
+      );
+      
+      if (needsRepositioning) {
+        // When repositioning is needed, use position that will be correct after repositioning
+        // If we're placing at the top (destIndex 0), we'll get position 1024 after repositioning
+        optimisticPosition = (clampedIndex + 1) * VIEW_POSITION_GAP;
+      }
       
       // Create a deep copy of the issue to avoid shared reference mutations
       const originalIssue = newLocalIssues[issueIndex];
@@ -577,13 +623,46 @@ export const useKanbanState = ({
         const itemWithOptimisticPosition = { ...updatedIssue, viewPosition: optimisticPosition, position: optimisticPosition };
         finalItems.splice(dbDestIndex, 0, itemWithOptimisticPosition);
         
-        // Create bulk update using existing positions (gap-based) instead of rebuilding with index-based
-        // This ensures database positions match our optimistic positions, preventing visual jumping
-        const bulk = finalItems.map((it) => ({
+        // Create bulk update - check if we need repositioning due to position conflicts
+        let bulk = finalItems.map((it) => ({
           issueId: it.id,
           columnId: targetColumnId,
           position: it.viewPosition || it.position || ((finalItems.indexOf(it) + 1) * VIEW_POSITION_GAP)
         }));
+
+        // ENHANCED: Check for tight spacing or position conflicts that require full repositioning
+        // This applies to both same-column and cross-column moves
+        const needsFullRepositioning = needsRepositioning || detectTightSpacing(bulk);
+        
+        if (needsFullRepositioning) {
+          // When repositioning is needed, recalculate all positions with proper gaps
+          // Reorder based on the visual array order (where user actually dropped the item)
+          const reorderedBulk = finalItems.map((item, visualIndex) => {
+            return {
+              issueId: item.id,
+              columnId: targetColumnId,
+              position: (visualIndex + 1) * VIEW_POSITION_GAP // Clean spacing: 1024, 2048, 3072, etc.
+            };
+          });
+          
+          bulk = reorderedBulk;
+          
+          // CRITICAL: Update the optimistic position to match the final repositioned position
+          // This prevents visual jumping when the database response comes back
+          const droppedItemInBulk = bulk.find(b => b.issueId === draggableId);
+          if (droppedItemInBulk) {
+            // Update both the optimistic position and the newLocalIssues state
+            optimisticPosition = droppedItemInBulk.position;
+            const issueIndex = newLocalIssues.findIndex((i: any) => i.id === draggableId);
+            if (issueIndex !== -1) {
+              newLocalIssues[issueIndex] = {
+                ...newLocalIssues[issueIndex],
+                viewPosition: optimisticPosition,
+                position: optimisticPosition
+              };
+            }
+          }
+        }
         
         
         
