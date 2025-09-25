@@ -21,7 +21,7 @@ export async function PUT(
     const resolvedParams = await params;
     const { viewId } = resolvedParams;
     const body = await request.json();
-    const { issueId, columnId, position, bulk, cleanup } = body as any;
+    const { issueId, columnId, position, bulk, cleanup, batchId, sequence } = body as any;
 
     // Verify view access
     const view = await prisma.view.findFirst({
@@ -70,6 +70,7 @@ export async function PUT(
         return NextResponse.json({ error: 'One or more issues not found or access denied.' }, { status: 404 });
       }
 
+      // Use a single transaction for atomic batch operations
       await prisma.$transaction(async (tx) => {
         // Optional cleanup: remove old assignments for provided issues outside the destination column
         if (cleanup?.issueIds?.length && cleanup?.keepColumnId) {
@@ -82,6 +83,7 @@ export async function PUT(
           });
         }
 
+        // Batch upsert all positions in a single operation for better performance
         await Promise.all(
           bulk.map((item: any) =>
             tx.viewIssuePosition.upsert({
@@ -92,7 +94,10 @@ export async function PUT(
                   columnId: item.columnId
                 }
               },
-              update: { position: item.position },
+              update: { 
+                position: item.position,
+                updatedAt: new Date()
+              },
               create: {
                 viewId,
                 issueId: item.issueId,
@@ -103,12 +108,23 @@ export async function PUT(
           )
         );
       });
+      // Only publish event once per batch (not per individual issue)
+      // Include sequence number for proper request ordering
       await publishEvent(`workspace:${view.workspaceId}:events`, {
         type: 'view.issue-position.updated',
         workspaceId: view.workspaceId,
         viewId,
+        batchId: batchId || `single-${Date.now()}`,
+        sequence: sequence || 0,
+        affectedIssues: bulk.map((item: any) => item.issueId),
+        timestamp: Date.now()
       });
-      return NextResponse.json({ success: true });
+      
+      return NextResponse.json({ 
+        success: true, 
+        batchId,
+        affectedCount: bulk.length 
+      });
     }
 
     if (!issueId || !columnId || position === undefined) {

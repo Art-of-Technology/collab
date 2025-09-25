@@ -56,6 +56,7 @@ export interface KanbanColumnProps {
   currentUserId: string;
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
+  operationsInProgress?: Set<string>;
   onIssueClick: (issueId: string) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
@@ -69,6 +70,7 @@ export interface KanbanIssueCardProps {
   issue: any;
   index: number;
   displayProperties: string[];
+  operationsInProgress?: Set<string>;
   onCardClick: (issueId: string) => void;
 }
 
@@ -92,6 +94,7 @@ export interface KanbanBoardProps {
   currentUserId: string;
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
+  operationsInProgress?: Set<string>;
   onDragEnd: (result: any) => void;
   onDragStart: (start: any) => void;
   onDragUpdate: (update: any) => void;

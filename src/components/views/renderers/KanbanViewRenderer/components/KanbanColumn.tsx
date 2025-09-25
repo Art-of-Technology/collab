@@ -25,6 +25,7 @@ export default function KanbanColumn({
   currentUserId,
   draggedIssue,
   hoverState,
+  operationsInProgress,
   onIssueClick,
   onStartCreatingIssue,
   onCancelCreatingIssue,
@@ -116,6 +117,7 @@ export default function KanbanColumn({
                     issue={issue}
                     index={index}
                     displayProperties={displayProperties}
+                    operationsInProgress={operationsInProgress}
                     onCardClick={onIssueClick}
                   />
                 ))}

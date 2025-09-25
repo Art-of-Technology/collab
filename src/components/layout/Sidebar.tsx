@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -60,8 +60,6 @@ import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
-import { usePermissions } from "@/hooks/use-permissions";
-import { getRoleDisplayName } from "@/lib/permissions";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface SidebarProps {
@@ -81,20 +79,8 @@ export default function Sidebar({
   const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
-  const { userPermissions } = usePermissions(currentWorkspace?.id);
   const { canManageLeave } = useWorkspacePermissions();
 
-  const formatGlobalRole = (role?: string) =>
-    role
-      ? role
-        .toString()
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-      : "";
-
-
-  const displayRole = userPermissions?.role ? getRoleDisplayName(userPermissions.role as any) : formatGlobalRole(session?.user?.role) || "Member";
 
   // Use Mention context for notifications
   const {
@@ -462,20 +448,6 @@ export default function Sidebar({
                 </PopoverContent>
               </Popover>
             )}
-
-            {/* Chat */}
-            {session && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                onClick={toggleChat}
-                title="Chat"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {isChatOpen && <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />}
-              </Button>
-            )}
           </div>
         </div>
 
@@ -705,19 +677,6 @@ export default function Sidebar({
               </Popover>
             )}
 
-            {/* Chat */}
-            {session && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                onClick={toggleChat}
-                title="Chat"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {isChatOpen && <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />}
-              </Button>
-            )}
           </div>
         </div>
       </div>

@@ -16,6 +16,7 @@ export default function KanbanBoard({
   currentUserId,
   draggedIssue,
   hoverState,
+  operationsInProgress,
   onDragEnd,
   onDragStart,
   onDragUpdate,
@@ -52,6 +53,7 @@ export default function KanbanBoard({
                 currentUserId={currentUserId}
                 draggedIssue={draggedIssue}
                 hoverState={hoverState}
+                operationsInProgress={operationsInProgress}
                 onIssueClick={onIssueClick}
                 onCreateIssue={onCreateIssue}
                 onStartCreatingIssue={onStartCreatingIssue}

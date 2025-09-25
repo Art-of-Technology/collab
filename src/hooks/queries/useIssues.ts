@@ -69,14 +69,13 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
       return response.json();
     },
     enabled: !!workspaceId,
-    // Disable React Query caching: always treat data as stale and garbage collect immediately
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    // More reasonable caching with proper invalidation
+    staleTime: 10000, // 10 seconds before considering stale
+    gcTime: 60000, // Keep in cache for 1 minute
+    refetchOnMount: true,
+    refetchOnWindowFocus: false, // We have realtime updates
     refetchOnReconnect: true,
-    // Do not retry to avoid hidden stale replays
-    retry: false,
+    retry: 1, // Retry once on failure
   });
 }
 
