@@ -951,7 +951,7 @@ export function IssueDetailContent({
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] focus:border-[#58a6ff] h-auto py-2 flex-1"
+                    className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] h-auto py-1 flex-1"
                     placeholder="Issue title"
                     autoFocus
                     onKeyDown={(e) => {
@@ -964,34 +964,34 @@ export function IssueDetailContent({
                       }
                     }}
                   />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveTitle}
-                    disabled={isUpdating}
-                    className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-                  >
-                    {isUpdating ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : (
-                      <Check className="h-3 w-3 mr-1" />
-                    )}
-                    Save
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEditingTitle(false);
-                      setTitle(issue.title);
-                    }}
-                    disabled={isUpdating}
-                    className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Cancel
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveTitle}
+                      disabled={isUpdating}
+                      className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+                    >
+                      {isUpdating ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Check className="h-3 w-3 mr-1" />
+                      )}
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingTitle(false);
+                        setTitle(issue.title);
+                      }}
+                      disabled={isUpdating}
+                      className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1104,7 +1104,7 @@ export function IssueDetailContent({
                   </>
                 )}
               </div>
-              
+
               {/* Autosave status indicator and Editor Controls */}
               <div className="flex items-center gap-4 text-xs text-[#8b949e]">
                 {/* Autosave Status */}
