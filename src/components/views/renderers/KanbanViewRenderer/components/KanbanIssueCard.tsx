@@ -23,6 +23,7 @@ const KanbanIssueCard = React.memo(({
   issue,
   index,
   displayProperties,
+  operationsInProgress,
   onCardClick
 }: KanbanIssueCardProps) => {
   const showAssignee = displayProperties.includes('Assignee');
@@ -44,15 +45,20 @@ const KanbanIssueCard = React.memo(({
   const typeConfig = ISSUE_TYPE_CONFIG[issue.type as keyof typeof ISSUE_TYPE_CONFIG] || ISSUE_TYPE_CONFIG.TASK;
   const TypeIcon = typeConfig.icon;
 
+  const isIssueBeingProcessed = operationsInProgress?.has(issue.id) || false;
+  
   return (
-    <Draggable key={issue.id} draggableId={issue.id} index={index}>
+    <Draggable key={issue.id} draggableId={issue.id} index={index} isDragDisabled={isIssueBeingProcessed}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg hover:border-[#333] transition-colors duration-150 cursor-pointer",
+            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
+            isIssueBeingProcessed 
+              ? "opacity-60 cursor-not-allowed" 
+              : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
           onClick={handleCardClick}

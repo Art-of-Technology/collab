@@ -338,8 +338,7 @@ export default function ViewRenderer({
     return Array.from(issueMap.values());
   }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged, recentIssueCreated]);
 
-  // Use merged issues for filtering
-  const issues = allIssues;
+  // Use merged issues for filtering directly
   
   // Helper function to handle filter changes and trigger data refetch when needed
   const handleFilterChange = useCallback((filterKey: string, newValues: string[] | ActionFilter[], originalValues: string[] | ActionFilter[]) => {
@@ -386,10 +385,10 @@ export default function ViewRenderer({
   // Update ViewFilters context with current data
   useEffect(() => {
     setCurrentView(view);
-    setIssues(issues);
+    setIssues(allIssues);
     setWorkspace(workspace);
     setCurrentUser(currentUser);
-  }, [view, issues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
+  }, [view, allIssues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
 
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
@@ -427,14 +426,14 @@ export default function ViewRenderer({
 
   // Memoize action filters to prevent reference instability
   const actionFilters = useMemo(() => {
-    return allFilters.actions as ActionFilter[] || [];
-  }, [allFilters.actions]);
+    return (allFilters.actions as ActionFilter[]) || [];
+  }, [JSON.stringify(allFilters.actions || [])]);
 
   // Apply action filters first (async filtering)
   const { 
     filteredIssues: actionFilteredIssues
   } = useActionFilteredIssues({
-    issues,
+    issues: allIssues,
     actionFilters,
     workspaceId: workspace.id
   });
@@ -618,7 +617,17 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds, tempProjectIds.length]);
+  }, [
+    actionFilteredIssues, 
+    issueFilterType, 
+    searchQuery, 
+    JSON.stringify(allFilters), 
+    JSON.stringify(viewFiltersState), 
+    viewPositionsData?.positions, 
+    sortedTempProjectIds, 
+    JSON.stringify(originalProjectIds), 
+    tempProjectIds.length
+  ]);
 
   const handleUpdateView = async () => {
     try {
@@ -824,7 +833,14 @@ export default function ViewRenderer({
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [actionFilteredIssues, sortedTempProjectIds, originalProjectIds, searchQuery, allFilters, viewFiltersState]);
+  }, [
+    actionFilteredIssues, 
+    sortedTempProjectIds, 
+    JSON.stringify(originalProjectIds), 
+    searchQuery, 
+    JSON.stringify(allFilters), 
+    JSON.stringify(viewFiltersState)
+  ]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
