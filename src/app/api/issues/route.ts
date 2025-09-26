@@ -6,6 +6,15 @@ import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
+
+const RELATED_ISSUE_SELECT = {
+  id: true,
+  issueKey: true,
+  title: true,
+  type: true
+} as const;
+
 // Reuse a compact include set similar to the detail route
 const LIST_INCLUDE = {
   project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true } },
@@ -16,7 +25,21 @@ const LIST_INCLUDE = {
   children: { select: { id: true, title: true, issueKey: true, type: true, status: true } },
   column: { select: { id: true, name: true, color: true, order: true } },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
-  _count: { select: { children: true, comments: true } }
+  _count: { select: { children: true, comments: true } },
+  sourceRelations: {
+    select: {
+      id: true,
+      relationType: true,
+      targetIssue: { select: RELATED_ISSUE_SELECT }
+    }
+  },
+  targetRelations: {
+    select: {
+      id: true,
+      relationType: true,
+      sourceIssue: { select: RELATED_ISSUE_SELECT }
+    }
+  }
 } as const;
 
 // GET /api/issues - Get issues by workspace/project
@@ -67,7 +90,21 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: 'desc' }
     });
 
-    return NextResponse.json({ issues }, { status: 200 });
+    const issuesWithRelations = issues.map((issue: any) => {
+      const { sourceRelations, targetRelations, ...rest } = issue;
+      const issueRelations: RelationMap = buildIssueRelations({
+        ...issue,
+        sourceRelations,
+        targetRelations,
+      });
+
+      return {
+        ...rest,
+        issueRelations,
+      };
+    });
+
+    return NextResponse.json({ issues: issuesWithRelations }, { status: 200 });
   } catch (error) {
     console.error('[ISSUES_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -359,4 +396,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
