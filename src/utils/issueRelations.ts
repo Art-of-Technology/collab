@@ -25,7 +25,7 @@ export interface RelationItem {
 
 export type RelationMap = {
   parent?: RelationItem;
-  child: RelationItem[];
+  children: RelationItem[];
   blocks: RelationItem[];
   blocked_by: RelationItem[];
   relates_to: RelationItem[];
@@ -72,13 +72,23 @@ export const RELATION_TYPE_LABELS: Record<RelationTypeKey, string> = {
 
 export const createEmptyRelationMap = (): RelationMap => ({
   parent: undefined,
-  child: [],
+  children: [],
   blocks: [],
   blocked_by: [],
   relates_to: [],
   duplicates: [],
   duplicated_by: [],
 });
+
+const RELATION_PROPERTY_MAP: Record<RelationTypeKey, keyof RelationMap> = {
+  parent: 'parent',
+  child: 'children',
+  blocks: 'blocks',
+  blocked_by: 'blocked_by',
+  relates_to: 'relates_to',
+  duplicates: 'duplicates',
+  duplicated_by: 'duplicated_by',
+};
 
 const resolveId = (value: unknown): string | undefined => {
   if (value == null) return undefined;
@@ -134,8 +144,8 @@ const toRelationItem = (issue: any, relationType: RelationTypeKey): RelationItem
   };
 };
 
-const pushRelation = (bucket: RelationItem[], item: RelationItem | undefined) => {
-  if (!item) return;
+const pushRelation = (bucket: RelationItem[] | undefined, item: RelationItem | undefined) => {
+  if (!bucket || !item) return;
   if (bucket.some(existing => existing.id === item.id)) {
     return;
   }
@@ -153,7 +163,13 @@ const applyRelation = (
     return;
   }
 
-  pushRelation(map[relationType], item);
+  const relationKey = RELATION_PROPERTY_MAP[relationType];
+  if (!relationKey || relationKey === 'parent') {
+    return;
+  }
+
+  const bucket = map[relationKey] as RelationItem[] | undefined;
+  pushRelation(bucket, item);
 };
 
 export const buildIssueRelations = (issue: any): RelationMap => {
@@ -212,7 +228,7 @@ export const isRelationTypeKey = (value?: string): value is RelationTypeKey => {
   return value ? RELATION_TYPE_SET.has(value as RelationTypeKey) : false;
 };
 
-export type NormalizedRelation = RelationItem
+export type NormalizedRelation = RelationItem;
 
 const normalizeRelationEntry = (entry: any, fallbackType?: RelationTypeKey): RelationItem | undefined => {
   if (!entry) return undefined;
@@ -236,7 +252,6 @@ const normalizeRelationEntry = (entry: any, fallbackType?: RelationTypeKey): Rel
 
   if (!item) return undefined;
 
-  // Preserve explicit relation type when entry already carries it
   if (relationTypeValue && isRelationTypeKey(relationTypeValue) && relationTypeValue !== item.relationType) {
     item.relationType = relationTypeValue;
   }
@@ -301,7 +316,7 @@ export const countRelations = (relations: RelationMap): number => {
 
   return (
     (relations.parent ? 1 : 0) +
-    relations.child.length +
+    relations.children.length +
     relations.blocks.length +
     relations.blocked_by.length +
     relations.relates_to.length +
@@ -312,9 +327,12 @@ export const countRelations = (relations: RelationMap): number => {
 
 export const countRelationsOfType = (relations: RelationMap, relationType: RelationTypeKey): number => {
   if (!relations) return 0;
-  if (relationType === 'parent') {
+
+  const relationKey = RELATION_PROPERTY_MAP[relationType];
+  if (relationKey === 'parent') {
     return relations.parent ? 1 : 0;
   }
 
-  return relations[relationType].length;
+  const bucket = relations[relationKey] as RelationItem[] | undefined;
+  return Array.isArray(bucket) ? bucket.length : 0;
 };

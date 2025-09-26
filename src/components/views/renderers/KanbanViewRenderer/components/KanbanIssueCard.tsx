@@ -82,6 +82,7 @@ const KanbanIssueCard = React.memo(({
           {...provided.dragHandleProps}
           className={cn(
             "p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
+            hasRelations ? 'pb-1.5' : 'pb-3',
             isIssueBeingProcessed
               ? "opacity-60 cursor-not-allowed"
               : "hover:border-[#333] cursor-pointer",
@@ -234,16 +235,16 @@ const KanbanIssueCard = React.memo(({
 
           {hasRelations && (
             <>
-              <hr className="border-[#1f1f1f] my-0 mt-1 mb-2" />
+              <hr className="border-[#1f1f1f] my-0 mt-0 mb-1.5" />
               <button
                 type="button"
-                className="group flex w-full items-center justify-between rounded-md bg-transparent px-0 py-0 text-[11px] text-[#8b949e] transition-colors"
+                className="group flex w-fit items-center justify-between rounded-md bg-transparent pl-0 pr-4 py-0 text-[11px] text-[#8b949e] transition-colors"
                 onClick={handleToggleRelations}
                 onPointerDown={handleRelationsPointerDown}
               >
-                <span className="flex items-center">
+                <span className="flex items-center justify-center">
                   {areRelationsCollapsed ? (
-                    <ChevronRight className="h-3 w-3 relative -left-1 text-[#6e7681]" />
+                    <ChevronRight className="h-3 w-3 relative -top-[0.5px] -left-1 text-[#6e7681]" />
                   ) : (
                     <ChevronDown className="h-3 w-3 relative -left-0.5 text-[#6e7681]" />
                   )}
