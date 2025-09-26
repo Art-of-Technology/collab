@@ -150,28 +150,34 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
   }
 
   return (
-    <div className="container py-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Link href={`/${workspaceId}/notes`}>
-          <Button variant="ghost" size="sm">
-            <ChevronLeft className="h-4 w-4" />
-            Back to Notes
+          <Button variant="ghost" size="sm" className="px-2 sm:px-3">
+            <ChevronLeft className="h-4 w-4 mr-1 sm:mr-2" />
+            <span className="text-xs sm:text-sm">Back to Notes</span>
           </Button>
         </Link>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-end">
           {session?.user?.id === note.author.id ? (
             <>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => setEditingNote(note)}
+                className="text-xs sm:text-sm px-2 sm:px-3 py-1 h-8 sm:h-9"
               >
-                <Edit className="h-4 w-4 mr-2" />
+                <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Edit
               </Button>
-              <Button variant="outline" size="sm" onClick={handleDelete}>
-                <Trash2 className="h-4 w-4 mr-2" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDelete}
+                className="text-xs sm:text-sm px-2 sm:px-3 py-1 h-8 sm:h-9"
+              >
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Delete
               </Button>
             </>
@@ -180,16 +186,17 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
               variant="outline" 
               size="sm"
               onClick={() => document.getElementById('note-comments')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-xs sm:text-sm px-2 sm:px-3 py-1 h-8 sm:h-9 ml-auto sm:ml-0"
             >
-              <MessageSquare className="h-4 w-4 mr-2" />
+              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               Comment
             </Button>
           )}
         </div>
       </div>
 
-      <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
-        <CardHeader className="flex flex-row items-baseline justify-between pb-2">
+      <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm mx-0 sm:mx-0">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-baseline justify-between pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <div className="space-y-1">
             <CardTitle className="text-lg sm:text-2xl font-bold tracking-tight sm:tracking-normal">{note.title}</CardTitle>
             <div className="flex flex-col sm:flex-row sm:items-center gap-1 pt-3 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
@@ -209,31 +216,31 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </div>
         </CardHeader>
 
-        <CardContent className="pt-2 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-6">
+        <CardContent className="pt-2 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-6 space-y-3 sm:space-y-4">
           <div className="flex gap-6">
             {/* Note content */}
             <div className="flex-1 space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Avatar className="h-8 w-8 border border-border/40">
+                  <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border border-border/40">
                     <AvatarImage src={note.author.image || undefined} alt={note.author.name || "User"} />
-                    <AvatarFallback className="bg-primary/10 text-primary">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs sm:text-sm">
                       {note.author.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-medium text-sm sm:text-base tracking-tight sm:tracking-normal">{note.author.name}</span>
+                  <span className="font-medium text-xs sm:text-sm md:text-base tracking-tight sm:tracking-normal">{note.author.name}</span>
                 </div>
                 
-                <h3 className="text-base sm:text-lg font-medium tracking-tight sm:tracking-normal mt-4">Content</h3>
-                <div className="mt-2">
+                <h3 className="text-sm sm:text-base md:text-lg font-medium tracking-tight sm:tracking-normal mt-3 sm:mt-4">Content</h3>
+                <div className="mt-1 sm:mt-2 text-sm sm:text-base">
                   <MarkdownRenderer 
                     content={note.content}
                   />
                 </div>
                 
                 {note.tags && note.tags.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium mb-2">Tags</h4>
+                  <div className="mt-3 sm:mt-4">
+                    <h4 className="text-xs sm:text-sm font-medium mb-1 sm:mb-2">Tags</h4>
                     <div className="flex flex-wrap gap-1">
                       {note.tags.map((tag) => (
                         <Badge key={tag.id} variant="secondary" className="text-xs">
@@ -254,12 +261,12 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
       </Card>
       
       {/* Comment Section */}
-      <div id="note-comments" className="mt-8">
+      <div id="note-comments" className="mt-6 sm:mt-8">
         <Card className="border-border/40 bg-card/95 backdrop-blur-sm">
-          <CardContent className="pt-6 pb-4">
-            <div className="flex items-center gap-2 mb-6">
-              <MessageSquare className="h-5 w-5" />
-              <h3 className="text-lg font-medium">Comments</h3>
+          <CardContent className="pt-4 sm:pt-6 pb-4 px-3 sm:px-6">
+            <div className="flex items-center gap-1 sm:gap-2 mb-4 sm:mb-6">
+              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
+              <h3 className="text-base sm:text-lg font-medium">Comments</h3>
             </div>
             <NoteCommentsList noteId={note.id} />
           </CardContent>
