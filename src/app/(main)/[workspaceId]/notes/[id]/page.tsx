@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Edit, Trash2 } from "lucide-react";
+import { ChevronLeft, Edit, Trash2, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
+import { NoteCommentsList } from "@/components/notes/NoteCommentsList";
 
 interface Note {
   id: string;
@@ -34,6 +36,7 @@ interface Note {
 }
 
 export default function NoteDetailPage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
+  const { data: session } = useSession();
   const [note, setNote] = useState<Note | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -157,18 +160,31 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
         </Link>
         
         <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setEditingNote(note)}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
-          </Button>
+          {session?.user?.id === note.author.id ? (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setEditingNote(note)}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDelete}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => document.getElementById('note-comments')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Comment
+            </Button>
+          )}
         </div>
       </div>
 
@@ -236,6 +252,19 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </div>
         </CardContent>
       </Card>
+      
+      {/* Comment Section */}
+      <div id="note-comments" className="mt-8">
+        <Card className="border-border/40 bg-card/95 backdrop-blur-sm">
+          <CardContent className="pt-6 pb-4">
+            <div className="flex items-center gap-2 mb-6">
+              <MessageSquare className="h-5 w-5" />
+              <h3 className="text-lg font-medium">Comments</h3>
+            </div>
+            <NoteCommentsList noteId={note.id} />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Edit Note Dialog */}
       {editingNote && (

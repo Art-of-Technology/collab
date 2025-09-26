@@ -558,30 +558,34 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                               }`}
                             />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setEditingNote(note);
-                            }}
-                          >
-                            <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteNote(note.id);
-                            }}
-                          >
-                            <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
-                          </Button>
+                          {session?.user?.id === note.author.id && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setEditingNote(note);
+                                }}
+                              >
+                                <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteNote(note.id);
+                                }}
+                              >
+                                <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
 
