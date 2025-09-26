@@ -93,6 +93,9 @@ model User {
   
   // Notification preferences
   notificationPreferences NotificationPreferences?
+  
+  // OAuth authorization codes
+  oauthAuthorizationCodes AppOAuthAuthorizationCode[]
 }
 
 model Account {
@@ -372,6 +375,10 @@ model Workspace {
   projects            Project[]
   views               View[]
   issues              Issue[]
+  
+  // App Store relationships
+  appInstallations    AppInstallation[]
+  oauthAuthorizationCodes AppOAuthAuthorizationCode[]
 }
 
 model WorkspaceMember {
@@ -1738,6 +1745,19 @@ enum ViewVisibility {
   SHARED
 }
 
+enum AppStatus { 
+  DRAFT 
+  PUBLISHED 
+  SUSPENDED 
+}
+
+enum InstallationStatus { 
+  ACTIVE
+  PENDING 
+  SUSPENDED 
+  REMOVED 
+}
+
 model NotificationPreferences {
   id     String @id @default(cuid())
   userId String @unique
@@ -1782,4 +1802,200 @@ model NotificationPreferences {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ========================================
+// App Store Platform Models
+// ========================================
+
+model App {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  iconUrl         String?
+  manifestUrl     String
+  publisherId     String  // user/org
+  status          AppStatus @default(DRAFT)
+  latestVersionId String?
+  versions        AppVersion[]
+  oauthClient     AppOAuthClient?
+  scopes          AppScope[]
+  permissions     Json?            // Store {org: boolean, user: boolean}
+  installations   AppInstallation[]
+  webhooks        AppWebhook[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([slug])
+  @@index([status])
+  @@index([publisherId])
+}
+
+model AppVersion {
+  id        String   @id @default(cuid())
+  appId     String
+  version   String
+  manifest  Json
+  createdAt DateTime @default(now())
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@index([version])
+  @@unique([appId, version])
+}
+
+model AppOAuthClient {
+  id             String   @id @default(cuid())
+  appId          String   @unique
+  clientId       String   @unique
+  clientSecret   String   // encrypted at rest
+  apiKey         String?   @unique
+  redirectUris   String[]
+  app            App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  authorizationCodes AppOAuthAuthorizationCode[]
+
+  @@index([clientId])
+}
+
+model AppInstallation {
+  id            String   @id @default(cuid())
+  appId         String
+  workspaceId   String
+  installedById String
+  status        InstallationStatus @default(ACTIVE)
+  scopes        String[] // normalized scopes granted at install time
+  accessToken   String?  // encrypted
+  refreshToken  String?  // encrypted
+  tokenExpiresAt DateTime?
+  settings      Json?    // app-specific configuration
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  app           App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  webhooks      AppWebhook[]
+  authorizationCodes AppOAuthAuthorizationCode[]
+  
+  @@unique([appId, workspaceId])
+  @@index([workspaceId])
+  @@index([installedById])
+  @@index([status])
+}
+
+model AppScope { // catalog of app scopes (renamed from AppPermission for clarity)
+  id     String @id @default(cuid())
+  appId  String
+  scope  String
+  app    App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, scope])
+  @@index([appId])
+  @@index([scope])
+}
+
+model AppWebhook {
+  id             String   @id @default(cuid())
+  appId          String
+  installationId String
+  url            String
+  secretEnc      Bytes    // HMAC signing secret (encrypted)
+  eventTypes     String[] // ["issue.created", "issue.updated", etc.]
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  app          App             @relation(fields: [appId], references: [id], onDelete: Cascade)
+  installation AppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  deliveries   AppWebhookDelivery[]
+
+  @@unique([installationId, url]) // One webhook URL per installation
+  @@index([appId])
+  @@index([installationId])
+  @@index([isActive])
+}
+
+model AppWebhookDelivery {
+  id          String   @id @default(cuid())
+  webhookId   String
+  eventType   String   // "issue.created"
+  eventId     String   // unique event identifier
+  payload     Json     // event payload
+  signature   String   // HMAC signature sent
+  httpStatus  Int?     // response status code
+  responseBody String? // response from webhook URL
+  attempts    Int      @default(0)
+  lastAttemptAt DateTime?
+  nextAttemptAt DateTime?
+  deliveredAt DateTime? // when successfully delivered
+  failedAt    DateTime? // when permanently failed
+  createdAt   DateTime @default(now())
+  
+  webhook AppWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@unique([webhookId, eventId]) // Prevent duplicate deliveries
+  @@index([webhookId])
+  @@index([eventType])
+  @@index([nextAttemptAt]) // For retry processing
+  @@index([createdAt])
+}
+
+enum WebhookEventType {
+  ISSUE_CREATED
+  ISSUE_UPDATED
+  ISSUE_DELETED
+  POST_CREATED
+  POST_UPDATED
+  WORKSPACE_MEMBER_ADDED
+  WORKSPACE_MEMBER_REMOVED
+  APP_INSTALLED
+  APP_UNINSTALLED
+}
+
+model AppOAuthAuthorizationCode {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  clientId       String
+  userId         String
+  workspaceId    String
+  installationId String
+  redirectUri    String
+  scope          String
+  state          String?
+  code_challenge String?
+  code_challenge_method String?
+  nonce          String?
+  used           Boolean  @default(false)
+  usedAt         DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  
+  oauthClient    AppOAuthClient   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation   AppInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  
+  @@index([code])
+  @@index([clientId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([expiresAt])
+  @@index([used])
+  @@map("app_oauth_authorization_codes")
+}
+
+model AppAuditLog {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  installationId String?
+  actorId        String?
+  action         String   // install, uninstall, token_rotated, sync_start, sync_end
+  details        Json?
+  createdAt      DateTime @default(now())
+  
+  @@index([workspaceId])
+  @@index([installationId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("app_audit_logs")
 }

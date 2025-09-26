@@ -41,6 +41,7 @@ import {
 } from '@/components/views/selectors';
 import { ActionFiltersSelector, type ActionFilter } from '@/components/views/selectors/ActionFiltersSelector';
 import { useCreateView } from '@/hooks/queries/useViews';
+import Image from 'next/image';
 
 interface CreateViewModalProps {
   isOpen: boolean;
@@ -254,7 +255,7 @@ export default function CreateViewModal({
                   <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-[#1a1a1a] text-xs">
                     <div className="flex items-center gap-1.5">
                       {workspace.logoUrl ? (
-                        <img src={workspace.logoUrl} alt="" className="h-3 w-3 rounded" />
+                        <Image src={workspace.logoUrl} alt="" className="h-3 w-3 rounded" />
                       ) : (
                         <Globe className="h-3 w-3" />
                       )}

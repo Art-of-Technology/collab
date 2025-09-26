@@ -27,6 +27,7 @@ import {
   Search as SearchIcon,
   Calendar,
   Book,
+  Grid3X3,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { formatDistanceToNow } from "date-fns";
@@ -49,6 +50,8 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
+import { useInstalledApps } from "@/hooks/queries/useInstalledApps";
+import { useFeatureFlag } from "@/lib/feature-flags";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NewIssueModal from "@/components/issue/NewIssueModal";
@@ -117,6 +120,11 @@ export default function Sidebar({
     includeStats: true,
   });
 
+  const isAppsEnabled = useFeatureFlag('APPS_ENABLED');
+  const { data: installedApps = [], isLoading: isAppsLoading } = useInstalledApps(
+    currentWorkspace?.id
+  );
+
   // Local state for Linear-style sidebar
   const [viewSearchQuery, setViewSearchQuery] = useState("");
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
@@ -125,6 +133,7 @@ export default function Sidebar({
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     projects: false,
     views: false,
+    apps: false,
   });
 
   // Notification and modal state
@@ -960,6 +969,71 @@ export default function Sidebar({
               </CollapsibleContent>
             </Collapsible>
           </div>
+
+          {/* Apps Section */}
+          {isAppsEnabled && installedApps.length > 0 && (
+            <div>
+              <Collapsible open={!collapsedSections.apps} onOpenChange={() => toggleSection("apps")}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between h-7 px-2 text-gray-400 hover:text-white hover:bg-[#1f1f1f] text-sm font-medium"
+                  >
+                    <div className="flex items-center">
+                      Apps
+                    </div>
+                    <div className="flex items-center">
+                      <Badge variant="secondary" className="mr-2 h-4 px-1 text-[10px] bg-[#1f1f1f]">
+                        {installedApps.length}
+                      </Badge>
+                      {collapsedSections.apps ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </div>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {/* Apps list */}
+                  <div className="space-y-0.5">
+                    {isAppsLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      </div>
+                    ) : (
+                      installedApps.map((installation) => (
+                        <Button
+                          key={installation.id}
+                          variant="ghost"
+                          className={cn(
+                            "w-full justify-start h-7 px-2 text-sm transition-colors",
+                            pathname.includes(`/apps/${installation.app.slug}`)
+                              ? "bg-[#1f1f1f] text-white"
+                              : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                          )}
+                          asChild
+                        >
+                          <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/apps/${installation.app.slug}`} className="min-w-0 block">
+                            <div className="flex items-center w-full min-w-0">
+                              {installation.app.iconUrl ? (
+                                <Image
+                                  src={installation.app.iconUrl}
+                                  alt={`${installation.app.name} icon`}
+                                  width={12}
+                                  height={12}
+                                  className="mr-2 h-3 w-3 flex-shrink-0 rounded-sm"
+                                />
+                              ) : (
+                                <Grid3X3 className="mr-2 h-3 w-3 flex-shrink-0" />
+                              )}
+                              <span className="truncate flex-1 text-xs">{installation.app.name}</span>
+                            </div>
+                          </Link>
+                        </Button>
+                      ))
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
         </div>
       </ScrollArea>
 

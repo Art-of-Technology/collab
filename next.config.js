@@ -34,7 +34,14 @@ const nextConfig = {
     'bcrypt',
   ],
   images: {
-    domains: ['lh3.googleusercontent.com', 'upload.wikimedia.org', 'res.cloudinary.com'],
+    remotePatterns: [
+        {
+            protocol: 'https',
+            hostname: '**',
+            port: '',
+            pathname: '**',
+        },
+    ],
   },
   // Remove old API config as App Router uses different mechanism
 }
