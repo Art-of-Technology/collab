@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { viewId: string } }
+  { params }: { params: Promise<{ viewId: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -14,13 +14,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { viewId: viewSlug } = await params;
-    const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
-
-    if (!workspaceId) {
-      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
-    }
+    const { viewId } = await params;
 
     // Get user
     const user = await prisma.user.findUnique({
@@ -31,93 +25,62 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Check if user has access to this view
+    // Check if view exists and user has access to it
     const view = await prisma.view.findFirst({
       where: {
-        slug: viewSlug,
-        workspaceId: workspaceId,
+        id: viewId,
         OR: [
           { visibility: 'WORKSPACE' },
-          { visibility: 'SHARED', sharedWith: { has: user.id } },
-          { visibility: 'PERSONAL', ownerId: user.id }
-        ],
-        workspace: {
-          members: {
-            some: {
-              user: {
-                email: session.user.email
-              }
-            }
-          }
-        }
+          { ownerId: user.id },
+          { sharedWith: { has: user.id } }
+        ]
       }
     });
 
     if (!view) {
-      return NextResponse.json({ error: 'View not found' }, { status: 404 });
+      return NextResponse.json({ error: 'View not found or access denied' }, { status: 404 });
     }
 
-    // Toggle favorite status
-    const updatedView = await prisma.view.update({
-      where: { id: view.id },
-      data: {
-        isFavorite: !view.isFavorite
-      },
-      include: {
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-            slug: true
-          }
-        },
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
+    // Check if already favorited
+    const existingFavorite = await prisma.viewFavorite.findUnique({
+      where: {
+        viewId_userId: {
+          viewId: viewId,
+          userId: user.id
         }
       }
     });
 
-    // Transform the data for the frontend
-    const transformedView = {
-      id: updatedView.id,
-      slug: updatedView.slug,
-      name: updatedView.name,
-      description: updatedView.description,
-      displayType: updatedView.displayType,
-      visibility: updatedView.visibility,
-      color: updatedView.color,
-      filters: updatedView.filters,
-      sorting: updatedView.sorting,
-      grouping: updatedView.grouping,
-      fields: updatedView.fields,
-      layout: updatedView.layout,
-      projectIds: updatedView.projectIds,
-      workspaceIds: updatedView.workspaceIds,
-      isDefault: updatedView.isDefault,
-      isFavorite: updatedView.isFavorite,
-      sharedWith: updatedView.sharedWith,
-      workspace: updatedView.workspace,
-      owner: updatedView.owner,
-      lastAccessedAt: updatedView.lastAccessedAt,
-      accessCount: updatedView.accessCount,
-      createdAt: updatedView.createdAt,
-      updatedAt: updatedView.updatedAt
-    };
+    let isFavorite = false;
 
-    return NextResponse.json({ 
-      view: transformedView,
-      message: `View ${updatedView.isFavorite ? 'favorited' : 'unfavorited'} successfully`
+    if (existingFavorite) {
+      // Remove from favorites
+      await prisma.viewFavorite.delete({
+        where: {
+          id: existingFavorite.id
+        }
+      });
+      isFavorite = false;
+    } else {
+      // Add to favorites
+      await prisma.viewFavorite.create({
+        data: {
+          viewId: viewId,
+          userId: user.id
+        }
+      });
+      isFavorite = true;
+    }
+
+    return NextResponse.json({
+      success: true,
+      isFavorite
     });
-
   } catch (error) {
     console.error('Error toggling view favorite:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to toggle view favorite' },
       { status: 500 }
     );
   }
-} 
+}

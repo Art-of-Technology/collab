@@ -219,7 +219,7 @@ export default function CreateProjectModal({
 
             <div>
               <label className="block text-xs font-medium text-[#e6edf3] mb-1.5">
-                Description
+                Description (optional)
               </label>
               <Textarea
                 value={formData.description}

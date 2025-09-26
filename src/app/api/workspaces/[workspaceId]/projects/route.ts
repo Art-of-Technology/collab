@@ -157,8 +157,8 @@ export async function GET(
       issuePrefix: project.issuePrefix,
       color: project.color,
       isDefault: project.isDefault,
+      isArchived: project.isArchived,
       issueCount: project._count.issues,
-      activeIssueCount: 0, // TODO: Calculate active issues count
       createdAt: project.createdAt,
       updatedAt: project.updatedAt
     }));
@@ -371,8 +371,8 @@ export async function POST(
       issuePrefix: project.issuePrefix,
       color: project.color,
       isDefault: project.isDefault,
+      isArchived: project.isArchived,
       issueCount: project._count.issues,
-      activeIssueCount: 0,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt
     };
