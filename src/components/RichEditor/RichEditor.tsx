@@ -28,27 +28,23 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  List,
-  ListOrdered,
-  Quote,
   WandSparkles,
   Loader2,
   Hash,
   AtSign,
-  ExternalLink,
 } from 'lucide-react';
 
 // Import our custom components
 import { StaticToolbar, UserMentionSuggestion, IssueMentionSuggestion, AIImprovePopover } from './components';
 
 // Import our hooks
-import { useMentions, useImageUpload, useKeyboardShortcuts } from './hooks';
+import { useImageUpload } from './hooks';
 
 // Import types
 import { RichEditorProps, RichEditorRef } from './types';
 
 // Import utils
-import { handlePaste, handleDrop, findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove, parseMarkdownToTipTap } from './utils';
+import { findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove } from './utils';
 
 // Import extensions
 import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ImageCSSExtension } from './extensions';
@@ -258,9 +254,21 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         onChange?.(html, text);
       }
 
-      // Check if editor is really empty (including just <p></p> or <p><br></p>)
-      const isContentEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
-      setIsEmpty(isContentEmpty);
+      // Check if editor has mentions when determining empty state
+      const hasMentions = html.includes('data-type="mention"') || html.includes('data-type="issue-mention"');
+      const isTextEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
+      const shouldShowPlaceholder = isTextEmpty && !hasMentions;
+      
+      // Update isEmpty state
+      setIsEmpty(shouldShowPlaceholder);
+      
+      // Manually manage placeholder visibility by adding/removing a CSS class
+      const editorElement = editor.view.dom;
+      if (shouldShowPlaceholder) {
+        editorElement.classList.add('should-show-placeholder');
+      } else {
+        editorElement.classList.remove('should-show-placeholder');
+      }
 
       // Check for mention triggers
       if (!isInsertingMentionRef.current) {
@@ -818,7 +826,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           }
           
           /* Placeholder for truly empty editor */
-          .${editorId} .ProseMirror.is-editor-empty:before {
+          .${editorId} .ProseMirror.is-editor-empty.should-show-placeholder:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -829,8 +837,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             z-index: 1;
           }
           
-          /* Placeholder for editor with just empty paragraph */
-          .${editorId} .ProseMirror p:first-child:last-child:empty:before {
+          /* Placeholder for editor with just empty paragraph - only show when should-show-placeholder class is present */
+          .${editorId} .ProseMirror.should-show-placeholder p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -839,6 +847,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             font-size: 14px;
             line-height: 1.5;
             z-index: 1;
+          }
+          
+          /* Hide placeholder when paragraph contains mentions (fallback for browsers without JS control) */
+          .${editorId} .ProseMirror p:first-child:last-child:has(.mention):before,
+          .${editorId} .ProseMirror p:first-child:last-child:has(.issue-mention):before,
+          .${editorId} .ProseMirror p:first-child:last-child:has([data-type="mention"]):before,
+          .${editorId} .ProseMirror p:first-child:last-child:has([data-type="issue-mention"]):before {
+            display: none !important;
           }
           
           /* Static toolbar mode specific styles */

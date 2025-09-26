@@ -75,6 +75,7 @@ export async function GET(
       keyPrefix: project.issuePrefix,
       color: project.color,
       isDefault: project.isDefault,
+      isArchived: project.isArchived,
       statuses: project.statuses.map(status => ({
         id: status.id,
         name: status.displayName,
@@ -251,6 +252,7 @@ export async function PATCH(
       keyPrefix: updatedProject.issuePrefix,
       color: updatedProject.color,
       isDefault: updatedProject.isDefault,
+      isArchived: updatedProject.isArchived,
       statuses: updatedProject.statuses.map(status => ({
         id: status.id,
         name: status.displayName,
