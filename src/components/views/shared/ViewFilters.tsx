@@ -10,12 +10,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { 
-  Settings,
+import {
   X,
   User,
   UserX,
-  ChevronDown,
   Globe,
   Lock,
   Trash2,
@@ -405,18 +403,6 @@ export default function ViewFilters({
                 </div>
               </PopoverContent>
             </Popover>
-          </div>
-
-          {/* Owner Selector */}
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-[#9ca3af]">Owner</div>
-            <OwnerSelector
-              value={view?.owner?.id}
-              onChange={onOwnerChange}
-              workspaceMembers={workspaceMembers}
-              currentOwner={view?.owner}
-              isLoading={isLoadingMembers}
-            />
           </div>
         </div>
         
