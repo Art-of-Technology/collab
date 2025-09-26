@@ -8,6 +8,7 @@ export interface Project {
   description: string | null;
   workspaceId?: string;
   isDefault: boolean;
+  isArchived?: boolean; // Optional for backwards compatibility
   issuePrefix?: string;
   keyPrefix?: string; // For settings API compatibility
   nextIssueNumbers?: Record<string, number>;
@@ -15,7 +16,7 @@ export interface Project {
   createdAt: Date;
   updatedAt: Date;
   statuses?: ProjectStatus[]; // For settings API compatibility
-  issueCount?: number; // For API compatibility
+  issueCount?: number; // Total issues count
   _count?: {
     issues: number;
   };
@@ -110,6 +111,23 @@ export const useCreateProject = () => {
       queryClient.invalidateQueries({ 
         queryKey: ["views", { workspaceId: variables.workspaceId, includeStats: true }]
       });
+    },
+  });
+};
+
+// Archive project mutation
+export const useArchiveProject = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ projectId, isArchived }: { projectId: string; isArchived: boolean }) => {
+      const { data } = await axios.patch(`/api/projects/${projectId}/archive`, { isArchived });
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate all projects queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["views"] });
     },
   });
 };
