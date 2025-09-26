@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { isIssueKey } from '@/lib/shared-issue-key-utils';
 
 /**
  * Toggle like on an issue comment
@@ -29,8 +30,7 @@ export async function toggleIssueCommentLike(issueId: string, commentId: string)
     }
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
       : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
 
@@ -168,8 +168,7 @@ export async function updateIssueComment(issueId: string, commentId: string, dat
     }
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
       : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
 
@@ -259,8 +258,7 @@ export async function deleteIssueComment(issueId: string, commentId: string) {
     }
 
     // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
+    const issue = isIssueKey(issueId)
       ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
       : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
 

@@ -47,7 +47,7 @@ const WorkspaceSelector = () => {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="flex items-center justify-between w-56 h-9 px-3 gap-2"
+          className="flex items-center justify-between w-full h-9 px-3 gap-2"
         >
           <div className="flex items-center gap-2 truncate">
             {currentWorkspace.logoUrl ? (

@@ -5,9 +5,9 @@ export interface KanbanViewRendererProps {
   currentUser: any;
   activeFilters?: Record<string, string[]>;
   setActiveFilters?: (filters: Record<string, string[]>) => void;
-  onIssueUpdate?: (issueId: string, updates: any) => void;
   onColumnUpdate?: (columnId: string, updates: any) => void;
   onCreateIssue?: (columnId: string, issueData: any) => void;
+  onOrderingChange?: (ordering: string) => void;
 }
 
 
@@ -39,13 +39,12 @@ export interface KanbanState {
 
 export interface KanbanColumnProps {
   column: Column;
+  issues: any[];
   index: number;
   groupField: string;
   displayProperties: string[];
   isCreatingIssue: boolean;
   newIssueTitle: string;
-  editingColumnId: string | null;
-  newColumnName: string;
   projects: Array<{
     id: string;
     name: string;
@@ -57,17 +56,13 @@ export interface KanbanColumnProps {
   currentUserId: string;
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
+  operationsInProgress?: Set<string>;
   onIssueClick: (issueId: string) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
   onIssueKeyDown: (e: React.KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
-  onStartEditingColumn: (columnId: string, name: string) => void;
-  onColumnEdit: (columnId: string, name: string) => void;
-  onCancelEditingColumn: () => void;
-  onColumnKeyDown: (e: React.KeyboardEvent) => void;
-  onColumnNameChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
 
@@ -75,6 +70,7 @@ export interface KanbanIssueCardProps {
   issue: any;
   index: number;
   displayProperties: string[];
+  operationsInProgress?: Set<string>;
   onCardClick: (issueId: string) => void;
 }
 
@@ -87,8 +83,6 @@ export interface KanbanBoardProps {
   groupField: string;
   isCreatingIssue: string | null;
   newIssueTitle: string;
-  editingColumnId: string | null;
-  newColumnName: string;
   projects: Array<{
     id: string;
     name: string;
@@ -100,6 +94,7 @@ export interface KanbanBoardProps {
   currentUserId: string;
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
+  operationsInProgress?: Set<string>;
   onDragEnd: (result: any) => void;
   onDragStart: (start: any) => void;
   onDragUpdate: (update: any) => void;
@@ -109,10 +104,5 @@ export interface KanbanBoardProps {
   onCancelCreatingIssue: () => void;
   onIssueKeyDown: (e: React.KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
-  onStartEditingColumn: (columnId: string, name: string) => void;
-  onColumnEdit: (columnId: string, name: string) => void;
-  onCancelEditingColumn: () => void;
-  onColumnKeyDown: (e: React.KeyboardEvent) => void;
-  onColumnNameChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }

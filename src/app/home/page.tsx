@@ -51,18 +51,17 @@ const features = [
 
 export default function LandingPage() {
     return (
-        <div className="min-h-screen flex flex-col font-landing">
+        <div className="min-h-screen flex flex-col font-landing overflow-y-auto">
             <header className="container max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex justify-between items-center">
                 <div className="flex items-center">
                     <span className="text-xl sm:text-2xl font-bold flex items-center">
                         <Image
-                            src="/Icon.svg"
+                            src="/logo-text.svg"
                             alt="Collab"
-                            width={32}
-                            height={32}
-                            className="mr-2 sm:w-10 sm:h-10 dark:invert" 
+                            width={120}
+                            height={27}
+                            className="mr-2 sm:h-10" 
                         />
-                        Collab
                     </span>
                 </div>
                 <div className="flex items-center">

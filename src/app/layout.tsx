@@ -49,12 +49,12 @@ export default async function RootLayout({
         <link rel="preload" href="/globals.css" as="style" />
         
         {/* Preload Logo */}
-        <link rel="preload" href="/logo-v2.png" as="image" />
+        <link rel="preload" href="/logo-text.svg" as="image" />
         
         {/* Preload common assets */}
         <link rel="preload" href="/icons/search.svg" as="image" />
         
-        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />

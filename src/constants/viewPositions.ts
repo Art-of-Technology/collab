@@ -1,0 +1,4 @@
+export const VIEW_POSITION_GAP = 1024;
+
+export const VIEW_POSITIONS_MAX_BULK_SIZE = 500;
+

@@ -31,7 +31,7 @@ export function IssueRelationsSection({
 }: IssueRelationsSectionProps) {
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
-    relationType: IssueRelationType;
+    relationType: IssueRelationType | null;
   }>({
     isOpen: false,
     relationType: 'child'
@@ -44,7 +44,7 @@ export function IssueRelationsSection({
   const addMultipleRelationsMutation = useAddMultipleRelations();
   const removeRelationMutation = useRemoveRelation();
 
-  const handleAddRelation = useCallback((relationType: IssueRelationType) => {
+  const handleAddRelation = useCallback((relationType: IssueRelationType | null) => {
     setModalState({
       isOpen: true,
       relationType
@@ -90,7 +90,7 @@ export function IssueRelationsSection({
 
   const handleAddFromEmpty = useCallback(() => {
     // Default to adding a child relation when clicking from empty state
-    handleAddRelation('child');
+    handleAddRelation(null);
   }, [handleAddRelation]);
 
   // Get existing relation IDs for the current modal type

@@ -80,13 +80,7 @@ const ACTION_OPTIONS = [
   { value: "UNASSIGNED", label: "Unassigned", icon: UserCheck, color: "text-gray-500" },
   { value: "TYPE_CHANGED", label: "Type changed", icon: Target, color: "text-cyan-500" },
   { value: "LABELS_CHANGED", label: "Labels changed", icon: Tags, color: "text-pink-500" },
-  { value: "DUE_DATE_SET", label: "Due date set", icon: Calendar, color: "text-orange-500" },
   { value: "DUE_DATE_CHANGED", label: "Due date changed", icon: Calendar, color: "text-orange-400" },
-  { value: "DUE_DATE_REMOVED", label: "Due date removed", icon: Calendar, color: "text-gray-500" },
-  { value: "MOVED", label: "Moved", icon: Move, color: "text-indigo-500" },
-  { value: "TASK_PLAY_STARTED", label: "Timer started", icon: Play, color: "text-emerald-500" },
-  { value: "TASK_PLAY_STOPPED", label: "Timer stopped", icon: Square, color: "text-red-500" },
-  { value: "CREATED", label: "Created", icon: History, color: "text-slate-400" },
 ];
 
 // Priority options for sub-conditions

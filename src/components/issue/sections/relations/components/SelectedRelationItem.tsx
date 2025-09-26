@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { X, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp } from "lucide-react";
-import { format } from "date-fns";
 import type { RelationItem, IssueRelationType } from "../types/relation";
 import { cn } from "@/lib/utils";
 
@@ -35,10 +34,10 @@ const getStatusIcon = (status: string) => {
   const iconClass = "h-3.5 w-3.5";
   
   switch (normalizedStatus) {
-    case 'todo':
+    case 'to_do':
     case 'backlog':
       return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
-    case 'in progress':
+    case 'in_progress':
     case 'active':
     case 'working':
       return <Clock className={cn(iconClass, "text-[#3b82f6]")} />;
@@ -61,6 +60,7 @@ const getStatusIcon = (status: string) => {
 interface SelectedRelationItemProps {
   item: RelationItem;
   relationType: IssueRelationType;
+  canChangeRelationType?: boolean;
   onRelationTypeChange: (itemId: string, relationType: IssueRelationType) => void;
   onRemove: (itemId: string) => void;
 }
@@ -68,6 +68,7 @@ interface SelectedRelationItemProps {
 export function SelectedRelationItem({
   item,
   relationType,
+  canChangeRelationType = true,
   onRelationTypeChange,
   onRemove
 }: SelectedRelationItemProps) {
@@ -75,7 +76,7 @@ export function SelectedRelationItem({
     <div className="group flex items-center px-3 py-2 bg-[#0f1011] border border-[#1f1f1f] rounded-md transition-all">
       {/* Status Icon */}
       <div className="flex items-center w-5 mr-2 flex-shrink-0">
-        {getStatusIcon(item.status || 'todo')}
+        {getStatusIcon(item.status || 'to_do')}
       </div>
 
       {/* Issue Key */}
@@ -148,6 +149,7 @@ export function SelectedRelationItem({
         <Select
           value={relationType}
           onValueChange={(value) => onRelationTypeChange(item.id, value as IssueRelationType)}
+          disabled={!canChangeRelationType}
         >
           <SelectTrigger className="w-32 h-6 text-xs bg-[#1a1a1a] border-[#333] text-[#e1e7ef]">
             <SelectValue />
