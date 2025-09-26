@@ -115,7 +115,7 @@ class CollabAppSDK {
 
   private resolveRequest(requestId: string, response: any) {
     const resolver = this.pendingRequests.get(requestId);
-    if (resolver) {
+    if (resolver && typeof resolver === 'function') {
       resolver(response);
       this.pendingRequests.delete(requestId);
     }

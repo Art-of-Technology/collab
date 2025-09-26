@@ -318,7 +318,7 @@ export function useAppBridge({ iframe, allowedOrigin, context }: UseAppBridgePro
         // Handle responses to requests we sent
         if (appMessage.requestId) {
           const resolver = pendingRequests.current.get(appMessage.requestId);
-          if (resolver) {
+          if (resolver && typeof resolver === 'function') {
             resolver(appMessage.payload);
             pendingRequests.current.delete(appMessage.requestId);
           }
