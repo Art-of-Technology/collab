@@ -59,6 +59,14 @@ export async function GET(
             email: true,
             image: true
           }
+        },
+        favorites: {
+          where: {
+            userId: user.id
+          },
+          select: {
+            id: true
+          }
         }
       },
       orderBy: [
@@ -85,7 +93,7 @@ export async function GET(
       projectIds: view.projectIds,
       workspaceIds: view.workspaceIds,
       isDefault: view.isDefault,
-      isFavorite: view.isFavorite,
+      isFavorite: view.favorites.length > 0, // User-specific favorite status
       ownerId: view.ownerId,
       owner: view.owner,
       createdBy: view.ownerId,

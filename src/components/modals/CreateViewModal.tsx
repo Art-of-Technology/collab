@@ -29,7 +29,6 @@ import {
   ViewTypeSelector,
   ViewProjectSelector,
   ViewGroupingSelector,
-  ViewOrderingSelector,
   ViewDisplayPropertiesSelector,
   StatusSelector,
   PrioritySelector,
@@ -152,7 +151,7 @@ export default function CreateViewModal({
         visibility: formData.visibility as 'PERSONAL' | 'WORKSPACE' | 'SHARED',
         projectIds: formData.projectIds,
         filters: formData.filters,
-        sorting: { field: formData.ordering, direction: 'asc' },
+        sorting: { field: 'manual', direction: 'asc' },
         grouping: { field: formData.grouping },
         fields: formData.displayProperties,
         layout: {
@@ -190,13 +189,12 @@ export default function CreateViewModal({
       switch (newType) {
         case 'LIST': return ['Priority', 'Status', 'Assignee'];
         case 'KANBAN': return ['Assignee', 'Priority', 'Labels'];
-        case 'TIMELINE': return ['Priority', 'Assignee', 'Status'];
         default: return ['Priority', 'Status', 'Assignee'];
       }
     })();
 
     const newGrouping = newType === 'KANBAN' ? 'status' : 'none';
-    const newOrdering = newType === 'TIMELINE' ? 'startDate' : 'manual';
+    const newOrdering = 'manual';
 
     setFormData(prev => ({
       ...prev,
@@ -307,7 +305,7 @@ export default function CreateViewModal({
           {/* Properties - Badge Selectors like NewIssueModal */}
           <div className="flex flex-wrap gap-1 mt-2 mb-6">
             <ViewTypeSelector
-              value={formData.displayType as "LIST" | "KANBAN" | "TIMELINE"}
+              value={formData.displayType as "LIST" | "KANBAN"}
               onChange={handleDisplayTypeChange}
             />
             <ViewProjectSelector
@@ -318,11 +316,6 @@ export default function CreateViewModal({
             <ViewGroupingSelector
               value={formData.grouping}
               onChange={(grouping) => setFormData(prev => ({ ...prev, grouping }))}
-              displayType={formData.displayType}
-            />
-            <ViewOrderingSelector
-              value={formData.ordering}
-              onChange={(ordering) => setFormData(prev => ({ ...prev, ordering }))}
               displayType={formData.displayType}
             />
             <ViewDisplayPropertiesSelector

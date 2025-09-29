@@ -6,6 +6,8 @@ import { IssueDetailContent } from "@/components/issue/IssueDetailContent";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useViewTracking } from "@/hooks/useViewTracking";
 import { Loader2 } from "lucide-react";
+import { IssueUser } from "@/types/issue";
+import { useIssueActivities } from "@/components/issue/sections/activity/hooks/useIssueActivities";
 
 export default function IssuePage() {
   const router = useRouter();
@@ -30,7 +32,7 @@ export default function IssuePage() {
   }
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-[#0a0a0a]">
+    <div className="h-full w-full overflow-hidden bg-[#0a0a0a]">
       <Suspense
         fallback={
           <div className="flex h-[80vh] items-center justify-center">
@@ -60,6 +62,14 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [issue, setIssue] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
+  const { activities, loading, error: activitiesError } = useIssueActivities({ issueId, limit: 1, action: 'CREATED' });
+
+  useEffect(() => {
+    if (activities && activities.length > 0) {
+      setCreatedByUser(activities[0].user as IssueUser);
+    }
+  }, [activities]);
 
   // Track view when issue is successfully loaded
   useViewTracking({
@@ -117,6 +127,7 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
       issueId={issueId}
       viewSlug={viewSlug || undefined}
       viewName={viewName || undefined}
+      createdByUser={createdByUser || undefined}
     />
   );
 }

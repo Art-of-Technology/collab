@@ -7,7 +7,7 @@ export interface RichEditorProps {
   maxHeight?: string;
   readOnly?: boolean;
   showToolbar?: boolean;
-  toolbarMode?: 'static' | 'floating'; // New prop for toolbar style
+  toolbarMode?: 'static' | 'floating' | 'custom'; // New prop for toolbar style
   showAiImprove?: boolean;
   onAiImprove?: (text: string) => Promise<string>;
   workspaceId?: string;

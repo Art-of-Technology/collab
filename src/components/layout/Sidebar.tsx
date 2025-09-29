@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -52,6 +52,7 @@ import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
 import { useInstalledApps } from "@/hooks/queries/useInstalledApps";
 import { useFeatureFlag } from "@/lib/feature-flags";
+import { useToggleViewFavorite } from "@/hooks/queries/useViewFavorites";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NewIssueModal from "@/components/issue/NewIssueModal";
@@ -63,8 +64,6 @@ import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
-import { usePermissions } from "@/hooks/use-permissions";
-import { getRoleDisplayName } from "@/lib/permissions";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface SidebarProps {
@@ -84,20 +83,8 @@ export default function Sidebar({
   const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
-  const { userPermissions } = usePermissions(currentWorkspace?.id);
   const { canManageLeave } = useWorkspacePermissions();
 
-  const formatGlobalRole = (role?: string) =>
-    role
-      ? role
-        .toString()
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-      : "";
-
-
-  const displayRole = userPermissions?.role ? getRoleDisplayName(userPermissions.role as any) : formatGlobalRole(session?.user?.role) || "Member";
 
   // Use Mention context for notifications
   const {
@@ -125,6 +112,29 @@ export default function Sidebar({
     currentWorkspace?.id
   );
 
+  // View favorite toggle mutation
+  const toggleViewFavoriteMutation = useToggleViewFavorite();
+
+  // Handle view favorite toggle
+  const handleToggleViewFavorite = async (viewId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      await toggleViewFavoriteMutation.mutateAsync(viewId);
+      toast({
+        title: "Success",
+        description: "View favorite status updated",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update view favorite status",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Local state for Linear-style sidebar
   const [viewSearchQuery, setViewSearchQuery] = useState("");
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
@@ -140,7 +150,7 @@ export default function Sidebar({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showNewIssueModal, setShowNewIssueModal] = useState(false);
 
-  // Filter views for sidebar display - show favorites or latest 4
+  // Filter views for sidebar display - show all views with favorites at the top
   const sidebarViews = useMemo(() => {
     if (!views.length) return [];
 
@@ -148,18 +158,17 @@ export default function Sidebar({
     let filteredViews = views;
     if (viewSearchQuery.trim()) {
       filteredViews = views.filter((view) => view.name.toLowerCase().includes(viewSearchQuery.toLowerCase()));
-      // Limit search results to 4 items
-      return filteredViews.slice(0, 4);
     }
 
-    // If no search, show favorites or latest 4
-    const favoriteViews = views.filter((view) => view.isFavorite);
-    if (favoriteViews.length > 0) {
-      return favoriteViews.slice(0, 4);
-    } else {
-      // Show latest 4 views by updatedAt
-      return [...views].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 4);
-    }
+    // Sort views: favorites first, then by updatedAt
+    return [...filteredViews].sort((a, b) => {
+      // First sort by favorite status (favorites first)
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      
+      // Then sort by updatedAt (latest first)
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
   }, [views, viewSearchQuery]);
 
   // Helper function to find default view for a project
@@ -169,20 +178,21 @@ export default function Sidebar({
     );
   };
 
-  // Filter projects for sidebar display - show latest 4
+  // Filter projects for sidebar display - show all active projects, sorted
   const sidebarProjects = useMemo(() => {
     if (!projects.length) return [];
 
-    // Filter by search query first
-    let filteredProjects = projects;
+    // First filter out archived projects (only show active projects)
+    const activeProjects = projects.filter(project => !project.isArchived);
+
+    // Then filter by search query if present
+    let filteredProjects = activeProjects;
     if (projectSearchQuery.trim()) {
-      filteredProjects = projects.filter((project) => project.name.toLowerCase().includes(projectSearchQuery.toLowerCase()));
-      // Limit search results to 4 items
-      return filteredProjects.slice(0, 4);
+      filteredProjects = activeProjects.filter((project) => project.name.toLowerCase().includes(projectSearchQuery.toLowerCase()));
     }
 
-    // If no search, show latest 4 projects by updatedAt
-    return [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 4);
+    // Sort by updatedAt (latest first)
+    return [...filteredProjects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [projects, projectSearchQuery]);
 
 
@@ -341,7 +351,7 @@ export default function Sidebar({
           {/* Logo */}
           <div className="flex justify-center">
             <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/dashboard` : "/dashboard"} className="flex items-center">
-              <Image src="/logo-v2.png" width={32} height={32} alt="Collab" className="h-8 w-auto" />
+              <Image src="/logo-icon.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
             </Link>
           </div>
 
@@ -471,20 +481,6 @@ export default function Sidebar({
                 </PopoverContent>
               </Popover>
             )}
-
-            {/* Chat */}
-            {session && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative w-full h-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                onClick={toggleChat}
-                title="Chat"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {isChatOpen && <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />}
-              </Button>
-            )}
           </div>
         </div>
 
@@ -592,7 +588,7 @@ export default function Sidebar({
         <div className="flex items-center justify-between mb-3">
           {/* Logo */}
           <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
-            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
+            <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
           </Link>
 
           {/* Action Buttons */}
@@ -714,19 +710,6 @@ export default function Sidebar({
               </Popover>
             )}
 
-            {/* Chat */}
-            {session && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                onClick={toggleChat}
-                title="Chat"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {isChatOpen && <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />}
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -775,9 +758,9 @@ export default function Sidebar({
                     Projects
                   </div>
                   <div className="flex items-center">
-                    {projects.length > 0 && (
+                    {projects.filter(project => !project.isArchived).length > 0 && (
                       <Badge variant="secondary" className="mr-2 h-4 px-1 text-[10px] bg-[#1f1f1f]">
-                        {projects.length}
+                        {projects.filter(project => !project.isArchived).length}
                       </Badge>
                     )}
                     {collapsedSections.projects ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -798,53 +781,58 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                {/* Projects list */}
-                <div className="space-y-0.5">
-                  {isProjectsLoading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  ) : sidebarProjects.length > 0 ? (
-                    sidebarProjects.map((project) => {
-                      const defaultView = getDefaultViewForProject(project.id);
-                      const href = defaultView 
-                        ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${defaultView.slug || defaultView.id}`
-                        : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`;
-                      
-                      return (
-                        <Button
-                          key={project.id}
-                          variant="ghost"
-                          className={cn(
-                            "w-full justify-start h-7 px-2 text-sm transition-colors",
-                            (defaultView && pathname.includes(`/views/${defaultView.slug || defaultView.id}`)) ||
-                            pathname.includes(`/projects/${project.slug || project.id}`)
-                              ? "bg-[#1f1f1f] text-white"
-                              : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                          )}
-                          asChild
-                        >
-                          <Link href={href} className="min-w-0 block">
-                            <div className="flex items-center w-full min-w-0">
-                              <FolderOpen className="mr-2 h-3 w-3 flex-shrink-0" />
-                              <span className="truncate flex-1 text-xs">{project.name}</span>
-                              {project._count?.issues && (
-                                <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
-                                  {project._count.issues}
-                                </Badge>
+                {/* Projects list - scrollable container with fixed height */}
+                <div>
+                  {/* Scrollable projects list */}
+                  <ScrollArea className="h-[124px]"> {/* Height for ~4 items (28px * 4) */}
+                    <div className="space-y-0.5 pr-2">
+                      {isProjectsLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        </div>
+                      ) : sidebarProjects.length > 0 ? (
+                        sidebarProjects.map((project) => {
+                          const defaultView = getDefaultViewForProject(project.id);
+                          const href = defaultView 
+                            ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${defaultView.slug || defaultView.id}`
+                            : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`;
+                          
+                          return (
+                            <Button
+                              key={project.id}
+                              variant="ghost"
+                              className={cn(
+                                "w-full justify-start h-7 px-2 text-sm transition-colors",
+                                (defaultView && pathname.includes(`/views/${defaultView.slug || defaultView.id}`)) ||
+                                pathname.includes(`/projects/${project.slug || project.id}`)
+                                  ? "bg-[#1f1f1f] text-white"
+                                  : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                               )}
-                            </div>
-                          </Link>
-                        </Button>
-                      );
-                    })
-                  ) : projectSearchQuery ? (
-                    <div className="px-2 py-2 text-xs text-gray-500 text-center">No projects found for "{projectSearchQuery}"</div>
-                  ) : (
-                    <div className="px-2 py-2 text-xs text-gray-500 text-center">No projects yet. Create your first project.</div>
-                  )}
+                              asChild
+                            >
+                              <Link href={href} className="min-w-0 block">
+                                <div className="flex items-center w-full min-w-0">
+                                  <FolderOpen className="mr-2 h-3 w-3 flex-shrink-0" />
+                                  <span className="truncate flex-1 text-xs">{project.name}</span>
+                                  {project.issueCount && project.issueCount > 0 && (
+                                    <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
+                                      {project.issueCount}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </Link>
+                            </Button>
+                          );
+                        })
+                      ) : projectSearchQuery ? (
+                        <div className="px-2 py-2 text-xs text-gray-500 text-center">No projects found for "{projectSearchQuery}"</div>
+                      ) : (
+                        <div className="px-2 py-2 text-xs text-gray-500 text-center">No projects yet. Create your first project.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
 
-                  {/* Create new project or see all projects */}
+                  {/* Create new project or see all projects - outside scroll area */}
                   <div className="pt-1 space-y-0.5">
                     <Button
                       variant="ghost"
@@ -905,46 +893,67 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                {/* Views list */}
-                <div className="space-y-0.5">
-                  {isViewsLoading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  ) : sidebarViews.length > 0 ? (
-                    sidebarViews.map((view) => (
-                      <Button
-                        key={view.id}
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start h-7 px-2 text-sm transition-colors",
-                          pathname.includes(`/views/${view.slug || view.id}`)
-                            ? "bg-[#1f1f1f] text-white"
-                            : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                        )}
-                        asChild
-                      >
-                        <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.slug || view.id}`} className="min-w-0 block">
-                          <div className="flex items-center w-full min-w-0">
-                            <Eye className="mr-2 h-3 w-3 flex-shrink-0" />
-                            {view.isFavorite && <Star className="mr-1 h-3 w-3 text-yellow-500 fill-current" />}
-                            <span className="truncate flex-1 text-xs">{view.name}</span>
-                            {view._count?.issues && (
-                              <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
-                                {view._count.issues}
-                              </Badge>
-                            )}
+                {/* Views list - scrollable container with fixed height */}
+                <div>
+                  {/* Scrollable views list */}
+                  <ScrollArea className="h-[124px]"> {/* Height for ~4 items (28px * 4) */}
+                    <div className="space-y-0.5 pr-2">
+                      {isViewsLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        </div>
+                      ) : sidebarViews.length > 0 ? (
+                        sidebarViews.map((view) => (
+                          <div
+                            key={view.id}
+                            className="group relative max-w-[240px]"
+                          >
+                            <Button
+                              variant="ghost"
+                              className={cn(
+                                "w-full justify-start h-7 px-2 text-sm transition-colors",
+                                pathname.includes(`/views/${view.slug || view.id}`)
+                                  ? "bg-[#1f1f1f] text-white"
+                                  : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                              )}
+                              asChild
+                            >
+                              <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${view.slug || view.id}`} className="min-w-0 block">
+                                <div className="flex items-center w-full min-w-0">
+                                  <Eye className="mr-2 h-3 w-3 flex-shrink-0" />
+                                  <span className="truncate flex-1 text-xs">{view.name}</span>
+                                  {view._count?.issues && (
+                                    <Badge variant="secondary" className="ml-auto h-4 px-1 text-[10px] bg-[#2a2a2a]">
+                                      {view._count.issues}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </Link>
+                            </Button>
+                            {/* Favorite toggle star - appears on hover */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 p-0 opacity-0 transition-opacity group-hover:opacity-70",
+                                view.isFavorite ? "text-yellow-500 opacity-70" : "text-gray-400 hover:text-yellow-500"
+                              )}
+                              onClick={(e) => handleToggleViewFavorite(view.id, e)}
+                              disabled={toggleViewFavoriteMutation.isPending}
+                            >
+                              <Star className={cn("h-3 w-3", view.isFavorite && "fill-current")} />
+                            </Button>
                           </div>
-                        </Link>
-                      </Button>
-                    ))
-                  ) : viewSearchQuery ? (
-                    <div className="px-2 py-2 text-xs text-gray-500 text-center">No views found for "{viewSearchQuery}"</div>
-                  ) : (
-                    <div className="px-2 py-2 text-xs text-gray-500 text-center">No favorite views. Latest views will appear here.</div>
-                  )}
+                        ))
+                      ) : viewSearchQuery ? (
+                        <div className="px-2 py-2 text-xs text-gray-500 text-center">No views found for "{viewSearchQuery}"</div>
+                      ) : (
+                        <div className="px-2 py-2 text-xs text-gray-500 text-center">No favorite views. Latest views will appear here.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
 
-                  {/* Create new view or see all views */}
+                  {/* Create new view or see all views - outside scroll area */}
                   <div className="pt-1 space-y-0.5">
                     <Button
                       variant="ghost"
@@ -1114,10 +1123,6 @@ export default function Sidebar({
           isOpen={showCreateProjectModal}
           onClose={() => setShowCreateProjectModal(false)}
           workspaceId={currentWorkspace?.id || ""}
-          onProjectCreated={(project) => {
-            console.log("Project created:", project);
-            // The useCreateProject hook will automatically invalidate queries
-          }}
         />
       )}
 
@@ -1127,11 +1132,6 @@ export default function Sidebar({
         onOpenChange={setShowNewIssueModal}
         workspaceId={currentWorkspace?.id || ""}
         currentUserId={userData?.id}
-        onCreated={(issueId) => {
-          console.log("Issue created:", issueId);
-          // Optionally navigate to the new issue
-          // router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueId}`);
-        }}
       />
 
 

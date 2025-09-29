@@ -21,7 +21,7 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
@@ -30,7 +30,6 @@ import TimelineViewRenderer from './renderers/TimelineViewRenderer';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
-import { ViewOrderingSelector } from './selectors/ViewOrderingSelector';
 import { ViewDisplayPropertiesSelector } from './selectors/ViewDisplayPropertiesSelector';
 import { ViewUpdatedAtSelector } from './selectors/ViewUpdatedAtSelector';
 import { StatusSelector } from './selectors/StatusSelector';
@@ -131,7 +130,6 @@ export default function ViewRenderer({
     setWorkspace,
     setCurrentUser
   } = useViewFilters();
-
   // Fetch all workspace projects for the project selector
   const { data: allProjects = [] } = useProjects({
     workspaceId: workspace.id,
@@ -184,35 +182,32 @@ export default function ViewRenderer({
 
   
 
-  // Fetch view-specific issue positions for proper ordering
-  const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(view.id, view.displayType === 'KANBAN');
-
-  // Listen for position invalidation events
-  useEffect(() => {
-    const handleInvalidatePositions = (event: CustomEvent) => {
-      if (event.detail?.viewId === view.id) {
-        // Immediate invalidation and refetch
-        queryClient.invalidateQueries({ queryKey: ['viewPositions', view.id] });
-        queryClient.refetchQueries({ queryKey: ['viewPositions', view.id] });
-      }
-    };
-
-    window.addEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
-    return () => {
-      window.removeEventListener('invalidateViewPositions', handleInvalidatePositions as EventListener);
-    };
-  }, [view.id, queryClient]);
-
   // Realtime: subscribe to workspace-level events to keep issues and positions fresh
+  // Allow invalidations so view positions update after drag-and-drop
   useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
 
   // Temporary state for filters and display (resets on refresh)
   const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
   const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
-  const [tempOrdering, setTempOrdering] = useState(view.sorting?.field || 'manual');
+  const [tempOrdering, setTempOrdering] = useState('manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
+  const [recentIssueCreated, setRecentIssueCreated] = useState(false);
+  
+  // Reset recentIssueCreated flag after a delay
+  useEffect(() => {
+    if (recentIssueCreated) {
+      const timeout = setTimeout(() => setRecentIssueCreated(false), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [recentIssueCreated]);
+  
+  // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
+  const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
+    view.id,
+    view.displayType === 'KANBAN' || tempOrdering === 'manual',
+  );
   // Load project follow status (for the primary project of this view)
   const primaryProjectId = useMemo(() => (tempProjectIds?.[0] || view.projects?.[0]?.id || ''), [tempProjectIds, view.projects]);
   useEffect(() => {
@@ -246,6 +241,12 @@ export default function ViewRenderer({
     }
   }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
   const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
+
+  // Update ordering selection and invalidate caches; positions are not reset here
+  // Sorting is locked to manual; no-op for ordering changes
+  const handleOrderingChange = useCallback(async () => {
+    setTempOrdering('manual');
+  }, []);
 
   // Determine which projects are newly selected (not in original view)
   const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
@@ -288,8 +289,9 @@ export default function ViewRenderer({
   
   // Fetch live data if:
   // 1. View has no active filters, OR
-  // 2. User has added/changed any filters that weren't in the original view
-  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged;
+  // 2. User has added/changed any filters that weren't in the original view, OR
+  // 3. An issue was recently created (to ensure new issues appear in filtered views)
+  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged || recentIssueCreated;
   
   // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
@@ -320,9 +322,9 @@ export default function ViewRenderer({
 
   // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // When view has filters and no temp filters changed, prioritize server-side filtered initialIssues
-    // When no filters OR temp filters changed, use live data for real-time updates
-    const baseIssues = (hasActiveFilters && !tempFiltersChanged)
+    // When view has filters and no temp filters changed AND no recent issue creation, prioritize server-side filtered initialIssues
+    // When no filters OR temp filters changed OR recent issue created, use live data for real-time updates
+    const baseIssues = (hasActiveFilters && !tempFiltersChanged && !recentIssueCreated)
       ? initialIssues 
       : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
@@ -334,10 +336,9 @@ export default function ViewRenderer({
     });
     
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged, recentIssueCreated]);
 
-  // Use merged issues for filtering
-  const issues = allIssues;
+  // Use merged issues for filtering directly
   
   // Helper function to handle filter changes and trigger data refetch when needed
   const handleFilterChange = useCallback((filterKey: string, newValues: string[] | ActionFilter[], originalValues: string[] | ActionFilter[]) => {
@@ -361,7 +362,7 @@ export default function ViewRenderer({
   const [lastSavedState, setLastSavedState] = useState({
     displayType: view.displayType,
     grouping: view.grouping?.field || 'none',
-    ordering: view.sorting?.field || 'manual',
+    ordering: 'manual',
     displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
     filters: view.filters || {}
   });
@@ -371,7 +372,7 @@ export default function ViewRenderer({
     setLastSavedState({
       displayType: view.displayType,
       grouping: view.grouping?.field || 'none',
-      ordering: view.sorting?.field || 'manual',
+      ordering: 'manual',
       displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
       filters: view.filters || {}
     });
@@ -384,10 +385,10 @@ export default function ViewRenderer({
   // Update ViewFilters context with current data
   useEffect(() => {
     setCurrentView(view);
-    setIssues(issues);
+    setIssues(allIssues);
     setWorkspace(workspace);
     setCurrentUser(currentUser);
-  }, [view, issues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
+  }, [view, allIssues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
 
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
@@ -425,15 +426,14 @@ export default function ViewRenderer({
 
   // Memoize action filters to prevent reference instability
   const actionFilters = useMemo(() => {
-    return allFilters.actions as ActionFilter[] || [];
-  }, [allFilters.actions]);
+    return (allFilters.actions as ActionFilter[]) || [];
+  }, [JSON.stringify(allFilters.actions || [])]);
 
   // Apply action filters first (async filtering)
   const { 
-    filteredIssues: actionFilteredIssues, 
-    isLoading: isActionFilterLoading 
+    filteredIssues: actionFilteredIssues
   } = useActionFilteredIssues({
-    issues,
+    issues: allIssues,
     actionFilters,
     workspaceId: workspace.id
   });
@@ -447,7 +447,6 @@ export default function ViewRenderer({
   const filteredIssues = useMemo(() => {
     // Start with action-filtered issues instead of all issues
     let filtered = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
-    
     // Apply project filtering if tempProjectIds differs from original view projects
     const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
     
@@ -473,7 +472,7 @@ export default function ViewRenderer({
           return statusLower !== 'done' && 
                  statusLower !== 'backlog' && 
                  statusLower !== 'cancelled' &&
-                 statusLower !== 'todo'; // Todo items should be in backlog, not active
+                 statusLower !== 'to_do'; // Todo items should be in backlog, not active
         });
         break;
       case 'backlog':
@@ -481,7 +480,7 @@ export default function ViewRenderer({
           // Use projectStatus if available, otherwise fallback to legacy fields
           const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
           const statusLower = status.toLowerCase();
-          return statusLower === 'backlog' || statusLower === 'todo';
+          return statusLower === 'backlog' || statusLower === 'to_do';
         });
         break;
       default:
@@ -618,49 +617,17 @@ export default function ViewRenderer({
     }
     
     return filtered;
-  }, [actionFilteredIssues, issueFilterType, searchQuery, allFilters, viewFiltersState, viewPositionsData, sortedTempProjectIds, originalProjectIds, tempProjectIds.length]);
-
-  // Apply sorting
-  const sortedIssues = useMemo(() => {
-    const sorted = [...filteredIssues];
-    
-    const sortField = tempOrdering;
-    if (sortField && sortField !== 'manual') {
-      sorted.sort((a, b) => {
-        let aValue: any;
-        let bValue: any;
-        
-        switch (sortField) {
-          case 'priority':
-            const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-            aValue = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
-            bValue = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
-            break;
-          case 'created':
-          case 'createdAt':
-            aValue = new Date(a.createdAt).getTime();
-            bValue = new Date(b.createdAt).getTime();
-            break;
-          case 'updated':
-          case 'updatedAt':
-            aValue = new Date(a.updatedAt).getTime();
-            bValue = new Date(b.updatedAt).getTime();
-            break;
-          case 'dueDate':
-            aValue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-            bValue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-            break;
-          default:
-            aValue = a[sortField] || '';
-            bValue = b[sortField] || '';
-        }
-        
-        return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
-      });
-    }
-    
-    return sorted;
-  }, [filteredIssues, tempOrdering]);
+  }, [
+    actionFilteredIssues, 
+    issueFilterType, 
+    searchQuery, 
+    JSON.stringify(allFilters), 
+    JSON.stringify(viewFiltersState), 
+    viewPositionsData?.positions, 
+    sortedTempProjectIds, 
+    JSON.stringify(originalProjectIds), 
+    tempProjectIds.length
+  ]);
 
   const handleUpdateView = async () => {
     try {
@@ -670,7 +637,7 @@ export default function ViewRenderer({
         body: JSON.stringify({
           displayType: tempDisplayType,
           filters: allFilters,
-          sorting: { field: tempOrdering, direction: 'desc' },
+          sorting: { field: 'manual', direction: 'desc' },
           grouping: { field: tempGrouping },
           fields: tempDisplayProperties,
           projectIds: tempProjectIds,
@@ -734,7 +701,7 @@ export default function ViewRenderer({
           visibility: 'PERSONAL',
           projectIds: tempProjectIds,
           filters: allFilters,
-          sorting: { field: tempOrdering, direction: 'desc' },
+          sorting: { field: 'manual', direction: 'desc' },
           grouping: { field: tempGrouping },
           fields: tempDisplayProperties,
         })
@@ -794,7 +761,7 @@ export default function ViewRenderer({
         countingIssues = countingIssues.filter(issue => {
           switch (filterKey) {
             case 'status':
-              return filterValues.includes(issue.statusValue || issue.status);
+              return filterValues.includes(issue.statusId);
             case 'priority':
               return filterValues.includes(issue.priority);
             case 'type':
@@ -856,17 +823,24 @@ export default function ViewRenderer({
       // Use projectStatus if available, otherwise fallback to legacy fields
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
       const statusLower = status.toLowerCase();
-      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'todo';
+      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'to_do';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
       // Use projectStatus if available, otherwise fallback to legacy fields  
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
       const statusLower = status.toLowerCase();
-      return statusLower === 'backlog' || statusLower === 'todo';
+      return statusLower === 'backlog' || statusLower === 'to_do';
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [actionFilteredIssues, sortedTempProjectIds, originalProjectIds, searchQuery, allFilters, viewFiltersState]);
+  }, [
+    actionFilteredIssues, 
+    sortedTempProjectIds, 
+    JSON.stringify(originalProjectIds), 
+    searchQuery, 
+    JSON.stringify(allFilters), 
+    JSON.stringify(viewFiltersState)
+  ]);
 
   // Issue update handler - no page refresh, just API call
   const handleIssueUpdate = async (issueId: string, updates: any) => {
@@ -938,15 +912,18 @@ export default function ViewRenderer({
   };
 
   const renderViewContent = () => {
+    // Single source of truth for Kanban sorting:
     const sharedProps = {
       view: {
         ...view,
         displayType: tempDisplayType,
         grouping: { field: tempGrouping },
+        ordering: tempOrdering,
         sorting: { field: tempOrdering, direction: 'desc' },
         fields: tempDisplayProperties
       },
-      issues: sortedIssues,
+      // Pass filtered (unsorted) issues to Kanban; Kanban columns handle sorting per selected ordering
+      issues: filteredIssues,
       workspace,
       currentUser,
       activeFilters: allFilters,
@@ -955,6 +932,9 @@ export default function ViewRenderer({
       workspaceId: workspace.id,
       currentUserId: currentUser.id,
       onIssueCreated: () => {
+        // Set flag to force using live data for recent issue creations
+        setRecentIssueCreated(true);
+        
         // Invalidate queries to refresh data - use the correct query keys
         const currentProjectIds = tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id);
         queryClient.invalidateQueries({ 
@@ -986,7 +966,15 @@ export default function ViewRenderer({
             </div>
           );
         }
-        return <KanbanViewRenderer {...sharedProps} />;
+        return (
+          <KanbanViewRenderer 
+            {...sharedProps}
+            onOrderingChange={() => {
+              // Sorting is locked; always enforce manual
+              setTempOrdering('manual');
+            }}
+          />
+        );
       case 'LIST':
         return <ListViewRenderer {...sharedProps} />;
       case 'TABLE':
@@ -1004,7 +992,7 @@ export default function ViewRenderer({
       <PageHeader
         icon={VIEW_TYPE_ICONS[view.type as keyof typeof VIEW_TYPE_ICONS] || List}
         title={view.name}
-        subtitle={`${sortedIssues.length} ${sortedIssues.length === 1 ? 'issue' : 'issues'}`}
+        subtitle={`${filteredIssues.length} ${filteredIssues.length === 1 ? 'issue' : 'issues'}`}
         leftContent={
           hasChanges && (
             <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
@@ -1040,7 +1028,7 @@ export default function ViewRenderer({
         }
         search={
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-[#666]" />
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground z-10" />
             <Input
               placeholder="Search issues..."
               value={searchQuery}
@@ -1201,28 +1189,27 @@ export default function ViewRenderer({
           {/* Mobile: Filters and View Type in Column */}
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2 md:flex-1">
             {/* Badge-like selectors - wrap on mobile */}
-            <div className="flex flex-wrap gap-1.5 md:gap-1">
-              <ViewProjectSelector
-                value={tempProjectIds}
-                onChange={(projectIds) => {
-                  setTempProjectIds(projectIds);
-                }}
-                projects={allProjects}
-              />
-              <ViewGroupingSelector
-                value={tempGrouping}
-                onChange={setTempGrouping}
-                displayType={tempDisplayType}
-              />
-              <ViewOrderingSelector
-                value={tempOrdering}
-                onChange={setTempOrdering}
-                displayType={tempDisplayType}
-              />
-              <ViewDisplayPropertiesSelector
-                value={tempDisplayProperties}
-                onChange={setTempDisplayProperties}
-              />
+            <div className="flex flex-wrap gap-3 md:gap-4">
+              <div className="flex flex-wrap gap-1.5 md:gap-1">
+
+                {!view.isDefault && <ViewProjectSelector
+                  value={tempProjectIds}
+                  onChange={(projectIds) => {
+                    setTempProjectIds(projectIds);
+                  }}
+                  projects={allProjects}
+                />}
+                <ViewGroupingSelector
+                  value={tempGrouping}
+                  onChange={setTempGrouping}
+                  displayType={tempDisplayType}
+                />
+                <ViewDisplayPropertiesSelector
+                  value={tempDisplayProperties}
+                  onChange={setTempDisplayProperties}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 md:gap-1">
               <StatusSelector
                 value={allFilters.status || []}
                 projectIds={tempProjectIds}
@@ -1290,6 +1277,7 @@ export default function ViewRenderer({
                 projectIds={tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)}
                 workspaceMembers={workspaceMembers}
               />
+              </div>
             </div>
 
             {/* View Type Toggle - Right aligned on desktop, left on mobile */}
@@ -1298,7 +1286,7 @@ export default function ViewRenderer({
                 selectedType={tempDisplayType}
                 onTypeChange={setTempDisplayType}
                 variant="toolbar"
-                availableTypes={['LIST', 'KANBAN', 'TIMELINE']}
+                availableTypes={['LIST', 'KANBAN']}
               />
             </div>
           </div>

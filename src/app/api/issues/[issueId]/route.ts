@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // Shared helpers and constants to reduce duplication
-const ISSUE_ID_REGEX = /^[A-Z]+[0-9]*-[A-Z]*\d+$/;
+// Updated regex to allow spaces in issue prefixes (e.g., "SPA PR-1", "MY PROJECT-123")
+const ISSUE_ID_REGEX = /^[A-Z\s]+[0-9]*-[A-Z]*\d+$/;
 const isIssueKeyFormat = (value: string) => ISSUE_ID_REGEX.test(value);
 
 const ISSUE_INCLUDE = {
