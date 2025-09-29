@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { decryptToken } from '@/lib/apps/crypto';
 
 const prisma = new PrismaClient();
@@ -52,7 +53,19 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      if (!oauthClient || oauthClient.clientSecret !== clientSecret) {
+      if (!oauthClient) {
+        return NextResponse.json(
+          {
+            error: 'invalid_client',
+            error_description: 'Invalid client credentials'
+          },
+          { status: 401 }
+        );
+      }
+
+      // Verify client secret using bcrypt to compare against hashed secret
+      const isValidSecret = await bcrypt.compare(clientSecret, oauthClient.clientSecret);
+      if (!isValidSecret) {
         return NextResponse.json(
           {
             error: 'invalid_client',

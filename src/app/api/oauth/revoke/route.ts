@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { decryptToken } from '@/lib/apps/crypto';
 
 const prisma = new PrismaClient();
@@ -61,8 +62,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify client secret using constant-time comparison to prevent timing attacks
-    if (!secureCompare(oauthClient.clientSecret, clientSecret)) {
+    // Verify client secret using bcrypt to compare against hashed secret
+    const isValidSecret = await bcrypt.compare(clientSecret, oauthClient.clientSecret);
+    if (!isValidSecret) {
       return NextResponse.json(
         {
           error: 'invalid_client',
@@ -230,18 +232,4 @@ async function revokeTokenFromInstallations(
     console.error(`Error revoking ${tokenType} token:`, error);
     return { success: false };
   }
-}
-
-// Utility function to securely compare client secrets (constant-time comparison)
-function secureCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  
-  return result === 0;
 }

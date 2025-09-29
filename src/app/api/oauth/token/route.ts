@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
+import bcrypt from 'bcrypt';
 import { encryptToken } from '@/lib/apps/crypto';
 import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
 
@@ -51,8 +52,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify client secret using constant-time comparison to prevent timing attacks
-    if (!secureCompare(oauthClient.clientSecret, clientSecret)) {
+    // Verify client secret using bcrypt to compare against hashed secret
+    const isValidSecret = await bcrypt.compare(clientSecret, oauthClient.clientSecret);
+    if (!isValidSecret) {
       return NextResponse.json(
         {
           error: 'invalid_client',
@@ -473,9 +475,4 @@ function secureCompare(a: string, b: string): boolean {
   }
   
   return result === 0;
-}
-
-// Utility function to hash client secret (for secure storage)
-function hashClientSecret(secret: string): string {
-  return createHash('sha256').update(secret).digest('hex');
 }

@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppScope } from '@/lib/apps/types';
 import { useToast } from '@/hooks/use-toast';
-import crypto from 'crypto';
 
 interface AppContext {
   app: {
@@ -43,7 +42,14 @@ interface UseAppBridgeProps {
 }
 
 const generateRequestId = () => {
-  return `req_${Date.now()}_${crypto.randomUUID()}`;
+  // Use browser's crypto.randomUUID() if available, otherwise fallback to a simple random string
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `req_${Date.now()}_${crypto.randomUUID()}`;
+  }
+  
+  // Fallback for browsers that don't support crypto.randomUUID()
+  const randomString = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  return `req_${Date.now()}_${randomString}`;
 };
 
 export function useAppBridge({ iframe, allowedOrigin, context }: UseAppBridgeProps) {
