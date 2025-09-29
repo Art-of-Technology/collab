@@ -1,10 +1,18 @@
+/*
+ * This file is commented out as per manager's instructions.
+ * We're now using the unified comment system instead of custom note comments.
+ */
+
+/*
 "use client";
 
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+*/
 
+/*
 interface NoteCommentReplyFormProps {
   noteId: string;
   parentCommentId: string;
@@ -20,6 +28,8 @@ export function NoteCommentReplyForm({
   onCancel,
   onSuccess
 }: NoteCommentReplyFormProps) {
+*/
+/*
   const [content, setContent] = useState("");
   const [isImproving, setIsImproving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -163,4 +173,10 @@ export function NoteCommentReplyForm({
       </div>
     </form>
   );
+}
+*/
+
+// Empty export to avoid import errors
+export function NoteCommentReplyForm() {
+  return null;
 }

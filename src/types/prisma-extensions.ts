@@ -10,6 +10,15 @@ export interface CommentWhereInputExtension extends Prisma.CommentWhereInput {
   noteId?: string | Prisma.StringFilter;
 }
 
+// Custom type for comment creation with noteId
+export type CommentCreateDataWithNoteId = {
+  message: string;
+  noteId: string;
+  authorId: string;
+  parentId?: string | null;
+  html?: string | null;
+}
+
 // Extend NoteInclude to include comments
 export interface NoteIncludeExtension extends Prisma.NoteInclude {
   comments?: boolean | Prisma.CommentFindManyArgs;

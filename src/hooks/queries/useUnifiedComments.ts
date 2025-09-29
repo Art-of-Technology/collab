@@ -3,7 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getBoardItemComments, addBoardItemComment, BoardItemType } from "@/actions/boardItemComment";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
 
-export type UnifiedItemType = 'task' | 'epic' | 'story' | 'milestone';
+export type UnifiedItemType = 'task' | 'epic' | 'story' | 'milestone' | 'note';
 
 // Unified hook for fetching comments
 export function useUnifiedComments(itemType: UnifiedItemType, itemId: string) {
@@ -14,15 +14,28 @@ export function useUnifiedComments(itemType: UnifiedItemType, itemId: string) {
     enabled: itemType === 'task' && !!itemId,
   });
   
+  // For notes, use the note comments hook
+  const noteCommentsQuery = useQuery({
+    queryKey: ["note-comments", itemId],
+    queryFn: () => import("@/actions/boardItemComment").then(m => m.getNoteComments(itemId)),
+    enabled: itemType === 'note' && !!itemId,
+  });
+  
   // For other items, use board item comments
   const boardItemCommentsQuery = useQuery({
     queryKey: ["board-item-comments", itemType, itemId],
     queryFn: () => getBoardItemComments(itemType as BoardItemType, itemId),
-    enabled: itemType !== 'task' && !!itemId,
+    enabled: itemType !== 'task' && itemType !== 'note' && !!itemId,
   });
 
   // Return the appropriate query based on item type
-  return itemType === 'task' ? taskCommentsQuery : boardItemCommentsQuery;
+  if (itemType === 'task') {
+    return taskCommentsQuery;
+  } else if (itemType === 'note') {
+    return noteCommentsQuery;
+  } else {
+    return boardItemCommentsQuery;
+  }
 }
 
 // Unified hook for adding comments
@@ -83,6 +96,10 @@ export function useAddUnifiedComment() {
           taskId: itemId,
           content
         });
+      } else if (itemType === 'note') {
+        return import("@/actions/boardItemComment").then(m => 
+          m.addNoteComment(itemId, content, parentId)
+        );
       } else {
         return addBoardItemCommentMutation.mutateAsync({
           itemType: itemType as BoardItemType,
@@ -97,6 +114,10 @@ export function useAddUnifiedComment() {
       if (variables.itemType === 'task') {
         queryClient.invalidateQueries({
           queryKey: ["task-comments", variables.itemId],
+        });
+      } else if (variables.itemType === 'note') {
+        queryClient.invalidateQueries({
+          queryKey: ["note-comments", variables.itemId],
         });
       } else {
         queryClient.invalidateQueries({

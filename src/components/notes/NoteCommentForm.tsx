@@ -1,3 +1,9 @@
+/*
+ * This file is commented out as per manager's instructions.
+ * We're now using the unified comment system instead of custom note comments.
+ */
+
+/*
 "use client";
 
 import { useState } from "react";
@@ -7,7 +13,9 @@ import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useSession } from "next-auth/react";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+*/
 
+/*
 interface NoteCommentFormProps {
   noteId: string;
   initialContent?: string;
@@ -25,6 +33,8 @@ export function NoteCommentForm({
   onSuccess,
   isEdit = false
 }: NoteCommentFormProps) {
+*/
+/*
   const [content, setContent] = useState(initialContent);
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
@@ -236,4 +246,10 @@ export function NoteCommentForm({
       </div>
     </form>
   );
+}
+*/
+
+// Empty export to avoid import errors
+export function NoteCommentForm() {
+  return null;
 }
