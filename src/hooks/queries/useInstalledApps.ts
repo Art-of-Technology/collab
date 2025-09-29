@@ -22,7 +22,6 @@ export function useInstalledApps(workspaceId?: string) {
       
       try {
         const installations = await getWorkspaceInstallations(workspaceId);
-        console.log({ installations })
         return installations.filter(installation => installation.status === 'ACTIVE');
       } catch (error) {
         console.error('Failed to fetch installed apps:', error);
