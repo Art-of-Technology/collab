@@ -24,7 +24,7 @@ export default async function LoginPage() {
       <div className="w-full max-w-md px-8 py-12">
         <div className="flex flex-col items-center justify-center text-center mb-8">
           <Link href="/" className="mb-4">
-            <Image src="/logo-v2.png" width={125} height={125} alt="Collab" />
+            <Image src="/logo-text.svg" width={125} height={125} alt="Collab" />
           </Link>
           <p className="mt-2 text-muted-foreground">PMs, Designers & Devs — Aligned at Last.</p>
         </div>

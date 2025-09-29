@@ -6,10 +6,6 @@ import { NextResponse } from "next/server";
 
 async function improveEnglishText(userInput: string) {
     const apiKey = process.env.OPENAPI_KEY;
-    
-    console.log('improveEnglishText: API key available:', !!apiKey);
-    console.log('improveEnglishText: Input text:', userInput);
-    
     if (!apiKey) {
         console.error('OpenAI API key is missing - check OPENAPI_KEY environment variable');
         return null;
@@ -40,8 +36,6 @@ Always maintain the original meaning and key information.`,
     ];
 
     try {
-        console.log('improveEnglishText: Making OpenAI API request...');
-        
         const response = await axios.post(
             endpoint,
             {
@@ -55,22 +49,13 @@ Always maintain the original meaning and key information.`,
                     'Authorization': `Bearer ${apiKey}`,
                 },
             }
-        );
-        
-        console.log('improveEnglishText: OpenAI API response received:', {
-            status: response.status,
-            hasChoices: !!response.data?.choices,
-            choicesLength: response.data?.choices?.length,
-            hasContent: !!response.data?.choices?.[0]?.message?.content
-        });
-        
+        );  
         if (!response.data?.choices?.[0]?.message?.content) {
             console.error('improveEnglishText: Unexpected API response format:', response.data);
             return null;
         }
         
         const improvedText = response.data.choices[0].message.content.trim();
-        console.log('improveEnglishText: Extracted improved text:', improvedText);
         return improvedText;
     } catch (error: any) {
         console.error('improveEnglishText: Error calling OpenAI API:', {
@@ -117,14 +102,9 @@ export async function POST(req: Request) {
             );
         }
         
-        console.log('AI Improve API: Processing text:', text);
-        
         const result = await improveEnglishText(text);
         
-        console.log('AI Improve API: Raw result from OpenAI:', result);
-        
         if (!result) {
-            console.log('AI Improve API: No result from OpenAI, returning error');
             return NextResponse.json(
                 { error: "Failed to improve text. Please try again." },
                 { status: 500 }
@@ -132,7 +112,6 @@ export async function POST(req: Request) {
         }
 
         const normalizedResult = normalizeText(result);
-        console.log('AI Improve API: Normalized result:', normalizedResult);
 
         return NextResponse.json({
             message: normalizedResult

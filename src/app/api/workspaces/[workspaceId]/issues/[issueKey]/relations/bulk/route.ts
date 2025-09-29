@@ -17,8 +17,6 @@ export async function POST(
     const { workspaceId, issueKey } = await params;
     const { relations } = await request.json();
 
-    console.log("Bulk relations request:", { workspaceId, issueKey, relationsCount: relations?.length });
-
     if (!Array.isArray(relations) || relations.length === 0) {
       return NextResponse.json(
         { error: "Relations array is required" },
@@ -34,8 +32,6 @@ export async function POST(
       }
     });
 
-    console.log("Workspace lookup result:", workspace ? "Found" : "Not found");
-
     if (!workspace) {
       return NextResponse.json(
         { error: "Workspace not found or access denied" },
@@ -50,8 +46,6 @@ export async function POST(
         workspaceId: workspace.id
       }
     });
-
-    console.log("Source issue lookup:", { issueKey, workspaceId: workspace.id, found: !!sourceIssue });
 
     if (!sourceIssue) {
       return NextResponse.json(

@@ -39,8 +39,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useProject, ProjectStatus } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
-import { DEFAULT_PROJECT_STATUSES, generateInternalStatusName, validateStatusDisplayName } from '@/constants/project-statuses';
+import { DEFAULT_PROJECT_STATUSES, validateStatusDisplayName } from '@/constants/project-statuses';
 import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
+import { isValidNewIssuePrefix } from '@/lib/shared-issue-key-utils';
 
 interface ProjectSettingsClientProps {
   workspaceId: string;
@@ -74,6 +75,9 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
   const [statusIssueCount, setStatusIssueCount] = useState(0);
   const [targetStatusId, setTargetStatusId] = useState<string>('');
   const [deletingStatus, setDeletingStatus] = useState(false);
+  
+  // Prefix validation state
+  const [prefixError, setPrefixError] = useState<string | null>(null);
 
   // Default status colors
   const statusColors = [
@@ -101,6 +105,9 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
         color: project.color || '#6366f1'
       });
       
+      // Clear any prefix errors when loading project data
+      setPrefixError(null);
+      
       // Set statuses - use project statuses if available, otherwise default ones
       if (project.statuses && project.statuses.length > 0) {
         setStatuses(project.statuses);
@@ -121,6 +128,17 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
     try {
       setSaving(true);
       
+      // Validate issue prefix if provided
+      if (formData.keyPrefix && !isValidNewIssuePrefix(formData.keyPrefix)) {
+        setPrefixError('Issue prefix must start with a letter and contain only letters and numbers (no spaces)');
+        toast({
+          title: "Error",
+          description: "Invalid issue prefix format",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       const response = await fetch(`/api/workspaces/${workspaceId}/projects/${projectSlug}`, {
         method: 'PATCH',
         headers: {
@@ -132,7 +150,11 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to update project');
+      if (!response.ok) {
+        // Extract error message from API response
+        const errorData = await response.json().catch(() => ({ error: 'Failed to update project' }));
+        throw new Error(errorData.error || 'Failed to update project');
+      }
 
       toast({
         title: "Success",
@@ -143,9 +165,13 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
       await refetchProject();
     } catch (error) {
       console.error('Error updating project:', error);
+      
+      // Display the actual error message from the API
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update project settings';
+      
       toast({
         title: "Error",
-        description: "Failed to update project settings",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -364,14 +390,29 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
                     <Input
                       id="keyPrefix"
                       value={formData.keyPrefix}
-                      onChange={(e) => setFormData({ ...formData, keyPrefix: e.target.value.toUpperCase() })}
-                      className="mt-1 bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]"
+                      onChange={(e) => {
+                        // Clean input: remove spaces and special characters, convert to uppercase
+                        const cleanValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                        setFormData({ ...formData, keyPrefix: cleanValue });
+                        // Clear prefix error when user starts typing
+                        if (prefixError) setPrefixError(null);
+                      }}
+                      className={cn(
+                        "mt-1 bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]",
+                        prefixError && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                      )}
                       placeholder="e.g., PROJ"
-                      maxLength={6}
+                      maxLength={10}
                     />
-                    <p className="text-xs text-[#8b949e] mt-1">
-                      Issues will be numbered as {formData.keyPrefix || 'PROJ'}-1, {formData.keyPrefix || 'PROJ'}-2, etc.
-                    </p>
+                    {prefixError ? (
+                      <p className="text-xs text-red-400 mt-1">
+                        {prefixError}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-[#8b949e] mt-1">
+                        Issues will be numbered as {formData.keyPrefix || 'PROJ'}-1, {formData.keyPrefix || 'PROJ'}-2, etc. No spaces allowed.
+                      </p>
+                    )}
                   </div>
 
                   <div>

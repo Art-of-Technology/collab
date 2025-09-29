@@ -1,6 +1,9 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
+import { useWorkspace } from "@/context/WorkspaceContext"
+import type React from "react"
 
 interface CollabTextProps {
   content: string
@@ -19,10 +22,11 @@ export function CollabText({
   withBackground = false,
   asSpan = false
 }: CollabTextProps) {
+  const router = useRouter()
+  const { currentWorkspace } = useWorkspace()
   // Parse and format the content with mentions
   const formatTextWithMentions = () => {
     if (!content) return { __html: "" }
-    
     // Escape HTML special characters to prevent XSS
     let formatted = content
       .replace(/&/g, "&amp;")
@@ -31,11 +35,11 @@ export function CollabText({
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;")
     
-    // Convert @[username](userId) to clickable links
+    // Convert @[username](userId) to clickable spans (routing handled via onClick)
     formatted = formatted.replace(
       /@\[([^\]]+)\]\(([^)]+)\)/g,
       (_, name, id) => {
-        return `<a href="/profile/${id}" class="mention mention-link" data-user-id="${id}"><span class="mention-symbol">@</span>${name}</a>`
+        return `<span class="mention mention-link" data-user-id="${id}"><span class="mention-symbol">@</span>${name}</span>`
       }
     )
     
@@ -59,6 +63,29 @@ export function CollabText({
     return { __html: formatted }
   }
   
+  const handleClick = (event: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
+    const target = event.target as HTMLElement
+    const userMention = target.closest('.mention-link[data-user-id]') as HTMLElement | null
+    const issueMention = target.closest('.mention-link[data-issue-id]') as HTMLElement | null
+    const workspaceSegment = currentWorkspace ? (currentWorkspace.slug || currentWorkspace.id) : undefined;
+    
+    if (userMention && currentWorkspace && workspaceSegment) {
+      const userId = userMention.getAttribute('data-user-id')
+      if (userId) {
+        event.preventDefault()
+        event.stopPropagation()
+        router.push(`/${workspaceSegment}/profile/${userId}`)
+      }
+    } else if (issueMention && currentWorkspace && workspaceSegment) {
+      const issueId = issueMention.getAttribute('data-issue-id')
+      if (issueId) {
+        event.preventDefault()
+        event.stopPropagation()
+        router.push(`/${workspaceSegment}/issues/${issueId}`)
+      }
+    }
+  }
+  
   const Container = asSpan ? 'span' : 'div';
   const ContentContainer = asSpan ? 'span' : 'div';
   
@@ -68,7 +95,7 @@ export function CollabText({
       small ? "text-sm" : "",
       withBackground ? "p-3 rounded-md bg-card/40 border border-border/30" : "",
       className
-    )}>
+    )} onClick={handleClick}>
       {title && <h3 className="font-medium mb-2">{title}</h3>}
       <ContentContainer dangerouslySetInnerHTML={formatTextWithMentions()} />
     </Container>

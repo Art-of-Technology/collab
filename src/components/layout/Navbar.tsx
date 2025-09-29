@@ -245,7 +245,7 @@ export default function Navbar({
             }
             className="flex items-center"
           >
-            <Image src="/logo-v2.png" width={100} height={100} alt="Collab" className="h-7 w-auto" />
+            <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
           </Link>
         </div>
 

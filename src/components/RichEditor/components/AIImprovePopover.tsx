@@ -3,6 +3,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
+import { RichTextRenderer } from '../RichTextRenderer';
+import { parseMarkdownToTipTap } from '../utils/ai-improve';
 
 interface AIImprovePopoverProps {
   isVisible: boolean;
@@ -37,13 +39,21 @@ export function AIImprovePopover({
         <h4 className="text-sm font-semibold text-[#e6edf3]">AI Improved Text</h4>
         <p className="text-xs text-[#9ca3af] mt-1">Review and apply the AI improved version</p>
       </div>
-      
-      <div className="p-3 max-h-48 overflow-y-auto text-sm bg-[#0e0e0e] text-[#e6edf3]">
-        <div className="whitespace-pre-wrap">
-          {improvedText}
+        <div 
+          className="h-48 bg-[#0e0e0e] overflow-y-auto overscroll-contain"
+          style={{ scrollBehavior: 'smooth' }}
+          onWheel={(e) => {
+            // Ensure wheel events are properly handled
+            e.stopPropagation();
+          }}
+        >
+          <div className="p-3 text-sm">
+            <RichTextRenderer 
+              content={parseMarkdownToTipTap(improvedText) || improvedText}
+              className="text-[#e6edf3] prose-sm [&_*]:text-[#e6edf3]"
+            />
+          </div>
         </div>
-      </div>
-      
       <div className="border-t border-[#333] p-2 flex justify-end gap-2 bg-[#1a1a1a]">
         <Button 
           size="sm" 

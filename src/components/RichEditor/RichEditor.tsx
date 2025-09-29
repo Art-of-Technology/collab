@@ -28,27 +28,23 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  List,
-  ListOrdered,
-  Quote,
   WandSparkles,
   Loader2,
   Hash,
   AtSign,
-  ExternalLink,
 } from 'lucide-react';
 
 // Import our custom components
 import { StaticToolbar, UserMentionSuggestion, IssueMentionSuggestion, AIImprovePopover } from './components';
 
 // Import our hooks
-import { useMentions, useImageUpload, useKeyboardShortcuts } from './hooks';
+import { useImageUpload } from './hooks';
 
 // Import types
 import { RichEditorProps, RichEditorRef } from './types';
 
 // Import utils
-import { handlePaste, handleDrop, findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove, parseMarkdownToTipTap } from './utils';
+import { findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove } from './utils';
 
 // Import extensions
 import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ImageCSSExtension } from './extensions';
@@ -75,6 +71,21 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
+  // Guard to prevent onUpdate → onChange → setContent recursion
+  const isExternalUpdateRef = useRef(false);
+  // Guard to suppress transient checks during mention insertion
+  const isInsertingMentionRef = useRef(false);
+  
+  // Helper to release guards on the next tick after ProseMirror updates
+  const releaseMentionGuardsNextTick = () => {
+    setTimeout(() => {
+      isInsertingMentionRef.current = false;
+      isExternalUpdateRef.current = false;
+    }, 0);
+  };
+  
+  // Generate unique ID for this editor instance to avoid CSS conflicts
+  const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
   
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
@@ -192,7 +203,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             checkForMentionTrigger();
           }, 0);
         }
-        
+
         // Update mention position while typing (check for any printable character or backspace)
         if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
           setTimeout(() => {
@@ -235,17 +246,36 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       },
     },
     onUpdate: ({ editor }) => {
+      // Always compute current content
       const html = editor.getHTML();
       const text = editor.getText();
-      onChange?.(html, text);
+
+      // Avoid feedback loops when we programmatically set content or insert mentions
+      if (!isExternalUpdateRef.current) {
+        onChange?.(html, text);
+      }
+
+      // Check if editor has mentions when determining empty state
+      const hasMentions = html.includes('data-type="mention"') || html.includes('data-type="issue-mention"');
+      const isTextEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
+      const shouldShowPlaceholder = isTextEmpty && !hasMentions;
       
-      // Check if editor is really empty (including just <p></p> or <p><br></p>)
-      const isContentEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
-      setIsEmpty(isContentEmpty);
+      // Update isEmpty state
+      setIsEmpty(shouldShowPlaceholder);
       
+      // Manually manage placeholder visibility by adding/removing a CSS class
+      const editorElement = editor.view.dom;
+      if (shouldShowPlaceholder) {
+        editorElement.classList.add('should-show-placeholder');
+      } else {
+        editorElement.classList.remove('should-show-placeholder');
+      }
+
       // Check for mention triggers
-      checkForMentionTrigger();
-      
+      if (!isInsertingMentionRef.current) {
+        checkForMentionTrigger();
+      }
+
       // Call external update callback
       onUpdate?.(editor);
     },
@@ -290,9 +320,17 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
 
 
-  // Mention trigger check
+  // Mention trigger check with safeguards against infinite loops
   const checkForMentionTrigger = useCallback(() => {
-    if (!editor || !editorRef.current) return;
+    // Early return with safety checks
+    if (!editor || !editorRef.current) {
+      return;
+    }
+
+    // Check if we're currently inserting a mention to avoid recursive calls
+    if (isInsertingMentionRef.current) {
+      return;
+    }
 
     const { from } = editor.state.selection;
     const trigger = findMentionTrigger(editor, from);
@@ -301,10 +339,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       // Use current cursor position (from), not trigger position
       const position = getCaretPosition(editor, from);
       const editorRect = editorRef.current.getBoundingClientRect();
-      
+
       // Improved bounds checking for right-side positioning
       let adjustedLeft = position.left;
-      
+
       // If popup would go off the right edge, position it to the left of cursor instead
       if (position.left + 320 > editorRect.width) {
         // Get cursor position again but for left side
@@ -316,12 +354,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           adjustedLeft = Math.max(5, position.left - 340);
         }
       }
-      
+
       const adjustedPosition = {
         top: Math.max(5, Math.min(position.top, editorRect.height - 200)), // Prevent vertical overflow
         left: adjustedLeft
       };
-      
+
       setMentionSuggestion({
         position: adjustedPosition,
         query: trigger.query,
@@ -344,6 +382,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const label = user.name || user.email || 'Unknown User';
       
       // Use the insertMention utility
+      isInsertingMentionRef.current = true;
+      isExternalUpdateRef.current = true;
       insertMention(
         editor,
         {
@@ -355,6 +395,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         from,
         trigger.char
       );
+      // Release guards on next tick after ProseMirror updates
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -372,6 +414,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const title = issue.title || label;
       const type = issue.type || 'TASK';
       
+      isInsertingMentionRef.current = true;
+      isExternalUpdateRef.current = true;
       insertMention(
         editor,
         {
@@ -384,6 +428,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         from,
         trigger.char
       );
+      // Release guards on next tick after ProseMirror updates
+      releaseMentionGuardsNextTick();
     }
     
     setMentionSuggestion(null);
@@ -411,104 +457,76 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
   const applyImprovedText = useCallback(() => {
     if (!editor || !improvedText || !savedSelection) {
-      console.log('applyImprovedText: Missing required data', { 
-        hasEditor: !!editor, 
-        hasImprovedText: !!improvedText, 
-        hasSavedSelection: !!savedSelection 
-      });
       return;
     }
-    
+
     const { from, to, originalText } = savedSelection;
     try {
       // Get current document state
       const currentDoc = editor.state.doc;
       const currentDocLength = currentDoc.content.size;
-      
-      console.log('applyImprovedText: Document info', {
-        currentDocLength,
-        from,
-        to,
-        isValidRange: from >= 0 && to <= currentDocLength
-      });
-      
+
       // Try direct replacement first
       if (from >= 0 && to <= currentDocLength && from <= to) {
         const currentTextAtPosition = currentDoc.textBetween(from, to, ' ');
-        console.log('applyImprovedText: Text at saved position', { 
-          currentTextAtPosition, 
-          originalText,
-          matches: currentTextAtPosition === originalText 
-        });
-        
+
         // Try the replacement regardless of whether text matches exactly
         // This handles cases where formatting might affect comparison
-        console.log('applyImprovedText: Attempting replacement at saved positions');
-        
         const result = editor.chain()
           .focus()
           .setTextSelection({ from, to })
           .deleteSelection()
           .insertContent(improvedText)
           .run();
-          
-        console.log('applyImprovedText: Replacement result', result);
-        
+
         if (result) {
-          console.log('applyImprovedText: Direct replacement successful');
           setImprovedText(null);
           setShowImprovePopover(false);
           setSavedSelection(null);
           return;
         }
       }
-      
+
       // Fallback 1: Search for the original text in the document
-      console.log('applyImprovedText: Direct replacement failed, searching for text');
       const fullText = editor.getText();
       const originalTextIndex = fullText.indexOf(originalText);
-      
+
       if (originalTextIndex !== -1) {
-        console.log('applyImprovedText: Found original text at index', originalTextIndex);
-        
         // Calculate character positions in the document
         // This is a simplified approach - for complex docs we'd need more sophisticated position mapping
         let charCount = 0;
         let foundFrom = -1;
         let foundTo = -1;
-        
+
         // Walk through the document to find the correct positions
         currentDoc.descendants((node, pos) => {
           if (node.isText) {
             const nodeText = node.text || '';
             const nodeStart = charCount;
             const nodeEnd = charCount + nodeText.length;
-            
+
             if (originalTextIndex >= nodeStart && originalTextIndex < nodeEnd) {
               foundFrom = pos + (originalTextIndex - nodeStart);
               foundTo = foundFrom + originalText.length;
               return false; // Stop traversing
             }
-            
+
             charCount += nodeText.length;
           } else if (node.isBlock) {
             charCount += 1; // Add space for block breaks
           }
           return true;
         });
-        
+
         if (foundFrom !== -1 && foundTo !== -1) {
-          console.log('applyImprovedText: Found positions', { foundFrom, foundTo });
-          
           const result = editor.chain()
             .focus()
             .setTextSelection({ from: foundFrom, to: foundTo })
             .deleteSelection()
             .insertContent(improvedText)
             .run();
-            
+
           if (result) {
-            console.log('applyImprovedText: Search-based replacement successful');
             setImprovedText(null);
             setShowImprovePopover(false);
             setSavedSelection(null);
@@ -516,40 +534,32 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           }
         }
       }
-      
+
       // Fallback 2: Replace current selection if any
-      console.log('applyImprovedText: Using current selection fallback');
       const { from: currentFrom, to: currentTo } = editor.state.selection;
-      
+
       if (currentFrom !== currentTo) {
-        console.log('applyImprovedText: Replacing current selection');
         editor.chain()
           .focus()
           .deleteSelection()
           .insertContent(improvedText)
           .run();
       } else {
-        console.log('applyImprovedText: Inserting at cursor position');
         editor.chain()
           .focus()
           .insertContent(improvedText)
           .run();
       }
-      
-      console.log('applyImprovedText: Fallback replacement completed');
-      
+
     } catch (error) {
-      console.error('applyImprovedText: Error during replacement', error);
-      
       // Final fallback: just insert the text
       try {
         editor.chain()
           .focus()
           .insertContent(improvedText)
           .run();
-        console.log('applyImprovedText: Final fallback successful');
       } catch (finalError) {
-        console.error('applyImprovedText: All replacement methods failed', finalError);
+        // Silent fallback - don't log errors
       }
     }
     
@@ -571,8 +581,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
       if (value !== currentContent) {
+        // Prevent update feedback loop when syncing external value
+        isExternalUpdateRef.current = true;
         setTimeout(() => {
           editor.commands.setContent(value || '');
+          // Release guard after ProseMirror processes this transaction
+          setTimeout(() => {
+            isExternalUpdateRef.current = false;
+          }, 0);
         }, 0);
       }
     }
@@ -700,7 +716,13 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     focus: () => editor?.commands.focus(),
     getHTML: () => editor?.getHTML() || '',
     getText: () => editor?.getText() || '',
-    setContent: (content: string) => editor?.commands.setContent(content),
+    setContent: (content: string) => {
+      isExternalUpdateRef.current = true;
+      editor?.commands.setContent(content);
+      setTimeout(() => {
+        isExternalUpdateRef.current = false;
+      }, 0);
+    },
     insertText: (text: string) => editor?.commands.insertContent(text),
     clear: () => editor?.commands.clearContent(),
     getEditor: () => editor,
@@ -739,11 +761,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         className={cn(
           "relative cursor-text flex-1", 
           toolbarMode === 'static' ? "p-0" : "",
-          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : ""
+          maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : "",
+          editorId // Add unique class for scoped CSS
         )} 
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
-        onKeyDown={onKeyDown}
         style={{ 
           minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
           maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined
@@ -754,9 +776,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           <div 
             className="absolute pointer-events-none text-[#6e7681] text-sm z-0"
             style={{ 
-              // In static mode, offset by the container's p-3 padding (12px)
-              top: toolbarMode === 'static' ? '0' : '0',
-              left: toolbarMode === 'static' ? '0' : '0',
+              // In static mode, offset by the container's p-2 padding (8px)
+              top: toolbarMode === 'static' ? '8px' : '0',
+              left: toolbarMode === 'static' ? '8px' : '0',
               lineHeight: '1.5',
               fontSize: '14px'
             }}
@@ -773,39 +795,39 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           )}
           style={{ 
             minHeight: toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight),
-            padding: toolbarMode === 'static' ? '0' : '0' // Remove any default padding
+            padding: toolbarMode === 'static' ? '8px' : '0' // Remove any default padding
           }}
         />
 
-        {/* Global CSS for TipTap styling */}
+        {/* Scoped CSS for this TipTap editor instance */}
         <style jsx global>{`
-          .ProseMirror {
+          .${editorId} .ProseMirror {
             min-height: ${toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight)};
             outline: none;
             padding: 0;
             line-height: 1.5;
           }
           
-          .ProseMirror:focus {
+          .${editorId} .ProseMirror:focus {
             outline: none;
             box-shadow: none;
           }
           
-          .ProseMirror p {
+          .${editorId} .ProseMirror p {
             margin: 0;
             padding: 0;
           }
           
-          .ProseMirror p:first-child {
+          .${editorId} .ProseMirror p:first-child {
             margin-top: 0;
           }
           
-          .ProseMirror p:last-child {
+          .${editorId} .ProseMirror p:last-child {
             margin-bottom: 0;
           }
           
           /* Placeholder for truly empty editor */
-          .ProseMirror.is-editor-empty:before {
+          .${editorId} .ProseMirror.is-editor-empty.should-show-placeholder:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -816,8 +838,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             z-index: 1;
           }
           
-          /* Placeholder for editor with just empty paragraph */
-          .ProseMirror p:first-child:last-child:empty:before {
+          /* Placeholder for editor with just empty paragraph - only show when should-show-placeholder class is present */
+          .${editorId} .ProseMirror.should-show-placeholder p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             content: attr(data-placeholder) !important;
             pointer-events: none;
@@ -828,17 +850,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             z-index: 1;
           }
           
+          /* Hide placeholder when paragraph contains mentions (fallback for browsers without JS control) */
+          .${editorId} .ProseMirror p:first-child:last-child:has(.mention):before,
+          .${editorId} .ProseMirror p:first-child:last-child:has(.issue-mention):before,
+          .${editorId} .ProseMirror p:first-child:last-child:has([data-type="mention"]):before,
+          .${editorId} .ProseMirror p:first-child:last-child:has([data-type="issue-mention"]):before {
+            display: none !important;
+          }
+          
           /* Static toolbar mode specific styles */
           ${toolbarMode === 'static' ? `
-            .ProseMirror.is-editor-empty:before,
-            .ProseMirror p:first-child:last-child:empty:before {
+            .${editorId} .ProseMirror.is-editor-empty:before,
+            .${editorId} .ProseMirror p:first-child:last-child:empty:before {
               display: none !important;
             }
           ` : ''}
           
           /* Override any prose styles for placeholder */
-          .prose .ProseMirror.is-editor-empty:before,
-          .prose .ProseMirror p:first-child:last-child:empty:before {
+          .prose .${editorId} .ProseMirror.is-editor-empty:before,
+          .prose .${editorId} .ProseMirror p:first-child:last-child:empty:before {
             color: #6e7681 !important;
             margin: 0 !important;
             padding: 0 !important;

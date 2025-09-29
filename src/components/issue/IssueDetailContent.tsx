@@ -30,7 +30,6 @@ import { useDeleteIssue } from "@/hooks/queries/useIssues";
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { useSession } from "next-auth/react";
 import { useActivity } from "@/context/ActivityContext";
-import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { formatLiveTime } from "@/utils/taskHelpers";
 import {
   Dialog,
@@ -44,6 +43,9 @@ import {
 import { IssueTabs } from "./sections/IssueTabs";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
+import { EditorMiniToolbar } from "@/components/RichEditor/components/EditorMiniToolbar";
+import { EditorHistoryModal } from "@/components/RichEditor/components/EditorHistoryModal";
+import type { RichEditorRef } from "@/components/RichEditor/types";
 import { generateBackNavigationUrl } from "@/lib/navigation-helpers";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
@@ -56,7 +58,7 @@ import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelecto
 import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 
 // Import types
-import type { IssueDetailProps, IssueFieldUpdate, PlayTime } from "@/types/issue";
+import type { IssueDetailProps, IssueFieldUpdate, IssueUser, PlayTime } from "@/types/issue";
 
 type PlayState = "playing" | "paused" | "stopped";
 
@@ -78,6 +80,7 @@ interface IssueDetailContentProps extends IssueDetailProps {
   issueId?: string;
   viewName?: string;
   viewSlug?: string;
+  createdByUser?: IssueUser;
 }
 
 export function IssueDetailContent({
@@ -90,7 +93,8 @@ export function IssueDetailContent({
   workspaceId,
   issueId,
   viewName,
-  viewSlug
+  viewSlug,
+  createdByUser
 }: IssueDetailContentProps) {
   const router = useRouter();
   const deleteIssueMutation = useDeleteIssue();
@@ -110,7 +114,6 @@ export function IssueDetailContent({
   // Session and activity hooks
   const { data: session } = useSession();
   const { userStatus, handleTaskAction } = useActivity();
-  const { settings } = useWorkspaceSettings();
   const currentUserId = session?.user?.id;
 
   // Time tracking state
@@ -123,6 +126,12 @@ export function IssueDetailContent({
   // Follow state
   const [isFollowingIssue, setIsFollowingIssue] = useState(false);
   const [isTogglingIssueFollow, setIsTogglingIssueFollow] = useState(false);
+
+  // Editor reference for mini toolbar
+  const editorRef = useRef<RichEditorRef>(null);
+
+  // History modal state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Time tracking utilities
   const canControlTimer = useMemo(() => {
@@ -458,6 +467,11 @@ export function IssueDetailContent({
     }
   }, [issue?.id, isFollowingIssue, isTogglingIssueFollow, toast]);
 
+  // Handle history modal
+  const handleHistoryClick = useCallback(() => {
+    setIsHistoryOpen(true);
+  }, []);
+
   // Build collaboration document id using workspace slug and issue key
   const collabDocumentId = issue?.issueKey && workspaceId
     ? `${workspaceId}.${issue.issueKey}.description`
@@ -529,7 +543,7 @@ export function IssueDetailContent({
   // Handle description change and detect changes
   const handleDescriptionChange = useCallback((newDescription: string) => {
     setDescription(newDescription);
-  }, [issue?.description]);
+  }, []);
 
   // AI Improve function for description editor
   const handleAiImprove = useCallback(async (text: string): Promise<string> => {
@@ -692,8 +706,6 @@ export function IssueDetailContent({
         if (editingTitle) {
           setEditingTitle(false);
           setTitle(issue?.title || '');
-        } else {
-          onClose?.();
         }
       }
     };
@@ -793,7 +805,7 @@ export function IssueDetailContent({
         actions={
           <div className="flex items-center gap-2">
             {/* Time tracking controls - Only show if time tracking is enabled */}
-            {settings?.timeTrackingEnabled && (
+            {false && (
               <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm mr-2">
                 {currentPlayState === "stopped" && (
                   <Button
@@ -854,9 +866,9 @@ export function IssueDetailContent({
                     <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
                   </div>
                 ) : totalPlayTime ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime.formattedTime}`}>
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime?.formattedTime}`}>
                     <Clock className="h-3.5 w-3.5" />
-                    <span>{totalPlayTime.formattedTime}</span>
+                    <span>{totalPlayTime?.formattedTime}</span>
                   </div>
                 ) : (
                   <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
@@ -939,7 +951,7 @@ export function IssueDetailContent({
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] focus:border-[#58a6ff] h-auto py-2 flex-1"
+                    className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] h-auto py-1 flex-1"
                     placeholder="Issue title"
                     autoFocus
                     onKeyDown={(e) => {
@@ -952,34 +964,34 @@ export function IssueDetailContent({
                       }
                     }}
                   />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveTitle}
-                    disabled={isUpdating}
-                    className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-                  >
-                    {isUpdating ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : (
-                      <Check className="h-3 w-3 mr-1" />
-                    )}
-                    Save
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEditingTitle(false);
-                      setTitle(issue.title);
-                    }}
-                    disabled={isUpdating}
-                    className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Cancel
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveTitle}
+                      disabled={isUpdating}
+                      className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+                    >
+                      {isUpdating ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Check className="h-3 w-3 mr-1" />
+                      )}
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingTitle(false);
+                        setTitle(issue.title);
+                      }}
+                      disabled={isUpdating}
+                      className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1075,27 +1087,28 @@ export function IssueDetailContent({
 
             <div className="flex items-center justify-between">
               {/* Created info */}
-              <div className="flex items-center gap-2 text-xs text-[#6e7681]">
+              <div className="flex items-center gap-1 text-xs text-[#6e7681]">
                 <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
-                {issue.reporter && (
+                {createdByUser && (
                   <>
                     <span>by</span>
                     <div className="flex items-center gap-1">
                       <Avatar className="h-4 w-4">
-                        <AvatarImage src={issue.reporter.image} />
+                        <AvatarImage src={createdByUser?.image} />
                         <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
-                          {issue.reporter.name?.charAt(0)}
+                          {createdByUser?.name?.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      <span>{issue.reporter.name}</span>
+                      <span>{createdByUser?.name}</span>
                     </div>
                   </>
                 )}
               </div>
-              
-              {/* Autosave status indicator */}
-              <div className="flex items-center gap-2 text-xs text-[#8b949e]">
-                <div className="flex items-center gap-2">
+
+              {/* Autosave status indicator and Editor Controls */}
+              <div className="flex items-center gap-4 text-xs text-[#8b949e]">
+                {/* Autosave Status */}
+                <div className="flex items-center gap-2 border-r border-[#21262d] pr-4">
                   {autosaveStatus === "idle" && (
                     <>
                       <span className="text-[#8b949e]">Autosave is active</span>
@@ -1131,6 +1144,13 @@ export function IssueDetailContent({
                     </>
                   )}
                 </div>
+                {/* Editor Mini Toolbar */}
+                {collabDocumentId && (
+                  <EditorMiniToolbar
+                    editorRef={editorRef}
+                    onHistoryClick={handleHistoryClick}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1143,6 +1163,7 @@ export function IssueDetailContent({
             <div className="w-full relative">
 
               <IssueRichEditor
+                ref={editorRef}
                 value={description}
                 onChange={handleDescriptionChange}
                 placeholder="Add a description..."
@@ -1244,6 +1265,15 @@ export function IssueDetailContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* History Modal */}
+      <EditorHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        collabDocumentId={collabDocumentId}
+        issueId={issue?.id}
+        editorRef={editorRef}
+      />
 
       {/* Autosave is always on; no unsaved changes modal */}
     </div>

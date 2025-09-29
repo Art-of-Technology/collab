@@ -9,7 +9,7 @@ import {
 import { List, Kanban, Calendar, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewType = "LIST" | "KANBAN" | "TIMELINE";
+type ViewType = "LIST" | "KANBAN";
 
 interface ViewTypeSelectorProps {
   value: ViewType;
@@ -29,12 +29,6 @@ const VIEW_TYPE_CONFIG = {
     icon: Kanban,
     color: "#22c55e",
     description: "Kanban board with columns"
-  },
-  TIMELINE: {
-    label: "Timeline",
-    icon: Calendar,
-    color: "#f59e0b",
-    description: "Timeline view with dates"
   }
 } as const;
 
@@ -48,7 +42,7 @@ export function ViewTypeSelector({
   const selectedConfig = VIEW_TYPE_CONFIG[value] || VIEW_TYPE_CONFIG.LIST;
   const Icon = selectedConfig.icon;
 
-  const options: ViewType[] = ["LIST", "KANBAN", "TIMELINE"];
+  const options: ViewType[] = ["LIST", "KANBAN"];
 
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
