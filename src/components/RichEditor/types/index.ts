@@ -17,6 +17,7 @@ export interface RichEditorProps {
   onKeyDown?: (e: React.KeyboardEvent) => void;
   onUpdate?: (editor: any) => void;
   additionalExtensions?: any[];
+  autofocus?: boolean;
 }
 
 export interface RichEditorRef {
