@@ -38,7 +38,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
   "slug": "hello-collab",
   "version": "1.3.0",
   "description": "Sample integration that syncs issues from Collab.",
-  "type": "external_iframe",
+  "type": "embed",
   "entrypoint_url": "https://hello.example.com",
   "icon_url": "https://hello.example.com/icon.png",
   "publisher": {
@@ -79,7 +79,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 
 ### Validation Rules
 - `slug`: lowercase alphanumeric + hyphen, max 50 chars; reserved slugs include `admin`, `api`, `auth`, `dev`, `manifest`, etc. (`RESERVED_APP_SLUGS`).
-- `type`: one of `external_iframe`, `mfe_remote`, `server_only`.
+- `type`: one of `embed`, `mfe_remote`, `server_only`.
 - `entrypoint_url`: must resolve to HTTPS (localhost allowed for development) and passes `validateAppManifestSecurity` checks.
 - `scopes`: deduplicated list of up to 10 values; allowed scopes come from `AppScopeSchema` (`workspace:read`, `issues:read`, `issues:write`, `comments:read`, `comments:write`, `user:read`, `leave:read`, `leave:write`).
 - `oauth`: all redirect URIs validated as URLs; both `client_id` and `client_secret` are required when provided.

@@ -81,8 +81,8 @@ export const AppManifestV1Schema = z.object({
   description: z.string().min(1, 'App description is required').max(500, 'Description must be less than 500 characters'),
   
   // App configuration
-  type: z.enum(['external_iframe', 'mfe_remote', 'server_only'], {
-    errorMap: () => ({ message: 'App type must be external_iframe, mfe_remote, or server_only' })
+  type: z.enum(['embed', 'mfe_remote', 'server_only'], {
+    errorMap: () => ({ message: 'App type must be embed, mfe_remote, or server_only' })
   }),
   
   entrypoint_url: z.string().url('Invalid entrypoint URL'),
