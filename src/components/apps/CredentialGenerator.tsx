@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
 import { Copy, RefreshCw, Eye, EyeOff, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { copyToClipboard } from '@/utils/issueHelpers';
-import { useToast } from '@/hooks';
+import { useToast } from '@/hooks/use-toast';
 
 interface Credentials {
   clientId: string;
