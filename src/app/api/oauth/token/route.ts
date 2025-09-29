@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { encryptToken } from '@/lib/apps/crypto';
+import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -221,8 +222,6 @@ async function handleRefreshTokenGrant(
   oauthClient: any
 ): Promise<NextResponse> {
   const refreshToken = body.get('refresh_token') as string;
-  const scope = body.get('scope') as string;
-  const subject = body.get('subject') as string;
 
   if (!refreshToken) {
     return NextResponse.json(
@@ -366,12 +365,8 @@ async function validateAuthorizationCode(
       }
     });
 
-    const scopeString =
-    Array.isArray(authCode.scope)
-      ? authCode.scope.join(" ")
-      : typeof authCode.scope === "string"
-        ? authCode.scope
-        : "";
+    // Normalize scope handling - convert any format to consistent string
+    const scopeString = scopesToString(normalizeScopes(authCode.scope));
 
     return {
       valid: true,
@@ -429,7 +424,7 @@ async function validateRefreshToken(
             return {
               valid: true,
               installationId: installation.id,
-              scope: installation.scopes.join(' ')
+              scope: scopesToString(installation.scopes)
             };
           }
         }

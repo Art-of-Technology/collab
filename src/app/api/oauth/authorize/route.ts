@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import { generateAuthorizationCode } from '@/lib/apps/crypto';
+import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -188,16 +189,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate and normalize scopes
-    const requestedScopes = scope.split(' ').filter(s => s.trim());
-    const availableScopes = installation.scopes;
-    const grantedScopes = requestedScopes.filter(s => availableScopes.includes(s));
+    // Validate and normalize scopes using utility functions
+    const scopeValidation = validateScopes(scope);
+    if (!scopeValidation.valid && scope.trim()) {
+      return NextResponse.json(
+        {
+          error: 'invalid_scope',
+          error_description: `Invalid scopes: ${scopeValidation.invalidScopes.join(', ')}`
+        },
+        { status: 400 }
+      );
+    }
 
+    const grantedScopes = filterGrantedScopes(scope, installation.scopes);
+    
     if (grantedScopes.length === 0) {
       return NextResponse.json(
         {
           error: 'invalid_scope',
-          error_description: 'No valid scopes requested'
+          error_description: 'No valid scopes requested or granted'
         },
         { status: 400 }
       );
@@ -216,7 +226,7 @@ export async function GET(request: NextRequest) {
         workspaceId: targetWorkspaceId!,
         installationId: installation.id,
         redirectUri,
-        scope: grantedScopes.join(' '),
+        scope: scopesToString(grantedScopes),
         state,
         code_challenge,
         code_challenge_method,
@@ -226,7 +236,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Log authorization for audit trail
-    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, scopes=${grantedScopes.join(' ')}`);
+    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, scopes=${scopesToString(grantedScopes)}`);
 
     // Redirect back to app with authorization code
     const callbackUrl = new URL(redirectUri);

@@ -247,3 +247,73 @@ export type WebhookEventType = typeof WEBHOOK_EVENT_TYPES[number];
 export function validateEventTypes(eventTypes: string[]): boolean {
   return eventTypes.every(type => WEBHOOK_EVENT_TYPES.includes(type as WebhookEventType));
 }
+
+/**
+ * Type guard to validate WebhookEvent structure
+ */
+export function isValidWebhookEvent(payload: any): payload is WebhookEvent {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  // Check required string fields
+  if (typeof payload.id !== 'string' || !payload.id) {
+    return false;
+  }
+  
+  if (typeof payload.type !== 'string' || !payload.type) {
+    return false;
+  }
+  
+  // Check timestamp is a valid number
+  if (typeof payload.timestamp !== 'number' || !Number.isInteger(payload.timestamp) || payload.timestamp <= 0) {
+    return false;
+  }
+
+  // Validate workspace object
+  if (!payload.workspace || typeof payload.workspace !== 'object') {
+    return false;
+  }
+  
+  if (typeof payload.workspace.id !== 'string' || !payload.workspace.id) {
+    return false;
+  }
+  
+  if (typeof payload.workspace.slug !== 'string' || !payload.workspace.slug) {
+    return false;
+  }
+  
+  if (typeof payload.workspace.name !== 'string' || !payload.workspace.name) {
+    return false;
+  }
+
+  // Validate app object
+  if (!payload.app || typeof payload.app !== 'object') {
+    return false;
+  }
+  
+  if (typeof payload.app.id !== 'string' || !payload.app.id) {
+    return false;
+  }
+  
+  if (typeof payload.app.slug !== 'string' || !payload.app.slug) {
+    return false;
+  }
+  
+  if (typeof payload.app.name !== 'string' || !payload.app.name) {
+    return false;
+  }
+
+  // data field can be any type, so we don't validate its structure
+  // but we ensure it exists
+  if (!payload.hasOwnProperty('data')) {
+    return false;
+  }
+
+  // Validate event type is one of the known types
+  if (!WEBHOOK_EVENT_TYPES.includes(payload.type as WebhookEventType)) {
+    return false;
+  }
+
+  return true;
+}

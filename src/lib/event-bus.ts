@@ -1,5 +1,6 @@
 import { WebhookEvent, WebhookEventType } from './webhooks';
 import { processWebhookEvent } from './webhook-delivery';
+import crypto from 'crypto';
 
 export interface EventData {
   [key: string]: any;
@@ -178,7 +179,7 @@ export class EventBus {
   }
 
   private generateEventId(): string {
-    return `evt_${Date.now()}_${Math.random().toString(36).substr(2, 12)}`;
+    return `evt_${Date.now()}_${crypto.randomUUID()}`;
   }
 }
 

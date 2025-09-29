@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppScope } from '@/lib/apps/types';
 import { useToast } from '@/hooks/use-toast';
+import crypto from 'crypto';
 
 interface AppContext {
   app: {
@@ -41,12 +42,16 @@ interface UseAppBridgeProps {
   context: AppContext;
 }
 
+const generateRequestId = () => {
+  return `req_${Date.now()}_${crypto.randomUUID()}`;
+};
+
 export function useAppBridge({ iframe, allowedOrigin, context }: UseAppBridgeProps) {
   const [isReady, setIsReady] = useState(false);
   const router = useRouter();
   const pendingRequests = useRef(new Map<string, (response: any) => void>());
   const messageRateLimit = useRef(new Map<string, { count: number; resetTime: number }>());
-  const bridgeId = useRef(`bridge_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`);
+  const bridgeId = useRef(`bridge_${generateRequestId()}`);
   const pendingInitialContext = useRef(false);
   const { toast } = useToast();
   // Debug: Log hook initialization
@@ -74,9 +79,6 @@ export function useAppBridge({ iframe, allowedOrigin, context }: UseAppBridgePro
     iframe.contentWindow.postMessage(message, allowedOrigin);
   }, [iframe, allowedOrigin]);
 
-  const generateRequestId = useCallback(() => {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }, []);
 
   // Rate limiting for postMessage
   const rateLimitMessage = useCallback((key: string, limit: number = 50, windowMs: number = 60000): boolean => {

@@ -8,7 +8,8 @@ import {
   isSuccessStatus,
   isPermanentFailure,
   createWebhookPayload,
-  createSignatureHeader
+  createSignatureHeader,
+  isValidWebhookEvent
 } from './webhooks';
 import { decrypt } from './apps/crypto';
 
@@ -352,7 +353,26 @@ export async function retryFailedWebhooks(
         continue;
       }
 
-      const event: WebhookEvent = delivery.payload as unknown as WebhookEvent;
+      // Validate payload structure before processing
+      if (!isValidWebhookEvent(delivery.payload)) {
+        console.error(`🪝 Webhook: Invalid payload structure for delivery ${delivery.id}`, {
+          eventId: delivery.eventId,
+          webhookId: delivery.webhook.id,
+          eventType: delivery.eventType
+        });
+        
+        // Mark as permanently failed since payload is invalid
+        await prisma.appWebhookDelivery.update({
+          where: { id: delivery.id },
+          data: {
+            failedAt: new Date(),
+            nextAttemptAt: null
+          }
+        });
+        continue;
+      }
+
+      const event: WebhookEvent = delivery.payload;
       const result = await deliverWebhook(delivery.webhook.id, event, options);
       
       await recordWebhookDelivery(
