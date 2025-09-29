@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { NoteComment, NoteCommentWithAuthor } from "@/components/notes/NoteComment";
 import { NoteCommentForm } from "@/components/notes/NoteCommentForm";
 import { useSession } from "next-auth/react";
@@ -53,7 +53,7 @@ export function NoteCommentsList({
     return organized;
   }, [processedComments]);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       setIsLoading(true);
       console.log(`Fetching comments for note ${noteId}...`);
@@ -76,11 +76,11 @@ export function NoteCommentsList({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [noteId, toast]);
 
   useEffect(() => {
     fetchComments();
-  }, [noteId]);
+  }, [noteId, fetchComments]);
 
   const handleCommentSuccess = () => {
     fetchComments();

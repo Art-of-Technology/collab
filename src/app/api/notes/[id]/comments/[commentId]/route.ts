@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { CommentWhereInputExtension } from '@/types/prisma-extensions';
 
 // Get a specific comment
 export async function GET(
@@ -36,9 +37,8 @@ export async function GET(
     const comment = await prisma.comment.findFirst({
       where: {
         id: commentId,
-        // @ts-ignore - noteId will be added after migration
         noteId: id
-      },
+      } as CommentWhereInputExtension,
       include: {
         author: {
           select: {
@@ -110,9 +110,8 @@ export async function PATCH(
     const comment = await prisma.comment.findFirst({
       where: {
         id: commentId,
-        // @ts-ignore - noteId already exists in schema
         noteId: id
-      }
+      } as CommentWhereInputExtension
     });
 
     if (!comment) {
@@ -187,9 +186,8 @@ export async function DELETE(
     const comment = await prisma.comment.findFirst({
       where: {
         id: commentId,
-        // @ts-ignore - noteId already exists in schema
         noteId: id
-      }
+      } as CommentWhereInputExtension
     });
 
     if (!comment) {

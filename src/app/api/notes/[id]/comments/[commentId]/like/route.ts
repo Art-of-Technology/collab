@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { CommentWhereInputExtension } from '@/types/prisma-extensions';
 
 // Toggle like on a comment
 export async function POST(
@@ -36,9 +37,8 @@ export async function POST(
     const comment = await prisma.comment.findFirst({
       where: {
         id: commentId,
-        // @ts-ignore - noteId already exists in schema
         noteId: id,
-      },
+      } as CommentWhereInputExtension,
     });
     
     if (!comment) {

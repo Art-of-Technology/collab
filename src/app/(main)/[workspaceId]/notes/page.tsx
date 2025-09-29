@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock } from "lucide-react";
+import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,9 @@ interface Note {
     name: string;
     slug: string;
   };
+  comments?: {
+    id: string;
+  }[];
 }
 
 interface NoteTag {
@@ -599,6 +602,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           ) : (
                             <div title="Private note">
                               <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                            </div>
+                          )}
+                          {note.comments && note.comments.length > 0 && (
+                            <div title={`${note.comments.length} comment${note.comments.length === 1 ? '' : 's'}`} className="ml-1">
+                              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                             </div>
                           )}
                         </div>

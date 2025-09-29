@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { CommentWhereInputExtension } from '@/types/prisma-extensions';
 
 // Helper function to organize comments into a tree structure
 const organizeCommentsIntoTree = (comments: any[]) => {
@@ -73,9 +74,8 @@ export async function GET(
     // Get all comments for the note
     const comments = await prisma.comment.findMany({
       where: {
-        // @ts-ignore - noteId already exists in schema
         noteId: id
-      },
+      } as CommentWhereInputExtension,
       include: {
         author: {
           select: {
@@ -167,7 +167,6 @@ export async function POST(
         message,
         html,
         authorId: session.user.id,
-        // @ts-ignore - noteId already exists in schema
         noteId: id,
         ...(parentId && { parentId })
       },

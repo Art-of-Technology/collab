@@ -33,6 +33,9 @@ interface Note {
     name: string;
     color: string;
   }[];
+  comments?: {
+    id: string;
+  }[];
 }
 
 export default function NoteDetailPage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
