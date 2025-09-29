@@ -154,8 +154,6 @@ export async function POST(request: NextRequest) {
           where: { appId: existingApp.id }
         });
 
-        console.log(manifest.oauth);
-
         // Require both client_id and client_secret in manifest
         if (!manifest.oauth.client_id || !manifest.oauth.client_secret) {
           return NextResponse.json(

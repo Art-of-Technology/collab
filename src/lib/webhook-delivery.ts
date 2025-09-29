@@ -21,6 +21,8 @@ export interface WebhookDeliveryResult {
   response?: string;
   error?: string;
   shouldRetry?: boolean;
+  timestamp?: number;
+  signature?: string;
 }
 
 /**
@@ -41,12 +43,24 @@ export async function deliverWebhook(
     });
 
     if (!webhook || !webhook.isActive) {
-      return { success: false, error: 'Webhook not found or inactive', shouldRetry: false };
+      return { 
+        success: false, 
+        error: 'Webhook not found or inactive', 
+        shouldRetry: false,
+        timestamp: Date.now(),
+        signature: ''
+      };
     }
 
     // Check if webhook subscribes to this event type
     if (!webhook.eventTypes.includes(event.type)) {
-      return { success: false, error: 'Webhook not subscribed to event type', shouldRetry: false };
+      return { 
+        success: false, 
+        error: 'Webhook not subscribed to event type', 
+        shouldRetry: false,
+        timestamp: Date.now(),
+        signature: ''
+      };
     }
 
     // Decrypt webhook secret
@@ -105,7 +119,9 @@ export async function deliverWebhook(
         success,
         status: response.status,
         response: responseText.slice(0, 1000), // Limit response size
-        shouldRetry
+        shouldRetry,
+        timestamp,
+        signature
       };
 
     } catch (fetchError: any) {
@@ -124,7 +140,9 @@ export async function deliverWebhook(
       return {
         success: false,
         error,
-        shouldRetry: true // Network errors are usually retryable
+        shouldRetry: true, // Network errors are usually retryable
+        timestamp,
+        signature
       };
     }
 
@@ -138,7 +156,9 @@ export async function deliverWebhook(
     return {
       success: false,
       error: error.message,
-      shouldRetry: true
+      shouldRetry: true,
+      timestamp: Date.now(), // Fallback timestamp for error cases
+      signature: '' // Empty signature for error cases
     };
   }
 }
@@ -274,9 +294,9 @@ export async function processWebhookEvent(
     const deliveryPromises = webhooks.map(async (webhook) => {
       try {
         const result = await deliverWebhook(webhook.id, event, options);
-        const payload = createWebhookPayload(event);
-        const secret = await decrypt(Buffer.from(webhook.secretEnc));
-        const signature = generateWebhookSignature(payload, secret, Date.now());
+        
+        // Use the signature from the actual delivery result to ensure consistency
+        const signature = result.signature || '';
         
         await recordWebhookDelivery(
           webhook.id,
