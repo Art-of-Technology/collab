@@ -1,53 +1,91 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp, ArrowDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import type { SearchRelationItemProps } from "../types/relation";
 import { cn } from "@/lib/utils";
+import { ISSUE_TYPE_CONFIG, type IssueType } from "@/constants/issue-types";
+import { InfoBadge } from "./InfoBadge";
 
 // Priority icon mapping to match ListViewRenderer
 const getPriorityIcon = (priority: string) => {
   const colorMap = {
     'URGENT': 'text-red-500',
-    'HIGH': 'text-orange-500', 
+    'HIGH': 'text-orange-500',
     'MEDIUM': 'text-blue-500',
     'LOW': 'text-green-500'
   };
-  
+
   const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-gray-500';
-  
+
   return <ArrowUp className={cn("h-3.5 w-3.5", colorClass)} />;
 };
 
-// Status icon mapping to match ListViewRenderer  
+// Status badge component similar to IssueStatusSelector
 const getStatusIcon = (status: string) => {
+  const normalizedStatus = status?.toUpperCase().replace(/[_\s]/g, " ");
+  const STATUS_ICONS = {
+    TODO: Circle,
+    BACKLOG: Circle,
+    "IN PROGRESS": Clock,
+    REVIEW: Clock,
+    TESTING: Clock,
+    DONE: CheckCircle2,
+    COMPLETED: CheckCircle2,
+    CANCELLED: XCircle,
+    BLOCKED: AlertCircle,
+  } as const;
+
+  return STATUS_ICONS[normalizedStatus as keyof typeof STATUS_ICONS] || Circle;
+};
+
+const getStatusColor = (status: string) => {
+  const normalizedStatus = status?.toUpperCase().replace(/[_\s]/g, " ");
+  const STATUS_COLORS = {
+    TODO: "text-slate-500",
+    BACKLOG: "text-slate-500",
+    "IN PROGRESS": "text-blue-500",
+    REVIEW: "text-amber-500",
+    TESTING: "text-purple-500",
+    DONE: "text-emerald-500",
+    COMPLETED: "text-emerald-500",
+    CANCELLED: "text-red-500",
+    BLOCKED: "text-red-500",
+  } as const;
+
+  return STATUS_COLORS[normalizedStatus as keyof typeof STATUS_COLORS] || "text-slate-500";
+};
+
+const getStatusDisplayName = (status: string) => {
   const normalizedStatus = status?.toLowerCase().replace(/[_\s]/g, ' ');
-  const iconClass = "h-3.5 w-3.5";
-  
-  switch (normalizedStatus) {
-    case 'todo':
-    case 'backlog':
-      return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
-    case 'in progress':
-    case 'active':
-    case 'working':
-      return <Clock className={cn(iconClass, "text-[#3b82f6]")} />;
-    case 'review':
-    case 'testing':
-      return <Clock className={cn(iconClass, "text-[#f59e0b]")} />;
-    case 'done':
-    case 'completed':
-      return <CheckCircle2 className={cn(iconClass, "text-[#22c55e]")} fill="currentColor" />;
-    case 'cancelled':
-    case 'rejected':
-      return <XCircle className={cn(iconClass, "text-[#ef4444]")} fill="currentColor" />;
-    case 'blocked':
-      return <AlertCircle className={cn(iconClass, "text-[#f59e0b]")} />;
-    default:
-      return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
-  }
+
+  const STATUS_DISPLAY_NAMES = {
+    'todo': 'To Do',
+    'backlog': 'Backlog',
+    'in progress': 'In Progress',
+    'review': 'Review',
+    'testing': 'Testing',
+    'done': 'Done',
+    'completed': 'Completed',
+    'cancelled': 'Cancelled',
+    'blocked': 'Blocked',
+  } as const;
+
+  return STATUS_DISPLAY_NAMES[normalizedStatus as keyof typeof STATUS_DISPLAY_NAMES] || status;
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const Icon = getStatusIcon(status);
+  const colorClass = getStatusColor(status);
+  const displayName = getStatusDisplayName(status);
+
+  return (
+    <InfoBadge>
+      <Icon className={cn("h-2.5 w-2.5", colorClass)} />
+      {displayName}
+    </InfoBadge>
+  );
 };
 
 export function SearchRelationItem({
@@ -56,9 +94,9 @@ export function SearchRelationItem({
   onToggle
 }: SearchRelationItemProps) {
   return (
-    <div 
+    <div
       className={cn(
-        "group flex items-center px-3 py-2 transition-all duration-150 cursor-pointer rounded-md",
+        "group flex items-center px-2 py-1.5 transition-all duration-150 cursor-pointer rounded-md",
         "hover:bg-[#0f1011]",
         isSelected && "bg-blue-500/10 border-l-2 border-blue-500"
       )}
@@ -73,29 +111,24 @@ export function SearchRelationItem({
         )}
       </div>
 
-      {/* Status Icon */}
-      <div className="flex items-center w-5 mr-2 flex-shrink-0">
-        {getStatusIcon(item.status || 'todo')}
-      </div>
-
-      {/* Issue Key */}
-      <div className="w-16 flex-shrink-0 mr-2">
-        <span className="text-[#8b949e] text-xs font-mono font-medium">
-          {item.issueKey || item.type.toUpperCase()}
-        </span>
-      </div>
-
-      {/* Priority and Title section */}
+      {/* Title and Issue Key section */}
       <div className="flex-1 min-w-0 mr-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-0.5">
           {/* Priority Icon */}
           {item.priority && (
             <div className="flex items-center flex-shrink-0">
               {getPriorityIcon(item.priority)}
             </div>
           )}
-          
-          {/* Title */}
+
+          {/* Issue Key - moved to top */}
+          <span className="text-[#8b949e] text-[10px] font-mono font-medium">
+            {item.issueKey || item.type.toUpperCase()}
+          </span>
+        </div>
+
+        {/* Title - moved under issue key */}
+        <div className="flex items-center">
           <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
             {item.title}
           </span>
@@ -106,24 +139,37 @@ export function SearchRelationItem({
       <div className="flex items-center gap-1.5 flex-shrink-0 mr-3">
         {/* Workspace Badge */}
         {item.workspace && (
-          <Badge 
-            className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#333] text-[#9ca3af]"
-          >
+          <InfoBadge>
             {item.workspace.name}
-          </Badge>
+          </InfoBadge>
         )}
-        
+
         {/* Project Badge */}
         {item.project && (
-          <Badge 
-            className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-opacity-80 hover:bg-opacity-100 transition-all"
-            style={{ 
-              backgroundColor: (item.project.color || '#6e7681') + '30',
-              color: item.project.color || '#8b949e'
-            }}
-          >
+          <InfoBadge>
             {item.project.name}
-          </Badge>
+          </InfoBadge>
+        )}
+        {/* Status Badge */}
+        <div className="flex items-center flex-shrink-0">
+          <StatusBadge status={item.status || 'todo'} />
+        </div>
+        {/* Issue Type Badge */}
+        {item.type && (
+          (() => {
+            const typeConfig = ISSUE_TYPE_CONFIG[item.type.toUpperCase() as IssueType] || ISSUE_TYPE_CONFIG.TASK;
+            const TypeIcon = typeConfig.icon;
+
+            return (
+              <InfoBadge>
+                <TypeIcon
+                  className="h-2.5 w-2.5"
+                  style={{ color: typeConfig.color }}
+                />
+                {typeConfig.label}
+              </InfoBadge>
+            );
+          })()
         )}
       </div>
 
@@ -144,7 +190,7 @@ export function SearchRelationItem({
       </div>
 
       {/* Updated Date */}
-      <div className="flex-shrink-0 w-12">
+      <div className="flex-shrink-0 w-10">
         <span className="text-[#6e7681] text-xs">
           {format(new Date(item.updatedAt), 'MMM d')}
         </span>
