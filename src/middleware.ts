@@ -12,7 +12,6 @@ import { NextResponse, type NextRequest } from "next/server";
 // Run this middleware on almost everything except static assets and next internals
 export const config = {
   matcher: [
-    
     "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|assets/|fonts/|images/|api/health).*)",
   ],
 };
