@@ -139,7 +139,8 @@ export async function GET(
         createdAt: relation.targetIssue.createdAt.toISOString(),
         updatedAt: relation.targetIssue.updatedAt.toISOString(),
         dueDate: relation.targetIssue.dueDate?.toISOString(),
-        _count: relation.targetIssue._count
+        _count: relation.targetIssue._count,
+        relationEntryId: relation.id
       };
 
       switch (relation.relationType) {
@@ -182,7 +183,8 @@ export async function GET(
         createdAt: relation.sourceIssue.createdAt.toISOString(),
         updatedAt: relation.sourceIssue.updatedAt.toISOString(),
         dueDate: relation.sourceIssue.dueDate?.toISOString(),
-        _count: relation.sourceIssue._count
+        _count: relation.sourceIssue._count,
+        relationEntryId: relation.id
       };
 
       switch (relation.relationType) {
