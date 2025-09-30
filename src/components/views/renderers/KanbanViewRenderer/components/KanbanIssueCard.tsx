@@ -73,6 +73,15 @@ const KanbanIssueCard = React.memo(({
 
   const isIssueBeingProcessed = operationsInProgress?.has(issue.id) || false;
 
+  const isLabelsVisible = showLabels && issue.labels && issue.labels.length > 0;
+  const isProjectVisible = showProject && issue.project;
+  const isDueDateVisible = showDueDate && issue.dueDate;
+  const isStoryPointsVisible = showStoryPoints && issue.storyPoints;
+  const isReporterVisible = showReporter && issue.reporter;
+  const isStatusVisible = showStatus && (issue.projectStatus?.displayName || issue.status || issue.statusValue)
+  const isCreatedVisible = showCreated && issue.createdAt;
+  const isTagsVisible = isLabelsVisible || isProjectVisible || isDueDateVisible || isStoryPointsVisible || isReporterVisible || isStatusVisible || isCreatedVisible;
+
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index} isDragDisabled={isIssueBeingProcessed}>
       {(provided, snapshot) => (
@@ -81,7 +90,7 @@ const KanbanIssueCard = React.memo(({
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           className={cn(
-            "p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
+            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
             hasRelations ? 'pb-1.5' : 'pb-3',
             isIssueBeingProcessed
               ? "opacity-60 cursor-not-allowed"
@@ -89,7 +98,7 @@ const KanbanIssueCard = React.memo(({
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
         >
-          <div className="group flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
             <div className="flex items-center justify-between"
               onClick={handleCardClick}>
@@ -143,9 +152,11 @@ const KanbanIssueCard = React.memo(({
             {/* All Badges Row: Labels, Project, Due Date, Story Points, Reporter - Flex Wrap */}
             <div className="flex flex-row justify-between gap-2">
               {/* All Badges in Flex Wrap Container */}
-              <div className="flex flex-wrap gap-1 items-center">
+              <div className={cn("flex flex-wrap gap-1 items-center",
+                isTagsVisible && "mb-1.5"
+              )}>
                 {/* Labels */}
-                {showLabels && issue.labels && issue.labels.length > 0 && (
+                {isLabelsVisible && (
                   <>
                     {issue.labels.slice(0, 3).map((label: any) => (
                       <Badge
@@ -166,7 +177,7 @@ const KanbanIssueCard = React.memo(({
                 )}
 
                 {/* Project Badge */}
-                {showProject && issue.project && (
+                {isProjectVisible && (
                   <Badge
                     className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm"
                     style={{
@@ -179,21 +190,21 @@ const KanbanIssueCard = React.memo(({
                 )}
 
                 {/* Due Date */}
-                {showDueDate && issue.dueDate && (
+                {isDueDateVisible && (
                   <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-orange-500/20 text-orange-400 border-0 rounded-sm">
                     {format(new Date(issue.dueDate), 'MMM d')}
                   </Badge>
                 )}
 
                 {/* Story Points */}
-                {showStoryPoints && issue.storyPoints && (
+                {isStoryPointsVisible && (
                   <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-blue-500/20 text-blue-400 border-0 rounded-sm">
                     {issue.storyPoints} pts
                   </Badge>
                 )}
 
                 {/* Reporter Badge */}
-                {showReporter && issue.reporter && (
+                {isReporterVisible && (
                   <Badge className="kanban-badge h-4 px-1.5 text-[10px] font-medium leading-none bg-purple-500/20 text-purple-400 border-0 rounded-sm">
                     {issue.reporter.name}
                   </Badge>
@@ -268,7 +279,10 @@ const KanbanIssueCard = React.memo(({
                       <div
                         key={relation.id}
                         onClick={() => {
-                          router.push(`/${currentWorkspace?.slug}/issues/${relation.issueKey}`);
+                          if (!relation.issueKey) return;
+                          const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
+                          if (!workspaceSlug) return;
+                          router.push(`/${workspaceSlug}/issues/${relation.issueKey}`);
                         }}
                         className="flex items-center transition-colors duration-150 justify-between gap-2 rounded-md border border-[#1a1a1a] bg-[#0f0f0f] px-2 py-1 cursor-pointer hover:bg-[#1a1a1a]"
                       >

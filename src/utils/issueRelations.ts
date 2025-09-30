@@ -17,10 +17,15 @@ export type IssueTypeKey =
 
 export interface RelationItem {
   id: string;
+  issueId?: string;
   issueKey?: string;
   title?: string;
   issueType: IssueTypeKey;
   relationType: RelationTypeKey;
+  workspaceId?: string;
+  workspaceSlug?: string;
+  workspaceName?: string;
+  relationEntryId?: string;
 }
 
 export type RelationMap = {
@@ -125,7 +130,11 @@ export const mapToIssueTypeKey = (value: unknown): IssueTypeKey => {
   return DEFAULT_ISSUE_TYPE;
 };
 
-const toRelationItem = (issue: any, relationType: RelationTypeKey): RelationItem | undefined => {
+const toRelationItem = (
+  issue: any,
+  relationType: RelationTypeKey,
+  relationMeta?: { entryId?: string; workspaceSlug?: string; workspaceId?: string; workspaceName?: string }
+): RelationItem | undefined => {
   if (!issue) return undefined;
 
   const id = resolveId(issue.id ?? issue.dbId);
@@ -134,13 +143,37 @@ const toRelationItem = (issue: any, relationType: RelationTypeKey): RelationItem
   const issueKey = issue.issueKey ?? issue.key ?? issue.identifier;
   const title = issue.title ?? issue.name ?? issue.summary;
   const issueTypeSource = issue.issueType ?? issue.type ?? issue.itemType;
+  const workspaceSource = issue.workspace ?? {};
+
+  const relationEntryId = resolveId(relationMeta?.entryId ?? issue.relationId ?? issue.dbRelationId);
+  const workspaceId = relationMeta?.workspaceId ?? resolveId(workspaceSource.id ?? issue.workspaceId);
+  const workspaceSlug =
+    relationMeta?.workspaceSlug
+      ?? (typeof workspaceSource.slug === 'string'
+        ? workspaceSource.slug
+        : typeof issue.workspaceSlug === 'string'
+          ? issue.workspaceSlug
+          : undefined);
+
+  const workspaceName =
+    relationMeta?.workspaceName
+      ?? (typeof workspaceSource.name === 'string'
+        ? workspaceSource.name
+        : typeof issue.workspaceName === 'string'
+          ? issue.workspaceName
+          : undefined);
 
   return {
     id,
+    issueId: id,
     issueKey: issueKey ? String(issueKey) : undefined,
     title: title ? String(title) : undefined,
     issueType: mapToIssueTypeKey(issueTypeSource),
     relationType,
+    workspaceId,
+    workspaceSlug,
+    workspaceName,
+    relationEntryId,
   };
 };
 
@@ -184,7 +217,8 @@ export const buildIssueRelations = (issue: any): RelationMap => {
     if (!relationType) return;
 
     const relatedIssue = relation?.targetIssue ?? relation?.target;
-    const item = toRelationItem(relatedIssue, relationType);
+    const entryId = resolveId(relation?.id);
+    const item = toRelationItem(relatedIssue, relationType, { entryId });
     applyRelation(relations, relationType, item);
   });
 
@@ -195,7 +229,8 @@ export const buildIssueRelations = (issue: any): RelationMap => {
 
     const relationType = TARGET_RELATION_INVERSION[rawType];
     const relatedIssue = relation?.sourceIssue ?? relation?.source;
-    const item = toRelationItem(relatedIssue, relationType);
+    const entryId = resolveId(relation?.id);
+    const item = toRelationItem(relatedIssue, relationType, { entryId });
     applyRelation(relations, relationType, item);
   });
 
@@ -258,7 +293,7 @@ const normalizeRelationEntry = (entry: any, fallbackType?: RelationTypeKey): Rel
 
   const explicitId = resolveId(entry?.dbId ?? entry?.id);
   if (explicitId) {
-    item.id = `${item.relationType}-${explicitId}`;
+    item.relationEntryId = explicitId;
   }
 
   return item;
@@ -275,13 +310,15 @@ export const normalizeIssueRelations = (issue: any): NormalizedRelation[] => {
     const item = normalizeRelationEntry(entry, fallbackType);
     if (!item) return;
 
-    const uniqueId = `${item.relationType}-${item.id}`;
+    const uniqueBase = item.relationEntryId ?? item.id;
+    const uniqueId = `${item.relationType}-${uniqueBase}`;
     if (seen.has(uniqueId)) return;
     seen.add(uniqueId);
 
     normalized.push({
       ...item,
       id: uniqueId,
+      issueId: item.issueId ?? item.id,
     });
   };
 
