@@ -588,6 +588,118 @@ export async function addNoteComment(
   }
 }
 
+/**
+ * Update a note comment
+ */
+export async function updateNoteComment(
+  noteId: string,
+  commentId: string,
+  message: string,
+  html?: string
+) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  if (!message.trim()) {
+    throw new Error('Comment content cannot be empty');
+  }
+  
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Check if the note exists and user has access to it
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        OR: [
+          { authorId: user.id },
+          { isPublic: true }
+        ]
+      }
+    });
+    
+    if (!note) {
+      throw new Error('Note not found or access denied');
+    }
+    
+    // Check if the comment exists
+    const comment = await prisma.comment.findFirst({
+      where: {
+        id: commentId,
+        noteId
+      } as CommentWhereInputExtension
+    });
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    // Check if the user is the author of the comment
+    if (comment.authorId !== user.id) {
+      throw new Error('You can only edit your own comments');
+    }
+    
+    // Update the comment
+    const updatedComment = await prisma.comment.update({
+      where: {
+        id: commentId
+      },
+      data: {
+        message,
+        html
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true,
+          }
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                useCustomAvatar: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return updatedComment;
+  } catch (error) {
+    console.error(`Error updating note comment:`, error);
+    throw error;
+  }
+}
+
 export async function toggleBoardItemCommentLike(
   itemType: BoardItemType,
   itemId: string, 

@@ -13,6 +13,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { UnifiedItemType } from "@/hooks/queries/useUnifiedComments";
 import { UnifiedCommentReplyForm } from "./unified-comment-reply-form";
 import { useTaskCommentLikes, useToggleTaskCommentLike, useUpdateTaskComment } from "@/hooks/queries/useTaskComment";
+import { useUpdateNoteComment } from "@/hooks/queries/useUnifiedComments";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
@@ -158,7 +159,8 @@ export function UnifiedComment({
   // Use TanStack Query to get likes data (only for tasks for now)
   const { data: likesData } = useTaskCommentLikes(itemId, comment.id);
   const toggleLikeMutation = useToggleTaskCommentLike();
-  const updateCommentMutation = useUpdateTaskComment();
+  const updateTaskCommentMutation = useUpdateTaskComment();
+  const updateNoteCommentMutation = useUpdateNoteComment();
 
   // Extract like information
   // For tasks, use the likesData from the hook
@@ -243,14 +245,21 @@ export function UnifiedComment({
     }
     try {
       if (itemType === 'task') {
-        await updateCommentMutation.mutateAsync({ 
+        await updateTaskCommentMutation.mutateAsync({ 
           taskId: itemId, 
           commentId: comment.id, 
           content: editContent 
         });
-        toast({
-          title: "Success",
-          description: "Comment updated successfully",
+        setIsEditing(false);
+        // Update local state immediately for UI responsiveness
+        setLocalCommentContent(editContent);
+        setLocalCommentHtml(editContent);
+      } else if (itemType === 'note') {
+        await updateNoteCommentMutation.mutateAsync({
+          noteId: itemId,
+          commentId: comment.id,
+          message: editContent,
+          html: editContent // Using the same content for both fields
         });
         setIsEditing(false);
         // Update local state immediately for UI responsiveness
@@ -259,15 +268,12 @@ export function UnifiedComment({
       } else {
         toast({
           title: "Info",
-          description: "Edit functionality for non-task comments coming soon",
+          description: "Edit functionality for this comment type coming soon",
         });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update comment",
-        variant: "destructive",
-      });
+      console.error("Error updating comment:", error);
+      // Toast is already handled in the mutation hooks
     }
   };
 
@@ -369,16 +375,21 @@ export function UnifiedComment({
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setIsEditing(false)} 
-                    disabled={updateCommentMutation.isPending}
+                    disabled={(itemType === 'task' ? updateTaskCommentMutation.isPending : 
+                              itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
                   >
                     Cancel
                   </Button>
                   <Button 
                     type="submit" 
                     size="sm" 
-                    disabled={!editContent.trim() || updateCommentMutation.isPending}
+                    disabled={!editContent.trim() || 
+                      (itemType === 'task' ? updateTaskCommentMutation.isPending : 
+                       itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
                   >
-                    {updateCommentMutation.isPending ? "Saving..." : "Save"}
+                    {(itemType === 'task' && updateTaskCommentMutation.isPending) || 
+                     (itemType === 'note' && updateNoteCommentMutation.isPending) 
+                      ? "Saving..." : "Save"}
                   </Button>
                 </div>
               </form>

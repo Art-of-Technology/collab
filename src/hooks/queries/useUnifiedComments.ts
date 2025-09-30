@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { getBoardItemComments, addBoardItemComment, BoardItemType } from "@/actions/boardItemComment";
+import { getBoardItemComments, addBoardItemComment, updateNoteComment, BoardItemType } from "@/actions/boardItemComment";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
 
 export type UnifiedItemType = 'task' | 'epic' | 'story' | 'milestone' | 'note';
@@ -39,6 +39,47 @@ export function useUnifiedComments(itemType: UnifiedItemType, itemId: string) {
 }
 
 // Unified hook for adding comments
+/**
+ * Hook to update a note comment
+ */
+export function useUpdateNoteComment() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: async ({
+      noteId,
+      commentId,
+      message,
+      html
+    }: {
+      noteId: string;
+      commentId: string;
+      message: string;
+      html?: string;
+    }) => {
+      return updateNoteComment(noteId, commentId, message, html);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["note-comments", variables.noteId],
+      });
+      toast({
+        title: "Success",
+        description: "Comment updated successfully",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating note comment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update comment",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useAddUnifiedComment() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
