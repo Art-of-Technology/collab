@@ -124,6 +124,15 @@ export function RelationItem({
               {item.project.name}
             </Badge>
           )}
+          
+          {/* Issue Type Badge */}
+          {item.type && (
+            <Badge 
+              className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#2a2a2a] text-[#a0a9ba]"
+            >
+              {item.type.toUpperCase()}
+            </Badge>
+          )}
         </div>
 
         {/* Assignee */}
