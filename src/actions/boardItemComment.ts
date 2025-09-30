@@ -700,6 +700,83 @@ export async function updateNoteComment(
   }
 }
 
+/**
+ * Get likes for a note comment
+ */
+export async function getNoteCommentLikes(
+  noteId: string,
+  commentId: string
+) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    // Check if the comment exists
+    const comment = await prisma.comment.findFirst({
+      where: {
+        id: commentId,
+        noteId
+      } as CommentWhereInputExtension
+    });
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    // Get all likes for this comment
+    const likes = await prisma.commentLike.findMany({
+      where: {
+        commentId: commentId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true
+          }
+        }
+      }
+    });
+    
+    // Convert the likes to the expected format
+    const reactions = likes.map(like => ({
+      id: like.id,
+      type: "like",
+      authorId: like.userId,
+      author: like.user
+    }));
+    
+    // Check if the current user has liked this comment
+    const isLiked = likes.some(like => like.userId === user.id);
+    
+    return {
+      likes: reactions,
+      isLiked,
+      currentUserId: user.id
+    };
+  } catch (error) {
+    console.error("Error getting comment likes:", error);
+    throw error;
+  }
+}
+
 export async function toggleBoardItemCommentLike(
   itemType: BoardItemType,
   itemId: string, 

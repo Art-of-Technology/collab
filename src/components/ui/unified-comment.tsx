@@ -10,9 +10,9 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import Link from "next/link";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { UnifiedItemType } from "@/hooks/queries/useUnifiedComments";
+import { UnifiedItemType, useToggleCommentLike } from "@/hooks/queries/useUnifiedComments";
 import { UnifiedCommentReplyForm } from "./unified-comment-reply-form";
-import { useTaskCommentLikes, useToggleTaskCommentLike, useUpdateTaskComment } from "@/hooks/queries/useTaskComment";
+import { useTaskCommentLikes, useUpdateTaskComment } from "@/hooks/queries/useTaskComment";
 import { useUpdateNoteComment } from "@/hooks/queries/useUnifiedComments";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
@@ -113,32 +113,7 @@ export function UnifiedComment({
     }
   }, [itemType, comment.reactions, currentUserId]);
 
-  // Add event listener for refreshing comments after like actions
-  useEffect(() => {
-    const handleRefreshComments = (event: CustomEvent) => {
-      const { itemId: refreshItemId, commentId: refreshCommentId, likesData } = event.detail;
-      if (refreshItemId === itemId && refreshCommentId === comment.id) {
-        if (likesData) {
-          // Update the local state with the new likes data
-          setIsLikedState(likesData.isLiked);
-          setLikesCountState(likesData.likes.length);
-        } else {
-          // Force refresh the parent component by triggering a state change
-          // This is a workaround since we don't have a dedicated hook for note comments
-          setLocalCommentContent(prev => prev + " ");
-          setTimeout(() => {
-            setLocalCommentContent(prev => prev.trim());
-          }, 10);
-        }
-      }
-    };
-    
-    window.addEventListener('refreshComments', handleRefreshComments as EventListener);
-    
-    return () => {
-      window.removeEventListener('refreshComments', handleRefreshComments as EventListener);
-    };
-  }, [itemId, comment.id]);
+  // No event listeners needed - TanStack Query handles the state management
 
   // For debugging - check if author is missing
   if (!comment.author) {
@@ -158,7 +133,7 @@ export function UnifiedComment({
 
   // Use TanStack Query to get likes data (only for tasks for now)
   const { data: likesData } = useTaskCommentLikes(itemId, comment.id);
-  const toggleLikeMutation = useToggleTaskCommentLike();
+  const toggleCommentLikeMutation = useToggleCommentLike();
   const updateTaskCommentMutation = useUpdateTaskComment();
   const updateNoteCommentMutation = useUpdateNoteComment();
 
@@ -187,49 +162,30 @@ export function UnifiedComment({
     }
   }
 
-  // Function to handle like button click
-  const handleLike = async () => {
-    if (itemType === 'task') {
-      toggleLikeMutation.mutate({ taskId: itemId, commentId: comment.id });
-    } else if (itemType === 'note') {
-      // For notes, use the boardItemCommentLike API
-      try {
-        // First toggle the like
-        const response = await fetch(`/api/notes/${itemId}/comments/${comment.id}/like`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
+  // Function to handle like button click using TanStack Query
+  const handleLike = () => {
+    toggleCommentLikeMutation.mutate(
+      { 
+        itemType, 
+        itemId, 
+        commentId: comment.id 
+      },
+      {
+        onSuccess: (data) => {
+          // For notes, manually update the local state for immediate UI feedback
+          if (itemType === 'note' && data) {
+            // Check which response format we received
+            if ('isLiked' in data && 'likes' in data) {
+              setIsLikedState(data.isLiked);
+              setLikesCountState(data.likes.length);
+            } else if ('liked' in data) {
+              setIsLikedState(data.liked);
+              // Query will be invalidated to get the updated count
+            }
           }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to toggle like');
         }
-        
-        // Then fetch the updated likes data
-        const likesResponse = await fetch(`/api/notes/${itemId}/comments/${comment.id}/like`);
-        
-        if (likesResponse.ok) {
-          const likesData = await likesResponse.json();
-          // Update the UI based on the response
-          const event = new CustomEvent('refreshComments', { 
-            detail: { 
-              itemId, 
-              commentId: comment.id,
-              likesData 
-            } 
-          });
-          window.dispatchEvent(event);
-        }
-      } catch (error) {
-        console.error('Error toggling like:', error);
-        toast({
-          title: "Error",
-          description: "Failed to toggle like",
-          variant: "destructive",
-        });
       }
-    }
+    );
   };
 
   // Function to handle edit submission
@@ -319,7 +275,7 @@ export function UnifiedComment({
                 <button
                   className={`flex items-center ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
                   onClick={handleLike}
-                  disabled={itemType === 'task' ? toggleLikeMutation.isPending : false}
+                  disabled={toggleCommentLikeMutation.isPending}
                 >
                   {isLiked ? (
                     <HeartIconSolid className="h-3.5 w-3.5" />

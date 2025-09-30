@@ -3,6 +3,7 @@ import { toggleBoardItemCommentLike } from "@/actions/boardItemComment";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { CommentWhereInputExtension } from "@/types/prisma-extensions";
 
 // Toggle like on a comment - now using the unified comment system
 export async function POST(
@@ -55,15 +56,13 @@ export async function GET(
       );
     }
     
-    // Check if the comment exists
-    // Use raw SQL query to check if the comment exists and belongs to the note
-    const comments = await prisma.$queryRaw`
-      SELECT * FROM "Comment" 
-      WHERE id = ${commentId} 
-      AND "noteId" = ${id}
-    `;
-    
-    const comment = comments && Array.isArray(comments) && comments.length > 0 ? comments[0] : null;
+    // Check if the comment exists and belongs to the note using Prisma's typed client with proper type extension
+    const comment = await prisma.comment.findFirst({
+      where: {
+        id: commentId,
+        noteId: id
+      } as CommentWhereInputExtension
+    });
     
     if (!comment) {
       return NextResponse.json(

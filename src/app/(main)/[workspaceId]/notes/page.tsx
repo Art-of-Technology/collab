@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 
 import { useSession } from "next-auth/react";
+import { canEditNote, canDeleteNote } from "@/utils/permissions";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -561,7 +562,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                               }`}
                             />
                           </Button>
-                          {session?.user?.id === note.author.id && (
+                          {canEditNote(session, note) && (
                             <>
                               <Button
                                 variant="ghost"

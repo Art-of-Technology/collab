@@ -80,6 +80,75 @@ export function useUpdateNoteComment() {
   });
 }
 
+/**
+ * Hook for toggling likes on comments
+ */
+export function useToggleCommentLike() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: async ({
+      itemType,
+      itemId,
+      commentId,
+    }: {
+      itemType: UnifiedItemType;
+      itemId: string;
+      commentId: string;
+    }) => {
+      if (itemType === 'task') {
+        // Use existing task comment like API
+        return import("@/hooks/queries/useTaskComment").then(m => 
+          m.useToggleTaskCommentLike().mutateAsync({ taskId: itemId, commentId })
+        );
+      } else if (itemType === 'note') {
+        // Use server action for note comment likes
+        // First toggle the like
+        const result = await import("@/actions/boardItemComment").then(m => 
+          m.toggleBoardItemCommentLike('note', itemId, commentId)
+        );
+        
+        // Then get the updated likes data
+        const likesData = await import("@/actions/boardItemComment").then(m => 
+          m.getNoteCommentLikes(itemId, commentId)
+        );
+        
+        return likesData;
+      } else {
+        // For other board item types
+        return import("@/actions/boardItemComment").then(m => 
+          m.toggleBoardItemCommentLike(itemType as BoardItemType, itemId, commentId)
+        );
+      }
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate the appropriate query to refresh comments
+      if (variables.itemType === 'task') {
+        queryClient.invalidateQueries({
+          queryKey: ["task-comments", variables.itemId],
+        });
+      } else if (variables.itemType === 'note') {
+        queryClient.invalidateQueries({
+          queryKey: ["note-comments", variables.itemId],
+        });
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: ["board-item-comments", variables.itemType, variables.itemId],
+        });
+      }
+    },
+    onError: (error) => {
+      console.error("Error toggling comment like:", error);
+      toast({
+        title: "Error",
+        description: "Failed to toggle like",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useAddUnifiedComment() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
