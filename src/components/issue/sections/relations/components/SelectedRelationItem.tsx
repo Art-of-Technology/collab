@@ -13,48 +13,87 @@ import {
 import { X, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp } from "lucide-react";
 import type { RelationItem, IssueRelationType } from "../types/relation";
 import { cn } from "@/lib/utils";
+import { ISSUE_TYPE_CONFIG, type IssueType } from "@/constants/issue-types";
+import { InfoBadge } from "./InfoBadge";
 
 // Priority icon mapping
 const getPriorityIcon = (priority: string) => {
   const colorMap = {
     'URGENT': 'text-red-500',
-    'HIGH': 'text-orange-500', 
+    'HIGH': 'text-orange-500',
     'MEDIUM': 'text-blue-500',
     'LOW': 'text-green-500'
   };
-  
+
   const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-gray-500';
-  
+
   return <ArrowUp className={cn("h-3.5 w-3.5", colorClass)} />;
 };
 
-// Status icon mapping
+// Status badge component similar to IssueStatusSelector
 const getStatusIcon = (status: string) => {
+  const normalizedStatus = status?.toUpperCase().replace(/[_\s]/g, " ");
+  const STATUS_ICONS = {
+    TODO: Circle,
+    BACKLOG: Circle,
+    "IN PROGRESS": Clock,
+    REVIEW: Clock,
+    TESTING: Clock,
+    DONE: CheckCircle2,
+    COMPLETED: CheckCircle2,
+    CANCELLED: XCircle,
+    BLOCKED: AlertCircle,
+  } as const;
+
+  return STATUS_ICONS[normalizedStatus as keyof typeof STATUS_ICONS] || Circle;
+};
+
+const getStatusColor = (status: string) => {
+  const normalizedStatus = status?.toUpperCase().replace(/[_\s]/g, " ");
+  const STATUS_COLORS = {
+    TODO: "text-slate-500",
+    BACKLOG: "text-slate-500",
+    "IN PROGRESS": "text-blue-500",
+    REVIEW: "text-amber-500",
+    TESTING: "text-purple-500",
+    DONE: "text-emerald-500",
+    COMPLETED: "text-emerald-500",
+    CANCELLED: "text-red-500",
+    BLOCKED: "text-red-500",
+  } as const;
+
+  return STATUS_COLORS[normalizedStatus as keyof typeof STATUS_COLORS] || "text-slate-500";
+};
+
+const getStatusDisplayName = (status: string) => {
   const normalizedStatus = status?.toLowerCase().replace(/[_\s]/g, ' ');
-  const iconClass = "h-3.5 w-3.5";
-  
-  switch (normalizedStatus) {
-    case 'to_do':
-    case 'backlog':
-      return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
-    case 'in_progress':
-    case 'active':
-    case 'working':
-      return <Clock className={cn(iconClass, "text-[#3b82f6]")} />;
-    case 'review':
-    case 'testing':
-      return <Clock className={cn(iconClass, "text-[#f59e0b]")} />;
-    case 'done':
-    case 'completed':
-      return <CheckCircle2 className={cn(iconClass, "text-[#22c55e]")} fill="currentColor" />;
-    case 'cancelled':
-    case 'rejected':
-      return <XCircle className={cn(iconClass, "text-[#ef4444]")} fill="currentColor" />;
-    case 'blocked':
-      return <AlertCircle className={cn(iconClass, "text-[#f59e0b]")} />;
-    default:
-      return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
-  }
+
+  const STATUS_DISPLAY_NAMES = {
+    'todo': 'To Do',
+    'backlog': 'Backlog',
+    'in progress': 'In Progress',
+    'review': 'Review',
+    'testing': 'Testing',
+    'done': 'Done',
+    'completed': 'Completed',
+    'cancelled': 'Cancelled',
+    'blocked': 'Blocked',
+  } as const;
+
+  return STATUS_DISPLAY_NAMES[normalizedStatus as keyof typeof STATUS_DISPLAY_NAMES] || status;
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const Icon = getStatusIcon(status);
+  const colorClass = getStatusColor(status);
+  const displayName = getStatusDisplayName(status);
+
+  return (
+    <InfoBadge>
+      <Icon className={cn("h-2.5 w-2.5", colorClass)} />
+      {displayName}
+    </InfoBadge>
+  );
 };
 
 interface SelectedRelationItemProps {
@@ -73,63 +112,74 @@ export function SelectedRelationItem({
   onRemove
 }: SelectedRelationItemProps) {
   return (
-    <div className="group flex items-center px-3 py-2 bg-[#0f1011] border border-[#1f1f1f] rounded-md transition-all">
-      {/* Status Icon */}
-      <div className="flex items-center w-5 mr-2 flex-shrink-0">
-        {getStatusIcon(item.status || 'to_do')}
-      </div>
+    <div className="group flex items-center px-2 py-1.5 bg-[#0f1011] border border-[#1f1f1f] rounded-md transition-all">
 
-      {/* Issue Key */}
-      <div className="w-16 flex-shrink-0 mr-2">
-        <span className="text-[#8b949e] text-xs font-mono font-medium">
-          {item.issueKey || item.type.toUpperCase()}
-        </span>
-      </div>
-
-      {/* Priority and Title section */}
+      {/* Title and Issue Key section */}
       <div className="flex-1 min-w-0 mr-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-0.5">
           {/* Priority Icon */}
           {item.priority && (
             <div className="flex items-center flex-shrink-0">
               {getPriorityIcon(item.priority)}
             </div>
           )}
-          
-          {/* Title */}
+
+          {/* Issue Key - moved to top */}
+          <span className="text-[#8b949e] text-[10px] font-mono font-medium">
+            {item.issueKey || item.type.toUpperCase()}
+          </span>
+        </div>
+
+        {/* Title - moved under issue key */}
+        <div className="flex items-center">
           <span className="text-[#e6edf3] text-sm font-medium truncate">
             {item.title}
           </span>
         </div>
       </div>
 
-      {/* Workspace and Project Badges */}
-      <div className="flex items-center gap-1.5 mr-3 flex-shrink-0">
+      {/* Workspace and Project section */}
+      <div className="flex items-center gap-1.5 flex-shrink-0 mr-3">
         {/* Workspace Badge */}
         {item.workspace && (
-          <Badge 
-            className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#333] text-[#9ca3af]"
-          >
+          <InfoBadge>
             {item.workspace.name}
-          </Badge>
+          </InfoBadge>
         )}
-        
+
         {/* Project Badge */}
         {item.project && (
-          <Badge 
-            className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-opacity-80"
-            style={{ 
-              backgroundColor: (item.project.color || '#6e7681') + '30',
-              color: item.project.color || '#8b949e'
-            }}
-          >
+          <InfoBadge>
             {item.project.name}
-          </Badge>
+          </InfoBadge>
+        )}
+
+        {/* Status Badge */}
+        <div className="flex items-center flex-shrink-0">
+          <StatusBadge status={item.status || 'todo'} />
+        </div>
+
+        {/* Issue Type Badge */}
+        {item.type && (
+          (() => {
+            const typeConfig = ISSUE_TYPE_CONFIG[item.type.toUpperCase() as IssueType] || ISSUE_TYPE_CONFIG.TASK;
+            const TypeIcon = typeConfig.icon;
+
+            return (
+              <InfoBadge>
+                <TypeIcon
+                  className="h-2.5 w-2.5"
+                  style={{ color: typeConfig.color }}
+                />
+                {typeConfig.label}
+              </InfoBadge>
+            );
+          })()
         )}
       </div>
 
       {/* Assignee */}
-      <div className="flex items-center w-6 mr-3 flex-shrink-0">
+      <div className="flex items-center w-6 mr-2 flex-shrink-0">
         {item.assignee ? (
           <Avatar className="h-5 w-5">
             <AvatarImage src={item.assignee.image || undefined} />
