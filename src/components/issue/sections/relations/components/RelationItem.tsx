@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ExternalLink, X, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp } from "lucide-react";
@@ -111,7 +110,7 @@ export function RelationItem({
         href={itemUrl}
         className="flex items-center flex-1 min-w-0"
       >
-        {/* Title and Issue Key section */}
+        {/* Issue title and key section */}
         <div className="flex-1 min-w-0 mr-3">
           <div className="flex items-center gap-2 mb-0.5">
             {/* Priority Icon */}
@@ -121,13 +120,13 @@ export function RelationItem({
               </div>
             )}
 
-            {/* Title */}
+            {/* Issue key */}
             <span className="text-[#8b949e] text-[10px] font-mono font-medium">
               {item.issueKey}
             </span>
           </div>
 
-          {/* Issue Key - moved under title */}
+          {/* Issue title*/}
           <div className="flex items-center">
             <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
               {item.title}
