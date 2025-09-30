@@ -547,7 +547,7 @@ export async function addNoteComment(
     };
     
     const comment = await prisma.comment.create({
-      data: commentData as any,
+      data: commentData as CommentCreateDataWithNoteId,
       include: {
         author: {
           select: {

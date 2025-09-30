@@ -184,17 +184,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
                 Delete
               </Button>
             </>
-          ) : (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => document.getElementById('note-comments')?.scrollIntoView({ behavior: 'smooth' })}
-              className="text-xs sm:text-sm px-2 sm:px-3 py-1 h-8 sm:h-9 ml-auto sm:ml-0"
-            >
-              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              Comment
-            </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
