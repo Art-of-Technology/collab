@@ -550,7 +550,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                            className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
                             onClick={(e) => {
                               e.preventDefault();
                               toggleFavorite(note.id, note.isFavorite);
@@ -558,7 +558,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           >
                             <Star
                               className={`h-1 w-1 sm:h-4 sm:w-4 ${
-                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-yellow-400"
                               }`}
                             />
                           </Button>
@@ -567,26 +567,26 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                                className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setEditingNote(note);
                                 }}
                               >
-                                <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
+                                <Edit className="h-1 w-1 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-primary" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                                className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   handleDeleteNote(note.id);
                                 }}
                               >
-                                <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
+                                <Trash2 className="h-1 w-1 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-red-500" />
                               </Button>
                             </>
                           )}
