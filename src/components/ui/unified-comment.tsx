@@ -83,6 +83,8 @@ export function UnifiedComment({
   const [editContent, setEditContent] = useState(comment.content || comment.message || "");
   const [localCommentContent, setLocalCommentContent] = useState(comment.content || comment.message || "");
   const [localCommentHtml, setLocalCommentHtml] = useState(comment.html || "");
+  const [isLikedState, setIsLikedState] = useState(false);
+  const [likesCountState, setLikesCountState] = useState(0);
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
 
@@ -92,6 +94,50 @@ export function UnifiedComment({
     setLocalCommentHtml(comment.html || "");
     setEditContent(comment.content || comment.message || "");
   }, [comment.content, comment.message, comment.html]);
+  
+  // Initialize state values from comment reactions
+  useEffect(() => {
+    if (itemType === 'note' && comment.reactions) {
+      // Check if current user has liked this comment
+      const userLiked = comment.reactions.some(reaction => 
+        reaction.authorId === currentUserId && reaction.type.toLowerCase() === 'like'
+      );
+      // Count only like reactions
+      const likesNum = comment.reactions.filter(reaction => 
+        reaction.type.toLowerCase() === 'like'
+      ).length;
+      
+      setIsLikedState(userLiked);
+      setLikesCountState(likesNum);
+    }
+  }, [itemType, comment.reactions, currentUserId]);
+
+  // Add event listener for refreshing comments after like actions
+  useEffect(() => {
+    const handleRefreshComments = (event: CustomEvent) => {
+      const { itemId: refreshItemId, commentId: refreshCommentId, likesData } = event.detail;
+      if (refreshItemId === itemId && refreshCommentId === comment.id) {
+        if (likesData) {
+          // Update the local state with the new likes data
+          setIsLikedState(likesData.isLiked);
+          setLikesCountState(likesData.likes.length);
+        } else {
+          // Force refresh the parent component by triggering a state change
+          // This is a workaround since we don't have a dedicated hook for note comments
+          setLocalCommentContent(prev => prev + " ");
+          setTimeout(() => {
+            setLocalCommentContent(prev => prev.trim());
+          }, 10);
+        }
+      }
+    };
+    
+    window.addEventListener('refreshComments', handleRefreshComments as EventListener);
+    
+    return () => {
+      window.removeEventListener('refreshComments', handleRefreshComments as EventListener);
+    };
+  }, [itemId, comment.id]);
 
   // For debugging - check if author is missing
   if (!comment.author) {
@@ -115,14 +161,72 @@ export function UnifiedComment({
   const updateCommentMutation = useUpdateTaskComment();
 
   // Extract like information
-  const isLiked = likesData?.isLiked || false;
-  const likes = likesData?.likes || [];
-  const likesCount = likes.length;
+  // For tasks, use the likesData from the hook
+  let isLiked = likesData?.isLiked || false;
+  let likesCount = likesData?.likes?.length || 0;
+  
+  // For notes, use local state or check reactions directly
+  if (itemType === 'note') {
+    // If we have state values from API, use those
+    if (isLikedState || likesCountState > 0) {
+      isLiked = isLikedState;
+      likesCount = likesCountState;
+    } 
+    // Otherwise check reactions directly from the comment
+    else if (comment.reactions) {
+      // Check if current user has liked this comment
+      isLiked = comment.reactions.some(reaction => 
+        reaction.authorId === currentUserId && reaction.type.toLowerCase() === 'like'
+      );
+      // Count only like reactions
+      likesCount = comment.reactions.filter(reaction => 
+        reaction.type.toLowerCase() === 'like'
+      ).length;
+    }
+  }
 
-  // Function to handle like button click (only for tasks)
+  // Function to handle like button click
   const handleLike = async () => {
     if (itemType === 'task') {
       toggleLikeMutation.mutate({ taskId: itemId, commentId: comment.id });
+    } else if (itemType === 'note') {
+      // For notes, use the boardItemCommentLike API
+      try {
+        // First toggle the like
+        const response = await fetch(`/api/notes/${itemId}/comments/${comment.id}/like`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to toggle like');
+        }
+        
+        // Then fetch the updated likes data
+        const likesResponse = await fetch(`/api/notes/${itemId}/comments/${comment.id}/like`);
+        
+        if (likesResponse.ok) {
+          const likesData = await likesResponse.json();
+          // Update the UI based on the response
+          const event = new CustomEvent('refreshComments', { 
+            detail: { 
+              itemId, 
+              commentId: comment.id,
+              likesData 
+            } 
+          });
+          window.dispatchEvent(event);
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+        toast({
+          title: "Error",
+          description: "Failed to toggle like",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -201,50 +305,42 @@ export function UnifiedComment({
               />
             </div>
 
-            <div className="flex gap-4 mt-1 text-xs items-center">
+            <div className="flex gap-4 mt-1 text-xs">
               <span className="text-xs text-muted-foreground">
                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
               </span>
-              {likesCount > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {likesCount} {likesCount === 1 ? 'like' : 'likes'}
-                </span>
+              <div className="flex items-center gap-1">
+                <button
+                  className={`flex items-center ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+                  onClick={handleLike}
+                  disabled={itemType === 'task' ? toggleLikeMutation.isPending : false}
+                >
+                  {isLiked ? (
+                    <HeartIconSolid className="h-3.5 w-3.5" />
+                  ) : (
+                    <HeartIconOutline className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {likesCount > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {likesCount}
+                  </span>
+                )}
+              </div>
+              {author.id === currentUserId && (
+                <button
+                  className="text-xs text-muted-foreground"
+                  onClick={() => setIsEditing(true)}
+                >
+                  Edit
+                </button>
               )}
               <button
-                className={`flex items-center gap-1 text-xs text-muted-foreground hover:text-primary ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
-                onClick={handleLike}
-                disabled={toggleLikeMutation.isPending}
-              >
-                {isLiked ? (
-                  <HeartIconSolid className="h-3.5 w-3.5" />
-                ) : (
-                  <HeartIconOutline className="h-3.5 w-3.5" />
-                )}
-                <span>Like</span>
-              </button>
-              <button
-                className="text-xs text-muted-foreground hover:text-primary"
+                className="text-xs text-muted-foreground"
                 onClick={() => setIsReplying(!isReplying)}
               >
                 Reply
               </button>
-              <div className="flex-1" />
-              {author.id === currentUserId && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 hover-effect">
-                      <EllipsisHorizontalIcon className="h-5 w-5" />
-                      <span className="sr-only">More options</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="shadow-lg hover-effect">
-                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                      <PencilSquareIcon className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
           </div>
 
@@ -296,9 +392,9 @@ export function UnifiedComment({
         <div className="mt-1 ml-8">
           <button
             onClick={toggleReplies}
-            className="text-xs text-muted-foreground hover:text-primary cursor-pointer flex items-center mb-1 transition-colors duration-200 group"
+            className="text-xs text-muted-foreground cursor-pointer flex items-center mb-1 transition-colors duration-200 group"
           >
-            <div className="w-6 h-[1px] bg-border/60 mr-2 group-hover:bg-primary/30 transition-colors duration-200"></div>
+            <div className="w-6 h-[1px] bg-border/60 mr-2 transition-colors duration-200"></div>
             <span className="flex items-center gap-1">
               {showReplies ? (
                 <>
