@@ -191,7 +191,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
       <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm mx-0 sm:mx-0">
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-baseline justify-between pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <div className="space-y-1">
-            <CardTitle className="text-lg sm:text-2xl font-bold tracking-tight sm:tracking-normal">{note.title}</CardTitle>
+            <h1 className="text-xl font-semibold text-white transition-colors flex-1">{note.title}</h1>
             <div className="flex flex-col sm:flex-row sm:items-center gap-1 pt-3 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                 <span>
