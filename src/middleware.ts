@@ -45,13 +45,12 @@ export function middleware(req: NextRequest) {
 
   // In dev we allow inline/eval for React Fast Refresh and various tooling
   const devScriptRelax = isDev ? "'unsafe-eval' 'unsafe-inline'" : "";
-  const devStyleRelax = isDev ? "'unsafe-inline'" : ""; // many libs inject inline styles in dev
 
   const directives: string[] = [
     // Baseline defaults
     "default-src 'self'",
 
-    /// Scripts: No inline/eval in prod. In dev we relax to keep DX.
+    // Scripts: No inline/eval in prod. In dev we relax to keep DX.
     (() => {
       const parts: string[] = ["'self'"];
       if (devScriptRelax) parts.push(devScriptRelax);      // adds 'unsafe-eval' 'unsafe-inline' in dev
@@ -62,7 +61,6 @@ export function middleware(req: NextRequest) {
     // Styles: allow inline styles due to CSS-in-JS and Next.js style tags
     (() => {
       const parts: string[] = ["'self'", "'unsafe-inline'"];
-      if (devStyleRelax) parts.push(devStyleRelax);        // may duplicate; harmless
       if (styleExtra) parts.push(styleExtra);
       return `style-src ${parts.join(" ")}`;
     })(),
