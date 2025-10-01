@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { RichTextRenderer } from '../RichTextRenderer';
 import { parseMarkdownToTipTap } from '../utils/ai-improve';
@@ -28,7 +29,7 @@ export function AIImprovePopover({
 
   const popover = (
     <div 
-      className="absolute z-[99999] w-72 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden pointer-events-auto"
+      className="fixed z-[99999] w-72 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden pointer-events-auto"
       data-ai-improve-popover
       style={{
         top: position.top,
@@ -76,5 +77,7 @@ export function AIImprovePopover({
     </div>
   );
 
-  return popover;
+  // Use createPortal to render the popover at the document body level
+  // This ensures it's positioned relative to the viewport, not a parent container
+  return typeof window !== 'undefined' ? createPortal(popover, document.body) : null;
 }
