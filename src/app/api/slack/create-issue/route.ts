@@ -1,9 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import crypto from 'crypto';
 
-async function parseFormData(req: NextRequest): Promise<Record<string, string>> {
-    const text = await req.text();
-    const params = new URLSearchParams(text);
+function verifySlackRequest(req: NextRequest, body: string): boolean {
+    const signature = req.headers.get('x-slack-signature');
+    const timestamp = req.headers.get('x-slack-request-timestamp');
+    const signingSecret = process.env.SLACK_SIGNING_SECRET;
+
+    if (!signature || !timestamp || !signingSecret) {
+        return false;
+    }
+
+    // Check timestamp (prevent replay attacks)
+    const currentTime = Math.floor(Date.now() / 1000);
+    const requestTime = parseInt(timestamp);
+    if (Math.abs(currentTime - requestTime) > 300) { // 5 minutes
+        return false;
+    }
+
+    // Verify signature
+    const baseString = `v0:${timestamp}:${body}`;
+    const expectedSignature = 'v0=' + crypto
+        .createHmac('sha256', signingSecret)
+        .update(baseString)
+        .digest('hex');
+
+    return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+    );
+}
+
+function parseFormData(bodyText: string): Record<string, string> {
+    const params = new URLSearchParams(bodyText);
     const result: Record<string, string> = {};
     for (const [key, value] of params.entries()) {
         result[key] = value;
@@ -12,23 +41,23 @@ async function parseFormData(req: NextRequest): Promise<Record<string, string>> 
 }
 
 function parseCommand(text: string) {
-    const workspaceMatch = text.match(/workspace:(\w+)/i);
-    const projectMatch = text.match(/project:(\w+)/i);
+    const workspaceMatch = text.match(/workspace:([^:\s]+)/i);
+    const projectMatch = text.match(/project:([^:\s]+)/i);
     const priorityMatch = text.match(/priority:(high|medium|low|urgent)/i);
-    const statusMatch = text.match(/status:(\w+)/i);
-    const assigneeMatch = text.match(/assignee:(\w+)/i);
-    const reporterMatch = text.match(/reporter:(\w+)/i);
+    const statusMatch = text.match(/status:([^:\s]+)/i);
+    const assigneeMatch = text.match(/assignee:([^:\s]+)/i);
+    const reporterMatch = text.match(/reporter:([^:\s]+)/i);
     const dueDateMatch = text.match(/due:(\d{4}-\d{2}-\d{2})/i);
     const typeMatch = text.match(/type:(task|bug|feature|story|epic)/i);
     const descriptionMatch = text.match(/description:"([^"]+)"/i);
     
     const title = text
-        .replace(/workspace:\w+/gi, '')
-        .replace(/project:\w+/gi, '')
+        .replace(/workspace:[^:\s]+/gi, '')
+        .replace(/project:[^:\s]+/gi, '')
         .replace(/priority:(high|medium|low|urgent)/gi, '')
-        .replace(/status:\w+/gi, '')
-        .replace(/assignee:\w+/gi, '')
-        .replace(/reporter:\w+/gi, '')
+        .replace(/status:[^:\s]+/gi, '')
+        .replace(/assignee:[^:\s]+/gi, '')
+        .replace(/reporter:[^:\s]+/gi, '')
         .replace(/due:\d{4}-\d{2}-\d{2}/gi, '')
         .replace(/type:(task|bug|feature|story|epic)/gi, '')
         .replace(/description:"[^"]+"/gi, '')
@@ -50,7 +79,17 @@ function parseCommand(text: string) {
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await parseFormData(req);
+        const bodyText = await req.text();
+        
+        // Verify Slack request authenticity
+        if (!verifySlackRequest(req, bodyText)) {
+            return NextResponse.json({
+                response_type: 'ephemeral',
+                text: '❌ Request verification failed',
+            }, { status: 401 });
+        }
+
+        const body = parseFormData(bodyText);
         const { title, workspace, project, priority, status, assignee, reporter, dueDate, type, description } = parseCommand(body.text?.trim() || '');
 
         const slackUserId = body.user_id;
