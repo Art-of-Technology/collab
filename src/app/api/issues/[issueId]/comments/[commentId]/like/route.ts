@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function POST(
   req: Request,

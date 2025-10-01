@@ -70,7 +70,6 @@ export async function PUT(
 ) {
   try {
     const currentUser = await getCurrentUser();
-    console.log(currentUser);
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -92,8 +91,6 @@ export async function PUT(
         message: `Issue ${issueId} not found` 
       }, { status: 404 });
     }
-
-    console.log(existingIssue);
     // Check workspace access
     const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
 

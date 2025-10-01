@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { ActivityService } from "@/lib/activity-service";
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export const dynamic = 'force-dynamic';
 

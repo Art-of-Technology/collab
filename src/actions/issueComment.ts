@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 
 /**
  * Toggle like on an issue comment

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 // PUT /api/issues/[issueId]/comments/[commentId] - Update a comment
 export async function PUT(

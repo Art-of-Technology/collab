@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(

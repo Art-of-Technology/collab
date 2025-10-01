@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getItemActivities, BoardItemType, ActivityAction } from "@/lib/board-item-activity-service";
 import { prisma } from "@/lib/prisma";
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function GET(
   request: NextRequest,
