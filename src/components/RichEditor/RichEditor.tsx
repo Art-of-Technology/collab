@@ -442,9 +442,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     if (toolbarMode === 'static') {
       const editorRect = editorRef.current?.getBoundingClientRect();
       if (editorRect) {
+        const TOOLBAR_OFFSET = 45;
+        const MODAL_WIDTH = 500;
+        
         setFloatingMenuPosition({
-          top: 45,
-          left: (editorRect.width - 500) / 2,
+          top: TOOLBAR_OFFSET,
+          left: (editorRect.width - MODAL_WIDTH) / 2,
         });
       }
     }
@@ -800,7 +803,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           onMentionUser={handleMentionUser}
           onMentionIssue={handleMentionIssue}
           showAiImprove={showAiImprove}
-          hasContent={!!editor.getText().trim()}
+          hasContent={!!(editor?.getText() ?? "").trim()}
         />
       )}
 
