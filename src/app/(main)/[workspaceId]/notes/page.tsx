@@ -4,10 +4,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 
 import { useSession } from "next-auth/react";
+import { canEditNote, canDeleteNote } from "@/utils/permissions";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock } from "lucide-react";
+import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,9 @@ interface Note {
     name: string;
     slug: string;
   };
+  comments?: {
+    id: string;
+  }[];
 }
 
 interface NoteTag {
@@ -546,7 +550,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                            className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
                             onClick={(e) => {
                               e.preventDefault();
                               toggleFavorite(note.id, note.isFavorite);
@@ -554,34 +558,38 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           >
                             <Star
                               className={`h-1 w-1 sm:h-4 sm:w-4 ${
-                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-yellow-400"
                               }`}
                             />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setEditingNote(note);
-                            }}
-                          >
-                            <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteNote(note.id);
-                            }}
-                          >
-                            <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
-                          </Button>
+                          {canEditNote(session, note) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setEditingNote(note);
+                                }}
+                              >
+                                <Edit className="h-1 w-1 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-primary" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteNote(note.id);
+                                }}
+                              >
+                                <Trash2 className="h-1 w-1 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-red-500" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -595,6 +603,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                           ) : (
                             <div title="Private note">
                               <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                            </div>
+                          )}
+                          {note.comments && note.comments.length > 0 && (
+                            <div title={`${note.comments.length} comment${note.comments.length === 1 ? '' : 's'}`} className="ml-1">
+                              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                             </div>
                           )}
                         </div>
