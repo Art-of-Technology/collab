@@ -800,7 +800,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           onMentionUser={handleMentionUser}
           onMentionIssue={handleMentionIssue}
           showAiImprove={showAiImprove}
-          hasContent={!!editor.getText().trim()}
+          hasContent={!!(editor?.getText() ?? "").trim()}
         />
       )}
 
