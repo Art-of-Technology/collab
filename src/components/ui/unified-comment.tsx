@@ -113,7 +113,7 @@ export function UnifiedComment({
     }
   }, [itemType, comment.reactions, currentUserId]);
 
-  // No event listeners needed - TanStack Query handles the state management
+  // TanStack Query handles data fetching and mutations, but we still need event handlers for UI interactions
 
   // For debugging - check if author is missing
   if (!comment.author) {

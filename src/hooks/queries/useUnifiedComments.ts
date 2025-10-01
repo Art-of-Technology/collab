@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getBoardItemComments, addBoardItemComment, updateNoteComment, BoardItemType } from "@/actions/boardItemComment";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { toggleTaskCommentLike } from "@/actions/taskComment";
 
 export type UnifiedItemType = 'task' | 'epic' | 'story' | 'milestone' | 'note';
 
@@ -98,10 +99,8 @@ export function useToggleCommentLike() {
       commentId: string;
     }) => {
       if (itemType === 'task') {
-        // Use existing task comment like API
-        return import("@/hooks/queries/useTaskComment").then(m => 
-          m.useToggleTaskCommentLike().mutateAsync({ taskId: itemId, commentId })
-        );
+        // Use task comment like API directly
+        return toggleTaskCommentLike(itemId, commentId);
       } else if (itemType === 'note') {
         // Use server action for note comment likes
         // First toggle the like
