@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { publishEvent } from '@/lib/redis';
 import { VIEW_POSITIONS_MAX_BULK_SIZE } from '@/constants/viewPositions';
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
