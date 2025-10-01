@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { ActivityService } from "@/lib/activity-service";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
+import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
 
 export const dynamic = 'force-dynamic';
 
@@ -19,29 +19,17 @@ export async function GET(
 
     const { issueId } = await params;
 
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
-      : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id,
+      select: { id: true, workspaceId: true }
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
 
-    // Check if user has access to this workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
 
     // Use ActivityService to get time spent on this issue
     // For now, we'll use the same logic as tasks since the system is being migrated

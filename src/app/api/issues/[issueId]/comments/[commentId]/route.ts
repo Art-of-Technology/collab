@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
+import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
 
 // PUT /api/issues/[issueId]/comments/[commentId] - Update a comment
 export async function PUT(
@@ -23,10 +23,11 @@ export async function PUT(
       return NextResponse.json({ error: "Content is required" }, { status: 400 });
     }
 
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
-      : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id,
+      select: { id: true, workspaceId: true }
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
@@ -48,20 +49,7 @@ export async function PUT(
       return NextResponse.json({ error: "You can only edit your own comments" }, { status: 403 });
     }
 
-    // Access check: user must be in workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
 
     const updatedComment = await prisma.issueComment.update({
       where: { id: commentId },
@@ -101,10 +89,11 @@ export async function DELETE(
     const issueId = _params.issueId;
     const commentId = _params.commentId;
 
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
-      : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id,
+      select: { id: true, workspaceId: true }
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
@@ -129,20 +118,7 @@ export async function DELETE(
       return NextResponse.json({ error: "You can only delete your own comments" }, { status: 403 });
     }
 
-    // Access check: user must be in workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
 
     // If comment has replies, just mark it as deleted but keep the structure
     if (comment.replies && comment.replies.length > 0) {

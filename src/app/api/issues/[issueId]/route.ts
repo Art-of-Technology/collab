@@ -5,75 +5,10 @@ import { trackFieldChanges, createActivity, compareObjects, trackAssignment } fr
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-// Shared helpers and constants to reduce duplication
-// Updated regex to allow spaces in issue prefixes (e.g., "SPA PR-1", "MY PROJECT-123")
-const ISSUE_ID_REGEX = /^[A-Z\s]+[0-9]*-[A-Z]*\d+$/;
-const isIssueKeyFormat = (value: string) => ISSUE_ID_REGEX.test(value);
-
-const ISSUE_INCLUDE = {
-  assignee: {
-    select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
-  },
-  reporter: {
-    select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
-  },
-  column: {
-    select: { id: true, name: true, color: true, order: true }
-  },
-  project: {
-    select: { id: true, name: true, slug: true, issuePrefix: true, description: true }
-  },
-  workspace: {
-    select: { id: true, name: true, slug: true }
-  },
-  labels: {
-    select: { id: true, name: true, color: true }
-  },
-  parent: {
-    select: { id: true, title: true, issueKey: true, type: true }
-  },
-  children: {
-    select: { id: true, title: true, issueKey: true, type: true, status: true }
-  },
-  projectStatus: {
-    select: { id: true, name: true, displayName: true, color: true, iconName: true, order: true }
-  },
-  comments: {
-    include: {
-      author: { select: { id: true, name: true, email: true, image: true, useCustomAvatar: true } }
-    },
-    orderBy: { createdAt: 'asc' as const }
-  },
-  _count: { select: { children: true, comments: true } }
-} as const;
-
-async function userHasWorkspaceAccess(userId: string, workspaceId: string) {
-  return prisma.workspace.findFirst({
-    where: {
-      id: workspaceId,
-      OR: [
-        { ownerId: userId },
-        { members: { some: { userId } } }
-      ]
-    }
-  });
-}
-
-async function findIssueByIdOrKey(idOrKey: string, workspaceId?: string) {
-  if (isIssueKeyFormat(idOrKey)) {
-    const whereClause: any = { issueKey: idOrKey };
-    if (workspaceId) {
-      whereClause.workspaceId = workspaceId;
-    }
-    return prisma.issue.findFirst({ where: whereClause });
-  } else {
-    return prisma.issue.findUnique({ where: { id: idOrKey } });
-  }
-}
 
 // GET /api/issues/[issueId] - Get issue details
 export async function GET(
@@ -94,16 +29,12 @@ export async function GET(
     const url = new URL(req.url);
     const workspaceId = url.searchParams.get('workspaceId');
     
-    const isIssueKey = isIssueKeyFormat(issueId);
-    const issue = isIssueKey
-      ? await prisma.issue.findFirst({ 
-          where: { 
-            issueKey: issueId,
-            ...(workspaceId && { workspaceId })
-          }, 
-          include: ISSUE_INCLUDE 
-        })
-      : await prisma.issue.findUnique({ where: { id: issueId }, include: ISSUE_INCLUDE });
+    // Find issue using the utility function with proper workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      workspaceId: workspaceId || undefined,
+      userId: currentUser.id,
+      include: STANDARD_ISSUE_INCLUDE
+    });
 
     if (!issue) {
       return NextResponse.json(
@@ -139,6 +70,7 @@ export async function PUT(
 ) {
   try {
     const currentUser = await getCurrentUser();
+    console.log(currentUser);
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -148,8 +80,11 @@ export async function PUT(
     const url = new URL(req.url);
     const workspaceId = url.searchParams.get('workspaceId');
 
-    // Find the issue first
-    const existingIssue = await findIssueByIdOrKey(issueId, workspaceId || undefined);
+    // Find the issue first, scoped to user's accessible workspaces
+    const existingIssue = await findIssueByIdOrKey(issueId, {
+      workspaceId: workspaceId || undefined,
+      userId: currentUser.id
+    });
 
     if (!existingIssue) {
       return NextResponse.json({ 
@@ -158,6 +93,7 @@ export async function PUT(
       }, { status: 404 });
     }
 
+    console.log(existingIssue);
     // Check workspace access
     const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
 
@@ -240,7 +176,7 @@ export async function PUT(
           ...updateData,
           ...(Object.keys(relationalUpdates).length > 0 ? relationalUpdates : {}),
         },
-        include: ISSUE_INCLUDE
+          include: STANDARD_ISSUE_INCLUDE
       });
 
       // Handle assignee changes - create/update IssueAssignee records
@@ -490,8 +426,11 @@ export async function DELETE(
     const url = new URL(req.url);
     const workspaceId = url.searchParams.get('workspaceId');
 
-    // Find the issue first
-    const existingIssue = await findIssueByIdOrKey(issueId, workspaceId || undefined);
+    // Find the issue first, scoped to user's accessible workspaces
+    const existingIssue = await findIssueByIdOrKey(issueId, {
+      workspaceId: workspaceId || undefined,
+      userId: currentUser.id
+    });
 
     if (!existingIssue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });

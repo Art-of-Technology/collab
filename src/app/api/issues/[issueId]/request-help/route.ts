@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import * as BoardItemActivityService from "@/lib/board-item-activity-service";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
+import { findIssueByIdOrKey, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { NotificationService } from "@/lib/notification-service";
 
 // POST /api/issues/[issueId]/request-help - Request to help with an issue
@@ -18,41 +18,20 @@ export async function POST(
 
     const { issueId } = await params;
 
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ 
-          where: { issueKey: issueId }, 
-          include: { 
-            assignee: { select: { id: true, name: true } },
-            reporter: { select: { id: true, name: true } }
-          } 
-        })
-      : await prisma.issue.findUnique({ 
-          where: { id: issueId }, 
-          include: { 
-            assignee: { select: { id: true, name: true } },
-            reporter: { select: { id: true, name: true } }
-          } 
-        });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id,
+      include: { 
+        assignee: { select: { id: true, name: true } },
+        reporter: { select: { id: true, name: true } }
+      }
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
 
-    // Access check: user must be in workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
 
     // Check if user is already the assignee
     if (issue.assigneeId === currentUser.id) {
