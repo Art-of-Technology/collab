@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { AppVisibility, AppStatus, PrismaClient } from '@prisma/client';
 import { 
   ImportManifestRequestSchema, 
   validateAppManifest, 
@@ -7,7 +7,7 @@ import {
   validateManifestUrl 
 } from '@/lib/apps/validation';
 import { AppManifestV1, AppImportResponse } from '@/lib/apps/types';
-import { hashSecret } from '@/lib/apps/crypto';
+import { validateJWKS } from '@/lib/apps/jwks';
 
 const prisma = new PrismaClient();
 
@@ -73,12 +73,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate JWKS if using private_key_jwt authentication
+    if (manifest.oauth?.token_endpoint_auth_method === 'private_key_jwt' && manifest.oauth.jwks_uri) {
+      try {
+        const jwksValidation = await validateJWKS(manifest.oauth.jwks_uri);
+        if (!jwksValidation.valid) {
+          return NextResponse.json(
+            { success: false, error: `JWKS validation failed: ${jwksValidation.error}` },
+            { status: 400 }
+          );
+        }
+        
+        // Log warnings if any
+        if (jwksValidation.warnings && jwksValidation.warnings.length > 0) {
+          console.warn('JWKS validation warnings:', jwksValidation.warnings);
+        }
+      } catch (error) {
+        return NextResponse.json(
+          { success: false, error: `Failed to validate JWKS: ${error instanceof Error ? error.message : 'Unknown error'}` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Check for reserved slugs
     if (isReservedSlug(manifest.slug)) {
       return NextResponse.json(
         { success: false, error: `App slug "${manifest.slug}" is reserved and cannot be used` },
         { status: 400 }
       );
+    }
+
+    // Cross-field policy checks for OAuth configuration
+    if (manifest.oauth) {
+      if (manifest.oauth.client_type === "public" && manifest.oauth.token_endpoint_auth_method !== "none") {
+        return NextResponse.json({ error: "Public clients must use token_endpoint_auth_method=none" }, { status: 400 });
+      } else if (manifest.oauth.client_type === "confidential" && manifest.oauth.token_endpoint_auth_method !== "client_secret_basic") {
+        return NextResponse.json({ error: "Confidential clients must use token_endpoint_auth_method=client_secret_basic or private_key_jwt" }, { status: 400 });
+      }
+      
+      // During submission, we should not have actual credentials in the manifest
+      // These will be generated during the approval process
+      if (manifest.oauth.client_id) {
+        return NextResponse.json({ 
+          error: "OAuth credentials should not be included in manifest during submission. Credentials will be generated upon approval." 
+        }, { status: 400 });
+      }
     }
 
     // Check if app with this slug already exists
@@ -97,7 +137,8 @@ export async function POST(request: NextRequest) {
           name: manifest.name,
           iconUrl: manifest.icon_url,
           manifestUrl: url,
-          updatedAt: new Date()
+          status: AppStatus.IN_REVIEW,
+          updatedAt: new Date(),
         }
       });
 
@@ -148,43 +189,8 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      // Update OAuth client if provided
-      if (manifest.oauth) {
-        const existingOAuthClient = await prisma.appOAuthClient.findUnique({
-          where: { appId: existingApp.id }
-        });
-
-        // Require both client_id and client_secret in manifest
-        if (!manifest.oauth.client_id || !manifest.oauth.client_secret) {
-          return NextResponse.json(
-            { success: false, error: 'OAuth configuration requires both client_id and client_secret. Generate credentials first.' },
-            { status: 400 }
-          );
-        }
-        
-        // Hash the client secret for secure storage
-        const hashedClientSecret = await hashSecret(manifest.oauth.client_secret);
-
-        if (existingOAuthClient) {
-          await prisma.appOAuthClient.update({
-            where: { id: existingOAuthClient.id },
-            data: {
-              clientId: manifest.oauth.client_id,
-              redirectUris: manifest.oauth.redirect_uris,
-              clientSecret: hashedClientSecret
-            }
-          });
-        } else {
-          await prisma.appOAuthClient.create({
-            data: {
-              appId: existingApp.id,
-              clientId: manifest.oauth.client_id,
-              redirectUris: manifest.oauth.redirect_uris,
-              clientSecret: hashedClientSecret
-            }
-          });
-        }
-      }
+      // OAuth configuration is stored in the manifest for validation
+      // but credentials are not created until app approval
 
     } else {
       // Create new app with version and permissions in a transaction
@@ -196,7 +202,8 @@ export async function POST(request: NextRequest) {
             iconUrl: manifest.icon_url,
             manifestUrl: url,
             publisherId,
-            status: 'DRAFT',
+            status: AppStatus.IN_REVIEW,
+            visibility: manifest.visibility.toUpperCase() as AppVisibility,
             permissions: manifest.permissions
           }
         });
@@ -217,25 +224,8 @@ export async function POST(request: NextRequest) {
         });
 
 
-        // Create OAuth client if provided
-        if (manifest.oauth) {
-          // Require both client_id and client_secret in manifest
-          if (!manifest.oauth.client_id || !manifest.oauth.client_secret) {
-            throw new Error('OAuth configuration requires both client_id and client_secret. Generate credentials first.');
-          }
-          
-          // Hash the client secret for secure storage
-          const hashedClientSecret = await hashSecret(manifest.oauth.client_secret);
-          
-          await tx.appOAuthClient.create({
-            data: {
-              appId: newApp.id,
-              clientId: manifest.oauth.client_id,
-              redirectUris: manifest.oauth.redirect_uris,
-              clientSecret: hashedClientSecret,
-            }
-          });
-        }
+        // OAuth configuration is stored in the manifest for validation
+        // but credentials are not created until app approval
 
         return { app: newApp, version: newVersion };
       });
@@ -254,7 +244,7 @@ export async function POST(request: NextRequest) {
         iconUrl: app.iconUrl || undefined,
         manifestUrl: app.manifestUrl,
         publisherId: app.publisherId,
-        status: app.status as 'DRAFT' | 'PUBLISHED' | 'SUSPENDED',
+        status: app.status as 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SUSPENDED',
         latestVersion: version.version,
         createdAt: app.createdAt,
         updatedAt: app.updatedAt

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate secure client credentials
-    const credentials = generateClientCredentials();
+    const credentials = await generateClientCredentials();
 
     return NextResponse.json({
       success: true,

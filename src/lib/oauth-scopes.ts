@@ -20,6 +20,8 @@
 export const SUPPORTED_SCOPES = [
   'read',
   'write',
+  'user:read',
+  'user:write',
   'issues:read',
   'issues:write',
   'posts:read', 

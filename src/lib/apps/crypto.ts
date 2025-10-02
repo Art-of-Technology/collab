@@ -10,10 +10,14 @@ export function generateAuthorizationCode() {
   return randomBytes(32).toString('hex');
 }
 
-export function generateClientCredentials() {
+export async function generateClientCredentials() {
+  const clientSecret = randomBytes(32).toString('hex');
+  const hashedClientSecret = await hashSecret(clientSecret);
+  
   return {
     clientId: uuidv4(),
-    clientSecret: randomBytes(32).toString('hex'),
+    clientSecret: clientSecret, // Plain text (shown once only)
+    hashedClientSecret: hashedClientSecret, // Hashed for storage
     apiKey: randomBytes(24).toString('hex'),
   };
 }

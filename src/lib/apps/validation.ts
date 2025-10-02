@@ -36,16 +36,47 @@ export const AppPublisherSchema = z.object({
 
 // OAuth configuration schema
 export const AppOAuthSchema = z.object({
-  client_id: z.string().min(1, 'OAuth client_id is required'),
+  client_id: z.string().min(1, 'OAuth client_id is required').optional(), // Optional during submission, generated on approval
+  client_type: z.enum(['confidential', 'public']),
+  token_endpoint_auth_method: z.enum(['client_secret_basic', 'none', 'private_key_jwt']),
   redirect_uris: z.array(z.string().url('Invalid redirect URI')).min(1, 'At least one redirect URI is required'),
   scopes: z.array(AppScopeSchema).optional(),
-  client_secret: z.string().optional()
+  post_logout_redirect_uris: z.array(z.string().url('Invalid post logout redirect URI')).optional(),
+  response_types: z.array(z.literal("code")).default(["code"]),
+  grant_types: z
+    .array(z.enum(["authorization_code", "refresh_token"]))
+    .default(["authorization_code", "refresh_token"]),
+  jwks_uri: z.string().url('Invalid JWKS URI').optional()
+}).refine((data) => {
+  // For public clients, auth method must be 'none'
+  if (data.client_type === 'public' && data.token_endpoint_auth_method !== 'none') {
+    return false;
+  }
+  // For confidential clients with private_key_jwt, jwks_uri is required
+  if (data.client_type === 'confidential' && data.token_endpoint_auth_method === 'private_key_jwt' && !data.jwks_uri) {
+    return false;
+  }
+  // For confidential clients with client_secret_basic, jwks_uri should not be present
+  if (data.client_type === 'confidential' && data.token_endpoint_auth_method === 'client_secret_basic' && data.jwks_uri) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Invalid OAuth configuration: public clients must use "none" auth method, confidential clients with private_key_jwt must provide jwks_uri'
 });
 
 // Webhooks configuration schema
 export const AppWebhooksSchema = z.object({
-  url: z.string().url('Invalid webhook URL'),
-  events: z.array(z.string()).min(1, 'At least one webhook event is required')
+  endpoints: z.array(z.object({
+    url: z.string().url('Invalid webhook URL'),
+    events: z.array(z.string()).min(1, 'At least one webhook event is required'),
+    signature: z.object({
+      type: z.enum(['HMAC_SHA256', 'JWS', 'HTTP_SIGNATURE']),
+      header: z.string().min(1, 'Webhook header is required')
+    }),
+    tolerance_seconds: z.number().optional(),
+    retries: z.object({ max: z.number(), backoff: z.enum(['exponential', 'fixed']) }).optional()
+  })).min(1, 'At least one webhook endpoint is required')
 });
 
 // API versions schema
@@ -79,7 +110,8 @@ export const AppManifestV1Schema = z.object({
   version: z.string().min(1, 'App version is required'),
   
   description: z.string().min(1, 'App description is required').max(500, 'Description must be less than 500 characters'),
-  
+  repository_url: z.string().url('Invalid repository URL').optional(),
+
   // App configuration
   type: z.enum(['embed', 'mfe_remote', 'server_only'], {
     errorMap: () => ({ message: 'App type must be embed, mfe_remote, or server_only' })
@@ -121,15 +153,18 @@ export const AppManifestV1Schema = z.object({
   // Security configuration
   csp: AppCSPSchema.optional(),
   
-  // Legacy fields for backward compatibility
-  homepage_url: z.string().url('Invalid homepage URL').optional(),
-  permissions_legacy: z.array(AppScopeSchema).optional()
+  // MFE configuration
+  mfe: z.object({
+    remoteName: z.string().min(1),
+    module: z.string().min(1), // e.g., "./App"
+    integrity: z.string().optional(), // SRI hash
+  }).optional(),
 });
 
 // Import manifest request schema
 export const ImportManifestRequestSchema = z.object({
   url: z.string().url('Invalid manifest URL'),
-  publisherId: z.string().min(1, 'Publisher ID is required').optional()
+  publisherId: z.string().min(1, 'Publisher ID is required')
 });
 
 // App creation schema (for direct creation without manifest URL)

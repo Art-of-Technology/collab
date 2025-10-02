@@ -112,6 +112,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Enforce PKCE for public clients
+    if (oauthClient.clientType === 'public') {
+      if (!code_challenge || !code_challenge_method) {
+        return NextResponse.json(
+          {
+            error: 'invalid_request',
+            error_description: 'Public clients must use PKCE (code_challenge and code_challenge_method required)'
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Verify workspace access if workspace_id is provided
     let targetWorkspaceId = workspaceId;
     if (workspaceId) {
