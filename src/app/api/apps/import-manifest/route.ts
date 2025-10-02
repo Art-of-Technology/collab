@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     if (manifest.oauth) {
       if (manifest.oauth.client_type === "public" && manifest.oauth.token_endpoint_auth_method !== "none") {
         return NextResponse.json({ error: "Public clients must use token_endpoint_auth_method=none" }, { status: 400 });
-      } else if (manifest.oauth.client_type === "confidential" && manifest.oauth.token_endpoint_auth_method !== "client_secret_basic") {
+      } else if (manifest.oauth.client_type === "confidential" && !['client_secret_basic', 'private_key_jwt'].includes(manifest.oauth.token_endpoint_auth_method)) {
         return NextResponse.json({ error: "Confidential clients must use token_endpoint_auth_method=client_secret_basic or private_key_jwt" }, { status: 400 });
       }
       
