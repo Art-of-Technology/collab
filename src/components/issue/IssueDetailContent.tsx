@@ -534,18 +534,18 @@ export function IssueDetailContent({
       const preventFocusLoss = (event: FocusEvent) => {
         const target = event.target as HTMLElement;
 
-        // If focus is moving away from title input to something other than save/cancel buttons
-        if (titleInputRef.current &&
-          target !== titleInputRef.current &&
-          !target.closest('.title-editing-controls')) {
+        // Allow focus on the title input itself
+        if (target === titleInputRef.current) {
+          return;
+        }
 
-          // Allow focus on save/cancel buttons
-          if (target.closest('button[type="button"]') &&
-            target.closest('.title-editing-actions')) {
-            return;
-          }
+        // Allow focus on save/cancel buttons (inside .title-editing-actions)
+        if (target.closest('button[type="button"]') && target.closest('.title-editing-actions')) {
+          return;
+        }
 
-          // Otherwise, bring focus back to title input
+        // If focus is moving to any other element, prevent it and refocus title input
+        if (titleInputRef.current) {
           event.preventDefault();
           titleInputRef.current.focus();
         }
@@ -575,7 +575,7 @@ export function IssueDetailContent({
         }
       }
     }
-  });
+  }, [editingTitle]);
 
   // Fetch playtime when issue ID changes or onRefresh is called
   useEffect(() => {
