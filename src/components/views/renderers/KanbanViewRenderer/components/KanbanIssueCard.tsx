@@ -49,6 +49,7 @@ const KanbanIssueCard = React.memo(({
   const showUpdated = displayProperties.includes('Updated');
 
   const [areRelationsCollapsed, setAreRelationsCollapsed] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
   const relations = useMemo(() => normalizeIssueRelations(issue), [issue]);
   const relationCount = relations.length;
   const hasRelations = relationCount > 0;
@@ -62,10 +63,24 @@ const KanbanIssueCard = React.memo(({
     event.stopPropagation();
   }, []);
 
-  const handleCardClick = useCallback(() => {
+  const handleCardClick = useCallback((event: React.MouseEvent) => {
+    // Don't open issue if we just finished dragging
+    if (isDragging) {
+      setIsDragging(false);
+      return;
+    }
+    
     const keyOrId = issue.issueKey || issue.id;
     onCardClick(keyOrId);
-  }, [onCardClick, issue.issueKey, issue.id]);
+  }, [onCardClick, issue.issueKey, issue.id, isDragging]);
+
+  const handleMouseDown = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+  }, []);
 
   const issueTypeKey = mapToIssueTypeKey(issue.type);
   const typeConfig = ISSUE_TYPE_CONFIG[issueTypeKey] || ISSUE_TYPE_CONFIG.TASK;
@@ -97,11 +112,13 @@ const KanbanIssueCard = React.memo(({
               : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
+          onClick={handleCardClick}
+          onMouseDown={handleMouseDown}
+          onDragStart={handleDragStart}
         >
           <div className="flex flex-col gap-1.5">
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
-            <div className="flex items-center justify-between"
-              onClick={handleCardClick}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {/* Type Indicator */}
                 <TypeIcon
@@ -144,8 +161,7 @@ const KanbanIssueCard = React.memo(({
             </div>
 
             {/* Issue Title */}
-            <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-[#58a6ff] transition-colors"
-              onClick={handleCardClick}>
+            <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-[#58a6ff] transition-colors">
               {issue.title}
             </h4>
 
