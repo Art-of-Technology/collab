@@ -19,10 +19,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(session.user.role);
-
-    console.log(session);
-
     if (session.user.role !== 'SYSTEM_ADMIN') {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
