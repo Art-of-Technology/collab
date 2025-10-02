@@ -138,15 +138,5 @@ export function getTokenEndpointUrl(request: Request): string {
   return `${url.protocol}//${url.host}/api/oauth/token`;
 }
 
-/**
- * Check if a JWT has been used before (replay protection)
- * This should be implemented with a cache/database to store used JTIs
- */
-export async function isJWTReplayAttack(jti: string, exp: number): Promise<boolean> {
-  // TODO: Implement JTI tracking in database or cache
-  // For now, we'll just return false (no replay detection)
-  // In production, you should store JTIs until their expiration
-  return false;
-}
 
 export type { ClientAssertionPayload, JWTValidationResult };
