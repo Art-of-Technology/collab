@@ -7,7 +7,6 @@ const validScopes: AppScope[] = [
   'issues:read',
   'issues:write', 
   'user:read',
-  'issues:write',
   'comments:read',
   'comments:write',
   'leave:read',

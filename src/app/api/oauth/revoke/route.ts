@@ -64,11 +64,11 @@ export async function POST(request: NextRequest) {
     const oauthClient = authResult.oauthClient;
 
     // Attempt to revoke the token
-    const revocationResult = await revokeToken(token, tokenTypeHint, oauthClient.app.id);
+    const revocationResult = await revokeToken(token, tokenTypeHint, oauthClient?.app?.id ?? '');
 
     if (revocationResult.success) {
       // Log successful revocation for audit trail
-      console.log(`Token revoked successfully: app=${oauthClient.app.slug}, token_type=${revocationResult.tokenType}, installation=${revocationResult.installationId}`);
+      console.log(`Token revoked successfully: app=${oauthClient?.app?.slug ?? ''}, token_type=${revocationResult.tokenType}, installation=${revocationResult.installationId}`);
       
       // RFC 7009: The authorization server responds with HTTP status code 200
       // if the revocation is successful or if the client submitted an invalid token

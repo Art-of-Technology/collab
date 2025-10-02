@@ -2,15 +2,43 @@ import { NextRequest } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { decryptToken } from '@/lib/apps/crypto';
+import { TokenEndpointAuthMethod } from '@/lib/apps/types';
 
 const prisma = new PrismaClient();
+
+/**
+ * OAuth client type representing the structure returned from the database
+ * with the included app relation
+ */
+export interface OAuthClientWithApp {
+  id: string;
+  appId: string;
+  clientId: string;
+  clientSecret: Buffer | null;
+  clientType: string | null;
+  tokenEndpointAuthMethod: TokenEndpointAuthMethod | null;
+  jwksUri: string | null;
+  jwksValidated: boolean;
+  secretRevealed: boolean;
+  apiKey: string | null;
+  redirectUris: string[];
+  postLogoutRedirectUris: string[];
+  responseTypes: string[];
+  grantTypes: string[];
+  app: {
+    id: string;
+    slug: string;
+    name: string;
+    status: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SUSPENDED' | 'REJECTED';
+  };
+}
 
 export interface ClientAuthResult {
   valid: boolean;
   error?: string;
   errorDescription?: string;
   statusCode?: number;
-  oauthClient?: any;
+  oauthClient?: OAuthClientWithApp;
 }
 
 /**
@@ -72,7 +100,7 @@ export async function authenticateOAuthClient(
           }
         }
       }
-    });
+    }) as OAuthClientWithApp | null;
 
     if (!oauthClient) {
       return {
