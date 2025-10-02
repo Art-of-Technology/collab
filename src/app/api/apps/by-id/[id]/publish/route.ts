@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient, AppStatus } from '@prisma/client';
 import { z } from 'zod';
-import { generateClientCredentials } from '@/lib/apps/crypto';
 
 const prisma = new PrismaClient();
 
