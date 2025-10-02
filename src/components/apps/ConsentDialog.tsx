@@ -145,6 +145,7 @@ export function ConsentDialog({
           client_id: appData.oauthClient.clientId,
           redirect_uri: appData.oauthClient.redirectUris[0],
           scope: scopes.join(' '),
+          response_type: 'code',
           state: crypto.randomUUID(), // Generate random state for security
           installation_id: installResult.installationId,
           workspace_id: workspaceId
