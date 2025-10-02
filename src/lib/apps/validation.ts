@@ -4,7 +4,8 @@ import { AppScope, AppManifestV1 } from './types';
 // Valid app scopes - must match the type definition
 const validScopes: AppScope[] = [
   'workspace:read',
-  'issues:read', 
+  'issues:read',
+  'issues:write', 
   'user:read',
   'issues:write',
   'comments:read',
