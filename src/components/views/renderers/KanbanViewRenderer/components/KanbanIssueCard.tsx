@@ -49,7 +49,6 @@ const KanbanIssueCard = React.memo(({
   const showUpdated = displayProperties.includes('Updated');
 
   const [areRelationsCollapsed, setAreRelationsCollapsed] = useState(true);
-  const [isDragging, setIsDragging] = useState(false);
   const relations = useMemo(() => normalizeIssueRelations(issue), [issue]);
   const relationCount = relations.length;
   const hasRelations = relationCount > 0;
@@ -64,23 +63,9 @@ const KanbanIssueCard = React.memo(({
   }, []);
 
   const handleCardClick = useCallback((event: React.MouseEvent) => {
-    // Don't open issue if we just finished dragging
-    if (isDragging) {
-      setIsDragging(false);
-      return;
-    }
-    
     const keyOrId = issue.issueKey || issue.id;
     onCardClick(keyOrId);
-  }, [onCardClick, issue.issueKey, issue.id, isDragging]);
-
-  const handleMouseDown = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  const handleDragStart = useCallback(() => {
-    setIsDragging(true);
-  }, []);
+  }, [onCardClick, issue.issueKey, issue.id]);
 
   const issueTypeKey = mapToIssueTypeKey(issue.type);
   const typeConfig = ISSUE_TYPE_CONFIG[issueTypeKey] || ISSUE_TYPE_CONFIG.TASK;
@@ -113,8 +98,6 @@ const KanbanIssueCard = React.memo(({
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
           onClick={handleCardClick}
-          onMouseDown={handleMouseDown}
-          onDragStart={handleDragStart}
         >
           <div className="flex flex-col gap-1.5">
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
