@@ -313,27 +313,32 @@ export function IssueDetailContent({
     setShowHelperModal(false);
   };
 
-  // Initialize local state from issue data
+  // Initialize local state from issue data (only when issue changes)
   useEffect(() => {
     if (issue) {
-      // Save focus state before updating to prevent focus loss
-      saveFocusState();
-
       setTitle(issue.title || '');
       setDescription(issue.description || '');
       setLastSavedDescription(issue.description || '');
       setAutosaveStatus("saved");
 
-      // Use a microtask to restore focus after state updates
+      setTimeout(() => {
+        setAutosaveStatus("idle");
+      }, 600);
+    }
+  }, [issue]);
+
+  // Separate focus restoration effect that doesn't reset data
+  useEffect(() => {
+    if (issue) {
+      // Save focus state before any potential updates
+      saveFocusState();
+
+      // Use a microtask to restore focus after renders
       Promise.resolve().then(() => {
         if (!editingTitle) {
           restoreFocusState();
         }
       });
-
-      setTimeout(() => {
-        setAutosaveStatus("idle");
-      }, 600);
     }
   }, [issue, saveFocusState, restoreFocusState, editingTitle]);
 
