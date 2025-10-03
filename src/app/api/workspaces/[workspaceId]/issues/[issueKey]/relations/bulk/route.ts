@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 // POST /api/workspaces/[workspaceId]/issues/[issueKey]/relations/bulk
 export async function POST(
@@ -40,11 +41,9 @@ export async function POST(
     }
 
     // Find the source issue
-    const sourceIssue = await prisma.issue.findFirst({
-      where: {
-        issueKey: issueKey,
-        workspaceId: workspace.id
-      }
+    const sourceIssue = await findIssueByIdOrKey(issueKey, {
+      workspaceId: workspace.id,
+      userId: session.user.id
     });
 
     if (!sourceIssue) {

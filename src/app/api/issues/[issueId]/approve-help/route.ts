@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import * as BoardItemActivityService from "@/lib/board-item-activity-service";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
+import { NotificationService } from "@/lib/notification-service";
 
 // POST /api/issues/[issueId]/approve-help - Approve or reject a help request
 export async function POST(
@@ -22,23 +24,15 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
-    // Resolve issue by key or id
-    const isIssueKey = /^[A-Z]+[0-9]*-\d+$/.test(issueId);
-    const issue = isIssueKey
-      ? await prisma.issue.findFirst({ 
-          where: { issueKey: issueId }, 
-          include: { 
-            assignee: { select: { id: true, name: true } },
-            reporter: { select: { id: true, name: true } }
-          } 
-        })
-      : await prisma.issue.findUnique({ 
-          where: { id: issueId }, 
-          include: { 
-            assignee: { select: { id: true, name: true } },
-            reporter: { select: { id: true, name: true } }
-          } 
-        });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id,
+      include: { 
+        assignee: { select: { id: true, name: true } },
+        reporter: { select: { id: true, name: true } },
+        workspace: { select: { id: true } }
+      }
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });

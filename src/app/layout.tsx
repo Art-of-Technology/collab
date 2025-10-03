@@ -45,14 +45,12 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Preload critical CSS */}
-        <link rel="preload" href="/globals.css" as="style" />
+        {/* Critical CSS is automatically handled by Next.js */}
         
         {/* Preload Logo */}
         <link rel="preload" href="/logo-text.svg" as="image" />
         
         {/* Preload common assets */}
-        <link rel="preload" href="/icons/search.svg" as="image" />
         
         <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

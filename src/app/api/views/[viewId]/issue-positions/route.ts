@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { publishEvent } from '@/lib/redis';
 import { VIEW_POSITIONS_MAX_BULK_SIZE } from '@/constants/viewPositions';
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -136,15 +137,8 @@ export async function PUT(
     }
 
     // Verify issue exists and user has access (single update path)
-    const issue = await prisma.issue.findFirst({
-      where: {
-        id: issueId,
-        workspace: {
-          members: {
-            some: { userId: currentUser.id }
-          }
-        }
-      }
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id
     });
 
     if (!issue) {

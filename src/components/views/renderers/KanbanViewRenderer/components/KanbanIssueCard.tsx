@@ -62,7 +62,7 @@ const KanbanIssueCard = React.memo(({
     event.stopPropagation();
   }, []);
 
-  const handleCardClick = useCallback(() => {
+  const handleCardClick = useCallback((event: React.MouseEvent) => {
     const keyOrId = issue.issueKey || issue.id;
     onCardClick(keyOrId);
   }, [onCardClick, issue.issueKey, issue.id]);
@@ -97,11 +97,11 @@ const KanbanIssueCard = React.memo(({
               : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
+          onClick={handleCardClick}
         >
           <div className="flex flex-col gap-1.5">
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
-            <div className="flex items-center justify-between"
-              onClick={handleCardClick}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {/* Type Indicator */}
                 <TypeIcon
@@ -144,8 +144,7 @@ const KanbanIssueCard = React.memo(({
             </div>
 
             {/* Issue Title */}
-            <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-[#58a6ff] transition-colors"
-              onClick={handleCardClick}>
+            <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-[#58a6ff] transition-colors">
               {issue.title}
             </h4>
 

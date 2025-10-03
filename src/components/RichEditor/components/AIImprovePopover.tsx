@@ -1,7 +1,6 @@
 "use client";
 
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { RichTextRenderer } from '../RichTextRenderer';
 import { parseMarkdownToTipTap } from '../utils/ai-improve';
@@ -29,10 +28,11 @@ export function AIImprovePopover({
 
   const popover = (
     <div 
-      className="fixed z-[99999] w-80 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden pointer-events-auto"
+      className="absolute z-[99999] w-72 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden pointer-events-auto"
+      data-ai-improve-popover
       style={{
-        top: Math.max(10, position.top + 45),
-        left: Math.max(10, Math.min(position.left + 200, window.innerWidth - 320)),
+        top: position.top,
+        left: position.left,
       }}
     >
       <div className="p-3 border-b border-[#333] bg-[#1a1a1a]">
@@ -40,7 +40,7 @@ export function AIImprovePopover({
         <p className="text-xs text-[#9ca3af] mt-1">Review and apply the AI improved version</p>
       </div>
         <div 
-          className="h-48 bg-[#0e0e0e] overflow-y-auto overscroll-contain"
+          className="max-h-48 bg-[#0e0e0e] overflow-y-auto overscroll-contain"
           style={{ scrollBehavior: 'smooth' }}
           onWheel={(e) => {
             // Ensure wheel events are properly handled
@@ -76,6 +76,5 @@ export function AIImprovePopover({
     </div>
   );
 
-  if (typeof window === 'undefined' || !document?.body) return popover;
-  return createPortal(popover, document.body);
+  return popover;
 }

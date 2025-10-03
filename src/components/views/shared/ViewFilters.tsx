@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSession } from "next-auth/react";
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -632,15 +633,24 @@ function OwnerSelector({
   currentOwner,
   isLoading = false
 }: OwnerSelectorProps) {
+  const { data: session } = useSession();
   const [searchQuery, setSearchQuery] = useState("");
 
   const selectedUser = workspaceMembers.find(member => member.id === value) || currentOwner;
+  const currentUserId = session?.user?.id;
 
   // Filter users based on search query
   const filteredUsers = workspaceMembers.filter(member =>
     member.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Separate current user from others to prioritize current user
+  const currentUser = filteredUsers.find(member => member.id === currentUserId);
+  const otherUsers = filteredUsers.filter(member => member.id !== currentUserId);
+  
+  // Combine: current user first, then others in original order
+  const prioritizedUsers = currentUser ? [currentUser, ...otherUsers] : otherUsers;
 
   return (
     <Popover modal={true}>
@@ -700,15 +710,19 @@ function OwnerSelector({
             </div>
           ) : (
             <>
-              {filteredUsers.length > 0 && (
+              {prioritizedUsers.length > 0 && (
                 <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
               )}
               
-              {filteredUsers.map((member) => (
+              {prioritizedUsers.map((member) => (
             <button
               key={member.id}
               type="button"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
+                member.id === currentUserId 
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                  : 'hover:bg-[#2a2a2a]'
+              }`}
               onClick={() => onChange?.(member.id)}
             >
               <Avatar className="h-5 w-5">
@@ -717,14 +731,16 @@ function OwnerSelector({
                   {member.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-[#cccccc] flex-1">{member.name}</span>
+              <span className={`text-[#cccccc] flex-1 ${member.id === currentUserId ? 'font-medium' : ''}`}>
+                {member.name}{member.id === currentUserId ? " (You)" : ""}
+              </span>
               {value === member.id && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
             </button>
               ))}
               
-              {!filteredUsers.length && workspaceMembers.length > 0 && (
+              {!prioritizedUsers.length && workspaceMembers.length > 0 && (
                 <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
                   No people match your search
                 </div>

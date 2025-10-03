@@ -42,7 +42,7 @@ export default async function WorkspaceInvitationLayout({
       />
       
       {/* Main content area - full width */}
-      <main className="pt-20 pb-[90px] px-4 overflow-y-auto bg-[#191919]">
+      <main className="pt-20 pb-[90px] px-4 overflow-y-auto bg-[#191919] h-screen">
         <div className="mx-auto w-full p-2 md:p-12">
           {children}
         </div>

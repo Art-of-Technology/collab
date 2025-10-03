@@ -1,4 +1,3 @@
-/* eslint-disable */
 "use client";
 
 import ReactMarkdown from "react-markdown";

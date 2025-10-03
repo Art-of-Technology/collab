@@ -156,7 +156,15 @@ export const MentionSuggestion = forwardRef<HTMLDivElement, MentionSuggestionPro
                     <div
                       key={user.id}
                       data-index={index}
-                      onClick={() => onSelect(user)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSelect(user);
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                       onMouseEnter={() => handleMouseEnter(index)}
                       className={cn(
                         "flex items-center gap-2 px-2 py-2 cursor-pointer rounded-sm",

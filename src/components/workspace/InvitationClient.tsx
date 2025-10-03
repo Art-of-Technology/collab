@@ -51,7 +51,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
   
   return (
     <div className="container max-w-2xl py-4 md:py-8 px-4 mx-auto">
-      <div className="text-center mb-6 md:mb-8">
+      <div className="text-center mb-4">
         <h1 className="text-2xl md:text-3xl font-bold">Workspace Invitation</h1>
         <p className="text-muted-foreground mt-1 text-sm md:text-base">
           You&apos;ve been invited to join a workspace
@@ -66,7 +66,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
       )}
       
       <Card className="border-border/40 shadow-md">
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-2">
           <div className="flex flex-col md:flex-row items-center gap-4">
             {invitation.workspace.logoUrl ? (
               <Image 
@@ -88,7 +88,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-4 pb-4">
+        <CardContent className="space-y-3">
           <div>
             <p className="text-sm text-muted-foreground break-words">
               {invitation.invitedBy.name || invitation.invitedBy.email} has invited you to join this workspace
@@ -125,7 +125,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
           </div>
         </CardContent>
         
-        <CardFooter className="flex flex-col md:flex-row gap-3 md:gap-4 border-t border-border/40 pt-4 md:pt-6">
+        <CardFooter className="flex flex-col md:flex-row gap-3 md:gap-4 border-t border-border/40">
           <Button 
             variant="outline" 
             onClick={handleDecline}

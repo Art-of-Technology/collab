@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   Popover,
   PopoverContent,
@@ -31,16 +32,25 @@ export function AssigneeSelector({
   disabled = false,
   assignees = [],
 }: AssigneeSelectorProps) {
+  const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const selectedAssignees = assignees.filter(a => value.includes(a.id));
+  const currentUserId = session?.user?.id;
   
   // Filter assignees based on search query
   const filteredAssignees = assignees.filter(assignee =>
     assignee.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     assignee.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Separate current user from others to prioritize current user
+  const currentUser = filteredAssignees.find(assignee => assignee.id === currentUserId);
+  const otherAssignees = filteredAssignees.filter(assignee => assignee.id !== currentUserId);
+  
+  // Combine: current user first, then others in original order
+  const prioritizedAssignees = currentUser ? [currentUser, ...otherAssignees] : otherAssignees;
 
   const toggleAssignee = (assigneeId: string) => {
     const newValues = value.includes(assigneeId)
@@ -155,15 +165,19 @@ export function AssigneeSelector({
             )}
           </button>
           
-          {filteredAssignees.length > 0 && (
+          {prioritizedAssignees.length > 0 && (
             <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
           )}
           
-          {filteredAssignees.map((assignee) => (
+          {prioritizedAssignees.map((assignee) => (
             <button
               key={assignee.id}
               type="button"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
+                assignee.id === currentUserId 
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                  : 'hover:bg-[#2a2a2a]'
+              }`}
               onClick={() => toggleAssignee(assignee.id)}
             >
               {assignee.useCustomAvatar ? (
@@ -176,14 +190,16 @@ export function AssigneeSelector({
                   </AvatarFallback>
                 </Avatar>
               )}
-              <span className="text-[#cccccc] flex-1">{assignee.name}</span>
+              <span className={`text-[#cccccc] flex-1 ${assignee.id === currentUserId ? 'font-medium' : ''}`}>
+                {assignee.name}{assignee.id === currentUserId ? " (You)" : ""}
+              </span>
               {value.includes(assignee.id) && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
             </button>
           ))}
           
-          {filteredAssignees.length === 0 && assignees.length > 0 && (
+          {prioritizedAssignees.length === 0 && assignees.length > 0 && (
             <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
               No people match your search
             </div>

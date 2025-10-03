@@ -4,8 +4,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { CommentWhereInputExtension, CommentCreateDataWithNoteId } from '@/types/prisma-extensions';
 
-export type BoardItemType = 'epic' | 'story' | 'milestone' | 'task';
+export type BoardItemType = 'epic' | 'story' | 'milestone' | 'task' | 'note';
 
 /**
  * Get comments for a board item (epic, story, milestone, or task)
@@ -392,8 +393,390 @@ export async function addBoardItemComment(
 }
 
 /**
- * Toggle like on a board item comment
+ * Get comments for a note
  */
+export async function getNoteComments(noteId: string) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Check if the note exists and user has access to it
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        OR: [
+          { authorId: user.id },
+          { isPublic: true }
+        ]
+      },
+      select: { id: true, workspaceId: true }
+    });
+    
+    if (!note) {
+      throw new Error('Note not found or access denied');
+    }
+    
+    // Get comments for the note using the Comment model
+    const comments = await prisma.comment.findMany({
+      where: { noteId } as CommentWhereInputExtension,
+      orderBy: { createdAt: 'asc' },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true,
+          }
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                useCustomAvatar: true
+              }
+            }
+          }
+        },
+        parent: true
+      }
+    });
+    
+    return {
+      comments,
+      currentUserId: user.id
+    };
+  } catch (error) {
+    console.error(`Error getting note comments:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Add a comment to a note
+ */
+export async function addNoteComment(
+  noteId: string, 
+  message: string, 
+  parentId?: string
+) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  if (!message.trim()) {
+    throw new Error('Comment content cannot be empty');
+  }
+  
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Check if the note exists and user has access to it
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        OR: [
+          { authorId: user.id },
+          { isPublic: true }
+        ]
+      }
+    });
+    
+    if (!note) {
+      throw new Error('Note not found or access denied');
+    }
+    
+    // If parentId is provided, check if it exists
+    if (parentId) {
+      const parentComment = await prisma.comment.findFirst({
+        where: {
+          id: parentId,
+          noteId
+        } as CommentWhereInputExtension
+      });
+      
+      if (!parentComment) {
+        throw new Error('Parent comment not found');
+      }
+    }
+    
+    // Create the comment using the Comment model with type casting
+    const commentData: CommentCreateDataWithNoteId = {
+      message,
+      noteId,
+      authorId: user.id,
+      parentId: parentId || null
+    };
+    
+    const comment = await prisma.comment.create({
+      data: commentData as CommentCreateDataWithNoteId,
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true,
+          }
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                useCustomAvatar: true
+              }
+            }
+          }
+        },
+        parent: true
+      }
+    });
+    
+    return comment;
+  } catch (error) {
+    console.error(`Error adding note comment:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Update a note comment
+ */
+export async function updateNoteComment(
+  noteId: string,
+  commentId: string,
+  message: string,
+  html?: string
+) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  if (!message.trim()) {
+    throw new Error('Comment content cannot be empty');
+  }
+  
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Check if the note exists and user has access to it
+    const note = await prisma.note.findFirst({
+      where: {
+        id: noteId,
+        OR: [
+          { authorId: user.id },
+          { isPublic: true }
+        ]
+      }
+    });
+    
+    if (!note) {
+      throw new Error('Note not found or access denied');
+    }
+    
+    // Check if the comment exists
+    const comment = await prisma.comment.findFirst({
+      where: {
+        id: commentId,
+        noteId
+      } as CommentWhereInputExtension
+    });
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    // Check if the user is the author of the comment
+    if (comment.authorId !== user.id) {
+      throw new Error('You can only edit your own comments');
+    }
+    
+    // Update the comment
+    const updatedComment = await prisma.comment.update({
+      where: {
+        id: commentId
+      },
+      data: {
+        message,
+        html
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true,
+            avatarSkinTone: true,
+            avatarEyes: true,
+            avatarBrows: true,
+            avatarMouth: true,
+            avatarNose: true,
+            avatarHair: true,
+            avatarEyewear: true,
+            avatarAccessory: true,
+          }
+        },
+        reactions: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                useCustomAvatar: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return updatedComment;
+  } catch (error) {
+    console.error(`Error updating note comment:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get likes for a note comment
+ */
+export async function getNoteCommentLikes(
+  noteId: string,
+  commentId: string
+) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error('Unauthorized');
+  }
+  
+  try {
+    // Get the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: session.user.email
+      },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    // Check if the comment exists
+    const comment = await prisma.comment.findFirst({
+      where: {
+        id: commentId,
+        noteId
+      } as CommentWhereInputExtension
+    });
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    // Get all likes for this comment
+    const likes = await prisma.commentLike.findMany({
+      where: {
+        commentId: commentId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            useCustomAvatar: true
+          }
+        }
+      }
+    });
+    
+    // Convert the likes to the expected format
+    const reactions = likes.map(like => ({
+      id: like.id,
+      type: "like",
+      authorId: like.userId,
+      author: like.user
+    }));
+    
+    // Check if the current user has liked this comment
+    const isLiked = likes.some(like => like.userId === user.id);
+    
+    return {
+      likes: reactions,
+      isLiked,
+      currentUserId: user.id
+    };
+  } catch (error) {
+    console.error("Error getting comment likes:", error);
+    throw error;
+  }
+}
+
 export async function toggleBoardItemCommentLike(
   itemType: BoardItemType,
   itemId: string, 

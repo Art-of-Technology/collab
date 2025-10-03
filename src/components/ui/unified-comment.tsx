@@ -10,9 +10,10 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import Link from "next/link";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { UnifiedItemType } from "@/hooks/queries/useUnifiedComments";
+import { UnifiedItemType, useToggleCommentLike } from "@/hooks/queries/useUnifiedComments";
 import { UnifiedCommentReplyForm } from "./unified-comment-reply-form";
-import { useTaskCommentLikes, useToggleTaskCommentLike, useUpdateTaskComment } from "@/hooks/queries/useTaskComment";
+import { useTaskCommentLikes, useUpdateTaskComment } from "@/hooks/queries/useTaskComment";
+import { useUpdateNoteComment } from "@/hooks/queries/useUnifiedComments";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +84,8 @@ export function UnifiedComment({
   const [editContent, setEditContent] = useState(comment.content || comment.message || "");
   const [localCommentContent, setLocalCommentContent] = useState(comment.content || comment.message || "");
   const [localCommentHtml, setLocalCommentHtml] = useState(comment.html || "");
+  const [isLikedState, setIsLikedState] = useState(false);
+  const [likesCountState, setLikesCountState] = useState(0);
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
 
@@ -92,6 +95,25 @@ export function UnifiedComment({
     setLocalCommentHtml(comment.html || "");
     setEditContent(comment.content || comment.message || "");
   }, [comment.content, comment.message, comment.html]);
+  
+  // Initialize state values from comment reactions
+  useEffect(() => {
+    if (itemType === 'note' && comment.reactions) {
+      // Check if current user has liked this comment
+      const userLiked = comment.reactions.some(reaction => 
+        reaction.authorId === currentUserId && reaction.type.toLowerCase() === 'like'
+      );
+      // Count only like reactions
+      const likesNum = comment.reactions.filter(reaction => 
+        reaction.type.toLowerCase() === 'like'
+      ).length;
+      
+      setIsLikedState(userLiked);
+      setLikesCountState(likesNum);
+    }
+  }, [itemType, comment.reactions, currentUserId]);
+
+  // TanStack Query handles data fetching and mutations, but we still need event handlers for UI interactions
 
   // For debugging - check if author is missing
   if (!comment.author) {
@@ -111,19 +133,59 @@ export function UnifiedComment({
 
   // Use TanStack Query to get likes data (only for tasks for now)
   const { data: likesData } = useTaskCommentLikes(itemId, comment.id);
-  const toggleLikeMutation = useToggleTaskCommentLike();
-  const updateCommentMutation = useUpdateTaskComment();
+  const toggleCommentLikeMutation = useToggleCommentLike();
+  const updateTaskCommentMutation = useUpdateTaskComment();
+  const updateNoteCommentMutation = useUpdateNoteComment();
 
   // Extract like information
-  const isLiked = likesData?.isLiked || false;
-  const likes = likesData?.likes || [];
-  const likesCount = likes.length;
-
-  // Function to handle like button click (only for tasks)
-  const handleLike = async () => {
-    if (itemType === 'task') {
-      toggleLikeMutation.mutate({ taskId: itemId, commentId: comment.id });
+  // For tasks, use the likesData from the hook
+  let isLiked = likesData?.isLiked || false;
+  let likesCount = likesData?.likes?.length || 0;
+  
+  // For notes, use local state or check reactions directly
+  if (itemType === 'note') {
+    // If we have state values from API, use those
+    if (isLikedState || likesCountState > 0) {
+      isLiked = isLikedState;
+      likesCount = likesCountState;
+    } 
+    // Otherwise check reactions directly from the comment
+    else if (comment.reactions) {
+      // Check if current user has liked this comment
+      isLiked = comment.reactions.some(reaction => 
+        reaction.authorId === currentUserId && reaction.type.toLowerCase() === 'like'
+      );
+      // Count only like reactions
+      likesCount = comment.reactions.filter(reaction => 
+        reaction.type.toLowerCase() === 'like'
+      ).length;
     }
+  }
+
+  // Function to handle like button click using TanStack Query
+  const handleLike = () => {
+    toggleCommentLikeMutation.mutate(
+      { 
+        itemType, 
+        itemId, 
+        commentId: comment.id 
+      },
+      {
+        onSuccess: (data) => {
+          // For notes, manually update the local state for immediate UI feedback
+          if (itemType === 'note' && data) {
+            // Check which response format we received
+            if ('isLiked' in data && 'likes' in data) {
+              setIsLikedState(data.isLiked);
+              setLikesCountState(data.likes.length);
+            } else if ('liked' in data) {
+              setIsLikedState(data.liked);
+              // Query will be invalidated to get the updated count
+            }
+          }
+        }
+      }
+    );
   };
 
   // Function to handle edit submission
@@ -139,14 +201,21 @@ export function UnifiedComment({
     }
     try {
       if (itemType === 'task') {
-        await updateCommentMutation.mutateAsync({ 
+        await updateTaskCommentMutation.mutateAsync({ 
           taskId: itemId, 
           commentId: comment.id, 
           content: editContent 
         });
-        toast({
-          title: "Success",
-          description: "Comment updated successfully",
+        setIsEditing(false);
+        // Update local state immediately for UI responsiveness
+        setLocalCommentContent(editContent);
+        setLocalCommentHtml(editContent);
+      } else if (itemType === 'note') {
+        await updateNoteCommentMutation.mutateAsync({
+          noteId: itemId,
+          commentId: comment.id,
+          message: editContent,
+          html: editContent // Using the same content for both fields
         });
         setIsEditing(false);
         // Update local state immediately for UI responsiveness
@@ -155,15 +224,12 @@ export function UnifiedComment({
       } else {
         toast({
           title: "Info",
-          description: "Edit functionality for non-task comments coming soon",
+          description: "Edit functionality for this comment type coming soon",
         });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update comment",
-        variant: "destructive",
-      });
+      console.error("Error updating comment:", error);
+      // Toast is already handled in the mutation hooks
     }
   };
 
@@ -201,50 +267,42 @@ export function UnifiedComment({
               />
             </div>
 
-            <div className="flex gap-4 mt-1 text-xs items-center">
+            <div className="flex gap-4 mt-1 text-xs">
               <span className="text-xs text-muted-foreground">
                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
               </span>
-              {likesCount > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {likesCount} {likesCount === 1 ? 'like' : 'likes'}
-                </span>
+              <div className="flex items-center gap-1">
+                <button
+                  className={`flex items-center ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+                  onClick={handleLike}
+                  disabled={toggleCommentLikeMutation.isPending}
+                >
+                  {isLiked ? (
+                    <HeartIconSolid className="h-3.5 w-3.5" />
+                  ) : (
+                    <HeartIconOutline className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {likesCount > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {likesCount}
+                  </span>
+                )}
+              </div>
+              {author.id === currentUserId && (
+                <button
+                  className="text-xs text-muted-foreground"
+                  onClick={() => setIsEditing(true)}
+                >
+                  Edit
+                </button>
               )}
               <button
-                className={`flex items-center gap-1 text-xs text-muted-foreground hover:text-primary ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
-                onClick={handleLike}
-                disabled={toggleLikeMutation.isPending}
-              >
-                {isLiked ? (
-                  <HeartIconSolid className="h-3.5 w-3.5" />
-                ) : (
-                  <HeartIconOutline className="h-3.5 w-3.5" />
-                )}
-                <span>Like</span>
-              </button>
-              <button
-                className="text-xs text-muted-foreground hover:text-primary"
+                className="text-xs text-muted-foreground"
                 onClick={() => setIsReplying(!isReplying)}
               >
                 Reply
               </button>
-              <div className="flex-1" />
-              {author.id === currentUserId && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 hover-effect">
-                      <EllipsisHorizontalIcon className="h-5 w-5" />
-                      <span className="sr-only">More options</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="shadow-lg hover-effect">
-                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                      <PencilSquareIcon className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
           </div>
 
@@ -273,16 +331,21 @@ export function UnifiedComment({
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setIsEditing(false)} 
-                    disabled={updateCommentMutation.isPending}
+                    disabled={(itemType === 'task' ? updateTaskCommentMutation.isPending : 
+                              itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
                   >
                     Cancel
                   </Button>
                   <Button 
                     type="submit" 
                     size="sm" 
-                    disabled={!editContent.trim() || updateCommentMutation.isPending}
+                    disabled={!editContent.trim() || 
+                      (itemType === 'task' ? updateTaskCommentMutation.isPending : 
+                       itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
                   >
-                    {updateCommentMutation.isPending ? "Saving..." : "Save"}
+                    {(itemType === 'task' && updateTaskCommentMutation.isPending) || 
+                     (itemType === 'note' && updateNoteCommentMutation.isPending) 
+                      ? "Saving..." : "Save"}
                   </Button>
                 </div>
               </form>
@@ -296,9 +359,9 @@ export function UnifiedComment({
         <div className="mt-1 ml-8">
           <button
             onClick={toggleReplies}
-            className="text-xs text-muted-foreground hover:text-primary cursor-pointer flex items-center mb-1 transition-colors duration-200 group"
+            className="text-xs text-muted-foreground cursor-pointer flex items-center mb-1 transition-colors duration-200 group"
           >
-            <div className="w-6 h-[1px] bg-border/60 mr-2 group-hover:bg-primary/30 transition-colors duration-200"></div>
+            <div className="w-6 h-[1px] bg-border/60 mr-2 transition-colors duration-200"></div>
             <span className="flex items-center gap-1">
               {showReplies ? (
                 <>
