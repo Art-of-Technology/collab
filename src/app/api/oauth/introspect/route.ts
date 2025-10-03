@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     let oauthClient = null;
     
     if (clientId) {
-      const authResult = await authenticateOAuthClient(request, {
+      const authResult = await authenticateOAuthClient(request, body, {
         requireAuth: false, // Authentication is optional for introspection
         allowPublic: true
       });

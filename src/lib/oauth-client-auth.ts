@@ -58,14 +58,13 @@ export function parseBasicAuth(header: string | null): { headerClientId: string 
  */
 export async function authenticateOAuthClient(
   request: NextRequest,
+  body: FormData,
   options: {
     requireAuth?: boolean; // Whether authentication is required (default: true)
     allowPublic?: boolean; // Whether public clients are allowed (default: true)
   } = {}
 ): Promise<ClientAuthResult> {
   const { requireAuth = true, allowPublic = true } = options;
-
-  const body = await request.formData();
 
   try {
     // Extract client credentials from body and headers

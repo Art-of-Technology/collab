@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Authenticate client (required for revocation)
-    const authResult = await authenticateOAuthClient(request, {
+    const authResult = await authenticateOAuthClient(request, body, {
       requireAuth: true, // Authentication is required for revocation
       allowPublic: true  // Public clients can revoke tokens
     });

@@ -82,7 +82,7 @@ export async function POST(
         
         // Only generate and store client secret for client_secret_basic
         if (clientType === 'confidential' && authMethod === 'client_secret_basic') {
-          clientSecret = (await encryptToken(credentials.clientSecret)) as Buffer;
+          clientSecret = (await encryptToken(credentials.clientSecret));
         }
         
         await tx.appOAuthClient.create({

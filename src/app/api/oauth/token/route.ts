@@ -17,13 +17,13 @@ export async function POST(request: NextRequest) {
     
     const body = await request.formData();
     const grant_type = body.get('grant_type') as string;
-    const client_id = body.get('client_id') as string;
+    const formClientId = body.get('client_id') as string;
     const client_assertion_type = body.get('client_assertion_type') as string;
     const client_assertion = body.get('client_assertion') as string;
 
     // Identify client auth method from header or body
     const { headerClientId, basicSecret } = parseBasicAuth(request.headers.get("Authorization"));
-    const clientId = headerClientId || client_id;
+    const clientId = headerClientId || formClientId;
     const clientSecret = basicSecret || null;
 
     if (!clientId) return oauthError("invalid_request", "Missing client_id", 400);
