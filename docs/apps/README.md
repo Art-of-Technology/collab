@@ -18,17 +18,20 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 - `AppWebhook` / `AppWebhookDelivery`: manage webhook subscriptions and delivery attempts per installation.
 
 ## Developer Workflow
-1. **Generate OAuth credentials**
-   - Use the *Generate App Credentials* widget on `/dev/apps/new` (POST `/api/apps/generate-credentials`).
-   - Copy the `client_id` and `client_secret` into your manifest’s `oauth` block. Secrets are shown once; store them securely.
-2. **Prepare `manifest.json`**
+1. **Prepare `manifest.json`**
    - Follow the schema below, host it on HTTPS (HTTP allowed for localhost), and ensure the slug is unique and not reserved.
-3. **Import manifest**
-   - Submit the manifest URL via the form on `/dev/apps/new` (POST `/api/apps/import-manifest`). The API fetches the file, validates it with Zod, persists the manifest snapshot and initial scopes, and hashes the OAuth secret.
-4. **Review & iterate**
+   - **Important:** Do NOT include `client_id` or `client_secret` in your manifest during submission. These will be automatically generated upon approval.
+2. **Import manifest**
+   - Submit the manifest URL via the form on `/dev/apps/new` (POST `/api/apps/import-manifest`). The API fetches the file, validates it with Zod, persists the manifest snapshot and initial scopes. App status will be set to `IN_REVIEW`.
+3. **Review & iterate**
    - `/dev/apps/:id` displays the parsed manifest, current status, install analytics, webhook settings and workspace installs. Re-importing the same slug + new version updates metadata and app scopes.
+4. **App Review & Approval**
+   - Apps undergo review before publication. During this process, OAuth credentials are automatically generated based on your manifest's `client_type` and `token_endpoint_auth_method`:
+     - **Public clients** (`client_type: "public"`): Only `client_id` is generated, PKCE is required
+     - **Confidential clients with `client_secret_basic`**: Both `client_id` and `client_secret` are generated
+     - **Confidential clients with `private_key_jwt`**: Only `client_id` is generated, JWKS is validated
 5. **Publish**
-   - Toggle availability via the *Publish* control (PATCH `/api/apps/by-id/:id/publish`). Published apps appear in workspace listings and can be installed by admins.
+   - Upon approval, toggle availability via the *Publish* control (PATCH `/api/apps/by-id/:id/publish`). This creates OAuth credentials and makes the app available for installation by workspace admins.
 
 ## App Manifest Reference
 ```json
@@ -49,9 +52,12 @@ The Collab App Store enables third-party developers to ship apps that workspace 
     "terms_url": "https://hello.example.com/terms"
   },
   "oauth": {
-    "client_id": "<value from credential generator>",
-    "client_secret": "<value from credential generator>",
+    "client_type": "confidential",
+    "token_endpoint_auth_method": "client_secret_basic",
     "redirect_uris": ["https://hello.example.com/oauth/callback"],
+    "post_logout_redirect_uris": ["https://hello.example.com/logout"],
+    "response_types": ["code"],
+    "grant_types": ["authorization_code", "refresh_token"],
     "scopes": ["workspace:read", "issues:read"]
   },
   "webhooks": {
@@ -73,6 +79,11 @@ The Collab App Store enables third-party developers to ship apps that workspace 
     "connectSrc": ["https://api.collab.com"],
     "imgSrc": ["https://hello.example.com"],
     "frameAncestors": ["https://app.collab.com"]
+  },
+  "mfe": {
+    "remoteName": "helloApp",
+    "module": "./App",
+    "integrity": "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"
   }
 }
 ```
@@ -82,9 +93,103 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 - `type`: one of `embed`, `mfe_remote`, `server_only`.
 - `entrypoint_url`: must resolve to HTTPS (localhost allowed for development) and passes `validateAppManifestSecurity` checks.
 - `scopes`: deduplicated list of up to 10 values; allowed scopes come from `AppScopeSchema` (`workspace:read`, `issues:read`, `issues:write`, `comments:read`, `comments:write`, `user:read`, `leave:read`, `leave:write`).
-- `oauth`: all redirect URIs validated as URLs; both `client_id` and `client_secret` are required when provided.
+- `oauth`: all redirect URIs validated as URLs; authentication method determines credential requirements.
 - `webhooks.url`: must be HTTPS in production; private-network hosts are rejected.
 - Legacy fields `homepage_url` and `permissions_legacy` are mapped for backward compatibility but new manifests should use the fields above.
+
+### OAuth Authentication Methods
+
+The platform supports three OAuth 2.0 client authentication methods:
+
+#### 1. Public Clients (`client_type: "public"`)
+- **Auth Method**: `token_endpoint_auth_method: "none"`
+- **Credentials**: Only `client_id` is generated
+- **Security**: PKCE (Proof Key for Code Exchange) is **required**
+- **Use Case**: Single-page applications, mobile apps, or any client that cannot securely store secrets
+
+```json
+{
+  "oauth": {
+    "client_type": "public",
+    "token_endpoint_auth_method": "none",
+    "redirect_uris": ["https://myapp.example.com/callback"],
+    "post_logout_redirect_uris": ["https://myapp.example.com/logout"],
+    "response_types": ["code"],
+    "grant_types": ["authorization_code", "refresh_token"]
+  }
+}
+```
+
+#### 2. Confidential Clients with Client Secret (`client_type: "confidential"`)
+- **Auth Method**: `token_endpoint_auth_method: "client_secret_basic"`
+- **Credentials**: Both `client_id` and `client_secret` are generated
+- **Security**: Client secret is shown only once after approval and must be stored securely
+- **Use Case**: Server-side applications that can securely store secrets
+
+```json
+{
+  "oauth": {
+    "client_type": "confidential", 
+    "token_endpoint_auth_method": "client_secret_basic",
+    "redirect_uris": ["https://myapp.example.com/callback"],
+    "post_logout_redirect_uris": ["https://myapp.example.com/logout"],
+    "response_types": ["code"],
+    "grant_types": ["authorization_code", "refresh_token"]
+  }
+}
+```
+
+#### 3. Confidential Clients with JWT Assertion (`client_type: "confidential"`)
+- **Auth Method**: `token_endpoint_auth_method: "private_key_jwt"`
+- **Credentials**: Only `client_id` is generated
+- **Security**: Client authenticates using JWT signed with their private key
+- **Requirements**: Must provide `jwks_uri` pointing to public keys (JWKS)
+- **Use Case**: High-security applications with existing PKI infrastructure
+
+```json
+{
+  "oauth": {
+    "client_type": "confidential",
+    "token_endpoint_auth_method": "private_key_jwt", 
+    "jwks_uri": "https://myapp.example.com/.well-known/jwks.json",
+    "redirect_uris": ["https://myapp.example.com/callback"],
+    "post_logout_redirect_uris": ["https://myapp.example.com/logout"],
+    "response_types": ["code"],
+    "grant_types": ["authorization_code", "refresh_token"]
+  }
+}
+```
+
+**OAuth Field Reference:**
+- `post_logout_redirect_uris`: Optional array of URIs where users are redirected after logout
+- `response_types`: Supported OAuth response types (defaults to `["code"]`)
+- `grant_types`: Supported OAuth grant types (defaults to `["authorization_code", "refresh_token"]`)
+
+**JWKS Requirements for `private_key_jwt`:**
+- JWKS must be accessible via HTTPS
+- Keys must include `kid` (Key ID) and appropriate `alg` (Algorithm)
+- Supported algorithms: RS256, RS384, RS512, ES256, ES384, ES512, EdDSA
+- RSA keys must be at least 2048 bits
+- Supported curves: P-256, P-384, P-521 (EC), Ed25519, Ed448 (OKP)
+
+### Micro-Frontend (MFE) Configuration
+
+For `mfe_remote` app types, the `mfe` configuration object is required:
+
+- `remoteName`: Unique name for the remote module (used in module federation)
+- `module`: Entry point module path (e.g., `"./App"`, `"./Dashboard"`)
+- `integrity`: Optional SRI (Subresource Integrity) hash for security verification
+
+```json
+{
+  "type": "mfe_remote",
+  "mfe": {
+    "remoteName": "myAppRemote",
+    "module": "./App",
+    "integrity": "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"
+  }
+}
+```
 
 ## Installation Flow
 1. Workspace admins click **Install App** on the workspace app surface. The button opens `ConsentDialog`, rendering scopes, high-risk warnings and requiring acknowledgement when scopes are labelled “high”.

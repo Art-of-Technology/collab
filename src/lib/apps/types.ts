@@ -1,4 +1,8 @@
 // App Store Platform Types
+export type TokenEndpointAuthMethod =
+  | "none"
+  | "client_secret_basic"
+  | "private_key_jwt"
 
 export type AppScope = 
   | 'workspace:read' 
@@ -33,16 +37,29 @@ export interface AppManifestV1 {
   
   // OAuth configuration
   oauth?: { 
-    client_id: string; 
+    client_id?: string; // Optional during submission, generated on approval
+    client_type: 'confidential' | 'public';
+    token_endpoint_auth_method: TokenEndpointAuthMethod;
     redirect_uris: string[];
-    client_secret?: string; // Optional - will be generated if not provided
     scopes?: AppScope[];
+    post_logout_redirect_uris?: string[];
+    response_types?: string[]; // defaults to ["code"]
+    grant_types?: string[]; // defaults to ["authorization_code", "refresh_token"]
+    jwks_uri?: string; // Required for private_key_jwt
   };
   
   // Webhook configuration
-  webhooks?: { 
-    url: string;
-    events: string[];
+  webhooks?: {
+    endpoints: Array<{
+      url: string;
+      events: string[];
+      signature: {
+        type: "HMAC_SHA256" | "JWS" | "HTTP_SIGNATURE";
+        header: string;
+      };
+      tolerance_seconds?: number;   // default 300
+      retries?: { max: number; backoff: "exponential" | "fixed" };
+    }>;
   };
   
   // Permissions and scopes
@@ -69,9 +86,12 @@ export interface AppManifestV1 {
     frameAncestors?: string[];
   };
   
-  // Legacy fields for backward compatibility
-  homepage_url?: string; // Will be mapped to entrypoint_url
-  permissions_legacy?: AppScope[]; // Will be mapped to scopes
+  // MFE configuration
+  mfe?: {
+    remoteName: string;
+    module: string; // e.g., "./App"
+    integrity?: string; // SRI hash
+  };
 }
 
 export interface AppRegistration {
@@ -81,7 +101,7 @@ export interface AppRegistration {
   iconUrl?: string;
   manifestUrl: string;
   publisherId: string;
-  status: 'DRAFT' | 'PUBLISHED' | 'SUSPENDED';
+  status: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SUSPENDED';
   latestVersion?: string;
   createdAt: Date;
   updatedAt: Date;

@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft } from 'lucide-react';
 import { ImportManifestRequestSchema } from '@/lib/apps/validation';
-import CredentialGenerator from '@/components/apps/CredentialGenerator';
 
 // Form schemas
 type ImportManifestForm = z.infer<typeof ImportManifestRequestSchema>;
@@ -51,7 +50,7 @@ export default function NewAppPage() {
       if (response.ok) {
         setSuccess(`App "${result.app.name}" imported successfully!`);
         setTimeout(() => {
-          router.push(`/dev/apps/${result.app.id}`);
+          router.push(`/dev/apps/${result.app.slug}`);
         }, 2000);
       } else {
         setError(result.error || 'Failed to import manifest');
@@ -76,10 +75,13 @@ export default function NewAppPage() {
         </p>
       </div>
 
-      {/* Credential Generator */}
-      <div className="mb-8">
-        <CredentialGenerator />
-      </div>
+      {/* Information about credential generation */}
+      <Alert className="mb-8">
+        <AlertDescription>
+          <strong>Note:</strong> OAuth credentials will be automatically generated when your app is approved and published. 
+          You do not need to generate credentials during the submission process.
+        </AlertDescription>
+      </Alert>
 
       {/* Success/Error Messages */}
       {success && (

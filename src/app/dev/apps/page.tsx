@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { PrismaClient } from '@prisma/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Settings, Eye, ExternalLink } from 'lucide-react';
+import { Plus, Settings, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
+import { AppStatusBadge } from '@/components/apps/AppStatusBadge';
 
 const prisma = new PrismaClient();
 
@@ -35,14 +35,6 @@ async function getApps() {
   return apps;
 }
 
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'PUBLISHED': return 'bg-green-100 text-green-800 border-green-200';
-    case 'DRAFT': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'SUSPENDED': return 'bg-red-100 text-red-800 border-red-200';
-    default: return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
 
 export default async function DevAppsPage() {
   const apps = await getApps();
@@ -103,16 +95,16 @@ export default async function DevAppsPage() {
                       </div>
                     )}
                     <div>
-                      <CardTitle className="text-lg">{app.name}</CardTitle>
+                      <CardTitle
+                        className="text-lg truncate max-w-[10rem]"
+                        title={app.name}
+                      >
+                        {app.name}
+                      </CardTitle>
                       <p className="text-sm text-muted-foreground">/{app.slug}</p>
                     </div>
                   </div>
-                  <Badge 
-                    variant="outline" 
-                    className={getStatusColor(app.status)}
-                  >
-                    {app.status}
-                  </Badge>
+                  <AppStatusBadge status={app.status} className="whitespace-nowrap" />
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -137,7 +129,7 @@ export default async function DevAppsPage() {
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    <Link href={`/dev/apps/${app.id}`} className="flex-1">
+                    <Link href={`/dev/apps/${app.slug}`} className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
                         <Settings className="w-4 h-4 mr-2" />
                         Manage

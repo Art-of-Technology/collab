@@ -45,9 +45,6 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Preload critical CSS */}
-        <link rel="preload" href="/globals.css" as="style" />
-        
         {/* Preload Logo */}
         <link rel="preload" href="/logo-text.svg" as="image" />
         

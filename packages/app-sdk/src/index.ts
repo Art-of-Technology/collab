@@ -1,13 +1,7 @@
 // Collab App SDK - Client library for apps to communicate with the host
 // This would be published as @collab/app-sdk
 
-export type AppScope = 
-  | 'workspace:read'
-  | 'issues:read'
-  | 'user:read'
-  | 'issues:write'
-  | 'comments:read'
-  | 'comments:write';
+import { AppScope } from "@/lib/apps/types";
 
 export interface AppContext {
   app: {

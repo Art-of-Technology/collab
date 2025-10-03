@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
 import { decryptToken } from '@/lib/apps/crypto';
+import { authenticateOAuthClient } from '@/lib/oauth-client-auth';
 
 const prisma = new PrismaClient();
 
@@ -9,12 +9,18 @@ const prisma = new PrismaClient();
 // Allows clients to notify the authorization server that a token is no longer needed
 export async function POST(request: NextRequest) {
   try {
+    // Require form content-type
+    if (!request.headers.get("content-type")?.includes("application/x-www-form-urlencoded")) {
+      return NextResponse.json(
+        { error: "invalid_request", error_description: "Use application/x-www-form-urlencoded" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.formData();
     
     const token = body.get('token') as string;
     const tokenTypeHint = body.get('token_type_hint') as string; // 'access_token' or 'refresh_token'
-    const clientId = body.get('client_id') as string;
-    const clientSecret = body.get('client_secret') as string;
 
     // Validate required parameters
     if (!token) {
@@ -28,69 +34,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Client authentication is required for token revocation
-    if (!clientId || !clientSecret) {
+    const clientId = body.get('client_id') as string;
+    if (!clientId) {
       return NextResponse.json(
         {
-          error: 'invalid_client',
-          error_description: 'Client authentication required'
+          error: 'invalid_request',
+          error_description: 'Missing client_id'
         },
-        { status: 401 }
+        { status: 400 }
       );
     }
 
-    // Verify OAuth client
-    const oauthClient = await prisma.appOAuthClient.findUnique({
-      where: { clientId },
-      include: {
-        app: {
-          select: {
-            id: true,
-            slug: true,
-            status: true
-          }
-        }
-      }
+    // Authenticate client (required for revocation)
+    const authResult = await authenticateOAuthClient(request, body, {
+      requireAuth: true, // Authentication is required for revocation
+      allowPublic: true  // Public clients can revoke tokens
     });
 
-    if (!oauthClient) {
+    if (!authResult.valid) {
       return NextResponse.json(
         {
-          error: 'invalid_client',
-          error_description: 'Invalid client credentials'
+          error: authResult.error,
+          error_description: authResult.errorDescription
         },
-        { status: 401 }
+        { status: authResult.statusCode }
       );
     }
 
-    // Verify client secret using bcrypt to compare against hashed secret
-    const isValidSecret = await bcrypt.compare(clientSecret, oauthClient.clientSecret);
-    if (!isValidSecret) {
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'Invalid client credentials'
-        },
-        { status: 401 }
-      );
-    }
-
-    // Check if app is active
-    if (oauthClient.app.status !== 'PUBLISHED') {
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'App is not active'
-        },
-        { status: 401 }
-      );
-    }
+    const oauthClient = authResult.oauthClient;
 
     // Attempt to revoke the token
-    const revocationResult = await revokeToken(token, tokenTypeHint, oauthClient);
+    const revocationResult = await revokeToken(token, tokenTypeHint, oauthClient?.app?.id ?? '');
 
     if (revocationResult.success) {
       // Log successful revocation for audit trail
-      console.log(`Token revoked successfully: app=${oauthClient.app.slug}, token_type=${revocationResult.tokenType}, installation=${revocationResult.installationId}`);
+      console.log(`Token revoked successfully: app=${oauthClient?.app?.slug ?? ''}, token_type=${revocationResult.tokenType}, installation=${revocationResult.installationId}`);
       
       // RFC 7009: The authorization server responds with HTTP status code 200
       // if the revocation is successful or if the client submitted an invalid token
@@ -119,7 +97,7 @@ export async function POST(request: NextRequest) {
 async function revokeToken(
   token: string, 
   tokenTypeHint: string | null,
-  oauthClient: any
+  appId: string
 ): Promise<{
   success: boolean;
   tokenType?: 'access_token' | 'refresh_token';
@@ -128,7 +106,7 @@ async function revokeToken(
   try {
     // Search for access tokens first (or if hint suggests access_token)
     if (!tokenTypeHint || tokenTypeHint === 'access_token') {
-      const accessTokenResult = await revokeTokenFromInstallations(token, 'access', oauthClient.app.id);
+      const accessTokenResult = await revokeTokenFromInstallations(token, 'access', appId);
       if (accessTokenResult.success) {
         return {
           success: true,
@@ -140,7 +118,7 @@ async function revokeToken(
 
     // Search for refresh tokens if access token not found (or if hint suggests refresh_token)
     if (!tokenTypeHint || tokenTypeHint === 'refresh_token') {
-      const refreshTokenResult = await revokeTokenFromInstallations(token, 'refresh', oauthClient.app.id);
+      const refreshTokenResult = await revokeTokenFromInstallations(token, 'refresh', appId);
       if (refreshTokenResult.success) {
         return {
           success: true,

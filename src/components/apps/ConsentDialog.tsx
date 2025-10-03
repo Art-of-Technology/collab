@@ -144,8 +144,8 @@ export function ConsentDialog({
         const oauthParams = new URLSearchParams({
           client_id: appData.oauthClient.clientId,
           redirect_uri: appData.oauthClient.redirectUris[0],
-          response_type: 'code',
           scope: scopes.join(' '),
+          response_type: 'code',
           state: crypto.randomUUID(), // Generate random state for security
           installation_id: installResult.installationId,
           workspace_id: workspaceId
