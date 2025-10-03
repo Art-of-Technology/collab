@@ -152,10 +152,6 @@ export async function builtInAiImprove(text: string): Promise<string> {
   if (!text.trim()) return text;
 
   try {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('builtInAiImprove: Sending request to API with text:', text);
-    }
-    
     const response = await fetch("/api/ai/improve", {
       method: "POST",
       headers: {
@@ -164,31 +160,20 @@ export async function builtInAiImprove(text: string): Promise<string> {
       body: JSON.stringify({ text })
     });
 
-    console.log('builtInAiImprove: API response status:', response.status, response.statusText);
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('builtInAiImprove: API error response:', errorData);
       throw new Error(`API request failed: ${response.status} - ${errorData.error || response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('builtInAiImprove: API response data:', data);
     
     // Check if we have a valid improved text
     if (!data.message && !data.improvedText) {
-      console.error('builtInAiImprove: No improved text in response');
       throw new Error("No improved text received from API");
     }
     
     const improvedText = data.message || data.improvedText;
     
-    // Check if the improved text is different from the original
-    if (improvedText === text) {
-      console.warn('builtInAiImprove: API returned the same text as input');
-    }
-    
-    console.log('builtInAiImprove: Returning improved text:', improvedText);
     return improvedText;
   } catch (error) {
     console.error("builtInAiImprove: Error improving text:", error);
@@ -202,12 +187,9 @@ export async function builtInAiImprove(text: string): Promise<string> {
 export function parseMarkdownToTipTap(markdown: string): string {
   if (!markdown || !markdown.trim()) return '';
   
-  console.log('parseMarkdownToTipTap: Input markdown:', markdown);
-  
   // Check if this is just simple text without any markdown formatting
   const hasMarkdownFormatting = /[*_#>`\[\]()~-]|^[\s]*[-*+]|^\d+\./.test(markdown);
   if (!hasMarkdownFormatting && !markdown.includes('\n\n')) {
-    console.log('parseMarkdownToTipTap: Simple text detected, returning as-is');
     return markdown.trim();
   }
   
@@ -328,8 +310,6 @@ export function parseMarkdownToTipTap(markdown: string): string {
     .replace(/<br>\s*<\/(h[1-6]|blockquote|li|p)>/g, '</$1>')
     .replace(/(<\/(?:h[1-6]|blockquote|ul|ol|hr|div)>)\s*<br>/g, '$1')
     .replace(/(<(h[1-6]|blockquote|ul|ol|hr|div)[^>]*>)\s*<br>/g, '$1');
-  
-  console.log('parseMarkdownToTipTap: Output HTML:', html);
   
   return html;
 }
