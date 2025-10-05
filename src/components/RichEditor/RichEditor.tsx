@@ -266,7 +266,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       setIsEmpty(shouldShowPlaceholder);
       
       // Update hasContent for AI Improve button
-      setHasContent(text.trim().length > 0);
+      const hasTextContent = text.trim().length > 0;
+      setHasContent(hasTextContent);
       
       // Manually manage placeholder visibility by adding/removing a CSS class
       const editorElement = editor.view.dom;
