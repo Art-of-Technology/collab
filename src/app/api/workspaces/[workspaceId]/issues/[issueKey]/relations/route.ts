@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import type { IssueRelationType as PrismaIssueRelationType } from "@prisma/client";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 // GET /api/workspaces/[workspaceId]/issues/[issueKey]/relations
 export async function GET(
@@ -34,11 +35,9 @@ export async function GET(
     }
 
     // Find the issue
-    const issue = await prisma.issue.findFirst({
-      where: {
-        issueKey: issueKey,
-        workspaceId: workspace.id
-      }
+    const issue = await findIssueByIdOrKey(issueKey, {
+      workspaceId: workspace.id,
+      userId: session.user.id
     });
 
     if (!issue) {
@@ -274,11 +273,9 @@ export async function POST(
     }
 
     // Find source issue
-    const sourceIssue = await prisma.issue.findFirst({
-      where: {
-        issueKey: issueKey,
-        workspaceId: workspace.id
-      }
+    const sourceIssue = await findIssueByIdOrKey(issueKey, {
+      workspaceId: workspace.id,
+      userId: session.user.id
     });
 
     if (!sourceIssue) {
@@ -289,10 +286,8 @@ export async function POST(
     }
 
     // Find target issue and verify user has access to its workspace
-    const targetIssue = await prisma.issue.findFirst({
-      where: {
-        id: targetIssueId
-      },
+    const targetIssue = await findIssueByIdOrKey(targetIssueId, {
+      userId: session.user.id,
       include: {
         workspace: {
           select: {

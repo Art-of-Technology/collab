@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function POST(
   req: Request,
@@ -18,10 +18,11 @@ export async function POST(
     const issueId = _params.issueId;
     const commentId = _params.commentId;
     
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
-      : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: user.id,
+      select: { id: true, workspaceId: true }
+    });
 
     if (!issue) {
       return new NextResponse("Issue not found", { status: 404 });
@@ -39,20 +40,7 @@ export async function POST(
       return new NextResponse("Comment not found", { status: 404 });
     }
 
-    // Access check: user must be in workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return new NextResponse("Access denied", { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
     
     // Check if the user already liked this comment
     const existingReaction = await prisma.issueCommentReaction.findFirst({

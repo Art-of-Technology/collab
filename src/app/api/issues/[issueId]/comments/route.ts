@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -16,29 +16,17 @@ export async function GET(
 
     const { issueId } = await params;
 
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId }, select: { id: true, workspaceId: true } })
-      : await prisma.issue.findUnique({ where: { id: issueId }, select: { id: true, workspaceId: true } });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id,
+      select: { id: true, workspaceId: true }
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
 
-    // Access check: user must be in workspace
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
 
     const comments = await prisma.issueComment.findMany({
       where: { issueId: issue.id },
@@ -90,29 +78,16 @@ export async function POST(
       return NextResponse.json({ error: "Content is required" }, { status: 400 });
     }
 
-    // Resolve issue by key or id
-    const issue = isIssueKey(issueId)
-      ? await prisma.issue.findFirst({ where: { issueKey: issueId } })
-      : await prisma.issue.findUnique({ where: { id: issueId } });
+    // Resolve issue by key or id with workspace scoping
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id
+    });
 
     if (!issue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
 
-    // Access check
-    const hasAccess = await prisma.workspace.findFirst({
-      where: {
-        id: issue.workspaceId,
-        OR: [
-          { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
-        ],
-      },
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Access is already validated by findIssueByIdOrKey with userId
 
     // Verify parentId belongs to this issue
     if (parentId) {

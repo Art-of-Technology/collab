@@ -126,6 +126,12 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async redirect({ url, baseUrl }) {
+      // Ensure we redirect to the home page after login
+      if (url.includes('/api/auth/signin') || url.includes('/api/auth/callback')) {
+        return baseUrl;
+      }
+      
+      // Otherwise follow the normal redirect rules
       if (url.startsWith(baseUrl) || url.startsWith("/")) {
         return url;
       }

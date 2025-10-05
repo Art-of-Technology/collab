@@ -1263,6 +1263,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
        />
     </div>
   );
-});
+ });
 
 RichEditor.displayName = 'RichEditor';

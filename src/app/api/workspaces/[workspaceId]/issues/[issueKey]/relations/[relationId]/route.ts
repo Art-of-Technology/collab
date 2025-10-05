@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 // DELETE /api/workspaces/[workspaceId]/issues/[issueKey]/relations/[relationId]
 export async function DELETE(
@@ -32,11 +33,9 @@ export async function DELETE(
     }
 
     // Find the issue
-    const issue = await prisma.issue.findFirst({
-      where: {
-        issueKey: issueKey,
-        workspaceId: workspace.id
-      }
+    const issue = await findIssueByIdOrKey(issueKey, {
+      workspaceId: workspace.id,
+      userId: session.user.id
     });
 
     if (!issue) {
