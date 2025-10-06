@@ -21,14 +21,17 @@ export default function InvitationClient({ invitation, token }: InvitationClient
   
   // Use TanStack Query mutation for accepting the invitation
   const { mutate: acceptInvitation, isPending } = useAcceptInvitation({
-    onSuccess: (data) => {
-      // Redirect to the workspace on success
-      if (data.workspaceId) {
-        router.push(`/workspaces/${data.workspaceId}`);
-      } else {
-        router.push('/workspaces');
-      }
-    },
+        onSuccess: (data) => {
+          // Redirect to the workspace dashboard using slug
+          if (data.workspaceSlug) {
+            router.push(`/${data.workspaceSlug}/dashboard`);
+          } else if (data.workspaceId) {
+            // Fallback to ID if slug is not available
+            router.push(`/workspaces/${data.workspaceId}`);
+          } else {
+            router.push('/workspaces');
+          }
+        },
     onError: (err) => {
       setError((err as Error).message || 'Failed to accept invitation');
     }

@@ -13,11 +13,12 @@ interface InvitationPageProps {
 export const dynamic = 'force-dynamic';
 
 export default async function WorkspaceInvitationPage({ params }: InvitationPageProps) {
-  const { token } = params;
+  const { token } = await params;
   const session = await getAuthSession();
   
   if (!session?.user) {
-    redirect(`/login?callbackUrl=/workspace-invitation/${token}`);
+    console.log("Redirecting to login: callbackUrl", `/workspace-invitation/${token}`);
+    redirect(`/login?callbackUrl=${encodeURIComponent(`/workspace-invitation/${token}`)}`);
   }
   
   try {

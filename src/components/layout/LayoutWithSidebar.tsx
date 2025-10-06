@@ -48,7 +48,6 @@ export default function LayoutWithSidebar({
               <Sidebar
                 pathname={pathname}
                 isCollapsed={isCollapsedDesktop}
-                toggleSidebar={toggleDesktop}
               />
             </div>
           </div>
@@ -74,7 +73,6 @@ export default function LayoutWithSidebar({
               <Sidebar
                 pathname={pathname}
                 isCollapsed={false}
-                toggleSidebar={toggleMobile}
               />
             </div>
           </div>
