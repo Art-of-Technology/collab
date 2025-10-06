@@ -10,15 +10,14 @@ interface QueryProviderProps {
 
 export const QueryProvider = ({ children }: QueryProviderProps) => {
   const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60 * 1000, // 1 minute
-            refetchOnWindowFocus: false,
-          },
+    () => new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: 60 * 1000, // 1 minute
+          refetchOnWindowFocus: false,
         },
-      })
+      },
+    })
   );
 
   return (

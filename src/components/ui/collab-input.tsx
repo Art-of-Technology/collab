@@ -477,8 +477,12 @@ export function CollabInput({
       }
     }
     
-    document.addEventListener("mousedown", handleClickOutside);
+    // Use a slight delay to allow click events on mention items to process first
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 10);
     return () => {
+      clearTimeout(timeoutId);
       document.removeEventListener("mousedown", handleClickOutside);
     }
   }, []);

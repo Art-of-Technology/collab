@@ -38,6 +38,7 @@ interface StaticToolbarProps {
   onMentionUser?: () => void;
   onMentionIssue?: () => void;
   showAiImprove?: boolean;
+  hasContent?: boolean;
 }
 
 export function StaticToolbar({
@@ -47,6 +48,7 @@ export function StaticToolbar({
   onMentionUser,
   onMentionIssue,
   showAiImprove = false,
+  hasContent = false,
 }: StaticToolbarProps) {
   const insertLink = () => {
     const url = window.prompt('Enter URL:');
@@ -381,9 +383,14 @@ export function StaticToolbar({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 hover:bg-purple-500/20 transition-colors"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      hasContent 
+                        ? "hover:bg-purple-500/20" 
+                        : "opacity-70 cursor-not-allowed"
+                    )}
                     onClick={onAiImprove}
-                    disabled={isImproving}
+                    disabled={isImproving || !hasContent}
                   >
                     {isImproving ? (
                       <Loader2 className="h-4 w-4 animate-spin text-purple-400" />

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { trackView, BoardItemType } from "@/lib/board-item-activity-service";
 import { prisma } from "@/lib/prisma";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function POST(
   request: NextRequest,
@@ -40,15 +41,10 @@ export async function POST(
 
     switch (boardItemType) {
       case 'ISSUE':
-        // Try to find by ID first, then by issueKey
-        item = await prisma.issue.findFirst({
-          where: { 
-            OR: [
-              { id: itemId },
-              { issueKey: itemId }
-            ]
-          },
-          select: { id: true, workspaceId: true },
+        // Use utility function with workspace scoping
+        item = await findIssueByIdOrKey(itemId, {
+          userId: session.user.id,
+          select: { id: true, workspaceId: true }
         });
         workspaceId = item?.workspaceId;
         break;
