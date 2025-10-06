@@ -1,6 +1,7 @@
 "use client";
 
 import React, { forwardRef, useImperativeHandle, useCallback, useRef, useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -97,6 +98,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const [showImprovePopover, setShowImprovePopover] = useState(false);
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
+  const [hasContent, setHasContent] = useState(false);
   const [isEmpty, setIsEmpty] = useState(!value || value === '' || value === '<p></p>' || value === '<p><br></p>');
   
   // Initialize editor with extensions
@@ -132,11 +134,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       // Mention extensions
       MentionExtension,
       IssueMentionExtension,
-      // AI Improve extension
-      AIImproveExtension.configure({
+      // AI Improve extension (only for floating mode)
+      ...(toolbarMode === 'floating' ? [AIImproveExtension.configure({
         onAiImprove: onAiImprove || builtInAiImprove,
         showAiImprove,
-      }),
+      })] : []),
       // Additional extensions passed from props
       ...additionalExtensions,
     ],
@@ -262,6 +264,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       
       // Update isEmpty state
       setIsEmpty(shouldShowPlaceholder);
+      
+      // Update hasContent for AI Improve button
+      const hasTextContent = text.trim().length > 0;
+      setHasContent(hasTextContent);
       
       // Manually manage placeholder visibility by adding/removing a CSS class
       const editorElement = editor.view.dom;
@@ -435,39 +441,59 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     setMentionSuggestion(null);
   }, [editor, mentionSuggestion]);
 
-  // AI improvement functionality - uses the extension
+  // AI improvement functionality
   const handleAiImprove = useCallback(() => {
     if (!editor || isImproving) return;
     
     if (toolbarMode === 'static') {
+      // Static mode: handle AI improve directly
+      const { from, to, empty } = editor.state.selection;
+      
+      if (empty) {
+        return; // No selection
+      }
+      
+      const selectedText = editor.state.doc.textBetween(from, to, ' ');
+      if (!selectedText.trim()) {
+        return;
+      }
+      
+      // Set popup position
       const editorRect = editorRef.current?.getBoundingClientRect();
       if (editorRect) {
-        const TOOLBAR_OFFSET = 45;
-        const MODAL_WIDTH = 500;
-        
         setFloatingMenuPosition({
-          top: TOOLBAR_OFFSET,
-          left: (editorRect.width - MODAL_WIDTH) / 2,
+          top: 45,
+          left: (editorRect.width - 500) / 2,
         });
       }
-    }
-    
-    setIsImproving(true);
-    const result = editor.commands.improveSelection();
-    
-    if (!result && toolbarMode === 'static') {
-      const allText = editor.getText();
-      builtInAiImprove(allText)
+      
+      // Save selection for later use
+      setSavedSelection({ from, to, originalText: selectedText });
+      
+      setIsImproving(true);
+      
+      // Call AI improve directly
+      builtInAiImprove(selectedText)
         .then((improvedText) => {
-          setImprovedText(improvedText);
-          setShowImprovePopover(true);
-          setIsImproving(false);
+          flushSync(() => {
+            setImprovedText(improvedText);
+            setShowImprovePopover(true);
+            setIsImproving(false);
+          });
         })
         .catch((error) => {
           console.error('Error improving text:', error);
           setIsImproving(false);
         });
-    } else if (!result) {
+      
+      return;
+    }
+    
+    // Floating mode: use extension
+    setIsImproving(true);
+    const result = editor.commands.improveSelection();
+    
+    if (!result) {
       setIsImproving(false);
     }
   }, [editor, isImproving, toolbarMode]);
@@ -490,18 +516,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       return;
     }
 
-    // For static mode, replace all content
-    if (toolbarMode === 'static') {
-      editor.chain()
-        .focus()
-        .setContent(improvedText)
-        .run();
-      
-      setImprovedText(null);
-      setShowImprovePopover(false);
-      setSavedSelection(null);
-      return;
-    }
 
     // For floating mode, need savedSelection
     if (!savedSelection) {
@@ -631,12 +645,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       if (value !== currentContent) {
         // Prevent update feedback loop when syncing external value
         isExternalUpdateRef.current = true;
+        editor.commands.setContent(value || '');
+        // Release guard after ProseMirror processes this transaction
         setTimeout(() => {
-          editor.commands.setContent(value || '');
-          // Release guard after ProseMirror processes this transaction
-          setTimeout(() => {
-            isExternalUpdateRef.current = false;
-          }, 0);
+          isExternalUpdateRef.current = false;
         }, 0);
       }
     }
@@ -681,9 +693,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         const isClickOnPopover = target.closest('[data-ai-improve-popover]');
         
         if (!isClickOnPopover) {
-          setShowFloatingMenu(false);
-          setMentionSuggestion(null);
-          setShowImprovePopover(false);
+        setShowFloatingMenu(false);
+        setMentionSuggestion(null);
+        setShowImprovePopover(false);
         }
       }
     };
@@ -803,7 +815,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           onMentionUser={handleMentionUser}
           onMentionIssue={handleMentionIssue}
           showAiImprove={showAiImprove}
-          hasContent={!!(editor?.getText() ?? "").trim()}
+          hasContent={hasContent}
         />
       )}
 
@@ -1237,8 +1249,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
               />
             )}
           </div>
-         )}
-       </div>
+        )}
+      </div>
 
        {/* AI Improve Popover */}
        <AIImprovePopover
@@ -1249,7 +1261,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
          onCancel={cancelImproveText}
          isImproving={isImproving}
        />
-     </div>
+    </div>
   );
  });
 

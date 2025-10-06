@@ -385,8 +385,9 @@ export function StaticToolbar({
                     size="sm"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      !hasContent && "opacity-70",
-                      hasContent ? "hover:bg-purple-500/20" : "hover:bg-[#2a2a2a]"
+                      hasContent 
+                        ? "hover:bg-purple-500/20" 
+                        : "opacity-70 cursor-not-allowed"
                     )}
                     onClick={onAiImprove}
                     disabled={isImproving || !hasContent}
