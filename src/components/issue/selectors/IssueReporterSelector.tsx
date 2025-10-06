@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   Popover,
   PopoverContent,
@@ -24,6 +25,7 @@ export function IssueReporterSelector({
   placeholder = "Select reporter...",
   workspaceId
 }: IssueReporterSelectorProps) {
+  const { data: session } = useSession();
   const [users, setUsers] = useState<IssueUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -54,12 +56,20 @@ export function IssueReporterSelector({
   }, [workspaceId]);
 
   const selectedUser = users.find(user => user.id === value);
+  const currentUserId = session?.user?.id;
 
   // Filter users based on search query
   const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Separate current user from others to prioritize current user
+  const currentUser = filteredUsers.find(user => user.id === currentUserId);
+  const otherUsers = filteredUsers.filter(user => user.id !== currentUserId);
+  
+  // Combine: current user first, then others in original order
+  const prioritizedUsers = currentUser ? [currentUser, ...otherUsers] : otherUsers;
 
   if (isLoading) {
     return (
@@ -145,15 +155,19 @@ export function IssueReporterSelector({
             )}
           </button>
           
-          {filteredUsers.length > 0 && (
+          {prioritizedUsers.length > 0 && (
             <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
           )}
           
-          {filteredUsers.map((user) => (
+          {prioritizedUsers.map((user) => (
             <button
               key={user.id}
               type="button"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
+                user.id === currentUserId 
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                  : 'hover:bg-[#2a2a2a]'
+              }`}
               onClick={() => onChange(user.id)}
             >
               {user.useCustomAvatar ? (
@@ -166,7 +180,9 @@ export function IssueReporterSelector({
                   </AvatarFallback>
                 </Avatar>
               )}
-              <span className="text-[#cccccc] flex-1">{user.name}</span>
+              <span className={`text-[#cccccc] flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
+                {user.name}{user.id === currentUserId ? " (You)" : ""}
+              </span>
               {value === user.id && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
@@ -179,7 +195,7 @@ export function IssueReporterSelector({
             </div>
           )}
           
-          {!isLoading && filteredUsers.length === 0 && users.length > 0 && (
+          {!isLoading && prioritizedUsers.length === 0 && users.length > 0 && (
             <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
               No people match your search
             </div>

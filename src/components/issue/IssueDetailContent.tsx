@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,6 +130,12 @@ export function IssueDetailContent({
   // Editor reference for mini toolbar
   const editorRef = useRef<RichEditorRef>(null);
 
+  // Focus management refs
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFocusedElementRef = useRef<HTMLElement | null>(null);
+  const preventFocusStealRef = useRef(false);
+
   // History modal state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
@@ -139,6 +145,66 @@ export function IssueDetailContent({
     // Allow assignee, reporter, or any user to control their own timer
     return true;
   }, [issue, currentUserId]);
+
+  // Focus management utilities
+  const saveFocusState = useCallback(() => {
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && activeElement !== document.body) {
+      lastFocusedElementRef.current = activeElement;
+    }
+  }, []);
+
+  const restoreFocusState = useCallback(() => {
+    if (lastFocusedElementRef.current && document.contains(lastFocusedElementRef.current)) {
+      try {
+        lastFocusedElementRef.current.focus();
+      } catch (error) {
+        // Ignore focus errors
+      }
+    }
+  }, []);
+
+  const preventFocusSteal = useCallback((duration = 100) => {
+    preventFocusStealRef.current = true;
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+    focusTimeoutRef.current = setTimeout(() => {
+      preventFocusStealRef.current = false;
+    }, duration);
+  }, []);
+
+  // Focus event handler to track focus changes
+  const handleFocusChange = useCallback((event: FocusEvent) => {
+    // Don't track focus when we're preventing focus steal
+    if (preventFocusStealRef.current) {
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+
+    // Only track focus for input-like elements
+    if (target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable ||
+      target.closest('[contenteditable="true"]') ||
+      target.closest('.ProseMirror')
+    )) {
+      lastFocusedElementRef.current = target;
+    }
+  }, []);
+
+  // Global focus tracking
+  useEffect(() => {
+    document.addEventListener('focusin', handleFocusChange);
+    return () => {
+      document.removeEventListener('focusin', handleFocusChange);
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+    };
+  }, [handleFocusChange]);
 
   // Get current play state from user activity status
   const currentPlayState: PlayState = useMemo(() => {
@@ -247,18 +313,34 @@ export function IssueDetailContent({
     setShowHelperModal(false);
   };
 
-  // Initialize local state from issue data
+  // Initialize local state from issue data (only when issue changes)
   useEffect(() => {
     if (issue) {
       setTitle(issue.title || '');
       setDescription(issue.description || '');
       setLastSavedDescription(issue.description || '');
       setAutosaveStatus("saved");
+
       setTimeout(() => {
         setAutosaveStatus("idle");
       }, 600);
     }
   }, [issue]);
+
+  // Separate focus restoration effect that doesn't reset data
+  useEffect(() => {
+    if (issue) {
+      // Save focus state before any potential updates
+      saveFocusState();
+
+      // Use a microtask to restore focus after renders
+      Promise.resolve().then(() => {
+        if (!editingTitle) {
+          restoreFocusState();
+        }
+      });
+    }
+  }, [issue, saveFocusState, restoreFocusState, editingTitle]);
 
   // Keep a ref of the latest description to avoid race conditions when saving
   useEffect(() => {
@@ -268,6 +350,10 @@ export function IssueDetailContent({
   // Autosave function (direct API call to avoid noisy toasts and page dimming)
   const autosaveDescription = useCallback(async (content: string) => {
     if (!issue) return;
+
+    // Save focus state before autosave to restore it after
+    saveFocusState();
+
     setAutosaveStatus("saving");
     try {
       const response = await fetch(`/api/issues/${issue.issueKey || issue.id}`, {
@@ -295,6 +381,13 @@ export function IssueDetailContent({
       setShowSavedIndicator(true);
       setTimeout(() => setShowSavedIndicator(false), 1500);
       autosaveErrorToastShownRef.current = false;
+
+      // Restore focus after successful autosave
+      Promise.resolve().then(() => {
+        if (!editingTitle) {
+          restoreFocusState();
+        }
+      });
     } catch (error: any) {
       setAutosaveStatus("error");
       if (!autosaveErrorToastShownRef.current) {
@@ -305,8 +398,15 @@ export function IssueDetailContent({
         });
         autosaveErrorToastShownRef.current = true;
       }
+
+      // Restore focus even on error
+      Promise.resolve().then(() => {
+        if (!editingTitle) {
+          restoreFocusState();
+        }
+      });
     }
-  }, [issue, toast]);
+  }, [issue, toast, saveFocusState, restoreFocusState, editingTitle]);
 
   // Debounced autosave on description changes
   useEffect(() => {
@@ -422,6 +522,61 @@ export function IssueDetailContent({
     };
   }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, userStatus?.statusStartedAt, issue?.id, totalPlayTime, isLoadingPlayTime]);
 
+  // Title editing focus management - Keep focus on title input when editing
+  useEffect(() => {
+    if (editingTitle && titleInputRef.current) {
+      // Focus the title input
+      titleInputRef.current.focus();
+
+      // Prevent focus steal during title editing
+      preventFocusSteal(500);
+
+      const preventFocusLoss = (event: FocusEvent) => {
+        const target = event.target as HTMLElement;
+
+        // Allow focus on the title input itself
+        if (target === titleInputRef.current) {
+          return;
+        }
+
+        // Allow focus on save/cancel buttons (inside .title-editing-actions)
+        if (target.closest('button[type="button"]') && target.closest('.title-editing-actions')) {
+          return;
+        }
+
+        // If focus is moving to any other element, prevent it and refocus title input
+        if (titleInputRef.current) {
+          event.preventDefault();
+          titleInputRef.current.focus();
+        }
+      };
+
+      // Add listener to prevent focus loss
+      document.addEventListener('focusin', preventFocusLoss);
+
+      return () => {
+        document.removeEventListener('focusin', preventFocusLoss);
+      };
+    }
+  }, [editingTitle, preventFocusSteal]);
+
+  // Description and comment focus preservation during rerenders
+  useLayoutEffect(() => {
+    // This effect runs synchronously after all DOM mutations
+    // Use it to restore focus immediately after renders
+    if (!editingTitle && lastFocusedElementRef.current && document.contains(lastFocusedElementRef.current)) {
+      // Only restore focus if no other element currently has focus
+      const activeElement = document.activeElement;
+      if (!activeElement || activeElement === document.body) {
+        try {
+          lastFocusedElementRef.current.focus();
+        } catch (error) {
+          // Ignore focus errors
+        }
+      }
+    }
+  }, [editingTitle]);
+
   // Fetch playtime when issue ID changes or onRefresh is called
   useEffect(() => {
     if (issue?.id) {
@@ -481,6 +636,10 @@ export function IssueDetailContent({
   const handleUpdate = useCallback(async (updates: IssueFieldUpdate) => {
     if (!issue) return;
 
+    // Save focus state before updating
+    saveFocusState();
+    preventFocusSteal(200);
+
     setIsUpdating(true);
     try {
       const response = await fetch(`/api/issues/${issue.issueKey || issue.id}`, {
@@ -508,6 +667,13 @@ export function IssueDetailContent({
 
       // Refresh the issue data
       onRefresh();
+
+      // Restore focus after update
+      Promise.resolve().then(() => {
+        if (!editingTitle) {
+          restoreFocusState();
+        }
+      });
     } catch (error) {
       console.error('Failed to update issue:', error);
       toast({
@@ -519,7 +685,7 @@ export function IssueDetailContent({
     } finally {
       setIsUpdating(false);
     }
-  }, [issue, onRefresh, toast]);
+  }, [issue, onRefresh, toast, saveFocusState, restoreFocusState, preventFocusSteal, editingTitle]);
 
   // Handle title save
   const handleSaveTitle = useCallback(async () => {
@@ -940,7 +1106,7 @@ export function IssueDetailContent({
           <div className="space-y-3">
             {editingTitle ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 title-editing-controls">
                   {/* Issue Key Badge */}
                   <Badge
                     className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
@@ -949,11 +1115,11 @@ export function IssueDetailContent({
                     {issue.issueKey}
                   </Badge>
                   <Input
+                    ref={titleInputRef}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] h-auto py-1 flex-1"
                     placeholder="Issue title"
-                    autoFocus
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -964,8 +1130,9 @@ export function IssueDetailContent({
                       }
                     }}
                   />
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 title-editing-actions">
                     <Button
+                      type="button"
                       size="sm"
                       onClick={handleSaveTitle}
                       disabled={isUpdating}
@@ -979,6 +1146,7 @@ export function IssueDetailContent({
                       Save
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => {
@@ -1001,7 +1169,7 @@ export function IssueDetailContent({
               >
                 {/* Issue Key Badge */}
                 <Badge
-                  className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
+                  className="font-mono text-xs px-2 pt-1 pb-0.5 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleCopyLink();
@@ -1009,15 +1177,17 @@ export function IssueDetailContent({
                 >
                   {issue.issueKey}
                 </Badge>
-                <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1">
-                  {issue.title}
-                </h1>
-                <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
+                <div className="flex flex-row items-center gap-2 h-8">
+                  <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1">
+                    {issue.title}
+                  </h1>
+                  <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
+                </div>
               </div>
             )}
 
             {/* Properties Row - Using New Selectors */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className={cn("flex flex-wrap items-center gap-2", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
               {/* Status Selector */}
               <IssueStatusSelector
                 value={issue.status}
@@ -1085,7 +1255,7 @@ export function IssueDetailContent({
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className={cn("flex items-center justify-between", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
               {/* Created info */}
               <div className="flex items-center gap-1 text-xs text-[#6e7681]">
                 <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
@@ -1157,7 +1327,7 @@ export function IssueDetailContent({
         </div>
 
         {/* Main Content - Full Width Experience */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className={cn("flex-1 overflow-y-auto min-h-0", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
           <div className="space-y-6 pb-8">
             {/* Seamless Description Editor - Full Width */}
             <div className="w-full relative">
