@@ -1,6 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
+export interface Repository {
+  id: string;
+  projectId: string;
+  githubRepoId: string;
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string;
+  webhookSecret: string;
+  isActive: boolean;
+  syncedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -16,6 +31,7 @@ export interface Project {
   createdAt: Date;
   updatedAt: Date;
   statuses?: ProjectStatus[]; // For settings API compatibility
+  repository?: Repository; // GitHub integration
   issueCount?: number; // Total issues count
   _count?: {
     issues: number;
