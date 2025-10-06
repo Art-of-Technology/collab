@@ -126,23 +126,17 @@ export function AssigneeSelect({
     );
   }
 
-  // Filter and prioritize users based on the search
-  const filteredUsers = users
-    .filter(user => 
-      !searchQuery || (user.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    )
-    .sort((a, b) => {
-      // Prioritize current user first
-      if (currentUserId) {
-        if (a.id === currentUserId && b.id !== currentUserId) return -1;
-        if (b.id === currentUserId && a.id !== currentUserId) return 1;
-      }
-      
-      // Then sort alphabetically by name
-      const nameA = a.name?.toLowerCase() || '';
-      const nameB = b.name?.toLowerCase() || '';
-      return nameA.localeCompare(nameB);
-    });
+  // Filter users based on the search
+  const filteredUsers = users.filter(user => 
+    !searchQuery || (user.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Separate current user from others to prioritize current user
+  const currentUser = filteredUsers.find(user => user.id === currentUserId);
+  const otherUsers = filteredUsers.filter(user => user.id !== currentUserId);
+  
+  // Combine: current user first, then others in original order
+  const prioritizedUsers = currentUser ? [currentUser, ...otherUsers] : otherUsers;
 
   // The key to fixing the scroll issue is removing animation and using Command's native scrolling
   return (
@@ -202,12 +196,16 @@ export function AssigneeSelect({
                   <span>Unassigned</span>
                 </div>
               </CommandItem>
-              {filteredUsers.map((user) => (
+              {prioritizedUsers.map((user) => (
                 <CommandItem
                   key={user.id}
                   value={user.name || ""}
                   onSelect={() => handleSelect(user.id)}
-                  className={`cursor-pointer ${user.id === currentUserId ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
+                  className={`cursor-pointer ${
+                    user.id === currentUserId 
+                      ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                      : 'hover:bg-accent'
+                  }`}
                 >
                   <div className="flex items-center gap-2">
                     {renderAvatar(user)}

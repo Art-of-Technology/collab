@@ -195,6 +195,7 @@ model Comment {
   epicId           String?
   storyId          String?
   milestoneId      String?
+  noteId           String?
   html             String?
   author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
@@ -203,6 +204,7 @@ model Comment {
   children         Comment[]      @relation("CommentToComment")
   post             Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
   story            Story?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  note             Note?          @relation(fields: [noteId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   notifications    Notification[]
   reactions        Reaction[]
@@ -213,6 +215,7 @@ model Comment {
   @@index([epicId])
   @@index([storyId])
   @@index([milestoneId])
+  @@index([noteId])
 }
 
 model Reaction {
@@ -1113,6 +1116,7 @@ model Note {
   author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
   tags        NoteTag[]  @relation("NoteToTag")
+  comments    Comment[]
 
   @@index([authorId])
   @@index([workspaceId])

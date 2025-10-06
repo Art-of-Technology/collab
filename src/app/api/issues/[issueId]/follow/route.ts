@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { NotificationService } from "@/lib/notification-service";
 import { withRateLimit, followActionRateLimit } from "@/lib/rate-limit";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export const POST = withRateLimit(async function(
   req: NextRequest,
@@ -18,16 +19,8 @@ export const POST = withRateLimit(async function(
     const { issueId } = resolvedParams;
 
     // Check if issue exists and user has access
-    const issue = await prisma.issue.findFirst({
-      where: {
-        id: issueId,
-        workspace: {
-          OR: [
-            { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
-          ]
-        }
-      }
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id
     });
 
     if (!issue) {
@@ -84,16 +77,8 @@ export const DELETE = withRateLimit(async function(
     const { issueId } = resolvedParams;
 
     // Check if issue exists and user has access
-    const issue = await prisma.issue.findFirst({
-      where: {
-        id: issueId,
-        workspace: {
-          OR: [
-            { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
-          ]
-        }
-      }
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id
     });
 
     if (!issue) {
@@ -136,16 +121,8 @@ export const GET = withRateLimit(async function(
     const { issueId } = resolvedParams;
 
     // Check if issue exists and user has access
-    const issue = await prisma.issue.findFirst({
-      where: {
-        id: issueId,
-        workspace: {
-          OR: [
-            { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
-          ]
-        }
-      }
+    const issue = await findIssueByIdOrKey(issueId, {
+      userId: currentUser.id
     });
 
     if (!issue) {

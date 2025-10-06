@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   Popover,
   PopoverContent,
@@ -31,17 +32,25 @@ export function ReporterSelector({
   disabled = false,
   reporters = [],
 }: ReporterSelectorProps) {
+  const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const selectedReporters = reporters.filter(r => value.includes(r.id));
+  const currentUserId = session?.user?.id;
   
   // Filter reporters based on search query
-  const searchQueryLower = searchQuery.toLowerCase();
   const filteredReporters = reporters.filter(reporter =>
-    reporter.name?.toLowerCase().includes(searchQueryLower) ||
-    reporter.email?.toLowerCase().includes(searchQueryLower)
+    reporter.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    reporter.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Separate current user from others to prioritize current user
+  const currentUser = filteredReporters.find(reporter => reporter.id === currentUserId);
+  const otherReporters = filteredReporters.filter(reporter => reporter.id !== currentUserId);
+  
+  // Combine: current user first, then others in original order
+  const prioritizedReporters = currentUser ? [currentUser, ...otherReporters] : otherReporters;
 
   const toggleReporter = (reporterId: string) => {
     const newValues = value.includes(reporterId)
@@ -147,15 +156,19 @@ export function ReporterSelector({
             )}
           </button>
           
-          {filteredReporters.length > 0 && (
+          {prioritizedReporters.length > 0 && (
             <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
           )}
           
-          {filteredReporters.map((reporter) => (
+          {prioritizedReporters.map((reporter) => (
             <button
               key={reporter.id}
               type="button"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
+                reporter.id === currentUserId 
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                  : 'hover:bg-[#2a2a2a]'
+              }`}
               onClick={() => toggleReporter(reporter.id)}
             >
               {reporter.useCustomAvatar ? (
@@ -168,14 +181,16 @@ export function ReporterSelector({
                   </AvatarFallback>
                 </Avatar>
               )}
-              <span className="text-[#cccccc] flex-1">{reporter.name}</span>
+              <span className={`text-[#cccccc] flex-1 ${reporter.id === currentUserId ? 'font-medium' : ''}`}>
+                {reporter.name}{reporter.id === currentUserId ? " (You)" : ""}
+              </span>
               {value.includes(reporter.id) && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
             </button>
           ))}
           
-          {filteredReporters.length === 0 && reporters.length > 0 && (
+          {prioritizedReporters.length === 0 && reporters.length > 0 && (
             <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
               No people match your search
             </div>

@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { getBoardItemComments, addBoardItemComment, BoardItemType } from "@/actions/boardItemComment";
+import { getBoardItemComments, addBoardItemComment, updateNoteComment, BoardItemType } from "@/actions/boardItemComment";
 import { useAddTaskComment } from "@/hooks/queries/useTaskComment";
+import { toggleTaskCommentLike } from "@/actions/taskComment";
 
-export type UnifiedItemType = 'task' | 'epic' | 'story' | 'milestone';
+export type UnifiedItemType = 'task' | 'epic' | 'story' | 'milestone' | 'note';
 
 // Unified hook for fetching comments
 export function useUnifiedComments(itemType: UnifiedItemType, itemId: string) {
@@ -14,18 +15,139 @@ export function useUnifiedComments(itemType: UnifiedItemType, itemId: string) {
     enabled: itemType === 'task' && !!itemId,
   });
   
+  // For notes, use the note comments hook
+  const noteCommentsQuery = useQuery({
+    queryKey: ["note-comments", itemId],
+    queryFn: () => import("@/actions/boardItemComment").then(m => m.getNoteComments(itemId)),
+    enabled: itemType === 'note' && !!itemId,
+  });
+  
   // For other items, use board item comments
   const boardItemCommentsQuery = useQuery({
     queryKey: ["board-item-comments", itemType, itemId],
     queryFn: () => getBoardItemComments(itemType as BoardItemType, itemId),
-    enabled: itemType !== 'task' && !!itemId,
+    enabled: itemType !== 'task' && itemType !== 'note' && !!itemId,
   });
 
   // Return the appropriate query based on item type
-  return itemType === 'task' ? taskCommentsQuery : boardItemCommentsQuery;
+  if (itemType === 'task') {
+    return taskCommentsQuery;
+  } else if (itemType === 'note') {
+    return noteCommentsQuery;
+  } else {
+    return boardItemCommentsQuery;
+  }
 }
 
 // Unified hook for adding comments
+/**
+ * Hook to update a note comment
+ */
+export function useUpdateNoteComment() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: async ({
+      noteId,
+      commentId,
+      message,
+      html
+    }: {
+      noteId: string;
+      commentId: string;
+      message: string;
+      html?: string;
+    }) => {
+      return updateNoteComment(noteId, commentId, message, html);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["note-comments", variables.noteId],
+      });
+      toast({
+        title: "Success",
+        description: "Comment updated successfully",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating note comment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update comment",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+/**
+ * Hook for toggling likes on comments
+ */
+export function useToggleCommentLike() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: async ({
+      itemType,
+      itemId,
+      commentId,
+    }: {
+      itemType: UnifiedItemType;
+      itemId: string;
+      commentId: string;
+    }) => {
+      if (itemType === 'task') {
+        // Use task comment like API directly
+        return toggleTaskCommentLike(itemId, commentId);
+      } else if (itemType === 'note') {
+        // Use server action for note comment likes
+        // First toggle the like
+        const result = await import("@/actions/boardItemComment").then(m => 
+          m.toggleBoardItemCommentLike('note', itemId, commentId)
+        );
+        
+        // Then get the updated likes data
+        const likesData = await import("@/actions/boardItemComment").then(m => 
+          m.getNoteCommentLikes(itemId, commentId)
+        );
+        
+        return likesData;
+      } else {
+        // For other board item types
+        return import("@/actions/boardItemComment").then(m => 
+          m.toggleBoardItemCommentLike(itemType as BoardItemType, itemId, commentId)
+        );
+      }
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate the appropriate query to refresh comments
+      if (variables.itemType === 'task') {
+        queryClient.invalidateQueries({
+          queryKey: ["task-comments", variables.itemId],
+        });
+      } else if (variables.itemType === 'note') {
+        queryClient.invalidateQueries({
+          queryKey: ["note-comments", variables.itemId],
+        });
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: ["board-item-comments", variables.itemType, variables.itemId],
+        });
+      }
+    },
+    onError: (error) => {
+      console.error("Error toggling comment like:", error);
+      toast({
+        title: "Error",
+        description: "Failed to toggle like",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useAddUnifiedComment() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -83,6 +205,10 @@ export function useAddUnifiedComment() {
           taskId: itemId,
           content
         });
+      } else if (itemType === 'note') {
+        return import("@/actions/boardItemComment").then(m => 
+          m.addNoteComment(itemId, content, parentId)
+        );
       } else {
         return addBoardItemCommentMutation.mutateAsync({
           itemType: itemType as BoardItemType,
@@ -97,6 +223,10 @@ export function useAddUnifiedComment() {
       if (variables.itemType === 'task') {
         queryClient.invalidateQueries({
           queryKey: ["task-comments", variables.itemId],
+        });
+      } else if (variables.itemType === 'note') {
+        queryClient.invalidateQueries({
+          queryKey: ["note-comments", variables.itemId],
         });
       } else {
         queryClient.invalidateQueries({
