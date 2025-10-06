@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import { 
   getUserWorkspaces, 
   getWorkspaceById, 
@@ -15,6 +16,14 @@ import {
   getWorkspaceMembers
 } from '@/actions/workspace';
 
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  ownerId?: string;
+}
+
 // Define query keys
 export const workspaceKeys = {
   all: ['workspaces'] as const,
@@ -25,22 +34,39 @@ export const workspaceKeys = {
   detailedWorkspace: (id: string) => [...workspaceKeys.all, 'detailed', id] as const,
 };
 
-// Get all user workspaces
+// Get all user workspaces (session-aware)
 export const useUserWorkspaces = () => {
+  const { data: session, status } = useSession();
+
   return useQuery({
     queryKey: workspaceKeys.list(),
-    queryFn: getUserWorkspaces,
+    queryFn: async () => {
+      const result = await getUserWorkspaces();
+      return result.all; // Return only the combined array of workspaces
+    },
+    enabled: !!session?.user && status === 'authenticated',
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: true,
   });
 };
 
-// Get workspace by ID
+// Alias for compatibility with WorkspaceContext
+export const useWorkspaces = useUserWorkspaces;
+
+// Get workspace by ID (session-aware)
 export const useWorkspaceById = (workspaceId: string) => {
+  const { data: session, status } = useSession();
+
   return useQuery({
     queryKey: workspaceKeys.detail(workspaceId),
     queryFn: () => getWorkspaceById(workspaceId),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && !!session?.user && status === 'authenticated',
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
+
+// Alias for compatibility (single workspace by ID)
+export const useWorkspace = useWorkspaceById;
 
 // Create workspace mutation
 export const useCreateWorkspace = () => {
@@ -155,4 +181,25 @@ export const useWorkspaceMembers = (workspaceId: string | undefined) => {
     enabled: !!workspaceId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
-}; 
+};
+
+/**
+ * Hook to get query client for manual invalidation
+ */
+export function useWorkspaceQueryClient() {
+  const queryClient = useQueryClient();
+
+  const invalidateWorkspaces = () => {
+    queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
+  };
+
+  const invalidateWorkspace = (workspaceId: string) => {
+    queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspaceId) });
+  };
+
+  return {
+    invalidateWorkspaces,
+    invalidateWorkspace,
+    queryClient,
+  };
+} 

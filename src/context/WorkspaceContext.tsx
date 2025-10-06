@@ -4,14 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
-
-type Workspace = {
-  id: string;
-  name: string;
-  slug: string;
-  logoUrl?: string | null;
-  ownerId?: string;
-};
+import { useWorkspaces, type Workspace } from '@/hooks/queries/useWorkspace';
 
 type WorkspaceContextType = {
   currentWorkspace: Workspace | null;
@@ -19,7 +12,6 @@ type WorkspaceContextType = {
   isLoading: boolean;
   error: string | null;
   switchWorkspace: (workspaceId: string) => void;
-  refreshWorkspaces: () => Promise<void>;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -41,10 +33,15 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false);
+  
+  // Use TanStack Query for workspace data
+  const { 
+    data: workspaces = [], 
+    isLoading, 
+    error: queryError 
+  } = useWorkspaces();
+  
+  const error = queryError ? (queryError as Error).message : null;
 
   // Extract workspace ID from current URL
   const getWorkspaceIdFromUrl = useCallback((): string | null => {
@@ -63,83 +60,39 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     return null;
   }, [pathname]);
 
-  const fetchWorkspaces = useCallback(async () => {
-    if (status === 'loading' || !session?.user) {
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setHasInitiallyFetched(true);
-      const response = await fetch('/api/workspaces');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch workspaces');
-      }
-      
-      const data = await response.json();
-      setWorkspaces(data);
-      
-      // Determine which workspace should be current based on URL first, then localStorage
+  // Determine current workspace based on URL and available workspaces
+  useEffect(() => {
+    if (workspaces.length > 0) {
       const urlWorkspaceId = getWorkspaceIdFromUrl();
       let targetWorkspace: Workspace | null = null;
       
       if (urlWorkspaceId) {
         // Use workspace from URL if it exists and user has access (support both ID and slug)
-        targetWorkspace = data.find((w: Workspace) => w.id === urlWorkspaceId || w.slug === urlWorkspaceId) || null;
+        targetWorkspace = workspaces.find((w: Workspace) => w.id === urlWorkspaceId || w.slug === urlWorkspaceId) || null;
       }
       
-      if (!targetWorkspace && data.length > 0) {
+      if (!targetWorkspace && workspaces.length > 0) {
         // Fallback to localStorage if URL doesn't specify workspace or workspace not found
         const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
         targetWorkspace = savedWorkspaceId 
-          ? data.find((w: Workspace) => w.id === savedWorkspaceId) || data[0]
-          : data[0];
+          ? workspaces.find((w: Workspace) => w.id === savedWorkspaceId) || workspaces[0]
+          : workspaces[0];
       }
       
-      if (targetWorkspace) {
+      if (targetWorkspace && (!currentWorkspace || currentWorkspace.id !== targetWorkspace.id)) {
         setCurrentWorkspace(targetWorkspace);
-        // Update localStorage for fallback purposes, but don't rely on it for current tab
+        // Update localStorage for fallback purposes
         localStorage.setItem('currentWorkspaceId', targetWorkspace.id);
       }
-    } catch (err) {
-      console.error('Error fetching workspaces:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setIsLoading(false);
     }
-  }, [session, status, getWorkspaceIdFromUrl]);
+  }, [workspaces, getWorkspaceIdFromUrl, currentWorkspace]);
 
-  // Update current workspace when URL changes
+  // Clear workspace data when user logs out
   useEffect(() => {
-    if (workspaces.length > 0) {
-      const urlWorkspaceId = getWorkspaceIdFromUrl();
-      
-      if (urlWorkspaceId) {
-        const urlWorkspace = workspaces.find(w => w.id === urlWorkspaceId || w.slug === urlWorkspaceId);
-        if (urlWorkspace && (!currentWorkspace || (currentWorkspace.id !== urlWorkspace.id && currentWorkspace.slug !== urlWorkspaceId))) {
-          setCurrentWorkspace(urlWorkspace);
-          // Update localStorage for fallback purposes
-          localStorage.setItem('currentWorkspaceId', urlWorkspace.id);
-        }
-      } else if (currentWorkspace) {
-        // If not on a workspace route, keep current workspace but don't force it
-        // This allows non-workspace pages to still have access to workspace context
-      }
-    }
-  }, [pathname, workspaces, currentWorkspace, getWorkspaceIdFromUrl]);
-
-  useEffect(() => {
-    if (session?.user && !hasInitiallyFetched) {
-      // Only fetch workspaces if we haven't fetched them yet
-      fetchWorkspaces();
-    } else if (status === 'unauthenticated') {
-      setWorkspaces([]);
+    if (status === 'unauthenticated') {
       setCurrentWorkspace(null);
-      setIsLoading(false);
-      setHasInitiallyFetched(false);
     }
-  }, [session, status]);
+  }, [status]);
 
   // Sync localStorage workspace ID to cookie on initial load
   useEffect(() => {
@@ -218,10 +171,6 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     }
   };
 
-  const refreshWorkspaces = async () => {
-    await fetchWorkspaces();
-  };
-
   return (
     <WorkspaceContext.Provider
       value={{
@@ -230,7 +179,6 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         isLoading,
         error,
         switchWorkspace,
-        refreshWorkspaces
       }}
     >
       {children}

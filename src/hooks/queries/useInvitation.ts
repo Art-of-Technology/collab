@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPendingInvitations, getInvitationByToken, acceptInvitation } from '@/actions/invitation';
+import { workspaceKeys } from './useWorkspace';
 
 /**
  * Hook for fetching pending workspace invitations
@@ -43,9 +44,14 @@ export const useAcceptInvitation = (options?: UseAcceptInvitationOptions) => {
   return useMutation({
     mutationFn: acceptInvitation,
     onSuccess: (data) => {
-      // Invalidate workspaces list and invitation
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      // Invalidate workspace queries using proper query keys
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
       queryClient.invalidateQueries({ queryKey: invitationKeys.all });
+      
+      // Also invalidate specific workspace if we have the ID
+      if (data.workspaceId) {
+        queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(data.workspaceId) });
+      }
       
       if (options?.onSuccess) {
         options.onSuccess(data);

@@ -4,19 +4,19 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, User, Users, Mail, Bell, UserPlus, Trash2, Loader2, Shield, UserCheck, UserX } from "lucide-react";
+import { ArrowLeft, Building2, Users, Mail, Bell, UserPlus, Trash2, Loader2, Shield, UserCheck, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import InviteMemberForm from "@/app/(main)/workspaces/[workspaceId]/InviteMemberForm";
 import WorkspaceDetailsEditor from "@/app/(main)/workspaces/[workspaceId]/WorkspaceDetailsEditor";
-import CancelInvitationButton from "@/components/workspace/CancelInvitationButton";
+import { InvitationsTab } from "@/components/workspace/components/invitation";
 import { WorkspaceFeatureSettings } from "./WorkspaceFeatureSettings";
 import { useDetailedWorkspaceById } from "@/hooks/queries/useWorkspace";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import { useCanInviteMembers } from "@/hooks/use-permissions";
 import PageHeader from "@/components/layout/PageHeader";
 import MemberStatusToggle from "./MemberStatusToggle";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,6 +37,9 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
 
   // Check if user can manage workspace permissions and members
   const { isWorkspaceAdmin, isWorkspaceOwner } = useWorkspacePermissions();
+  
+  // Check if user can invite members
+  const { hasPermission: canInviteMembers } = useCanInviteMembers(workspaceId);
 
   // Use the fetched data or fallback to initial data
   const workspaceData = workspace || initialWorkspace;
@@ -200,9 +203,11 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
           <TabsTrigger value="members" className="text-sm">
             Members
           </TabsTrigger>
-          <TabsTrigger value="invitations" className="text-sm">
-            Invitations
-          </TabsTrigger>
+          {canInviteMembers && (
+            <TabsTrigger value="invitations" className="text-sm">
+              Invitations
+            </TabsTrigger>
+          )}
           {canManage && (
             <TabsTrigger value="settings" className="text-sm">
               Settings
@@ -338,56 +343,10 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
           </Card>
         </TabsContent>
 
-        <TabsContent className="max-w-6xl px-6 py-4" value="invitations">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="border border-border/40 bg-card/50">
-              <CardHeader className="pb-3 pt-4 px-4">
-                <CardTitle className="text-base font-medium">Pending Invitations</CardTitle>
-                <CardDescription className="text-xs">View and manage pending invitations to your workspace.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                {(localWorkspace?.invitations?.length || workspace?.invitations?.length || workspaceData.invitations?.length) > 0 ? (
-                  <div className="space-y-3">
-                    {(localWorkspace?.invitations || workspace?.invitations || workspaceData.invitations).map((invitation: any) => (
-                      <div key={invitation.id} className="p-3 border border-border/20 rounded">
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          <span className="font-medium text-sm">{invitation.email}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Invited by {invitation.invitedBy?.name || invitation.invitedBy?.email} on{" "}
-                          {new Date(invitation.createdAt).toLocaleDateString()}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Expires on {new Date(invitation.expiresAt).toLocaleDateString()}
-                        </div>
-                        {canManage && (
-                          <div className="mt-2">
-                            <CancelInvitationButton invitationId={invitation.id} workspaceId={workspaceId} />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-muted-foreground text-sm">No pending invitations</div>
-                )}
-              </CardContent>
-            </Card>
-
-            {canManage && (
-              <Card className="border border-border/40 bg-card/50">
-                <CardHeader className="pb-3 pt-4 px-4">
-                  <CardTitle className="text-base font-medium">Invite New Members</CardTitle>
-                  <CardDescription className="text-xs">Send invitations to new members to join your workspace.</CardDescription>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <InviteMemberForm workspaceId={workspaceId} />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
+        <InvitationsTab
+          workspaceId={workspaceId}
+          canInviteMembers={canInviteMembers}
+        />
 
         {canManage && (
           <TabsContent className="max-w-6xl px-6 py-4" value="settings">
