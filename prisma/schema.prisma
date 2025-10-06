@@ -1768,8 +1768,16 @@ enum ViewVisibility {
 
 enum AppStatus { 
   DRAFT 
+  IN_REVIEW 
   PUBLISHED 
   SUSPENDED 
+  REJECTED 
+}
+
+enum AppVisibility {
+  PUBLIC
+  LIMITED
+  PRIVATE
 }
 
 enum InstallationStatus { 
@@ -1836,9 +1844,10 @@ model App {
   iconUrl         String?
   manifestUrl     String
   publisherId     String  // user/org
-  status          AppStatus @default(DRAFT)
+  status          AppStatus @default(IN_REVIEW)
   latestVersionId String?
   versions        AppVersion[]
+  visibility      AppVisibility @default(PUBLIC)
   oauthClient     AppOAuthClient?
   scopes          AppScope[]
   permissions     Json?            // Store {org: boolean, user: boolean}
@@ -1866,14 +1875,22 @@ model AppVersion {
 }
 
 model AppOAuthClient {
-  id             String   @id @default(cuid())
-  appId          String   @unique
-  clientId       String   @unique
-  clientSecret   String   // encrypted at rest
-  apiKey         String?   @unique
-  redirectUris   String[]
-  app            App      @relation(fields: [appId], references: [id], onDelete: Cascade)
-  authorizationCodes AppOAuthAuthorizationCode[]
+  id                        String   @id @default(cuid())
+  appId                     String   @unique
+  clientId                  String   @unique
+  clientSecret              Bytes?   // encrypted at rest, only for client_secret_basic
+  clientType                String?  // public or confidential
+  tokenEndpointAuthMethod   String?  // none, client_secret_basic, private_key_jwt
+  jwksUri                   String?  // for private_key_jwt clients
+  jwksValidated             Boolean  @default(false) // track JWKS validation status
+  secretRevealed            Boolean  @default(false) // track if secret has been shown
+  apiKey                    String?  @unique
+  redirectUris              String[]
+  postLogoutRedirectUris    String[] // post logout redirect URIs
+  responseTypes             String[] @default(["code"]) // supported response types
+  grantTypes                String[] @default(["authorization_code", "refresh_token"]) // supported grant types
+  app                       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  authorizationCodes        AppOAuthAuthorizationCode[]
 
   @@index([clientId])
 }
@@ -2001,7 +2018,6 @@ model AppOAuthAuthorizationCode {
   @@index([workspaceId])
   @@index([expiresAt])
   @@index([used])
-  @@map("app_oauth_authorization_codes")
 }
 
 model AppAuditLog {
@@ -2018,5 +2034,4 @@ model AppAuditLog {
   @@index([actorId])
   @@index([action])
   @@index([createdAt])
-  @@map("app_audit_logs")
 }

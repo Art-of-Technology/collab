@@ -1,31 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
-import bcrypt from 'bcrypt';
-import { encryptToken } from '@/lib/apps/crypto';
+import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
+import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
-
 // OAuth 2.0 Token Endpoint
 // Handles authorization_code and refresh_token grant types
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.formData();
-    const grantType = body.get('grant_type') as string;
-    const clientId = body.get('client_id') as string;
-    const clientSecret = body.get('client_secret') as string;
-
-    // Validate required parameters
-    if (!grantType || !clientId || !clientSecret) {
-      return NextResponse.json(
-        { 
-          error: 'invalid_request',
-          error_description: 'Missing required parameters: grant_type, client_id, client_secret'
-        },
-        { status: 400 }
-      );
+    // Require form content-type
+    if (!request.headers.get("content-type")?.includes("application/x-www-form-urlencoded")) {
+      return oauthError("invalid_request", "Use application/x-www-form-urlencoded");
     }
+    
+    const body = await request.formData();
+    const grant_type = body.get('grant_type') as string;
+    const formClientId = body.get('client_id') as string;
+    const client_assertion_type = body.get('client_assertion_type') as string;
+    const client_assertion = body.get('client_assertion') as string;
+
+    // Identify client auth method from header or body
+    const { headerClientId, basicSecret } = parseBasicAuth(request.headers.get("Authorization"));
+    const clientId = headerClientId || formClientId;
+    const clientSecret = basicSecret || null;
+
+    if (!clientId) return oauthError("invalid_request", "Missing client_id", 400);
 
     // Verify OAuth client
     const oauthClient = await prisma.appOAuthClient.findUnique({
@@ -43,40 +44,83 @@ export async function POST(request: NextRequest) {
     });
 
     if (!oauthClient) {
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'Invalid client credentials:  No oauth client found'
-        },
-        { status: 401 }
-      );
+      return oauthError("invalid_client", "Invalid client credentials: No oauth client found", 401);
     }
 
-    // Verify client secret using bcrypt to compare against hashed secret
-    const isValidSecret = await bcrypt.compare(clientSecret, oauthClient.clientSecret);
-    if (!isValidSecret) {
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'Invalid client credentials:  Client secret mismatch'
-        },
-        { status: 401 }
-      );
+    // Handle client authentication based on client type and auth method
+    const authMethod = oauthClient.tokenEndpointAuthMethod || 
+      (oauthClient.clientType === 'public' ? 'none' : 'client_secret_basic');
+
+    if (oauthClient.clientType === 'public') {
+      // Public clients must use 'none' authentication
+      if (authMethod !== 'none') {
+        return oauthError("invalid_client", "Public clients must use 'none' authentication method", 401);
+      }
+      
+      // Public clients should not provide client_secret or client_assertion
+      if (clientSecret || client_assertion) {
+        return oauthError("invalid_request", "Public clients must not provide client credentials", 400);
+      }
+      // PKCE verification is handled in the authorization code grant handler
+      
+    } else if (oauthClient.clientType === 'confidential') {
+      if (authMethod === 'client_secret_basic') {
+        // Confidential clients with client_secret_basic require client_secret
+        if (!clientSecret) {
+          return oauthError("invalid_request", "Client secret required for client_secret_basic authentication", 400);
+        }
+
+        // Verify client secret by decrypting stored secret
+        if (!oauthClient.clientSecret) {
+          return oauthError("invalid_client", "No client secret configured", 401);
+        }
+
+        try {
+          const storedSecret = await decryptToken(Buffer.from(oauthClient.clientSecret));
+          if (storedSecret !== clientSecret) {
+            return oauthError("invalid_client", "Invalid client credentials", 401);
+          }
+        } catch (error) {
+          return oauthError("invalid_client", "Failed to verify client credentials", 401);
+        }
+        
+      } else if (authMethod === 'private_key_jwt') {
+        // Confidential clients with private_key_jwt require client_assertion
+        if (!client_assertion || client_assertion_type !== 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer') {
+          return oauthError("invalid_client", "Missing client_assertion or client_assertion_type", 401);
+        }
+
+        if (!oauthClient.jwksUri) {
+          return oauthError("invalid_client", "No JWKS URI configured for JWT authentication", 401);
+        }
+
+        // Validate JWT client assertion
+        const tokenEndpoint = getTokenEndpointUrl(request);
+        const assertionResult = await validateClientAssertion(
+          client_assertion,
+          clientId,
+          oauthClient.jwksUri,
+          tokenEndpoint
+        );
+
+        if (!assertionResult.valid) {
+          return oauthError("invalid_client", `JWT assertion validation failed: ${assertionResult.error}`, 401);
+        }
+
+        // Client secret should not be provided with JWT authentication
+        if (clientSecret) {
+          return oauthError("invalid_request", "Client secret must not be provided with JWT authentication", 400);
+        }
+      }
     }
 
     // Check if app is active
     if (oauthClient.app.status !== 'PUBLISHED') {
-      return NextResponse.json(
-        {
-          error: 'invalid_client',
-          error_description: 'App is not active'
-        },
-        { status: 401 }
-      );
+      return oauthError("invalid_client", "App is not active", 401);
     }
 
     // Handle different grant types
-    switch (grantType) {
+    switch (grant_type) {
       case 'authorization_code':
         return await handleAuthorizationCodeGrant(body, oauthClient);
       
@@ -84,24 +128,12 @@ export async function POST(request: NextRequest) {
         return await handleRefreshTokenGrant(body, oauthClient);
       
       default:
-        return NextResponse.json(
-          {
-            error: 'unsupported_grant_type',
-            error_description: `Grant type '${grantType}' is not supported`
-          },
-          { status: 400 }
-        );
+        return oauthError("unsupported_grant_type", `Grant type '${grant_type}' is not supported`, 400);
     }
 
   } catch (error) {
     console.error('OAuth token endpoint error:', error);
-    return NextResponse.json(
-      {
-        error: 'server_error',
-        error_description: 'Internal server error'
-      },
-      { status: 500 }
-    );
+    return oauthError("server_error", "Internal server error", 500);
   } finally {
     await prisma.$disconnect();
   }
@@ -117,37 +149,19 @@ async function handleAuthorizationCodeGrant(
   const redirectUri = body.get('redirect_uri') as string;
 
   if (!code || !redirectUri) {
-    return NextResponse.json(
-      {
-        error: 'invalid_request',
-        error_description: 'Missing required parameters: code, redirect_uri'
-      },
-      { status: 400 }
-    );
+    return oauthError("invalid_request", "Missing required parameters: code, redirect_uri", 400);
   }
 
   // Validate redirect URI
   if (!oauthClient.redirectUris.includes(redirectUri)) {
-    return NextResponse.json(
-      {
-        error: 'invalid_grant',
-        error_description: 'Invalid redirect_uri'
-      },
-      { status: 400 }
-    );
+    return oauthError("invalid_grant", "Invalid redirect_uri", 400);
   }
 
   // Validate authorization code and PKCE challenge
   const authCodeData = await validateAuthorizationCode(code, redirectUri, code_verifier, oauthClient);
   
   if (!authCodeData.valid) {
-    return NextResponse.json(
-      {
-        error: 'invalid_grant',
-        error_description: authCodeData.error || 'Invalid authorization code'
-      },
-      { status: 400 }
-    );
+    return oauthError("invalid_grant", authCodeData.error || "Invalid authorization code", 400);
   }
 
   // Generate tokens
@@ -188,13 +202,7 @@ async function handleAuthorizationCodeGrant(
     } else {
       // This should not happen if the OAuth flow is working correctly
       console.error(`Installation not found for OAuth completion: app=${oauthClient.app.slug}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
-      return NextResponse.json(
-        {
-          error: 'server_error',
-          error_description: 'Installation record not found'
-        },
-        { status: 500 }
-      );
+      return oauthError("server_error", "Installation record not found", 500);
     }
 
     // Return OAuth 2.0 compliant token response
@@ -208,13 +216,7 @@ async function handleAuthorizationCodeGrant(
 
   } catch (error) {
     console.error('Token generation error:', error);
-    return NextResponse.json(
-      {
-        error: 'server_error',
-        error_description: 'Failed to generate tokens'
-      },
-      { status: 500 }
-    );
+    return oauthError("server_error", "Failed to generate tokens", 500);
   }
 }
 
@@ -226,26 +228,14 @@ async function handleRefreshTokenGrant(
   const refreshToken = body.get('refresh_token') as string;
 
   if (!refreshToken) {
-    return NextResponse.json(
-      {
-        error: 'invalid_request',
-        error_description: 'Missing required parameter: refresh_token'
-      },
-      { status: 400 }
-    );
+    return oauthError("invalid_request", "Missing required parameter: refresh_token", 400);
   }
 
   // Validate refresh token
   const tokenData = await validateRefreshToken(refreshToken, oauthClient);
   
   if (!tokenData.valid) {
-    return NextResponse.json(
-      {
-        error: 'invalid_grant',
-        error_description: tokenData.error || 'Invalid refresh token'
-      },
-      { status: 400 }
-    );
+    return oauthError("invalid_grant", tokenData.error || "Invalid refresh token", 400);
   }
 
   // Generate new access token
@@ -277,13 +267,7 @@ async function handleRefreshTokenGrant(
 
   } catch (error) {
     console.error('Token refresh error:', error);
-    return NextResponse.json(
-      {
-        error: 'server_error',
-        error_description: 'Failed to refresh token'
-      },
-      { status: 500 }
-    );
+    return oauthError('server_error', 'Failed to refresh token', 500);
   }
 }
 
@@ -463,16 +447,12 @@ function generateRefreshToken(): string {
   return `collab_rt_${timestamp}_${random}`;
 }
 
-// Utility function to securely compare client secrets (constant-time comparison)
-function secureCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  
-  return result === 0;
+function parseBasicAuth(header: string | null) {
+  if (!header?.startsWith("Basic ")) return { headerClientId: null, basicSecret: null };
+  const [id, secret] = Buffer.from(header.slice(6), "base64").toString("utf8").split(":");
+  return { headerClientId: id ?? null, basicSecret: secret ?? null };
+}
+
+function oauthError(error: string, description?: string, status = 400) {
+  return NextResponse.json({ error, error_description: description }, { status });
 }

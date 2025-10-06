@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
 import { decryptToken } from '@/lib/apps/crypto';
+import { authenticateOAuthClient } from '@/lib/oauth-client-auth';
 
 const prisma = new PrismaClient();
 
@@ -9,12 +9,18 @@ const prisma = new PrismaClient();
 // Allows authorized clients to determine the state of an access token
 export async function POST(request: NextRequest) {
   try {
+    // Require form content-type
+    if (!request.headers.get("content-type")?.includes("application/x-www-form-urlencoded")) {
+      return NextResponse.json(
+        { error: "invalid_request", error_description: "Use application/x-www-form-urlencoded" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.formData();
     
     const token = body.get('token') as string;
     const tokenTypeHint = body.get('token_type_hint') as string; // 'access_token' or 'refresh_token'
-    const clientId = body.get('client_id') as string;
-    const clientSecret = body.get('client_secret') as string;
 
     // Validate required parameters
     if (!token) {
@@ -27,68 +33,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If client credentials are provided, verify them
-    if (clientId || clientSecret) {
-      if (!clientId || !clientSecret) {
-        return NextResponse.json(
-          {
-            error: 'invalid_client',
-            error_description: 'Both client_id and client_secret are required'
-          },
-          { status: 401 }
-        );
-      }
-
-      // Verify OAuth client
-      const oauthClient = await prisma.appOAuthClient.findUnique({
-        where: { clientId },
-        include: {
-          app: {
-            select: {
-              id: true,
-              slug: true,
-              status: true
-            }
-          }
-        }
+    // Authenticate client (optional for introspection, but if provided must be valid)
+    const clientId = body.get('client_id') as string;
+    let oauthClient = null;
+    
+    if (clientId) {
+      const authResult = await authenticateOAuthClient(request, body, {
+        requireAuth: false, // Authentication is optional for introspection
+        allowPublic: true
       });
 
-      if (!oauthClient) {
+      if (!authResult.valid) {
         return NextResponse.json(
           {
-            error: 'invalid_client',
-            error_description: 'Invalid client credentials'
+            error: authResult.error,
+            error_description: authResult.errorDescription
           },
-          { status: 401 }
+          { status: authResult.statusCode }
         );
       }
 
-      // Verify client secret using bcrypt to compare against hashed secret
-      const isValidSecret = await bcrypt.compare(clientSecret, oauthClient.clientSecret);
-      if (!isValidSecret) {
-        return NextResponse.json(
-          {
-            error: 'invalid_client',
-            error_description: 'Invalid client credentials'
-          },
-          { status: 401 }
-        );
-      }
-
-      // Check if app is active
-      if (oauthClient.app.status !== 'PUBLISHED') {
-        return NextResponse.json(
-          {
-            error: 'invalid_client',
-            error_description: 'App is not active'
-          },
-          { status: 401 }
-        );
-      }
+      oauthClient = authResult.oauthClient;
     }
 
     // Look up the token in app installations
-    let tokenInfo = await introspectToken(token, tokenTypeHint);
+    let tokenInfo = await introspectToken(token, tokenTypeHint, oauthClient);
 
     // Return introspection response
     return NextResponse.json(tokenInfo);
@@ -110,7 +79,8 @@ export async function POST(request: NextRequest) {
 // Introspect token and return its details
 async function introspectToken(
   token: string, 
-  tokenTypeHint?: string
+  tokenTypeHint?: string,
+  oauthClient?: any
 ): Promise<{
   active: boolean;
   scope?: string;
@@ -121,11 +91,13 @@ async function introspectToken(
   iat?: number;
   sub?: string;
   aud?: string;
+  workspace_id?: string;
+  workspace_slug?: string;
 }> {
   try {
     // Search for access tokens first (or if hint suggests access_token)
     if (!tokenTypeHint || tokenTypeHint === 'access_token') {
-      const accessTokenResult = await findTokenInInstallations(token, 'access');
+      const accessTokenResult = await findTokenInInstallations(token, 'access', oauthClient?.app?.id);
       if (accessTokenResult.found) {
         return accessTokenResult.info;
       }
@@ -133,7 +105,7 @@ async function introspectToken(
 
     // Search for refresh tokens if access token not found (or if hint suggests refresh_token)
     if (!tokenTypeHint || tokenTypeHint === 'refresh_token') {
-      const refreshTokenResult = await findTokenInInstallations(token, 'refresh');
+      const refreshTokenResult = await findTokenInInstallations(token, 'refresh', oauthClient?.app?.id);
       if (refreshTokenResult.found) {
         return refreshTokenResult.info;
       }
@@ -151,7 +123,8 @@ async function introspectToken(
 // Helper function to find token in app installations
 async function findTokenInInstallations(
   token: string, 
-  tokenType: 'access' | 'refresh'
+  tokenType: 'access' | 'refresh',
+  appId?: string
 ): Promise<{
   found: boolean;
   info: any;
@@ -159,12 +132,18 @@ async function findTokenInInstallations(
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
     
-    // Find all active installations that have tokens
+    // Find installations that have tokens (optionally filtered by app)
+    const whereClause: any = {
+      [tokenField]: { not: null },
+      status: 'ACTIVE'
+    };
+    
+    if (appId) {
+      whereClause.appId = appId;
+    }
+
     const installations = await prisma.appInstallation.findMany({
-      where: {
-        [tokenField]: { not: null },
-        status: 'ACTIVE'
-      },
+      where: whereClause,
       include: {
         app: {
           include: {

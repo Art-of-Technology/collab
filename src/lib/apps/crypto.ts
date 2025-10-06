@@ -10,7 +10,7 @@ export function generateAuthorizationCode() {
   return randomBytes(32).toString('hex');
 }
 
-export function generateClientCredentials() {
+export async function generateClientCredentials() {
   return {
     clientId: uuidv4(),
     clientSecret: randomBytes(32).toString('hex'),
