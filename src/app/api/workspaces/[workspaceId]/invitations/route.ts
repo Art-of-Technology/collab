@@ -30,7 +30,7 @@ export async function GET(
       workspaceId,
       Permission.INVITE_MEMBERS
     );
-    console.log(permissionResult);
+    // Debug log removed
     if (!permissionResult.hasPermission) {
       return NextResponse.json(
         { error: 'You do not have permission to view invitations for this workspace' },
