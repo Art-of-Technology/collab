@@ -30,14 +30,12 @@ export async function GET(
       workspaceId,
       Permission.INVITE_MEMBERS
     );
-    console.log(permissionResult);
     if (!permissionResult.hasPermission) {
       return NextResponse.json(
         { error: 'You do not have permission to view invitations for this workspace' },
         { status: 403 }
       );
     }
-
     // Get pending invitations for the workspace
     const invitations = await prisma.workspaceInvitation.findMany({
       where: { 
@@ -103,14 +101,12 @@ export async function POST(
       workspaceId,
       Permission.INVITE_MEMBERS
     );
-    console.log(permissionResult);
     if (!permissionResult.hasPermission) {
       return NextResponse.json(
         { error: 'You do not have permission to invite members to this workspace' },
         { status: 403 }
       );
     }
-
     // Get workspace for invitation email
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
