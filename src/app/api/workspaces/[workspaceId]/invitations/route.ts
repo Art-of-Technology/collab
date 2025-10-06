@@ -103,7 +103,6 @@ export async function POST(
       workspaceId,
       Permission.INVITE_MEMBERS
     );
-    console.log(permissionResult);
     if (!permissionResult.hasPermission) {
       return NextResponse.json(
         { error: 'You do not have permission to invite members to this workspace' },
