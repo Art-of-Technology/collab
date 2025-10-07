@@ -29,7 +29,6 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
       <WorkspaceDetailClient 
         workspaceId={workspaceId}
         initialWorkspace={initialWorkspace}
-        userId={session.user.id}
       />
     );
   } catch (error) {
@@ -49,7 +48,6 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
       <WorkspaceDetailClient 
         workspaceId={workspaceId}
         initialWorkspace={null}
-        userId={session.user.id}
       />
     );
   }

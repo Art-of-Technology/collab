@@ -1,5 +1,4 @@
 import React from "react";
-import { redirect } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -12,23 +11,24 @@ export default async function WorkspaceInvitationLayout({
   // Get the current user session
   const session = await getAuthSession();
   
-  if (!session?.user) {
-    redirect("/login");
+  // Authentication is handled by individual pages to preserve URL parameters
+  
+  // Check if user has any workspaces (only if authenticated)
+  let hasWorkspaces = false;
+  if (session?.user) {
+    const userWorkspaces = await prisma.workspace.findMany({
+      where: {
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id } } }
+        ]
+      },
+      select: { id: true },
+      take: 1
+    });
+    
+    hasWorkspaces = userWorkspaces.length > 0;
   }
-  
-  // Check if user has any workspaces
-  const userWorkspaces = await prisma.workspace.findMany({
-    where: {
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
-    },
-    select: { id: true },
-    take: 1
-  });
-  
-  const hasWorkspaces = userWorkspaces.length > 0;
   
   return (
     <>
@@ -36,9 +36,9 @@ export default async function WorkspaceInvitationLayout({
       <Navbar 
         hasWorkspaces={hasWorkspaces}
         shouldShowSearch={false}
-        userEmail={session.user.email || ''}
-        userName={session.user.name || ''}
-        userImage={session.user.image || ''}
+        userEmail={session?.user?.email || ''}
+        userName={session?.user?.name || ''}
+        userImage={session?.user?.image || ''}
       />
       
       {/* Main content area - full width */}

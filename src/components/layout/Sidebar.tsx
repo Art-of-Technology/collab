@@ -17,7 +17,6 @@ import {
   FolderOpen,
   Eye,
   Plus,
-  MessageSquare,
   FileText,
   Clock,
   Bookmark,
@@ -55,7 +54,6 @@ import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NewIssueModal from "@/components/issue/NewIssueModal";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useUiContext } from "@/context/UiContext";
 import { useMention } from "@/context/MentionContext";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -66,18 +64,15 @@ import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 interface SidebarProps {
   pathname?: string;
   isCollapsed?: boolean;
-  toggleSidebar?: () => void;
 }
 
 export default function Sidebar({
   pathname = "",
   isCollapsed = false,
-  toggleSidebar,
 }: SidebarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
   const { canManageLeave } = useWorkspacePermissions();
