@@ -364,6 +364,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                 <DialogTitle>Create New Note</DialogTitle>
               </DialogHeader>
               <NoteCreateForm
+                workspaceSlug={currentWorkspace?.slug}
                 onSuccess={() => {
                   setIsCreateOpen(false);
                   fetchNotes();

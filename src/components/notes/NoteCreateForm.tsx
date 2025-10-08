@@ -35,6 +35,7 @@ type NoteCreateFormValues = z.infer<typeof noteCreateSchema>;
 interface NoteCreateFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  workspaceSlug?: string;
 }
 
 interface NoteTag {
@@ -43,16 +44,12 @@ interface NoteTag {
   color: string;
 }
 
-export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
+export function NoteCreateForm({ onSuccess, onCancel, workspaceSlug }: NoteCreateFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const { toast } = useToast();
   
-  // Get workspace ID from URL
-  const workspaceSlug = typeof window !== 'undefined' 
-    ? window.location.pathname.split('/')[1] 
-    : null;
-  
+  // Get workspace data from slug prop
   const { data: currentWorkspace } = useWorkspace(workspaceSlug || '');
 
   const form = useForm<NoteCreateFormValues>({
@@ -62,7 +59,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
       content: "",
       isPublic: false,
       isFavorite: false,
-      workspaceId: currentWorkspace?.id || null,
+      workspaceId: currentWorkspace?.id || undefined,
       tagIds: [],
     },
   });
@@ -84,6 +81,16 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   };
 
   const onSubmit = async (values: NoteCreateFormValues) => {
+    // Prevent submission if workspace is not loaded
+    if (!currentWorkspace?.id) {
+      toast({
+        title: "Error",
+        description: "Workspace not loaded. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -219,12 +226,14 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isLoading}>
+          <Button type="submit" disabled={isLoading || !currentWorkspace?.id}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating...
               </>
+            ) : !currentWorkspace?.id ? (
+              "Loading workspace..."
             ) : (
               "Create Note"
             )}

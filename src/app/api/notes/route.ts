@@ -101,6 +101,11 @@ export async function GET(request: NextRequest) {
             name: true,
             slug: true
           }
+        },
+        comments: {
+          select: {
+            id: true
+          }
         }
       } as NoteIncludeExtension,
       orderBy: {
