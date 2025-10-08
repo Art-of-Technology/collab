@@ -363,15 +363,21 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               <DialogHeader>
                 <DialogTitle>Create New Note</DialogTitle>
               </DialogHeader>
-              <NoteCreateForm
-                workspaceSlug={currentWorkspace?.slug}
-                onSuccess={() => {
-                  setIsCreateOpen(false);
-                  fetchNotes();
-                  fetchTags();
-                }}
-                onCancel={() => setIsCreateOpen(false)}
-              />
+              {currentWorkspace?.id ? (
+                <NoteCreateForm
+                  workspaceId={currentWorkspace.id}
+                  onSuccess={() => {
+                    setIsCreateOpen(false);
+                    fetchNotes();
+                    fetchTags();
+                  }}
+                  onCancel={() => setIsCreateOpen(false)}
+                />
+              ) : (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
         }
