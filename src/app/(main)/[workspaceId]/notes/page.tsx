@@ -18,6 +18,7 @@ import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface Note {
   id: string;
@@ -83,7 +84,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -92,20 +92,14 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  // Get workspace from context (consistent with other pages)
+  const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
+
   // Filter tags based on search term
   const filteredTags = useMemo(() => {
     return sortTagsBySearchTerm(tags, tagSearchTerm);
   }, [tags, tagSearchTerm]);
 
-  // Resolve params first
-  useEffect(() => {
-    const resolveParams = async () => {
-      const resolvedParams = await params;
-
-      setWorkspaceId(resolvedParams.workspaceId);
-    };
-    resolveParams();
-  }, [params]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -114,11 +108,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   }, [status]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (session?.user && currentWorkspace?.id) {
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, workspaceId, searchQuery, selectedTag, showFavorites, activeTab]);
+  }, [session?.user, currentWorkspace?.id, searchQuery, selectedTag, showFavorites, activeTab]);
 
   // Focus search input when dialog opens
   useEffect(() => {
@@ -224,31 +218,31 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           // Private: User's private notes only
           params.append("own", "true");
           params.append("public", "false");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
         case "public":
           // Public: User's public notes only
           params.append("own", "true");
           params.append("public", "true");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
         case "all":
           // All: User's all notes (both private and public)
           params.append("own", "true");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
         case "team-notes":
           // Team Notes: Public notes from others in workspace
           params.append("public", "true");
           params.append("own", "false");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
       }
@@ -280,7 +274,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const fetchTags = async () => {
     try {
       // Always send workspace parameter for My Notes filtering
-      const url = workspaceId ? `/api/notes/tags?workspace=${workspaceId}` : "/api/notes/tags";
+      const url = currentWorkspace?.id ? `/api/notes/tags?workspace=${currentWorkspace.id}` : "/api/notes/tags";
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -342,7 +336,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  if (status === "loading" || isLoading) {
+  if (status === "loading" || isLoading || workspaceLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -537,7 +531,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                 {notes.map((note) => (
-                  <Link key={note.id} href={`/${workspaceId}/notes/${note.id}`} className="block">
+                  <Link key={note.id} href={`/${currentWorkspace?.slug}/notes/${note.id}`} className="block">
                     <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
                       <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
                         {/* Author mention on the left */}

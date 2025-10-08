@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { NotionEditor } from "@/components/ui/notion-editor";
 import { TagSelect } from "@/components/notes/TagSelect";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspace } from "@/hooks/queries/useWorkspace";
 import { Loader2 } from "lucide-react";
 
 const noteCreateSchema = z.object({
@@ -46,6 +47,13 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const { toast } = useToast();
+  
+  // Get workspace ID from URL
+  const workspaceSlug = typeof window !== 'undefined' 
+    ? window.location.pathname.split('/')[1] 
+    : null;
+  
+  const { data: currentWorkspace } = useWorkspace(workspaceSlug || '');
 
   const form = useForm<NoteCreateFormValues>({
     resolver: zodResolver(noteCreateSchema),
@@ -54,7 +62,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
       content: "",
       isPublic: false,
       isFavorite: false,
-      workspaceId: null,
+      workspaceId: currentWorkspace?.id || null,
       tagIds: [],
     },
   });

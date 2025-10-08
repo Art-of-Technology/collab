@@ -49,12 +49,7 @@ export async function GET(request: NextRequest) {
       // Apply workspace filter if specified
       if (workspaceId) {
         if (!where.AND) where.AND = [];
-        where.AND.push({
-          OR: [
-            { workspaceId: workspaceId },
-            { workspaceId: null } // Include legacy notes
-          ]
-        });
+        where.AND.push({ workspaceId: workspaceId });
       }
     } else if (own === "false") {
       // Team Public - only public notes from others in the workspace
@@ -62,12 +57,7 @@ export async function GET(request: NextRequest) {
         where.AND = [
           { isPublic: true },
           { authorId: { not: session.user.id } }, // Exclude user's own notes
-          {
-            OR: [
-              { workspaceId: workspaceId },
-              { workspaceId: null }
-            ]
-          }
+          { workspaceId: workspaceId }
         ];
       } else {
         // If no workspace, show all public notes from others
@@ -76,12 +66,22 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // All Notes - everything user has access to (own notes + others' public)
-      where.OR = [
-        { authorId: session.user.id }, // User's own notes (both public and private)
-        { isPublic: true } // Others' public notes
-      ];
-      
-      // Don't apply workspace filter for "all" mode to show everything
+      if (workspaceId) {
+        where.AND = [
+          {
+            OR: [
+              { authorId: session.user.id }, // User's own notes (both public and private)
+              { isPublic: true } // Others' public notes
+            ]
+          },
+          { workspaceId: workspaceId }
+        ];
+      } else {
+        where.OR = [
+          { authorId: session.user.id }, // User's own notes (both public and private)
+          { isPublic: true } // Others' public notes
+        ];
+      }
     }
 
     const notes = await prisma.note.findMany({
@@ -100,11 +100,6 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             slug: true
-          }
-        },
-        comments: {
-          select: {
-            id: true
           }
         }
       } as NoteIncludeExtension,
