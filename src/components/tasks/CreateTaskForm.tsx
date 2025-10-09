@@ -269,6 +269,11 @@ export default function CreateTaskForm({
 
   // Form submission
   const onSubmit = async (values: TaskFormValues) => {
+    // Prevent duplicate submissions 
+    if (createTaskMutation.isPending || createTaskMutation.isSuccess) {
+      return;
+    }
+
     // Check for required values before proceeding
     if (!values.title) {
       console.error("Title is required");
@@ -427,6 +432,15 @@ export default function CreateTaskForm({
             <form
               id="create-task-form"
               onSubmit={form.handleSubmit(onSubmit)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  // Prevent double submission by checking both pending and success states
+                  if (!createTaskMutation.isPending && !createTaskMutation.isSuccess) {
+                    form.handleSubmit(onSubmit)();
+                  }
+                }
+              }}
               className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 pb-4"
             >
             <div className="md:col-span-2 space-y-4">
