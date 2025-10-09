@@ -17,7 +17,7 @@ async function improveEnglishText(userInput: string) {
     const messages = [
         {
             role: 'system',
-            content: `You are a helpful assistant that improves the clarity, grammar, and natural flow of English text written by a diverse development team. Do not change the original meaning. If the text is longer than 160 characters, shorten it while preserving the core message. Remove unnecessary words. Then categorise the message as one of the following: "Update", "Blocker", "Idea", or "Question". If the message mentions an issue that prevents progress, classify it as a "Blocker".`,
+            content: `You are a text improvement tool that enhances English text clarity, grammar, and flow while preserving the original meaning. You MUST respond ONLY in English. If the text is longer than 160 characters, shorten it while preserving the core message. Remove unnecessary words. Then categorize the message as one of: "Update", "Blocker", "Idea", or "Question". If the message mentions an issue that prevents progress, classify it as a "Blocker".`,
         },
         {
             role: 'user',
