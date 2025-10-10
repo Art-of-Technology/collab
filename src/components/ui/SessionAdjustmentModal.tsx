@@ -197,9 +197,7 @@ export function SessionAdjustmentModal({
 
     setIsLoading(true);
     try {
-      // Determine if this is an issue (UUID format) or legacy task
-      const isIssue = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
-      const apiPath = isIssue ? `/api/issues/${taskId}/stop-with-adjustment` : `/api/tasks/${taskId}/stop-with-adjustment`;
+      const apiPath = `/api/issues/${taskId}/stop-with-adjustment`;
       
       // Stop the current session with adjustment metadata
       const response = await fetch(apiPath, {
@@ -241,9 +239,7 @@ export function SessionAdjustmentModal({
   const handleStopWithoutAdjustment = async () => {
     setIsLoading(true);
     try {
-      // Determine if this is an issue (UUID format) or legacy task
-      const isIssue = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
-      const apiPath = isIssue ? `/api/issues/${taskId}/stop` : `/api/tasks/${taskId}/stop`;
+      const apiPath = `/api/issues/${taskId}/stop`;
       
       // Just stop the session normally without adjustment
       const response = await fetch(apiPath, {

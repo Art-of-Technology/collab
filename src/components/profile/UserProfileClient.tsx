@@ -34,7 +34,7 @@ export default function UserProfileClient({
   }, [error, router]);
   
   // Use the data from query or fall back to initial data
-  const { user, posts, stats, existingConversation } = data || initialData;
+  const { user, posts, stats } = data || initialData;
   
   if (isLoading && !initialData) {
     return (
@@ -77,12 +77,6 @@ export default function UserProfileClient({
                 )}
               </div>
             </div>
-            
-            <Button asChild variant="outline">
-              <Link href={existingConversation ? `/messages/${existingConversation.id}` : `/messages/new/${user.id}`}>
-                Message
-              </Link>
-            </Button>
           </div>
         </CardHeader>
         <CardContent>

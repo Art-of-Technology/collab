@@ -4,11 +4,9 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { issueKeys } from '@/hooks/queries/useIssues';
-import { boardItemsKeys } from '@/hooks/queries/useBoardItems';
 
 export interface RealtimeOptions {
   workspaceId?: string;
-  boardId?: string;
   viewId?: string;
 }
 
@@ -113,7 +111,7 @@ export function hasPendingDragOperations(): boolean {
 }
 
 export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInvalidations: null | boolean = false) {
-  const { workspaceId, boardId, viewId } = options;
+  const { workspaceId, viewId } = options;
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
@@ -132,6 +130,13 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
 
   useEffect(() => {
     if (!workspaceId) return;
+
+    // Capture refs at start to avoid stale references in cleanup
+    const currentPositionTimeouts = positionUpdateTimeouts.current;
+    const currentPendingInvalidations = pendingInvalidations.current;
+    const currentRecentBatchIds = recentBatchIds.current;
+    const currentLatestSequences = latestSequences.current;
+    const currentRecentDragOperations = recentDragOperations.current;
 
     const conn = getOrCreateWorkspaceConnection(workspaceId);
     conn.refCount += 1;
@@ -166,7 +171,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
           // Check if this is a recent drag operation - if so, skip bulk issues invalidation
           // to prevent interference with optimistic drag updates
           const isDragRelated = data.issueId && (
-            recentDragOperations.current.has(data.issueId) || 
+            currentRecentDragOperations.has(data.issueId) || 
             globalDragOperations.has(data.issueId)
           );
           
@@ -174,9 +179,6 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
             queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(String(data.workspaceId)) });
           }
           
-          if (boardId && !isDragRelated) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
-          }
           if (data.issueId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.detail(String(data.issueId)) });
           }
@@ -184,7 +186,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
           // Clean up drag operation tracking after a delay
           if (isDragRelated && data.issueId) {
             setTimeout(() => {
-              recentDragOperations.current.delete(data.issueId);
+              currentRecentDragOperations.delete(data.issueId);
             }, 2000); // Clean up after 2 seconds
           }
         }
@@ -193,9 +195,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
           if (data.workspaceId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(String(data.workspaceId)) });
           }
-          if (boardId) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
-          }
+
           if (data.issueId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.detail(String(data.issueId)) });
           }
@@ -204,33 +204,33 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
         if (data?.type === 'view.issue-position.updated') {
             if (data.viewId && (!viewId || data.viewId === viewId)) {
               const currentSequence = data.sequence || 0;
-              const lastSequence = latestSequences.current.get(data.viewId) || 0;
+              const lastSequence = currentLatestSequences.get(data.viewId) || 0;
             
             // Prevent duplicate invalidations from the same batch
-            if (data.batchId && recentBatchIds.current.has(data.batchId)) {
+            if (data.batchId && currentRecentBatchIds.has(data.batchId)) {
               return;
             }
             
             if (data.batchId) {
-              recentBatchIds.current.add(data.batchId);
+              currentRecentBatchIds.add(data.batchId);
               // Clean up batch ID after 5 seconds
               setTimeout(() => {
-                recentBatchIds.current.delete(data.batchId);
+                currentRecentBatchIds.delete(data.batchId);
               }, 5000);
             }
             
             // Update latest sequence for this view
-            latestSequences.current.set(data.viewId, Math.max(lastSequence, currentSequence));
+            currentLatestSequences.set(data.viewId, Math.max(lastSequence, currentSequence));
             
             // Cancel any existing pending invalidation for this view
-            const existingPending = pendingInvalidations.current.get(data.viewId);
+            const existingPending = currentPendingInvalidations.get(data.viewId);
             if (existingPending) {
               clearTimeout(existingPending.timeout);
-              pendingInvalidations.current.delete(data.viewId);
+              currentPendingInvalidations.delete(data.viewId);
             }
             
             // Only schedule invalidation if this is the latest sequence
-            const isLatestSequence = currentSequence >= latestSequences.current.get(data.viewId)!;
+            const isLatestSequence = currentSequence >= currentLatestSequences.get(data.viewId)!;
             
             if (isLatestSequence) {
               // Check if this update is from the current user (my action) or another user
@@ -239,11 +239,11 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
               // Track affected issues from this drag operation (only for my actions)
               if (isMyAction && data.affectedIssues && Array.isArray(data.affectedIssues)) {
                 data.affectedIssues.forEach((issueId: string) => {
-                  recentDragOperations.current.add(issueId);
+                  currentRecentDragOperations.add(issueId);
                   globalDragOperations.add(issueId);
                   // Clean up after 3 seconds
                   setTimeout(() => {
-                    recentDragOperations.current.delete(issueId);
+                    currentRecentDragOperations.delete(issueId);
                     globalDragOperations.delete(issueId);
                   }, 3000);
                 });
@@ -262,7 +262,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
               }
               
               // Clear any existing timeout for this view to prevent premature GET requests
-              const existingInvalidation = pendingInvalidations.current.get(data.viewId);
+              const existingInvalidation = currentPendingInvalidations.get(data.viewId);
               if (existingInvalidation) {
                 clearTimeout(existingInvalidation.timeout);
               }
@@ -273,34 +273,22 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
               const timeout = setTimeout(() => {
                 // For my actions, check pending operations. For others, process immediately
                 if (isMyAction && hasPendingDragOperations()) {
-                  pendingInvalidations.current.delete(data.viewId);
+                  currentPendingInvalidations.delete(data.viewId);
                   return;
                 }
                 
                 // Double-check we're still the latest before invalidating
-                const finalLatestSequence = latestSequences.current.get(data.viewId) || 0;
+                const finalLatestSequence = currentLatestSequences.get(data.viewId) || 0;
                 if (currentSequence >= finalLatestSequence) {
                   queryClient.invalidateQueries({ queryKey: ['viewPositions', data.viewId] });
                 }
-                pendingInvalidations.current.delete(data.viewId);
+                currentPendingInvalidations.delete(data.viewId);
               }, delayMs);
               
-              pendingInvalidations.current.set(data.viewId, { sequence: currentSequence, timeout });
+              currentPendingInvalidations.set(data.viewId, { sequence: currentSequence, timeout });
             } else {
               // Ignoring out-of-order position update (expected behavior)
             }
-          }
-        }
-
-        if (data?.type === 'board.items.reordered') {
-          if (boardId && data.boardId === boardId) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
-          }
-        }
-
-        if (data?.type === 'board.updated') {
-          if (boardId && data.boardId === boardId) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
           }
         }
       } catch {
@@ -312,17 +300,17 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
 
     return () => {
       // Clear any pending position update timeouts
-      positionUpdateTimeouts.current.forEach(timeout => clearTimeout(timeout));
-      positionUpdateTimeouts.current.clear();
+      currentPositionTimeouts.forEach(timeout => clearTimeout(timeout));
+      currentPositionTimeouts.clear();
       
       // Clear pending invalidations
-      pendingInvalidations.current.forEach(pending => clearTimeout(pending.timeout));
-      pendingInvalidations.current.clear();
+      currentPendingInvalidations.forEach(pending => clearTimeout(pending.timeout));
+      currentPendingInvalidations.clear();
       
       // Clear tracking data
-      recentBatchIds.current.clear();
-      latestSequences.current.clear();
-      recentDragOperations.current.clear();
+      currentRecentBatchIds.clear();
+      currentLatestSequences.clear();
+      currentRecentDragOperations.clear();
       
       conn.listeners.delete(handleEvent);
       conn.refCount -= 1;
@@ -332,7 +320,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, boardId, viewId]);
+  }, [workspaceId, viewId]);
 }
 
 

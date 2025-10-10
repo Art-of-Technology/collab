@@ -133,7 +133,6 @@ export interface IssueDetailProps {
   isLoading?: boolean;
   onRefresh: () => void;
   onClose?: () => void;
-  boardId?: string;
 }
 
 // Time tracking interfaces

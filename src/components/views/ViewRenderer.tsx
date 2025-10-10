@@ -25,8 +25,6 @@ import {
 } from 'lucide-react';
 import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
-import TableViewRenderer from './renderers/TableViewRenderer';
-import TimelineViewRenderer from './renderers/TimelineViewRenderer';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
@@ -977,10 +975,6 @@ export default function ViewRenderer({
         );
       case 'LIST':
         return <ListViewRenderer {...sharedProps} />;
-      case 'TABLE':
-        return <TableViewRenderer {...sharedProps} />;
-      case 'TIMELINE':
-        return <TimelineViewRenderer {...sharedProps} />;
       default:
         return <ListViewRenderer {...sharedProps} />;
     }

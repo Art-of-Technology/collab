@@ -186,16 +186,6 @@ class UrlResolver {
     return this.workspace({ workspaceSlug, path: `/features/${featureId}` });
   }
 
-  // ========== Communication URLs ==========
-
-  messages(workspaceSlug: string): string {
-    return this.workspace({ workspaceSlug, path: '/messages' });
-  }
-
-  conversation(workspaceSlug: string, conversationId: string): string {
-    return this.workspace({ workspaceSlug, path: `/messages/${conversationId}` });
-  }
-
   // ========== Management URLs ==========
 
   workspaces(): string {
@@ -235,12 +225,6 @@ class UrlResolver {
     workspaces: () => '/api/workspaces',
     workspace: (workspaceId: string) => `/api/workspaces/${workspaceId}`,
     workspaceBoards: (workspaceId: string) => `/api/workspaces/${workspaceId}/boards`,
-    boards: () => '/api/taskboards',
-    board: (boardId: string) => `/api/tasks/boards/${boardId}`,
-    tasks: () => '/api/tasks',
-    task: (taskId: string) => `/api/tasks/${taskId}`,
-    boardColumns: (boardId: string) => `/api/tasks/boards/${boardId}/columns`,
-    taskComments: (taskId: string) => `/api/tasks/${taskId}/comments`,
     upload: () => '/api/upload',
     user: () => '/api/user',
     notifications: () => '/api/notifications',

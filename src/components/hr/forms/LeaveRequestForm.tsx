@@ -77,7 +77,7 @@ const leaveRequestSchema = z.object({
     .max(500, "Notes cannot exceed 500 characters"),
 });
 
-export type LeaveRequestFormData = z.infer<typeof leaveRequestSchema>;
+type LeaveRequestFormData = z.infer<typeof leaveRequestSchema>;
 
 export function LeaveRequestForm({
   workspaceId,

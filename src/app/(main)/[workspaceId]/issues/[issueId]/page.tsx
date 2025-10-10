@@ -63,7 +63,7 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
-  const { activities, loading, error: activitiesError } = useIssueActivities({ issueId, limit: 1, action: 'CREATED' });
+  const { activities } = useIssueActivities({ issueId, limit: 1, action: 'CREATED' });
 
   useEffect(() => {
     if (activities && activities.length > 0) {
@@ -124,7 +124,6 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
       onRefresh={fetchIssue}
       onClose={onClose}
       workspaceId={workspaceId}
-      issueId={issueId}
       viewSlug={viewSlug || undefined}
       viewName={viewName || undefined}
       createdByUser={createdByUser || undefined}

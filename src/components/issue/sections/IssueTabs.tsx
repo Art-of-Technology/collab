@@ -2,8 +2,6 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, History, Users, Link as LinkIcon } from "lucide-react";
-import { IssueHelpersSection } from "./IssueHelpersSection";
-import { IssueWorkSessions } from "./IssueWorkSessions";
 import { IssueActivity } from "./IssueActivity";
 import { IssueRelationsSection } from "./IssueRelationsSection";
 import type { IssueComment } from "@/types/issue";
@@ -94,27 +92,6 @@ export function IssueTabs({
               <IssueRelationsSection
                 issue={issue}
                 workspaceId={workspaceId}
-                onRefresh={onRefresh}
-              />
-            </TabsContent>
-          )}
-
-          {showSessions && (
-            <TabsContent value="sessions" className="mt-0">
-              <IssueWorkSessions
-                issueId={issue.id}
-                onRefresh={onRefresh}
-              />
-            </TabsContent>
-          )}
-
-          {showHelpers && (
-            <TabsContent value="helpers" className="mt-0">
-              <IssueHelpersSection
-                issueId={issue.id}
-                assigneeId={issue.assigneeId}
-                reporterId={issue.reporterId}
-                currentUserId={currentUserId}
                 onRefresh={onRefresh}
               />
             </TabsContent>
