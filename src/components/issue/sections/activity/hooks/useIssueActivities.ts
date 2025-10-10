@@ -31,9 +31,13 @@ export function useIssueActivities({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        `/api/board-items/issue/${issueId}/activities?limit=${limit}&action=${action}`
-      );
+      // Build URL without undefined values
+      const url = new URL(`/api/board-items/issue/${issueId}/activities`, window.location.origin);
+      url.searchParams.set('limit', String(limit));
+      if (action) {
+        url.searchParams.set('action', action);
+      }
+      const response = await fetch(url.toString());
 
       if (!response.ok) {
         throw new Error(`Failed to fetch activities: ${response.statusText}`);

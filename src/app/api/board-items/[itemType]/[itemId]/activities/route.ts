@@ -7,7 +7,7 @@ import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { itemType: string; itemId: string, action?: ActivityAction } }
+  { params }: { params: { itemType: string; itemId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,9 +15,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const _params = await params;
-    const { itemType, itemId, action } = _params;
+    const { itemType, itemId } = _params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
+    // Only get action if it's explicitly set
+    const actionParam = searchParams.get('action');
+    const action = actionParam && actionParam.length > 0 ? actionParam as ActivityAction : undefined;
 
     // Validate item type (include ISSUE for unified model)
     const validItemTypes: Record<string, BoardItemType> = {
