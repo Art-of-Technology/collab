@@ -7,7 +7,6 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useViewTracking } from "@/hooks/useViewTracking";
 import { Loader2 } from "lucide-react";
 import { IssueUser } from "@/types/issue";
-import { useIssueActivities } from "@/components/issue/sections/activity/hooks/useIssueActivities";
 
 export default function IssuePage() {
   const router = useRouter();
@@ -63,13 +62,40 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
-  const { activities, loading, error: activitiesError } = useIssueActivities({ issueId, limit: 1, action: 'CREATED' });
 
+  // Fetch creator separately to avoid conflicts with other useIssueActivities calls
   useEffect(() => {
-    if (activities && activities.length > 0) {
-      setCreatedByUser(activities[0].user as IssueUser);
+    let isMounted = true;
+
+    const fetchCreator = async () => {
+      try {
+        // Get all activities and find the oldest one (first created)
+        const response = await fetch(
+          `/api/board-items/issue/${issueId}/activities`
+        );
+        if (response.ok && isMounted) {
+          const data = await response.json();
+          if (data && data.length > 0 && isMounted) {
+            // Sort by oldest first and get the first activity (original creator)
+            const sortedActivities = data.sort((a: any, b: any) => 
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            setCreatedByUser(sortedActivities[0].user as IssueUser);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching creator:', error);
+      }
+    };
+
+    if (issueId) {
+      fetchCreator();
     }
-  }, [activities]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [issueId]);
 
   // Track view when issue is successfully loaded
   useViewTracking({
