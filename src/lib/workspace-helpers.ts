@@ -11,19 +11,41 @@ type User = {
  * Verify if a user has access to a workspace and get a valid workspace ID
  * 
  * @param user The current user
+ * @param urlWorkspaceId Optional workspace ID/slug from URL parameter
  * @returns A valid workspace ID or null if user has no workspaces
  * 
- * If the user doesn't have access to the workspace in the cookie,
- * this function will return the first workspace they have access to.
- * If the user has no workspaces, it returns null.
+ * Priority: URL parameter > cookie > first accessible workspace
  */
-export async function getWorkspaceId(user: User): Promise<string> {
+export async function getWorkspaceId(user: User, urlWorkspaceId?: string): Promise<string> {
   if (!user) throw new Error('User not found');
 
-  // Get current workspace from cookie
+  // First priority: Check URL workspace parameter (can be ID or slug)
+  if (urlWorkspaceId) {
+    const urlWorkspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { id: urlWorkspaceId },
+          { slug: urlWorkspaceId }
+        ],
+        AND: {
+          OR: [
+            { ownerId: user.id },
+            { members: { some: { userId: user.id, status: true } } }
+          ]
+        }
+      },
+      select: { id: true }
+    });
+
+    if (urlWorkspace) {
+      return urlWorkspace.id;
+    }
+  }
+
+  // Second priority: Get current workspace from cookie
   const cookieStore = await cookies();
   const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
-
+  
   // If a workspace ID exists in cookie, verify the user has access to it
   if (currentWorkspaceId) {
     const hasAccess = await prisma.workspace.findFirst({
@@ -53,7 +75,7 @@ export async function getWorkspaceId(user: User): Promise<string> {
     select: { id: true },
     orderBy: { createdAt: 'asc' }
   });
-
+  
   if (!firstAccessible) throw new Error('No workspace available');
 
   return firstAccessible.id;
@@ -61,10 +83,33 @@ export async function getWorkspaceId(user: User): Promise<string> {
 
 /**
  * Get a valid workspace path segment (slug if available, otherwise ID)
- * Verifies cookie-selected workspace access; falls back to first accessible
+ * Priority: URL parameter > cookie > first accessible workspace
  */
-export async function getWorkspaceSlugOrId(user: User): Promise<string | null> {
+export async function getWorkspaceSlugOrId(user: User, urlWorkspaceId?: string): Promise<string | null> {
   if (!user) return null;
+
+  // First priority: Check URL workspace parameter (can be ID or slug)
+  if (urlWorkspaceId) {
+    const urlWorkspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { id: urlWorkspaceId },
+          { slug: urlWorkspaceId }
+        ],
+        AND: {
+          OR: [
+            { ownerId: user.id },
+            { members: { some: { userId: user.id, status: true } } }
+          ]
+        }
+      },
+      select: { id: true, slug: true }
+    });
+
+    if (urlWorkspace) {
+      return urlWorkspace.slug || urlWorkspace.id;
+    }
+  }
 
   const cookieStore = await cookies();
   const currentWorkspaceId = cookieStore.get('currentWorkspaceId')?.value;
@@ -106,6 +151,7 @@ export async function getWorkspaceSlugOrId(user: User): Promise<string | null> {
  * 
  * @param user The current user
  * @param redirectNoAccess Whether to redirect if user has no workspaces
+ * @param urlWorkspaceId Optional workspace ID/slug from URL parameter
  * @returns A valid workspace ID
  * 
  * This function will redirect to the welcome page if the user has no workspaces
@@ -113,13 +159,14 @@ export async function getWorkspaceSlugOrId(user: User): Promise<string | null> {
  */
 export async function verifyWorkspaceAccess(
   user: User | null, 
-  redirectNoAccess: boolean = true
+  redirectNoAccess: boolean = true,
+  urlWorkspaceId?: string
 ): Promise<string> {
   if (!user) {
     redirect("/login");
   }
 
-  const workspaceId = await getWorkspaceId(user);
+  const workspaceId = await getWorkspaceId(user, urlWorkspaceId);
   
   if (!workspaceId && redirectNoAccess) {
     redirect('/welcome');
