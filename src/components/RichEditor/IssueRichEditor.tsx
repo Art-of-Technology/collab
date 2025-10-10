@@ -35,6 +35,7 @@ import { useIssueActivities } from '@/components/issue/sections/activity/hooks/u
 import { CustomAvatar } from '@/components/ui/custom-avatar';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { IS_COLLABORATIVE_EDITING_ENABLED } from '@/lib/featureFlags';
 
 interface IssueRichEditorProps {
   value: string;
@@ -154,6 +155,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   const { data: session } = useSession();
   const { data: currentUser } = useCurrentUser();
   const collaborationUser = useMemo(() => createCollaborationUser(session, currentUser), [session, currentUser]);
+  const isCollaborationEnabled = IS_COLLABORATIVE_EDITING_ENABLED && !!collabDocumentId;
   // Slash commands state
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
@@ -563,7 +565,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
 
   // Initialize collaboration (Hocuspocus) when document id is provided
   useEffect(() => {
-    if (!collabDocumentId) return;
+    if (!isCollaborationEnabled || !collabDocumentId) return;
 
     const initializeCollaboration = async () => {
       if (hocuspocusManagerRef.current) return;
@@ -584,7 +586,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       hocuspocusManagerRef.current?.destroy();
       hocuspocusManagerRef.current = null;
     };
-  }, [collabDocumentId]);
+  }, [isCollaborationEnabled, collabDocumentId]);
 
   // Build extensions array
   const additionalExtensions = [];
@@ -619,7 +621,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   }
 
   // Add collaboration extensions when ready
-  if (collabDocumentId && hocuspocusManagerRef.current) {
+  if (isCollaborationEnabled && hocuspocusManagerRef.current) {
     try {
       const collabExts = hocuspocusManagerRef.current.getCollaborationExtensions(collaborationUser);
       additionalExtensions.push(...collabExts);
@@ -632,7 +634,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     <div ref={containerRef} className="relative">
       <RichEditor
         autofocus={true}
-        key={collabDocumentId ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
+        key={isCollaborationEnabled ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
         ref={editorRef}
         value={value}
         onChange={onChange}
