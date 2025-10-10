@@ -47,6 +47,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import React, { useEffect } from 'react';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
+import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
 import { Bell, BellOff } from 'lucide-react';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
@@ -183,8 +184,9 @@ export default function ViewRenderer({
   
 
   // Realtime: subscribe to workspace-level events to keep issues and positions fresh
-  // Allow invalidations so view positions update after drag-and-drop
-  useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id });
+  // Allow invalidations so view positions update after drag-and-drop unless feature flag disables it for Kanban
+  const suppressRealtimeForKanban = view.displayType === 'KANBAN' && !IS_KANBAN_REALTIME_ENABLED;
+  useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id }, suppressRealtimeForKanban);
 
   // Temporary state for filters and display (resets on refresh)
   const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
