@@ -1,4 +1,3 @@
-/* eslint-disable */
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -43,6 +42,11 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
   
   const error = queryError ? (queryError as Error).message : null;
 
+  const setCookieHelper = useCallback((workspaceId: string) => {
+    // Set cookie with proper format and immediate expiry
+    document.cookie = `currentWorkspaceId=${workspaceId}; path=/; max-age=31536000; SameSite=Lax; Secure=${window.location.protocol === 'https:'}`;
+  }, []);
+
   // Extract workspace ID from current URL
   const getWorkspaceIdFromUrl = useCallback((): string | null => {
     if (!pathname) return null;
@@ -83,9 +87,11 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         setCurrentWorkspace(targetWorkspace);
         // Update localStorage for fallback purposes
         localStorage.setItem('currentWorkspaceId', targetWorkspace.id);
+        // Also sync cookie
+        setCookieHelper(targetWorkspace.id);
       }
     }
-  }, [workspaces, getWorkspaceIdFromUrl, currentWorkspace]);
+  }, [workspaces, getWorkspaceIdFromUrl, currentWorkspace, setCookieHelper]);
 
   // Clear workspace data when user logs out
   useEffect(() => {
@@ -99,10 +105,10 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     if (typeof window !== 'undefined') {
       const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
       if (savedWorkspaceId) {
-        document.cookie = `currentWorkspaceId=${savedWorkspaceId}; path=/; max-age=31536000; SameSite=Lax`;
+        setCookieHelper(savedWorkspaceId);
       }
     }
-  }, []);
+  }, [setCookieHelper]);
 
   const switchWorkspace = async (workspaceId: string) => {
     try {
@@ -115,12 +121,28 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       
       const workspaceDetails = await response.json();
       
-      // Update context immediately for this tab
-      setCurrentWorkspace(workspaceDetails);
+      // Update localStorage immediately
       localStorage.setItem('currentWorkspaceId', workspaceDetails.id);
       
-      // Also set a cookie for server components
-      document.cookie = `currentWorkspaceId=${workspaceDetails.id}; path=/; max-age=31536000; SameSite=Lax`;
+      // Set cookie immediately with proper synchronization
+      setCookieHelper(workspaceDetails.id);
+      
+      // Also make a server call to sync the cookie server-side for immediate next request
+      try {
+        await fetch('/api/workspace/set-current', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ workspaceId: workspaceDetails.id }),
+          credentials: 'include'
+        });
+      } catch (cookieError) {
+        console.warn('Failed to sync workspace cookie server-side:', cookieError);
+      }
+      
+      // Update context after cookie is set
+      setCurrentWorkspace(workspaceDetails);
       
       // Navigate to the new workspace maintaining the current route
       // Extract the route part after the workspace ID (if any)
@@ -141,16 +163,21 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       
       // Navigate to the new workspace with the preserved route (use slug if available)
       const workspaceSlugOrId = workspaceDetails.slug || workspaceDetails.id;
-      router.push(`/${workspaceSlugOrId}${routePart}`);
+      
+      // Add a small delay to ensure cookie is processed before navigation
+      setTimeout(() => {
+        router.push(`/${workspaceSlugOrId}${routePart}`);
+      }, 100);
+      
     } catch (err) {
       console.error('Error switching workspace:', err);
       
       // Fallback to basic switching if detailed fetch fails
       const workspace = workspaces.find(w => w.id === workspaceId);
       if (workspace) {
-        setCurrentWorkspace(workspace);
         localStorage.setItem('currentWorkspaceId', workspace.id);
-        document.cookie = `currentWorkspaceId=${workspace.id}; path=/; max-age=31536000; SameSite=Lax`;
+        setCookieHelper(workspace.id);
+        setCurrentWorkspace(workspace);
         
         // Use same navigation logic for fallback
         const currentWorkspaceId = currentWorkspace?.id;
@@ -166,7 +193,9 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         
         // Use slug if available, fallback to ID
         const workspaceSlugOrId = workspace.slug || workspace.id;
-        router.push(`/${workspaceSlugOrId}${routePart}`);
+        setTimeout(() => {
+          router.push(`/${workspaceSlugOrId}${routePart}`);
+        }, 100);
       }
     }
   };

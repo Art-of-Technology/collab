@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Command,
   CommandEmpty,
@@ -19,7 +20,6 @@ import {
   FolderOpen,
   Eye,
   Search,
-  Filter,
   Users,
   Tag,
   Lightbulb,
@@ -32,9 +32,13 @@ import {
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCommandSearch } from "@/hooks/queries/useCommandSearch";
+import { useProjects } from "@/hooks/queries/useProjects";
 import { cn } from "@/lib/utils";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { NewIssueModal } from "@/components/issue";
+import CreateViewModal from "@/components/modals/CreateViewModal";
+import CreateProjectModal from "@/components/modals/CreateProjectModal";
 
 interface CommandMenuProps {
   open: boolean;
@@ -52,9 +56,14 @@ export function CommandMenu({
   onCreateProject 
 }: CommandMenuProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { currentWorkspace } = useWorkspace();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
+  const [isNewIssueFullscreenOpen, setIsNewIssueFullscreenOpen] = useState(false);
+  const [isCreateViewOpen, setIsCreateViewOpen] = useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
 
   const runCommand = useCallback((command: () => void) => {
     onOpenChange(false);
@@ -77,6 +86,12 @@ export function CommandMenu({
     currentWorkspace?.id || ""
   );
 
+  // Fetch projects for create view modal
+  const { data: projects = [] } = useProjects({
+    workspaceId: currentWorkspace?.id,
+    includeStats: false,
+  });
+
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -93,6 +108,22 @@ export function CommandMenu({
     }
   };
 
+  const handleCreateIssue = useCallback(() => {
+    setIsNewIssueOpen(true);
+  }, []);
+
+  const handleCreateIssueFullscreen = useCallback(() => {
+    setIsNewIssueFullscreenOpen(true);
+  }, []);
+
+  const handleCreateView = useCallback(() => {
+    setIsCreateViewOpen(true);
+  }, []);
+
+  const handleCreateProject = useCallback(() => {
+    setIsCreateProjectOpen(true);
+  }, []);
+
   // Helper function to get icon for search result type
   const getResultIcon = (type: string) => {
     switch (type) {
@@ -104,16 +135,6 @@ export function CommandMenu({
       case 'post': return <Clock className="h-4 w-4" />;
       case 'tag': return <Tag className="h-4 w-4" />;
       default: return <Search className="h-4 w-4" />;
-    }
-  };
-
-  // Helper function to get badge color for search result type
-  const getResultBadgeVariant = (type: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (type) {
-      case 'issue': return 'default';
-      case 'project': return 'secondary';
-      case 'view': return 'outline';
-      default: return 'secondary';
     }
   };
 
@@ -370,7 +391,7 @@ export function CommandMenu({
           )}
         >
           <CommandItem
-            onSelect={() => runCommand(() => onCreateIssue?.())}
+            onSelect={() => runCommand(handleCreateIssue)}
             className={cn(
               "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
               "hover:bg-white/10 hover:text-white",
@@ -384,7 +405,7 @@ export function CommandMenu({
             <CommandShortcut className="ml-auto text-xs text-gray-500">C</CommandShortcut>
           </CommandItem>
           <CommandItem
-            onSelect={() => runCommand(() => onCreateIssue?.())}
+            onSelect={() => runCommand(handleCreateIssueFullscreen)}
             className={cn(
               "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
               "hover:bg-white/10 hover:text-white",
@@ -397,33 +418,6 @@ export function CommandMenu({
             <span className="text-sm">Create issue in fullscreen...</span>
             <CommandShortcut className="ml-auto text-xs text-gray-500">V</CommandShortcut>
           </CommandItem>
-          <CommandItem
-            onSelect={() => runCommand(() => onCreateIssue?.())}
-            className={cn(
-              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
-              "hover:bg-white/10 hover:text-white",
-              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
-              "px-3 py-1.5",
-              "mx-1"
-            )}
-          >
-            <Plus className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Create new issue from template...</span>
-            <CommandShortcut className="ml-auto text-xs text-gray-500">Alt C</CommandShortcut>
-          </CommandItem>
-          <CommandItem
-            onSelect={() => navigateTo(getWorkspacePath("/views"))}
-            className={cn(
-              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
-              "hover:bg-white/10 hover:text-white",
-              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
-              "px-3 py-1.5",
-              "mx-1"
-            )}
-          >
-            <Eye className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Go to Views</span>
-          </CommandItem>
         </CommandGroup>
 
         {/* Projects Group */}
@@ -435,7 +429,7 @@ export function CommandMenu({
           )}
         >
           <CommandItem
-            onSelect={() => runCommand(() => onCreateProject?.())}
+            onSelect={() => runCommand(handleCreateProject)}
             className={cn(
               "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
               "hover:bg-white/10 hover:text-white",
@@ -472,7 +466,7 @@ export function CommandMenu({
           )}
         >
           <CommandItem
-            onSelect={() => runCommand(() => onCreateView?.())}
+            onSelect={() => runCommand(handleCreateView)}
             className={cn(
               "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
               "hover:bg-white/10 hover:text-white",
@@ -532,69 +526,6 @@ export function CommandMenu({
           >
             <Users className="h-4 w-4 text-gray-400" />
             <span className="text-sm">All workspaces</span>
-          </CommandItem>
-        </CommandGroup>
-
-        {/* Filter Group */}
-        <CommandGroup 
-          heading="Filter" 
-          className={cn(
-            "text-gray-400 font-medium px-3 py-1",
-            "text-xs"
-          )}
-        >
-          <CommandItem
-            onSelect={() => navigateTo(getWorkspacePath("/search"))}
-            className={cn(
-              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
-              "hover:bg-white/10 hover:text-white",
-              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
-              "px-3 py-1.5",
-              "mx-1"
-            )}
-          >
-            <Search className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Search workspace...</span>
-          </CommandItem>
-          <CommandItem
-            onSelect={() => {
-              // TODO: Implement in-view filter functionality
-              toast({
-                title: "Coming soon",
-                description: "Find in view functionality will be available soon",
-              });
-            }}
-            className={cn(
-              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
-              "hover:bg-white/10 hover:text-white",
-              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
-              "px-3 py-1.5",
-              "mx-1"
-            )}
-          >
-            <Search className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Find in view...</span>
-            <CommandShortcut className="ml-auto text-xs text-gray-500">Ctrl F</CommandShortcut>
-          </CommandItem>
-          <CommandItem
-            onSelect={() => {
-              // TODO: Implement filter functionality
-              toast({
-                title: "Coming soon", 
-                description: "Filter functionality will be available soon",
-              });
-            }}
-            className={cn(
-              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
-              "hover:bg-white/10 hover:text-white",
-              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
-              "px-3 py-1.5",
-              "mx-1"
-            )}
-          >
-            <Filter className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Filter...</span>
-            <CommandShortcut className="ml-auto text-xs text-gray-500">F</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 
@@ -714,6 +645,72 @@ export function CommandMenu({
         </CommandList>
         </Command>
       </DialogContent>
+      
+      {/* New Issue Modal */}
+      {currentWorkspace && (
+        <>
+          <NewIssueModal
+            open={isNewIssueOpen}
+            onOpenChange={setIsNewIssueOpen}
+            workspaceId={currentWorkspace.id}
+            onCreated={() => {
+              setIsNewIssueOpen(false);
+              queryClient.invalidateQueries();
+              toast({
+                title: "Success",
+                description: "Issue created successfully",
+              });
+            }}
+          />
+          
+          {/* Fullscreen New Issue Modal */}
+          <NewIssueModal
+            open={isNewIssueFullscreenOpen}
+            onOpenChange={setIsNewIssueFullscreenOpen}
+            workspaceId={currentWorkspace.id}
+            fullscreen={true}
+            onCreated={() => {
+              setIsNewIssueFullscreenOpen(false);
+              queryClient.invalidateQueries();
+              toast({
+                title: "Success",
+                description: "Issue created successfully",
+              });
+            }}
+          />
+
+          {/* Create View Modal */}
+          <CreateViewModal
+            isOpen={isCreateViewOpen}
+            onClose={() => setIsCreateViewOpen(false)}
+            workspaceId={currentWorkspace.id}
+            projects={projects}
+            onViewCreated={() => {
+              setIsCreateViewOpen(false);
+              queryClient.invalidateQueries();
+              toast({
+                title: "Success",
+                description: "View created successfully",
+              });
+            }}
+          />
+
+          {/* Create Project Modal */}
+          <CreateProjectModal
+            isOpen={isCreateProjectOpen}
+            onClose={() => setIsCreateProjectOpen(false)}
+            workspaceId={currentWorkspace.id}
+            onProjectCreated={() => {
+              setIsCreateProjectOpen(false);
+              queryClient.invalidateQueries();
+              toast({
+                title: "Success",
+                description: "Project created successfully",
+              });
+            }}
+          />
+        </>
+      )}
     </Dialog>
   );
 }

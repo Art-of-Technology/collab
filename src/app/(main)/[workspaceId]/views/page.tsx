@@ -15,10 +15,10 @@ export default async function ViewsPage({ params }: Props) {
     redirect('/login');
   }
 
-  // Verify workspace access
-  const workspaceId = await verifyWorkspaceAccess(session.user);
   const { workspaceId: paramWorkspaceId } = await params;
-
+  
+  // Verify workspace access - pass URL parameter first
+  const workspaceId = await verifyWorkspaceAccess(session.user, true, paramWorkspaceId);
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center h-64">

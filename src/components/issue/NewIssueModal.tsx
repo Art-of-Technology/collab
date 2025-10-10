@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Maximize2, Minimize2 } from "lucide-react";
 import { IssueStatusSelector } from "./selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "./selectors/IssuePrioritySelector";
 import { IssueAssigneeSelector } from "./selectors/IssueAssigneeSelector";
@@ -67,6 +67,7 @@ interface NewIssueModalProps {
   defaultStatus?: string;
   currentUserId?: string;
   onCreated?: (issueId: string) => void;
+  fullscreen?: boolean;
 }
 
 export default function NewIssueModal({
@@ -77,6 +78,7 @@ export default function NewIssueModal({
   defaultStatus,
   currentUserId,
   onCreated,
+  fullscreen = false,
 }: NewIssueModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -92,6 +94,7 @@ export default function NewIssueModal({
   const [createMore, setCreateMore] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
   const [relations, setRelations] = useState<IssueRelation[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(fullscreen);
 
   const titleRef = useRef<IssueTitleInputRef>(null);
   const createIssueMutation = useCreateIssue();
@@ -105,7 +108,17 @@ export default function NewIssueModal({
     }
   }, [open, currentUserId, reporterId]);
 
+  // Sync internal fullscreen state with prop
+  useEffect(() => {
+    setIsFullscreen(fullscreen);
+  }, [fullscreen]);
+
   const canCreate = title.trim().length > 0 && !!selectedProjectId;
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
 
   // AI Improve functionality
   const handleAiImprove = useCallback(async (text: string): Promise<string> => {
@@ -309,7 +322,12 @@ export default function NewIssueModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden flex flex-col">
+      <DialogContent className={cn(
+        "p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden flex flex-col",
+        isFullscreen 
+          ? "w-full h-[95vh] max-w-7xl mx-auto my-4 rounded-lg" 
+          : "max-w-2xl max-h-[90vh]"
+      )}>
         <VisuallyHidden>
           <DialogTitle>New issue</DialogTitle>
         </VisuallyHidden>
@@ -322,12 +340,30 @@ export default function NewIssueModal({
             </div>
             <span className="text-[#9ca3af] text-sm">New issue</span>
           </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={toggleFullscreen}
+              variant="ghost"
+              size="sm"
+              className="text-[#6e7681] hover:text-white p-1"
+              title={isFullscreen ? "Minimize" : "Fullscreen"}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              onClick={() => onOpenChange(false)}
+              variant="ghost"
+              size="sm"
+              className="text-[#6e7681] hover:text-white p-1"
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Content */}
@@ -364,8 +400,8 @@ export default function NewIssueModal({
             enableSlashCommands={true}
             enableFloatingMenu={true}
             enableSubIssueCreation={true}
-            minHeight="200px"
-            maxHeight="300px"
+            minHeight={isFullscreen ? "400px" : "200px"}
+            maxHeight={isFullscreen ? "600px" : "300px"}
           />
 
           {/* Properties */}
