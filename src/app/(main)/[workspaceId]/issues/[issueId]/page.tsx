@@ -69,18 +69,15 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
 
     const fetchCreator = async () => {
       try {
-        // Get all activities and find the oldest one (first created)
+        // Get only the CREATED activity
         const response = await fetch(
-          `/api/board-items/issue/${issueId}/activities`
+          `/api/board-items/issue/${issueId}/activities?action=CREATED&limit=1`
         );
         if (response.ok && isMounted) {
           const data = await response.json();
           if (data && data.length > 0 && isMounted) {
-            // Sort by oldest first and get the first activity (original creator)
-            const sortedActivities = data.sort((a: any, b: any) => 
-              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-            );
-            setCreatedByUser(sortedActivities[0].user as IssueUser);
+            // We get only one CREATED activity
+            setCreatedByUser(data[0].user as IssueUser);
           }
         }
       } catch (error) {
