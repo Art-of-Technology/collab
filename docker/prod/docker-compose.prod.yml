@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Production Docker Compose configuration for Collab
 # Uses external AWS RDS PostgreSQL and Cloud Redis
 services:
@@ -90,36 +88,20 @@ services:
           memory: 1G
     # Health check for the application
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  # pgAdmin for external database management (Production - admin profile only)
-  pgadmin-prod:
-    image: dpage/pgadmin4:latest
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@collab.local}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
-      PGADMIN_CONFIG_SERVER_MODE: 'True'
-    ports:
-      - "5052:80"
-    volumes:
-      - pgadmin_prod_data:/var/lib/pgadmin
-    networks:
-      - collab-prod-network
-    profiles:
-      - admin
-
-  # Redis Commander for external Cloud Redis management (Production - admin profile only)
+  # Redis Commander - Monitor Redis (admin profile only)
   redis-commander-prod:
     image: rediscommander/redis-commander:latest
     restart: unless-stopped
     environment:
-      # Parse Redis URL for connection (will need manual setup in UI)
-      REDIS_HOSTS: external-redis:external-redis:${REDIS_PORT:-6379}:0:${REDIS_PASSWORD:-""}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "8083:8081"
     networks:
@@ -127,8 +109,39 @@ services:
     profiles:
       - admin
 
+  # Uptime Kuma - Production health monitoring (admin profile only)
+  uptime-kuma-prod:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - "3003:3001"
+    volumes:
+      - uptime_kuma_prod_data:/app/data
+    networks:
+      - collab-prod-network
+    environment:
+      UPTIME_KUMA_PORT: 3001
+    profiles:
+      - admin
+
+  # Portainer - Docker management (admin profile only)
+  portainer-prod:
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9002:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_prod_data:/data
+    networks:
+      - collab-prod-network
+    profiles:
+      - admin
+
 volumes:
-  pgadmin_prod_data:
+  uptime_kuma_prod_data:
+    driver: local
+  portainer_prod_data:
     driver: local
   prod_uploads:
     driver: local

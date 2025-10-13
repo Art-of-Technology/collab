@@ -3,31 +3,20 @@ set -e
 
 echo "🚀 Starting Collab in Production Mode..."
 
-# Wait for database to be ready
-echo "⏳ Waiting for database connection..."
-until npx prisma db push --accept-data-loss 2>/dev/null; do
-  echo "Database is unavailable - sleeping"
-  sleep 2
-done
-
-echo "✅ Database is ready!"
-
-# Run database migrations
-echo "🔄 Running database migrations..."
-npx prisma migrate deploy
-
-# Generate Prisma client (if not already generated)
-echo "🔧 Ensuring Prisma client is generated..."
+# Generate Prisma client (already done in build, but ensure it's available)
+echo "🔧 Verifying Prisma client..."
 npx prisma generate
+
+echo "✅ Prisma client ready!"
 
 # Optional: Run database seeding if SEED_DATABASE is set (usually false in production)
 if [ "$SEED_DATABASE" = "true" ]; then
-  echo "🌱 Seeding production database..."
+  echo "⚠️  WARNING: Seeding production database..."
   npm run prisma:init-workspace || echo "⚠️  Workspace initialization completed or already exists"
 fi
 
 echo "🏢 Starting Collab production server..."
-echo "🔗 Application starting on port 3002"
+echo "🔗 Application running on port 3000 (exposed as 3002)"
 echo "🔒 Production Environment - Optimized and secured"
 
 # Start the Next.js application

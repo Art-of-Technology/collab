@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Development Docker Compose configuration for Collab
 # Uses external NeonDB PostgreSQL and Cloud Redis
 services:
@@ -88,8 +86,10 @@ services:
     entrypoint: ["sh", "-c"]
     command: |
       "echo '🚀 Starting Collab Development...' &&
-       echo '🔧 Fixing .next directory permissions...' &&
+       echo '🔧 Fixing permissions for Next.js directories and files...' &&
        mkdir -p .next && chown -R nextjs:nodejs .next &&
+       chown nextjs:nodejs /app/next-env.d.ts 2>/dev/null || touch /app/next-env.d.ts && chown nextjs:nodejs /app/next-env.d.ts &&
+       chown nextjs:nodejs /app/tsconfig.json 2>/dev/null || true &&
        chown -R nextjs:nodejs /app/uploads || true &&
        chown -R nextjs:nodejs /app/logs || true &&
        echo '🔧 Switching to nextjs user and generating Prisma client...' &&
