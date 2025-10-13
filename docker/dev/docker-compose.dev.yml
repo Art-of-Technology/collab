@@ -102,9 +102,9 @@ services:
     image: rediscommander/redis-commander:latest
     restart: unless-stopped
     environment:
-      REDIS_HOST: redis-17044.c72.eu-west-1-2.ec2.redns.redis-cloud.com
-      REDIS_PORT: 17044
-      REDIS_PASSWORD: kOvQx3mVnFZcbW26yHdIoTLivTs2ZvM9
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "8081:8081"
     networks:

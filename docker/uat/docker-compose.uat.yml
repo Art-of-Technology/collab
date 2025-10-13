@@ -1,5 +1,3 @@
-version: '3.8'
-
 # UAT/Staging Docker Compose configuration for Collab
 # Uses external AWS PostgreSQL and Cloud Redis
 services:
@@ -74,7 +72,7 @@ services:
       SEED_DATABASE: ${SEED_DATABASE:-false}
       
     ports:
-      - "3001:3000"
+      - "3004:3000"
     volumes:
       # Mount logs and uploads for UAT
       - uat_uploads:/app/uploads
@@ -82,35 +80,48 @@ services:
     networks:
       - collab-uat-network
 
-  # pgAdmin for external database management (UAT)
-  pgadmin-uat:
-    image: dpage/pgadmin4:latest
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: uat@collab.local
-      PGADMIN_DEFAULT_PASSWORD: uatpassword
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - "5051:80"
-    volumes:
-      - pgadmin_uat_data:/var/lib/pgadmin
-    networks:
-      - collab-uat-network
-
-  # Redis Commander for external Cloud Redis management (UAT)
+  # Redis Commander - Monitor Redis (UAT)
   redis-commander-uat:
     image: rediscommander/redis-commander:latest
     restart: unless-stopped
     environment:
-      # Parse Redis URL for connection (will need manual setup in UI)
-      REDIS_HOSTS: external-redis:external-redis:${REDIS_PORT:-6379}:0:${REDIS_PASSWORD:-""}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "8082:8081"
     networks:
       - collab-uat-network
 
+  # Uptime Kuma - UAT health monitoring
+  uptime-kuma-uat:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - "3005:3001"
+    volumes:
+      - uptime_kuma_uat_data:/app/data
+    networks:
+      - collab-uat-network
+    environment:
+      UPTIME_KUMA_PORT: 3001
+
+  # Portainer - Docker management (UAT)
+  portainer-uat:
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9001:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_uat_data:/data
+    networks:
+      - collab-uat-network
+
 volumes:
-  pgadmin_uat_data:
+  uptime_kuma_uat_data:
+    driver: local
+  portainer_uat_data:
     driver: local
   uat_uploads:
     driver: local
