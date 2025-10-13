@@ -3,11 +3,8 @@ set -e
 
 echo "🚀 Starting Collab in Production Mode..."
 
-# Generate Prisma client (already done in build, but ensure it's available)
-echo "🔧 Verifying Prisma client..."
-npx prisma generate
-
-echo "✅ Prisma client ready!"
+# Prisma client was already generated during build
+echo "✅ Prisma client ready (generated during build)"
 
 # Optional: Run database seeding if SEED_DATABASE is set (usually false in production)
 if [ "$SEED_DATABASE" = "true" ]; then
