@@ -51,7 +51,6 @@ import { useViews } from "@/hooks/queries/useViews";
 import { useToggleViewFavorite } from "@/hooks/queries/useViewFavorites";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
-import NewIssueModal from "@/components/issue/NewIssueModal";
 import { cn } from "@/lib/utils";
 import { NotificationUrlResolver } from "@/lib/notification-url-resolver";
 import { useToast } from "@/hooks/use-toast";
@@ -136,7 +135,6 @@ export default function Sidebar({
 
   // Notification and modal state
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showNewIssueModal, setShowNewIssueModal] = useState(false);
 
   // Filter views for sidebar display - show all views with favorites at the top
   const sidebarViews = useMemo(() => {
@@ -1013,15 +1011,6 @@ export default function Sidebar({
           workspaceId={currentWorkspace?.id || ""}
         />
       )}
-
-      {/* New Issue Modal */}
-      <NewIssueModal
-        open={showNewIssueModal}
-        onOpenChange={setShowNewIssueModal}
-        workspaceId={currentWorkspace?.id || ""}
-        currentUserId={userData?.id}
-      />
-
 
     </div>
   );
