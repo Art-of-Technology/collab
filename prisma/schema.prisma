@@ -98,9 +98,13 @@ model User {
   notificationPreferences NotificationPreferences?
   
   // GitHub Integration relationships
+  githubId               String?                 // GitHub user ID
+  githubUsername         String?                 // GitHub username
+  githubAccessToken      String?                 // OAuth access token (encrypt in production)
   createdPullRequests    PullRequest[]           @relation("PRCreatedBy")
   mergedPullRequests     PullRequest[]           @relation("PRMergedBy")
   deployments            Deployment[]            @relation("DeploymentUser")
+  prReviews              PRReview[]              // PR reviews by this user
 }
 
 model Account {
@@ -1499,11 +1503,20 @@ model Repository {
   fullName        String    // owner/name
   defaultBranch   String    @default("main")
   webhookSecret   String    // for webhook verification
+  webhookId       String?   // GitHub webhook ID for management
   accessToken     String?   // encrypted GitHub token
   isActive        Boolean   @default(true)
   syncedAt        DateTime? // last sync timestamp
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  
+  // Branch versioning configuration
+  developmentBranch String?  // Base branch for development versioning (dev, development, etc.)
+  versioningStrategy VersioningStrategy @default(SINGLE_BRANCH)
+  branchEnvironmentMap Json? // Map branches to environments {"dev": "development", "staging": "staging"}
+  
+  // Issue type mapping configuration
+  issueTypeMapping Json?    // Custom mapping of issue types to version increments
   
   project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   branches        Branch[]
@@ -1573,6 +1586,7 @@ model PullRequest {
   checks          PRCheck[]
   commits         Commit[]
   changelogEntries ChangelogEntry[]
+  reviews         PRReview[]
   
   @@unique([repositoryId, githubPrId])
   @@index([issueId])
@@ -1580,6 +1594,29 @@ model PullRequest {
   @@index([repositoryId])
   @@index([baseBranchId])
   @@index([headBranchId])
+}
+
+// Pull Request Review Tracking
+model PRReview {
+  id              String        @id @default(cuid())
+  pullRequestId   String
+  githubReviewId  String        // GitHub's review ID
+  reviewerId      String?       // Collab user ID
+  githubReviewerId String       // GitHub user ID
+  reviewerLogin   String        // GitHub username
+  state           ReviewState   // PENDING, APPROVED, CHANGES_REQUESTED, DISMISSED
+  body            String?       // Review comment
+  submittedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  pullRequest     PullRequest   @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  reviewer        User?         @relation(fields: [reviewerId], references: [id])
+  
+  @@unique([pullRequestId, githubReviewId])
+  @@index([pullRequestId])
+  @@index([reviewerId])
+  @@index([state])
 }
 
 // Commit Tracking
@@ -1646,15 +1683,22 @@ model Version {
   releaseType   ReleaseType   // MAJOR, MINOR, PATCH
   status        VersionStatus // PENDING, RELEASED, FAILED, CANCELLED
   environment   String        // development, staging, production
+  branch        String?       // Branch this version was created from
   releasedAt    DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  
+  // Version inheritance tracking
+  parentVersionId String?     // Reference to the development version this production version inherits from
+  isProduction    Boolean     @default(false) // True if this is a production release
   
   // AI-generated content for better changelog
   aiSummary     String?       // AI-generated version summary
   aiChangelog   String?       // AI-generated changelog content
   
   repository    Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  parentVersion Version?      @relation("VersionInheritance", fields: [parentVersionId], references: [id])
+  childVersions Version[]     @relation("VersionInheritance")
   issues        VersionIssue[]
   releases      Release[]
   deployments   Deployment[]
@@ -1664,6 +1708,8 @@ model Version {
   @@unique([repositoryId, version])
   @@index([repositoryId, status])
   @@index([repositoryId, environment])
+  @@index([repositoryId, branch])
+  @@index([parentVersionId])
   @@index([status])
 }
 
@@ -1800,6 +1846,18 @@ enum VersionStatus {
   RELEASED    // Successfully released
   FAILED      // Release failed
   CANCELLED   // Release cancelled
+}
+
+enum VersioningStrategy {
+  SINGLE_BRANCH    // Direct to main/master (simple flow)
+  MULTI_BRANCH     // Development branch -> main/master (GitFlow style)
+}
+
+enum ReviewState {
+  PENDING           // Review requested but not submitted
+  APPROVED          // Review approved
+  CHANGES_REQUESTED // Changes requested
+  DISMISSED         // Review dismissed
 }
 
 enum DeploymentStatus {

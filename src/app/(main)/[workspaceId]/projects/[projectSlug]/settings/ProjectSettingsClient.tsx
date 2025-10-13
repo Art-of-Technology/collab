@@ -30,8 +30,6 @@ import {
   ArrowLeft, 
   Plus, 
   X,
-  Palette,
-  Hash,
   FileText,
   Circle
 } from 'lucide-react';

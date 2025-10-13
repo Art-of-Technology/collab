@@ -10,10 +10,17 @@ export interface Repository {
   fullName: string;
   defaultBranch: string;
   webhookSecret: string;
+  webhookId?: string | null;
   isActive: boolean;
   syncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  
+  // Branch versioning configuration
+  developmentBranch?: string;
+  versioningStrategy: 'SINGLE_BRANCH' | 'MULTI_BRANCH';
+  branchEnvironmentMap?: Record<string, string>;
+  issueTypeMapping?: Record<string, 'MAJOR' | 'MINOR' | 'PATCH'>;
 }
 
 export interface Project {

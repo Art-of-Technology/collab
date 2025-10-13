@@ -92,113 +92,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/github/repositories/[repositoryId] - Get repository details
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { repositoryId: string } }
-) {
-  try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { repositoryId } = params;
-
-    const repository = await prisma.repository.findFirst({
-      where: {
-        id: repositoryId,
-        project: {
-          workspace: {
-            OR: [
-              { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
-            ],
-          },
-        },
-      },
-      include: {
-        project: {
-          include: { workspace: true },
-        },
-        branches: {
-          take: 10,
-          orderBy: { updatedAt: 'desc' },
-        },
-        pullRequests: {
-          take: 10,
-          where: { state: { in: ['OPEN', 'DRAFT'] } },
-          orderBy: { githubUpdatedAt: 'desc' },
-        },
-        versions: {
-          take: 5,
-          orderBy: { createdAt: 'desc' },
-        },
-        _count: {
-          select: {
-            branches: true,
-            pullRequests: true,
-            commits: true,
-            versions: true,
-          },
-        },
-      },
-    });
-
-    if (!repository) {
-      return NextResponse.json({ error: "Repository not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ repository });
-  } catch (error) {
-    console.error('[GITHUB_REPOSITORY_GET]', error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
-// DELETE /api/github/repositories/[repositoryId] - Disconnect repository
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { repositoryId: string } }
-) {
-  try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { repositoryId } = params;
-
-    // Verify user has admin access to the repository's project
-    const repository = await prisma.repository.findFirst({
-      where: {
-        id: repositoryId,
-        project: {
-          workspace: {
-            ownerId: session.user.id, // Only workspace owners can disconnect
-          },
-        },
-      },
-    });
-
-    if (!repository) {
-      return NextResponse.json(
-        { error: "Repository not found or insufficient permissions" },
-        { status: 404 }
-      );
-    }
-
-    // Delete repository and all related data (cascades)
-    await prisma.repository.delete({
-      where: { id: repositoryId },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('[GITHUB_REPOSITORY_DELETE]', error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
 
 // Helper function to encrypt access tokens
 async function encryptToken(token: string): Promise<string> {
@@ -206,6 +99,7 @@ async function encryptToken(token: string): Promise<string> {
   // For now, return the token (in production, implement proper encryption)
   return token;
 }
+
 
 // Helper function to initialize default version
 async function initializeDefaultVersion(repositoryId: string) {

@@ -41,6 +41,14 @@ export async function POST(request: NextRequest) {
         await handlePullRequestEvent(payload, webhookService, versionManager);
         break;
 
+      case 'pull_request_review':
+        await handlePullRequestReviewEvent(payload, webhookService);
+        break;
+
+      case 'deployment':
+      case 'deployment_status':
+        await handleDeploymentEvent(payload, webhookService);
+        break;
 
       case 'check_run':
       case 'check_suite':
@@ -294,6 +302,160 @@ async function handleBranchEvent(
   }
 }
 
+// Handle pull request review events
+async function handlePullRequestReviewEvent(
+  payload: any,
+  webhookService: GitHubWebhookService
+) {
+  try {
+    const repository = await findRepository(payload.repository.id);
+    if (!repository) return;
+
+    const review = payload.review;
+    const pullRequest = payload.pull_request;
+
+    // Find the pull request in our database
+    const pr = await prisma.pullRequest.findFirst({
+      where: {
+        repositoryId: repository.id,
+        githubPrId: pullRequest.number,
+      },
+    });
+
+    if (!pr) {
+      console.log(`Pull request ${pullRequest.number} not found for review event`);
+      return;
+    }
+
+    // Find or create the reviewer user
+    const reviewerId = await findUserByGithubId(review.user.id);
+
+    // Create or update the review record
+    await prisma.pRReview.upsert({
+      where: {
+        pullRequestId_githubReviewId: {
+          pullRequestId: pr.id,
+          githubReviewId: review.id.toString(),
+        },
+      },
+      update: {
+        state: mapReviewState(review.state),
+        body: review.body,
+        submittedAt: review.submitted_at ? new Date(review.submitted_at) : null,
+      },
+      create: {
+        pullRequestId: pr.id,
+        githubReviewId: review.id.toString(),
+        reviewerId,
+        githubReviewerId: review.user.id.toString(),
+        reviewerLogin: review.user.login,
+        state: mapReviewState(review.state),
+        body: review.body,
+        submittedAt: review.submitted_at ? new Date(review.submitted_at) : null,
+      },
+    });
+
+    console.log(`Processed review ${review.id} for PR ${pullRequest.number} by ${review.user.login}`);
+  } catch (error) {
+    console.error('Error handling pull request review event:', error);
+  }
+}
+
+// Handle deployment events
+async function handleDeploymentEvent(
+  payload: any,
+  webhookService: GitHubWebhookService
+) {
+  try {
+    const repository = await findRepository(payload.repository.id);
+    if (!repository) return;
+
+    if (payload.deployment) {
+      // Handle deployment creation
+      const deployment = payload.deployment;
+      
+      await prisma.deployment.upsert({
+        where: {
+          repositoryId_githubDeploymentId: {
+            repositoryId: repository.id,
+            githubDeploymentId: deployment.id.toString(),
+          },
+        },
+        update: {
+          status: 'PENDING',
+          environment: deployment.environment,
+          ref: deployment.ref,
+          sha: deployment.sha,
+        },
+        create: {
+          repositoryId: repository.id,
+          githubDeploymentId: deployment.id.toString(),
+          environment: deployment.environment,
+          ref: deployment.ref,
+          sha: deployment.sha,
+          status: 'PENDING',
+          deployedAt: new Date(deployment.created_at),
+          deployedById: await findUserByGithubId(deployment.creator?.id),
+        },
+      });
+
+      console.log(`Processed deployment ${deployment.id} to ${deployment.environment}`);
+    }
+
+    if (payload.deployment_status) {
+      // Handle deployment status update
+      const deploymentStatus = payload.deployment_status;
+      const deployment = payload.deployment;
+
+      await prisma.deployment.updateMany({
+        where: {
+          repositoryId: repository.id,
+          githubDeploymentId: deployment.id.toString(),
+        },
+        data: {
+          status: mapDeploymentStatus(deploymentStatus.state),
+          deployedAt: deploymentStatus.state === 'success' ? new Date() : undefined,
+        },
+      });
+
+      console.log(`Updated deployment ${deployment.id} status to ${deploymentStatus.state}`);
+    }
+  } catch (error) {
+    console.error('Error handling deployment event:', error);
+  }
+}
+
+// Helper function to map GitHub review states to our enum
+function mapReviewState(githubState: string): 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'DISMISSED' {
+  switch (githubState?.toLowerCase()) {
+    case 'approved':
+      return 'APPROVED';
+    case 'changes_requested':
+      return 'CHANGES_REQUESTED';
+    case 'dismissed':
+      return 'DISMISSED';
+    default:
+      return 'PENDING';
+  }
+}
+
+// Helper function to map GitHub deployment status to our enum
+function mapDeploymentStatus(githubStatus: string): 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILURE' | 'CANCELLED' {
+  switch (githubStatus?.toLowerCase()) {
+    case 'success':
+      return 'SUCCESS';
+    case 'failure':
+    case 'error':
+      return 'FAILURE';
+    case 'in_progress':
+      return 'IN_PROGRESS';
+    case 'cancelled':
+      return 'CANCELLED';
+    default:
+      return 'PENDING';
+  }
+}
+
 // Helper functions
 async function verifyWebhookSignature(
   signature: string,
@@ -333,9 +495,19 @@ async function findRepository(githubRepoId: number) {
 }
 
 async function findUserByGithubId(githubUserId: number): Promise<string | null> {
-  // This would need to be implemented based on how you store GitHub user mappings
-  // For now, return null and handle gracefully
-  return null;
+  if (!githubUserId) return null;
+  
+  try {
+    const user = await prisma.user.findFirst({
+      where: { githubId: githubUserId.toString() },
+      select: { id: true },
+    });
+    
+    return user?.id || null;
+  } catch (error) {
+    console.error('Error finding user by GitHub ID:', error);
+    return null;
+  }
 }
 
 async function extractIssueFromBranchName(

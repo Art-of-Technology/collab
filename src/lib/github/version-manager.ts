@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { PrismaClient, IssueType } from "@prisma/client";
+import { PrismaClient, IssueType, VersioningStrategy } from "@prisma/client";
 import semver from "semver";
 
 interface CommitInfo {
@@ -35,6 +35,14 @@ interface VersionCalculation {
   releaseType: 'MAJOR' | 'MINOR' | 'PATCH' | 'PRERELEASE';
   issues: string[]; // Issue IDs
   environment: string;
+  branch: string;
+}
+
+interface RepositoryConfig {
+  versioningStrategy: VersioningStrategy;
+  developmentBranch?: string;
+  branchEnvironmentMap: Record<string, string>;
+  issueTypeMapping: Record<string, 'MAJOR' | 'MINOR' | 'PATCH'>;
 }
 
 export class VersionManager {
@@ -45,11 +53,12 @@ export class VersionManager {
   }
 
   /**
-   * Handle branch merge and calculate next version
+   * Handle branch merge and calculate next version with multi-branch support
    */
   async handleBranchMerge(repositoryId: string, targetBranch: string, commits: CommitInfo[]) {
     try {
-      const environment = this.getEnvironmentFromBranch(targetBranch);
+      // Get repository configuration
+      const repoConfig = await this.getRepositoryConfig(repositoryId);
       
       // Extract issues from commits
       const issueIds = await this.extractIssuesFromCommits(repositoryId, commits);
@@ -65,30 +74,16 @@ export class VersionManager {
         select: { id: true, type: true, issueKey: true, title: true, description: true },
       });
 
-      // Special handling for production merges (dev -> master)
-      if (environment === 'production') {
-        return await this.handleProductionMerge(repositoryId, issues.map(issue => ({
-          ...issue,
-          description: issue.description || undefined
-        })));
-      }
+      console.log(`Processing ${issues.length} issues for branch merge to ${targetBranch}`);
 
-      // Calculate next version for development/staging
-      const versionCalc = await this.calculateNextVersion(repositoryId, issues, environment);
+      // Determine environment and handle versioning based on strategy
+      const environment = this.getEnvironmentFromBranch(targetBranch, repoConfig.branchEnvironmentMap);
       
-      // Create version record
-      const version = await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
-        ...issue,
-        description: issue.description || undefined
-      })));
-      
-      // Generate AI-enhanced changelog
-      await this.generateVersionChangelog(version.id, issues);
-      
-      // Update version.json if needed
-      await this.updateVersionFile(repositoryId, version, environment);
-      
-      return version;
+      if (repoConfig.versioningStrategy === 'MULTI_BRANCH') {
+        return await this.handleMultiBranchVersioning(repositoryId, targetBranch, issues, repoConfig);
+      } else {
+        return await this.handleSingleBranchVersioning(repositoryId, targetBranch, issues, repoConfig);
+      }
     } catch (error) {
       console.error('Error handling branch merge:', error);
       throw error;
@@ -96,7 +91,265 @@ export class VersionManager {
   }
 
   /**
-   * Handle production merge (dev -> master)
+   * Handle multi-branch versioning strategy (GitFlow style)
+   */
+  private async handleMultiBranchVersioning(
+    repositoryId: string, 
+    targetBranch: string, 
+    issues: any[], 
+    config: RepositoryConfig
+  ) {
+    const environment = this.getEnvironmentFromBranch(targetBranch, config.branchEnvironmentMap);
+    
+    if (environment === 'production') {
+      // Production merge: promote development version to production
+      return await this.promoteToProduction(repositoryId, issues, targetBranch);
+    } else if (targetBranch === config.developmentBranch) {
+      // Development branch: create incremental version
+      return await this.createDevelopmentVersion(repositoryId, issues, targetBranch, config);
+    } else {
+      // Other branches: create staging/feature versions
+      return await this.createBranchVersion(repositoryId, issues, targetBranch, environment, config);
+    }
+  }
+
+  /**
+   * Handle single-branch versioning strategy (direct to main)
+   */
+  private async handleSingleBranchVersioning(
+    repositoryId: string, 
+    targetBranch: string, 
+    issues: any[], 
+    config: RepositoryConfig
+  ) {
+    const environment = this.getEnvironmentFromBranch(targetBranch, config.branchEnvironmentMap);
+    
+    // Calculate next version directly
+    const versionCalc = await this.calculateNextVersion(repositoryId, issues, environment, targetBranch, config);
+    
+    // Create version record
+    const version = await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
+      ...issue,
+      description: issue.description || undefined
+    })));
+    
+    // Generate AI-enhanced changelog
+    await this.generateVersionChangelog(version.id, issues);
+    
+    // Update version.json if needed
+    await this.updateVersionFile(repositoryId, version, environment);
+    
+    return version;
+  }
+
+  /**
+   * Get repository configuration for versioning
+   */
+  private async getRepositoryConfig(repositoryId: string): Promise<RepositoryConfig> {
+    const repository = await this.prisma.repository.findUnique({
+      where: { id: repositoryId },
+      select: {
+        versioningStrategy: true,
+        developmentBranch: true,
+        branchEnvironmentMap: true,
+        issueTypeMapping: true,
+      },
+    });
+
+    if (!repository) {
+      throw new Error(`Repository not found: ${repositoryId}`);
+    }
+
+    // Default configurations
+    const defaultBranchEnvironmentMap = {
+      'main': 'production',
+      'master': 'production',
+      'production': 'production',
+      'develop': 'development',
+      'development': 'development',
+      'dev': 'development',
+      'staging': 'staging',
+      'uat': 'uat',
+      'sandbox': 'sandbox',
+    };
+
+    const defaultIssueTypeMapping = {
+      'BUG': 'PATCH' as const,
+      'HOTFIX': 'PATCH' as const,
+      'TASK': 'MINOR' as const,
+      'STORY': 'MINOR' as const,
+      'FEATURE': 'MINOR' as const,
+      'ENHANCEMENT': 'MINOR' as const,
+      'EPIC': 'MAJOR' as const,
+      'BREAKING_CHANGE': 'MAJOR' as const,
+    };
+
+    return {
+      versioningStrategy: repository.versioningStrategy,
+      developmentBranch: repository.developmentBranch || 'dev',
+      branchEnvironmentMap: {
+        ...defaultBranchEnvironmentMap,
+        ...(repository.branchEnvironmentMap as Record<string, string> || {}),
+      },
+      issueTypeMapping: {
+        ...defaultIssueTypeMapping,
+        ...(repository.issueTypeMapping as Record<string, 'MAJOR' | 'MINOR' | 'PATCH'> || {}),
+      },
+    };
+  }
+
+  /**
+   * Create development version with incremental versioning
+   */
+  private async createDevelopmentVersion(
+    repositoryId: string,
+    issues: any[],
+    branch: string,
+    config: RepositoryConfig
+  ) {
+    console.log(`Creating development version for ${issues.length} issues on branch ${branch}`);
+    
+    // Calculate next version based on current development versions
+    const versionCalc = await this.calculateNextVersion(repositoryId, issues, 'development', branch, config);
+    
+    // Create version record
+    const version = await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
+      ...issue,
+      description: issue.description || undefined
+    })));
+    
+    // Generate AI-enhanced changelog
+    await this.generateVersionChangelog(version.id, issues);
+    
+    // Update version.json for development
+    await this.updateVersionFile(repositoryId, version, 'development');
+    
+    console.log(`Created development version ${version.version} with ${issues.length} issues`);
+    return version;
+  }
+
+  /**
+   * Promote development version to production
+   */
+  private async promoteToProduction(repositoryId: string, issues: any[], branch: string) {
+    console.log(`Promoting to production for ${issues.length} issues`);
+    
+    // Find the latest development version that contains these issues
+    const latestDevVersion = await this.findLatestDevelopmentVersion(repositoryId);
+    
+    if (latestDevVersion) {
+      // Create production version inheriting from development
+      const productionVersion = await this.prisma.version.create({
+        data: {
+          repositoryId,
+          version: latestDevVersion.version,
+          major: latestDevVersion.major,
+          minor: latestDevVersion.minor,
+          patch: latestDevVersion.patch,
+          prerelease: latestDevVersion.prerelease,
+          buildMetadata: latestDevVersion.buildMetadata,
+          releaseType: latestDevVersion.releaseType,
+          status: 'READY',
+          environment: 'production',
+          branch,
+          parentVersionId: latestDevVersion.id,
+          isProduction: true,
+          releasedAt: new Date(),
+        },
+      });
+
+      // Copy all issues from development version to production version
+      const devVersionIssues = await this.prisma.versionIssue.findMany({
+        where: { versionId: latestDevVersion.id },
+      });
+
+      for (const versionIssue of devVersionIssues) {
+        await this.prisma.versionIssue.upsert({
+          where: {
+            versionId_issueId: {
+              versionId: productionVersion.id,
+              issueId: versionIssue.issueId,
+            },
+          },
+          update: {},
+          create: {
+            versionId: productionVersion.id,
+            issueId: versionIssue.issueId,
+            aiTitle: versionIssue.aiTitle,
+            aiSummary: versionIssue.aiSummary,
+          },
+        });
+      }
+
+      // Update version.json for production
+      await this.updateVersionFile(repositoryId, productionVersion, 'production');
+
+      console.log(`Promoted version ${productionVersion.version} to production`);
+      return productionVersion;
+    } else {
+      // Fallback: create new production version if no development version found
+      console.log('No development version found, creating new production version');
+      const config = await this.getRepositoryConfig(repositoryId);
+      const versionCalc = await this.calculateNextVersion(repositoryId, issues, 'production', branch, config);
+      
+      const version = await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
+        ...issue,
+        description: issue.description || undefined
+      })));
+      
+      await this.generateVersionChangelog(version.id, issues);
+      await this.updateVersionFile(repositoryId, version, 'production');
+      
+      return version;
+    }
+  }
+
+  /**
+   * Create version for other branches (staging, feature, etc.)
+   */
+  private async createBranchVersion(
+    repositoryId: string,
+    issues: any[],
+    branch: string,
+    environment: string,
+    config: RepositoryConfig
+  ) {
+    console.log(`Creating ${environment} version for ${issues.length} issues on branch ${branch}`);
+    
+    const versionCalc = await this.calculateNextVersion(repositoryId, issues, environment, branch, config);
+    
+    const version = await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
+      ...issue,
+      description: issue.description || undefined
+    })));
+    
+    await this.generateVersionChangelog(version.id, issues);
+    await this.updateVersionFile(repositoryId, version, environment);
+    
+    return version;
+  }
+
+  /**
+   * Find latest development version for promotion
+   */
+  private async findLatestDevelopmentVersion(repositoryId: string) {
+    return await this.prisma.version.findFirst({
+      where: {
+        repositoryId,
+        environment: 'development',
+        status: { notIn: ['FAILED', 'CANCELLED'] },
+      },
+      orderBy: [
+        { major: 'desc' },
+        { minor: 'desc' },
+        { patch: 'desc' },
+        { createdAt: 'desc' },
+      ],
+    });
+  }
+
+  /**
+   * Handle production merge (dev -> master) - LEGACY METHOD
    * Promotes existing development version to production
    */
   private async handleProductionMerge(repositoryId: string, issues: Array<{ id: string; type: IssueType; issueKey: string | null; title: string; description?: string }>) {
@@ -314,36 +567,97 @@ export class VersionManager {
   }
 
   /**
-   * Calculate next version based on issues and SemVer rules
+   * Calculate next version based on issues and SemVer rules with enhanced multi-branch support
    */
   private async calculateNextVersion(
     repositoryId: string,
     issues: Array<{ id: string; type: IssueType; issueKey: string | null }>,
-    environment: string
+    environment: string,
+    branch: string,
+    config: RepositoryConfig
   ): Promise<VersionCalculation> {
     try {
-      // Get current version
+      // Get current version for the environment
       const currentVersion = await this.getCurrentVersion(repositoryId, environment);
       
-      // Determine version bump based on issue types
-      const releaseType = this.determineVersionBump(issues);
+      // Determine version bump based on issue types using custom mapping
+      const releaseType = this.determineVersionBump(issues, config.issueTypeMapping);
       
-      // Calculate next semantic version
-      const nextVersion = this.calculateSemVer(currentVersion, releaseType);
-      
-      return {
-        version: nextVersion.version,
-        major: nextVersion.major,
-        minor: nextVersion.minor,
-        patch: nextVersion.patch,
-        releaseType,
-        issues: issues.map(i => i.id),
-        environment,
-      };
+      // For development branches, use smart accumulation logic
+      if (environment === 'development' && config.versioningStrategy === 'MULTI_BRANCH') {
+        const nextVersion = await this.calculateDevelopmentVersion(repositoryId, currentVersion, releaseType, issues);
+        
+        return {
+          version: nextVersion.version,
+          major: nextVersion.major,
+          minor: nextVersion.minor,
+          patch: nextVersion.patch,
+          releaseType,
+          issues: issues.map(i => i.id),
+          environment,
+          branch,
+        };
+      } else {
+        // Standard semantic versioning
+        const nextVersion = this.calculateSemVer(currentVersion, releaseType);
+        
+        return {
+          version: nextVersion.version,
+          major: nextVersion.major,
+          minor: nextVersion.minor,
+          patch: nextVersion.patch,
+          releaseType,
+          issues: issues.map(i => i.id),
+          environment,
+          branch,
+        };
+      }
     } catch (error) {
       console.error('Error calculating next version:', error);
       throw error;
     }
+  }
+
+  /**
+   * Calculate development version with smart accumulation
+   * Example: 0.2.1 -> 0.2.2 (bug) -> 0.2.3 (bug) -> 0.3.3 (feature)
+   */
+  private async calculateDevelopmentVersion(
+    repositoryId: string,
+    currentVersion: string,
+    releaseType: 'MAJOR' | 'MINOR' | 'PATCH',
+    issues: Array<{ id: string; type: IssueType }>
+  ) {
+    const parsed = semver.parse(currentVersion);
+    if (!parsed) {
+      throw new Error(`Invalid current version: ${currentVersion}`);
+    }
+
+    let { major, minor, patch } = parsed;
+
+    // Smart version accumulation logic
+    if (releaseType === 'MAJOR') {
+      major += 1;
+      // Keep accumulated minor and patch changes
+      // Don't reset to 0 - this preserves the development history
+    } else if (releaseType === 'MINOR') {
+      minor += 1;
+      // Keep accumulated patch changes
+      // Don't reset patch to 0 - this preserves the development history
+    } else if (releaseType === 'PATCH') {
+      patch += 1;
+    }
+
+    const version = `${major}.${minor}.${patch}`;
+    
+    console.log(`Development version calculation: ${currentVersion} -> ${version} (${releaseType})`);
+    
+    return {
+      version,
+      major,
+      minor,
+      patch,
+    };
   }
 
   /**
@@ -377,6 +691,7 @@ export class VersionManager {
           releaseType: versionCalc.releaseType,
           status: 'PENDING',
           environment: versionCalc.environment,
+          branch: versionCalc.branch,
         },
       });
 
@@ -518,8 +833,8 @@ export class VersionManager {
   }
 
   // Helper methods
-  private getEnvironmentFromBranch(branchName: string): string {
-    const envMap: Record<string, string> = {
+  private getEnvironmentFromBranch(branchName: string, branchEnvironmentMap?: Record<string, string>): string {
+    const defaultEnvMap: Record<string, string> = {
       'main': 'production',
       'master': 'production',
       'production': 'production',
@@ -528,30 +843,36 @@ export class VersionManager {
       'dev': 'development',
       'staging': 'staging',
       'uat': 'staging',
+      'sandbox': 'sandbox',
     };
 
+    const envMap = branchEnvironmentMap || defaultEnvMap;
     return envMap[branchName] || 'development';
   }
 
-  private determineVersionBump(issues: Array<{ type: IssueType }>): 'MAJOR' | 'MINOR' | 'PATCH' {
-    // Check for breaking changes (would need to be manually flagged or determined by issue labels)
-    const hasBreakingChanges = false; // This would need custom logic
+  private determineVersionBump(
+    issues: Array<{ type: IssueType }>, 
+    issueTypeMapping: Record<string, 'MAJOR' | 'MINOR' | 'PATCH'>
+  ): 'MAJOR' | 'MINOR' | 'PATCH' {
+    let highestBump: 'MAJOR' | 'MINOR' | 'PATCH' = 'PATCH';
 
-    if (hasBreakingChanges) {
-      return 'MAJOR';
+    for (const issue of issues) {
+      const bump = issueTypeMapping[issue.type] || 'PATCH';
+      
+      // Determine the highest priority bump
+      if (bump === 'MAJOR') {
+        highestBump = 'MAJOR';
+        break; // MAJOR is the highest, no need to continue
+      } else if (bump === 'MINOR' && highestBump !== 'MAJOR') {
+        highestBump = 'MINOR';
+      }
+      // PATCH is the default, so no need to explicitly set it
     }
 
-    // Check for new features
-    const hasFeatures = issues.some(issue => 
-      ['TASK', 'STORY', 'EPIC'].includes(issue.type)
-    );
+    console.log(`Version bump determined: ${highestBump} for ${issues.length} issues`, 
+      issues.map(i => `${i.type}:${issueTypeMapping[i.type] || 'PATCH'}`));
 
-    if (hasFeatures) {
-      return 'MINOR';
-    }
-
-    // Only bug fixes
-    return 'PATCH';
+    return highestBump;
   }
 
   private calculateSemVer(

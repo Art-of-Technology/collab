@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Github, CheckCircle, AlertCircle, ExternalLink, GitBranch, GitPullRequest, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { GitHubOAuthConnection } from './GitHubOAuthConnection';
+import { BranchConfiguration } from './BranchConfiguration';
 
 interface Repository {
   id: string;
@@ -18,8 +20,14 @@ interface Repository {
   name: string;
   fullName: string;
   isActive: boolean;
-  syncedAt: string;
+  syncedAt: Date | null;
   webhookSecret: string;
+  webhookId?: string | null;
+  defaultBranch: string;
+  developmentBranch?: string;
+  versioningStrategy: 'SINGLE_BRANCH' | 'MULTI_BRANCH';
+  branchEnvironmentMap?: Record<string, string>;
+  issueTypeMapping?: Record<string, 'MAJOR' | 'MINOR' | 'PATCH'>;
   branches?: Array<{
     id: string;
     name: string;
@@ -54,64 +62,20 @@ interface GitHubRepositorySettingsProps {
 }
 
 export function GitHubRepositorySettings({ projectId, repository, onUpdate }: GitHubRepositorySettingsProps) {
-  const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [showConnectionForm, setShowConnectionForm] = useState(!repository);
-  const [formData, setFormData] = useState({
-    owner: '',
-    name: '',
-    githubRepoId: '',
-    accessToken: '',
-  });
+  const [showManualForm, setShowManualForm] = useState(false);
 
-  const handleConnect = async () => {
-    if (!formData.owner || !formData.name || !formData.githubRepoId) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    setIsConnecting(true);
-    try {
-      const response = await fetch('/api/github/repositories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          githubRepoId: parseInt(formData.githubRepoId),
-          owner: formData.owner,
-          name: formData.name,
-          accessToken: formData.accessToken || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to connect repository');
-      }
-
-      const data = await response.json();
-      
-      toast.success(
-        <div>
-          <div className="font-medium">Repository connected successfully!</div>
-          <div className="text-sm text-muted-foreground mt-1">
-            Webhook secret: <code className="text-xs">{data.repository.webhookSecret}</code>
-          </div>
-        </div>
-      );
-      
-      setShowConnectionForm(false);
-      onUpdate?.();
-    } catch (error) {
-      console.error('Error connecting repository:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to connect repository');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
+  // Debug: Log repository data
+  console.log('Repository data:', repository);
 
   const handleDisconnect = async () => {
     if (!repository) return;
+
+    console.log('Attempting to disconnect repository:', {
+      id: repository.id,
+      fullName: repository.fullName,
+      projectId: repository.projectId
+    });
 
     setIsDisconnecting(true);
     try {
@@ -120,12 +84,18 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to disconnect repository');
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Disconnect failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: error.error,
+          repositoryId: repository.id
+        });
+        throw new Error(error.error || `Failed to disconnect repository (${response.status})`);
       }
 
       toast.success('Repository disconnected successfully');
-      setShowConnectionForm(true);
+      // Repository disconnected, component will re-render
       onUpdate?.();
     } catch (error) {
       console.error('Error disconnecting repository:', error);
@@ -148,94 +118,60 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
     }
   };
 
-  if (showConnectionForm || !repository) {
+  // If no repository connected, show OAuth connection
+  if (!repository) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Github className="h-5 w-5" />
-            Connect GitHub Repository
-          </CardTitle>
-          <CardDescription>
-            Connect your GitHub repository to enable version tracking, AI code reviews, and automated changelog generation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="owner">Repository Owner</Label>
-              <Input
-                id="owner"
-                placeholder="e.g., microsoft"
-                value={formData.owner}
-                onChange={(e) => setFormData(prev => ({ ...prev, owner: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="name">Repository Name</Label>
-              <Input
-                id="name"
-                placeholder="e.g., vscode"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-          </div>
+      <div className="space-y-6">
+        <GitHubOAuthConnection 
+          projectId={projectId} 
+          onSuccess={onUpdate} 
+        />
+        
+        {/* Manual connection fallback */}
+        <div className="text-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowManualForm(!showManualForm)}
+            className="text-muted-foreground"
+          >
+            Need manual setup? Click here
+          </Button>
+        </div>
 
-          <div>
-            <Label htmlFor="githubRepoId">GitHub Repository ID</Label>
-            <Input
-              id="githubRepoId"
-              placeholder="e.g., 41881900"
-              value={formData.githubRepoId}
-              onChange={(e) => setFormData(prev => ({ ...prev, githubRepoId: e.target.value }))}
-            />
-            <p className="text-sm text-muted-foreground mt-1">
-              Find this in your GitHub repository's API URL or settings
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="accessToken">GitHub Access Token (Optional)</Label>
-            <Input
-              id="accessToken"
-              type="password"
-              placeholder="ghp_..."
-              value={formData.accessToken}
-              onChange={(e) => setFormData(prev => ({ ...prev, accessToken: e.target.value }))}
-            />
-            <p className="text-sm text-muted-foreground mt-1">
-              Required for private repositories or advanced features
-            </p>
-          </div>
-
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              After connecting, you'll need to configure a webhook in your GitHub repository settings.
-              We'll provide the webhook URL and secret after connection.
-            </AlertDescription>
-          </Alert>
-
-          <div className="flex gap-2">
-            <Button onClick={handleConnect} disabled={isConnecting}>
-              {isConnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Connect Repository
-            </Button>
-            {repository && (
-              <Button 
-                variant="outline" 
-                onClick={() => setShowConnectionForm(false)}
-              >
-                Cancel
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        {showManualForm && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Github className="h-5 w-5" />
+                Manual Repository Connection
+              </CardTitle>
+              <CardDescription>
+                Use this if OAuth doesn't work for your setup.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Manual setup requires technical knowledge and is not recommended. 
+                  Use OAuth connection above for the best experience.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">
+                  Manual setup is temporarily disabled. Please use OAuth connection above.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     );
   }
 
+  // Repository is connected, show status and management
   return (
     <div className="space-y-6">
       {/* Repository Status */}
@@ -282,7 +218,7 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />
-            Last synced: {new Date(repository.syncedAt).toLocaleString()}
+            Last synced: {repository.syncedAt ? new Date(repository.syncedAt).toLocaleString() : 'Never'}
           </div>
         </CardContent>
       </Card>
@@ -292,70 +228,135 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
         <CardHeader>
           <CardTitle>Webhook Configuration</CardTitle>
           <CardDescription>
-            Configure GitHub webhooks to enable real-time updates and automated workflows
+            {repository.webhookId 
+              ? "Webhook configured automatically for real-time GitHub events"
+              : "Configure GitHub webhooks to enable real-time updates and automated workflows"
+            }
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label>Webhook URL</Label>
-            <div className="flex gap-2">
-              <Input
-                readOnly
-                value={`${window.location.origin}/api/github/webhooks/events`}
-                className="font-mono text-sm"
-              />
-              <Button variant="outline" size="sm" onClick={copyWebhookUrl}>
-                Copy
-              </Button>
-            </div>
-          </div>
+          {repository.webhookId ? (
+            // Webhook was created automatically
+            <>
+              <Alert>
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <AlertDescription>
+                  <div className="space-y-2">
+                    <p className="font-medium text-green-700">Webhook configured successfully!</p>
+                    <p className="text-sm">
+                      Your repository is now connected and will receive real-time updates for:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
+                      <li>Push events and commits</li>
+                      <li>Pull request activities</li>
+                      <li>Release and deployment events</li>
+                      <li>Branch and tag creation/deletion</li>
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
 
-          <div>
-            <Label>Webhook Secret</Label>
-            <div className="flex gap-2">
-              <Input
-                readOnly
-                type="password"
-                value={repository.webhookSecret}
-                className="font-mono text-sm"
-              />
-              <Button variant="outline" size="sm" onClick={copyWebhookSecret}>
-                Copy
-              </Button>
-            </div>
-          </div>
-
-          <Alert>
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-2">
-                <p>To complete the setup, add this webhook to your GitHub repository:</p>
-                <ol className="list-decimal list-inside space-y-1 text-sm">
-                  <li>Go to your repository Settings → Webhooks</li>
-                  <li>Click "Add webhook"</li>
-                  <li>Paste the webhook URL above</li>
-                  <li>Set Content type to "application/json"</li>  
-                  <li>Paste the webhook secret above</li>
-                  <li>Select "Send me everything" or choose specific events</li>
-                  <li>Click "Add webhook"</li>
-                </ol>
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium">Webhook Active</span>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <a 
+                    href={`https://github.com/${repository.fullName}/settings/hooks`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    View in GitHub
+                  </a>
+                </Button>
               </div>
-            </AlertDescription>
-          </Alert>
+            </>
+          ) : (
+            // Webhook needs manual configuration
+            <>
+              <Alert>
+                <AlertCircle className="h-4 w-4 text-yellow-500" />
+                <AlertDescription>
+                  <div className="space-y-2">
+                    <p className="font-medium text-yellow-700">Manual webhook setup required</p>
+                    <p className="text-sm">
+                      Automatic webhook creation failed. Please configure the webhook manually to enable real-time GitHub events.
+                    </p>
+                  </div>
+                </AlertDescription>
+              </Alert>
 
-          <Button variant="outline" asChild>
-            <a 
-              href={`https://github.com/${repository.fullName}/settings/hooks`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open GitHub Webhook Settings
-            </a>
-          </Button>
+              <div>
+                <Label>Webhook URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/api/github/webhooks/events`}
+                    className="font-mono text-sm"
+                  />
+                  <Button variant="outline" size="sm" onClick={copyWebhookUrl}>
+                    Copy
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <Label>Webhook Secret</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    type="password"
+                    value={repository.webhookSecret}
+                    className="font-mono text-sm"
+                  />
+                  <Button variant="outline" size="sm" onClick={copyWebhookSecret}>
+                    Copy
+                  </Button>
+                </div>
+              </div>
+
+              <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-2">
+                    <p>To complete the setup, add this webhook to your GitHub repository:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-sm">
+                      <li>Go to your repository Settings → Webhooks</li>
+                      <li>Click "Add webhook"</li>
+                      <li>Paste the webhook URL above</li>
+                      <li>Set Content type to "application/json"</li>  
+                      <li>Paste the webhook secret above</li>
+                      <li>Select "Send me everything" or choose specific events</li>
+                      <li>Click "Add webhook"</li>
+                    </ol>
+                  </div>
+                </AlertDescription>
+              </Alert>
+
+              <Button variant="outline" asChild>
+                <a 
+                  href={`https://github.com/${repository.fullName}/settings/hooks`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open GitHub Webhook Settings
+                </a>
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
+
+      {/* Branch & Versioning Configuration */}
+      <BranchConfiguration 
+        repository={repository}
+        onUpdate={onUpdate}
+      />
 
       {/* Recent Activity */}
       {(repository.branches || repository.pullRequests || repository.versions) && (
@@ -441,7 +442,7 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
       <div className="flex gap-2">
         <Button 
           variant="outline" 
-          onClick={() => setShowConnectionForm(true)}
+          onClick={() => setShowManualForm(true)}
         >
           Reconfigure
         </Button>
