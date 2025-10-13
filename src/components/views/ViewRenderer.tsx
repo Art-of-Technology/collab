@@ -186,7 +186,11 @@ export default function ViewRenderer({
   // Realtime: subscribe to workspace-level events to keep issues and positions fresh
   // Allow invalidations so view positions update after drag-and-drop unless feature flag disables it for Kanban
   const suppressRealtimeForKanban = view.displayType === 'KANBAN' && !IS_KANBAN_REALTIME_ENABLED;
-  useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id }, suppressRealtimeForKanban);
+  useRealtimeWorkspaceEvents({
+    workspaceId: workspace.id,
+    viewId: view.id,
+    enabled: !suppressRealtimeForKanban
+  });
 
   // Temporary state for filters and display (resets on refresh)
   const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
