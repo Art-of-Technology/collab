@@ -5,15 +5,10 @@ version: '3.8'
 services:
   # Collab Application - Development Mode
   collab-dev:
-    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_NAME:-collab}:${IMAGE_TAG:-dev-latest}
-    # Uncomment for local builds:
-    # build:
-    #   context: ../../
-    #   dockerfile: docker/dev/Dockerfile.dev
+    build:
+      context: ../../
+      dockerfile: docker/dev/Dockerfile.dev
     restart: unless-stopped
-    labels:
-      - "com.collab.environment=development"
-      - "com.collab.managed-by=argocd"
     environment:
       # External Database Configuration (NeonDB)
       DATABASE_URL: ${DATABASE_URL}
