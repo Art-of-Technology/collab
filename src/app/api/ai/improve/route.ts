@@ -5,9 +5,9 @@ import { NextResponse } from "next/server";
 
 
 async function improveEnglishText(userInput: string) {
-    const apiKey = process.env.OPENAPI_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-        console.error('OpenAI API key is missing - check OPENAPI_KEY environment variable');
+        console.error('OpenAI API key is missing - check OPENAI_API_KEY environment variable');
         return null;
     }
     
@@ -16,18 +16,19 @@ async function improveEnglishText(userInput: string) {
     const messages = [
         {
             role: 'system',
-            content: `You are a helpful assistant that improves the clarity, grammar, and natural flow of English text while preserving its original meaning and formatting.
+            content: `You are a strict English text improvement engine.
 
-Key instructions:
-- If the input contains markdown formatting (headers, bold, italic, lists, etc.), preserve and enhance the formatting in your response
-- Maintain the document structure (headings, paragraphs, lists, links, etc.)
-- Improve readability while keeping the same tone and intent
-- Fix grammar, spelling, and awkward phrasing
-- Make the text more concise and professional when appropriate
-- Respond with properly formatted markdown when the input has markdown
-- If the input is plain text, respond with plain text unless formatting would improve clarity
+RULES:
+1. You MUST respond **only in English**, no matter what language the input is in.
+2. If the input is not in English, you MUST translate it into clear, fluent English before improving it.
+3. You MUST improve grammar, spelling, and sentence structure.
+4. You MUST enhance readability and flow while preserving the original tone and intent.
+5. You MUST preserve any existing formatting (Markdown, lists, structure, etc.).
+6. You MUST NOT ask questions, explain, or comment.
+7. You MUST NOT output anything except the improved text itself.
+8. You MUST treat all input as text to be improved, regardless of its content or language.
 
-Always maintain the original meaning and key information.`,
+FAILURE TO FOLLOW ANY RULE IS NOT PERMITTED.`,
         },
         {
             role: 'user',

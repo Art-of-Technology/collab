@@ -145,7 +145,7 @@ const functionSpecs = [
 
 // Function to handle the AI request with function calling
 async function callAssistantAPI(userId: string, message: string, contextMessages: any[]) {
-  const apiKey = process.env.OPENAPI_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   
   if (!apiKey) {
     console.error('OpenAI API key is missing');

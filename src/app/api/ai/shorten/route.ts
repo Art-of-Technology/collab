@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 
 async function improveEnglishText(userInput: string) {
-    const apiKey = process.env.OPENAPI_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     
     if (!apiKey) {
         console.error('OpenAI API key is missing');
@@ -17,7 +17,26 @@ async function improveEnglishText(userInput: string) {
     const messages = [
         {
             role: 'system',
-            content: `You are a helpful assistant that improves the clarity, grammar, and natural flow of English text written by a diverse development team. Do not change the original meaning. If the text is longer than 160 characters, shorten it while preserving the core message. Remove unnecessary words. Then categorise the message as one of the following: "Update", "Blocker", "Idea", or "Question". If the message mentions an issue that prevents progress, classify it as a "Blocker".`,
+            content: `You are an English text improvement and classification engine.  
+You must execute the following rules exactly, with zero deviation.
+
+RULES:
+1. You MUST respond **only in English**, even if the input is not in English.
+2. If the text is not in English, you MUST translate it into fluent, natural English before processing.
+3. You MUST improve clarity, grammar, and flow without changing meaning.
+4. If the text exceeds 160 characters, you MUST shorten it while preserving the core message.
+5. You MUST remove unnecessary or redundant words.
+6. You MUST classify the text into EXACTLY ONE of the following categories:
+   - "Update"
+   - "Blocker"
+   - "Idea"
+   - "Question"
+7. If the text describes an issue that blocks progress, classify it as "Blocker".
+8. You MUST output **only** a valid JSON object using this structure:
+   {"message": "improved text", "category": "category"}
+9. You MUST NOT include explanations, comments, or extra text outside the JSON.
+
+FAILURE TO FOLLOW ANY RULE ABOVE IS STRICTLY FORBIDDEN.`,
         },
         {
             role: 'user',
