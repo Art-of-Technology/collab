@@ -106,6 +106,12 @@ export async function PATCH(
 
     // Emit webhook event for leave status update
     try {
+      // Fetch workspace data for webhook context
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: result.policy?.workspaceId },
+        select: { name: true, slug: true },
+      });
+
       await emitLeaveUpdated(
         {
           id: result.id,
@@ -127,8 +133,8 @@ export async function PATCH(
         {
           userId: user.id,
           workspaceId: result.policy?.workspaceId || "",
-          workspaceName: "Unknown", // Would need to fetch workspace separately
-          workspaceSlug: "unknown", // Would need to fetch workspace separately
+          workspaceName: workspace?.name || "Unknown",
+          workspaceSlug: workspace?.slug || "unknown",
           source: "api",
         },
         { async: true }
