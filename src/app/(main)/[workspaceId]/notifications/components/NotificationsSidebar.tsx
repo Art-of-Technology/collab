@@ -45,7 +45,7 @@ const filterCategories: FilterCategory[] = [
   },
   {
     id: "project-related",
-    label: "Project notifications", 
+    label: "Project notifications",
     icon: <Briefcase className="h-4 w-4" />,
   },
 ];
@@ -56,9 +56,9 @@ export default function NotificationsSidebar({
   onCategoryChange,
   onWorkspaceChange,
 }: NotificationsSidebarProps) {
-  const { data: workspaces = { all: [] } } = useUserWorkspaces();
+  const { data: workspaces = [] } = useUserWorkspaces();
   const { currentWorkspace } = useWorkspace();
-  const hasMultipleWorkspaces = workspaces.all.length > 1;
+  const hasMultipleWorkspaces = workspaces.length > 1;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -90,16 +90,16 @@ export default function NotificationsSidebar({
         })}
       </div>
 
-      
+
       {hasMultipleWorkspaces && (
         <div className="hidden">
           <Separator className="mx-4" />
-          
+
           {/* Workspaces */}
           <div className="p-4">
             <div className="text-sm font-medium text-muted-foreground mb-2">Workspaces</div>
             <div className="space-y-1">
-              {workspaces.all.slice(0, 5).map((workspace: any) => (
+              {workspaces.slice(0, 5).map((workspace: any) => (
                 <Button
                   key={workspace.id}
                   variant={selectedWorkspace === workspace.id ? "secondary" : "ghost"}
@@ -120,7 +120,7 @@ export default function NotificationsSidebar({
                   </Badge>
                 </Button>
               ))}
-              {workspaces.all.length > 5 && (
+              {workspaces.length > 5 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -135,7 +135,7 @@ export default function NotificationsSidebar({
       )}
 
 
-      
+
       {/* Manage notifications */}
       <div className="p-3 border-t border-border/50">
         <Link
