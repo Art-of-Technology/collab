@@ -260,3 +260,28 @@ export async function emitAppUninstalled(
 ): Promise<void> {
   await eventBus.emit('app.uninstalled', { installation }, context, options);
 }
+
+export async function emitLeaveCreated(
+  leave: any,
+  context: EventContext,
+  options?: EmitEventOptions
+): Promise<void> {
+  await eventBus.emit('leave.created', { leave }, context, options);
+}
+
+export async function emitLeaveUpdated(
+  leave: any,
+  changes: any,
+  context: EventContext,
+  options?: EmitEventOptions
+): Promise<void> {
+  await eventBus.emit('leave.updated', { leave, changes }, context, options);
+}
+
+export async function emitLeaveDeleted(
+  leave: any,
+  context: EventContext,
+  options?: EmitEventOptions
+): Promise<void> {
+  await eventBus.emit('leave.deleted', { leave }, context, options);
+}

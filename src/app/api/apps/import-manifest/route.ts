@@ -8,6 +8,7 @@ import {
 } from '@/lib/apps/validation';
 import { AppManifestV1, AppImportResponse } from '@/lib/apps/types';
 import { validateJWKS } from '@/lib/apps/jwks';
+import { validateWebhookManifest } from '@/lib/apps/webhook-auto-creation';
 
 const prisma = new PrismaClient();
 
@@ -69,6 +70,15 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       return NextResponse.json(
         { success: false, error: error instanceof Error ? error.message : 'Invalid manifest format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate webhook configuration if present
+    const webhookValidation = validateWebhookManifest(manifest);
+    if (!webhookValidation.valid) {
+      return NextResponse.json(
+        { success: false, error: `Webhook configuration invalid: ${webhookValidation.errors.join(', ')}` },
         { status: 400 }
       );
     }

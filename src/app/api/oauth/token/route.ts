@@ -4,6 +4,8 @@ import { createHash, randomBytes } from 'crypto';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
+import { createWebhooksFromManifest } from '@/lib/apps/webhook-auto-creation';
+import { AppManifestV1 } from '@/lib/apps/types';
 
 const prisma = new PrismaClient();
 // OAuth 2.0 Token Endpoint
@@ -196,6 +198,43 @@ async function handleAuthorizationCodeGrant(
           updatedAt: new Date()
         }
       });
+
+      // Auto-create webhooks from app manifest if installation was previously PENDING
+      if (installation.status === 'PENDING') {
+        try {
+          // Get app with latest version for manifest
+          const appWithManifest = await prisma.app.findUnique({
+            where: { id: oauthClient.app.id },
+            include: {
+              versions: {
+                orderBy: { createdAt: 'desc' },
+                take: 1
+              }
+            }
+          });
+
+          if (appWithManifest?.versions[0]?.manifest) {
+            const manifest = appWithManifest.versions[0].manifest as unknown as AppManifestV1;
+            
+            console.log(`🪝 Auto-creating webhooks for app ${oauthClient.app.slug} installation ${installation.id}`);
+            
+            const webhookResult = await createWebhooksFromManifest(
+              installation.id,
+              oauthClient.app.id,
+              manifest
+            );
+
+            if (webhookResult.success && webhookResult.webhooksCreated > 0) {
+              console.log(`✅ Successfully created ${webhookResult.webhooksCreated} webhooks for ${oauthClient.app.slug}`);
+            } else if (webhookResult.errors.length > 0) {
+              console.warn(`⚠️ Webhook creation completed with warnings for ${oauthClient.app.slug}:`, webhookResult.errors);
+            }
+          }
+        } catch (webhookError) {
+          // Don't fail the OAuth flow if webhook creation fails
+          console.error(`❌ Failed to auto-create webhooks for ${oauthClient.app.slug}:`, webhookError);
+        }
+      }
 
       // Log successful OAuth completion and installation activation
       console.log(`OAuth installation completed: app=${oauthClient.app.slug}, installation=${installation.id}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
