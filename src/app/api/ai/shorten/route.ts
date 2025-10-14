@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 
 async function improveEnglishText(userInput: string) {
-    const apiKey = process.env.OPENAPI_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     
     if (!apiKey) {
         console.error('OpenAI API key is missing');
