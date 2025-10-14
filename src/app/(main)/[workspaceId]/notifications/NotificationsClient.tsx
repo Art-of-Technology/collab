@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useMention, Notification } from "@/context/MentionContext";
+import { useMention } from "@/context/MentionContext";
 import {
   Check,
   CheckCheck,
@@ -20,7 +20,7 @@ type GroupBy = "date" | "user" | "project";
 
 export default function NotificationsClient() {
   const { currentWorkspace } = useWorkspace();
-  
+
   // State for filters and search
   const [selectedCategory, setSelectedCategory] = useState<string>("inbox");
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("all");
@@ -28,17 +28,17 @@ export default function NotificationsClient() {
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("date");
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
-  
+
   const mobileCategories: { id: string; label: string }[] = [
     { id: "inbox", label: "Inbox" },
     { id: "mentioned", label: "Mentioned" },
     { id: "issue-related", label: "Issue notifications" },
     { id: "project-related", label: "Project notifications" },
   ];
-  
+
   // Fetch notifications via unified hook
   const { notifications, unreadCount, loading: isLoading, markAllNotificationsAsRead, markNotificationAsRead } = useMention();
-  
+
   // Filter logic with memoization for better performance
   const filteredNotifications = useMemo(() => {
     let filtered = [...notifications];
@@ -76,28 +76,28 @@ export default function NotificationsClient() {
         }
       });
     }
-    
+
     // Apply quick filter (all/unread)
     if (quickFilter === "unread") {
       filtered = filtered.filter(notification => !notification.read);
     }
-    
+
     // Apply search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(notification => 
+      filtered = filtered.filter(notification =>
         notification.content?.toLowerCase().includes(query) ||
         notification.sender?.name?.toLowerCase().includes(query)
       );
     }
-    
+
     return filtered;
   }, [notifications, selectedCategory, quickFilter, searchQuery]);
-  
+
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategory(categoryId);
   };
-  
+
   const handleMarkAllAsRead = async () => {
     try {
       if (currentWorkspace?.id) {
@@ -119,12 +119,12 @@ export default function NotificationsClient() {
   const markSelectedAsRead = async () => {
     try {
       const selectedIds = Array.from(selectedNotifications);
-      
+
       // Use optimized hook function for each notification
       await Promise.all(
         selectedIds.map(id => markNotificationAsRead(id))
       );
-      
+
       // Clear selection after marking as read
       setSelectedNotifications(new Set());
     } catch (error) {
@@ -144,7 +144,7 @@ export default function NotificationsClient() {
           workspaceId={currentWorkspace?.id || ""}
         />
       </div>
-      
+
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-background">
         {/* Header */}
@@ -249,7 +249,7 @@ export default function NotificationsClient() {
             </div>
           </div>
         </div>
-        
+
         {/* Notifications List */}
         <div className="flex-1 overflow-hidden">
           <NotificationsList

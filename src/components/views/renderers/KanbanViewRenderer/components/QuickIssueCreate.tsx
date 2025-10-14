@@ -90,7 +90,10 @@ export default function QuickIssueCreate({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      handleSubmit();
+      // Prevent duplicate submissions by checking pending state
+      if (!createIssueMutation.isPending) {
+        handleSubmit();
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onCancel();
