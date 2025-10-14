@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { NotificationService } from "@/lib/notification-service";
+import { emitLeaveCreated } from "@/lib/event-bus";
 
 // Validation schema for creating a leave request
 const createLeaveRequestSchema = z.object({
@@ -251,6 +252,41 @@ export async function POST(req: NextRequest) {
         "Failed to send leave request notifications:",
         notificationError
       );
+    }
+
+    // Emit webhook event for leave creation
+    try {
+      await emitLeaveCreated(
+        {
+          id: leaveRequest.id,
+          userId: leaveRequest.userId,
+          workspaceId: leaveRequest.policy.workspaceId,
+          startDate: leaveRequest.startDate.toISOString(),
+          endDate: leaveRequest.endDate.toISOString(),
+          isAllDay: leaveRequest.duration === "FULL_DAY",
+          startTime:
+            leaveRequest.duration === "HALF_DAY" ? "09:00:00" : undefined,
+          endTime:
+            leaveRequest.duration === "HALF_DAY" ? "17:00:00" : undefined,
+          status: leaveRequest.status.toLowerCase(),
+          type: leaveRequest.policy.name,
+          reason: leaveRequest.notes,
+          notes: leaveRequest.notes,
+          timezone: "Europe/London", // Default timezone - could be made configurable
+          updatedAt: leaveRequest.updatedAt.toISOString(),
+        },
+        {
+          userId: user.id,
+          workspaceId: leaveRequest.policy.workspaceId,
+          workspaceName: policyWorkspace.name,
+          workspaceSlug: policyWorkspace.slug,
+          source: "api",
+        },
+        { async: true }
+      );
+    } catch (webhookError) {
+      // Log but don't fail the request creation
+      console.error("Failed to emit leave created webhook:", webhookError);
     }
 
     return NextResponse.json(leaveRequest, { status: 201 });

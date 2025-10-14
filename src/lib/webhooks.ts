@@ -236,7 +236,10 @@ export const WEBHOOK_EVENT_TYPES = [
   'workspace.member_added',
   'workspace.member_removed',
   'app.installed',
-  'app.uninstalled'
+  'app.uninstalled',
+  'leave.created',
+  'leave.updated',
+  'leave.deleted'
 ] as const;
 
 export type WebhookEventType = typeof WEBHOOK_EVENT_TYPES[number];
