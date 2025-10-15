@@ -249,7 +249,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Log authorization for audit trail
-    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, scopes=${scopesToString(grantedScopes)}`);
+    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, installation=${installation.id}, scopes=${scopesToString(grantedScopes)}`);
 
     // Redirect back to app with authorization code
     const callbackUrl = new URL(redirectUri);
@@ -257,6 +257,9 @@ export async function GET(request: NextRequest) {
     if (state) {
       callbackUrl.searchParams.set('state', state);
     }
+    // Include workspace_id and installation_id in callback for third-party apps
+    callbackUrl.searchParams.set('workspace_id', targetWorkspaceId!);
+    callbackUrl.searchParams.set('installation_id', installation.id);
 
     return NextResponse.redirect(callbackUrl);
 
@@ -279,7 +282,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { approve, client_id, redirect_uri, scope, state, workspace_id } = body;
+    const { approve, client_id, redirect_uri, scope, state, workspace_id, installation_id } = body;
 
     // Verify user is authenticated
     const session = await getServerSession(authOptions);
@@ -312,6 +315,7 @@ export async function POST(request: NextRequest) {
     authorizeUrl.searchParams.set('scope', scope);
     if (state) authorizeUrl.searchParams.set('state', state);
     if (workspace_id) authorizeUrl.searchParams.set('workspace_id', workspace_id);
+    if (installation_id) authorizeUrl.searchParams.set('installation_id', installation_id);
 
     return NextResponse.json({
       redirect: authorizeUrl.toString()
