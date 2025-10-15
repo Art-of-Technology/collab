@@ -57,6 +57,76 @@ const initializeWebPush = (): boolean => {
 // Initialize on module load
 const isWebPushInitialized = initializeWebPush();
 
+/**
+ * Notification type patterns and their corresponding titles
+ */
+const NOTIFICATION_PATTERNS = new Map([
+  [/updated an issue/, 'Issue Updated'],
+  [/commented/, 'New Comment'],
+  [/mentioned you/, 'New Mention'],
+  [/assigned/, 'Task Assignment'],
+  [/status changed/, 'Status Change'],
+  [/created a task/, 'Task Created'],
+  [/due date/, 'Due Date Update'],
+  [/priority changed/, 'Priority Update'],
+  [/blocked by/, 'Blocker Added'],
+  [/resolved/, 'Issue Resolved'],
+  [/reopened/, 'Issue Reopened'],
+  [/moved to/, 'Issue Moved'],
+  [/added a label/, 'Label Added'],
+  [/removed a label/, 'Label Removed'],
+  [/voted on/, 'New Vote'],
+  [/requested changes/, 'Changes Requested'],
+  [/approved/, 'Changes Approved']
+]);
+
+/**
+ * Simple content formatting patterns
+ */
+const CONTENT_FORMATTERS = [
+  {
+    pattern: /@\[([^\]]+)\]\([^)]+\)/g,
+    replacement: '$1',  // Just the name
+    description: 'Clean user mentions'
+  },
+  {
+    pattern: /#\[([^\]]+)\]\([^)]+\)/g,
+    replacement: '#$1',  // Keep # for issue references
+    description: 'Clean issue references'
+  }
+];
+
+/**
+ * Formats notification content to be more user-friendly
+ * @param payload - The original notification payload
+ * @returns Formatted notification payload
+ */
+function formatNotificationContent(payload: PushNotificationPayload): PushNotificationPayload {
+  // Format the title
+  let title = payload.title;
+  if (title === 'Collab Notification') {
+    const body = payload.body.toLowerCase();
+    for (const [pattern, newTitle] of NOTIFICATION_PATTERNS) {
+      if (pattern.test(body)) {
+        title = newTitle;
+        break;
+      }
+    }
+  }
+
+  // Format the body text using defined formatters
+  let body = payload.body;
+  for (const formatter of CONTENT_FORMATTERS) {
+    body = body.replace(formatter.pattern, formatter.replacement);
+  }
+
+  return {
+    ...payload,
+    title,
+    body,
+  };
+}
+
 export interface PushNotificationPayload {
   title: string;
   body: string;
@@ -124,10 +194,12 @@ export async function sendPushNotification(
       return false;
     }
     
-    // Send the push notification
+    // Format and send the push notification
+    const formattedPayload = formatNotificationContent(payload);
+    
     await webpush.sendNotification(
       subscription,
-      JSON.stringify(payload)
+      JSON.stringify(formattedPayload)
     );
 
     return true;

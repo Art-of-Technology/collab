@@ -13,75 +13,105 @@ self.addEventListener('push', function(event) {
     return;
   }
 
+  // Default notification options
+  const defaultOptions = {
+    icon: '/logo-icon.svg',
+    badge: '/favicon-96x96.png',
+    vibrate: [100, 50, 100],
+    timestamp: Date.now(),
+    silent: false,
+    renotify: true,
+    requireInteraction: false,
+    actions: [
+      {
+        action: 'view',
+        title: 'View',
+        icon: '/favicon-32x32.png'
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss',
+        icon: '/favicon-16x16.png'
+      }
+    ]
+  };
+
+  // Merge with provided options
   const options = {
+    ...defaultOptions,
     body: data.body || 'You have a new notification',
-    icon: data.icon || '/icon-192x192.png',
-    badge: data.badge || '/icon-192x192.png',
-    image: data.image,
-    vibrate: [200, 100, 200],
+    tag: data.tag || getNotificationTag(data),
     data: {
       url: data.url || '/',
+      type: data.type || 'default',
       ...data.data
     },
-    actions: data.actions || [],
-    requireInteraction: data.requireInteraction || false,
-    tag: data.tag || 'default',
-    renotify: data.renotify || false
+    // Override only if explicitly provided
+    icon: data.icon || defaultOptions.icon,
+    badge: data.badge || defaultOptions.badge,
+    image: data.image,
+    actions: data.actions || defaultOptions.actions,
+    requireInteraction: data.requireInteraction ?? defaultOptions.requireInteraction,
+    renotify: data.renotify ?? defaultOptions.renotify
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Collab Notification', options)
+    self.registration.showNotification(data.title, options)
   );
 });
 
+/**
+ * Generate a unique tag for notifications to handle grouping
+ */
+function getNotificationTag(data) {
+  if (data.tag) return data.tag;
+  
+  // Generate tag based on notification type and related entity
+  const type = data.type || 'default';
+  const entityId = data.data?.issueId || data.data?.taskId || data.data?.postId || 'general';
+  return `${type}:${entityId}`;
+}
+
 // Handle notification clicks
 self.addEventListener('notificationclick', function(event) {
-  event.notification.close();
+  const notification = event.notification;
+  const action = event.action;
+  const data = notification.data || {};
 
-  const urlToOpen = event.notification.data?.url || '/';
+  // Always close the notification
+  notification.close();
 
+  // Handle different actions
+  let urlToOpen = data.url || '/';
+  
+  if (action === 'view') {
+    // Use the specific URL for the 'view' action
+    urlToOpen = data.url || '/';
+  } else if (action === 'dismiss') {
+    // Just close the notification
+    return;
+  } else if (!action) {
+    // Default click behavior (no specific action)
+    urlToOpen = data.url || '/';
+  }
+
+  // Focus existing window or open new one
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(function(clientList) {
-        // Check if there's already a tab open with our app
-        for (let i = 0; i < clientList.length; i++) {
-          const client = clientList[i];
+        // Try to focus an existing window
+        for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.navigate(urlToOpen);
-            return client.focus();
+            return client.navigate(urlToOpen)
+              .then(navigatedClient => navigatedClient.focus());
           }
         }
-        // If no existing tab, open a new one
+        // If no existing window, open a new one
         if (clients.openWindow) {
           return clients.openWindow(urlToOpen);
         }
       })
   );
-});
-
-// Handle notification action clicks
-self.addEventListener('notificationclick', function(event) {
-  if (!event.action) {
-    // Main notification body was clicked
-    return;
-  }
-
-  // Handle specific actions
-  switch (event.action) {
-    case 'view':
-      // Open the relevant page
-      event.waitUntil(
-        clients.openWindow(event.notification.data.url)
-      );
-      break;
-    case 'dismiss':
-      // Just close the notification
-      event.notification.close();
-      break;
-    default:
-      console.log('Unknown action clicked:', event.action);
-      break;
-  }
 });
 
 // Handle service worker activation
