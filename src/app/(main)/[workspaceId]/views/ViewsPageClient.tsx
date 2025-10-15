@@ -31,9 +31,10 @@ import { useViews, useDeleteView } from '@/hooks/queries/useViews';
 import { useToggleViewFavorite } from '@/hooks/queries/useViewFavorites';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateViewModal from '@/components/modals/CreateViewModal';
-import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
+import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 
 interface ViewsPageClientProps {
   workspaceId: string;
@@ -69,8 +70,17 @@ const getVisibilityColor = (visibility: string) => {
     case 'WORKSPACE': return 'text-[#22c55e]';
     case 'PERSONAL': return 'text-[#3b82f6]';
     case 'SHARED': return 'text-[#a855f7]';
-    default: return 'text-[#6b7280]';
+    default: return 'text-gray-500';
   }
+};
+
+const getFavoriteButtonClassName = (isFavorite: boolean) => {
+  return cn(
+    "h-5 w-5 p-0 transition-colors hover:bg-transparent",
+    isFavorite
+      ? "text-yellow-400 opacity-100"
+      : "text-gray-500 hover:text-yellow-400 opacity-0 group-hover:opacity-100"
+  );
 };
 
 export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
@@ -79,6 +89,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [viewToDelete, setViewToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const { data: views = [], isLoading } = useViews({
     workspaceId,
@@ -130,23 +141,25 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     }
   };
 
-  const handleDeleteView = async (viewId: string, viewName: string, e: React.MouseEvent) => {
+  const handleDeleteView = (viewId: string, viewName: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setViewToDelete({ id: viewId, name: viewName });
+  };
 
-    if (!confirm(`Are you sure you want to delete "${viewName}"? This action cannot be undone.`)) {
-      return;
-    }
+  const confirmDeleteView = async () => {
+    if (!viewToDelete) return;
 
     try {
       await deleteViewMutation.mutateAsync({
         workspaceId,
-        viewId
+        viewId: viewToDelete.id
       });
 
       toast({
         title: 'Success',
         description: 'View deleted successfully'
       });
+      setViewToDelete(null);
     } catch (error) {
       console.error('Error deleting view:', error);
       toast({
@@ -164,43 +177,51 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     return (
       <div
         className={cn(
-          "group relative cursor-pointer transition-all duration-200",
-          // Mobile-first: Card-like design with glassmorphism
-          "mx-3 mb-3 p-4 rounded-xl",
-          "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
-          "border border-white/10 hover:border-white/20",
-          // Desktop: More compact list style
-          "md:mx-0 md:mb-0 md:p-3 md:rounded-lg md:border-0",
-          "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none"
+          "group relative cursor-pointer transition-all duration-150",
+          // Mobile: Compact card design
+          "mx-3 mb-2 p-3 rounded-lg",
+          "bg-white/5 hover:bg-white/5 backdrop-blur-sm",
+          "border border-white/5 hover:border-white/20",
+          // Desktop: Minimal list row
+          "md:mx-0 md:mb-0 md:py-2.5 md:px-4 md:rounded-none md:border-0",
+          "md:bg-transparent md:hover:bg-white/5 md:backdrop-blur-none"
         )}
         onClick={() => handleViewClick(view.slug || view.id)}
       >
         {/* Mobile Layout */}
         <div className="md:hidden">
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              {/* Favorite Star */}
-              {view.isFavorite && (
-                <Star className="h-4 w-4 text-yellow-500 fill-current shrink-0" />
-              )}
+          <div className="flex items-start justify-between mb-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {/* Favorite Star for Mobile */}
+              <button
+                className={cn(
+                  "p-0.5 rounded transition-colors flex-shrink-0",
+                  view.isFavorite ? "text-yellow-400" : "text-gray-500 hover:text-yellow-400"
+                )}
+                onClick={(e) => handleToggleViewFavorite(view.id, e)}
+                disabled={toggleViewFavoriteMutation.isPending}
+                title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Star className={cn("h-3.5 w-3.5", view.isFavorite && "fill-current")} />
+              </button>
 
               {/* View Type Icon */}
-              <TypeIcon className="h-4 w-4 text-gray-400 shrink-0" />
+              <TypeIcon className="h-4 w-4 text-gray-500 shrink-0" />
 
               {/* View Name */}
-              <span className="text-white text-sm font-medium truncate">
+              <span className="text-gray-100 text-sm font-medium truncate">
                 {view.name}
               </span>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-0.5 flex-shrink-0 ml-2">
               <button
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                className="p-1.5 rounded-md hover:bg-gray-800 transition-colors"
                 onClick={(e) => handleViewSettings(view.slug || view.id, e)}
                 title="Settings"
               >
-                <Settings className="h-4 w-4 text-gray-400" />
+                <Settings className="h-3.5 w-3.5 text-gray-500" />
               </button>
 
               <TooltipProvider>
@@ -208,20 +229,20 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
                   <TooltipTrigger asChild>
                     <button
                       className={cn(
-                        "p-1.5 rounded-lg transition-colors",
+                        "p-1.5 rounded-md transition-colors",
                         view.isDefault
-                          ? "cursor-not-allowed opacity-40"
-                          : "hover:bg-red-500/10 text-red-400"
+                          ? "cursor-not-allowed opacity-30"
+                          : "hover:bg-red-500/10 text-red-400 hover:text-red-300"
                       )}
                       onClick={(e) => !view.isDefault && handleDeleteView(view.id, view.name, e)}
                       disabled={view.isDefault}
                       title={view.isDefault ? "Default views cannot be deleted" : "Delete view"}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
                   {view.isDefault && (
-                    <TooltipContent className="bg-gray-900 border-gray-700 text-white">
+                    <TooltipContent className="bg-gray-800 border-white/5 text-gray-100 text-xs">
                       <p>Default views cannot be deleted</p>
                     </TooltipContent>
                   )}
@@ -232,7 +253,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
 
           {/* Description */}
           {view.description && (
-            <p className="text-gray-500 text-xs mb-2 line-clamp-2">
+            <p className="text-gray-500 text-xs mb-2.5 line-clamp-2 leading-relaxed">
               {view.description}
             </p>
           )}
@@ -241,35 +262,22 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-3">
               {/* View Type */}
-              <span className="text-gray-400">
+              <span className="text-gray-500">
                 {viewTypeLabels[view.displayType as keyof typeof viewTypeLabels]}
               </span>
 
               {/* Visibility */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <VisibilityIcon className={cn("h-3 w-3", getVisibilityColor(view.visibility))} />
-                <span className={cn("", getVisibilityColor(view.visibility))}>
+                <span className={cn("text-xs", getVisibilityColor(view.visibility))}>
                   {view.visibility === 'WORKSPACE' ? 'Team' :
                     view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}
                 </span>
               </div>
-
-              {/* Favorite Star for Mobile */}
-              <button
-                className={cn(
-                  "p-1 rounded transition-colors",
-                  view.isFavorite ? "text-yellow-500" : "text-gray-400 hover:text-yellow-500"
-                )}
-                onClick={(e) => handleToggleViewFavorite(view.id, e)}
-                disabled={toggleViewFavoriteMutation.isPending}
-                title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                <Star className={cn("h-3 w-3", view.isFavorite && "fill-current")} />
-              </button>
             </div>
 
             {/* Updated Date */}
-            <span className="text-gray-500">
+            <span className="text-gray-600 text-xs">
               {new Date(view.updatedAt).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric'
@@ -278,22 +286,35 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           </div>
         </div>
 
-        {/* Desktop Layout - Original structure */}
-        <div className="hidden md:flex md:items-center md:relative">
+        {/* Desktop Layout */}
+        <div className="hidden md:flex md:items-center md:relative md:gap-3">
+          {/* Favorite Star */}
+          <div className="flex items-center w-5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={getFavoriteButtonClassName(view.isFavorite)}
+              onClick={(e) => handleToggleViewFavorite(view.id, e)}
+              disabled={toggleViewFavoriteMutation.isPending}
+              title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star className={cn("h-3 w-3", view.isFavorite && "fill-current")} />
+            </Button>
+          </div>
 
           {/* View Type Icon */}
-          <div className="flex items-center w-6 mr-3">
-            <TypeIcon className="h-4 w-4 text-gray-400" />
+          <div className="flex items-center w-5">
+            <TypeIcon className="h-4 w-4 text-gray-500" />
           </div>
 
           {/* View Name & Description */}
-          <div className="flex-1 min-w-0 mr-4">
-            <div className="flex flex-col">
-              <span className="text-white text-sm font-medium truncate">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-gray-100 text-sm font-medium truncate">
                 {view.name}
               </span>
               {view.description && (
-                <span className="text-gray-500 text-xs truncate mt-0.5">
+                <span className="text-gray-500 text-xs truncate">
                   {view.description}
                 </span>
               )}
@@ -301,26 +322,26 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           </div>
 
           {/* View Type Label */}
-          <div className="w-20 mr-4 text-gray-400 text-sm">
+          <div className="w-20 text-gray-500 text-xs">
             {viewTypeLabels[view.displayType as keyof typeof viewTypeLabels]}
           </div>
 
           {/* Visibility */}
-          <div className="w-24 mr-4 flex items-center">
-            <VisibilityIcon className={cn("h-4 w-4 mr-1", getVisibilityColor(view.visibility))} />
-            <span className={cn("text-sm", getVisibilityColor(view.visibility))}>
+          <div className="w-24 flex items-center gap-1.5">
+            <VisibilityIcon className={cn("h-3.5 w-3.5", getVisibilityColor(view.visibility))} />
+            <span className={cn("text-xs", getVisibilityColor(view.visibility))}>
               {view.visibility === 'WORKSPACE' ? 'Team' :
                 view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}
             </span>
           </div>
 
           {/* Issue Count */}
-          <div className="w-16 mr-4 text-gray-500 text-sm text-right">
-            {view._count?.issues !== undefined ? `${view._count.issues}` : '—'}
+          <div className="w-16 text-gray-500 text-xs text-right tabular-nums">
+            {view._count?.issues !== undefined ? view._count.issues : '—'}
           </div>
 
           {/* Last Updated */}
-          <div className="w-20 mr-4 text-gray-500 text-xs text-right">
+          <div className="w-20 text-gray-600 text-xs text-right">
             {new Date(view.updatedAt).toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric'
@@ -328,7 +349,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-1 flex-shrink-0 transition-opacity">
+          <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -337,10 +358,10 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
                       variant="ghost"
                       size="icon"
                       className={cn(
-                        "h-6 w-6 transition-colors",
+                        "h-7 w-7 transition-colors",
                         view.isDefault
-                          ? "text-gray-600 cursor-not-allowed opacity-40"
-                          : "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          ? "text-gray-600 cursor-not-allowed opacity-30"
+                          : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"
                       )}
                       onClick={(e) => !view.isDefault && handleDeleteView(view.id, view.name, e)}
                       disabled={view.isDefault}
@@ -351,29 +372,12 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
                   </div>
                 </TooltipTrigger>
                 {view.isDefault && (
-                  <TooltipContent className="bg-gray-900 border-gray-700 text-white">
+                  <TooltipContent className="bg-gray-800 border-gray-700 text-gray-100 text-xs">
                     <p>Default views cannot be deleted</p>
                   </TooltipContent>
                 )}
               </Tooltip>
             </TooltipProvider>
-
-            {/* Favorite Star - Interactive */}
-            <div className="flex items-center w-6">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  "h-5 w-5 p-0 transition-opacity hover:bg-transparent",
-                  view.isFavorite ? "text-yellow-500 opacity-70 group-hover:text-yellow-500" : "text-gray-400 hover:text-yellow-500 opacity-70 group-hover:opacity-100"
-                )}
-                onClick={(e) => handleToggleViewFavorite(view.id, e)}
-                disabled={toggleViewFavoriteMutation.isPending}
-                title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                <Star className={cn("h-3 w-3", view.isFavorite && "fill-current")} />
-              </Button>
-            </div>
           </div>
         </div>
       </div>
@@ -388,25 +392,25 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     if (views.length === 0) return null;
 
     return (
-      <div className="mb-6">
+      <div className="mb-4">
         {/* Section Header - Mobile & Desktop */}
         <div className={cn(
           "flex items-center sticky top-0 z-10",
-          // Mobile: Glassmorphism header with padding
-          "px-4 py-3 mb-3 backdrop-blur-xl bg-black/60 border-b border-white/10",
+          // Mobile: Glassmorphism header
+          "px-4 py-2.5 mb-2 backdrop-blur-xl bg-black/60 border-b border-white/5",
           // Desktop: Clean minimal header  
-          "md:px-6 md:py-2 md:mb-0 md:backdrop-blur-none md:bg-[#101011] md:border-b-[#1a1a1a]"
+          "md:px-4 md:py-2 md:mb-0 md:backdrop-blur-none md:bg-[#101011] md:border-b md:border-b-white/5"
         )}>
-          <span className="text-gray-400 text-sm font-medium">
+          <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">
             {title}
           </span>
-          <span className="ml-2 text-gray-500 text-sm">
+          <span className="ml-2 text-gray-600 text-xs tabular-nums">
             {count}
           </span>
         </div>
 
         {/* Views */}
-        <div className="md:divide-y md:divide-[#1a1a1a]">
+        <div className="md:divide-y md:divide-white/5">
           {views.map((view) => (
             <ViewRow key={view.id} view={view} />
           ))}
@@ -432,12 +436,12 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
         subtitle={`${filteredViews.length} ${filteredViews.length === 1 ? 'view' : 'views'}`}
         search={
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground z-10" />
             <Input
               placeholder="Search views..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full md:w-64 bg-white/5 md:bg-[#1a1a1a] backdrop-blur-sm border-white/10 md:border-[#2a2a2a] text-white placeholder-gray-500 focus:border-white/30 md:focus:border-[#0969da] h-7 md:h-8 text-xs md:text-sm rounded-lg transition-all duration-200"
+              className={cn(pageHeaderSearchStyles, "w-full md:w-64")}
             />
           </div>
         }
@@ -455,7 +459,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {filteredViews.length > 0 ? (
-          <div className="pb-20 md:pb-16">
+          <div className="pb-16 md:pb-12">
             {favoriteViews.length > 0 && (
               <ViewSection
                 title="Favorites"
@@ -489,33 +493,33 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
             )}
           </div>
         ) : searchQuery ? (
-          <div className="h-full flex items-center justify-center">
+          <div className="h-full flex items-center justify-center px-4">
             <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
-                <Search className="h-6 w-6 text-[#666]" />
+              <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mx-auto mb-3">
+                <Search className="h-5 w-5 text-gray-600" />
               </div>
-              <p className="text-[#9ca3af] text-sm">No views found</p>
-              <p className="text-[#666] text-xs mt-1">
+              <p className="text-gray-400 text-sm font-medium">No views found</p>
+              <p className="text-gray-600 text-xs mt-1">
                 Try adjusting your search terms
               </p>
             </div>
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center">
+          <div className="h-full flex items-center justify-center px-4">
             <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
-                <Eye className="h-6 w-6 text-[#666]" />
+              <div className="w-12 h-12 rounded-lg bg-gray-900/50 flex items-center justify-center mx-auto mb-3">
+                <Eye className="h-5 w-5 text-gray-600" />
               </div>
-              <p className="text-[#9ca3af] text-sm">No views yet</p>
-              <p className="text-[#666] text-xs mt-1 mb-4">
+              <p className="text-gray-400 text-sm font-medium">No views yet</p>
+              <p className="text-gray-600 text-xs mt-1.5 mb-4">
                 Create custom views to organize your work
               </p>
               <Button
                 onClick={handleCreateView}
                 size="sm"
-                className="bg-[#0969da] hover:bg-[#0860ca] text-white"
+                className="bg-[#0969da] hover:bg-[#0860ca] text-white text-xs h-8 px-3"
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Create your first view
               </Button>
             </div>
@@ -531,6 +535,23 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           workspaceId={workspaceId}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!viewToDelete}
+        onClose={() => setViewToDelete(null)}
+        onConfirm={confirmDeleteView}
+        title="Delete View"
+        message={
+          <span className="text-gray-400 text-sm">
+            Are you sure you want to delete <strong className="text-gray-100">&quot;{viewToDelete?.name}&quot;</strong> ? <br />This action cannot be undone.
+          </span>
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={deleteViewMutation.isPending}
+      />
     </div>
   );
 } 
