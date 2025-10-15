@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface InputDialogProps {
   open: boolean;
@@ -83,7 +84,14 @@ export function InputDialog({
               placeholder={placeholder}
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className={error ? "border-red-500 focus:border-red-500 focus-visible:ring-red-500 focus-visible:ring-1 focus:ring-offset-0 focus-visible:ring-offset-0" : ""}
+              className={cn({
+                "border-red-500": error,
+                "focus:border-red-500": error,
+                "focus-visible:ring-red-500": error,
+                "focus-visible:ring-1": error,
+                "focus:ring-offset-0": error,
+                "focus-visible:ring-offset-0": error
+              })}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -103,14 +111,14 @@ export function InputDialog({
             variant="outline"
             onClick={() => handleOpenChange(false)}
             disabled={isLoading}
-            className="border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+            className="border-neutral-900 text-muted-foreground hover:bg-neutral-900"
           >
             {cancelText}
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={isLoading || !value.trim()}
-            className="bg-[#238636] hover:bg-[#2ea043] text-white"
+            className="bg-green-600 hover:bg-green-700 text-white"
           >
             {isLoading ? (
               <>

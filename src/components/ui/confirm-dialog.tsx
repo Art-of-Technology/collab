@@ -97,7 +97,7 @@ export function ConfirmDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
-            className="border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+            className="border-neutral-800 text-neutral-400 hover:bg-neutral-800"
           >
             {cancelText}
           </Button>
