@@ -1,0 +1,133 @@
+# UAT/Staging Docker Compose configuration for Collab
+# Uses external AWS PostgreSQL and Cloud Redis
+services:
+  # Collab Application - UAT Mode
+  collab-uat:
+    build:
+      context: ../../
+      dockerfile: docker/uat/Dockerfile.uat
+    restart: unless-stopped
+    environment:
+      # External Database Configuration (AWS RDS or similar)
+      DATABASE_URL: ${DATABASE_URL}
+      
+      # UAT Settings
+      NODE_ENV: production
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3001}
+      
+      # External Redis Configuration (Cloud Redis)
+      REDIS_URL: ${REDIS_URL}
+      
+      # UAT URLs
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
+      
+      # External Services (UAT/Staging keys)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+      
+      # GitHub Integration (UAT)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      
+      # Email Configuration (UAT)
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_SECURE: ${EMAIL_SECURE}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+      
+      # Push Notifications (UAT)
+      NEXT_PUBLIC_ONESIGNAL_APP_ID: ${NEXT_PUBLIC_ONESIGNAL_APP_ID_UAT}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY_UAT}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_EMAIL: ${VAPID_EMAIL}
+      
+      # Real-time Features (UAT)
+      PUSHER_APP_ID: ${PUSHER_APP_ID}
+      PUSHER_KEY: ${PUSHER_KEY}
+      PUSHER_SECRET: ${PUSHER_SECRET}
+      PUSHER_CLUSTER: ${PUSHER_CLUSTER}
+      NEXT_PUBLIC_HOCUSPOCUS_URL: ${NEXT_PUBLIC_HOCUSPOCUS_URL}
+      
+      # AI Integration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Security & Encryption
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      
+      # Webhook Configuration
+      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL}
+      
+      # Chat Integration
+      CHAT_PROJECT_API_KEY: ${CHAT_PROJECT_API_KEY}
+      
+      # UAT database seeding (configurable)
+      SEED_DATABASE: ${SEED_DATABASE:-false}
+      
+    ports:
+      - "3004:3000"
+    volumes:
+      # Mount logs and uploads for UAT
+      - uat_uploads:/app/uploads
+      - uat_logs:/app/logs
+    networks:
+      - collab-uat-network
+
+  # Redis Commander - Monitor Redis (UAT)
+  redis-commander-uat:
+    image: rediscommander/redis-commander:latest
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "8082:8081"
+    networks:
+      - collab-uat-network
+
+  # Uptime Kuma - UAT health monitoring
+  uptime-kuma-uat:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - "3005:3001"
+    volumes:
+      - uptime_kuma_uat_data:/app/data
+    networks:
+      - collab-uat-network
+    environment:
+      UPTIME_KUMA_PORT: 3001
+
+  # Portainer - Docker management (UAT)
+  portainer-uat:
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9001:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_uat_data:/data
+    networks:
+      - collab-uat-network
+
+volumes:
+  uptime_kuma_uat_data:
+    driver: local
+  portainer_uat_data:
+    driver: local
+  uat_uploads:
+    driver: local
+  uat_logs:
+    driver: local
+
+networks:
+  collab-uat-network:
+    driver: bridge

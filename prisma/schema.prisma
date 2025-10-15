@@ -96,6 +96,15 @@ model User {
   
   // Notification preferences
   notificationPreferences NotificationPreferences?
+  
+  // GitHub Integration relationships
+  githubId               String?                 // GitHub user ID
+  githubUsername         String?                 // GitHub username
+  githubAccessToken      String?                 // OAuth access token (encrypt in production)
+  createdPullRequests    PullRequest[]           @relation("PRCreatedBy")
+  mergedPullRequests     PullRequest[]           @relation("PRMergedBy")
+  deployments            Deployment[]            @relation("DeploymentUser")
+  prReviews              PRReview[]              // PR reviews by this user
 }
 
 model Account {
@@ -428,6 +437,9 @@ model Project {
   statuses        ProjectStatus[] // New status system
   followers       ProjectFollower[]
   
+  // GitHub Integration - One-to-one relationship with Repository
+  repository      Repository?     // Connected GitHub repository
+  
   // Legacy relationships for migration (will be removed after migration)
   columns         TaskColumn[]    // Legacy column system
 
@@ -528,6 +540,12 @@ model Issue {
   // Issue relations
   sourceRelations IssueRelation[] @relation("SourceRelations")
   targetRelations IssueRelation[] @relation("TargetRelations")
+  
+  // GitHub Integration relationships
+  branches        Branch[]
+  pullRequests    PullRequest[]
+  commits         Commit[]
+  versionIssues   VersionIssue[]
   
   @@index([projectId])
   @@index([workspaceId])
@@ -1471,6 +1489,415 @@ model LeaveBalance {
   @@index([year])
   @@map("leave_balances")
 }
+
+// GitHub Integration Models
+// This file contains all GitHub-related models for repository management, PRs, commits, and CI/CD
+
+// Repository Management  
+model Repository {
+  id              String    @id @default(cuid())
+  projectId       String    @unique
+  githubRepoId    String    @unique // GitHub's repo ID
+  owner           String    // GitHub org/user
+  name            String    // repo name
+  fullName        String    // owner/name
+  defaultBranch   String    @default("main")
+  webhookSecret   String    // for webhook verification
+  webhookId       String?   // GitHub webhook ID for management
+  accessToken     String?   // encrypted GitHub token
+  isActive        Boolean   @default(true)
+  syncedAt        DateTime? // last sync timestamp
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Branch versioning configuration
+  developmentBranch String?  // Base branch for development versioning (dev, development, etc.)
+  versioningStrategy VersioningStrategy @default(SINGLE_BRANCH)
+  branchEnvironmentMap Json? // Map branches to environments {"dev": "development", "staging": "staging"}
+  
+  // Issue type mapping configuration
+  issueTypeMapping Json?    // Custom mapping of issue types to version increments
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branches        Branch[]
+  pullRequests    PullRequest[]
+  commits         Commit[]
+  releases        Release[]
+  versions        Version[]
+  deployments     Deployment[]
+  versionFiles    VersionFile[]
+  changelogEntries ChangelogEntry[]
+  
+  @@index([projectId])
+  @@index([githubRepoId])
+  @@index([owner, name])
+}
+
+// Branch Tracking
+model Branch {
+  id            String      @id @default(cuid())
+  repositoryId  String
+  name          String
+  issueId       String?     // Linked collab issue
+  headSha       String
+  isProtected   Boolean     @default(false)
+  isDefault     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  issue         Issue?      @relation(fields: [issueId], references: [id])
+  commits       Commit[]
+  pullRequests  PullRequest[] @relation("PRHeadBranch")
+  basePullRequests PullRequest[] @relation("PRBaseBranch")
+  
+  @@unique([repositoryId, name])
+  @@index([issueId])
+  @@index([repositoryId])
+}
+
+// Pull Request Management
+model PullRequest {
+  id              String          @id @default(cuid())
+  repositoryId    String
+  githubPrId      Int             // GitHub's PR number
+  title           String
+  description     String?
+  state           PRState         // OPEN, CLOSED, MERGED
+  baseBranchId    String
+  headBranchId    String
+  issueId         String?         // Linked collab issue
+  createdById     String?
+  mergedById      String?
+  mergedAt        DateTime?
+  closedAt        DateTime?
+  githubCreatedAt DateTime
+  githubUpdatedAt DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  repository      Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  baseBranch      Branch          @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
+  headBranch      Branch          @relation("PRHeadBranch", fields: [headBranchId], references: [id])
+  issue           Issue?          @relation(fields: [issueId], references: [id])
+  createdBy       User?           @relation("PRCreatedBy", fields: [createdById], references: [id])
+  mergedBy        User?           @relation("PRMergedBy", fields: [mergedById], references: [id])
+  
+  checks          PRCheck[]
+  commits         Commit[]
+  changelogEntries ChangelogEntry[]
+  reviews         PRReview[]
+  
+  @@unique([repositoryId, githubPrId])
+  @@index([issueId])
+  @@index([state])
+  @@index([repositoryId])
+  @@index([baseBranchId])
+  @@index([headBranchId])
+}
+
+// Pull Request Review Tracking
+model PRReview {
+  id              String        @id @default(cuid())
+  pullRequestId   String
+  githubReviewId  String        // GitHub's review ID
+  reviewerId      String?       // Collab user ID
+  githubReviewerId String       // GitHub user ID
+  reviewerLogin   String        // GitHub username
+  state           ReviewState   // PENDING, APPROVED, CHANGES_REQUESTED, DISMISSED
+  body            String?       // Review comment
+  submittedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  pullRequest     PullRequest   @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  reviewer        User?         @relation(fields: [reviewerId], references: [id])
+  
+  @@unique([pullRequestId, githubReviewId])
+  @@index([pullRequestId])
+  @@index([reviewerId])
+  @@index([state])
+}
+
+// Commit Tracking
+model Commit {
+  id            String      @id @default(cuid())
+  repositoryId  String
+  sha           String      @unique
+  message       String
+  authorName    String
+  authorEmail   String
+  commitDate    DateTime
+  branchId      String?
+  pullRequestId String?
+  issueId       String?     // Extracted from commit message
+  createdAt     DateTime    @default(now())
+  
+  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  branch        Branch?     @relation(fields: [branchId], references: [id])
+  pullRequest   PullRequest? @relation(fields: [pullRequestId], references: [id])
+  issue         Issue?      @relation(fields: [issueId], references: [id])
+  
+  @@index([repositoryId])
+  @@index([issueId])
+  @@index([branchId])
+  @@index([pullRequestId])
+  @@index([sha])
+}
+
+// PR Status Checks
+model PRCheck {
+  id            String      @id @default(cuid())
+  pullRequestId String
+  name          String      // e.g., "CodeQL", "Vercel"
+  status        CheckStatus // PENDING, SUCCESS, FAILURE, ERROR
+  conclusion    String?
+  detailsUrl    String?
+  githubCheckId String?     // GitHub's check run ID
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  pullRequest   PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  
+  @@unique([pullRequestId, name])
+  @@index([pullRequestId])
+  @@index([status])
+}
+
+
+// Version Management and Release Models
+// This file contains models for version tracking, releases, deployments, and changelog management
+
+// Version Management
+model Version {
+  id            String        @id @default(cuid())
+  repositoryId  String
+  version       String        // e.g., "1.2.3"
+  major         Int
+  minor         Int
+  patch         Int
+  prerelease    String?       // e.g., "alpha.1"
+  buildMetadata String?
+  releaseType   ReleaseType   // MAJOR, MINOR, PATCH
+  status        VersionStatus // PENDING, RELEASED, FAILED, CANCELLED
+  environment   String        // development, staging, production
+  branch        String?       // Branch this version was created from
+  releasedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Version inheritance tracking
+  parentVersionId String?     // Reference to the development version this production version inherits from
+  isProduction    Boolean     @default(false) // True if this is a production release
+  
+  // AI-generated content for better changelog
+  aiSummary     String?       // AI-generated version summary
+  aiChangelog   String?       // AI-generated changelog content
+  
+  repository    Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  parentVersion Version?      @relation("VersionInheritance", fields: [parentVersionId], references: [id])
+  childVersions Version[]     @relation("VersionInheritance")
+  issues        VersionIssue[]
+  releases      Release[]
+  deployments   Deployment[]
+  versionFiles  VersionFile[]
+  changelogEntries ChangelogEntry[]
+  
+  @@unique([repositoryId, version])
+  @@index([repositoryId, status])
+  @@index([repositoryId, environment])
+  @@index([repositoryId, branch])
+  @@index([parentVersionId])
+  @@index([status])
+}
+
+// Issue-Version Mapping with AI enhancements
+model VersionIssue {
+  id          String    @id @default(cuid())
+  versionId   String
+  issueId     String
+  addedAt     DateTime  @default(now())
+  
+  // AI-enhanced content for better changelog presentation
+  aiTitle     String?   // AI-improved title based on issue details
+  aiSummary   String?   // AI-generated summary from issue details
+  
+  version     Version   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  @@unique([versionId, issueId])
+  @@index([issueId])
+  @@index([versionId])
+}
+
+// Release Management
+model Release {
+  id              String      @id @default(cuid())
+  repositoryId    String
+  versionId       String
+  githubReleaseId String?     // GitHub release ID
+  tagName         String
+  name            String
+  description     String?
+  isDraft         Boolean     @default(false)
+  isPrerelease    Boolean     @default(false)
+  publishedAt     DateTime?
+  githubUrl       String?     // GitHub release URL
+  downloadCount   Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  repository      Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version         Version     @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  deployments     Deployment[]
+  
+  @@unique([repositoryId, tagName])
+  @@index([versionId])
+  @@index([repositoryId])
+  @@index([publishedAt])
+}
+
+// Deployment Tracking across environments
+model Deployment {
+  id            String            @id @default(cuid())
+  repositoryId  String
+  versionId     String
+  releaseId     String?
+  environment   String            // development, staging, production
+  status        DeploymentStatus  // PENDING, IN_PROGRESS, SUCCESS, FAILURE, CANCELLED
+  deployedAt    DateTime?
+  deployedBy    String?           // User who triggered deployment
+  commitSha     String?
+  buildUrl      String?           // CI/CD build URL
+  errorMessage  String?
+  metadata      Json?             // Additional deployment metadata
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  
+  repository    Repository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version       Version           @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  release       Release?          @relation(fields: [releaseId], references: [id])
+  user          User?             @relation("DeploymentUser", fields: [deployedBy], references: [id])
+  
+  @@index([repositoryId])
+  @@index([versionId])
+  @@index([environment])
+  @@index([status])
+  @@index([deployedAt])
+}
+
+// Version File Tracking (for version.json in projects)
+model VersionFile {
+  id            String    @id @default(cuid())
+  repositoryId  String
+  versionId     String
+  environment   String
+  filePath      String    @default("public/version.json")
+  content       Json      // Version file content
+  deployedAt    DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version       Version    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  
+  @@unique([repositoryId, environment])
+  @@index([versionId])
+  @@index([repositoryId])
+}
+
+// Changelog Entries with AI-enhanced content
+model ChangelogEntry {
+  id            String      @id @default(cuid())
+  repositoryId  String
+  versionId     String?     // Optional for manual entries
+  type          ChangeType  // FEATURE, BUGFIX, BREAKING, IMPROVEMENT
+  title         String      // AI-enhanced title
+  description   String      // AI-enhanced description
+  issueKey      String?     // Related issue key (e.g., MA-123)
+  pullRequestId String?     // Related PR
+  order         Int         @default(0)
+  createdAt     DateTime    @default(now())
+  
+  repository    Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version       Version?     @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  pullRequest   PullRequest? @relation(fields: [pullRequestId], references: [id])
+  
+  @@index([repositoryId])
+  @@index([versionId])
+  @@index([type])
+}
+
+// Version Management Enums
+enum ReleaseType {
+  MAJOR       // Breaking changes
+  MINOR       // New features (TASKs, STORYs)
+  PATCH       // Bug fixes (BUGs)
+  PRERELEASE  // Alpha, beta releases
+}
+
+enum VersionStatus {
+  PENDING     // Version created, not yet built
+  BUILDING    // Currently building
+  TESTING     // In testing phase
+  READY       // Ready for release
+  RELEASED    // Successfully released
+  FAILED      // Release failed
+  CANCELLED   // Release cancelled
+}
+
+enum VersioningStrategy {
+  SINGLE_BRANCH    // Direct to main/master (simple flow)
+  MULTI_BRANCH     // Development branch -> main/master (GitFlow style)
+}
+
+enum ReviewState {
+  PENDING           // Review requested but not submitted
+  APPROVED          // Review approved
+  CHANGES_REQUESTED // Changes requested
+  DISMISSED         // Review dismissed
+}
+
+enum DeploymentStatus {
+  PENDING       // Deployment queued
+  IN_PROGRESS   // Currently deploying
+  SUCCESS       // Successfully deployed
+  FAILURE       // Deployment failed
+  CANCELLED     // Deployment cancelled
+  ROLLED_BACK   // Rolled back after deployment
+}
+
+enum ChangeType {
+  FEATURE       // New features
+  BUGFIX        // Bug fixes
+  BREAKING      // Breaking changes
+  IMPROVEMENT   // Improvements/enhancements
+  SECURITY      // Security fixes
+  PERFORMANCE   // Performance improvements
+  DOCUMENTATION // Documentation changes
+}
+
+// GitHub Integration Enums
+enum PRState {
+  OPEN
+  CLOSED
+  MERGED
+  DRAFT
+}
+
+enum CheckStatus {
+  PENDING
+  SUCCESS
+  FAILURE
+  ERROR
+  CANCELLED
+  NEUTRAL
+  SKIPPED
+}
+
+
 
 enum TrackUnit {
   HOURS

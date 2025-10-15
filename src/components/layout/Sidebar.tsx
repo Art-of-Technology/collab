@@ -51,10 +51,11 @@ import { useViews } from "@/hooks/queries/useViews";
 import { useToggleViewFavorite } from "@/hooks/queries/useViewFavorites";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
-import NewIssueModal from "@/components/issue/NewIssueModal";
 import { cn } from "@/lib/utils";
+import { NotificationUrlResolver } from "@/lib/notification-url-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { useMention } from "@/context/MentionContext";
+import type { Notification as MentionNotification } from "@/context/MentionContext";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 
@@ -76,7 +77,7 @@ export default function Sidebar({
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
   const { canManageLeave } = useWorkspacePermissions();
-
+  const workspaceSegment = currentWorkspace ? (currentWorkspace.slug || currentWorkspace.id) : undefined;
 
   // Use Mention context for notifications
   const {
@@ -136,7 +137,6 @@ export default function Sidebar({
 
   // Notification and modal state
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showNewIssueModal, setShowNewIssueModal] = useState(false);
 
   // Filter views for sidebar display - show all views with favorites at the top
   const sidebarViews = useMemo(() => {
@@ -199,7 +199,6 @@ export default function Sidebar({
   // Handle notification click - mark as read and navigate if needed
   const handleNotificationClick = async (id: string, url?: string) => {
     await markNotificationAsRead(id);
-
     if (url) {
       router.push(url);
     }
@@ -221,42 +220,8 @@ export default function Sidebar({
   };
 
   // Generate notification URL based on type
-  const getNotificationUrl = (notification: any): string => {
-    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
-    const workspaceId = currentWorkspace?.id;
-
-    if (!workspaceId) {
-      return "/welcome"; // Fallback if no workspace
-    }
-
-    switch (type) {
-      case "post_mention":
-      case "post_comment":
-      case "post_reaction":
-        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
-      case "comment_mention":
-      case "comment_reply":
-      case "comment_reaction":
-        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
-      case "taskComment_mention":
-        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
-      case "feature_mention":
-      case "feature_comment":
-      case "feature_vote":
-        return featureRequestId ? `/${workspaceId}/features/${featureRequestId}` : `/${workspaceId}/features`;
-      case "task_mention":
-      case "task_assigned":
-      case "task_status_change":
-        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
-      case "epic_mention":
-        return epicId ? `/${workspaceId}/epics/${epicId}` : `/${workspaceId}/tasks`;
-      case "story_mention":
-        return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`;
-      case "milestone_mention":
-        return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`;
-      default:
-        return `/${workspaceId}/timeline`;
-    }
+  const getNotificationUrl = (notification: MentionNotification): string => {
+    return NotificationUrlResolver.resolve(notification, { workspaceSegment });
   };
 
   // Get user initials for avatar
@@ -1048,15 +1013,6 @@ export default function Sidebar({
           workspaceId={currentWorkspace?.id || ""}
         />
       )}
-
-      {/* New Issue Modal */}
-      <NewIssueModal
-        open={showNewIssueModal}
-        onOpenChange={setShowNewIssueModal}
-        workspaceId={currentWorkspace?.id || ""}
-        currentUserId={userData?.id}
-      />
-
 
     </div>
   );

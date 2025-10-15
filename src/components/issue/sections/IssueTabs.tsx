@@ -1,11 +1,12 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Clock, History, Users, Link as LinkIcon } from "lucide-react";
+import { Clock, History, Users, Link as LinkIcon, Code } from "lucide-react";
 import { IssueHelpersSection } from "./IssueHelpersSection";
 import { IssueWorkSessions } from "./IssueWorkSessions";
 import { IssueActivity } from "./IssueActivity";
 import { IssueRelationsSection } from "./IssueRelationsSection";
+import { GitHubIssueIntegration } from "@/components/github/GitHubIssueIntegration";
 import type { IssueComment } from "@/types/issue";
 
 interface IssueTabsProps {
@@ -29,9 +30,11 @@ export function IssueTabs({
   const showSessions = false;
   const showHelpers = false; // Show helpers for all issues
   const showRelations = true; // Show relations for all issues
+  const showGitHub = true; // Show GitHub integration for all issues
 
   // Calculate grid columns dynamically - Relations is now first (no comments)
   const tabCount = (showRelations ? 1 : 0) +
+    (showGitHub ? 1 : 0) +
     (showSessions ? 1 : 0) +
     (showHelpers ? 1 : 0) +
     1; // activity (always shown)
@@ -39,6 +42,7 @@ export function IssueTabs({
 
   // Default tab based on what's available
   const defaultTab = showRelations ? "relations" :
+    showGitHub ? "github" :
     showSessions ? "sessions" :
       showHelpers ? "helpers" : "activity";
 
@@ -55,6 +59,16 @@ export function IssueTabs({
               >
                 <LinkIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">Relations</span>
+              </TabsTrigger>
+            )}
+
+            {showGitHub && (
+              <TabsTrigger
+                value="github"
+                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-[#e1e7ef] text-[#7d8590] hover:text-[#c9d1d9] transition-colors data-[state=active]:bg-transparent border-0"
+              >
+                <Code className="h-4 w-4" />
+                <span className="hidden sm:inline">GitHub</span>
               </TabsTrigger>
             )}
 
@@ -95,6 +109,17 @@ export function IssueTabs({
                 issue={issue}
                 workspaceId={workspaceId}
                 onRefresh={onRefresh}
+              />
+            </TabsContent>
+          )}
+
+          {showGitHub && (
+            <TabsContent value="github" className="mt-0">
+              <GitHubIssueIntegration
+                issueId={issue.id}
+                issueKey={issue.issueKey}
+                projectId={issue.projectId}
+                projectSlug={issue.project?.slug}
               />
             </TabsContent>
           )}
