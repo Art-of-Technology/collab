@@ -43,6 +43,7 @@ export interface Notification {
     id: string;
     name: string;
     displayType: string;
+    slug: string
   };
   leaveRequest?: {
     id: string;
@@ -54,7 +55,7 @@ export interface Notification {
       name: string;
     };
   };
-  
+
   // Legacy fields for backward compatibility during migration
   taskId?: string;
   epicId?: string;

@@ -9,9 +9,7 @@ import {
   BellIcon,
   MagnifyingGlassIcon,
   Bars3Icon,
-  /*SparklesIcon*/
 } from "@heroicons/react/24/outline";
-import { MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +17,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -39,7 +36,6 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { useUiContext } from "@/context/UiContext";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { useMention } from "@/context/MentionContext";
 import { useCurrentUser } from "@/hooks/queries/useUser";
@@ -47,7 +43,6 @@ import { formatDistanceToNow } from "date-fns";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
 interface NavbarProps {
   hasWorkspaces: boolean;
@@ -67,7 +62,6 @@ export default function Navbar({
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { isChatOpen, toggleChat, /*isAssistantOpen, toggleAssistant*/ } = useUiContext();
   const { toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -76,7 +70,6 @@ export default function Navbar({
   // Use TanStack Query hook to fetch user data
   const { data: userData } = useCurrentUser();
   const { currentWorkspace } = useWorkspace();
-  const { canManageLeave } = useWorkspacePermissions();
 
   // Use Mention context for notifications
   const {
@@ -426,19 +419,6 @@ export default function Navbar({
                       </div>
                     </PopoverContent>
                   </Popover>
-
-                  {/* Chat toggle button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
-                    onClick={toggleChat}
-                  >
-                <MessageCircle className="h-4 w-4" />
-                    {isChatOpen && (
-                  <span className="absolute -bottom-1 -right-1 bg-[#22c55e] rounded-full w-2 h-2" />
-                    )}
-                  </Button>
                 </>
               )}
 
@@ -456,27 +436,6 @@ export default function Navbar({
                       <p className="text-xs text-gray-400">{displayEmail}</p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator className="bg-[#2a2929]" />
-                  <DropdownMenuGroup>
-                    {hasWorkspaces && (
-                      <>
-                        <DropdownMenuItem asChild>
-                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : "/profile"}>Your Profile</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={currentWorkspace ? `/${currentWorkspace.id}/my-posts` : "/my-posts"}>My Posts</Link>
-                        </DropdownMenuItem>
-                        {canManageLeave && (
-                          <DropdownMenuItem asChild>
-                            <Link href={currentWorkspace ? `/${currentWorkspace.id}/leave-management` : "/leave-management"}>Leave Management</Link>
-                          </DropdownMenuItem>
-                        )}
-                      </>
-                    )}
-                    <DropdownMenuItem asChild>
-                      <Link href="/workspaces">Manage Workspaces</Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
                   <DropdownMenuSeparator className="bg-[#2a2929]" />
                   <DropdownMenuItem onClick={handleSignOut}>
                     Sign out

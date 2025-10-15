@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { NotionEditor } from "@/components/ui/notion-editor";
 import { TagSelect } from "@/components/notes/TagSelect";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspace } from "@/hooks/queries/useWorkspace";
 import { Loader2 } from "lucide-react";
 
 const noteCreateSchema = z.object({
@@ -34,6 +35,7 @@ type NoteCreateFormValues = z.infer<typeof noteCreateSchema>;
 interface NoteCreateFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+  workspaceId: string;
 }
 
 interface NoteTag {
@@ -42,7 +44,7 @@ interface NoteTag {
   color: string;
 }
 
-export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
+export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const { toast } = useToast();
@@ -54,7 +56,7 @@ export function NoteCreateForm({ onSuccess, onCancel }: NoteCreateFormProps) {
       content: "",
       isPublic: false,
       isFavorite: false,
-      workspaceId: null,
+      workspaceId: workspaceId,
       tagIds: [],
     },
   });

@@ -17,7 +17,6 @@ import {
   FolderOpen,
   Eye,
   Plus,
-  MessageSquare,
   FileText,
   Clock,
   Bookmark,
@@ -52,11 +51,11 @@ import { useViews } from "@/hooks/queries/useViews";
 import { useToggleViewFavorite } from "@/hooks/queries/useViewFavorites";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
-import NewIssueModal from "@/components/issue/NewIssueModal";
 import { cn } from "@/lib/utils";
+import { NotificationUrlResolver } from "@/lib/notification-url-resolver";
 import { useToast } from "@/hooks/use-toast";
-import { useUiContext } from "@/context/UiContext";
 import { useMention } from "@/context/MentionContext";
+import type { Notification as MentionNotification } from "@/context/MentionContext";
 import { CollabText } from "@/components/ui/collab-text";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 
@@ -66,22 +65,19 @@ import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 interface SidebarProps {
   pathname?: string;
   isCollapsed?: boolean;
-  toggleSidebar?: () => void;
 }
 
 export default function Sidebar({
   pathname = "",
   isCollapsed = false,
-  toggleSidebar,
 }: SidebarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { isChatOpen, toggleChat } = useUiContext();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
   const { canManageLeave } = useWorkspacePermissions();
-
+  const workspaceSegment = currentWorkspace ? (currentWorkspace.slug || currentWorkspace.id) : undefined;
 
   // Use Mention context for notifications
   const {
@@ -111,7 +107,7 @@ export default function Sidebar({
   const handleToggleViewFavorite = async (viewId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     try {
       await toggleViewFavoriteMutation.mutateAsync(viewId);
       toast({
@@ -139,7 +135,6 @@ export default function Sidebar({
 
   // Notification and modal state
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showNewIssueModal, setShowNewIssueModal] = useState(false);
 
   // Filter views for sidebar display - show all views with favorites at the top
   const sidebarViews = useMemo(() => {
@@ -156,7 +151,7 @@ export default function Sidebar({
       // First sort by favorite status (favorites first)
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
-      
+
       // Then sort by updatedAt (latest first)
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
@@ -164,7 +159,7 @@ export default function Sidebar({
 
   // Helper function to find default view for a project
   const getDefaultViewForProject = (projectId: string) => {
-    return views.find(view => 
+    return views.find(view =>
       view.projectIds.includes(projectId) && view.isDefault
     );
   };
@@ -202,7 +197,6 @@ export default function Sidebar({
   // Handle notification click - mark as read and navigate if needed
   const handleNotificationClick = async (id: string, url?: string) => {
     await markNotificationAsRead(id);
-
     if (url) {
       router.push(url);
     }
@@ -224,42 +218,8 @@ export default function Sidebar({
   };
 
   // Generate notification URL based on type
-  const getNotificationUrl = (notification: any): string => {
-    const { type, postId, featureRequestId, taskId, epicId, storyId, milestoneId } = notification;
-    const workspaceId = currentWorkspace?.id;
-
-    if (!workspaceId) {
-      return "/welcome"; // Fallback if no workspace
-    }
-
-    switch (type) {
-      case "post_mention":
-      case "post_comment":
-      case "post_reaction":
-        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
-      case "comment_mention":
-      case "comment_reply":
-      case "comment_reaction":
-        return postId ? `/${workspaceId}/posts/${postId}` : `/${workspaceId}/timeline`;
-      case "taskComment_mention":
-        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
-      case "feature_mention":
-      case "feature_comment":
-      case "feature_vote":
-        return featureRequestId ? `/${workspaceId}/features/${featureRequestId}` : `/${workspaceId}/features`;
-      case "task_mention":
-      case "task_assigned":
-      case "task_status_change":
-        return taskId ? `/${workspaceId}/tasks/${taskId}` : `/${workspaceId}/tasks`;
-      case "epic_mention":
-        return epicId ? `/${workspaceId}/epics/${epicId}` : `/${workspaceId}/tasks`;
-      case "story_mention":
-        return storyId ? `/${workspaceId}/stories/${storyId}` : `/${workspaceId}/tasks`;
-      case "milestone_mention":
-        return milestoneId ? `/${workspaceId}/milestones/${milestoneId}` : `/${workspaceId}/tasks`;
-      default:
-        return `/${workspaceId}/timeline`;
-    }
+  const getNotificationUrl = (notification: MentionNotification): string => {
+    return NotificationUrlResolver.resolve(notification, { workspaceSegment });
   };
 
   // Get user initials for avatar
@@ -538,10 +498,10 @@ export default function Sidebar({
               <item.icon className="h-5 w-5" />
             </Button>
           ))}
-          
+
           {/* Separator */}
           <div className="border-t border-[#1f1f1f] my-2" />
-          
+
           {/* Workspace Features */}
           {workspaceFeatures.map((item) => (
             <Button
@@ -784,10 +744,10 @@ export default function Sidebar({
                       ) : sidebarProjects.length > 0 ? (
                         sidebarProjects.map((project) => {
                           const defaultView = getDefaultViewForProject(project.id);
-                          const href = defaultView 
+                          const href = defaultView
                             ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${defaultView.slug || defaultView.id}`
                             : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`;
-                          
+
                           return (
                             <Button
                               key={project.id}
@@ -795,7 +755,7 @@ export default function Sidebar({
                               className={cn(
                                 "w-full justify-start h-7 px-2 text-sm transition-colors",
                                 (defaultView && pathname.includes(`/views/${defaultView.slug || defaultView.id}`)) ||
-                                pathname.includes(`/projects/${project.slug || project.id}`)
+                                  pathname.includes(`/projects/${project.slug || project.id}`)
                                   ? "bg-[#1f1f1f] text-white"
                                   : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                               )}
@@ -1019,7 +979,7 @@ export default function Sidebar({
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/docs"  rel="noopener noreferrer" target="_blank" className="text-gray-300 hover:text-white">
+              <Link href="/docs" rel="noopener noreferrer" target="_blank" className="text-gray-300 hover:text-white">
                 <Book className="mr-2 h-4 w-4" />
                 API Documentation
               </Link>
@@ -1051,15 +1011,6 @@ export default function Sidebar({
           workspaceId={currentWorkspace?.id || ""}
         />
       )}
-
-      {/* New Issue Modal */}
-      <NewIssueModal
-        open={showNewIssueModal}
-        onOpenChange={setShowNewIssueModal}
-        workspaceId={currentWorkspace?.id || ""}
-        currentUserId={userData?.id}
-      />
-
 
     </div>
   );

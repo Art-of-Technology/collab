@@ -9,7 +9,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Building2, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { useWorkspace } from '@/context/WorkspaceContext';
 import {
   Dialog,
   DialogContent,
@@ -26,7 +25,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateWorkspace, workspaceKeys } from '@/hooks/queries/useWorkspace';
+import { useCreateWorkspace } from '@/hooks/queries/useWorkspace';
+import { workspaceKeys } from '@/hooks/queries/useWorkspace';
 
 const workspaceFormSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name cannot exceed 50 characters'),
@@ -44,7 +44,6 @@ export function CreateWorkspaceModal({ open, onOpenChange }: CreateWorkspaceModa
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { refreshWorkspaces } = useWorkspace();
   const createWorkspaceMutation = useCreateWorkspace();
   
   const form = useForm<WorkspaceFormValues>({
@@ -63,12 +62,8 @@ export function CreateWorkspaceModal({ open, onOpenChange }: CreateWorkspaceModa
         // Slug will be generated automatically on the backend
       });
       
-      // Invalidate workspace queries to refresh workspaces in selectors
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.list() });
+      // Invalidate workspace queries to refresh workspaces everywhere
       queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
-      
-      // Explicitly refresh workspaces in the context
-      await refreshWorkspaces();
       
       toast({
         title: "Success",
@@ -78,7 +73,10 @@ export function CreateWorkspaceModal({ open, onOpenChange }: CreateWorkspaceModa
       // Close modal and navigate to the new workspace
       onOpenChange(false);
       form.reset();
-      router.push(`/workspaces/${workspace.id}`);
+      
+      // Navigate to workspace dashboard using slug if available, otherwise use ID
+      const workspaceSlugOrId = workspace.slug || workspace.id;
+      router.push(`/${workspaceSlugOrId}/dashboard`);
     } catch (error) {
       console.error('Error creating workspace:', error);
       toast({
