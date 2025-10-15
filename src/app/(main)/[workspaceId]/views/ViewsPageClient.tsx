@@ -5,33 +5,35 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Search, 
-  Plus, 
-  Eye, 
-  Star, 
-  Grid, 
-  List, 
+import {
+  Search,
+  Plus,
+  Eye,
+  Star,
+  Grid,
+  List,
   Table,
   Calendar,
   BarChart3,
-  MoreHorizontal,
   Users,
   User,
-  Share
+  Share,
+  Settings,
+  Trash2
 } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useViews } from '@/hooks/queries/useViews';
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useViews, useDeleteView } from '@/hooks/queries/useViews';
+import { useToggleViewFavorite } from '@/hooks/queries/useViewFavorites';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateViewModal from '@/components/modals/CreateViewModal';
 import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface ViewsPageClientProps {
   workspaceId: string;
@@ -74,6 +76,7 @@ const getVisibilityColor = (visibility: string) => {
 export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -82,7 +85,10 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     includeStats: true
   });
 
-  const filteredViews = views.filter(view => 
+  const deleteViewMutation = useDeleteView();
+  const toggleViewFavoriteMutation = useToggleViewFavorite();
+
+  const filteredViews = views.filter(view =>
     view.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (view.description && view.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -100,12 +106,63 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     setShowCreateModal(true);
   };
 
+  const handleViewSettings = (viewSlug: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${viewSlug}/settings`);
+  };
+
+  const handleToggleViewFavorite = async (viewId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      await toggleViewFavoriteMutation.mutateAsync(viewId);
+      toast({
+        title: "Success",
+        description: "View favorite status updated",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update view favorite status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteView = async (viewId: string, viewName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm(`Are you sure you want to delete "${viewName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await deleteViewMutation.mutateAsync({
+        workspaceId,
+        viewId
+      });
+
+      toast({
+        title: 'Success',
+        description: 'View deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete view',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const ViewRow = ({ view }: { view: any }) => {
     const TypeIcon = viewTypeIcons[view.displayType as keyof typeof viewTypeIcons];
     const VisibilityIcon = getVisibilityIcon(view.visibility);
-    
+
     return (
-      <div 
+      <div
         className={cn(
           "group relative cursor-pointer transition-all duration-200",
           // Mobile-first: Card-like design with glassmorphism
@@ -126,53 +183,60 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
               {view.isFavorite && (
                 <Star className="h-4 w-4 text-yellow-500 fill-current shrink-0" />
               )}
-              
+
               {/* View Type Icon */}
               <TypeIcon className="h-4 w-4 text-gray-400 shrink-0" />
-              
+
               {/* View Name */}
               <span className="text-white text-sm font-medium truncate">
                 {view.name}
               </span>
             </div>
-            
-            {/* Actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button 
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="h-4 w-4 text-gray-400" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-black/90 backdrop-blur-xl border-white/20">
-                <DropdownMenuItem className="text-white hover:bg-white/10 cursor-pointer">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Open view
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/20" />
-                <DropdownMenuItem className="text-white hover:bg-white/10 cursor-pointer">
-                  Edit view
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-white hover:bg-white/10 cursor-pointer">
-                  Duplicate
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/20" />
-                <DropdownMenuItem className="text-red-400 hover:bg-white/10 cursor-pointer">
-                  Delete view
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                onClick={(e) => handleViewSettings(view.slug || view.id, e)}
+                title="Settings"
+              >
+                <Settings className="h-4 w-4 text-gray-400" />
+              </button>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={cn(
+                        "p-1.5 rounded-lg transition-colors",
+                        view.isDefault
+                          ? "cursor-not-allowed opacity-40"
+                          : "hover:bg-red-500/10 text-red-400"
+                      )}
+                      onClick={(e) => !view.isDefault && handleDeleteView(view.id, view.name, e)}
+                      disabled={view.isDefault}
+                      title={view.isDefault ? "Default views cannot be deleted" : "Delete view"}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  {view.isDefault && (
+                    <TooltipContent className="bg-gray-900 border-gray-700 text-white">
+                      <p>Default views cannot be deleted</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
-          
+
           {/* Description */}
           {view.description && (
             <p className="text-gray-500 text-xs mb-2 line-clamp-2">
               {view.description}
             </p>
           )}
-          
+
           {/* Metadata row */}
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-3">
@@ -180,37 +244,42 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
               <span className="text-gray-400">
                 {viewTypeLabels[view.displayType as keyof typeof viewTypeLabels]}
               </span>
-              
+
               {/* Visibility */}
               <div className="flex items-center gap-1">
                 <VisibilityIcon className={cn("h-3 w-3", getVisibilityColor(view.visibility))} />
                 <span className={cn("", getVisibilityColor(view.visibility))}>
-                  {view.visibility === 'WORKSPACE' ? 'Team' : 
-                   view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}
+                  {view.visibility === 'WORKSPACE' ? 'Team' :
+                    view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}
                 </span>
               </div>
+
+              {/* Favorite Star for Mobile */}
+              <button
+                className={cn(
+                  "p-1 rounded transition-colors",
+                  view.isFavorite ? "text-yellow-500" : "text-gray-400 hover:text-yellow-500"
+                )}
+                onClick={(e) => handleToggleViewFavorite(view.id, e)}
+                disabled={toggleViewFavoriteMutation.isPending}
+                title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Star className={cn("h-3 w-3", view.isFavorite && "fill-current")} />
+              </button>
             </div>
-            
+
             {/* Updated Date */}
             <span className="text-gray-500">
-              {new Date(view.updatedAt).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
+              {new Date(view.updatedAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
               })}
             </span>
           </div>
         </div>
 
         {/* Desktop Layout - Original structure */}
-        <div className="hidden md:flex md:items-center">
-          {/* Favorite Star */}
-          <div className="flex items-center w-6 mr-3">
-            {view.isFavorite ? (
-              <Star className="h-4 w-4 text-yellow-500 fill-current" />
-            ) : (
-              <div className="w-4 h-4" />
-            )}
-          </div>
+        <div className="hidden md:flex md:items-center md:relative">
 
           {/* View Type Icon */}
           <div className="flex items-center w-6 mr-3">
@@ -240,8 +309,8 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           <div className="w-24 mr-4 flex items-center">
             <VisibilityIcon className={cn("h-4 w-4 mr-1", getVisibilityColor(view.visibility))} />
             <span className={cn("text-sm", getVisibilityColor(view.visibility))}>
-              {view.visibility === 'WORKSPACE' ? 'Team' : 
-               view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}
+              {view.visibility === 'WORKSPACE' ? 'Team' :
+                view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}
             </span>
           </div>
 
@@ -252,57 +321,72 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
 
           {/* Last Updated */}
           <div className="w-20 mr-4 text-gray-500 text-xs text-right">
-            {new Date(view.updatedAt).toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric' 
+            {new Date(view.updatedAt).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric'
             })}
           </div>
 
-          {/* Actions */}
-          <div className="w-8 flex justify-end">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="opacity-0 group-hover:opacity-100 h-6 w-6 text-gray-400 hover:text-white"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                className="bg-[#090909] border-[#1f1f1f] text-white"
-                align="end"
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1 flex-shrink-0 transition-opacity">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-6 w-6 transition-colors",
+                        view.isDefault
+                          ? "text-gray-600 cursor-not-allowed opacity-40"
+                          : "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      )}
+                      onClick={(e) => !view.isDefault && handleDeleteView(view.id, view.name, e)}
+                      disabled={view.isDefault}
+                      title={view.isDefault ? "Default views cannot be deleted" : "Delete view"}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                {view.isDefault && (
+                  <TooltipContent className="bg-gray-900 border-gray-700 text-white">
+                    <p>Default views cannot be deleted</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Favorite Star - Interactive */}
+            <div className="flex items-center w-6">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-5 w-5 p-0 transition-opacity hover:bg-transparent",
+                  view.isFavorite ? "text-yellow-500 opacity-70 group-hover:text-yellow-500" : "text-gray-400 hover:text-yellow-500 opacity-70 group-hover:opacity-100"
+                )}
+                onClick={(e) => handleToggleViewFavorite(view.id, e)}
+                disabled={toggleViewFavoriteMutation.isPending}
+                title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
               >
-                <DropdownMenuItem className="hover:bg-[#1f1f1f]">
-                  Edit view
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#1f1f1f]">
-                  Duplicate
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-[#1f1f1f]">
-                  {view.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-                <DropdownMenuItem className="hover:bg-[#1f1f1f] text-red-400">
-                  Delete view
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <Star className={cn("h-3 w-3", view.isFavorite && "fill-current")} />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
-  const ViewSection = ({ title, views, count }: { 
-    title: string; 
+  const ViewSection = ({ title, views, count }: {
+    title: string;
     views: any[];
     count: number;
   }) => {
     if (views.length === 0) return null;
-    
+
     return (
       <div className="mb-6">
         {/* Section Header - Mobile & Desktop */}
@@ -320,7 +404,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
             {count}
           </span>
         </div>
-        
+
         {/* Views */}
         <div className="md:divide-y md:divide-[#1a1a1a]">
           {views.map((view) => (
@@ -373,32 +457,32 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
         {filteredViews.length > 0 ? (
           <div className="pb-20 md:pb-16">
             {favoriteViews.length > 0 && (
-              <ViewSection 
-                title="Favorites" 
+              <ViewSection
+                title="Favorites"
                 views={favoriteViews}
                 count={favoriteViews.length}
               />
             )}
-            
+
             {workspaceViews.length > 0 && (
-              <ViewSection 
-                title="Team views" 
+              <ViewSection
+                title="Team views"
                 views={workspaceViews}
                 count={workspaceViews.length}
               />
             )}
-            
+
             {personalViews.length > 0 && (
-              <ViewSection 
-                title="Your views" 
+              <ViewSection
+                title="Your views"
                 views={personalViews}
                 count={personalViews.length}
               />
             )}
-            
+
             {sharedViews.length > 0 && (
-              <ViewSection 
-                title="Shared with you" 
+              <ViewSection
+                title="Shared with you"
                 views={sharedViews}
                 count={sharedViews.length}
               />
