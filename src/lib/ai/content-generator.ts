@@ -13,7 +13,7 @@ export class AIContentGenerator {
 
   constructor() {
     this.openai = new OpenAI({
-      apiKey: process.env.OPENAPI_KEY,
+      apiKey: process.env.OPENAI_API_KEY,
     });
   }
 
