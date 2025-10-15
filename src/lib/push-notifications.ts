@@ -85,12 +85,12 @@ const NOTIFICATION_PATTERNS = new Map([
  */
 const CONTENT_FORMATTERS = [
   {
-    pattern: /@\[([^\]]+)\]\([^)]+\)/g,
+    pattern: /@\[((?:[^\]\\]]+))\]\([^)]+\)/g,
     replacement: '$1',  // Just the name
     description: 'Clean user mentions'
   },
   {
-    pattern: /#\[([^\]]+)\]\([^)]+\)/g,
+    pattern: /#\[((?:[^\]\\]]+))\]\([^)]+\)/g,
     replacement: '#$1',  // Keep # for issue references
     description: 'Clean issue references'
   }
@@ -105,9 +105,10 @@ function formatNotificationContent(payload: PushNotificationPayload): PushNotifi
   // Format the title
   let title = payload.title;
   if (title === 'Collab Notification') {
-    const body = payload.body.toLowerCase();
+    const originalBody = payload.body;
+    const lowerBody = originalBody.toLowerCase();
     for (const [pattern, newTitle] of NOTIFICATION_PATTERNS) {
-      if (pattern.test(body)) {
+      if (pattern.test(lowerBody)) {
         title = newTitle;
         break;
       }

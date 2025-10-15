@@ -56,7 +56,7 @@ self.addEventListener('push', function(event) {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title || 'Collab Notification', options)
   );
 });
 
@@ -84,15 +84,9 @@ self.addEventListener('notificationclick', function(event) {
   // Handle different actions
   let urlToOpen = data.url || '/';
   
-  if (action === 'view') {
-    // Use the specific URL for the 'view' action
-    urlToOpen = data.url || '/';
-  } else if (action === 'dismiss') {
+  if (action === 'dismiss') {
     // Just close the notification
     return;
-  } else if (!action) {
-    // Default click behavior (no specific action)
-    urlToOpen = data.url || '/';
   }
 
   // Focus existing window or open new one
