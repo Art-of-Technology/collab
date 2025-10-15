@@ -5,8 +5,8 @@ export const useToggleViewFavorite = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (viewId: string) => {
-      const { data } = await axios.post(`/api/views/${viewId}/favorite`);
+    mutationFn: async ({ workspaceId, viewId }: { workspaceId: string; viewId: string }) => {
+      const { data } = await axios.post(`/api/workspaces/${workspaceId}/views/${viewId}/favorite`);
       return data;
     },
     onSuccess: () => {

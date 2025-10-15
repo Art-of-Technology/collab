@@ -106,9 +106,11 @@ export default function Sidebar({
   const handleToggleViewFavorite = async (viewId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
+    if (!currentWorkspace?.id) return;
+
     try {
-      await toggleViewFavoriteMutation.mutateAsync(viewId);
+      await toggleViewFavoriteMutation.mutateAsync({ workspaceId: currentWorkspace.id, viewId });
       toast({
         title: "Success",
         description: "View favorite status updated",
@@ -151,7 +153,7 @@ export default function Sidebar({
       // First sort by favorite status (favorites first)
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
-      
+
       // Then sort by updatedAt (latest first)
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
@@ -159,7 +161,7 @@ export default function Sidebar({
 
   // Helper function to find default view for a project
   const getDefaultViewForProject = (projectId: string) => {
-    return views.find(view => 
+    return views.find(view =>
       view.projectIds.includes(projectId) && view.isDefault
     );
   };
@@ -533,10 +535,10 @@ export default function Sidebar({
               <item.icon className="h-5 w-5" />
             </Button>
           ))}
-          
+
           {/* Separator */}
           <div className="border-t border-[#1f1f1f] my-2" />
-          
+
           {/* Workspace Features */}
           {workspaceFeatures.map((item) => (
             <Button
@@ -779,10 +781,10 @@ export default function Sidebar({
                       ) : sidebarProjects.length > 0 ? (
                         sidebarProjects.map((project) => {
                           const defaultView = getDefaultViewForProject(project.id);
-                          const href = defaultView 
+                          const href = defaultView
                             ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${defaultView.slug || defaultView.id}`
                             : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug || project.id}`;
-                          
+
                           return (
                             <Button
                               key={project.id}
@@ -790,7 +792,7 @@ export default function Sidebar({
                               className={cn(
                                 "w-full justify-start h-7 px-2 text-sm transition-colors",
                                 (defaultView && pathname.includes(`/views/${defaultView.slug || defaultView.id}`)) ||
-                                pathname.includes(`/projects/${project.slug || project.id}`)
+                                  pathname.includes(`/projects/${project.slug || project.id}`)
                                   ? "bg-[#1f1f1f] text-white"
                                   : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                               )}
@@ -1014,7 +1016,7 @@ export default function Sidebar({
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/docs"  rel="noopener noreferrer" target="_blank" className="text-gray-300 hover:text-white">
+              <Link href="/docs" rel="noopener noreferrer" target="_blank" className="text-gray-300 hover:text-white">
                 <Book className="mr-2 h-4 w-4" />
                 API Documentation
               </Link>

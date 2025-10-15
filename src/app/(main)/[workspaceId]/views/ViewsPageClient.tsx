@@ -127,7 +127,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     e.stopPropagation();
 
     try {
-      await toggleViewFavoriteMutation.mutateAsync(viewId);
+      await toggleViewFavoriteMutation.mutateAsync({ workspaceId, viewId });
       toast({
         title: "Success",
         description: "View favorite status updated",
