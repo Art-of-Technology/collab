@@ -15,10 +15,20 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { NotionEditor } from "@/components/ui/notion-editor";
+import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { TagSelect } from "@/components/notes/TagSelect";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const noteEditSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -58,6 +68,8 @@ interface NoteTag {
 export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<NoteEditFormValues>({
@@ -70,6 +82,33 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
       tagIds: note.tags.map((tag) => tag.id),
     },
   });
+
+  // Track form changes
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      const hasChanged =
+        value.title !== note.title ||
+        value.content !== note.content ||
+        value.isPublic !== note.isPublic ||
+        value.isFavorite !== note.isFavorite ||
+        JSON.stringify(value.tagIds?.sort()) !== JSON.stringify(note.tags.map((tag) => tag.id).sort());
+      setHasUnsavedChanges(hasChanged);
+    });
+    return () => subscription.unsubscribe();
+  }, [form, note]);
+
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedWarning(true);
+    } else {
+      onCancel();
+    }
+  };
+
+  const confirmCancel = () => {
+    setShowUnsavedWarning(false);
+    onCancel();
+  };
 
   useEffect(() => {
     fetchTags();
@@ -108,6 +147,7 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
         description: "Note updated successfully",
       });
 
+      setHasUnsavedChanges(false);
       onSuccess();
     } catch (error) {
       console.error("Error updating note:", error);
@@ -145,12 +185,15 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
             <FormItem>
               <FormLabel>Content</FormLabel>
               <FormControl>
-                <NotionEditor
-                  initialValue={field.value}
+                <IssueRichEditor
+                  value={field.value}
                   onChange={field.onChange}
-                  placeholder="Type '/' for commands or start writing..."
+                  placeholder="Add description..."
                   minHeight="300px"
                   maxHeight="500px"
+                  enableSlashCommands={true}
+                  enableFloatingMenu={true}
+                  enableSubIssueCreation={false}
                 />
               </FormControl>
               <FormMessage />
@@ -220,7 +263,7 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
         />
 
         <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
           <Button type="submit" disabled={isLoading}>
@@ -235,6 +278,24 @@ export function NoteEditForm({ note, onSuccess, onCancel }: NoteEditFormProps) {
           </Button>
         </div>
       </form>
+
+      {/* Unsaved Changes Warning */}
+      <AlertDialog open={showUnsavedWarning} onOpenChange={setShowUnsavedWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to discard them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancel} className="bg-destructive hover:bg-destructive/90">
+              Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Form>
   );
 } 

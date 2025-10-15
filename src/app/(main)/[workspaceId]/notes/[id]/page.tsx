@@ -12,6 +12,16 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { NoteCommentsList } from "@/components/notes/NoteCommentsList";
 
@@ -46,6 +56,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
   const [noteId, setNoteId] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { toast } = useToast();
 
   // Resolve params first
@@ -64,14 +75,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
     const fetchNote = async () => {
       setIsLoading(true);
       setError(null);
-      
+
       try {
         const response = await fetch(`/api/notes/${noteId}`);
-        
+
         if (!response.ok) {
           throw new Error(`Error: ${response.status}`);
         }
-        
+
         const data = await response.json();
         setNote(data);
       } catch (err) {
@@ -88,10 +99,6 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
   const handleDelete = async () => {
     if (!note) return;
 
-    if (!confirm("Are you sure you want to delete this note?")) {
-      return;
-    }
-
     try {
       const response = await fetch(`/api/notes/${note.id}`, {
         method: "DELETE",
@@ -105,6 +112,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
         title: "Success",
         description: "Note deleted successfully",
       });
+
+      setShowDeleteDialog(false);
 
       // Redirect back to notes list
       window.location.href = `/${workspaceId}/notes`;
@@ -120,15 +129,15 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
 
   if (isLoading) {
     return (
-      <div className="container py-6 space-y-6">
+      <div className="container py-4 space-y-4">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" disabled>
+          <Button variant="ghost" size="sm" disabled className="h-9 text-sm">
             <ChevronLeft className="h-4 w-4" />
             Back to Notes
           </Button>
         </div>
-        <div className="flex justify-center items-center py-12">
-          <div className="text-muted-foreground">Loading note...</div>
+        <div className="flex justify-center items-center py-16">
+          <div className="text-sm text-muted-foreground/60">Loading note...</div>
         </div>
       </div>
     );
@@ -136,51 +145,51 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
 
   if (error || !note) {
     return (
-      <div className="container py-6 space-y-6">
+      <div className="container py-4 space-y-4">
         <div className="flex items-center gap-2">
           <Link href={`/${workspaceId}/notes`}>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" className="h-9 text-sm">
               <ChevronLeft className="h-4 w-4" />
               Back to Notes
             </Button>
           </Link>
         </div>
-        <div className="flex justify-center items-center py-12">
-          <div className="text-muted-foreground">{error || "Note not found"}</div>
+        <div className="flex justify-center items-center py-16">
+          <div className="text-sm text-muted-foreground/60">{error || "Note not found"}</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container py-4 sm:py-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="container py-4 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <Link href={`/${workspaceId}/notes`}>
-          <Button variant="ghost" size="sm" className="px-2 sm:px-3">
-            <ChevronLeft className="h-4 w-4 mr-1 sm:mr-2" />
-            <span className="text-xs sm:text-sm">Back to Notes</span>
+          <Button variant="ghost" size="sm" className="h-9 px-3 text-sm">
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            <span>Back to Notes</span>
           </Button>
         </Link>
-        
-        <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-end">
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           {session?.user?.id === note.author.id ? (
             <>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setEditingNote(note)}
-                className="text-xs sm:text-sm px-2 sm:px-3 py-1 h-8 sm:h-9"
+                className="text-sm px-3 h-9"
               >
-                <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <Edit className="h-3.5 w-3.5 mr-2" />
                 Edit
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleDelete}
-                className="text-xs sm:text-sm px-2 sm:px-3 py-1 h-8 sm:h-9"
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+                className="text-sm px-3 h-9 text-destructive hover:text-destructive"
               >
-                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
                 Delete
               </Button>
             </>
@@ -188,55 +197,56 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
         </div>
       </div>
 
-      <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm mx-0 sm:mx-0">
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-baseline justify-between pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-white transition-colors flex-1">{note.title}</h1>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 pt-3 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span>
-                  Created {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                </span>
-                {note.isPublic && (
-                  <span className="sm:ml-auto">
-                    <Badge variant="secondary" className="bg-green-500/10 text-green-600">
-                      Public
-                    </Badge>
-                  </span>
-                )}
-              </div>
+      <Card className="overflow-hidden border border-border/50 bg-card/50 backdrop-blur-sm">
+        <CardHeader className="pb-3 px-4 pt-4 border-b border-border/30">
+          <div className="space-y-2">
+            <h1 className="text-xl font-semibold text-foreground">{note.title}</h1>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground/70">
+              <span>
+                Created {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+              </span>
+              {note.isPublic && (
+                <Badge variant="secondary" className="bg-green-500/10 text-green-600 text-xs border-0">
+                  Public
+                </Badge>
+              )}
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="pt-2 sm:pt-4 pb-4 sm:pb-6 px-3 sm:px-6 space-y-3 sm:space-y-4">
+        <CardContent className="pt-4 pb-4 px-4 space-y-4">
           <div className="flex gap-6">
             {/* Note content */}
             <div className="flex-1 space-y-4">
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border border-border/40">
+                <div className="flex items-center gap-2 mb-4">
+                  <Avatar className="h-7 w-7 border border-border/40">
                     <AvatarImage src={note.author.image || undefined} alt={note.author.name || "User"} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs sm:text-sm">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
                       {note.author.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-medium text-xs sm:text-sm md:text-base tracking-tight sm:tracking-normal">{note.author.name}</span>
+                  <span className="font-medium text-sm text-foreground/90">{note.author.name}</span>
                 </div>
-                
-                <h3 className="text-sm sm:text-base md:text-lg font-medium tracking-tight sm:tracking-normal mt-3 sm:mt-4">Content</h3>
-                <div className="mt-1 sm:mt-2 text-sm sm:text-base">
-                  <MarkdownRenderer 
+
+                <h3 className="text-sm font-medium text-foreground/90 mb-3">Content</h3>
+                <div className="text-sm text-foreground/80">
+                  <MarkdownRenderer
                     content={note.content}
                   />
                 </div>
-                
+
                 {note.tags && note.tags.length > 0 && (
-                  <div className="mt-3 sm:mt-4">
-                    <h4 className="text-xs sm:text-sm font-medium mb-1 sm:mb-2">Tags</h4>
-                    <div className="flex flex-wrap gap-1">
+                  <div className="mt-4 pt-4 border-t border-border/30">
+                    <h4 className="text-xs font-medium text-foreground/80 mb-2">Tags</h4>
+                    <div className="flex flex-wrap gap-1.5">
                       {note.tags.map((tag) => (
-                        <Badge key={tag.id} variant="secondary" className="text-xs">
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          className="text-xs px-2 py-0.5 font-normal border-0"
+                          style={{ backgroundColor: `${tag.color}15`, color: tag.color }}
+                        >
                           <div
                             className="w-2 h-2 rounded-full mr-1"
                             style={{ backgroundColor: tag.color }}
@@ -252,16 +262,18 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Comment Section */}
-      <div id="note-comments" className="mt-6 sm:mt-8">
-        <Card className="border-border/40 bg-card/95 backdrop-blur-sm">
-          <CardContent className="pt-4 sm:pt-6 pb-4 px-3 sm:px-6">
-            <div className="flex items-center gap-1 sm:gap-2 mb-4 sm:mb-6">
-              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
-              <h3 className="text-base sm:text-lg font-medium">Comments</h3>
+      <div id="note-comments" className="mt-4">
+        <Card className="border border-border/50 bg-card/50 backdrop-blur-sm">
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-0 pb-3 border-b border-border/30">
+              <MessageSquare className="h-4 w-4 text-muted-foreground/70" />
+              <h3 className="text-sm font-medium text-foreground/90">Comments</h3>
             </div>
-            <NoteCommentsList noteId={note.id} />
+            <div className="relative -left-2">
+              <NoteCommentsList noteId={note.id} />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -290,6 +302,24 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Note</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this note? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 } 

@@ -15,11 +15,21 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { NotionEditor } from "@/components/ui/notion-editor";
+import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { TagSelect } from "@/components/notes/TagSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/hooks/queries/useWorkspace";
-import { Loader2 } from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const noteCreateSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -32,10 +42,13 @@ const noteCreateSchema = z.object({
 
 type NoteCreateFormValues = z.infer<typeof noteCreateSchema>;
 
+const NOTE_DRAFT_KEY = "note-create-draft";
+
 interface NoteCreateFormProps {
   onSuccess: () => void;
   onCancel: () => void;
   workspaceId: string;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface NoteTag {
@@ -44,9 +57,12 @@ interface NoteTag {
   color: string;
 }
 
-export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateFormProps) {
+export function NoteCreateForm({ onSuccess, onCancel, workspaceId, onOpenChange }: NoteCreateFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<NoteTag[]>([]);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<NoteCreateFormValues>({
@@ -60,6 +76,82 @@ export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateF
       tagIds: [],
     },
   });
+
+  // Check for existing draft on mount
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(NOTE_DRAFT_KEY);
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+        setHasDraft(true);
+      }
+    } catch (error) {
+      console.error("Error loading draft:", error);
+    }
+  }, []);
+
+  // Track form changes and save draft
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      const hasContent = !!(value.title || value.content);
+      setHasUnsavedChanges(hasContent);
+
+      // Save draft to localStorage if there's content
+      if (hasContent) {
+        try {
+          localStorage.setItem(NOTE_DRAFT_KEY, JSON.stringify(value));
+        } catch (error) {
+          console.error("Error saving draft:", error);
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(NOTE_DRAFT_KEY);
+      setHasDraft(false);
+    } catch (error) {
+      console.error("Error clearing draft:", error);
+    }
+  };
+
+  const recoverDraft = () => {
+    try {
+      const savedDraft = localStorage.getItem(NOTE_DRAFT_KEY);
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+        form.reset(draft);
+        setHasDraft(false);
+        toast({
+          title: "Draft Recovered",
+          description: "Your previous draft has been restored",
+        });
+      }
+    } catch (error) {
+      console.error("Error recovering draft:", error);
+      toast({
+        title: "Error",
+        description: "Failed to recover draft",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedWarning(true);
+    } else {
+      onCancel();
+    }
+  };
+
+  const confirmCancel = () => {
+    clearDraft();
+    setShowUnsavedWarning(false);
+    onCancel();
+  };
 
   useEffect(() => {
     fetchTags();
@@ -98,6 +190,9 @@ export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateF
         description: "Note created successfully",
       });
 
+      // Clear draft after successful creation
+      clearDraft();
+      setHasUnsavedChanges(false);
       onSuccess();
     } catch (error) {
       console.error("Error creating note:", error);
@@ -114,6 +209,24 @@ export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateF
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {hasDraft && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-blue-500">A draft was found from your previous session</span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={recoverDraft}
+              className="border-blue-500/50 text-blue-500 hover:bg-blue-500/10 hover:text-blue-500"
+            >
+              Recover Draft
+            </Button>
+          </div>
+        )}
+
         <FormField
           control={form.control}
           name="title"
@@ -135,12 +248,15 @@ export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateF
             <FormItem>
               <FormLabel>Content</FormLabel>
               <FormControl>
-                <NotionEditor
-                  initialValue={field.value}
+                <IssueRichEditor
+                  value={field.value}
                   onChange={field.onChange}
-                  placeholder="Type '/' for commands or start writing..."
+                  placeholder="Add description..."
                   minHeight="300px"
                   maxHeight="500px"
+                  enableSlashCommands={true}
+                  enableFloatingMenu={true}
+                  enableSubIssueCreation={false}
                 />
               </FormControl>
               <FormMessage />
@@ -210,7 +326,7 @@ export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateF
         />
 
         <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
           <Button type="submit" disabled={isLoading}>
@@ -225,6 +341,24 @@ export function NoteCreateForm({ onSuccess, onCancel, workspaceId }: NoteCreateF
           </Button>
         </div>
       </form>
+
+      {/* Unsaved Changes Warning */}
+      <AlertDialog open={showUnsavedWarning} onOpenChange={setShowUnsavedWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to discard them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancel} className="bg-destructive hover:bg-destructive/90">
+              Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Form>
   );
 } 
