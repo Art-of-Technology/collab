@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 import { useSession } from "next-auth/react";
 import { canEditNote, canDeleteNote } from "@/utils/permissions";
@@ -23,8 +23,8 @@ import {
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
-import { NoteEditForm } from "@/components/notes/NoteEditForm";
+import { NoteCreateForm, NoteCreateFormRef } from "@/components/notes/NoteCreateForm";
+import { NoteEditForm, NoteEditFormRef } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
@@ -101,6 +101,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
+  const createFormRef = useRef<NoteCreateFormRef>(null);
+  const editFormRef = useRef<NoteEditFormRef>(null);
   const { toast } = useToast();
 
   // Get workspace from context (consistent with other pages)
@@ -348,6 +350,27 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
+  // Handle create dialog close request
+  const handleCreateDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      // User is trying to close the dialog
+      createFormRef.current?.requestClose();
+    } else {
+      setIsCreateOpen(true);
+    }
+  }, []);
+
+  // Handle edit dialog close request
+  const handleEditDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      // User is trying to close the dialog
+      editFormRef.current?.requestClose();
+    } else {
+      // This shouldn't happen, but just in case
+      setEditingNote(editingNote);
+    }
+  }, [editingNote]);
+
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -364,7 +387,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         title="Notes"
         subtitle="Create and organize your notes with markdown support"
         actions={
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={handleCreateDialogOpenChange}>
             <DialogTrigger asChild>
               <Button variant="outline" className={pageHeaderButtonStyles.primary}>
                 <Plus className="h-4 w-4" />
@@ -377,6 +400,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               </DialogHeader>
               {currentWorkspace?.id ? (
                 <NoteCreateForm
+                  ref={createFormRef}
                   workspaceId={currentWorkspace.id}
                   onSuccess={() => {
                     setIsCreateOpen(false);
@@ -665,12 +689,13 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
       {/* Edit Note Dialog */}
       {editingNote && (
-        <Dialog open={!!editingNote} onOpenChange={() => setEditingNote(null)}>
+        <Dialog open={!!editingNote} onOpenChange={handleEditDialogOpenChange}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Note</DialogTitle>
             </DialogHeader>
             <NoteEditForm
+              ref={editFormRef}
               note={editingNote}
               onSuccess={() => {
                 setEditingNote(null);
