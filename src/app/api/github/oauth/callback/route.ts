@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
 import { exchangeCodeForToken, getGitHubUser } from "@/lib/github/oauth-config";
 import { prisma } from "@/lib/prisma";
+import { EncryptionService } from "@/lib/encryption";
 
 /**
  * Handle GitHub OAuth callback
@@ -40,13 +41,16 @@ export async function GET(request: NextRequest) {
     // Get GitHub user profile
     const githubUser = await getGitHubUser(accessToken);
 
+    // Encrypt the access token before storing
+    const encryptedToken = EncryptionService.encrypt(accessToken);
+
     // Store or update GitHub connection for the user
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
         githubId: githubUser.id.toString(),
         githubUsername: githubUser.login,
-        githubAccessToken: accessToken, // In production, encrypt this
+        githubAccessToken: encryptedToken,
       },
     });
 

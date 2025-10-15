@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { EncryptionService } from "@/lib/encryption";
 
 // POST /api/github/repositories/connect - Connect a GitHub repository to a project
 export async function POST(request: NextRequest) {
@@ -95,9 +96,7 @@ export async function POST(request: NextRequest) {
 
 // Helper function to encrypt access tokens
 async function encryptToken(token: string): Promise<string> {
-  // Use your preferred encryption method
-  // For now, return the token (in production, implement proper encryption)
-  return token;
+  return EncryptionService.encrypt(token);
 }
 
 

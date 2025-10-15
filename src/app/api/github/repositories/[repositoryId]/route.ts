@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { EncryptionService } from "@/lib/encryption";
 
 // GET /api/github/repositories/[repositoryId] - Get repository details
 export async function GET(
@@ -60,7 +61,10 @@ export async function GET(
       return NextResponse.json({ error: "Repository not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ repository });
+    // Exclude sensitive fields from response
+    const { accessToken, webhookSecret, ...safeRepository } = repository;
+
+    return NextResponse.json({ repository: safeRepository });
   } catch (error) {
     console.error('[GITHUB_REPOSITORY_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -117,7 +121,9 @@ export async function DELETE(
     // Try to delete webhook from GitHub if we have webhook ID and access token
     if (repository.webhookId && repository.accessToken) {
       try {
-        await deleteGitHubWebhook(repository.accessToken, repository.owner, repository.name, parseInt(repository.webhookId));
+        // Decrypt the access token before using it
+        const decryptedToken = EncryptionService.decrypt(repository.accessToken);
+        await deleteGitHubWebhook(decryptedToken, repository.owner, repository.name, parseInt(repository.webhookId));
         console.log(`[GITHUB_REPOSITORY_DELETE] Webhook deleted from GitHub: ${repository.webhookId}`);
       } catch (error) {
         console.warn(`[GITHUB_REPOSITORY_DELETE] Failed to delete webhook from GitHub: ${error}`);

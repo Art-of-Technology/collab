@@ -4,6 +4,7 @@ import { authConfig } from "@/lib/auth";
 import { createRepositoryWebhook, getRepositoryDetails } from "@/lib/github/oauth-config";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { EncryptionService } from "@/lib/encryption";
 
 /**
  * Connect a GitHub repository to a project with one click
@@ -38,6 +39,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Decrypt the access token
+    const accessToken = EncryptionService.decrypt(user.githubAccessToken);
 
     // Verify user has access to the project
     const project = await prisma.project.findFirst({
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get repository details from GitHub to verify access
-    const repoDetails = await getRepositoryDetails(user.githubAccessToken, owner, name);
+    const repoDetails = await getRepositoryDetails(accessToken, owner, name);
 
     // Check if user has admin access to create webhooks
     if (!repoDetails.permissions?.admin) {
@@ -110,7 +114,7 @@ export async function POST(request: NextRequest) {
     
     try {
       const webhook = await createRepositoryWebhook(
-        user.githubAccessToken,
+        accessToken,
         owner,
         name,
         webhookUrl,

@@ -22,7 +22,11 @@ export async function POST(request: NextRequest) {
     const payload = JSON.parse(body);
 
     // Verify webhook signature
-    const isValid = await verifyWebhookSignature(signature, body, payload.repository?.id);
+    const isValid = await verifyWebhookSignature(
+      signature,
+      body,
+      payload.repository?.id !== undefined ? payload.repository.id.toString() : undefined
+    );
     if (!isValid) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
@@ -87,7 +91,7 @@ async function handlePushEvent(
     const repository = await findRepository(payload.repository.id);
     if (!repository) return;
 
-    // Process commits
+    // Process commits - pass repository data to avoid N+1 queries
     for (const commit of payload.commits) {
       await webhookService.processCommit({
         repositoryId: repository.id,
@@ -97,14 +101,29 @@ async function handlePushEvent(
         authorEmail: commit.author.email,
         commitDate: new Date(commit.timestamp),
         branchName: payload.ref.replace('refs/heads/', ''),
+        repository: {
+          id: repository.id,
+          projectId: repository.projectId,
+          project: {
+            issuePrefix: repository.project.issuePrefix,
+          },
+        },
       });
     }
 
     // Check if this is a merge to main/master branch
     const targetBranch = payload.ref.replace('refs/heads/', '');
     if (['main', 'master', 'development', 'dev'].includes(targetBranch)) {
+      // Map GitHub commits to CommitInfo format
+      const mappedCommits = payload.commits.map((commit: any) => ({
+        id: commit.id,
+        sha: commit.id,
+        message: commit.message,
+        authorName: commit.author.name,
+      }));
+      
       // Trigger version calculation for merged issues
-      await versionManager.handleBranchMerge(repository.id, targetBranch, payload.commits);
+      await versionManager.handleBranchMerge(repository.id, targetBranch, mappedCommits);
     }
   } catch (error) {
     console.error('Error handling push event:', error);
@@ -362,64 +381,20 @@ async function handlePullRequestReviewEvent(
 }
 
 // Handle deployment events
+// Note: Deployment model requires versionId and is designed for internal deployments
+// GitHub deployment webhooks are logged but not tracked in the database yet
 async function handleDeploymentEvent(
   payload: any,
   webhookService: GitHubWebhookService
 ) {
   try {
-    const repository = await findRepository(payload.repository.id);
-    if (!repository) return;
-
-    if (payload.deployment) {
-      // Handle deployment creation
-      const deployment = payload.deployment;
-      
-      await prisma.deployment.upsert({
-        where: {
-          repositoryId_githubDeploymentId: {
-            repositoryId: repository.id,
-            githubDeploymentId: deployment.id.toString(),
-          },
-        },
-        update: {
-          status: 'PENDING',
-          environment: deployment.environment,
-          ref: deployment.ref,
-          sha: deployment.sha,
-        },
-        create: {
-          repositoryId: repository.id,
-          githubDeploymentId: deployment.id.toString(),
-          environment: deployment.environment,
-          ref: deployment.ref,
-          sha: deployment.sha,
-          status: 'PENDING',
-          deployedAt: new Date(deployment.created_at),
-          deployedById: await findUserByGithubId(deployment.creator?.id),
-        },
-      });
-
-      console.log(`Processed deployment ${deployment.id} to ${deployment.environment}`);
-    }
-
-    if (payload.deployment_status) {
-      // Handle deployment status update
-      const deploymentStatus = payload.deployment_status;
-      const deployment = payload.deployment;
-
-      await prisma.deployment.updateMany({
-        where: {
-          repositoryId: repository.id,
-          githubDeploymentId: deployment.id.toString(),
-        },
-        data: {
-          status: mapDeploymentStatus(deploymentStatus.state),
-          deployedAt: deploymentStatus.state === 'success' ? new Date() : undefined,
-        },
-      });
-
-      console.log(`Updated deployment ${deployment.id} status to ${deploymentStatus.state}`);
-    }
+    console.log('GitHub deployment event received:', {
+      action: payload.action,
+      environment: payload.deployment?.environment,
+      deploymentId: payload.deployment?.id,
+      status: payload.deployment_status?.state,
+    });
+    // TODO: Implement GitHub deployment tracking when schema is updated
   } catch (error) {
     console.error('Error handling deployment event:', error);
   }
@@ -439,32 +414,19 @@ function mapReviewState(githubState: string): 'PENDING' | 'APPROVED' | 'CHANGES_
   }
 }
 
-// Helper function to map GitHub deployment status to our enum
-function mapDeploymentStatus(githubStatus: string): 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILURE' | 'CANCELLED' {
-  switch (githubStatus?.toLowerCase()) {
-    case 'success':
-      return 'SUCCESS';
-    case 'failure':
-    case 'error':
-      return 'FAILURE';
-    case 'in_progress':
-      return 'IN_PROGRESS';
-    case 'cancelled':
-      return 'CANCELLED';
-    default:
-      return 'PENDING';
-  }
-}
-
 // Helper functions
 async function verifyWebhookSignature(
   signature: string,
   body: string,
-  githubRepoId: string
+  githubRepoId: string | undefined
 ): Promise<boolean> {
   try {
+    if (!githubRepoId) {
+      return false;
+    }
+    
     const repository = await prisma.repository.findFirst({
-      where: { githubRepoId: githubRepoId.toString() },
+      where: { githubRepoId: githubRepoId },
       select: { webhookSecret: true },
     });
 

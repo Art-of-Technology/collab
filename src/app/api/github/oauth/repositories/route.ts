@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
 import { getUserRepositories } from "@/lib/github/oauth-config";
 import { prisma } from "@/lib/prisma";
+import { EncryptionService } from "@/lib/encryption";
 
 /**
  * Get user's GitHub repositories
@@ -28,6 +29,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Decrypt the access token
+    const accessToken = EncryptionService.decrypt(user.githubAccessToken);
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const search = searchParams.get('search') || '';
@@ -35,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch repositories from GitHub
     const { repositories, hasMore } = await getUserRepositories(
-      user.githubAccessToken,
+      accessToken,
       page,
       30,
       sort

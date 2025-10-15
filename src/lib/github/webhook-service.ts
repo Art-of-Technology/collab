@@ -9,6 +9,15 @@ interface CommitData {
   authorEmail: string;
   commitDate: Date;
   branchName: string;
+  repository?: RepositoryWithProject;
+}
+
+interface RepositoryWithProject {
+  id: string;
+  projectId: string;
+  project: {
+    issuePrefix: string;
+  };
 }
 
 interface PullRequestData {
@@ -55,13 +64,15 @@ export class GitHubWebhookService {
       const branch = await this.findOrCreateBranch(
         commitData.repositoryId,
         commitData.branchName,
-        commitData.sha
+        commitData.sha,
+        commitData.repository
       );
 
       // Extract issue from commit message
       const issueId = await this.extractIssueFromCommitMessage(
         commitData.repositoryId,
-        commitData.message
+        commitData.message,
+        commitData.repository
       );
 
       // Create or update commit
@@ -157,10 +168,12 @@ export class GitHubWebhookService {
     }>
   ) {
     try {
-      return await this.prisma.pullRequest.updateMany({
+      return await this.prisma.pullRequest.update({
         where: {
-          repositoryId,
-          githubPrId,
+          repositoryId_githubPrId: {
+            repositoryId,
+            githubPrId,
+          },
         },
         data: updates,
       });
@@ -236,7 +249,12 @@ export class GitHubWebhookService {
   }
 
   // Private helper methods
-  private async findOrCreateBranch(repositoryId: string, branchName: string, headSha: string) {
+  private async findOrCreateBranch(
+    repositoryId: string,
+    branchName: string,
+    headSha: string,
+    repository?: RepositoryWithProject
+  ) {
     let branch = await this.prisma.branch.findFirst({
       where: {
         repositoryId,
@@ -245,7 +263,11 @@ export class GitHubWebhookService {
     });
 
     if (!branch) {
-      const issueId = await this.extractIssueFromBranchName(repositoryId, branchName);
+      const issueId = await this.extractIssueFromBranchName(
+        repositoryId,
+        branchName,
+        repository
+      );
       branch = await this.prisma.branch.create({
         data: {
           repositoryId,
@@ -265,19 +287,31 @@ export class GitHubWebhookService {
     return branch;
   }
 
+  /**
+   * Extracts the issue ID from a commit message, using the provided repository (with project).
+   * @param repositoryId The repository ID.
+   * @param message The commit message.
+   * @param repository Optional repository object with project data to avoid N+1 queries.
+   * @returns The issue ID, or null if not found.
+   */
   private async extractIssueFromCommitMessage(
     repositoryId: string,
-    message: string
+    message: string,
+    repository?: RepositoryWithProject
   ): Promise<string | null> {
     try {
-      const repository = await this.prisma.repository.findUnique({
-        where: { id: repositoryId },
-        include: { project: true },
-      });
+      // Use provided repository or fetch it
+      let repo = repository;
+      if (!repo) {
+        const fetchedRepo = await this.prisma.repository.findUnique({
+          where: { id: repositoryId },
+          include: { project: true },
+        });
+        if (!fetchedRepo) return null;
+        repo = fetchedRepo;
+      }
 
-      if (!repository) return null;
-
-      const issuePrefix = repository.project.issuePrefix;
+      const issuePrefix = repo.project.issuePrefix;
       const regex = new RegExp(`${issuePrefix}-(\\d+)`, 'gi');
       const matches = message.match(regex);
 
@@ -286,7 +320,7 @@ export class GitHubWebhookService {
         const issue = await this.prisma.issue.findFirst({
           where: {
             issueKey,
-            projectId: repository.projectId,
+            projectId: repo.projectId,
           },
           select: { id: true },
         });
@@ -300,19 +334,31 @@ export class GitHubWebhookService {
     }
   }
 
+  /**
+   * Extracts the issue ID from a branch name, using the provided repository (with project).
+   * @param repositoryId The repository ID.
+   * @param branchName The branch name.
+   * @param repository Optional repository object with project data to avoid N+1 queries.
+   * @returns The issue ID, or null if not found.
+   */
   private async extractIssueFromBranchName(
     repositoryId: string,
-    branchName: string
+    branchName: string,
+    repository?: RepositoryWithProject
   ): Promise<string | null> {
     try {
-      const repository = await this.prisma.repository.findUnique({
-        where: { id: repositoryId },
-        include: { project: true },
-      });
+      // Use provided repository or fetch it
+      let repo = repository;
+      if (!repo) {
+        const fetchedRepo = await this.prisma.repository.findUnique({
+          where: { id: repositoryId },
+          include: { project: true },
+        });
+        if (!fetchedRepo) return null;
+        repo = fetchedRepo;
+      }
 
-      if (!repository) return null;
-
-      const issuePrefix = repository.project.issuePrefix;
+      const issuePrefix = repo.project.issuePrefix;
       const regex = new RegExp(`${issuePrefix}-(\\d+)`, 'i');
       const match = branchName.match(regex);
 
@@ -321,7 +367,7 @@ export class GitHubWebhookService {
         const issue = await this.prisma.issue.findFirst({
           where: {
             issueKey,
-            projectId: repository.projectId,
+            projectId: repo.projectId,
           },
           select: { id: true },
         });

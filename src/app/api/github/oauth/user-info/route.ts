@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { EncryptionService } from "@/lib/encryption";
 
 /**
  * Debug endpoint to check user's GitHub access and organizations
@@ -27,8 +28,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Decrypt the access token
+    const accessToken = EncryptionService.decrypt(user.githubAccessToken);
+
     const headers = {
-      'Authorization': `Bearer ${user.githubAccessToken}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/vnd.github.v3+json',
     };
 
