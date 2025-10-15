@@ -47,6 +47,7 @@ import { EditorMiniToolbar } from "@/components/RichEditor/components/EditorMini
 import { EditorHistoryModal } from "@/components/RichEditor/components/EditorHistoryModal";
 import type { RichEditorRef } from "@/components/RichEditor/types";
 import { generateBackNavigationUrl } from "@/lib/navigation-helpers";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { IssueAssigneeSelector } from "@/components/issue/selectors/IssueAssigneeSelector";
 import { IssueStatusSelector } from "@/components/issue/selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "@/components/issue/selectors/IssuePrioritySelector";
@@ -761,12 +762,18 @@ export function IssueDetailContent({
     });
   }, [issue, workspaceId, toast]);
 
-  // Handle delete issue
-  const handleDeleteIssue = useCallback(async () => {
-    if (!issue?.issueKey && !issue?.id) return;
+  // Delete dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-    const confirmed = window.confirm('Are you sure you want to delete this issue? This action cannot be undone.');
-    if (!confirmed) return;
+  // Handle delete issue
+  const handleDeleteIssue = useCallback(() => {
+    if (!issue?.issueKey && !issue?.id) return;
+    setShowDeleteDialog(true);
+  }, [issue]);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!issue?.issueKey && !issue?.id) return;
 
     try {
       await deleteIssueMutation.mutateAsync(issue.issueKey || issue.id);
@@ -809,6 +816,8 @@ export function IssueDetailContent({
         description: "Failed to delete issue. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setShowDeleteDialog(false);
     }
   }, [issue, deleteIssueMutation, toast, router, viewSlug, workspaceId]);
 
@@ -1435,6 +1444,22 @@ export function IssueDetailContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete Issue"
+        description="Are you sure you want to delete this issue? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete Issue"
+        isLoading={deleteIssueMutation.isPending}
+        onConfirm={handleDeleteConfirm}
+        metadata={issue ? {
+          title: issue.title,
+          subtitle: issue.issueKey
+        } : undefined}
+      />
 
       {/* History Modal */}
       <EditorHistoryModal
