@@ -133,7 +133,7 @@ export function Comment({
     try {
       await updateCommentMutation.mutateAsync({
         message: editedMessage,
-        html: editedHtml
+        html: "" // Clear HTML to force regeneration from the edited message
       });
       setIsEditing(false);
       toast({
