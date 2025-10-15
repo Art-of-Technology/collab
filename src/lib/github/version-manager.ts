@@ -169,7 +169,7 @@ export class VersionManager {
       'development': 'development',
       'dev': 'development',
       'staging': 'staging',
-      'uat': 'uat',
+      'uat': 'staging',
       'sandbox': 'sandbox',
     };
 
