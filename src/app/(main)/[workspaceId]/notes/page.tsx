@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { cn } from "@/lib/utils";
 
 interface Note {
   id: string;
@@ -97,12 +98,15 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
   const createFormRef = useRef<NoteCreateFormRef>(null);
   const editFormRef = useRef<NoteEditFormRef>(null);
+    // Delete note state
+    const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Get workspace from context (consistent with other pages)
@@ -297,10 +301,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       console.error("Error fetching tags:", error);
     }
   };
-
-  // Delete note state
-  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteNote = (noteId: string) => {
     setNoteToDelete(noteId);
@@ -743,8 +743,12 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive hover:bg-destructive/90">
-              Delete
+            <AlertDialogAction
+              onClick={() => deleteNoteId && handleDeleteNote(deleteNoteId as string)}
+              disabled={isDeleting}
+              className={cn("bg-destructive hover:bg-destructive/90", isDeleting && "opacity-50 cursor-not-allowed")}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
