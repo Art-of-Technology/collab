@@ -10,14 +10,15 @@ cloudinary.config({
 /**
  * Generate a unique filename to prevent overwrites and caching issues
  * @param originalFilename - The original file name
+ * @param prefix - The prefix for the filename (image, video, etc.)
  * @returns A unique filename with timestamp and random string
  */
-function generateUniqueFilename(originalFilename: string): string {
+function generateUniqueFilename(originalFilename: string, prefix: string = 'image'): string {
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).substring(2, 8);
   const fileExtension = originalFilename.split('.').pop() || 'png';
   
-  return `image_${timestamp}_${randomString}.${fileExtension}`;
+  return `${prefix}_${timestamp}_${randomString}.${fileExtension}`;
 }
 
 /**
@@ -44,7 +45,7 @@ export async function uploadImage(file: File): Promise<string> {
     const base64Data = await fileToBase64(file);
     
     // Generate unique filename to prevent overwrites
-    const uniqueFilename = generateUniqueFilename(file.name);
+    const uniqueFilename = generateUniqueFilename(file.name, 'image');
     
     // Upload to Cloudinary via API route to protect API key and secret
     const response = await fetch('/api/upload/image', {
@@ -66,6 +67,44 @@ export async function uploadImage(file: File): Promise<string> {
     return data.url;
   } catch (error) {
     console.error('Error uploading image:', error);
+    throw error;
+  }
+}
+
+/**
+ * Upload a video to Cloudinary
+ * @param file - The file to upload
+ * @returns The URL of the uploaded video
+ */
+export async function uploadVideo(file: File): Promise<string> {
+  try {
+    // Convert file to base64 for uploading
+    const base64Data = await fileToBase64(file);
+    
+    // Generate unique filename to prevent overwrites
+    const uniqueFilename = generateUniqueFilename(file.name, 'video');
+    
+    // Upload to Cloudinary via API route to protect API key and secret
+    const response = await fetch('/api/upload/video', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        video: base64Data,
+        filename: uniqueFilename,
+        mimeType: file.type
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to upload video');
+    }
+    
+    const data = await response.json();
+    return data.url;
+  } catch (error) {
+    console.error('Error uploading video:', error);
     throw error;
   }
 }
@@ -119,7 +158,7 @@ export function fileToBase64(file: File): Promise<string> {
     
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        // Remove data:image/jpeg;base64, prefix
+        // Remove data:image/jpeg;base64, or data:video/mp4;base64, prefix
         const base64 = reader.result.split(',')[1];
         resolve(base64);
       } else {
@@ -133,4 +172,22 @@ export function fileToBase64(file: File): Promise<string> {
     
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Check if a file is a video
+ * @param file - The file to check
+ * @returns True if the file is a video
+ */
+export function isVideoFile(file: File): boolean {
+  return file.type.startsWith('video/');
+}
+
+/**
+ * Check if a file is an image
+ * @param file - The file to check
+ * @returns True if the file is an image
+ */
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
 } 

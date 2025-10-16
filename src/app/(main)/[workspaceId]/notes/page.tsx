@@ -12,13 +12,11 @@ import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
-import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import router from "next/router";
 
 interface Note {
   id: string;
@@ -352,34 +350,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         title="Notes"
         subtitle="Create and organize your notes with markdown support"
         actions={
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="h-6 px-1 md:px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md transition-all duration-200 flex items-center justify-center">
-                <Plus className="h-3.5 w-3.5 md:mr-2" />
-                <span data-text className="hidden md:inline ml-1">New Note</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New Note</DialogTitle>
-              </DialogHeader>
-              {currentWorkspace?.id ? (
-                <NoteCreateForm
-                  workspaceId={currentWorkspace.id}
-                  onSuccess={() => {
-                    setIsCreateOpen(false);
-                    fetchNotes();
-                    fetchTags();
-                  }}
-                  onCancel={() => setIsCreateOpen(false)}
-                />
-              ) : (
-                <div className="flex justify-center items-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)} className="h-6 px-1 md:px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md transition-all duration-200 flex items-center justify-center">
+            <Plus className="h-3.5 w-3.5 md:mr-2" />
+            <span data-text className="hidden md:inline ml-1">New Note</span>
+          </Button>
         }
       />
 
@@ -435,11 +409,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                     <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
                       <div
                         data-tag-index="0"
-                        className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
-                          selectedIndex === 0
-                            ? "bg-primary text-primary-foreground"
-                            : "border-transparent hover:border-primary hover:bg-primary/10"
-                        }`}
+                        className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${selectedIndex === 0
+                          ? "bg-primary text-primary-foreground"
+                          : "border-transparent hover:border-primary hover:bg-primary/10"
+                          }`}
                         onClick={() => {
                           setSelectedTag(null);
                           setTagSearchTerm("");
@@ -453,9 +426,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                         <div
                           key={tag.id}
                           data-tag-index={index + 1}
-                          className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${
-                            selectedIndex === index + 1 ? "bg-primary text-primary-foreground" : "hover:bg-primary/10"
-                          }`}
+                          className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${selectedIndex === index + 1 ? "bg-primary text-primary-foreground" : "hover:bg-primary/10"
+                            }`}
                           onClick={() => {
                             setSelectedTag(tag.id);
                             setTagSearchTerm("");
@@ -482,40 +454,36 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
               <div className="flex gap-8 border-b border-border w-fit">
                 <button
                   onClick={() => setActiveTab("all")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "all" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
-                  }`}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "all" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+                    }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setActiveTab("private")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "private"
-                      ? "text-primary border-primary"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
-                  }`}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "private"
+                    ? "text-primary border-primary"
+                    : "text-muted-foreground border-transparent hover:text-foreground"
+                    }`}
                 >
                   Private
                 </button>
                 <button
                   onClick={() => setActiveTab("public")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "public"
-                      ? "text-primary border-primary"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
-                  }`}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "public"
+                    ? "text-primary border-primary"
+                    : "text-muted-foreground border-transparent hover:text-foreground"
+                    }`}
                 >
                   Public
                 </button>
                 <div className="border-l border-border h-6 self-end mb-3"></div>
                 <button
                   onClick={() => setActiveTab("team-notes")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "team-notes"
-                      ? "text-primary border-primary"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
-                  }`}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "team-notes"
+                    ? "text-primary border-primary"
+                    : "text-muted-foreground border-transparent hover:text-foreground"
+                    }`}
                 >
                   Team Notes
                 </button>
@@ -531,14 +499,14 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                   {searchQuery || selectedTag || showFavorites
                     ? "Try adjusting your filters"
                     : activeTab === "private" || activeTab === "public" || activeTab === "all"
-                    ? "Get started by creating your first note"
-                    : "No team notes found"}
+                      ? "Get started by creating your first note"
+                      : "No team notes found"}
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                 {notes.map((note) => (
-                  <Link key={note.id} href={`/${currentWorkspace?.slug}/notes/${note.id}`} className="block">
+                  <Link key={note.id} href={`/${currentWorkspace?.slug}/notes/${note.id}?edit=true`} className="block">
                     <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
                       <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
                         {/* Author mention on the left */}
@@ -558,25 +526,12 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                             }}
                           >
                             <Star
-                              className={`h-1 w-1 sm:h-4 sm:w-4 ${
-                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-yellow-400"
-                              }`}
+                              className={`h-1 w-1 sm:h-4 sm:w-4 ${note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-yellow-400"
+                                }`}
                             />
                           </Button>
                           {canEditNote(session, note) && (
                             <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-3 w-3 sm:h-8 sm:w-8 p-0 hover:bg-transparent group"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setEditingNote(note);
-                                }}
-                              >
-                                <Edit className="h-1 w-1 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-primary" />
-                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -656,26 +611,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </div>
         </div>
       </div>
-
-      {/* Edit Note Dialog */}
-      {editingNote && (
-        <Dialog open={!!editingNote} onOpenChange={() => setEditingNote(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Note</DialogTitle>
-            </DialogHeader>
-            <NoteEditForm
-              note={editingNote}
-              onSuccess={() => {
-                setEditingNote(null);
-                fetchNotes();
-                fetchTags();
-              }}
-              onCancel={() => setEditingNote(null)}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
