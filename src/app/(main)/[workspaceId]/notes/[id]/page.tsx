@@ -12,6 +12,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { NoteCommentsList } from "@/components/notes/NoteCommentsList";
 
@@ -85,13 +86,19 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
     fetchNote();
   }, [noteId]);
 
-  const handleDelete = async () => {
+  // Delete note state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = () => {
+    if (!note) return;
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
     if (!note) return;
 
-    if (!confirm("Are you sure you want to delete this note?")) {
-      return;
-    }
-
+    setIsDeleting(true);
     try {
       const response = await fetch(`/api/notes/${note.id}`, {
         method: "DELETE",
@@ -115,6 +122,9 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
         description: "Failed to delete note. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -265,6 +275,21 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Note Dialog */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete Note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete Note"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+        metadata={note ? {
+          title: note.title
+        } : undefined}
+      />
 
       {/* Edit Note Dialog */}
       {editingNote && (

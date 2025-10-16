@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Plus, Search, X, ChevronsUpDown, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sortTagsBySearchTerm } from "@/utils/sortUtils";
@@ -34,6 +35,10 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
   const [newTagName, setNewTagName] = useState("");
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Delete tag state
+  const [tagToDelete, setTagToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Keyboard navigation state
@@ -129,18 +134,23 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     onChange(value.filter(id => id !== tagId));
   };
 
-  const deleteTag = async (tagId: string) => {
-    if (!confirm("Are you sure you want to delete this tag?")) return;
+  const handleDeleteClick = (tagId: string) => {
+    setTagToDelete(tagId);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!tagToDelete) return;
+
+    setIsDeleting(true);
     try {
-      const response = await fetch(`/api/notes/tags/${tagId}`, {
+      const response = await fetch(`/api/notes/tags/${tagToDelete}`, {
         method: "DELETE",
       });
 
       if (response.ok) {
-        setTags(prev => prev.filter(tag => tag.id !== tagId));
+        setTags(prev => prev.filter(tag => tag.id !== tagToDelete));
         // Also remove from selected tags if it was selected
-        onChange(value.filter(id => id !== tagId));
+        onChange(value.filter(id => id !== tagToDelete));
         toast({
           title: "Success",
           description: "Tag deleted successfully",
@@ -156,6 +166,9 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
         description: error instanceof Error ? error.message : "Failed to delete tag",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setTagToDelete(null);
     }
   };
 
@@ -314,7 +327,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteTag(tag.id);
+                          handleDeleteClick(tag.id);
                         }}
                         className="ml-2 p-1.5 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground rounded border border-transparent hover:border-destructive transition-colors"
                         title="Delete unused tag"
@@ -424,6 +437,21 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
           ))}
         </div>
       )}
+
+      {/* Delete Tag Dialog */}
+      <ConfirmDialog
+        open={!!tagToDelete}
+        onOpenChange={(open) => !open && setTagToDelete(null)}
+        title="Delete Tag"
+        description="Are you sure you want to delete this tag? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete Tag"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+        metadata={tagToDelete ? {
+          title: tags.find(t => t.id === tagToDelete)?.name
+        } : undefined}
+      />
     </div>
   );
 } 
