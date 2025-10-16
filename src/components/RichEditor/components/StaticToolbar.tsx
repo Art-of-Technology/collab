@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Editor } from '@tiptap/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +30,7 @@ import {
   Minus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InputDialog } from '@/components/ui/input-dialog';
 
 interface StaticToolbarProps {
   editor: Editor;
@@ -50,18 +51,23 @@ export function StaticToolbar({
   showAiImprove = false,
   hasContent = false,
 }: StaticToolbarProps) {
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [showImageDialog, setShowImageDialog] = useState(false);
+
   const insertLink = () => {
-    const url = window.prompt('Enter URL:');
-    if (url) {
-      editor.chain().focus().setLink({ href: url }).run();
-    }
+    setShowLinkDialog(true);
+  };
+
+  const handleLinkConfirm = (url: string) => {
+    editor.chain().focus().setLink({ href: url }).run();
   };
 
   const insertImage = () => {
-    const url = window.prompt('Enter image URL:');
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
-    }
+    setShowImageDialog(true);
+  };
+
+  const handleImageConfirm = (url: string) => {
+    editor.chain().focus().setImage({ src: url }).run();
   };
 
   return (
@@ -405,6 +411,46 @@ export function StaticToolbar({
           )}
         </div>
       </TooltipProvider>
+
+      {/* Link Dialog */}
+      <InputDialog
+        open={showLinkDialog}
+        onOpenChange={setShowLinkDialog}
+        title="Insert Link"
+        description="Enter the URL for the link"
+        placeholder="https://example.com"
+        confirmText="Insert Link"
+        type="url"
+        onConfirm={handleLinkConfirm}
+        validate={(value: string) => {
+          try {
+            new URL(value);
+            return undefined;
+          } catch {
+            return "Please enter a valid URL";
+          }
+        }}
+      />
+
+      {/* Image Dialog */}
+      <InputDialog
+        open={showImageDialog}
+        onOpenChange={setShowImageDialog}
+        title="Insert Image"
+        description="Enter the URL for the image"
+        placeholder="https://example.com/image.jpg"
+        confirmText="Insert Image"
+        type="url"
+        onConfirm={handleImageConfirm}
+        validate={(value: string) => {
+          try {
+            new URL(value);
+            return undefined;
+          } catch {
+            return "Please enter a valid URL";
+          }
+        }}
+      />
     </div>
   );
 }

@@ -49,6 +49,7 @@ export async function GET(
         slug: projectSlug
       },
       include: {
+        repository: true, // Include GitHub repository
         statuses: {
           orderBy: {
             order: 'asc'
@@ -76,6 +77,7 @@ export async function GET(
       color: project.color,
       isDefault: project.isDefault,
       isArchived: project.isArchived,
+      repository: project.repository, // Include repository data
       statuses: project.statuses.map(status => ({
         id: status.id,
         name: status.displayName,

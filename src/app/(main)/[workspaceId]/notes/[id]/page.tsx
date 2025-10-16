@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NoteEditForm } from "@/components/notes/NoteEditForm";
 import { NoteCommentsList } from "@/components/notes/NoteCommentsList";
 
@@ -57,6 +58,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   // Resolve params first
@@ -96,9 +98,17 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
     fetchNote();
   }, [noteId]);
 
-  const handleDelete = async () => {
+
+
+  const handleDelete = () => {
+    if (!note) return;
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
     if (!note) return;
 
+    setIsDeleting(true);
     try {
       const response = await fetch(`/api/notes/${note.id}`, {
         method: "DELETE",
@@ -124,6 +134,9 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
         description: "Failed to delete note. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -277,6 +290,21 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Note Dialog */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete Note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete Note"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+        metadata={note ? {
+          title: note.title
+        } : undefined}
+      />
 
       {/* Edit Note Dialog */}
       {editingNote && (

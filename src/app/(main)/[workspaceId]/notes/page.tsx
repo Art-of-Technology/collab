@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 import { useSession } from "next-auth/react";
-import { canEditNote, canDeleteNote } from "@/utils/permissions";
+import { canEditNote } from "@/utils/permissions";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +21,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NoteCreateForm, NoteCreateFormRef } from "@/components/notes/NoteCreateForm";
 import { NoteEditForm, NoteEditFormRef } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
@@ -298,16 +298,25 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  const handleDeleteNote = async () => {
-    if (!deleteNoteId) return;
+  // Delete note state
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
+  const handleDeleteNote = (noteId: string) => {
+    setNoteToDelete(noteId);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!noteToDelete) return;
+
+    setIsDeleting(true);
     try {
-      const response = await fetch(`/api/notes/${deleteNoteId}`, {
+      const response = await fetch(`/api/notes/${noteToDelete}`, {
         method: "DELETE",
       });
 
       if (response.ok) {
-        setNotes(notes.filter((note) => note.id !== deleteNoteId));
+        setNotes(notes.filter((note) => note.id !== noteToDelete));
         toast({
           title: "Success",
           description: "Note deleted successfully",
@@ -323,6 +332,9 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         description: "Failed to delete note",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setNoteToDelete(null);
     }
   };
 
@@ -686,6 +698,18 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </div>
         </div>
       </div>
+
+      {/* Delete Note Dialog */}
+      <ConfirmDialog
+        open={!!noteToDelete}
+        onOpenChange={(open) => !open && setNoteToDelete(null)}
+        title="Delete Note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete Note"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+      />
 
       {/* Edit Note Dialog */}
       {editingNote && (

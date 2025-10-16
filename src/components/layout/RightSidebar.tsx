@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from 'react';
 import { useViewFilters } from '@/context/ViewFiltersContext';
 import ViewFilters from '@/components/views/shared/ViewFilters';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function RightSidebar() {
   const { 
@@ -20,8 +22,45 @@ export default function RightSidebar() {
   const { toast } = useToast();
   const router = useRouter();
 
+  // Delete view state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Get the view type for ViewFilters
   const viewType = (currentView?.displayType || 'LIST').toLowerCase() as 'kanban' | 'list' | 'timeline';
+
+  const handleDeleteConfirm = async () => {
+    if (!currentView || !workspace) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/workspaces/${workspace.id}/views/${currentView.id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Success',
+          description: 'View deleted successfully'
+        });
+        
+        // Navigate back to views list
+        router.push(`/${workspace.slug || workspace.id}/views`);
+      } else {
+        throw new Error('Failed to delete view');
+      }
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete view',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
 
   return (
     <div 
@@ -103,36 +142,7 @@ export default function RightSidebar() {
             });
           }
         }}
-        onDeleteView={async () => {
-          if (!confirm('Are you sure you want to delete this view? This action cannot be undone.')) {
-            return;
-          }
-          
-          try {
-            const response = await fetch(`/api/workspaces/${workspace.id}/views/${currentView.id}`, {
-              method: 'DELETE'
-            });
-
-            if (response.ok) {
-              toast({
-                title: 'Success',
-                description: 'View deleted successfully'
-              });
-              
-              // Navigate back to views list
-              router.push(`/${workspace.slug || workspace.id}/views`);
-            } else {
-              throw new Error('Failed to delete view');
-            }
-          } catch (error) {
-            console.error('Error deleting view:', error);
-            toast({
-              title: 'Error',
-              description: 'Failed to delete view',
-              variant: 'destructive'
-            });
-          }
-        }}
+        onDeleteView={() => setShowDeleteDialog(true)}
         onNameChange={async (name) => {
           try {
             const response = await fetch(`/api/workspaces/${workspace.id}/views/${currentView.id}`, {
@@ -168,6 +178,21 @@ export default function RightSidebar() {
           </div>
         )}
       </div>
+
+      {/* Delete View Dialog */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete View"
+        description="Are you sure you want to delete this view? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete View"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+        metadata={currentView ? {
+          title: currentView.name
+        } : undefined}
+      />
     </div>
   );
 }
