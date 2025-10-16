@@ -32,7 +32,7 @@ const normalizeCommentStructure = (comments: any[], itemType: UnifiedItemType): 
       parentId: comment.parentId,
       replies: comment.replies ? normalizeCommentStructure(comment.replies, itemType) : undefined
     };
-    
+
     return normalizedComment;
   });
 };
@@ -44,9 +44,9 @@ interface UnifiedCommentsSectionProps {
   currentUserId?: string;
 }
 
-export function UnifiedCommentsSection({ 
+export function UnifiedCommentsSection({
   itemType,
-  itemId, 
+  itemId,
   initialComments = [],
   currentUserId: initialUserId
 }: UnifiedCommentsSectionProps) {
@@ -54,21 +54,21 @@ export function UnifiedCommentsSection({
   const [isImproving, setIsImproving] = useState(false);
   // Reply functionality is now handled directly in UnifiedComment component
   const { toast } = useToast();
-  
+
   // Use unified hooks
   const { data, isLoading } = useUnifiedComments(itemType, itemId);
   const addCommentMutation = useAddUnifiedComment();
-  
+
   // Get current user data
   const { data: currentUser } = useCurrentUser();
-  
+
   // Normalize comment structure and use the query data or fall back to initial comments
   const rawComments = data?.comments || initialComments;
   const comments = useMemo(() => normalizeCommentStructure(rawComments, itemType), [rawComments, itemType]);
   const currentUserId = data?.currentUserId || initialUserId || '';
-  
+
   // Use organizeTaskCommentsIntoTree when rendering comments
-  const organizedComments = useMemo(() => 
+  const organizedComments = useMemo(() =>
     organizeTaskCommentsIntoTree(comments as any), [comments]
   );
 
@@ -94,7 +94,7 @@ export function UnifiedCommentsSection({
       // Process mentions if there are any in the comment
       if (newComment?.id) {
         const mentionedUserIds = extractMentionUserIds(content);
-        
+
         if (mentionedUserIds.length > 0) {
           try {
             await axios.post("/api/mentions", {
@@ -191,13 +191,13 @@ export function UnifiedCommentsSection({
               itemType={itemType}
               itemId={itemId}
               currentUserId={currentUserId}
-              // onReply removed - handled internally
+            // onReply removed - handled internally
             />
           ))}
         </div>
       )}
 
-      <div className="pt-4 mt-4 border-t border-border/30">
+      <div className="pt-4 mt-2 border-t border-border/30">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex gap-3">
             {currentUser.useCustomAvatar ? (
@@ -210,7 +210,7 @@ export function UnifiedCommentsSection({
                 </AvatarFallback>
               </Avatar>
             )}
-            <div className="flex-1">
+            <div className="flex-1 -mt-3">
               <MarkdownEditor
                 onChange={handleEditorChange}
                 placeholder="Add a comment..."
