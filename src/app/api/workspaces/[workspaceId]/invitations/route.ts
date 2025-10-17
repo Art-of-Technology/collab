@@ -36,14 +36,10 @@ export async function GET(
         { status: 403 }
       );
     }
-    // Get pending invitations for the workspace
+    // Get all invitations for the workspace
     const invitations = await prisma.workspaceInvitation.findMany({
       where: { 
-        workspaceId,
-        status: 'pending',
-        expiresAt: {
-          gte: new Date()
-        }
+        workspaceId
       },
       include: {
         invitedBy: {
@@ -170,24 +166,24 @@ export async function POST(
       }
     });
 
-    // Send invitation email
-    const inviterName = session.user.name || session.user.email || 'A team member';
-    const emailResult = await sendWorkspaceInvitationEmail({
-      to: email,
-      inviterName,
-      workspaceName: workspace.name,
-      invitationToken: token
-    });
+     // Send invitation email
+     const inviterName = session.user.name || session.user.email || 'A team member';
+     const emailResult = await sendWorkspaceInvitationEmail({
+       to: email,
+       inviterName,
+       workspaceName: workspace.name,
+       invitationToken: token
+     });
 
-    if (!emailResult.success) {
-      console.error('Failed to send invitation email:', emailResult.error);
-      // We still return success even if email fails, but log the error
-    }
-
-    return NextResponse.json({
-      ...invitation,
-      emailSent: emailResult.success
-    }, { status: 201 });
+     // Return response
+     return NextResponse.json({
+       ...invitation,
+       emailSent: emailResult.success,
+       emailDetails: {
+         error: emailResult.error || null,
+         messageId: emailResult.messageId || null
+       }
+     }, { status: 201 });
   } catch (error) {
     console.error('Error creating invitation:', error);
     return NextResponse.json(
