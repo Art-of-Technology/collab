@@ -134,10 +134,11 @@ export function useResendInvitation(workspaceId: string) {
       });
 
       if (data.emailSent === false) {
+        const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
         toast({
           title: "Invitation resent, but email not sent",
-          description: "The invitation was created successfully, but we couldn't send the email. The user can still join using the invitation link from your workspace settings.",
-          variant: "default",
+          description: `The invitation was created successfully, but we couldn't send the email${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
+          variant: "destructive",
         });
       } else {
         toast({

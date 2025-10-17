@@ -24,7 +24,7 @@ export default function DeleteInvitationButton({
     <Button
       variant="outline"
       size="sm"
-      className="text-xs text-destructive hover:bg-destructive"
+      className="text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground"
       onClick={handleDelete}
       disabled={isPending}
     >
