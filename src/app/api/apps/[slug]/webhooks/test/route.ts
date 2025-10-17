@@ -50,7 +50,7 @@ export async function POST(
       }
     });
 
-    if (!membership || membership.role !== 'ADMIN') {
+    if (!membership) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 

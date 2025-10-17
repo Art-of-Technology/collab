@@ -13,6 +13,12 @@ export interface WebhookCreationResult {
   success: boolean;
   webhooksCreated: number;
   errors: string[];
+  webhookSecrets: Array<{
+    webhookId: string;
+    url: string;
+    secret: string;
+    eventTypes: string[];
+  }>;
 }
 
 /**
@@ -26,7 +32,8 @@ export async function createWebhooksFromManifest(
   const result: WebhookCreationResult = {
     success: true,
     webhooksCreated: 0,
-    errors: []
+    errors: [],
+    webhookSecrets: []
   };
 
   try {
@@ -91,6 +98,14 @@ export async function createWebhooksFromManifest(
         });
 
         result.webhooksCreated++;
+        
+        // Store the webhook secret for returning to the third-party app
+        result.webhookSecrets.push({
+          webhookId: webhook.id,
+          url: endpoint.url,
+          secret: secret, // Return the plain-text secret
+          eventTypes: endpoint.events
+        });
         
         console.log(`✅ Created webhook ${webhook.id}`, {
           url: endpoint.url,

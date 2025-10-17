@@ -6,11 +6,17 @@ export type TokenEndpointAuthMethod =
 
 export type AppScope = 
   | 'workspace:read' 
+  | 'workspace:write'
   | 'issues:read' 
   | 'user:read'
+  | 'user:write'
   | 'issues:write'
   | 'comments:read'
   | 'comments:write'
+  | 'posts:read'
+  | 'posts:write'
+  | 'profile:read'
+  | 'profile:write'
   | 'leave:read'
   | 'leave:write';
 

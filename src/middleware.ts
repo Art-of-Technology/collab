@@ -113,9 +113,6 @@ export function middleware(req: NextRequest) {
   // MIME sniffing protection
   res.headers.set("X-Content-Type-Options", "nosniff");
 
-  // Clickjacking protection (redundant with frame-ancestors but widely supported)
-  res.headers.set("X-Frame-Options", "DENY");
-
   // Referrer policy
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
 

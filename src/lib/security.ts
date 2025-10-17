@@ -202,9 +202,6 @@ export function getSecurityHeaders(csp?: string): Record<string, string> {
     // Enable XSS protection
     'X-XSS-Protection': '1; mode=block',
     
-    // Prevent clickjacking (redundant with CSP frame-ancestors, but good fallback)
-    'X-Frame-Options': 'DENY',
-    
     // Strict Transport Security (HTTPS only)
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     
