@@ -36,10 +36,11 @@ export async function GET(
         { status: 403 }
       );
     }
-    // Get all invitations for the workspace
+    // Get all pending invitations for the workspace
     const invitations = await prisma.workspaceInvitation.findMany({
       where: { 
-        workspaceId
+        workspaceId,
+        status: 'pending'
       },
       include: {
         invitedBy: {
