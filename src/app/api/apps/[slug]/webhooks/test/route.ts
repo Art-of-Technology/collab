@@ -8,8 +8,9 @@ import { processWebhookEvent } from '@/lib/webhook-delivery';
 const prisma = new PrismaClient();
 
 const TestWebhookSchema = z.object({
-  workspaceId: z.string().cuid('Invalid workspace ID'),
+  workspaceId: z.string().min(1, 'Workspace ID is required'),
   eventType: z.string().min(1, 'Event type is required'),
+  webhookId: z.string().optional(),
   testData: z.object({}).optional()
 });
 
@@ -28,7 +29,6 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
     // Validate request body
     const validation = TestWebhookSchema.safeParse(body);
     if (!validation.success) {
