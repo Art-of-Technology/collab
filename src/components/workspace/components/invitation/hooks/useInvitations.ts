@@ -61,17 +61,19 @@ export function useInviteMember(workspaceId: string) {
         queryKey: ['workspace', workspaceId],
       });
 
-      // Show success toast
+      // Show detailed status toast
       if (data.emailSent === false) {
+        const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
         toast({
           title: "Invitation created, but email not sent",
-          description: "The invitation was created successfully, but we couldn't send the email. The user can still join using the invitation link from your workspace settings.",
-          variant: "default",
+          description: `The invitation was created successfully, but we couldn't send the email${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
+          variant: "destructive",
         });
       } else {
+        const messageId = data.emailDetails?.messageId ? ` (ID: ${data.emailDetails.messageId})` : '';
         toast({
           title: "Invitation sent successfully",
-          description: `An email invitation has been sent to ${email}`,
+          description: `An email invitation has been sent to ${email}${messageId}`,
           variant: "default",
         });
       }
@@ -87,6 +89,75 @@ export function useInviteMember(workspaceId: string) {
 }
 
 // Hook to cancel an invitation
+export function useResendInvitation(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ invitationId, email }: { invitationId: string; email: string }) => {
+      // First cancel the existing invitation
+      const cancelResponse = await fetch(`/api/workspaces/${workspaceId}/invitations?id=${invitationId}`, {
+        method: 'DELETE',
+      });
+
+      if (!cancelResponse.ok) {
+        const errorData = await cancelResponse.json();
+        throw new Error(errorData.error || 'Failed to cancel existing invitation');
+      }
+
+      // Then create a new invitation
+      const createResponse = await fetch(`/api/workspaces/${workspaceId}/invitations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await createResponse.json();
+
+      if (!createResponse.ok) {
+        throw new Error(result.error || 'Failed to create new invitation');
+      }
+
+      return result;
+    },
+    onSuccess: (data, { email }) => {
+      // Invalidate and refetch invitations
+      queryClient.invalidateQueries({
+        queryKey: invitationKeys.workspace(workspaceId),
+      });
+
+      // Also invalidate workspace data to update invitation count
+      queryClient.invalidateQueries({
+        queryKey: ['workspace', workspaceId],
+      });
+
+      if (data.emailSent === false) {
+        const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
+        toast({
+          title: "Invitation resent, but email not sent",
+          description: `The invitation was created successfully, but we couldn't send the email${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Invitation resent successfully",
+          description: `A new invitation email has been sent to ${email}`,
+          variant: "default",
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to resend invitation',
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
 export function useCancelInvitation(workspaceId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

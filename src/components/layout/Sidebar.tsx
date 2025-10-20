@@ -108,8 +108,10 @@ export default function Sidebar({
     e.preventDefault();
     e.stopPropagation();
 
+    if (!currentWorkspace?.id) return;
+
     try {
-      await toggleViewFavoriteMutation.mutateAsync(viewId);
+      await toggleViewFavoriteMutation.mutateAsync({ workspaceId: currentWorkspace.id, viewId });
       toast({
         title: "Success",
         description: "View favorite status updated",

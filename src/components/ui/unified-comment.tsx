@@ -95,19 +95,19 @@ export function UnifiedComment({
     setLocalCommentHtml(comment.html || "");
     setEditContent(comment.content || comment.message || "");
   }, [comment.content, comment.message, comment.html]);
-  
+
   // Initialize state values from comment reactions
   useEffect(() => {
     if (itemType === 'note' && comment.reactions) {
       // Check if current user has liked this comment
-      const userLiked = comment.reactions.some(reaction => 
+      const userLiked = comment.reactions.some(reaction =>
         reaction.authorId === currentUserId && reaction.type.toLowerCase() === 'like'
       );
       // Count only like reactions
-      const likesNum = comment.reactions.filter(reaction => 
+      const likesNum = comment.reactions.filter(reaction =>
         reaction.type.toLowerCase() === 'like'
       ).length;
-      
+
       setIsLikedState(userLiked);
       setLikesCountState(likesNum);
     }
@@ -141,22 +141,22 @@ export function UnifiedComment({
   // For tasks, use the likesData from the hook
   let isLiked = likesData?.isLiked || false;
   let likesCount = likesData?.likes?.length || 0;
-  
+
   // For notes, use local state or check reactions directly
   if (itemType === 'note') {
     // If we have state values from API, use those
     if (isLikedState || likesCountState > 0) {
       isLiked = isLikedState;
       likesCount = likesCountState;
-    } 
+    }
     // Otherwise check reactions directly from the comment
     else if (comment.reactions) {
       // Check if current user has liked this comment
-      isLiked = comment.reactions.some(reaction => 
+      isLiked = comment.reactions.some(reaction =>
         reaction.authorId === currentUserId && reaction.type.toLowerCase() === 'like'
       );
       // Count only like reactions
-      likesCount = comment.reactions.filter(reaction => 
+      likesCount = comment.reactions.filter(reaction =>
         reaction.type.toLowerCase() === 'like'
       ).length;
     }
@@ -165,10 +165,10 @@ export function UnifiedComment({
   // Function to handle like button click using TanStack Query
   const handleLike = () => {
     toggleCommentLikeMutation.mutate(
-      { 
-        itemType, 
-        itemId, 
-        commentId: comment.id 
+      {
+        itemType,
+        itemId,
+        commentId: comment.id
       },
       {
         onSuccess: (data) => {
@@ -201,10 +201,10 @@ export function UnifiedComment({
     }
     try {
       if (itemType === 'task') {
-        await updateTaskCommentMutation.mutateAsync({ 
-          taskId: itemId, 
-          commentId: comment.id, 
-          content: editContent 
+        await updateTaskCommentMutation.mutateAsync({
+          taskId: itemId,
+          commentId: comment.id,
+          content: editContent
         });
         setIsEditing(false);
         // Update local state immediately for UI responsiveness
@@ -260,10 +260,10 @@ export function UnifiedComment({
               >
                 {author.name}
               </Link>
-              <MarkdownContent 
-                content={localCommentHtml || comment.html || commentContent} 
+              <MarkdownContent
+                content={localCommentHtml || comment.html || commentContent}
                 htmlContent={localCommentHtml || comment.html || commentContent}
-                className="text-sm mt-0.5" 
+                className="text-sm mt-0.5"
               />
             </div>
 
@@ -326,25 +326,25 @@ export function UnifiedComment({
                   content={editContent}
                 />
                 <div className="flex justify-end gap-2">
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setIsEditing(false)} 
-                    disabled={(itemType === 'task' ? updateTaskCommentMutation.isPending : 
-                              itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditing(false)}
+                    disabled={(itemType === 'task' ? updateTaskCommentMutation.isPending :
+                      itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
-                    size="sm" 
-                    disabled={!editContent.trim() || 
-                      (itemType === 'task' ? updateTaskCommentMutation.isPending : 
-                       itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!editContent.trim() ||
+                      (itemType === 'task' ? updateTaskCommentMutation.isPending :
+                        itemType === 'note' ? updateNoteCommentMutation.isPending : false)}
                   >
-                    {(itemType === 'task' && updateTaskCommentMutation.isPending) || 
-                     (itemType === 'note' && updateNoteCommentMutation.isPending) 
+                    {(itemType === 'task' && updateTaskCommentMutation.isPending) ||
+                      (itemType === 'note' && updateNoteCommentMutation.isPending)
                       ? "Saving..." : "Save"}
                   </Button>
                 </div>

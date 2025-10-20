@@ -4,6 +4,7 @@ import React from "react";
 import { TabsContent } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import PendingInvitations from "./PendingInvitations";
+import ExpiredInvitations from "./ExpiredInvitations";
 import InviteNewMembers from "./InviteNewMembers";
 import { useInvitations } from "./hooks";
 
@@ -44,13 +45,20 @@ export default function InvitationsTab({
 
   return (
     <TabsContent className="max-w-6xl px-6 py-4" value="invitations">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <PendingInvitations
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <PendingInvitations
+            invitations={invitations.filter(inv => new Date(inv.expiresAt) >= new Date())}
+            workspaceId={workspaceId}
+            canCancelInvitations={canInviteMembers}
+          />
+          <InviteNewMembers workspaceId={workspaceId} />
+        </div>
+        <ExpiredInvitations
           invitations={invitations}
           workspaceId={workspaceId}
           canCancelInvitations={canInviteMembers}
         />
-        <InviteNewMembers workspaceId={workspaceId} />
       </div>
     </TabsContent>
   );
