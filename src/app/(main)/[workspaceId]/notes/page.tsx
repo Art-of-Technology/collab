@@ -302,6 +302,37 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
+  const handleDelete = async (noteId: string) => {
+    if (!confirm("Are you sure you want to delete this note?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/notes/${noteId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete note");
+      }
+
+      toast({
+        title: "Success",
+        description: "Note deleted successfully",
+      });
+
+      // Remove the note from the list
+      setNotes(notes.filter((note) => note.id !== noteId));
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete note. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -499,7 +530,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  router.push(`/${currentWorkspace?.slug}/notes/${note.id}/edit`);
+                                  router.push(`/${currentWorkspace?.slug}/notes/${note.id}`);
                                 }}
                               >
                                 <Edit className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-primary" />
@@ -511,7 +542,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  router.push(`/${currentWorkspace?.slug}/notes/${note.id}/delete`);
+                                  handleDelete(note.id);
                                 }}
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-red-500" />
