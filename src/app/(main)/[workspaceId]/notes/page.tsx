@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +81,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
@@ -302,13 +305,16 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  const handleDelete = async (noteId: string) => {
-    if (!confirm("Are you sure you want to delete this note?")) {
-      return;
-    }
+  const handleDeleteClick = (noteId: string) => {
+    setNoteToDelete(noteId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!noteToDelete) return;
 
     try {
-      const response = await fetch(`/api/notes/${noteId}`, {
+      const response = await fetch(`/api/notes/${noteToDelete}`, {
         method: "DELETE",
       });
 
@@ -322,7 +328,9 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       });
 
       // Remove the note from the list
-      setNotes(notes.filter((note) => note.id !== noteId));
+      setNotes(notes.filter((note) => note.id !== noteToDelete));
+      setDeleteConfirmOpen(false);
+      setNoteToDelete(null);
     } catch (error) {
       console.error("Error deleting note:", error);
       toast({
@@ -542,7 +550,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  handleDelete(note.id);
+                                  handleDeleteClick(note.id);
                                 }}
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-red-500" />
@@ -618,6 +626,27 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Note</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this note? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
