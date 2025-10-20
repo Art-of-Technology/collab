@@ -165,6 +165,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           border-radius: 8px;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
           transition: box-shadow 0.2s ease;
+          margin:0;
         }
         
         .video-resizable-container:hover .resizable-video,

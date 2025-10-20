@@ -197,6 +197,11 @@ export const ResizableVideoExtension = Node.create({
       let startY = 0;
       let startWidth = 0;
       let startHeight = 0;
+      let currentHandlePos = '';
+
+      // Define resize handlers outside the loop so they can be properly cleaned up in destroy
+      let handleResize: ((e: MouseEvent) => void) | null = null;
+      let stopResize: (() => void) | null = null;
 
       // Create resize handles (8 handles: corners + edges)
       const handles = ['se', 'sw', 'ne', 'nw', 'n', 's', 'e', 'w'];
@@ -204,34 +209,33 @@ export const ResizableVideoExtension = Node.create({
         const handle = document.createElement('div');
         handle.classList.add('resize-handle', `handle-${handlePos}`);
         handle.style.position = 'absolute';
-        handle.style.width = '10px';
-        handle.style.height = '10px';
+        handle.style.width = '8px';
+        handle.style.height = '8px';
         handle.style.backgroundColor = 'hsl(var(--background))';
         handle.style.border = '1px solid hsl(var(--foreground))';
-        handle.style.borderRadius = '2px';
-        handle.style.zIndex = '10';
+        handle.style.zIndex = '2';
         handle.style.display = 'none'; // Hidden by default
         
         // Position the handle based on its position code
         switch(handlePos) {
           case 'se': // bottom-right
-            handle.style.bottom = '-8px';
-            handle.style.right = '-4px';
+            handle.style.bottom = '0';
+            handle.style.right = '-2px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'sw': // bottom-left
-            handle.style.bottom = '-8px'; 
-            handle.style.left = '-4px';
+            handle.style.bottom = '0';
+            handle.style.left = '-2px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'ne': // top-right
-            handle.style.top = '8px';
-            handle.style.right = '-4px';
+            handle.style.top = '0';
+            handle.style.right = '-2px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'nw': // top-left
-            handle.style.top = '8px';
-            handle.style.left = '-4px';
+            handle.style.top = '0';
+            handle.style.left = '-2px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'n': // top-center
@@ -248,16 +252,82 @@ export const ResizableVideoExtension = Node.create({
             break;
           case 'e': // middle-right
             handle.style.top = '50%';
-            handle.style.right = '0';
+            handle.style.right = '-4px';
             handle.style.transform = 'translateY(-50%)';
             handle.style.cursor = 'ew-resize';
             break;
           case 'w': // middle-left
             handle.style.top = '50%';
-            handle.style.left = '-8px';   
+            handle.style.left = '-4px';
             handle.style.transform = 'translateY(-50%)';
             handle.style.cursor = 'ew-resize';
             break;
+        }
+        
+        // Define resize handlers (only once, not per handle)
+        if (!handleResize) {
+          handleResize = (e: MouseEvent) => {
+            if (!isResizing) return;
+            
+            // Calculate new dimensions based on handle position
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            
+            // Determine resize behavior based on current handle position
+            if (currentHandlePos.includes('e')) {
+              newWidth = startWidth + (e.clientX - startX);
+            } else if (currentHandlePos.includes('w')) {
+              newWidth = startWidth - (e.clientX - startX);
+            }
+            
+            if (currentHandlePos.includes('s')) {
+              newHeight = startHeight + (e.clientY - startY);
+            } else if (currentHandlePos.includes('n')) {
+              newHeight = startHeight - (e.clientY - startY);
+            }
+            
+            // Maintain aspect ratio by default (unless shift key is pressed)
+            if (!e.shiftKey) {
+              const ratio = startWidth / startHeight;
+              // Determine which dimension is dominant in this resize operation
+              const widthDominant = Math.abs(newWidth / startWidth - 1) > Math.abs(newHeight / startHeight - 1);
+              
+              if (widthDominant) {
+                newHeight = newWidth / ratio;
+              } else {
+                newWidth = newHeight * ratio;
+              }
+            }
+            
+            // Apply size limits
+            newWidth = Math.max(100, newWidth);  // min width 100px
+            newHeight = Math.max(56, newHeight); // min height 56px (16:9 aspect ratio at min width)
+            
+            // Update video dimensions
+            video.width = Math.round(newWidth);
+            video.height = Math.round(newHeight);
+            
+            // Update the node attributes for persistence
+            if (typeof getPos === 'function') {
+              const pos = getPos();
+              if (typeof pos === 'number') {
+                editor.commands.command(({ tr }) => {
+                  tr.setNodeMarkup(pos, undefined, { 
+                    ...node.attrs, 
+                    width: Math.round(newWidth),
+                    height: Math.round(newHeight),
+                  });
+                  return true;
+                });
+              }
+            }
+          };
+          
+          stopResize = () => {
+            isResizing = false;
+            if (handleResize) document.removeEventListener('mousemove', handleResize);
+            if (stopResize) document.removeEventListener('mouseup', stopResize);
+          };
         }
         
         // Add resize functionality
@@ -265,82 +335,20 @@ export const ResizableVideoExtension = Node.create({
           if (!editor.isEditable) return;
           
           isResizing = true;
+          currentHandlePos = handlePos;
           startX = e.clientX;
           startY = e.clientY;
           startWidth = video.width || video.videoWidth || 640;
           startHeight = video.height || video.videoHeight || 360;
           
           // Add event listeners to handle resize
-          document.addEventListener('mousemove', handleResize);
-          document.addEventListener('mouseup', stopResize);
+          if (handleResize) document.addEventListener('mousemove', handleResize);
+          if (stopResize) document.addEventListener('mouseup', stopResize);
           
           // Prevent default behavior and propagation
           e.preventDefault();
           e.stopPropagation();
         });
-        
-        const handleResize = (e: MouseEvent) => {
-          if (!isResizing) return;
-          
-          // Calculate new dimensions based on handle position
-          let newWidth = startWidth;
-          let newHeight = startHeight;
-          
-          // Determine resize behavior based on handle position
-          if (handlePos.includes('e')) {
-            newWidth = startWidth + (e.clientX - startX);
-          } else if (handlePos.includes('w')) {
-            newWidth = startWidth - (e.clientX - startX);
-          }
-          
-          if (handlePos.includes('s')) {
-            newHeight = startHeight + (e.clientY - startY);
-          } else if (handlePos.includes('n')) {
-            newHeight = startHeight - (e.clientY - startY);
-          }
-          
-          // Maintain aspect ratio by default (unless shift key is pressed)
-          if (!e.shiftKey) {
-            const ratio = startWidth / startHeight;
-            // Determine which dimension is dominant in this resize operation
-            const widthDominant = Math.abs(newWidth / startWidth - 1) > Math.abs(newHeight / startHeight - 1);
-            
-            if (widthDominant) {
-              newHeight = newWidth / ratio;
-            } else {
-              newWidth = newHeight * ratio;
-            }
-          }
-          
-          // Apply size limits
-          newWidth = Math.max(100, newWidth);  // min width 100px
-          newHeight = Math.max(56, newHeight); // min height 56px (16:9 aspect ratio at min width)
-          
-          // Update video dimensions
-          video.width = Math.round(newWidth);
-          video.height = Math.round(newHeight);
-          
-          // Update the node attributes for persistence
-          if (typeof getPos === 'function') {
-            const pos = getPos();
-            if (typeof pos === 'number') {
-              editor.commands.command(({ tr }) => {
-                tr.setNodeMarkup(pos, undefined, { 
-                  ...node.attrs, 
-                  width: Math.round(newWidth),
-                  height: Math.round(newHeight),
-                });
-                return true;
-              });
-            }
-          }
-        };
-        
-        const stopResize = () => {
-          isResizing = false;
-          document.removeEventListener('mousemove', handleResize);
-          document.removeEventListener('mouseup', stopResize);
-        };
         
         container.appendChild(handle);
       });
@@ -388,6 +396,13 @@ export const ResizableVideoExtension = Node.create({
         destroy: () => {
           // Clean up event listeners
           video.onloadedmetadata = null;
+          
+          // Clean up resize event listeners if they exist and resizing is in progress
+          if (isResizing && handleResize && stopResize) {
+            isResizing = false;
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopResize);
+          }
         },
       };
     }) as NodeViewRenderer;

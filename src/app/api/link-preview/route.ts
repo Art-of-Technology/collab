@@ -45,6 +45,20 @@ export async function POST(req: NextRequest) {
                 { id: workspaceIdentifier }
               ],
             },
+            OR: [
+              // Note is public
+              { isPublic: true },
+              // Or user is a member of the workspace
+              {
+                workspace: {
+                  members: {
+                    some: {
+                      userId: session.user.id,
+                    },
+                  },
+                },
+              },
+            ],
           },
           select: {
             id: true,
@@ -91,6 +105,12 @@ export async function POST(req: NextRequest) {
                 { slug: workspaceIdentifier },
                 { id: workspaceIdentifier }
               ],
+              // User must be a member of the workspace to access issue metadata
+              members: {
+                some: {
+                  userId: session.user.id,
+                },
+              },
             },
           },
           select: {

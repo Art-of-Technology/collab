@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
@@ -9,19 +8,9 @@ import { NoteFormEditor } from "@/components/notes/NoteFormEditor";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useRouter } from "next/navigation";
 
-export default function NewNotePage({ params }: { params: Promise<{ workspaceId: string }> }) {
-    const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+export default function NewNotePage({ params }: { params: { workspaceId: string } }) {
     const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
     const router = useRouter();
-
-    // Resolve params first
-    useEffect(() => {
-        const resolveParams = async () => {
-            const resolvedParams = await params;
-            setWorkspaceId(resolvedParams.workspaceId);
-        };
-        resolveParams();
-    }, [params]);
 
     const handleSuccess = (noteId: string) => {
         // Navigate to the newly created note's edit page
@@ -37,7 +26,7 @@ export default function NewNotePage({ params }: { params: Promise<{ workspaceId:
         }
     };
 
-    if (workspaceLoading || !workspaceId) {
+    if (workspaceLoading) {
         return (
             <div className="flex justify-center items-center min-h-screen">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
