@@ -7,10 +7,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Plus, Search, X, Tag as TagIcon } from "lucide-react";
+import { Plus, Search, X, Tag as TagIcon, Tag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sortTagsBySearchTerm } from "@/utils/sortUtils";
 import { NoteTag } from "@/types/models";
+import { Button } from "../ui/button";
 
 interface TagSelectProps {
   value: string[];
@@ -149,28 +150,30 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
           key={tag.id}
           type="button"
           onClick={() => handleTagRemove(tag.id)}
-          className="group inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium hover:opacity-70 transition-opacity"
+          className="group inline-flex justify-center items-center gap-1.5 px-2 py-1 rounded text-xs font-medium hover:opacity-70 transition-opacity"
           style={{
             backgroundColor: `${tag.color}15`,
             color: tag.color
           }}
         >
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
-          <span>{tag.name}</span>
-          <X className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <Tag className="size-2.5 relative top-[1px]" />
+          <span className="truncate max-w-[120px] text-[10px]">{tag.name}</span>
+          <X className="size-2.5 opacity-60 relative top-[1px]" />
         </button>
       ))}
 
       {/* Add tag dropdown - compact */}
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 transition-colors"
+            variant="outline"
+            size="sm"
+            className="h-auto px-2 py-1"
           >
             <Plus className="h-3 w-3" />
             <span>Add tag</span>
-          </button>
+          </Button>
         </PopoverTrigger>
         <PopoverContent
           className="w-64 p-0"

@@ -43,11 +43,11 @@ const imageCSS = `
 .resize-handle:hover {
   background-color: hsl(var(--primary) / 0.9);
   border-color: hsl(var(--background));
-  transform: scale(1.2);
+  transform: scale(1.1);
 }
 .resize-handle:active {
   background-color: hsl(var(--primary));
-  transform: scale(1.3);
+  transform: scale(1.2);
 }
 .image-tooltip {
   position: absolute;

@@ -94,33 +94,33 @@ export const ResizableImageExtension = Image.extend({
         // Position the handle based on its position code
         switch(handlePos) {
           case 'se': // bottom-right
-            handle.style.bottom = '-4px';
-            handle.style.right = '-4px';
+            handle.style.bottom = '0';
+            handle.style.right = '-2px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'sw': // bottom-left
-            handle.style.bottom = '-4px';
-            handle.style.left = '-4px';
+            handle.style.bottom = '0';
+            handle.style.left = '-2px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'ne': // top-right
-            handle.style.top = '-4px';
-            handle.style.right = '-4px';
+            handle.style.top = '0';
+            handle.style.right = '-2px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'nw': // top-left
-            handle.style.top = '-4px';
-            handle.style.left = '-4px';
+            handle.style.top = '0';
+            handle.style.left = '-2px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'n': // top-center
-            handle.style.top = '-4px';
+            handle.style.top = '0';
             handle.style.left = '50%';
             handle.style.transform = 'translateX(-50%)';
             handle.style.cursor = 'ns-resize';
             break;
           case 's': // bottom-center
-            handle.style.bottom = '-4px';
+            handle.style.bottom = '0';
             handle.style.left = '50%';
             handle.style.transform = 'translateX(-50%)';
             handle.style.cursor = 'ns-resize';

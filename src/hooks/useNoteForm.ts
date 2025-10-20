@@ -47,6 +47,7 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
   const router = useRouter();
   const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef(true);
+  const createdNoteIdRef = useRef<string | null>(noteId || null);
 
   const form = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
@@ -60,97 +61,7 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
     },
   });
 
-  // Fetch note data if in edit mode
-  useEffect(() => {
-    if (mode === "edit" && noteId) {
-      fetchNote();
-    }
-  }, [mode, noteId]);
-
-
-
-  // Autosave function
-  const autosave = useCallback(async (values: NoteFormValues, silent = true) => {
-    // Only autosave in edit mode
-    if (mode !== "edit" || !noteId) return;
-
-    setIsSaving(true);
-
-    try {
-      const response = await fetch(`/api/notes/${noteId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to save note");
-      }
-
-      setLastSaved(new Date());
-      
-      if (!silent) {
-        toast({
-          title: "Saved",
-          description: "Note saved successfully",
-        });
-      }
-    } catch (error) {
-      console.error("Autosave error:", error);
-      if (!silent) {
-        toast({
-          title: "Error",
-          description: "Failed to save note",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  }, [mode, noteId, toast]);
-
-  // Watch form changes and trigger autosave with debounce
-  useEffect(() => {
-    const subscription = form.watch((values) => {
-      // Skip autosave on initial load
-      if (isInitialLoadRef.current) {
-        isInitialLoadRef.current = false;
-        return;
-      }
-
-      // Skip if in create mode
-      if (mode !== "edit") return;
-
-      // Clear existing timeout
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
-
-      // Set new timeout for autosave (2 seconds after user stops typing)
-      autosaveTimeoutRef.current = setTimeout(() => {
-        const formValues = form.getValues();
-        autosave(formValues as NoteFormValues);
-      }, 2000);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
-    };
-  }, [form, autosave, mode]);
-
-  // Reset isInitialLoadRef when note data is loaded
-  useEffect(() => {
-    if (note && mode === "edit") {
-      isInitialLoadRef.current = true;
-    }
-  }, [note, mode]);
-
-  const fetchNote = async () => {
+  const fetchNote = useCallback(async () => {
     if (!noteId) return;
 
     setIsFetchingNote(true);
@@ -186,7 +97,128 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
     } finally {
       setIsFetchingNote(false);
     }
-  };
+  }, [noteId, workspaceId, form, toast]);
+
+  // Fetch note data if in edit mode
+  useEffect(() => {
+    if (mode === "edit" && noteId) {
+      fetchNote();
+    }
+  }, [mode, noteId, fetchNote]);
+
+  // Autosave function
+  const autosave = useCallback(async (values: NoteFormValues, silent = true) => {
+    setIsSaving(true);
+
+    try {
+      // If we're in create mode and haven't created a note yet, create it first
+      if (mode === "create" && !createdNoteIdRef.current) {
+        const response = await fetch("/api/notes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(values),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create note");
+        }
+
+        const result = await response.json();
+        createdNoteIdRef.current = result.id;
+        setLastSaved(new Date());
+        
+        if (!silent) {
+          toast({
+            title: "Saved",
+            description: "Note created successfully",
+          });
+        }
+        
+        // Notify parent component about the new note
+        if (onSuccess) {
+          onSuccess(result.id);
+        }
+        return;
+      }
+
+      // For edit mode or subsequent saves in create mode, update the note
+      const currentNoteId = mode === "edit" ? noteId : createdNoteIdRef.current;
+      if (!currentNoteId) return;
+
+      const response = await fetch(`/api/notes/${currentNoteId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save note");
+      }
+
+      setLastSaved(new Date());
+      
+      if (!silent) {
+        toast({
+          title: "Saved",
+          description: "Note saved successfully",
+        });
+      }
+    } catch (error) {
+      console.error("Autosave error:", error);
+      if (!silent) {
+        toast({
+          title: "Error",
+          description: "Failed to save note",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }, [mode, noteId, toast, onSuccess]);
+
+  // Watch form changes and trigger autosave with debounce
+  useEffect(() => {
+    const subscription = form.watch((values) => {
+      // Skip autosave on initial load
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false;
+        return;
+      }
+
+      // Clear existing timeout
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+
+      // Set new timeout for autosave (2 seconds after user stops typing)
+      autosaveTimeoutRef.current = setTimeout(() => {
+        const formValues = form.getValues();
+        // Only autosave if there's content (title or content field has value)
+        if (formValues.title?.trim() || formValues.content?.trim()) {
+          autosave(formValues as NoteFormValues);
+        }
+      }, 2000);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [form, autosave]);
+
+  // Reset isInitialLoadRef when note data is loaded
+  useEffect(() => {
+    if (note && mode === "edit") {
+      isInitialLoadRef.current = true;
+    }
+  }, [note, mode]);
 
   const onSubmit = async (values: NoteFormValues) => {
     setIsLoading(true);

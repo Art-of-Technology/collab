@@ -16,6 +16,7 @@ import { TagSelect } from "@/components/notes/TagSelect";
 import { Loader2, Check } from "lucide-react";
 import { useNoteForm } from "@/hooks/useNoteForm";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface NoteFormEditorProps {
     noteId?: string;
@@ -152,25 +153,23 @@ export function NoteFormEditor({
                         )}
                     />
 
-                    {/* Autosave status indicator - only show in edit mode */}
-                    {mode === "edit" && (
-                        <>
-                            <span className="text-muted-foreground/30">•</span>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                                {isSaving ? (
-                                    <>
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                        <span>Saving...</span>
-                                    </>
-                                ) : lastSaved ? (
-                                    <>
-                                        <Check className="h-3 w-3 text-green-500" />
-                                        <span>Saved {formatDistanceToNow(lastSaved, { addSuffix: true })}</span>
-                                    </>
-                                ) : null}
-                            </div>
-                        </>
-                    )}
+                    {/* Autosave status indicator - show in both create and edit modes */}
+                    <div className="flex flex-row gap-1">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Saving...</span>
+                                </>
+                            ) : (
+                                <span className="text-muted-foreground/50">Autosave is active</span>
+                            )}
+                        </div>
+                        <span className={cn(
+                            isSaving ? "text-primary animate-pulse"
+                                : "text-primary"
+                        )}>•</span>
+                    </div>
                 </div>
 
                 <div className="flex flex-col mt-8">

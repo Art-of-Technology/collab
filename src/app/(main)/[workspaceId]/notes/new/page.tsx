@@ -24,9 +24,9 @@ export default function NewNotePage({ params }: { params: Promise<{ workspaceId:
     }, [params]);
 
     const handleSuccess = (noteId: string) => {
-        // Navigate to the newly created note
+        // Navigate to the newly created note's edit page
         if (currentWorkspace?.slug) {
-            router.push(`/${currentWorkspace.slug}/notes/${noteId}`);
+            router.replace(`/${currentWorkspace.slug}/notes/${noteId}`);
         }
     };
 
@@ -57,9 +57,6 @@ export default function NewNotePage({ params }: { params: Promise<{ workspaceId:
             </div>
 
             <Card className="overflow-hidden shadow-lg border-border/40 bg-card/95 backdrop-blur-sm">
-                <CardHeader>
-                    <CardTitle className="text-xl sm:text-2xl">Create New Note</CardTitle>
-                </CardHeader>
                 <CardContent>
                     {currentWorkspace?.id ? (
                         <NoteFormEditor
