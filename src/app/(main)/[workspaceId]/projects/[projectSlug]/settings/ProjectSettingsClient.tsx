@@ -30,8 +30,6 @@ import {
   ArrowLeft, 
   Plus, 
   X,
-  Palette,
-  Hash,
   FileText,
   Circle
 } from 'lucide-react';
@@ -42,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { DEFAULT_PROJECT_STATUSES, validateStatusDisplayName } from '@/constants/project-statuses';
 import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
 import { isValidNewIssuePrefix } from '@/lib/shared-issue-key-utils';
+import { GitHubRepositorySettings } from '@/components/github/GitHubRepositorySettings';
 
 interface ProjectSettingsClientProps {
   workspaceId: string;
@@ -438,6 +437,15 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* GitHub Integration */}
+          <div className="space-y-6">
+            <GitHubRepositorySettings 
+              projectId={project.id} 
+              repository={project.repository}
+              onUpdate={refetchProject}
+            />
           </div>
 
           {/* Status Management */}
