@@ -59,11 +59,51 @@ export const ResizableImageExtension = Image.extend({
       img.classList.add('resizable-image');
       img.style.cursor = 'pointer';
       
-      // Add a tooltip to show resize instructions
-      const tooltip = document.createElement('div');
-      tooltip.className = 'image-tooltip';
-      tooltip.textContent = '✨ Drag corners to resize • Click to view full size';
-      container.appendChild(tooltip);
+      // Add delete button
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'image-delete-button';
+      deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
+      deleteButton.style.position = 'absolute';
+      deleteButton.style.top = '4px';
+      deleteButton.style.right = '4px';
+      deleteButton.style.width = '28px';
+      deleteButton.style.height = '28px';
+      deleteButton.style.display = 'none';
+      deleteButton.style.alignItems = 'center';
+      deleteButton.style.justifyContent = 'center';
+      deleteButton.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+      deleteButton.style.color = 'rgba(239, 68, 68, 1)';
+      deleteButton.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      deleteButton.style.borderRadius = '4px';
+      deleteButton.style.cursor = 'pointer';
+      deleteButton.style.zIndex = '100';
+      deleteButton.style.transition = 'all 0.2s ease';
+      deleteButton.style.padding = '0';
+      
+      deleteButton.addEventListener('mouseenter', () => {
+        deleteButton.style.backgroundColor = 'rgba(239, 68, 68, 1)';
+        deleteButton.style.color = 'white';
+        deleteButton.style.transform = 'scale(1.05)';
+      });
+      
+      deleteButton.addEventListener('mouseleave', () => {
+        deleteButton.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+        deleteButton.style.color = 'rgba(239, 68, 68, 1)';
+        deleteButton.style.transform = 'scale(1)';
+      });
+      
+      deleteButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof getPos === 'function') {
+          const pos = getPos();
+          if (typeof pos === 'number') {
+            editor.commands.deleteRange({ from: pos, to: pos + node.nodeSize });
+          }
+        }
+      });
+      
+      container.appendChild(deleteButton);
       
       // Make image resizable
       let isResizing = false;
@@ -88,7 +128,7 @@ export const ResizableImageExtension = Image.extend({
         handle.style.width = '8px';
         handle.style.height = '8px';
         handle.style.backgroundColor = 'hsl(var(--background))';
-        handle.style.border = '1px solid hsl(var(--primary))';
+        handle.style.border = '1px solid hsl(var(--foreground))';
         handle.style.zIndex = '2';
         
         // Position the handle based on its position code
@@ -114,13 +154,13 @@ export const ResizableImageExtension = Image.extend({
             handle.style.cursor = 'nwse-resize';
             break;
           case 'n': // top-center
-            handle.style.top = '0';
+            handle.style.top = '-4px';
             handle.style.left = '50%';
             handle.style.transform = 'translateX(-50%)';
             handle.style.cursor = 'ns-resize';
             break;
           case 's': // bottom-center
-            handle.style.bottom = '0';
+            handle.style.bottom = '-4px';
             handle.style.left = '50%';
             handle.style.transform = 'translateX(-50%)';
             handle.style.cursor = 'ns-resize';
@@ -222,12 +262,13 @@ export const ResizableImageExtension = Image.extend({
         container.appendChild(handle);
       });
       
-      // Show handles on hover, hide on mouseout
+      // Show handles and delete button on hover, hide on mouseout
       container.addEventListener('mouseenter', () => {
         if (!isResizing) {
           container.querySelectorAll('.resize-handle').forEach(handle => {
             (handle as HTMLElement).style.display = 'block';
           });
+          deleteButton.style.display = 'flex';
         }
       });
       
@@ -236,6 +277,7 @@ export const ResizableImageExtension = Image.extend({
           container.querySelectorAll('.resize-handle').forEach(handle => {
             (handle as HTMLElement).style.display = 'none';
           });
+          deleteButton.style.display = 'none';
         }
       });
       

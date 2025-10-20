@@ -128,8 +128,8 @@ export function LinkPreviewCard({
                 <>
                     <PreviewIcon type="note" />
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                            <h4 className="text-xs font-medium text-foreground line-clamp-1">
+                        <div className="flex items-center gap-1.5">
+                            <h4 className="my-0 text-xs font-medium text-foreground line-clamp-1">
                                 {preview.title}
                             </h4>
                             {preview.metadata?.isFavorite && (

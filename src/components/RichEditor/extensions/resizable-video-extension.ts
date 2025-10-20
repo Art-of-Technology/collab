@@ -1,6 +1,14 @@
 import { Node } from '@tiptap/core';
 import { NodeViewRenderer, NodeViewRendererProps } from '@tiptap/react';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    resizableVideo: {
+      setVideo: (options: { src: string; width?: number; height?: number }) => ReturnType;
+    };
+  }
+}
+
 export const ResizableVideoExtension = Node.create({
   name: 'resizableVideo',
   
@@ -137,6 +145,52 @@ export const ResizableVideoExtension = Node.create({
         }
       });
 
+      // Add delete button
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'video-delete-button';
+      deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
+      deleteButton.style.position = 'absolute';
+      deleteButton.style.top = '4px';
+      deleteButton.style.right = '4px';
+      deleteButton.style.width = '28px';
+      deleteButton.style.height = '28px';
+      deleteButton.style.display = 'none';
+      deleteButton.style.alignItems = 'center';
+      deleteButton.style.justifyContent = 'center';
+      deleteButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+      deleteButton.style.color = '#ef4444';
+      deleteButton.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      deleteButton.style.borderRadius = '4px';
+      deleteButton.style.cursor = 'pointer';
+      deleteButton.style.zIndex = '100';
+      deleteButton.style.transition = 'all 0.2s ease';
+      deleteButton.style.padding = '0';
+      
+      deleteButton.addEventListener('mouseenter', () => {
+        deleteButton.style.backgroundColor = '#ef4444';
+        deleteButton.style.color = 'white';
+        deleteButton.style.transform = 'scale(1.05)';
+      });
+      
+      deleteButton.addEventListener('mouseleave', () => {
+        deleteButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        deleteButton.style.color = '#ef4444';
+        deleteButton.style.transform = 'scale(1)';
+      });
+      
+      deleteButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof getPos === 'function') {
+          const pos = getPos();
+          if (typeof pos === 'number') {
+            editor.commands.deleteRange({ from: pos, to: pos + node.nodeSize });
+          }
+        }
+      });
+      
+      container.appendChild(deleteButton);
+
       // Make video resizable
       let isResizing = false;
       let startX = 0;
@@ -153,7 +207,7 @@ export const ResizableVideoExtension = Node.create({
         handle.style.width = '10px';
         handle.style.height = '10px';
         handle.style.backgroundColor = 'hsl(var(--background))';
-        handle.style.border = '2px solid hsl(var(--primary))';
+        handle.style.border = '1px solid hsl(var(--foreground))';
         handle.style.borderRadius = '2px';
         handle.style.zIndex = '10';
         handle.style.display = 'none'; // Hidden by default
@@ -161,46 +215,46 @@ export const ResizableVideoExtension = Node.create({
         // Position the handle based on its position code
         switch(handlePos) {
           case 'se': // bottom-right
-            handle.style.bottom = '-5px';
-            handle.style.right = '-5px';
+            handle.style.bottom = '-8px';
+            handle.style.right = '-4px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'sw': // bottom-left
-            handle.style.bottom = '-5px';
-            handle.style.left = '-5px';
+            handle.style.bottom = '-8px'; 
+            handle.style.left = '-4px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'ne': // top-right
-            handle.style.top = '-5px';
-            handle.style.right = '-5px';
+            handle.style.top = '8px';
+            handle.style.right = '-4px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'nw': // top-left
-            handle.style.top = '-5px';
-            handle.style.left = '-5px';
+            handle.style.top = '8px';
+            handle.style.left = '-4px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'n': // top-center
-            handle.style.top = '-5px';
+            handle.style.top = '-4px';
             handle.style.left = '50%';
             handle.style.transform = 'translateX(-50%)';
             handle.style.cursor = 'ns-resize';
             break;
           case 's': // bottom-center
-            handle.style.bottom = '-5px';
+            handle.style.bottom = '-4px';
             handle.style.left = '50%';
             handle.style.transform = 'translateX(-50%)';
             handle.style.cursor = 'ns-resize';
             break;
           case 'e': // middle-right
             handle.style.top = '50%';
-            handle.style.right = '-5px';
+            handle.style.right = '0';
             handle.style.transform = 'translateY(-50%)';
             handle.style.cursor = 'ew-resize';
             break;
           case 'w': // middle-left
             handle.style.top = '50%';
-            handle.style.left = '-5px';
+            handle.style.left = '-8px';   
             handle.style.transform = 'translateY(-50%)';
             handle.style.cursor = 'ew-resize';
             break;
@@ -291,13 +345,14 @@ export const ResizableVideoExtension = Node.create({
         container.appendChild(handle);
       });
 
-      // Show handles on hover, hide on mouseout
+      // Show handles and delete button on hover, hide on mouseout
       container.addEventListener('mouseenter', () => {
         if (!editor.isEditable) return;
         if (!isResizing) {
           container.querySelectorAll('.resize-handle').forEach(handle => {
             (handle as HTMLElement).style.display = 'block';
           });
+          deleteButton.style.display = 'flex';
         }
       });
       
@@ -306,6 +361,7 @@ export const ResizableVideoExtension = Node.create({
           container.querySelectorAll('.resize-handle').forEach(handle => {
             (handle as HTMLElement).style.display = 'none';
           });
+          deleteButton.style.display = 'none';
         }
       });
 
@@ -339,12 +395,14 @@ export const ResizableVideoExtension = Node.create({
 
   addCommands() {
     return {
-      setVideo: (options: { src: string; width?: number; height?: number }) => ({ commands }) => {
-        return commands.insertContent({
-          type: this.name,
-          attrs: options,
-        });
-      },
+      setVideo: 
+        (options: { src: string; width?: number; height?: number }) => 
+        ({ commands }: any) => {
+          return commands.insertContent({
+            type: this.name,
+            attrs: options,
+          });
+        },
     };
   },
 });

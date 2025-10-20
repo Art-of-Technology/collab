@@ -641,7 +641,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     setImprovedText(null);
     setShowImprovePopover(false);
     setSavedSelection(null);
-  }, [editor, improvedText, savedSelection, toolbarMode]);
+  }, [editor, improvedText, savedSelection]);
 
   const cancelImproveText = useCallback(() => {
     setShowImprovePopover(false);
@@ -712,6 +712,44 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       }
     };
 
+    // Handle hr delete button clicks - detect clicks in the delete button area
+    const handleHrDelete = (event: MouseEvent) => {
+      if (!editor || readOnly) return;
+
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'HR') {
+        const hrElement = target;
+        const rect = hrElement.getBoundingClientRect();
+        const clickX = event.clientX;
+        const clickY = event.clientY;
+
+        // Check if click is in the delete button area (right side, top-right corner)
+        const buttonWidth = 28;
+        const buttonHeight = 28;
+        const buttonRight = rect.right - 8; // 8px from right edge
+        const buttonLeft = buttonRight - buttonWidth;
+        const buttonTop = rect.top + (rect.height / 2) - (buttonHeight / 2);
+        const buttonBottom = buttonTop + buttonHeight;
+
+        if (clickX >= buttonLeft && clickX <= buttonRight &&
+          clickY >= buttonTop && clickY <= buttonBottom) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Find the position of the hr element in the editor
+          try {
+            const pos = editor.view.posAtDOM(hrElement, 0);
+            if (pos !== null && pos !== undefined) {
+              // Delete the hr node
+              editor.commands.deleteRange({ from: pos, to: pos + 1 });
+            }
+          } catch (error) {
+            console.error('Error deleting hr:', error);
+          }
+        }
+      }
+    };
+
     const handleMentionClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const mentionElement = target.closest('[data-type="mention"], [data-type="issue-mention"]') as HTMLElement | null;
@@ -767,6 +805,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('click', handleMentionClick, true);
+    document.addEventListener('click', handleHrDelete, true);
 
     const currentEditorRef = editorRef.current;
     if (currentEditorRef) {
@@ -777,13 +816,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('click', handleMentionClick, true);
+      document.removeEventListener('click', handleHrDelete, true);
 
       if (currentEditorRef) {
         currentEditorRef.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
         currentEditorRef.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
       }
     };
-  }, [currentWorkspace, toast, handleIssueMentionClick]);
+  }, [currentWorkspace, toast, handleIssueMentionClick, editor, readOnly, toolbarMode]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -881,6 +921,15 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             outline: none;
             padding: 0;
             line-height: 1.5;
+          }
+
+          .${editorId} .ProseMirror-selectednode > div,
+          .${editorId} .ProseMirror-selectednode > img {
+            border: 1px solid #22c55e;
+          }
+
+          .${editorId} hr.ProseMirror-selectednode {
+            border-color: #22c55e;
           }
           
           .${editorId} .ProseMirror:focus {
@@ -1022,6 +1071,62 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           
           .video-resizable-container:hover .resize-handle {
             opacity: 1;
+          }
+          
+          /* Horizontal rule styles with delete button */
+          .${editorId} .ProseMirror hr {
+            position: relative;
+            margin: 1.5rem 0;
+            border: none;
+            border-top: 2px solid #333;
+            cursor: default;
+          }
+          
+          .${editorId} .ProseMirror hr::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            background: transparent;
+            z-index: 1;
+          }
+          
+          .${editorId} .ProseMirror hr::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 28px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+          }
+          
+          .${editorId} .ProseMirror hr:hover::after {
+            opacity: 1;
+            pointer-events: auto;
+          }
+          
+          .${editorId} .ProseMirror hr:hover::after:hover {
+            background-color: #ef4444;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E");
+            transform: translateY(-50%) scale(1.05);
           }
         `}</style>
 
