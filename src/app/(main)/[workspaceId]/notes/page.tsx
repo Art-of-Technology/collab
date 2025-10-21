@@ -1,36 +1,21 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { canEditNote } from "@/utils/permissions";
-import { redirect } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock, MessageSquare } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import PageHeader from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { NoteCreateForm, NoteCreateFormRef } from "@/components/notes/NoteCreateForm";
-import { NoteEditForm, NoteEditFormRef } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { cn } from "@/lib/utils";
-
 interface Note {
   id: string;
   title: string;
@@ -93,22 +78,16 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
-  const createFormRef = useRef<NoteCreateFormRef>(null);
-  const editFormRef = useRef<NoteEditFormRef>(null);
-    // Delete note state
-    const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const { toast } = useToast();
-
+  const router = useRouter();
   // Get workspace from context (consistent with other pages)
   const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
 
@@ -302,42 +281,6 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  const handleDeleteNote = (noteId: string) => {
-    setNoteToDelete(noteId);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!noteToDelete) return;
-
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`/api/notes/${noteToDelete}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setNotes(notes.filter((note) => note.id !== noteToDelete));
-        toast({
-          title: "Success",
-          description: "Note deleted successfully",
-        });
-        setDeleteNoteId(null);
-      } else {
-        throw new Error("Failed to delete note");
-      }
-    } catch (error) {
-      console.error("Error deleting note:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete note",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleting(false);
-      setNoteToDelete(null);
-    }
-  };
-
   const toggleFavorite = async (noteId: string, isFavorite: boolean) => {
     try {
       const response = await fetch(`/api/notes/${noteId}`, {
@@ -362,26 +305,41 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  // Handle create dialog close request
-  const handleCreateDialogOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      // User is trying to close the dialog
-      createFormRef.current?.requestClose();
-    } else {
-      setIsCreateOpen(true);
-    }
-  }, []);
+  const handleDeleteClick = (noteId: string) => {
+    setNoteToDelete(noteId);
+    setDeleteConfirmOpen(true);
+  };
 
-  // Handle edit dialog close request
-  const handleEditDialogOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      // User is trying to close the dialog
-      editFormRef.current?.requestClose();
-    } else {
-      // This shouldn't happen, but just in case
-      setEditingNote(editingNote);
+  const handleDeleteConfirm = async () => {
+    if (!noteToDelete) return;
+
+    try {
+      const response = await fetch(`/api/notes/${noteToDelete}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete note");
+      }
+
+      toast({
+        title: "Success",
+        description: "Note deleted successfully",
+      });
+
+      // Remove the note from the list
+      setNotes(notes.filter((note) => note.id !== noteToDelete));
+      setDeleteConfirmOpen(false);
+      setNoteToDelete(null);
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete note. Please try again.",
+        variant: "destructive",
+      });
     }
-  }, [editingNote]);
+  };
 
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
@@ -398,37 +356,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         icon={FileText}
         title="Notes"
         subtitle="Create and organize your notes with markdown support"
-        actions={
-          <Dialog open={isCreateOpen} onOpenChange={handleCreateDialogOpenChange}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className={pageHeaderButtonStyles.primary}>
-                <Plus className="h-4 w-4" />
-                <span>New Note</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New Note</DialogTitle>
-              </DialogHeader>
-              {currentWorkspace?.id ? (
-                <NoteCreateForm
-                  ref={createFormRef}
-                  workspaceId={currentWorkspace.id}
-                  onSuccess={() => {
-                    setIsCreateOpen(false);
-                    fetchNotes();
-                    fetchTags();
-                  }}
-                  onCancel={() => setIsCreateOpen(false)}
-                />
-              ) : (
-                <div className="flex justify-center items-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        }
+        actions={<Button onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}><Plus className="h-4 w-4" /> New Note</Button>}
       />
 
       {/* Content */}
@@ -610,7 +538,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  setEditingNote(note);
+                                  router.push(`/${currentWorkspace?.slug}/notes/${note.id}`);
                                 }}
                               >
                                 <Edit className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-primary" />
@@ -622,7 +550,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  setDeleteNoteId(note.id);
+                                  handleDeleteClick(note.id);
                                 }}
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-red-500" />
@@ -699,41 +627,8 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         </div>
       </div>
 
-      {/* Delete Note Dialog */}
-      <ConfirmDialog
-        open={!!noteToDelete}
-        onOpenChange={(open) => !open && setNoteToDelete(null)}
-        title="Delete Note"
-        description="Are you sure you want to delete this note? This action cannot be undone."
-        variant="danger"
-        confirmText="Delete Note"
-        isLoading={isDeleting}
-        onConfirm={handleDeleteConfirm}
-      />
-
-      {/* Edit Note Dialog */}
-      {editingNote && (
-        <Dialog open={!!editingNote} onOpenChange={handleEditDialogOpenChange}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Note</DialogTitle>
-            </DialogHeader>
-            <NoteEditForm
-              ref={editFormRef}
-              note={editingNote}
-              onSuccess={() => {
-                setEditingNote(null);
-                fetchNotes();
-                fetchTags();
-              }}
-              onCancel={() => setEditingNote(null)}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteNoteId} onOpenChange={(open) => !open && setDeleteNoteId(null)}>
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Note</AlertDialogTitle>
@@ -744,11 +639,10 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteNoteId && handleDeleteNote(deleteNoteId as string)}
-              disabled={isDeleting}
-              className={cn("bg-destructive hover:bg-destructive/90", isDeleting && "opacity-50 cursor-not-allowed")}
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

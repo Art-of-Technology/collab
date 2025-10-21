@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
-import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension } from './extensions';
+import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension, LinkPreviewExtension } from './extensions';
 import { parseMarkdownToTipTap } from './utils/ai-improve';
 import {
   Heading1,
@@ -630,6 +630,9 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       // noop: manager may not be ready yet
     }
   }
+
+  // Add link preview extension
+  additionalExtensions.push(LinkPreviewExtension);
 
   return (
     <div ref={containerRef} className="relative">

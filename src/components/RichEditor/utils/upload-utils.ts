@@ -1,4 +1,4 @@
-import { uploadImage } from '@/utils/cloudinary';
+import { uploadImage, uploadVideo, isImageFile, isVideoFile } from '@/utils/cloudinary';
 
 export async function handleImageUpload(file: File): Promise<string> {
   try {
@@ -10,11 +10,21 @@ export async function handleImageUpload(file: File): Promise<string> {
   }
 }
 
-export function isImageFile(file: File): boolean {
-  return file.type.startsWith('image/');
+export async function handleVideoUpload(file: File): Promise<string> {
+  try {
+    const videoUrl = await uploadVideo(file);
+    return videoUrl;
+  } catch (error) {
+    console.error('Error uploading video:', error);
+    throw new Error('Failed to upload video');
+  }
 }
 
-export function handlePaste(event: ClipboardEvent, onImageUpload: (file: File) => Promise<void>) {
+export function handlePaste(
+  event: ClipboardEvent, 
+  onImageUpload: (file: File) => Promise<void>,
+  onVideoUpload?: (file: File) => Promise<void>
+) {
   const items = event.clipboardData?.items;
   if (!items) return false;
 
@@ -26,12 +36,23 @@ export function handlePaste(event: ClipboardEvent, onImageUpload: (file: File) =
         onImageUpload(file);
         return true;
       }
+    } else if (onVideoUpload && item.type.indexOf('video') !== -1) {
+      const file = item.getAsFile();
+      if (file) {
+        event.preventDefault();
+        onVideoUpload(file);
+        return true;
+      }
     }
   }
   return false;
 }
 
-export function handleDrop(event: DragEvent, onImageUpload: (file: File) => Promise<void>) {
+export function handleDrop(
+  event: DragEvent, 
+  onImageUpload: (file: File) => Promise<void>,
+  onVideoUpload?: (file: File) => Promise<void>
+) {
   const files = event.dataTransfer?.files;
   if (!files) return false;
 
@@ -40,7 +61,14 @@ export function handleDrop(event: DragEvent, onImageUpload: (file: File) => Prom
       event.preventDefault();
       onImageUpload(file);
       return true;
+    } else if (onVideoUpload && isVideoFile(file)) {
+      event.preventDefault();
+      onVideoUpload(file);
+      return true;
     }
   }
   return false;
 }
+
+// Re-export from cloudinary utils for consistency
+export { isImageFile, isVideoFile };
