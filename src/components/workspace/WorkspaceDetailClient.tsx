@@ -4,13 +4,16 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Users, Mail, Bell, UserPlus, Trash2, Loader2, Shield, UserCheck, UserX } from "lucide-react";
+import { ArrowLeft, Building2, Users, Mail, Bell, Loader2, Shield, UserCheck, UserX, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import WorkspaceDetailsEditor from "@/app/(main)/workspaces/[workspaceId]/WorkspaceDetailsEditor";
 import { InvitationsTab } from "@/components/workspace/components/invitation";
 import { WorkspaceFeatureSettings } from "./WorkspaceFeatureSettings";
@@ -20,6 +23,7 @@ import { useCanInviteMembers } from "@/hooks/use-permissions";
 import PageHeader from "@/components/layout/PageHeader";
 import MemberStatusToggle from "./MemberStatusToggle";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 interface WorkspaceDetailClientProps {
   readonly workspaceId: string;
@@ -29,6 +33,9 @@ interface WorkspaceDetailClientProps {
 export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }: WorkspaceDetailClientProps) {
   const [activeTab, setActiveTab] = useState("members");
   const [localWorkspace, setLocalWorkspace] = useState<any>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -37,7 +44,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
 
   // Check if user can manage workspace permissions and members
   const { isWorkspaceAdmin, isWorkspaceOwner } = useWorkspacePermissions();
-  
+
   // Check if user can invite members
   const { hasPermission: canInviteMembers } = useCanInviteMembers(workspaceId);
 
@@ -86,6 +93,57 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
     });
   };
 
+  // Handler for opening delete dialog
+  const handleDeleteClick = () => {
+    setIsDeleteDialogOpen(true);
+    setDeleteConfirmation("");
+  };
+
+  // Handler for closing delete dialog
+  const handleCloseDeleteDialog = () => {
+    if (!isDeleting) {
+      setIsDeleteDialogOpen(false);
+      setDeleteConfirmation("");
+    }
+  };
+
+  // Handler for deleting workspace
+  const handleDeleteWorkspace = async () => {
+    const currentWorkspace = localWorkspace || workspace || workspaceData;
+    if (deleteConfirmation !== currentWorkspace?.name) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}`, { method: "DELETE", });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete workspace");
+      }
+
+      toast({
+        title: "Success",
+        description: "Workspace deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      router.push("/workspaces");
+      setTimeout(() => {
+        setIsDeleting(false);
+        setIsDeleteDialogOpen(false);
+        setDeleteConfirmation("");
+      }, 300);
+    } catch (error) {
+      console.error("Error deleting workspace:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete workspace",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading && !initialWorkspace) {
     return (
       <div className="p-4 md:p-6 max-w-6xl mx-auto">
@@ -125,7 +183,6 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
 
   // Use the permissions returned from the server action
   const { isOwner, canManage } = localWorkspace || workspace || workspaceData;
-
 
   return (
     <div className="w-full mx-auto">
@@ -435,40 +492,29 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                 </CardContent>
               </Card>
               <WorkspaceFeatureSettings />
-              <Card className="border border-border/40 bg-card/50">
+              <Card className="md:col-span-1 border border-border/40 bg-card/50">
                 <CardHeader className="pb-3 pt-4 px-4">
                   <CardTitle className="text-base font-medium">Danger Zone</CardTitle>
                   <CardDescription className="text-xs">Irreversible actions that affect your workspace</CardDescription>
                 </CardHeader>
-                <CardContent className="px-4 pb-4">
+                <CardContent className="p-4 border border-destructive/20 rounded-lg">
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center p-2.5 border border-border/20 rounded bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <hr className="my-2 border-border" />
+                    <div className="flex justify-between items-center p-2.5">
                       <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-blue-500/10 rounded">
-                          <UserPlus className="h-3 w-3 text-blue-600" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium text-sm">Transfer Ownership</h3>
-                          <p className="text-xs text-muted-foreground">Transfer this workspace to another member</p>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm" className="text-xs h-7">
-                        Transfer
-                      </Button>
-                    </div>
-
-                    <div className="flex justify-between items-center p-2.5 border border-destructive/20 rounded bg-destructive/5 hover:bg-destructive/10 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-destructive/10 rounded">
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </div>
                         <div>
                           <h3 className="font-medium text-sm">Delete Workspace</h3>
                           <p className="text-xs text-muted-foreground">Once deleted, all members will lose access to this workspace</p>
                         </div>
                       </div>
-                      <Button variant="destructive" size="sm" className="text-xs h-7">
-                        Delete
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs text-destructive bg-background hover:bg-muted/30 hover:text-destructive h-7"
+                        onClick={handleDeleteClick}
+                        disabled={!isOwner}
+                      >
+                        Delete this workspace
                       </Button>
                     </div>
                   </div>
@@ -478,6 +524,74 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Delete Workspace Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={handleCloseDeleteDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-destructive/10 rounded-full">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg">Delete Workspace</DialogTitle>
+                <DialogDescription className="text-sm mt-1">
+                  This action cannot be undone. This will permanently delete the workspace.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3">
+              <p className="text-sm text-destructive">
+                All members will immediately lose access to this workspace and all its data.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="workspace-name" className="text-sm font-light">
+                To confirm, type <span className="font-bold">{localWorkspace?.name || workspace?.name || workspaceData.name}</span> below:
+              </Label>
+              <Input
+                id="workspace-name"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                placeholder="Enter workspace name"
+                className="text-lg h-10"
+                disabled={isDeleting}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCloseDeleteDialog}
+              disabled={isDeleting}
+              className="text-sm"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteWorkspace}
+              disabled={deleteConfirmation !== (localWorkspace?.name || workspace?.name || workspaceData.name) || isDeleting}
+              className="text-sm"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Workspace"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
