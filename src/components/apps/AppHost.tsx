@@ -144,7 +144,7 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
   }
 
   return (
-    <div className="relative w-full h-full min-h-[600px] bg-white">
+    <div className="relative w-full h-full min-h-[600px]">
       {/* Loading overlay */}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
