@@ -22,7 +22,6 @@ const UpdateWorkspaceSchema = z.object({
   logoUrl: z.string().url().optional(),
   dockEnabled: z.boolean().optional(),
   timeTrackingEnabled: z.boolean().optional(),
-  // Note: slug changes should be handled carefully and may require admin approval
 });
 
 /**
