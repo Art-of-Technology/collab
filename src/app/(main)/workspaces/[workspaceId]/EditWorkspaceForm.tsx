@@ -11,9 +11,10 @@ import { useToast } from '@/hooks/use-toast';
 
 interface EditWorkspaceFormProps {
   workspace: Workspace;
+  onClose: () => void;
 }
 
-export default function EditWorkspaceForm({ workspace }: EditWorkspaceFormProps) {
+export default function EditWorkspaceForm({ workspace, onClose }: EditWorkspaceFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -102,12 +103,14 @@ export default function EditWorkspaceForm({ workspace }: EditWorkspaceFormProps)
       </div>
       
       <div className="space-y-1.5">
-        <Label htmlFor="slug" className="text-sm font-medium">
-          Workspace Slug
-          <span className="text-xs text-muted-foreground ml-1.5">
-            (used in URLs)
-          </span>
-        </Label>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="slug" className="text-sm font-medium">
+            Workspace Slug
+          </Label>
+          <div className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs rounded-md">
+            Coming Soon
+          </div>
+        </div>
         <div className="flex items-center">
           <span className="bg-muted px-2.5 py-1.5 rounded-l border border-r-0 border-input text-muted-foreground text-sm">
             @
@@ -119,7 +122,7 @@ export default function EditWorkspaceForm({ workspace }: EditWorkspaceFormProps)
             value={formData.slug}
             onChange={handleSlugChange}
             placeholder="my-workspace"
-            required
+            disabled
           />
         </div>
       </div>
@@ -142,7 +145,7 @@ export default function EditWorkspaceForm({ workspace }: EditWorkspaceFormProps)
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => router.refresh()}
+          onClick={onClose}
           disabled={isLoading}
           className="text-sm"
         >
