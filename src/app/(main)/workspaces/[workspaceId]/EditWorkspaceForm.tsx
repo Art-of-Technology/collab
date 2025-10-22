@@ -120,7 +120,6 @@ export default function EditWorkspaceForm({ workspace, onClose }: EditWorkspaceF
             name="slug"
             className="rounded-l-none text-sm"
             value={formData.slug}
-            onChange={handleSlugChange}
             placeholder="my-workspace"
             disabled
           />
