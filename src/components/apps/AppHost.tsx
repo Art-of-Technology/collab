@@ -165,17 +165,13 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
         ref={iframeRef}
         src={app.entrypointUrl}
         title={`${app.name} - App`}
-        className="w-full h-full border-0"
+        className="w-full h-full border-0 min-h-[600px]"
         sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-downloads allow-modals"
         allow="clipboard-read; clipboard-write"
         loading="lazy"
         onLoad={handleIframeLoad}
         onError={handleIframeError}
         referrerPolicy="strict-origin-when-cross-origin"
-        style={{
-          minHeight: '600px',
-          height: 'calc(100vh - 100px)' // Account for header/navigation
-        }}
         data-app-id={app.id}
         data-installation-id={installation.id}
       />
