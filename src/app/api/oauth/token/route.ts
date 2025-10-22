@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'crypto';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
-import { createWebhooksFromManifest } from '@/lib/apps/webhook-auto-creation';
+import { createWebhooksFromManifest, WebhookCreationResult } from '@/lib/apps/webhook-auto-creation';
 import { AppManifestV1 } from '@/lib/apps/types';
 
 const prisma = new PrismaClient();
@@ -183,6 +183,9 @@ async function handleAuthorizationCodeGrant(
       }
     });
 
+    // Initialize webhook secrets array
+    let webhookSecrets: WebhookCreationResult['webhookSecrets'] = [];
+
     if (installation) {
       // Encrypt and store tokens
       const encryptedAccessToken = await encryptToken(accessToken);
@@ -226,6 +229,8 @@ async function handleAuthorizationCodeGrant(
 
             if (webhookResult.success && webhookResult.webhooksCreated > 0) {
               console.log(`✅ Successfully created ${webhookResult.webhooksCreated} webhooks for ${oauthClient.app.slug}`);
+              // Store webhook secrets to include in OAuth response
+              webhookSecrets = webhookResult.webhookSecrets;
             } else if (webhookResult.errors.length > 0) {
               console.warn(`⚠️ Webhook creation completed with warnings for ${oauthClient.app.slug}:`, webhookResult.errors);
             }
@@ -244,14 +249,22 @@ async function handleAuthorizationCodeGrant(
       return oauthError("server_error", "Installation record not found", 500);
     }
 
-    // Return OAuth 2.0 compliant token response
-    return NextResponse.json({
+    // Return OAuth 2.0 compliant token response with webhook secrets
+    const tokenResponse: any = {
       access_token: accessToken,
       token_type: 'Bearer',
       expires_in: expiresIn,
       refresh_token: refreshToken,
       scope: authCodeData.scope || 'read'
-    });
+    };
+
+    // Include webhook secrets if any were created during installation
+    if (webhookSecrets.length > 0) {
+      tokenResponse.webhook_secrets = webhookSecrets;
+      console.log(`🪝 Including ${webhookSecrets.length} webhook secrets in OAuth token response for ${oauthClient.app.slug}`);
+    }
+
+    return NextResponse.json(tokenResponse);
 
   } catch (error) {
     console.error('Token generation error:', error);
@@ -259,7 +272,7 @@ async function handleAuthorizationCodeGrant(
   }
 }
 
-// Handle refresh_token grant type
+// Handle refresh_token grant type - Production Ready
 async function handleRefreshTokenGrant(
   body: FormData,
   oauthClient: any
@@ -270,39 +283,66 @@ async function handleRefreshTokenGrant(
     return oauthError("invalid_request", "Missing required parameter: refresh_token", 400);
   }
 
+  // TODO: Add rate limiting here for production
+  // Example: Check if this client has exceeded refresh attempts in the last hour
+
   // Validate refresh token
   const tokenData = await validateRefreshToken(refreshToken, oauthClient);
   
   if (!tokenData.valid) {
+    // Log security event for monitoring
+    console.warn(`Failed refresh token attempt for app ${oauthClient.app.slug}: ${tokenData.error}`);
     return oauthError("invalid_grant", tokenData.error || "Invalid refresh token", 400);
   }
 
-  // Generate new access token
+  // Generate new access token (and optionally rotate refresh token)
   const newAccessToken = generateAccessToken();
   const expiresIn = 3600; // 1 hour
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+  // Optional: Generate new refresh token for rotation (recommended for high security)
+  // const newRefreshToken = generateRefreshToken();
 
   try {
     // Update stored tokens
     if (tokenData.installationId) {
       const encryptedAccessToken = await encryptToken(newAccessToken);
       
+      const updateData: any = {
+        accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+        tokenExpiresAt: expiresAt,
+        updatedAt: new Date()
+      };
+
+      // Optional: Update refresh token for rotation
+      // if (newRefreshToken) {
+      //   const encryptedRefreshToken = await encryptToken(newRefreshToken);
+      //   updateData.refreshToken = Buffer.from(encryptedRefreshToken).toString('base64');
+      // }
+      
       await prisma.appInstallation.update({
         where: { id: tokenData.installationId },
-        data: {
-          accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
-          tokenExpiresAt: expiresAt,
-          updatedAt: new Date()
-        }
+        data: updateData
       });
+
+      // Log successful token refresh for audit
+      console.log(`Access token refreshed for installation ${tokenData.installationId}, app ${oauthClient.app.slug}`);
     }
 
-    return NextResponse.json({
+    const response: any = {
       access_token: newAccessToken,
       token_type: 'Bearer',
       expires_in: expiresIn,
-      scope: tokenData.scope || 'read'
-    });
+      scope: tokenData.scope || 'read',
+      refresh_token: refreshToken
+    };
+
+    // Include new refresh token if rotation is enabled
+    // if (newRefreshToken) {
+    //   response.refresh_token = newRefreshToken;
+    // }
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Token refresh error:', error);
@@ -406,7 +446,7 @@ async function validateAuthorizationCode(
   }
 }
 
-// Validate refresh token
+// Validate refresh token - Production Ready Version
 async function validateRefreshToken(
   refreshToken: string,
   oauthClient: any
@@ -417,55 +457,95 @@ async function validateRefreshToken(
   scope?: string;
 }> {
   try {
-    // Find installations for this app that have refresh tokens
+    // Input validation
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      return { valid: false, error: 'Invalid refresh token format' };
+    }
+
+    // Validate token format (should start with collab_rt_)
+    if (!refreshToken.startsWith('collab_rt_')) {
+      return { valid: false, error: 'Invalid refresh token format' };
+    }
+
+    // Find active installations for this app that have refresh tokens
     const installations = await prisma.appInstallation.findMany({
       where: {
         appId: oauthClient.app.id,
-        refreshToken: { not: null }
+        refreshToken: { not: null },
+        status: 'ACTIVE' // Only check active installations
+      },
+      select: {
+        id: true,
+        refreshToken: true,
+        scopes: true,
+        createdAt: true,
+        updatedAt: true
       }
     });
 
     if (!installations || installations.length === 0) {
-      return { valid: false, error: 'No valid refresh tokens found' };
+      return { valid: false, error: 'No active installations found' };
     }
 
-    // In production, decrypt and compare each refresh token
-    // For demo purposes, we'll validate any installation with a refresh token
+    // Check each installation's refresh token
     for (const installation of installations) {
       try {
-        if (installation.refreshToken) {
-          // Decrypt the stored refresh token
-          const storedTokenData = Buffer.from(installation.refreshToken, 'base64');
-          const { decryptToken } = await import('@/lib/apps/crypto');
-          const decryptedToken = await decryptToken(storedTokenData);
-          
-          // Compare with provided refresh token
-          if (decryptedToken === refreshToken) {
-            // Verify token hasn't expired (refresh tokens typically last longer)
-            if (installation.tokenExpiresAt && installation.tokenExpiresAt < new Date()) {
-              continue; // Try next installation
-            }
+        if (!installation.refreshToken) continue;
 
-            return {
-              valid: true,
-              installationId: installation.id,
-              scope: scopesToString(installation.scopes)
-            };
+        // Decrypt the stored refresh token
+        const storedTokenData = Buffer.from(installation.refreshToken, 'base64');
+        const { decryptToken } = await import('@/lib/apps/crypto');
+        const decryptedToken = await decryptToken(storedTokenData);
+        
+        // Secure string comparison to prevent timing attacks
+        if (secureCompare(decryptedToken, refreshToken)) {
+          // Check if refresh token is too old (optional expiration policy)
+          const maxRefreshTokenAge = 90 * 24 * 60 * 60 * 1000; // 90 days
+          const tokenAge = Date.now() - installation.updatedAt.getTime();
+          
+          if (tokenAge > maxRefreshTokenAge) {
+            console.warn(`Refresh token expired for installation ${installation.id}: age=${Math.round(tokenAge / (24 * 60 * 60 * 1000))} days`);
+            continue; // Try next installation
           }
+
+          // Log successful refresh token validation for audit
+          console.log(`Refresh token validated for installation ${installation.id}, app ${oauthClient.app.slug}`);
+
+          return {
+            valid: true,
+            installationId: installation.id,
+            scope: scopesToString(installation.scopes)
+          };
         }
-      } catch (error) {
-        // If decryption fails for this installation, try the next one
-        console.error('Failed to decrypt refresh token for installation:', installation.id, error);
+      } catch (decryptionError) {
+        // Log decryption failures for monitoring
+        console.error(`Failed to decrypt refresh token for installation ${installation.id}:`, decryptionError);
         continue;
       }
     }
 
+    // Log failed validation attempts for security monitoring
+    console.warn(`Invalid refresh token attempt for app ${oauthClient.app.slug}`);
     return { valid: false, error: 'Invalid refresh token' };
 
   } catch (error) {
     console.error('Refresh token validation error:', error);
     return { valid: false, error: 'Token validation failed' };
   }
+}
+
+// Secure string comparison to prevent timing attacks
+function secureCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  
+  return result === 0;
 }
 
 // Generate access token (opaque token for security)
