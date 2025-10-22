@@ -49,7 +49,6 @@ export default async function RootLayout({
         <link rel="preload" href="/logo-text.svg" as="image" />
         
         {/* Preload common assets */}
-        <link rel="preload" href="/icons/search.svg" as="image" />
         
         <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

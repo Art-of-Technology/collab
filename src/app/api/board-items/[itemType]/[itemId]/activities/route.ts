@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getItemActivities, BoardItemType, ActivityAction } from "@/lib/board-item-activity-service";
 import { prisma } from "@/lib/prisma";
+import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { itemType: string; itemId: string, action?: ActivityAction } }
+  { params }: { params: { itemType: string; itemId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,9 +15,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const _params = await params;
-    const { itemType, itemId, action } = _params;
+    const { itemType, itemId } = _params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
+    // Only get action if it's explicitly set
+    const actionParam = searchParams.get('action');
+    const action = actionParam && actionParam.length > 0 ? actionParam as ActivityAction : undefined;
 
     // Validate item type (include ISSUE for unified model)
     const validItemTypes: Record<string, BoardItemType> = {
@@ -41,15 +45,10 @@ export async function GET(
 
     switch (boardItemType) {
       case 'ISSUE':
-        // Try to find by ID first, then by issueKey
-        item = await prisma.issue.findFirst({
-          where: { 
-            OR: [
-              { id: itemId },
-              { issueKey: itemId }
-            ]
-          },
-          select: { id: true, workspaceId: true },
+        // Use utility function with workspace scoping
+        item = await findIssueByIdOrKey(itemId, {
+          userId: session.user.id,
+          select: { id: true, workspaceId: true }
         });
         workspaceId = item?.workspaceId;
         break;

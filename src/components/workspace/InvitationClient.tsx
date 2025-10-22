@@ -21,14 +21,17 @@ export default function InvitationClient({ invitation, token }: InvitationClient
   
   // Use TanStack Query mutation for accepting the invitation
   const { mutate: acceptInvitation, isPending } = useAcceptInvitation({
-    onSuccess: (data) => {
-      // Redirect to the workspace on success
-      if (data.workspaceId) {
-        router.push(`/workspaces/${data.workspaceId}`);
-      } else {
-        router.push('/workspaces');
-      }
-    },
+        onSuccess: (data) => {
+          // Redirect to the workspace dashboard using slug
+          if (data.workspaceSlug) {
+            router.push(`/${data.workspaceSlug}/dashboard`);
+          } else if (data.workspaceId) {
+            // Fallback to ID if slug is not available
+            router.push(`/workspaces/${data.workspaceId}`);
+          } else {
+            router.push('/workspaces');
+          }
+        },
     onError: (err) => {
       setError((err as Error).message || 'Failed to accept invitation');
     }
@@ -50,10 +53,10 @@ export default function InvitationClient({ invitation, token }: InvitationClient
   const expiresDate = new Date(invitation.expiresAt);
   
   return (
-    <div className="container max-w-2xl py-8">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold">Workspace Invitation</h1>
-        <p className="text-muted-foreground mt-1">
+    <div className="container max-w-2xl py-4 md:py-8 px-4 mx-auto">
+      <div className="text-center mb-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Workspace Invitation</h1>
+        <p className="text-muted-foreground mt-1 text-sm md:text-base">
           You&apos;ve been invited to join a workspace
         </p>
       </div>
@@ -66,58 +69,58 @@ export default function InvitationClient({ invitation, token }: InvitationClient
       )}
       
       <Card className="border-border/40 shadow-md">
-        <CardHeader>
-          <div className="flex items-center gap-4">
+        <CardHeader className="pb-2">
+          <div className="flex flex-col md:flex-row items-center gap-4">
             {invitation.workspace.logoUrl ? (
               <Image 
                 src={invitation.workspace.logoUrl} 
                 alt={invitation.workspace.name} 
-                className="h-16 w-16 rounded-md" 
+                className="h-12 w-12 md:h-16 md:w-16 rounded-md flex-shrink-0" 
                 width={64}
                 height={64}
               />
             ) : (
-              <div className="h-16 w-16 rounded-md bg-primary/10 flex items-center justify-center">
-                <Building2 className="h-8 w-8 text-primary" />
+              <div className="h-12 w-12 md:h-16 md:w-16 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Building2 className="h-6 w-6 md:h-8 md:w-8 text-primary" />
               </div>
             )}
-            <div>
-              <CardTitle className="text-2xl">{invitation.workspace.name}</CardTitle>
-              <CardDescription>@{invitation.workspace.slug}</CardDescription>
+            <div className="text-center md:text-left min-w-0 flex-1">
+              <CardTitle className="text-lg md:text-2xl break-words">{invitation.workspace.name}</CardTitle>
+              <CardDescription className="break-all">@{invitation.workspace.slug}</CardDescription>
             </div>
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground break-words">
               {invitation.invitedBy.name || invitation.invitedBy.email} has invited you to join this workspace
             </p>
             
             {invitation.workspace.description && (
-              <div className="mt-4 p-4 bg-muted/40 rounded-md">
-                <p className="italic text-sm">&quot;{invitation.workspace.description}&quot;</p>
+              <div className="mt-4 p-3 md:p-4 bg-muted/40 rounded-md">
+                <p className="italic text-sm break-words">&quot;{invitation.workspace.description}&quot;</p>
               </div>
             )}
           </div>
           
-          <div className="flex flex-col sm:flex-row sm:gap-8 pt-4 border-t border-border/40">
-            <div className="flex items-center gap-2 mb-2 sm:mb-0">
-              <Users className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col gap-3 pt-4 border-t border-border/40">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <span className="text-sm">
                 {(invitation.workspace._count?.members || 0) + 1} members
               </span>
             </div>
             
-            <div className="flex items-center gap-2 mb-2 sm:mb-0">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <span className="text-sm">
                 Invited on {format(invitedDate, 'PPP')}
               </span>
             </div>
             
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <span className="text-sm">
                 Expires on {format(expiresDate, 'PPP')}
               </span>
@@ -125,11 +128,12 @@ export default function InvitationClient({ invitation, token }: InvitationClient
           </div>
         </CardContent>
         
-        <CardFooter className="flex justify-between border-t border-border/40 pt-6">
+        <CardFooter className="flex flex-col md:flex-row gap-3 md:gap-4 border-t border-border/40">
           <Button 
             variant="outline" 
             onClick={handleDecline}
             disabled={isPending}
+            className="w-full md:w-auto order-2 md:order-1"
           >
             <X className="mr-2 h-4 w-4" />
             Decline
@@ -138,6 +142,7 @@ export default function InvitationClient({ invitation, token }: InvitationClient
           <Button
             onClick={handleAccept}
             disabled={isPending}
+            className="w-full md:w-auto order-1 md:order-2"
           >
             {isPending ? (
               <>

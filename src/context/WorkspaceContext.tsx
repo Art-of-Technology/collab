@@ -1,17 +1,9 @@
-/* eslint-disable */
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
-
-type Workspace = {
-  id: string;
-  name: string;
-  slug: string;
-  logoUrl?: string | null;
-  ownerId?: string;
-};
+import { useWorkspaces, type Workspace } from '@/hooks/queries/useWorkspace';
 
 type WorkspaceContextType = {
   currentWorkspace: Workspace | null;
@@ -19,7 +11,6 @@ type WorkspaceContextType = {
   isLoading: boolean;
   error: string | null;
   switchWorkspace: (workspaceId: string) => void;
-  refreshWorkspaces: () => Promise<void>;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -41,10 +32,20 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasInitiallyFetched, setHasInitiallyFetched] = useState(false);
+  
+  // Use TanStack Query for workspace data
+  const { 
+    data: workspaces = [], 
+    isLoading, 
+    error: queryError 
+  } = useWorkspaces();
+  
+  const error = queryError ? (queryError as Error).message : null;
+
+  const setCookieHelper = useCallback((workspaceId: string) => {
+    // Set cookie with proper format and immediate expiry
+    document.cookie = `currentWorkspaceId=${workspaceId}; path=/; max-age=31536000; SameSite=Lax; Secure=${window.location.protocol === 'https:'}`;
+  }, []);
 
   // Extract workspace ID from current URL
   const getWorkspaceIdFromUrl = useCallback((): string | null => {
@@ -63,93 +64,51 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     return null;
   }, [pathname]);
 
-  const fetchWorkspaces = useCallback(async () => {
-    if (status === 'loading' || !session?.user) {
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setHasInitiallyFetched(true);
-      const response = await fetch('/api/workspaces');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch workspaces');
-      }
-      
-      const data = await response.json();
-      setWorkspaces(data);
-      
-      // Determine which workspace should be current based on URL first, then localStorage
+  // Determine current workspace based on URL and available workspaces
+  useEffect(() => {
+    if (workspaces.length > 0) {
       const urlWorkspaceId = getWorkspaceIdFromUrl();
       let targetWorkspace: Workspace | null = null;
       
       if (urlWorkspaceId) {
         // Use workspace from URL if it exists and user has access (support both ID and slug)
-        targetWorkspace = data.find((w: Workspace) => w.id === urlWorkspaceId || w.slug === urlWorkspaceId) || null;
+        targetWorkspace = workspaces.find((w: Workspace) => w.id === urlWorkspaceId || w.slug === urlWorkspaceId) || null;
       }
       
-      if (!targetWorkspace && data.length > 0) {
+      if (!targetWorkspace && workspaces.length > 0) {
         // Fallback to localStorage if URL doesn't specify workspace or workspace not found
         const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
         targetWorkspace = savedWorkspaceId 
-          ? data.find((w: Workspace) => w.id === savedWorkspaceId) || data[0]
-          : data[0];
+          ? workspaces.find((w: Workspace) => w.id === savedWorkspaceId) || workspaces[0]
+          : workspaces[0];
       }
       
-      if (targetWorkspace) {
+      if (targetWorkspace && (!currentWorkspace || currentWorkspace.id !== targetWorkspace.id)) {
         setCurrentWorkspace(targetWorkspace);
-        // Update localStorage for fallback purposes, but don't rely on it for current tab
+        // Update localStorage for fallback purposes
         localStorage.setItem('currentWorkspaceId', targetWorkspace.id);
-      }
-    } catch (err) {
-      console.error('Error fetching workspaces:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [session, status, getWorkspaceIdFromUrl]);
-
-  // Update current workspace when URL changes
-  useEffect(() => {
-    if (workspaces.length > 0) {
-      const urlWorkspaceId = getWorkspaceIdFromUrl();
-      
-      if (urlWorkspaceId) {
-        const urlWorkspace = workspaces.find(w => w.id === urlWorkspaceId || w.slug === urlWorkspaceId);
-        if (urlWorkspace && (!currentWorkspace || (currentWorkspace.id !== urlWorkspace.id && currentWorkspace.slug !== urlWorkspaceId))) {
-          setCurrentWorkspace(urlWorkspace);
-          // Update localStorage for fallback purposes
-          localStorage.setItem('currentWorkspaceId', urlWorkspace.id);
-        }
-      } else if (currentWorkspace) {
-        // If not on a workspace route, keep current workspace but don't force it
-        // This allows non-workspace pages to still have access to workspace context
+        // Also sync cookie
+        setCookieHelper(targetWorkspace.id);
       }
     }
-  }, [pathname, workspaces, currentWorkspace, getWorkspaceIdFromUrl]);
+  }, [workspaces, getWorkspaceIdFromUrl, currentWorkspace, setCookieHelper]);
 
+  // Clear workspace data when user logs out
   useEffect(() => {
-    if (session?.user && !hasInitiallyFetched) {
-      // Only fetch workspaces if we haven't fetched them yet
-      fetchWorkspaces();
-    } else if (status === 'unauthenticated') {
-      setWorkspaces([]);
+    if (status === 'unauthenticated') {
       setCurrentWorkspace(null);
-      setIsLoading(false);
-      setHasInitiallyFetched(false);
     }
-  }, [session, status]);
+  }, [status]);
 
   // Sync localStorage workspace ID to cookie on initial load
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
       if (savedWorkspaceId) {
-        document.cookie = `currentWorkspaceId=${savedWorkspaceId}; path=/; max-age=31536000; SameSite=Lax`;
+        setCookieHelper(savedWorkspaceId);
       }
     }
-  }, []);
+  }, [setCookieHelper]);
 
   const switchWorkspace = async (workspaceId: string) => {
     try {
@@ -162,12 +121,28 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       
       const workspaceDetails = await response.json();
       
-      // Update context immediately for this tab
-      setCurrentWorkspace(workspaceDetails);
+      // Update localStorage immediately
       localStorage.setItem('currentWorkspaceId', workspaceDetails.id);
       
-      // Also set a cookie for server components
-      document.cookie = `currentWorkspaceId=${workspaceDetails.id}; path=/; max-age=31536000; SameSite=Lax`;
+      // Set cookie immediately with proper synchronization
+      setCookieHelper(workspaceDetails.id);
+      
+      // Also make a server call to sync the cookie server-side for immediate next request
+      try {
+        await fetch('/api/workspace/set-current', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ workspaceId: workspaceDetails.id }),
+          credentials: 'include'
+        });
+      } catch (cookieError) {
+        console.warn('Failed to sync workspace cookie server-side:', cookieError);
+      }
+      
+      // Update context after cookie is set
+      setCurrentWorkspace(workspaceDetails);
       
       // Navigate to the new workspace maintaining the current route
       // Extract the route part after the workspace ID (if any)
@@ -188,16 +163,21 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       
       // Navigate to the new workspace with the preserved route (use slug if available)
       const workspaceSlugOrId = workspaceDetails.slug || workspaceDetails.id;
-      router.push(`/${workspaceSlugOrId}${routePart}`);
+      
+      // Add a small delay to ensure cookie is processed before navigation
+      setTimeout(() => {
+        router.push(`/${workspaceSlugOrId}${routePart}`);
+      }, 100);
+      
     } catch (err) {
       console.error('Error switching workspace:', err);
       
       // Fallback to basic switching if detailed fetch fails
       const workspace = workspaces.find(w => w.id === workspaceId);
       if (workspace) {
-        setCurrentWorkspace(workspace);
         localStorage.setItem('currentWorkspaceId', workspace.id);
-        document.cookie = `currentWorkspaceId=${workspace.id}; path=/; max-age=31536000; SameSite=Lax`;
+        setCookieHelper(workspace.id);
+        setCurrentWorkspace(workspace);
         
         // Use same navigation logic for fallback
         const currentWorkspaceId = currentWorkspace?.id;
@@ -213,13 +193,11 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         
         // Use slug if available, fallback to ID
         const workspaceSlugOrId = workspace.slug || workspace.id;
-        router.push(`/${workspaceSlugOrId}${routePart}`);
+        setTimeout(() => {
+          router.push(`/${workspaceSlugOrId}${routePart}`);
+        }, 100);
       }
     }
-  };
-
-  const refreshWorkspaces = async () => {
-    await fetchWorkspaces();
   };
 
   return (
@@ -230,7 +208,6 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
         isLoading,
         error,
         switchWorkspace,
-        refreshWorkspaces
       }}
     >
       {children}

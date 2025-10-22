@@ -1,22 +1,35 @@
 /* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 import { useSession } from "next-auth/react";
+import { canEditNote } from "@/utils/permissions";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock } from "lucide-react";
+import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock, MessageSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import PageHeader from "@/components/layout/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { NoteCreateForm } from "@/components/notes/NoteCreateForm";
-import { NoteEditForm } from "@/components/notes/NoteEditForm";
+import { NoteCreateForm, NoteCreateFormRef } from "@/components/notes/NoteCreateForm";
+import { NoteEditForm, NoteEditFormRef } from "@/components/notes/NoteEditForm";
 import { useToast } from "@/hooks/use-toast";
 import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { cn } from "@/lib/utils";
 
 interface Note {
   id: string;
@@ -41,6 +54,9 @@ interface Note {
     name: string;
     slug: string;
   };
+  comments?: {
+    id: string;
+  }[];
 }
 
 interface NoteTag {
@@ -79,29 +95,28 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const tagListRef = useRef<HTMLDivElement>(null);
   const tagDialogContentRef = useRef<HTMLDivElement>(null);
+  const createFormRef = useRef<NoteCreateFormRef>(null);
+  const editFormRef = useRef<NoteEditFormRef>(null);
+    // Delete note state
+    const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Get workspace from context (consistent with other pages)
+  const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
 
   // Filter tags based on search term
   const filteredTags = useMemo(() => {
     return sortTagsBySearchTerm(tags, tagSearchTerm);
   }, [tags, tagSearchTerm]);
 
-  // Resolve params first
-  useEffect(() => {
-    const resolveParams = async () => {
-      const resolvedParams = await params;
-
-      setWorkspaceId(resolvedParams.workspaceId);
-    };
-    resolveParams();
-  }, [params]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -110,11 +125,11 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   }, [status]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (session?.user && currentWorkspace?.id) {
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, workspaceId, searchQuery, selectedTag, showFavorites, activeTab]);
+  }, [session?.user, currentWorkspace?.id, searchQuery, selectedTag, showFavorites, activeTab]);
 
   // Focus search input when dialog opens
   useEffect(() => {
@@ -220,31 +235,31 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           // Private: User's private notes only
           params.append("own", "true");
           params.append("public", "false");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
         case "public":
           // Public: User's public notes only
           params.append("own", "true");
           params.append("public", "true");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
         case "all":
           // All: User's all notes (both private and public)
           params.append("own", "true");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
         case "team-notes":
           // Team Notes: Public notes from others in workspace
           params.append("public", "true");
           params.append("own", "false");
-          if (workspaceId) {
-            params.append("workspace", workspaceId);
+          if (currentWorkspace?.id) {
+            params.append("workspace", currentWorkspace.id);
           }
           break;
       }
@@ -276,7 +291,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
   const fetchTags = async () => {
     try {
       // Always send workspace parameter for My Notes filtering
-      const url = workspaceId ? `/api/notes/tags?workspace=${workspaceId}` : "/api/notes/tags";
+      const url = currentWorkspace?.id ? `/api/notes/tags?workspace=${currentWorkspace.id}` : "/api/notes/tags";
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -287,20 +302,26 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  const handleDeleteNote = async (noteId: string) => {
-    if (!confirm("Are you sure you want to delete this note?")) return;
+  const handleDeleteNote = (noteId: string) => {
+    setNoteToDelete(noteId);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!noteToDelete) return;
+
+    setIsDeleting(true);
     try {
-      const response = await fetch(`/api/notes/${noteId}`, {
+      const response = await fetch(`/api/notes/${noteToDelete}`, {
         method: "DELETE",
       });
 
       if (response.ok) {
-        setNotes(notes.filter((note) => note.id !== noteId));
+        setNotes(notes.filter((note) => note.id !== noteToDelete));
         toast({
           title: "Success",
           description: "Note deleted successfully",
         });
+        setDeleteNoteId(null);
       } else {
         throw new Error("Failed to delete note");
       }
@@ -311,6 +332,9 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         description: "Failed to delete note",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setNoteToDelete(null);
     }
   };
 
@@ -338,7 +362,28 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
     }
   };
 
-  if (status === "loading" || isLoading) {
+  // Handle create dialog close request
+  const handleCreateDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      // User is trying to close the dialog
+      createFormRef.current?.requestClose();
+    } else {
+      setIsCreateOpen(true);
+    }
+  }, []);
+
+  // Handle edit dialog close request
+  const handleEditDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      // User is trying to close the dialog
+      editFormRef.current?.requestClose();
+    } else {
+      // This shouldn't happen, but just in case
+      setEditingNote(editingNote);
+    }
+  }, [editingNote]);
+
+  if (status === "loading" || isLoading || workspaceLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -354,25 +399,33 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         title="Notes"
         subtitle="Create and organize your notes with markdown support"
         actions={
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={handleCreateDialogOpenChange}>
             <DialogTrigger asChild>
-              <Button className="h-6 px-1 md:px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md transition-all duration-200 flex items-center justify-center">
-                <Plus className="h-3.5 w-3.5 md:mr-2" />
-                <span data-text className="hidden md:inline ml-1">New Note</span>
+              <Button variant="outline" className={pageHeaderButtonStyles.primary}>
+                <Plus className="h-4 w-4" />
+                <span>New Note</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Note</DialogTitle>
               </DialogHeader>
-              <NoteCreateForm
-                onSuccess={() => {
-                  setIsCreateOpen(false);
-                  fetchNotes();
-                  fetchTags();
-                }}
-                onCancel={() => setIsCreateOpen(false)}
-              />
+              {currentWorkspace?.id ? (
+                <NoteCreateForm
+                  ref={createFormRef}
+                  workspaceId={currentWorkspace.id}
+                  onSuccess={() => {
+                    setIsCreateOpen(false);
+                    fetchNotes();
+                    fetchTags();
+                  }}
+                  onCancel={() => setIsCreateOpen(false)}
+                />
+              ) : (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
         }
@@ -380,18 +433,17 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        <div className="container mx-auto py-6 px-1">
-          <div className="flex flex-col gap-6">
+        <div className="container mx-auto py-4 px-4 sm:px-6">
+          <div className="flex flex-col gap-4">
             {/* Filters and Search */}
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col md:flex-row gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground/60 h-4 w-4" />
                 <Input
                   placeholder="Search notes..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 text-xs sm:text-sm h-7 sm:h-10"
-                  style={{ fontSize: "14px" }}
+                  className="pl-10 h-9 bg-card/50 border-border/50 focus:border-primary/50 text-sm"
                 />
               </div>
 
@@ -399,70 +451,68 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                 <Button
                   variant={showFavorites ? "default" : "outline"}
                   onClick={() => setShowFavorites(!showFavorites)}
-                  className="text-xs w-[100px] sm:text-sm h-7 sm:h-10"
-                  style={{ fontSize: "14px" }}
+                  className="h-9 gap-2 text-sm px-3"
                 >
-                  <Star className="h-4 w-4" />
-                  Favorites
+                  <Star className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Favorites</span>
                 </Button>
 
                 <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="text-xs w-[100px] sm:text-sm h-7 sm:h-10" style={{ fontSize: "14px" }}>
-                      <Filter className="h-4 w-4" />
-                      {selectedTag ? tags.find((t) => t.id === selectedTag)?.name : "All Tags"}
+                    <Button variant="outline" className="h-9 gap-2 text-sm px-3">
+                      <Filter className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{selectedTag ? tags.find((t) => t.id === selectedTag)?.name : "All Tags"}</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent ref={tagDialogContentRef} className="tag-dialog-content">
-                    <div className="p-2 sm:p-4 border-b">
-                      <DialogTitle className="text-base sm:text-lg mt-1">Select Tag</DialogTitle>
-                      <div className="relative mt-2 mb-1">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-3 w-3 sm:h-4 sm:w-4" />
+                    <div className="p-3 border-b border-border/50">
+                      <DialogTitle className="text-base font-semibold mb-2">Select Tag</DialogTitle>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-muted-foreground/60 h-3.5 w-3.5" />
                         <Input
                           ref={tagSearchInputRef}
                           placeholder="Search tags..."
                           value={tagSearchTerm}
                           onChange={(e) => setTagSearchTerm(e.target.value)}
-                          className="pl-6 sm:pl-8 text-sm sm:text-base h-8 sm:h-10"
+                          className="pl-8 text-sm h-9 bg-card/50 border-border/50"
                         />
                       </div>
                     </div>
-                    <div ref={tagListRef} className="max-h-[200px] sm:max-h-[300px] overflow-y-auto p-0 sm:p-2 -mt-1">
+                    <div ref={tagListRef} className="max-h-[280px] overflow-y-auto p-2">
                       <div
                         data-tag-index="0"
-                        className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer border-2 text-sm sm:text-base ${
-                          selectedIndex === 0
-                            ? "bg-primary text-primary-foreground"
-                            : "border-transparent hover:border-primary hover:bg-primary/10"
-                        }`}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer border text-sm transition-colors ${selectedIndex === 0
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-transparent hover:border-border/50 hover:bg-accent"
+                          }`}
                         onClick={() => {
                           setSelectedTag(null);
                           setTagSearchTerm("");
                           setIsTagDropdownOpen(false);
                         }}
                       >
-                        <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-600" />
-                        All Tags
+                        <div className="w-2 h-2 rounded-full bg-orange-500" />
+                        <span className="font-medium">All Tags</span>
                       </div>
                       {filteredTags.map((tag, index) => (
                         <div
                           key={tag.id}
                           data-tag-index={index + 1}
-                          className={`flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 rounded cursor-pointer text-sm sm:text-base ${
-                            selectedIndex === index + 1 ? "bg-primary text-primary-foreground" : "hover:bg-primary/10"
-                          }`}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-sm transition-colors ${selectedIndex === index + 1 ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                            }`}
                           onClick={() => {
                             setSelectedTag(tag.id);
                             setTagSearchTerm("");
                             setIsTagDropdownOpen(false);
                           }}
                         >
-                          <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                          {tag.name} ({tag._count.notes})
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                          <span>{tag.name}</span>
+                          <span className="text-xs text-muted-foreground ml-auto">({tag._count.notes})</span>
                         </div>
                       ))}
                       {filteredTags.length === 0 && tagSearchTerm.trim() && (
-                        <div className="px-2 py-2 text-sm sm:text-base text-muted-foreground text-center">
+                        <div className="px-3 py-6 text-sm text-muted-foreground/60 text-center">
                           No tags found matching "{tagSearchTerm}"
                         </div>
                       )}
@@ -473,135 +523,132 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
             </div>
 
             {/* Horizontal Tabs */}
-            <div className="max-w-2xl">
-              <div className="flex gap-8 border-b border-border w-fit">
-                <button
-                  onClick={() => setActiveTab("all")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "all" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+            <div className="flex gap-6 border-b border-border/50 w-full">
+              <button
+                onClick={() => setActiveTab("all")}
+                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "all" ? "text-foreground border-primary" : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
                   }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setActiveTab("private")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "private"
-                      ? "text-primary border-primary"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
+              >
+                All
+              </button>
+              <button
+                onClick={() => setActiveTab("private")}
+                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "private"
+                  ? "text-foreground border-primary"
+                  : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
                   }`}
-                >
-                  Private
-                </button>
-                <button
-                  onClick={() => setActiveTab("public")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "public"
-                      ? "text-primary border-primary"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
+              >
+                Private
+              </button>
+              <button
+                onClick={() => setActiveTab("public")}
+                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "public"
+                  ? "text-foreground border-primary"
+                  : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
                   }`}
-                >
-                  Public
-                </button>
-                <div className="border-l border-border h-6 self-end mb-3"></div>
-                <button
-                  onClick={() => setActiveTab("team-notes")}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === "team-notes"
-                      ? "text-primary border-primary"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
+              >
+                Public
+              </button>
+              <div className="border-l border-border/50 h-5 self-end mb-2.5"></div>
+              <button
+                onClick={() => setActiveTab("team-notes")}
+                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "team-notes"
+                  ? "text-foreground border-primary"
+                  : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
                   }`}
-                >
-                  Team Notes
-                </button>
-              </div>
+              >
+                Team Notes
+              </button>
             </div>
 
             {/* Notes Grid */}
             {notes.length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium">No notes found</h3>
-                <p className="text-muted-foreground">
+              <div className="text-center py-16">
+                <FileText className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                <h3 className="mt-3 text-base font-medium text-foreground/80">No notes found</h3>
+                <p className="text-sm text-muted-foreground/60 mt-1">
                   {searchQuery || selectedTag || showFavorites
                     ? "Try adjusting your filters"
                     : activeTab === "private" || activeTab === "public" || activeTab === "all"
-                    ? "Get started by creating your first note"
-                    : "No team notes found"}
+                      ? "Get started by creating your first note"
+                      : "No team notes found"}
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {notes.map((note) => (
-                  <Link key={note.id} href={`/${workspaceId}/notes/${note.id}`} className="block">
-                    <div className="bg-card border rounded-lg p-2 sm:p-3 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col min-h-[160px]">
-                      <div className="flex items-start justify-between mb-2 sm:mb-2 sm:pt-0">
+                  <Link key={note.id} href={`/${currentWorkspace?.slug}/notes/${note.id}`} className="block">
+                    <div className="bg-card/50 border border-border/50 rounded-lg p-3 hover:border-primary/50 hover:bg-card/80 transition-all cursor-pointer h-full flex flex-col min-h-[160px]">
+                      <div className="flex items-center justify-between mb-2.5">
                         {/* Author mention on the left */}
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className="text-xs sm:text-sm text-muted-foreground">@{note.author.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground/70">@{note.author.name}</span>
                         </div>
 
                         {/* Action buttons on the right */}
-                        <div className="flex items-center gap-3 sm:gap-0">
+                        <div className="flex items-center gap-0.5 -mr-2">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
+                            className="h-7 w-7 p-0 hover:bg-transparent group"
                             onClick={(e) => {
                               e.preventDefault();
                               toggleFavorite(note.id, note.isFavorite);
                             }}
                           >
                             <Star
-                              className={`h-1 w-1 sm:h-4 sm:w-4 ${
-                                note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-                              }`}
+                              className={`h-3.5 w-3.5 ${note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/50 group-hover:text-yellow-400"
+                                }`}
                             />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setEditingNote(note);
-                            }}
-                          >
-                            <Edit className="h-1 w-1 sm:h-4 sm:w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-3 w-3 sm:h-8 sm:w-8 p-0"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteNote(note.id);
-                            }}
-                          >
-                            <Trash2 className="h-1 w-1 sm:h-4 sm:w-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mb-2 sm:mb-3">
-                        <h3 className="font-semibold line-clamp-1 text-sm sm:text-base flex-1">{note.title}</h3>
-                        <div className="flex items-center gap-1 ml-2">
-                          {note.isPublic ? (
-                            <div title="Public note">
-                              <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
-                            </div>
-                          ) : (
-                            <div title="Private note">
-                              <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                            </div>
+                          {canEditNote(session, note) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 hover:bg-transparent group"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setEditingNote(note);
+                                }}
+                              >
+                                <Edit className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-primary" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 hover:bg-transparent group"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDeleteNoteId(note.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-red-500" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
 
-                      <div className="prose prose-sm max-w-none line-clamp-3 mb-2 sm:mb-3 flex-1">
-                        <div className="text-muted-foreground text-sm sm:text-sm">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          {note.isPublic ? (
+                            <div title="Public note">
+                              <Eye className="h-3.5 w-3.5 text-green-500/80" />
+                            </div>
+                          ) : (
+                            <div title="Private note">
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />
+                            </div>
+                          )}
+                          <h3 className="font-semibold line-clamp-1 text-base text-foreground flex-1">{note.title}</h3>
+                        </div>
+                      </div>
+
+                      <div className="prose prose-sm max-w-none line-clamp-3 mb-2.5 flex-1">
+                        <div className="text-muted-foreground/70 text-xs leading-relaxed">
                           {(() => {
                             const { preview, truncated } = getNotePreview(note.content, 100);
                             return (
@@ -615,24 +662,33 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
                       </div>
 
                       {note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-0.5 sm:gap-1 mb-2 sm:mb-3">
+                        <div className="flex flex-wrap gap-1.5 mb-2.5">
                           {note.tags.map((tag) => (
                             <Badge
                               key={tag.id}
                               variant="secondary"
-                              className="text-sm px-1 py-0.5 sm:px-2 sm:py-1"
-                              style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                              className="text-xs px-2 py-0.5 font-normal border-0"
+                              style={{ backgroundColor: `${tag.color}15`, color: tag.color }}
                             >
-                              <TagIcon className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                              <TagIcon className="h-2.5 w-2.5 mr-1" />
                               {tag.name}
                             </Badge>
                           ))}
                         </div>
                       )}
 
-                      <div className="text-sm text-muted-foreground mt-auto">
+                      <div className="flex flex-row items-center text-xs text-muted-foreground/60 mt-auto pt-1 border-t border-border/30">
                         Updated {new Date(note.updatedAt).toLocaleDateString()}
-                        {note.workspace && <span className="ml-2">• {note.workspace.name}</span>}
+                        {note.workspace && <span className="ml-1.5">• {note.workspace.name}</span>}
+
+                        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                          {note.comments && note.comments.length > 0 && (
+                            <div title={`${note.comments.length} comment${note.comments.length === 1 ? '' : 's'}`} className="flex items-center gap-1">
+                              <MessageSquare className="h-3.5 w-3.5 text-blue-400/80" />
+                              <span className="text-xs text-muted-foreground/70">{note.comments.length}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </Link>
@@ -643,14 +699,27 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
         </div>
       </div>
 
+      {/* Delete Note Dialog */}
+      <ConfirmDialog
+        open={!!noteToDelete}
+        onOpenChange={(open) => !open && setNoteToDelete(null)}
+        title="Delete Note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        variant="danger"
+        confirmText="Delete Note"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+      />
+
       {/* Edit Note Dialog */}
       {editingNote && (
-        <Dialog open={!!editingNote} onOpenChange={() => setEditingNote(null)}>
+        <Dialog open={!!editingNote} onOpenChange={handleEditDialogOpenChange}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Note</DialogTitle>
             </DialogHeader>
             <NoteEditForm
+              ref={editFormRef}
               note={editingNote}
               onSuccess={() => {
                 setEditingNote(null);
@@ -662,6 +731,28 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteNoteId} onOpenChange={(open) => !open && setDeleteNoteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Note</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this note? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteNoteId && handleDeleteNote(deleteNoteId as string)}
+              disabled={isDeleting}
+              className={cn("bg-destructive hover:bg-destructive/90", isDeleting && "opacity-50 cursor-not-allowed")}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

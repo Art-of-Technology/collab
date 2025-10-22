@@ -419,6 +419,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                         Permission.EDIT_BOARD,
                         Permission.MANAGE_BOARD_SETTINGS,
                         Permission.MANAGE_LEAVE,
+                        Permission.INVITE_MEMBERS,
                       ];
                       const isPermissionImplemented = implementedPermissions.includes(permission);
                       

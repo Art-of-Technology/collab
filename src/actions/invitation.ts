@@ -165,6 +165,7 @@ export async function acceptInvitation(token: string) {
   return {
     success: true,
     workspaceId: invitation.workspaceId,
-    workspaceName: invitation.workspace.name
+    workspaceName: invitation.workspace.name,
+    workspaceSlug: invitation.workspace.slug
   };
 } 

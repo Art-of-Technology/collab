@@ -1,0 +1,74 @@
+# Development Dockerfile for Collab
+FROM node:20-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Install dependencies based on the preferred package manager
+COPY package.json ./
+COPY package-lock.json ./
+RUN npm ci --legacy-peer-deps
+
+# Development image with hot-reload support
+FROM base AS development
+WORKDIR /app
+
+# Accept build arguments for NEXT_PUBLIC_ variables (embedded in client bundle)
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+ARG NEXT_PUBLIC_HOCUSPOCUS_URL
+ARG NEXT_PUBLIC_ONESIGNAL_APP_ID
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+
+# Accept build arguments for build-time dependencies (not embedded in bundle)
+ARG DATABASE_URL
+
+ENV NODE_ENV=development
+# Enable telemetry in development for better debugging
+ENV NEXT_TELEMETRY_DISABLED=0
+
+# Make build args available as environment variables
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=$NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+ENV NEXT_PUBLIC_HOCUSPOCUS_URL=$NEXT_PUBLIC_HOCUSPOCUS_URL
+ENV NEXT_PUBLIC_ONESIGNAL_APP_ID=$NEXT_PUBLIC_ONESIGNAL_APP_ID
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV DATABASE_URL=$DATABASE_URL
+
+# Create user for development
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy dependencies from deps stage with correct ownership
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Copy only essential files first (better Docker layer caching)
+COPY --chown=nextjs:nodejs package.json ./
+COPY --chown=nextjs:nodejs package-lock.json ./
+COPY --chown=nextjs:nodejs prisma/ ./prisma/
+
+# Copy remaining application code with correct ownership
+COPY --chown=nextjs:nodejs . .
+
+# Create .next directory with proper ownership for development
+RUN mkdir -p .next && chown -R nextjs:nodejs .next
+
+# Switch to nextjs user
+USER nextjs
+
+# Generate Prisma client
+RUN npx prisma generate
+
+EXPOSE 3000
+EXPOSE 9229
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Default command (will be overridden by docker-compose)
+CMD ["npm", "run", "dev"]
+

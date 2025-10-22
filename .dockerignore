@@ -1,0 +1,137 @@
+# Dependencies (exclude from Docker context)
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# Keep package-lock.json - needed for npm ci
+
+# Testing
+coverage
+
+# Next.js
+.next/
+out/
+build
+dist
+
+# Environment files (use templates instead)
+.env*.local
+.env.production
+.env.development
+.env.uat
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Git
+.git
+.gitignore
+
+# Docker files (exclude most but keep entrypoint scripts)
+docker/*/docker-compose*
+Dockerfile*
+*.dockerignore
+# Keep entrypoint scripts
+!docker/*/docker-entrypoint*.sh
+
+# Miscellaneous
+.nyc_output
+.cache
+*.orig
+
+# Documentation
+docs/
+*.md
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+COMMIT_GUIDELINES.md
+CONTRIBUTING.md
+LICENSE.txt
+SECURITY.md
+README.md
+
+# Scripts (except essential ones)
+scripts/data-migration*
+scripts/fix-*
+scripts/generate-*
+scripts/migrate-*
+scripts/normalize-*
+
+# Test files
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+__tests__/
+test/
+tests/
+
+# ESLint cache
+.eslintcache
+
+# Backup files
+backups/
+*.backup
+*.bak
+
+# Temporary files
+tmp/
+temp/
+
+# Large directories that slow down build
+public/screenshots/
+public/face-layers/
+prisma/migrations/*/
+
+# Development files
+*.dev.js
+*.development.js
+dev-dist/
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS specific  
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Build artifacts
+dist/
+build/
+out/
+

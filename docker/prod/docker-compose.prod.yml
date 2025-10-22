@@ -1,0 +1,166 @@
+# Production Docker Compose configuration for Collab
+# Uses external AWS RDS PostgreSQL and Cloud Redis
+services:
+  # Collab Application - Production Mode  
+  collab-prod:
+    build:
+      context: ../../
+      dockerfile: docker/prod/Dockerfile.prod
+      # Pass all NEXT_PUBLIC_ variables as build args
+      args:
+        # All environment variables from .env.prod.local are available here
+        # We explicitly list NEXT_PUBLIC_ ones for the build
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+        NEXT_PUBLIC_HOCUSPOCUS_URL: ${NEXT_PUBLIC_HOCUSPOCUS_URL}
+        NEXT_PUBLIC_ONESIGNAL_APP_ID: ${NEXT_PUBLIC_ONESIGNAL_APP_ID_PROD}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+        # Database URL needed for Prisma generate during build
+        DATABASE_URL: ${DATABASE_URL}
+    restart: unless-stopped
+    environment:
+      # External Database Configuration (AWS RDS)
+      DATABASE_URL: ${DATABASE_URL}
+      
+      # Production Settings
+      NODE_ENV: production
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      
+      # External Redis Configuration (Cloud Redis)
+      REDIS_URL: ${REDIS_URL}
+      
+      # Production URLs
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      
+      # External Services (Production keys)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+      
+      # GitHub Integration (Production)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      
+      # Email Configuration (Production SMTP)
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_SECURE: ${EMAIL_SECURE}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+      
+      # Push Notifications (Production)
+      NEXT_PUBLIC_ONESIGNAL_APP_ID: ${NEXT_PUBLIC_ONESIGNAL_APP_ID_PROD}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY_PROD}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+      VAPID_EMAIL: ${VAPID_EMAIL}
+      
+      # Real-time Features (Production)
+      PUSHER_APP_ID: ${PUSHER_APP_ID}
+      PUSHER_KEY: ${PUSHER_KEY}
+      PUSHER_SECRET: ${PUSHER_SECRET}
+      PUSHER_CLUSTER: ${PUSHER_CLUSTER}
+      NEXT_PUBLIC_HOCUSPOCUS_URL: ${NEXT_PUBLIC_HOCUSPOCUS_URL}
+      
+      # AI Integration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Security & Encryption
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      
+      # Webhook Configuration
+      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL}
+      
+      # Chat Integration
+      CHAT_PROJECT_API_KEY: ${CHAT_PROJECT_API_KEY}
+      
+      # Production database seeding (usually false)
+      SEED_DATABASE: ${SEED_DATABASE:-false}
+      
+    ports:
+      - "3002:3000"
+    volumes:
+      # Mount logs and uploads for production
+      - prod_uploads:/app/uploads
+      - prod_logs:/app/logs
+    networks:
+      - collab-prod-network
+    # Security and performance: limit resources
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    # Health check for the application
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis Commander - Monitor Redis (admin profile only)
+  redis-commander-prod:
+    image: rediscommander/redis-commander:latest
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "8083:8081"
+    networks:
+      - collab-prod-network
+    profiles:
+      - admin
+
+  # Uptime Kuma - Production health monitoring (admin profile only)
+  uptime-kuma-prod:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - "3003:3001"
+    volumes:
+      - uptime_kuma_prod_data:/app/data
+    networks:
+      - collab-prod-network
+    environment:
+      UPTIME_KUMA_PORT: 3001
+    profiles:
+      - admin
+
+  # Portainer - Docker management (admin profile only)
+  portainer-prod:
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9002:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_prod_data:/data
+    networks:
+      - collab-prod-network
+    profiles:
+      - admin
+
+volumes:
+  uptime_kuma_prod_data:
+    driver: local
+  portainer_prod_data:
+    driver: local
+  prod_uploads:
+    driver: local
+  prod_logs:
+    driver: local
+
+networks:
+  collab-prod-network:
+    driver: bridge
