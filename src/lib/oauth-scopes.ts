@@ -18,8 +18,6 @@
  * Standard OAuth scopes supported by the platform
  */
 export const SUPPORTED_SCOPES = [
-  'read',
-  'write',
   'user:read',
   'user:write',
   'issues:read',
@@ -30,12 +28,8 @@ export const SUPPORTED_SCOPES = [
   'workspace:write',
   'profile:read',
   'profile:write',
-  'tasks:read',
-  'tasks:write',
   'comments:read',
   'comments:write',
-  'milestones:read',
-  'milestones:write',
   'leave:read',
   'leave:write'
 ] as const;
@@ -218,8 +212,6 @@ export function isSupportedScope(scope: string): scope is SupportedScope {
  */
 export function getScopeDescription(scope: string): string {
   const descriptions: Record<string, string> = {
-    'read': 'Read access to basic information',
-    'write': 'Write access to basic information',
     'issues:read': 'Read access to issues',
     'issues:write': 'Create and modify issues',
     'posts:read': 'Read access to posts',
@@ -228,12 +220,8 @@ export function getScopeDescription(scope: string): string {
     'workspace:write': 'Modify workspace settings',
     'profile:read': 'Read access to user profiles',
     'profile:write': 'Modify user profiles',
-    'tasks:read': 'Read access to tasks',
-    'tasks:write': 'Create and modify tasks',
     'comments:read': 'Read access to comments',
     'comments:write': 'Create and modify comments',
-    'milestones:read': 'Read access to milestones',
-    'milestones:write': 'Create and modify milestones',
     'leave:read': 'Read access to leave requests',
     'leave:write': 'Create and modify leave requests'
   };
