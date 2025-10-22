@@ -89,6 +89,32 @@ export enum NotificationType {
 
 export class NotificationService {
   /**
+   * Bounce helper: returns true if the user's last notification content is the same.
+   * This prevents duplicate rapid-fire notifications with identical content.
+   */
+  private static async shouldBounceNotification(
+    userId: string,
+    content: string
+  ): Promise<boolean> {
+    try {
+      const last = await prisma.notification.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: { content: true },
+      });
+      console.log("last", last);
+      console.log("content", content);
+      console.log("should bounce", !!last && last.content === content);
+      return !!last && last.content === content;
+    } catch (error) {
+      logger.error("Bounce check failed; proceeding without bounce", error, {
+        userId,
+      });
+      return false;
+    }
+  }
+
+  /**
    * Create notifications for a specific list of users, optionally filtering by preferences.
    * Returns the number of notifications created. Also sends push notifications when
    * postId or issueId are provided (used for URL generation).
@@ -166,7 +192,15 @@ export class NotificationService {
 
       if (recipientIds.length === 0) return 0;
 
-      const data = recipientIds.map((userId) => ({
+      // Bounce filter: skip users whose last notification has identical content
+      const bounceChecks = await Promise.all(
+        recipientIds.map((uid) => this.shouldBounceNotification(uid, content))
+      );
+      const dedupedRecipientIds = recipientIds.filter((_, idx) => !bounceChecks[idx]);
+
+      if (dedupedRecipientIds.length === 0) return 0;
+
+      const data = dedupedRecipientIds.map((userId) => ({
         ...baseData,
         userId,
       }));
@@ -175,7 +209,7 @@ export class NotificationService {
 
       // Push notifications (best-effort)
       if (issueId || postId) {
-        const pushPromises = recipientIds.map((userId) =>
+        const pushPromises = dedupedRecipientIds.map((userId) =>
           this.sendPushNotificationForUser(
             userId,
             (type as unknown) as NotificationType,
@@ -188,11 +222,11 @@ export class NotificationService {
       }
 
       logger.info("Direct user notifications created", {
-        count: result.count ?? recipientIds.length,
+        count: result.count ?? dedupedRecipientIds.length,
         type,
       });
 
-      return result.count ?? recipientIds.length;
+      return result.count ?? dedupedRecipientIds.length;
     } catch (error) {
       logger.error("Failed to notify users", error, { type });
       return 0;
@@ -229,6 +263,12 @@ export class NotificationService {
       for (const follower of followers) {
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, notificationType)) {
+          // Bounce check: skip if last notification content matches
+          const shouldBounce = await this.shouldBounceNotification(
+            follower.userId,
+            content
+          );
+          if (shouldBounce) continue;
           validNotifications.push({
             type: notificationType.toString(),
             content,
@@ -790,15 +830,21 @@ export class NotificationService {
           read: false,
         }));
 
-      if (notifications.length > 0) {
-        await prisma.notification.createMany({ data: notifications });
+      // Bounce filter per user/content
+      const bounceChecks = await Promise.all(
+        notifications.map((n) => this.shouldBounceNotification(n.userId, n.content))
+      );
+      const dedupedNotifications = notifications.filter((_, idx) => !bounceChecks[idx]);
+
+      if (dedupedNotifications.length > 0) {
+        await prisma.notification.createMany({ data: dedupedNotifications });
         logger.info("Task comment mention notifications created", {
-          count: notifications.length,
+          count: dedupedNotifications.length,
           taskId,
           taskCommentId,
         });
 
-        const pushPromises = notifications.map((n) =>
+        const pushPromises = dedupedNotifications.map((n) =>
           this.sendPushNotificationForUser(
             n.userId,
             NotificationType.ISSUE_MENTION,
@@ -1175,6 +1221,11 @@ export class NotificationService {
       actionType
     );
 
+    // Bounce: skip if last notification matches
+    if (await this.shouldBounceNotification(leaveRequest.userId, content)) {
+      return;
+    }
+
     // Create in-app notification
     await prisma.notification.create({
       data: {
@@ -1233,8 +1284,16 @@ export class NotificationService {
       actionType
     );
 
+    // Bounce filter recipients
+    const bounceChecks = await Promise.all(
+      recipientIds.map((uid) => this.shouldBounceNotification(uid, content))
+    );
+    const dedupedRecipientIds = recipientIds.filter((_, idx) => !bounceChecks[idx]);
+
+    if (dedupedRecipientIds.length === 0) return;
+
     // Create notifications for each manager
-    const notifications = recipientIds.map((managerId) => ({
+    const notifications = dedupedRecipientIds.map((managerId) => ({
       userId: managerId,
       senderId: leaveRequest.userId,
       type: notificationType,
@@ -1247,7 +1306,7 @@ export class NotificationService {
     });
 
     // Send push notifications
-    for (const managerId of recipientIds) {
+    for (const managerId of dedupedRecipientIds) {
       const preferences = await NotificationService.getUserPreferences(
         managerId
       );
@@ -1302,8 +1361,16 @@ export class NotificationService {
       actionType
     );
 
+    // Bounce filter recipients
+    const bounceChecks = await Promise.all(
+      hrIds.map((uid) => this.shouldBounceNotification(uid, content))
+    );
+    const dedupedHrIds = hrIds.filter((_, idx) => !bounceChecks[idx]);
+
+    if (dedupedHrIds.length === 0) return;
+
     // Create notifications for each HR person
-    const notifications = hrIds.map((hrId) => ({
+    const notifications = dedupedHrIds.map((hrId) => ({
       userId: hrId,
       senderId: leaveRequest.userId,
       type: notificationType,
@@ -1316,7 +1383,7 @@ export class NotificationService {
     });
 
     // Send push notifications
-    for (const hrId of hrIds) {
+    for (const hrId of dedupedHrIds) {
       const preferences = await NotificationService.getUserPreferences(hrId);
 
       if (
