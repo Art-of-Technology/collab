@@ -102,9 +102,6 @@ export class NotificationService {
         orderBy: { createdAt: "desc" },
         select: { content: true },
       });
-      console.log("last", last);
-      console.log("content", content);
-      console.log("should bounce", !!last && last.content === content);
       return !!last && last.content === content;
     } catch (error) {
       logger.error("Bounce check failed; proceeding without bounce", error, {
