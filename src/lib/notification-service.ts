@@ -131,9 +131,17 @@ export class NotificationService {
 
       if (targets.length === 0) return result;
 
+      // Build a lookup of latest createdAt per userId
+      const latestCreatedAtByUser: Record<string, Date> = {};
+      for (const t of targets) {
+        latestCreatedAtByUser[t.userId] = t.createdAt;
+      }
+
+      // Fetch all notifications for these userIds with createdAt in the set of latest dates
       const rows = await prisma.notification.findMany({
         where: {
-          OR: targets.map((t) => ({ userId: t.userId, createdAt: t.createdAt })),
+          userId: { in: targets.map((t) => t.userId) },
+          createdAt: { in: targets.map((t) => t.createdAt) },
         },
         select: { userId: true, content: true, createdAt: true },
       });
