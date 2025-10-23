@@ -1363,7 +1363,7 @@ export class NotificationService {
       hrIds.map((uid) => this.shouldBounceNotification(uid, content))
     );
     const dedupedHrIds = hrIds.filter((_, idx) => !bounceChecks[idx]);
-
+      hrIds.map((uid) => NotificationService.shouldBounceNotification(uid, content))
     if (dedupedHrIds.length === 0) return;
 
     // Create notifications for each HR person
