@@ -832,7 +832,7 @@ export class NotificationService {
         notifications.map((n) => this.shouldBounceNotification(n.userId, n.content))
       );
       const dedupedNotifications = notifications.filter((_, idx) => !bounceChecks[idx]);
-
+        notifications.map((n) => NotificationService.shouldBounceNotification(n.userId, n.content))
       if (dedupedNotifications.length > 0) {
         await prisma.notification.createMany({ data: dedupedNotifications });
         logger.info("Task comment mention notifications created", {
