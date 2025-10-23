@@ -84,12 +84,12 @@ export function DeleteButton({ appSlug, appName }: DeleteButtonProps) {
               Delete App
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
-              <p>
+              <span>
                 Are you sure you want to delete <strong>{appName}</strong>? 
-              </p>
+              </span>
               <Alert variant="destructive" className="bg-destructive/10">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
+
                   <strong>This action cannot be undone.</strong> This will permanently delete:
                   <ul className="list-disc list-inside mt-2 space-y-1">
                     <li>The app and all its versions</li>
@@ -97,11 +97,11 @@ export function DeleteButton({ appSlug, appName }: DeleteButtonProps) {
                     <li>All webhooks and webhook history</li>
                     <li>Installation records</li>
                   </ul>
-                </AlertDescription>
+
               </Alert>
-              <p className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Note: If the app has active installations, you must uninstall it from all workspaces first.
-              </p>
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
 
