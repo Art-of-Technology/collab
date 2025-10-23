@@ -264,7 +264,7 @@ export class NotificationService {
           const shouldBounce = await this.shouldBounceNotification(
             follower.userId,
             content
-          );
+          const shouldBounce = await NotificationService.shouldBounceNotification(
           if (shouldBounce) continue;
           validNotifications.push({
             type: notificationType.toString(),
