@@ -194,7 +194,7 @@ export class NotificationService {
         recipientIds.map((uid) => this.shouldBounceNotification(uid, content))
       );
       const dedupedRecipientIds = recipientIds.filter((_, idx) => !bounceChecks[idx]);
-
+        recipientIds.map((uid) => NotificationService.shouldBounceNotification(uid, content))
       if (dedupedRecipientIds.length === 0) return 0;
 
       const data = dedupedRecipientIds.map((userId) => ({
