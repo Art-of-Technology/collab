@@ -4,11 +4,11 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
-  Circle, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Plus,
+  Circle,
+  CheckCircle2,
+  XCircle,
   Clock,
   AlertCircle,
   Filter,
@@ -113,10 +113,10 @@ const normalizeStatus = (status: string): string => {
   return normalized || status;
 };
 
-export default function ListViewRenderer({ 
-  view, 
-  issues, 
-  workspace, 
+export default function ListViewRenderer({
+  view,
+  issues,
+  workspace,
   currentUser,
   activeFilters,
   setActiveFilters,
@@ -126,7 +126,7 @@ export default function ListViewRenderer({
 }: ListViewRendererProps) {
   // Router for navigation
   const router = useRouter();
-  
+
   // State management
   const [hoveredIssueId, setHoveredIssueId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -155,7 +155,7 @@ export default function ListViewRenderer({
   // Filter and group issues
   const groupedIssues = useMemo(() => {
     let filtered = [...issues];
-    
+
     // Apply filters
     if (selectedFilters.assignees.length > 0) {
       filtered = filtered.filter(issue => {
@@ -163,25 +163,25 @@ export default function ListViewRenderer({
         return selectedFilters.assignees.includes(assigneeId);
       });
     }
-    
+
     if (selectedFilters.labels.length > 0) {
       filtered = filtered.filter(issue => {
         if (!issue.labels || issue.labels.length === 0) {
           return selectedFilters.labels.includes('no-labels');
         }
-        return issue.labels.some((label: any) => 
+        return issue.labels.some((label: any) =>
           selectedFilters.labels.includes(label.id)
         );
       });
     }
-    
+
     if (selectedFilters.priority.length > 0) {
       filtered = filtered.filter(issue => {
         const priority = issue.priority || 'no-priority';
         return selectedFilters.priority.includes(priority);
       });
     }
-    
+
     if (selectedFilters.projects.length > 0) {
       filtered = filtered.filter(issue => {
         const projectId = issue.project?.id || 'no-project';
@@ -191,11 +191,11 @@ export default function ListViewRenderer({
 
     // Group issues
     const groups = new Map<string, { name: string; issues: Issue[]; count: number }>();
-    
+
     filtered.forEach(issue => {
       let groupKey: string;
       let groupName: string;
-      
+
       switch (displaySettings.grouping) {
         case 'status':
           // Use projectStatus if available, otherwise fallback to legacy fields
@@ -223,7 +223,7 @@ export default function ListViewRenderer({
           groupKey = 'all';
           groupName = 'All Issues';
       }
-      
+
       if (!groups.has(groupKey)) {
         groups.set(groupKey, {
           name: groupName,
@@ -231,7 +231,7 @@ export default function ListViewRenderer({
           count: 0
         });
       }
-      
+
       groups.get(groupKey)!.issues.push(issue);
       groups.get(groupKey)!.count++;
     });
@@ -260,7 +260,7 @@ export default function ListViewRenderer({
         }
       });
     });
-    
+
     return Array.from(groups.values());
   }, [issues, selectedFilters, displaySettings]);
 
@@ -270,10 +270,10 @@ export default function ListViewRenderer({
     // Use workspace slug if available, else id; fallback to issue's workspaceId
     const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
     const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
-    
+
     // Build URL with view context for proper back navigation
     const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
-    
+
     if (workspaceSegment) {
       router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
     } else {
@@ -306,24 +306,24 @@ export default function ListViewRenderer({
   const getPriorityIcon = (priority: string) => {
     const priorityConfig = getIssuePriorityBadge(priority);
     const IconComponent = priorityConfig.icon;
-    
+
     // Color mapping for better visibility
     const colorMap = {
       'URGENT': 'text-red-500',
-      'HIGH': 'text-orange-500', 
+      'HIGH': 'text-orange-500',
       'MEDIUM': 'text-blue-500',
       'LOW': 'text-green-500'
     };
-    
+
     const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-gray-500';
-    
+
     return <IconComponent className={cn("h-3.5 w-3.5", colorClass)} />;
   };
 
   const getStatusIcon = (status: string) => {
     const normalizedStatus = normalizeStatus(status).toLowerCase();
     const iconClass = "h-3.5 w-3.5";
-    
+
     switch (normalizedStatus) {
       case 'todo':
         return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
@@ -347,9 +347,9 @@ export default function ListViewRenderer({
   // Group Header Component
   const GroupHeader = ({ group, groupKey }: { group: any; groupKey: string }) => {
     const isCollapsed = collapsedGroups.has(groupKey);
-    
+
     return (
-      <div 
+      <div
         className={cn(
           "sticky top-0 z-20 cursor-pointer transition-colors",
           // Mobile: Glassmorphism header
@@ -381,7 +381,7 @@ export default function ListViewRenderer({
 
   // Issue Row Component - Mobile-first responsive design
   const IssueRow = ({ issue }: { issue: Issue }) => (
-    <div 
+    <div
       className={cn(
         "group relative cursor-pointer transition-all duration-200",
         // Mobile-first: Card-like design with glassmorphism
@@ -405,21 +405,21 @@ export default function ListViewRenderer({
             <div className="flex items-center shrink-0">
               {getStatusIcon(issue.status)}
             </div>
-            
+
             {/* Priority Icon */}
             {displaySettings.displayProperties.includes('Priority') && issue.priority && (
               <div className="flex items-center shrink-0">
                 {getPriorityIcon(issue.priority)}
               </div>
             )}
-            
+
             {/* Issue Key */}
             {displaySettings.displayProperties.includes('ID') && (
               <span className="text-gray-400 text-xs font-mono font-medium shrink-0">
                 {issue.issueKey}
               </span>
             )}
-            
+
             {/* Assignee Avatar */}
             {displaySettings.displayProperties.includes('Assignee') && (
               <div className="flex items-center shrink-0 ml-auto">
@@ -439,20 +439,20 @@ export default function ListViewRenderer({
             )}
           </div>
         </div>
-        
+
         {/* Title */}
         <h3 className="text-white text-sm font-medium mb-2 line-clamp-2">
           {issue.title}
         </h3>
-        
+
         {/* Labels */}
         {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {issue.labels.slice(0, 3).map((label) => (
-              <Badge 
+              <Badge
                 key={label.id}
                 className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-sm"
-                style={{ 
+                style={{
                   backgroundColor: label.color + '20',
                   color: label.color || '#8b949e'
                 }}
@@ -465,15 +465,15 @@ export default function ListViewRenderer({
             )}
           </div>
         )}
-        
+
         {/* Meta badges row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Project Badge */}
             {displaySettings.displayProperties.includes('Project') && issue.project && (
-              <Badge 
+              <Badge
                 className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-md"
-                style={{ 
+                style={{
                   backgroundColor: (issue.project.color || '#6e7681') + '30',
                   color: issue.project.color || '#8b949e'
                 }}
@@ -505,7 +505,7 @@ export default function ListViewRenderer({
               </div>
             )}
           </div>
-          
+
           {/* Updated Date */}
           {displaySettings.displayProperties.includes('Updated') && (
             <span className="text-gray-500 text-xs">
@@ -540,21 +540,21 @@ export default function ListViewRenderer({
                 {getPriorityIcon(issue.priority)}
               </div>
             )}
-            
+
             {/* Title */}
             <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
               {issue.title}
             </span>
           </div>
-          
+
           {/* Labels - shown on same line in Linear style */}
           {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
             <div className="flex gap-1 mt-0.5">
               {issue.labels.slice(0, 2).map((label) => (
-                <Badge 
+                <Badge
                   key={label.id}
                   className="h-3.5 px-1 text-[9px] font-medium leading-none border-0 rounded-sm"
-                  style={{ 
+                  style={{
                     backgroundColor: label.color + '20',
                     color: label.color || '#8b949e'
                   }}
@@ -573,9 +573,9 @@ export default function ListViewRenderer({
         <div className="flex items-center gap-2 flex-shrink-0 mr-4">
           {/* Project Badge */}
           {displaySettings.displayProperties.includes('Project') && issue.project && (
-            <Badge 
+            <Badge
               className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all"
-              style={{ 
+              style={{
                 backgroundColor: (issue.project.color || '#6e7681') + '30',
                 color: issue.project.color || '#8b949e'
               }}
@@ -641,23 +641,6 @@ export default function ListViewRenderer({
   // Calculate total issues count
   const totalIssues = groupedIssues.reduce((sum, group) => sum + group.count, 0);
 
-  // Empty state component
-  if (issues.length === 0) {
-    return (
-      <div className="h-full bg-[#101011] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-full bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
-            <Plus className="h-6 w-6 text-[#666]" />
-          </div>
-          <p className="text-[#9ca3af] text-sm">No issues found</p>
-          <p className="text-[#666] text-xs mt-1">
-            Adjust your filters or create a new issue
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-full bg-[#101011] flex flex-col overflow-hidden">
       {/* Grouped List Content */}
@@ -677,14 +660,14 @@ export default function ListViewRenderer({
             {groupedIssues.map((group, index) => {
               const groupKey = `${displaySettings.grouping}-${group.name}`;
               const isCollapsed = collapsedGroups.has(groupKey);
-              
+
               return (
                 <div key={groupKey}>
                   {/* Group Header - only show if not "all" grouping */}
                   {displaySettings.grouping !== 'none' && (
                     <GroupHeader group={group} groupKey={groupKey} />
                   )}
-                  
+
                   {/* Group Issues */}
                   {!isCollapsed && (
                     <div className={cn(
