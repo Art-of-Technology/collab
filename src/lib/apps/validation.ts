@@ -243,3 +243,33 @@ export function validateManifestUrl(url: string): boolean {
     return false;
   }
 }
+
+// Fetch manifest from URL
+export async function fetchManifest(url: string): Promise<unknown> {
+  if (!validateManifestUrl(url)) {
+    throw new Error('Invalid manifest URL format');
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Collab-App-Platform/1.0'
+      },
+      signal: AbortSignal.timeout(10000) // 10 seconds
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch manifest: ${response.status} ${response.statusText}`);
+    }
+
+    const manifestData = await response.json();
+    return manifestData;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Failed to fetch manifest: Network error');
+  }
+}

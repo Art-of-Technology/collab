@@ -12,11 +12,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft } from 'lucide-react';
-import { ImportManifestRequestSchema } from '@/lib/apps/validation';
+import { ArrowLeft, Rocket } from 'lucide-react';
 
-// Form schemas
-type ImportManifestForm = z.infer<typeof ImportManifestRequestSchema>;
+// Form schema for creating a draft app
+const CreateDraftAppSchema = z.object({
+  name: z.string()
+    .min(1, 'App name is required')
+    .max(100, 'App name must be less than 100 characters')
+    .regex(/^[a-zA-Z0-9\s\-_]+$/, 'App name can only contain letters, numbers, spaces, hyphens, and underscores'),
+  publisherId: z.string()
+    .min(1, 'Publisher ID is required')
+    .max(100, 'Publisher ID must be less than 100 characters')
+    .regex(/^[a-zA-Z0-9\-_]+$/, 'Publisher ID can only contain letters, numbers, hyphens, and underscores')
+    .optional()
+    .or(z.literal(''))
+});
+
+type CreateDraftForm = z.infer<typeof CreateDraftAppSchema>;
 
 export default function NewAppPage() {
   const router = useRouter();
@@ -24,36 +36,43 @@ export default function NewAppPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Import form
-  const importForm = useForm<ImportManifestForm>({
-    resolver: zodResolver(ImportManifestRequestSchema),
+  // Create app form
+  const createForm = useForm<CreateDraftForm>({
+    resolver: zodResolver(CreateDraftAppSchema),
     defaultValues: {
-      url: '',
-      publisherId: 'developer'
+      name: '',
+      publisherId: ''
     }
   });
 
-  const onImportSubmit = async (data: ImportManifestForm) => {
+  const onCreateSubmit = async (data: CreateDraftForm) => {
     setLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const response = await fetch('/api/apps/import-manifest', {
+      // Remove empty publisherId before sending
+      const payload = {
+        name: data.name,
+        ...(data.publisherId && data.publisherId.trim() !== '' && { publisherId: data.publisherId })
+      };
+
+      const response = await fetch('/api/apps/create-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        setSuccess(`App "${result.app.name}" imported successfully!`);
+        setSuccess(`App "${result.app.name}" created successfully! Redirecting...`);
+        // Redirect to app detail page where credentials will be shown
         setTimeout(() => {
           router.push(`/dev/apps/${result.app.slug}`);
-        }, 2000);
+        }, 1500);
       } else {
-        setError(result.error || 'Failed to import manifest');
+        setError(result.error || 'Failed to create app');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -71,22 +90,14 @@ export default function NewAppPage() {
         </Link>
         <h1 className="text-3xl font-bold tracking-tight">Create New App</h1>
         <p className="text-muted-foreground mt-2">
-          Add a new app to the Collab platform
+          Start building your app for the Collab platform
         </p>
       </div>
-
-      {/* Information about credential generation */}
-      <Alert className="mb-8">
-        <AlertDescription>
-          <strong>Note:</strong> OAuth credentials will be automatically generated when your app is approved and published. 
-          You do not need to generate credentials during the submission process.
-        </AlertDescription>
-      </Alert>
 
       {/* Success/Error Messages */}
       {success && (
         <Alert className="mb-6 border-green-600 bg-green-950/30">
-          <AlertDescription className="text-green-600 bg">
+          <AlertDescription className="text-green-600">
             {success}
           </AlertDescription>
         </Alert>
@@ -94,7 +105,7 @@ export default function NewAppPage() {
 
       {error && (
         <Alert className="mb-6 border-red-600 bg-red-950/30">
-          <AlertDescription className="text-red-600 bg">
+          <AlertDescription className="text-red-600">
             {error}
           </AlertDescription>
         </Alert>
@@ -102,53 +113,82 @@ export default function NewAppPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Import from Manifest URL</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Rocket className="w-5 h-5" />
+            App Details
+          </CardTitle>
           <CardDescription>
-            Provide a URL to your app manifest JSON file. We'll fetch and validate it automatically.
+            Choose a name for your app. We'll generate OAuth credentials immediately so you can start developing.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={importForm.handleSubmit(onImportSubmit)} className="space-y-4">
-            <div>
-              <Label htmlFor="url">Manifest URL *</Label>
+          <form onSubmit={createForm.handleSubmit(onCreateSubmit)} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">App Name *</Label>
               <Input
-                id="url"
-                placeholder="https://example.com/manifest.json"
-                {...importForm.register('url')}
+                id="name"
+                placeholder="My Awesome App"
+                {...createForm.register('name')}
+                disabled={loading}
+                aria-describedby="name-help"
               />
-              {importForm.formState.errors.url && (
-                <p className="text-sm text-red-600 mt-1">
-                  {importForm.formState.errors.url.message}
+              {createForm.formState.errors.name && (
+                <p className="text-sm text-red-600 mt-1" role="alert">
+                  {createForm.formState.errors.name.message}
                 </p>
               )}
+              <p id="name-help" className="text-xs text-muted-foreground">
+                This will be used to generate a unique slug for your app
+              </p>
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="publisherId">Publisher ID</Label>
               <Input
                 id="publisherId"
                 placeholder="your-publisher-id"
-                {...importForm.register('publisherId')}
+                {...createForm.register('publisherId')}
+                disabled={loading}
+                aria-describedby="publisher-help"
               />
-              <p className="text-sm text-muted-foreground mt-1">
-                Optional. Defaults to 'developer' if not provided.
+              {createForm.formState.errors.publisherId && (
+                <p className="text-sm text-red-600 mt-1" role="alert">
+                  {createForm.formState.errors.publisherId.message}
+                </p>
+              )}
+              <p id="publisher-help" className="text-xs text-muted-foreground">
+                Optional. This identifies who is publishing the app. Defaults to your user ID if not provided.
               </p>
             </div>
 
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? 'Importing...' : 'Import Manifest'}
+            <div className="rounded-lg bg-muted/50 p-4 space-y-2">
+              <h4 className="text-sm font-medium">What happens next?</h4>
+              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>We'll create your app and generate OAuth credentials</li>
+                <li>Use these credentials to develop and test your app</li>
+                <li>When ready, submit your app manifest URL to publish</li>
+              </ol>
+            </div>
+
+            <Button type="submit" disabled={loading} className="w-full" size="lg">
+              {loading ? 'Creating App...' : 'Create App & Get Credentials'}
             </Button>
           </form>
         </CardContent>
       </Card>
 
       <div className="mt-8 p-4 bg-muted/50 rounded-lg">
-        <h3 className="font-semibold mb-2">Need Help?</h3>
-        <ul className="text-sm text-muted-foreground space-y-1">
-          <li>• Your manifest must be accessible via HTTPS in production</li>
-          <li>• Manifest should include name, slug, entrypoint_url, and permissions</li>
-          <li>• App slugs must be lowercase with hyphens only</li>
-          <li>• Reserved slugs like 'admin', 'api', 'auth' cannot be used</li>
+        <h3 className="font-semibold mb-2">Development Flow</h3>
+        <ul className="text-sm text-muted-foreground space-y-2">
+          <li>
+            <strong>1. Create App:</strong> Provide your app name and get credentials immediately
+          </li>
+          <li>
+            <strong>2. Develop:</strong> Build your app using the provided Client ID and Secret
+          </li>
+          <li>
+            <strong>3. Publish:</strong> Submit your manifest URL when your app is ready
+          </li>
         </ul>
       </div>
     </div>

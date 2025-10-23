@@ -13,6 +13,8 @@ import DeveloperAnalytics from '@/components/apps/DeveloperAnalytics';
 import Image from 'next/image';
 import { AppStatusBadge } from '@/components/apps/AppStatusBadge';
 import { OAuthCredentialsCard } from './OAuthCredentialsCard';
+import { ManifestSubmissionCard } from './ManifestSubmissionCard';
+import { DeleteButton } from './DeleteButton';
 
 const prisma = new PrismaClient();
 
@@ -147,185 +149,201 @@ export default async function AppDetailPage({
 
         <TabsContent value="overview">
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-        {/* App Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              App Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 sm:space-y-4">
-            <div>
-              <div className="text-xs sm:text-sm font-medium text-muted-foreground">Publisher</div>
-              <div className="text-sm sm:text-base break-words">{app.publisherId}</div>
-            </div>
+
+            {/* Manifest Submission - Show for DRAFT apps without a manifest */}
+            {app.status === 'DRAFT' && !manifest && (
+              <ManifestSubmissionCard appSlug={app.slug} />
+            )}
+
+            {/* Manifest Info */}
+            {manifest && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Code className="w-5 h-5" />
+                    Manifest Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 sm:space-y-4">
+                  <div>
+                    <div className="text-xs sm:text-sm font-medium text-muted-foreground">Entrypoint URL</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs sm:text-sm bg-muted px-2 py-1 rounded flex-1 truncate min-w-0">
+                        {manifest.entrypoint_url}
+                      </code>
+                      <Link href={manifest.entrypoint_url} target="_blank">
+                        <Button variant="outline" size="sm">
+                          <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {manifest.publisher && (
+                    <div>
+                      <div className="text-xs sm:text-sm font-medium text-muted-foreground">Publisher</div>
+                      <div className="text-sm">
+                        <div className="break-words">{manifest.publisher.name}</div>
+                        <div className="text-muted-foreground text-xs sm:text-sm break-all">{manifest.publisher.support_email}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="text-sm font-medium text-muted-foreground">App Type</div>
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {manifest.type.replace('_', ' ')}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-medium text-muted-foreground">Visibility</div>
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {manifest.visibility}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <div className="text-xs sm:text-sm font-medium text-muted-foreground">Permissions</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {manifest.scopes.map((scope) => (
+                        <Badge key={scope} variant="secondary" className="text-xs break-all">
+                          {scope}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {manifest.oauth && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">OAuth Configuration</div>
+                      <div className="text-sm space-y-1">
+                        {manifest.oauth.client_id && (
+                          <div>Client ID: <code className="bg-muted px-1 rounded">{manifest.oauth.client_id}</code></div>
+                        )}
+                        <div>Client Type: <Badge variant="outline" className="text-xs">{manifest.oauth.client_type}</Badge></div>
+                        <div>Redirect URIs: {manifest.oauth.redirect_uris.length}</div>
+                        {manifest.oauth.token_endpoint_auth_method && (
+                          <div>Auth Method: <code className="bg-muted px-1 rounded text-xs">{manifest.oauth.token_endpoint_auth_method}</code></div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {manifest.webhooks && manifest.webhooks.endpoints && (
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Webhook Endpoints</div>
+                      <div className="text-sm space-y-2">
+                        {manifest.webhooks.endpoints.map((endpoint, index) => (
+                          <div key={index} className="border rounded p-2">
+                            <div>URL: <code className="bg-muted px-1 rounded text-xs">{endpoint.url}</code></div>
+                            <div className="mt-1">Events: {endpoint.events.join(', ')}</div>
+                            <div className="mt-1">Signature: {endpoint.signature.type} via {endpoint.signature.header}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* OAuth Credentials - Always show when available */}
+            {app.oauthClient && (
+              <OAuthCredentialsCard oauthClient={app.oauthClient} appId={app.id} appStatus={app.status} />
+            )}
             
-            <div>
-              <div className="text-xs sm:text-sm font-medium text-muted-foreground">Manifest URL</div>
-              <div className="flex items-center gap-2">
-                <code className="text-xs sm:text-sm bg-muted px-2 py-1 rounded flex-1 truncate min-w-0">
-                  {app.manifestUrl}
-                </code>
-                <Link href={app.manifestUrl} target="_blank">
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs sm:text-sm font-medium text-muted-foreground">Created</div>
-              <div className="text-sm sm:text-base">
-                <div className="sm:hidden">{new Date(app.createdAt).toLocaleDateString()}</div>
-                <div className="hidden sm:block">{new Date(app.createdAt).toLocaleDateString()} at {new Date(app.createdAt).toLocaleTimeString()}</div>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs sm:text-sm font-medium text-muted-foreground">Last Updated</div>
-              <div className="text-sm sm:text-base">
-                <div className="sm:hidden">{new Date(app.updatedAt).toLocaleDateString()}</div>
-                <div className="hidden sm:block">{new Date(app.updatedAt).toLocaleDateString()} at {new Date(app.updatedAt).toLocaleTimeString()}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* OAuth Credentials */}
-        {app.status === 'DRAFT' && app.oauthClient && (
-          <OAuthCredentialsCard oauthClient={app.oauthClient} appId={app.id} />
-        )}
-
-        {/* Manifest Info */}
-        {manifest && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Code className="w-5 h-5" />
-                Manifest Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 sm:space-y-4">
-              <div>
-                <div className="text-xs sm:text-sm font-medium text-muted-foreground">Entrypoint URL</div>
-                <div className="flex items-center gap-2">
-                  <code className="text-xs sm:text-sm bg-muted px-2 py-1 rounded flex-1 truncate min-w-0">
-                    {manifest.entrypoint_url}
-                  </code>
-                  <Link href={manifest.entrypoint_url} target="_blank">
-                    <Button variant="outline" size="sm">
-                      <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-
-              {manifest.publisher && (
+            {/* App Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  App Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 sm:space-y-4">
                 <div>
                   <div className="text-xs sm:text-sm font-medium text-muted-foreground">Publisher</div>
-                  <div className="text-sm">
-                    <div className="break-words">{manifest.publisher.name}</div>
-                    <div className="text-muted-foreground text-xs sm:text-sm break-all">{manifest.publisher.support_email}</div>
+                  <div className="text-sm sm:text-base break-words">{app.publisherId}</div>
+                </div>
+                
+              {app.manifestUrl && <div>
+                  <div className="text-xs sm:text-sm font-medium text-muted-foreground">Manifest URL</div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs sm:text-sm bg-muted px-2 py-1 rounded flex-1 truncate min-w-0">
+                      {app.manifestUrl}
+                    </code>
+                    <Link href={app.manifestUrl} target="_blank">
+                      <Button variant="outline" size="sm">
+                        <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>}
+
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-muted-foreground">Created</div>
+                  <div className="text-sm sm:text-base">
+                    <div className="sm:hidden">{new Date(app.createdAt).toLocaleDateString()}</div>
+                    <div className="hidden sm:block">{new Date(app.createdAt).toLocaleDateString()} at {new Date(app.createdAt).toLocaleTimeString()}</div>
                   </div>
                 </div>
-              )}
 
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">App Type</div>
-                <Badge variant="outline" className="text-xs capitalize">
-                  {manifest.type.replace('_', ' ')}
-                </Badge>
-              </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-muted-foreground">Last Updated</div>
+                  <div className="text-sm sm:text-base">
+                    <div className="sm:hidden">{new Date(app.updatedAt).toLocaleDateString()}</div>
+                    <div className="hidden sm:block">{new Date(app.updatedAt).toLocaleDateString()} at {new Date(app.updatedAt).toLocaleTimeString()}</div>
+                  </div>
+                </div>
 
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">Visibility</div>
-                <Badge variant="outline" className="text-xs capitalize">
-                  {manifest.visibility}
-                </Badge>
-              </div>
+                {/* Danger Zone */}
+                <div className="pt-4 border-t">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-destructive">Danger Zone</h4>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Once you delete an app, there is no going back. Please be certain.
+                    </p>
+                    <DeleteButton appSlug={app.slug} appName={app.name} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-              <div>
-                <div className="text-xs sm:text-sm font-medium text-muted-foreground">Permissions</div>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {manifest.scopes.map((scope) => (
-                    <Badge key={scope} variant="secondary" className="text-xs break-all">
-                      {scope}
-                    </Badge>
+            {/* Versions */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Code className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Versions ({app.versions.length})
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Version history for this app
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 sm:space-y-3">
+                  {app.versions.map((version, index) => (
+                    <div key={version.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                        <Badge variant={index === 0 ? 'default' : 'outline'} className="text-xs">
+                          v{version.version}
+                        </Badge>
+                        <div className="text-xs sm:text-sm text-muted-foreground">
+                          <div className="sm:hidden">{new Date(version.createdAt).toLocaleDateString()}</div>
+                          <div className="hidden sm:block">{new Date(version.createdAt).toLocaleDateString()} at {new Date(version.createdAt).toLocaleTimeString()}</div>
+                        </div>
+                        {index === 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            LATEST
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
-
-              {manifest.oauth && (
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">OAuth Configuration</div>
-                  <div className="text-sm space-y-1">
-                    {manifest.oauth.client_id && (
-                      <div>Client ID: <code className="bg-muted px-1 rounded">{manifest.oauth.client_id}</code></div>
-                    )}
-                    <div>Client Type: <Badge variant="outline" className="text-xs">{manifest.oauth.client_type}</Badge></div>
-                    <div>Redirect URIs: {manifest.oauth.redirect_uris.length}</div>
-                    {manifest.oauth.token_endpoint_auth_method && (
-                      <div>Auth Method: <code className="bg-muted px-1 rounded text-xs">{manifest.oauth.token_endpoint_auth_method}</code></div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {manifest.webhooks && manifest.webhooks.endpoints && (
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Webhook Endpoints</div>
-                  <div className="text-sm space-y-2">
-                    {manifest.webhooks.endpoints.map((endpoint, index) => (
-                      <div key={index} className="border rounded p-2">
-                        <div>URL: <code className="bg-muted px-1 rounded text-xs">{endpoint.url}</code></div>
-                        <div className="mt-1">Events: {endpoint.events.join(', ')}</div>
-                        <div className="mt-1">Signature: {endpoint.signature.type} via {endpoint.signature.header}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-
-        {/* Versions */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Code className="w-4 h-4 sm:w-5 sm:h-5" />
-              Versions ({app.versions.length})
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Version history for this app
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 sm:space-y-3">
-              {app.versions.map((version, index) => (
-                <div key={version.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                    <Badge variant={index === 0 ? 'default' : 'outline'} className="text-xs">
-                      v{version.version}
-                    </Badge>
-                    <div className="text-xs sm:text-sm text-muted-foreground">
-                      <div className="sm:hidden">{new Date(version.createdAt).toLocaleDateString()}</div>
-                      <div className="hidden sm:block">{new Date(version.createdAt).toLocaleDateString()} at {new Date(version.createdAt).toLocaleTimeString()}</div>
-                    </div>
-                    {index === 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        LATEST
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
