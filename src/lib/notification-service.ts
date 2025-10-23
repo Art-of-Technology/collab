@@ -97,18 +97,79 @@ export class NotificationService {
     content: string
   ): Promise<boolean> {
     try {
-      const last = await prisma.notification.findFirst({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-        select: { content: true },
-      });
-      return !!last && last.content === content;
+      const map = await this.getLatestNotificationContentByUserIds([userId]);
+      const lastContent = map.get(userId);
+      return !!lastContent && lastContent === content;
     } catch (error) {
       logger.error("Bounce check failed; proceeding without bounce", error, {
         userId,
       });
       return false;
     }
+  }
+
+  /**
+   * Returns a mapping from userId -> last notification content for the provided userIds,
+   * fetched efficiently using groupBy + a single follow-up query.
+   */
+  private static async getLatestNotificationContentByUserIds(
+    userIds: string[]
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (!userIds || userIds.length === 0) return result;
+
+    try {
+      const groups = await prisma.notification.groupBy({
+        by: ["userId"],
+        where: { userId: { in: userIds } },
+        _max: { createdAt: true },
+      });
+
+      const targets = groups
+        .filter((g) => !!g._max.createdAt)
+        .map((g) => ({ userId: g.userId, createdAt: g._max.createdAt as Date }));
+
+      if (targets.length === 0) return result;
+
+      const rows = await prisma.notification.findMany({
+        where: {
+          OR: targets.map((t) => ({ userId: t.userId, createdAt: t.createdAt })),
+        },
+        select: { userId: true, content: true, createdAt: true },
+      });
+
+      for (const row of rows) {
+        if (!result.has(row.userId)) {
+          result.set(row.userId, row.content);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      logger.error("Failed to fetch latest notifications in batch", error, {
+        userCount: userIds.length,
+      });
+      return result; // fail-open
+    }
+  }
+
+  /**
+   * Given userIds and a content, returns the set of userIds whose latest notification
+   * already has exactly the same content (i.e., should bounce).
+   */
+  private static async getBouncedUserIdsForContent(
+    userIds: string[],
+    content: string
+  ): Promise<Set<string>> {
+    const bounced = new Set<string>();
+    if (!userIds || userIds.length === 0) return bounced;
+
+    const latestMap = await this.getLatestNotificationContentByUserIds(userIds);
+    for (const userId of userIds) {
+      const last = latestMap.get(userId);
+      if (last !== undefined && last === content) bounced.add(userId);
+    }
+    return bounced;
   }
 
   /**
@@ -190,11 +251,14 @@ export class NotificationService {
       if (recipientIds.length === 0) return 0;
 
       // Bounce filter: skip users whose last notification has identical content
-      const bounceChecks = await Promise.all(
-        recipientIds.map((uid) => this.shouldBounceNotification(uid, content))
+      const bouncedSet = await this.getBouncedUserIdsForContent(
+        recipientIds,
+        content
       );
-      const dedupedRecipientIds = recipientIds.filter((_, idx) => !bounceChecks[idx]);
-        recipientIds.map((uid) => NotificationService.shouldBounceNotification(uid, content))
+      const dedupedRecipientIds = recipientIds.filter(
+        (uid) => !bouncedSet.has(uid)
+      );
+
       if (dedupedRecipientIds.length === 0) return 0;
 
       const data = dedupedRecipientIds.map((userId) => ({
@@ -257,15 +321,16 @@ export class NotificationService {
 
       // Filter followers based on their notification preferences
       const validNotifications = [];
+      // Precompute bounce info for all followerIds in one go
+      const followerIds = followers.map((f) => f.userId);
+      const bouncedSet = await this.getBouncedUserIdsForContent(
+        followerIds,
+        content
+      );
       for (const follower of followers) {
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, notificationType)) {
-          // Bounce check: skip if last notification content matches
-          const shouldBounce = await this.shouldBounceNotification(
-            follower.userId,
-            content
-          const shouldBounce = await NotificationService.shouldBounceNotification(
-          if (shouldBounce) continue;
+          if (bouncedSet.has(follower.userId)) continue;
           validNotifications.push({
             type: notificationType.toString(),
             content,
@@ -827,12 +892,16 @@ export class NotificationService {
           read: false,
         }));
 
-      // Bounce filter per user/content
-      const bounceChecks = await Promise.all(
-        notifications.map((n) => this.shouldBounceNotification(n.userId, n.content))
+      // Bounce filter per user/content (batch)
+      const bouncedSet = await this.getBouncedUserIdsForContent(
+        notifications.map((n) => n.userId),
+        // content is uniform per n due to safeContent-based string building
+        notifications[0]?.content ?? ""
       );
-      const dedupedNotifications = notifications.filter((_, idx) => !bounceChecks[idx]);
-        notifications.map((n) => NotificationService.shouldBounceNotification(n.userId, n.content))
+      const dedupedNotifications = notifications.filter(
+        (n) => !bouncedSet.has(n.userId)
+      );
+
       if (dedupedNotifications.length > 0) {
         await prisma.notification.createMany({ data: dedupedNotifications });
         logger.info("Task comment mention notifications created", {
@@ -1222,7 +1291,7 @@ export class NotificationService {
     if (await this.shouldBounceNotification(leaveRequest.userId, content)) {
       return;
     }
-    if (await NotificationService.shouldBounceNotification(leaveRequest.userId, content)) {
+
     // Create in-app notification
     await prisma.notification.create({
       data: {
@@ -1282,11 +1351,12 @@ export class NotificationService {
     );
 
     // Bounce filter recipients
-    const bounceChecks = await Promise.all(
-      recipientIds.map((uid) => this.shouldBounceNotification(uid, content))
+    const bouncedSet = await this.getBouncedUserIdsForContent(
+      recipientIds,
+      content
     );
-    const dedupedRecipientIds = recipientIds.filter((_, idx) => !bounceChecks[idx]);
-      recipientIds.map((uid) => NotificationService.shouldBounceNotification(uid, content))
+    const dedupedRecipientIds = recipientIds.filter((uid) => !bouncedSet.has(uid));
+
     if (dedupedRecipientIds.length === 0) return;
 
     // Create notifications for each manager
@@ -1359,11 +1429,9 @@ export class NotificationService {
     );
 
     // Bounce filter recipients
-    const bounceChecks = await Promise.all(
-      hrIds.map((uid) => this.shouldBounceNotification(uid, content))
-    );
-    const dedupedHrIds = hrIds.filter((_, idx) => !bounceChecks[idx]);
-      hrIds.map((uid) => NotificationService.shouldBounceNotification(uid, content))
+    const bouncedSet = await this.getBouncedUserIdsForContent(hrIds, content);
+    const dedupedHrIds = hrIds.filter((uid) => !bouncedSet.has(uid));
+
     if (dedupedHrIds.length === 0) return;
 
     // Create notifications for each HR person
