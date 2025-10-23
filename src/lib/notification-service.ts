@@ -912,11 +912,14 @@ export class NotificationService {
           read: false,
         }));
 
+      // Return early if there are no notifications to process
+      if (notifications.length === 0) return;
+
       // Bounce filter per user/content (batch)
       const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
         notifications.map((n) => n.userId),
         // content is uniform per n due to safeContent-based string building
-        notifications[0]?.content ?? ""
+        notifications[0].content
       );
       const dedupedNotifications = notifications.filter(
         (n) => !bouncedSet.has(n.userId)
