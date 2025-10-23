@@ -97,7 +97,7 @@ export class NotificationService {
     content: string
   ): Promise<boolean> {
     try {
-      const map = await this.getLatestNotificationContentByUserIds([userId]);
+      const map = await NotificationService.getLatestNotificationContentByUserIds([userId]);
       const lastContent = map.get(userId);
       return !!lastContent && lastContent === content;
     } catch (error) {
@@ -164,7 +164,7 @@ export class NotificationService {
     const bounced = new Set<string>();
     if (!userIds || userIds.length === 0) return bounced;
 
-    const latestMap = await this.getLatestNotificationContentByUserIds(userIds);
+    const latestMap = await NotificationService.getLatestNotificationContentByUserIds(userIds);
     for (const userId of userIds) {
       const last = latestMap.get(userId);
       if (last !== undefined && last === content) bounced.add(userId);
@@ -251,7 +251,7 @@ export class NotificationService {
       if (recipientIds.length === 0) return 0;
 
       // Bounce filter: skip users whose last notification has identical content
-      const bouncedSet = await this.getBouncedUserIdsForContent(
+      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
         recipientIds,
         content
       );
@@ -323,7 +323,7 @@ export class NotificationService {
       const validNotifications = [];
       // Precompute bounce info for all followerIds in one go
       const followerIds = followers.map((f) => f.userId);
-      const bouncedSet = await this.getBouncedUserIdsForContent(
+      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
         followerIds,
         content
       );
@@ -893,7 +893,7 @@ export class NotificationService {
         }));
 
       // Bounce filter per user/content (batch)
-      const bouncedSet = await this.getBouncedUserIdsForContent(
+      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
         notifications.map((n) => n.userId),
         // content is uniform per n due to safeContent-based string building
         notifications[0]?.content ?? ""
@@ -1288,7 +1288,7 @@ export class NotificationService {
     );
 
     // Bounce: skip if last notification matches
-    if (await this.shouldBounceNotification(leaveRequest.userId, content)) {
+    if (await NotificationService.shouldBounceNotification(leaveRequest.userId, content)) {
       return;
     }
 
@@ -1351,7 +1351,7 @@ export class NotificationService {
     );
 
     // Bounce filter recipients
-    const bouncedSet = await this.getBouncedUserIdsForContent(
+    const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
       recipientIds,
       content
     );
@@ -1429,7 +1429,7 @@ export class NotificationService {
     );
 
     // Bounce filter recipients
-    const bouncedSet = await this.getBouncedUserIdsForContent(hrIds, content);
+    const bouncedSet = await NotificationService.getBouncedUserIdsForContent(hrIds, content);
     const dedupedHrIds = hrIds.filter((uid) => !bouncedSet.has(uid));
 
     if (dedupedHrIds.length === 0) return;
