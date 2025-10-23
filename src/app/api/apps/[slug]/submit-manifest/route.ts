@@ -68,9 +68,15 @@ export async function POST(
     try {
       const manifestData = await fetchManifest(manifestUrl);
       manifest = validateAppManifest(manifestData);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let errorMessage = 'Unknown error';
+      if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+        errorMessage = (error as { message: string }).message;
+      } else {
+        errorMessage = String(error);
+      }
       return NextResponse.json(
-        { error: `Invalid manifest: ${error.message}` },
+        { error: `Invalid manifest: ${errorMessage}` },
         { status: 400 }
       );
     }

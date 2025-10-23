@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { PrismaClient } from '@prisma/client';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';
+import { isReservedSlug } from '@/lib/apps/validation';
 
 const prisma = new PrismaClient();
 
@@ -46,8 +47,9 @@ export async function POST(request: NextRequest) {
       .replace(/^-|-$/g, '');
 
     // Reserved slugs that cannot be used
-    const reservedSlugs = ['admin', 'api', 'auth', 'app', 'apps', 'dev', 'docs', 'home'];
-    if (reservedSlugs.includes(slug)) {
+    const reservedSlug = isReservedSlug(slug);
+    
+    if (reservedSlug) {
       return NextResponse.json(
         { error: `The slug "${slug}" is reserved and cannot be used` },
         { status: 400 }

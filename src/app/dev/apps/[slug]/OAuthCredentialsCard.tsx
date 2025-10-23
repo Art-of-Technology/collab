@@ -152,6 +152,14 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                     <div className="flex items-center justify-center h-10 border rounded-md">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     </div>
+                  ) : oauthClient.secretRevealed ? (
+                    <Input
+                      id="clientSecret"
+                      value={clientSecret ? `****${clientSecret.slice(-4)}` : '••••••••••••••••'}
+                      readOnly
+                      className="font-mono text-xs sm:text-sm"
+                      type="text"
+                    />
                   ) : (
                     <>
                       <Input
@@ -161,7 +169,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                         className="font-mono text-xs sm:text-sm pr-8 sm:pr-10"
                         type={showClientSecret ? "text" : "password"}
                       />
-                      {clientSecret && !oauthClient.secretRevealed && (
+                      {clientSecret && (
                         <Button
                           variant="ghost"
                           size="sm"
