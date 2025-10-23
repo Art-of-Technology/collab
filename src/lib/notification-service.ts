@@ -143,15 +143,27 @@ export class NotificationService {
           userId: { in: targets.map((t) => t.userId) },
           createdAt: { in: targets.map((t) => t.createdAt) },
         },
-        select: { userId: true, content: true, createdAt: true },
+        select: { userId: true, content: true, createdAt: true, id: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       });
 
       for (const row of rows) {
-        if (!result.has(row.userId)) {
+        // If multiple notifications have the same createdAt, pick the one with the highest id
+        if (
+          !result.has(row.userId) ||
+          (result.has(row.userId) && row.id > (result.get(row.userId + "_id") ?? -1))
+        ) {
           result.set(row.userId, row.content);
+          result.set(row.userId + "_id", row.id);
         }
       }
 
+      // Remove temporary "_id" keys before returning
+      for (const key of Array.from(result.keys())) {
+        if (key.endsWith("_id")) {
+          result.delete(key);
+        }
+      }
       return result;
     } catch (error) {
       logger.error("Failed to fetch latest notifications in batch", error, {
