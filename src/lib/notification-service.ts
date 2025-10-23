@@ -1222,7 +1222,7 @@ export class NotificationService {
     if (await this.shouldBounceNotification(leaveRequest.userId, content)) {
       return;
     }
-
+    if (await NotificationService.shouldBounceNotification(leaveRequest.userId, content)) {
     // Create in-app notification
     await prisma.notification.create({
       data: {
