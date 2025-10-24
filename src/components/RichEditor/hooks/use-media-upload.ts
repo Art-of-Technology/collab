@@ -30,7 +30,6 @@ export function useMediaUpload(editor: Editor | null) {
       const videoUrl = await handleVideoUpload(file);
       
       // Insert video at current cursor position
-      // @ts-ignore - Custom command from ResizableVideoExtension
       editor.chain().focus().setVideo({ src: videoUrl }).run();
     } catch (error) {
       console.error('Failed to upload video:', error);
@@ -47,7 +46,6 @@ export function useMediaUpload(editor: Editor | null) {
 
   const insertVideoFromUrl = useCallback((url: string) => {
     if (!editor) return;
-    // @ts-ignore - Custom command from ResizableVideoExtension
     editor.chain().focus().setVideo({ src: url }).run();
   }, [editor]);
 
