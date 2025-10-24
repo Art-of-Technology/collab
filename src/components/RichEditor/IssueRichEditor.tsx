@@ -525,9 +525,9 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle scroll events to update floating menu position
+  // Handle scroll events to update floating menu and AI improve popup positions
   useEffect(() => {
-    if (!showFloatingMenu || !enableFloatingMenu) return;
+    if ((!showFloatingMenu && !showImprovePopover) || !enableFloatingMenu) return;
 
     const handleScroll = () => {
       const editor = editorRef.current?.getEditor();
@@ -535,7 +535,42 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
 
       const { from, to, empty } = editor.state.selection;
       if (!empty && from !== to) {
-        updateFloatingMenuPosition(editor, from);
+        if (showFloatingMenu) {
+          updateFloatingMenuPosition(editor, from);
+        }
+        
+        if (showImprovePopover && savedSelection) {
+          const coords = editor.view.coordsAtPos(savedSelection.from);
+          const selectionWidth = coords.right - coords.left;
+          const popoverHeight = 192;
+          const basePopoverWidth = 288;
+          const viewportPadding = 8;
+          const popoverGap = 8;
+          
+          const popoverWidth = Math.min(basePopoverWidth, window.innerWidth - (viewportPadding * 2));
+          
+          let top = coords.bottom + popoverGap;
+          let left = coords.left + (selectionWidth / 2) - (popoverWidth / 2);
+          
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          
+          if (left < viewportPadding) {
+            left = viewportPadding;
+          } else if (left + popoverWidth > viewportWidth - viewportPadding) {
+            left = viewportWidth - popoverWidth - viewportPadding;
+          }
+          
+          if (top + popoverHeight > viewportHeight - viewportPadding) {
+            top = coords.top - popoverHeight - popoverGap;
+          }
+          
+          if (top < viewportPadding) {
+            top = viewportPadding;
+          }
+
+          setImprovePosition({ top, left });
+        }
       }
     };
 
@@ -567,7 +602,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
         }
       }
     };
-  }, [showFloatingMenu, enableFloatingMenu, updateFloatingMenuPosition]);
+  }, [showFloatingMenu, showImprovePopover, enableFloatingMenu, updateFloatingMenuPosition, savedSelection]);
 
   // Handle AI improve events - set up listeners when editor is ready
   useEffect(() => {
@@ -598,13 +633,37 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
         setIsImproving(false);
         setShowFloatingMenu(false); // Hide floating menu when showing popover
 
-        // Calculate position for the popover
         if (eventSavedSelection) {
           const coords = editor.view.coordsAtPos(eventSavedSelection.from);
-          setImprovePosition({
-            top: coords.top - 100,
-            left: coords.left,
-          });
+          const selectionWidth = coords.right - coords.left;
+          const popoverHeight = 192;
+          const basePopoverWidth = 288;
+          const viewportPadding = 8;
+          const popoverGap = 8;
+          
+          const popoverWidth = Math.min(basePopoverWidth, window.innerWidth - (viewportPadding * 2));
+          
+          let top = coords.bottom + popoverGap;
+          let left = coords.left + (selectionWidth / 2) - (popoverWidth / 2);
+          
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          
+          if (left < viewportPadding) {
+            left = viewportPadding;
+          } else if (left + popoverWidth > viewportWidth - viewportPadding) {
+            left = viewportWidth - popoverWidth - viewportPadding;
+          }
+          
+          if (top + popoverHeight > viewportHeight - viewportPadding) {
+            top = coords.top - popoverHeight - popoverGap;
+          }
+          
+          if (top < viewportPadding) {
+            top = viewportPadding;
+          }
+
+          setImprovePosition({ top, left });
         }
 
         setShowImprovePopover(true);
