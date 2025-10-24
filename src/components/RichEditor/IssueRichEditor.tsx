@@ -571,12 +571,12 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     // Also listen for scroll events on scrollable containers within the editor
     const editorElement = editorRef.current?.getEditor()?.view.dom;
     if (editorElement) {
-      const scrollContainers = editorElement.closest('.overflow-y-auto') || 
-                               editorElement.closest('.overflow-auto') ||
-                               editorElement.closest('[data-scroll-container]');
+      const scrollContainer = editorElement.closest('.overflow-y-auto') || 
+                              editorElement.closest('.overflow-auto') ||
+                              editorElement.closest('[data-scroll-container]');
       
-      if (scrollContainers) {
-        scrollContainers.addEventListener('scroll', handleScroll, { passive: true });
+      if (scrollContainer) {
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
       }
     }
 
@@ -584,12 +584,12 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       window.removeEventListener('scroll', handleScroll);
       const editorElement = editorRef.current?.getEditor()?.view.dom;
       if (editorElement) {
-        const scrollContainers = editorElement.closest('.overflow-y-auto') || 
-                                 editorElement.closest('.overflow-auto') ||
-                                 editorElement.closest('[data-scroll-container]');
+        const scrollContainer = editorElement.closest('.overflow-y-auto') || 
+                               editorElement.closest('.overflow-auto') ||
+                               editorElement.closest('[data-scroll-container]');
         
-        if (scrollContainers) {
-          scrollContainers.removeEventListener('scroll', handleScroll);
+        if (scrollContainer) {
+          scrollContainer.removeEventListener('scroll', handleScroll);
         }
       }
     };
