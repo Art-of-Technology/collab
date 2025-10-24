@@ -260,6 +260,41 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     }
   }, []);
 
+  const updateFloatingMenuPosition = useCallback((editor: any, from: number) => {
+    if (!enableFloatingMenu || !editor) return;
+
+    const coords = editor.view.coordsAtPos(from);
+    const selectionWidth = coords.right - coords.left;
+    const menuHeight = 40;
+    const baseMenuWidth = 400;
+    const viewportPadding = 8;
+    const menuGap = 8;
+    
+    const menuWidth = Math.min(baseMenuWidth, window.innerWidth - (viewportPadding * 2));
+    
+    let top = coords.top - menuHeight - menuGap;
+    let left = coords.left + (selectionWidth / 2) - (menuWidth / 2);
+    
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    if (left < viewportPadding) {
+      left = viewportPadding;
+    } else if (left + menuWidth > viewportWidth - viewportPadding) {
+      left = viewportWidth - menuWidth - viewportPadding;
+    }
+    
+    if (top < viewportPadding) {
+      top = coords.bottom + menuGap;
+    }
+    
+    if (top + menuHeight > viewportHeight - viewportPadding) {
+      top = viewportHeight - menuHeight - viewportPadding;
+    }
+
+    setFloatingMenuPosition({ top, left });
+  }, [enableFloatingMenu]);
+
   // Handle floating menu for text selection
   const handleSelectionUpdate = useCallback((editor: any) => {
     if (!enableFloatingMenu) return;
@@ -270,27 +305,14 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       const selectedText = editor.state.doc.textBetween(from, to, ' ');
       if (selectedText.trim().length > 0) {
         setTimeout(() => {
-          const coords = editor.view.coordsAtPos(from);
-
-          // Account for any scrollable containers
-          const scrollContainer = editor.view.dom.closest('.overflow-y-auto');
-          let scrollTop = 0;
-          if (scrollContainer) {
-            scrollTop = scrollContainer.scrollTop;
-          }
-
-          // Use viewport coordinates for a fixed-position, portaled menu
-          setFloatingMenuPosition({
-            top: Math.max(8, coords.top - 60 - scrollTop),
-            left: Math.max(8, coords.left - 100),
-          });
+          updateFloatingMenuPosition(editor, from);
           setShowFloatingMenu(true);
         }, 10);
       }
     } else {
       setShowFloatingMenu(false);
     }
-  }, [enableFloatingMenu]);
+  }, [enableFloatingMenu, updateFloatingMenuPosition]);
 
   // Handle AI improve
   const handleAiImprove = useCallback(() => {
@@ -502,6 +524,50 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Handle scroll events to update floating menu position
+  useEffect(() => {
+    if (!showFloatingMenu || !enableFloatingMenu) return;
+
+    const handleScroll = () => {
+      const editor = editorRef.current?.getEditor();
+      if (!editor) return;
+
+      const { from, to, empty } = editor.state.selection;
+      if (!empty && from !== to) {
+        updateFloatingMenuPosition(editor, from);
+      }
+    };
+
+    // Add scroll listeners to window and any scrollable containers
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Also listen for scroll events on scrollable containers within the editor
+    const editorElement = editorRef.current?.getEditor()?.view.dom;
+    if (editorElement) {
+      const scrollContainers = editorElement.closest('.overflow-y-auto') || 
+                               editorElement.closest('.overflow-auto') ||
+                               editorElement.closest('[data-scroll-container]');
+      
+      if (scrollContainers) {
+        scrollContainers.addEventListener('scroll', handleScroll, { passive: true });
+      }
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      const editorElement = editorRef.current?.getEditor()?.view.dom;
+      if (editorElement) {
+        const scrollContainers = editorElement.closest('.overflow-y-auto') || 
+                                 editorElement.closest('.overflow-auto') ||
+                                 editorElement.closest('[data-scroll-container]');
+        
+        if (scrollContainers) {
+          scrollContainers.removeEventListener('scroll', handleScroll);
+        }
+      }
+    };
+  }, [showFloatingMenu, enableFloatingMenu, updateFloatingMenuPosition]);
 
   // Handle AI improve events - set up listeners when editor is ready
   useEffect(() => {
