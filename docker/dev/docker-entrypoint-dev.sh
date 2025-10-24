@@ -1,35 +1,21 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting Collab in Development Mode..."
+echo "🚀 Starting Collab in Development Mode (Production Build)..."
 
-# Wait for database to be ready
-echo "⏳ Waiting for database connection..."
-until npx prisma db push --accept-data-loss 2>/dev/null; do
-  echo "Database is unavailable - sleeping"
-  sleep 2
-done
-
-echo "✅ Database is ready!"
-
-# Run database migrations
-echo "🔄 Running database migrations..."
-npx prisma migrate deploy
-
-# Generate Prisma client (ensure it's up to date)
-echo "🔧 Generating Prisma client..."
-npx prisma generate
+# Prisma client was already generated during build
+echo "✅ Prisma client ready (generated during build)"
 
 # Auto-seed database in development if SEED_DATABASE is true
 if [ "$SEED_DATABASE" = "true" ]; then
-  echo "🌱 Seeding database for development..."
+  echo "🌱 Seeding development database..."
   npm run prisma:init-workspace || echo "⚠️  Workspace initialization completed or already exists"
 fi
 
-echo "🏢 Starting Collab development server with hot-reload..."
-echo "🔗 Application will be available at: http://localhost:3000"
-echo "🐛 Debugger available at: chrome://inspect (port 9229)"
+echo "🏢 Starting Collab development server (optimized build)..."
+echo "🔗 Application running on: http://localhost:3000"
+echo "💡 Development Environment - Built for performance"
+echo "⚡ Note: Changes require rebuild. Use 'make dev-restart' to apply code changes."
 
-# Start Next.js in development mode with debugging enabled
-exec npm run dev
-
+# Start the Next.js application (using the optimized standalone build)
+exec node server.js
