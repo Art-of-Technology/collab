@@ -265,21 +265,6 @@ export default function ListViewRenderer({
   }, [issues, selectedFilters, displaySettings]);
 
   // Handlers
-  const handleIssueClick = (issueIdOrKey: string) => {
-    // Navigate directly to the issue page (Linear-style)
-    // Use workspace slug if available, else id; fallback to issue's workspaceId
-    const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
-    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
-    
-    // Build URL with view context for proper back navigation
-    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
-    
-    if (workspaceSegment) {
-      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
-    } else {
-      router.push(`/issues/${issueIdOrKey}${viewParams}`);
-    }
-  };
 
   const handleGroupToggle = (groupKey: string) => {
     setCollapsedGroups(prev => {
@@ -380,23 +365,34 @@ export default function ListViewRenderer({
   };
 
   // Issue Row Component - Mobile-first responsive design
-  const IssueRow = ({ issue }: { issue: Issue }) => (
-    <div 
-      className={cn(
-        "group relative cursor-pointer transition-all duration-200",
-        // Mobile-first: Card-like design with glassmorphism
-        "mx-3 mb-3 p-4 rounded-xl",
-        "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
-        "border border-white/10 hover:border-white/20",
-        // Desktop: More compact list style
-        "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
-        "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]",
-        hoveredIssueId === issue.id && "md:bg-[#0f1011]"
-      )}
-      onMouseEnter={() => setHoveredIssueId(issue.id)}
-      onMouseLeave={() => setHoveredIssueId(null)}
-      onClick={() => handleIssueClick(issue.issueKey || issue.id)}
-    >
+  const IssueRow = ({ issue }: { issue: Issue }) => {
+    // Build URL for the issue
+    const issueIdOrKey = issue.issueKey || issue.id;
+    const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
+    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
+    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
+    const issueUrl = workspaceSegment 
+      ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
+      : `/issues/${issueIdOrKey}${viewParams}`;
+
+    return (
+      <a 
+        href={issueUrl}
+        rel="noopener noreferrer"
+        className={cn(
+          "group relative cursor-pointer transition-all duration-200 block",
+          // Mobile-first: Card-like design with glassmorphism
+          "mx-3 mb-3 p-4 rounded-xl",
+          "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
+          "border border-white/10 hover:border-white/20",
+          // Desktop: More compact list style
+          "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
+          "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]",
+          hoveredIssueId === issue.id && "md:bg-[#0f1011]"
+        )}
+        onMouseEnter={() => setHoveredIssueId(issue.id)}
+        onMouseLeave={() => setHoveredIssueId(null)}
+      >
       {/* Mobile Layout */}
       <div className="md:hidden">
         <div className="flex items-start justify-between mb-2">
@@ -635,8 +631,9 @@ export default function ListViewRenderer({
           </div>
         )}
       </div>
-    </div>
+    </a>
   );
+};
 
   // Calculate total issues count
   const totalIssues = groupedIssues.reduce((sum, group) => sum + group.count, 0);
@@ -707,4 +704,4 @@ export default function ListViewRenderer({
 
     </div>
   );
-} 
+}
