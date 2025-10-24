@@ -35,7 +35,6 @@ services:
       # UAT URLs
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
-      NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
       
       # External Services (UAT/Staging keys)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
