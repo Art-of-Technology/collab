@@ -260,40 +260,59 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     }
   }, []);
 
-  const updateFloatingMenuPosition = useCallback((editor: any, from: number) => {
-    if (!enableFloatingMenu || !editor) return;
-
+  const calculateElementPosition = useCallback((
+    editor: any,
+    from: number,
+    elementHeight: number,
+    elementWidth: number,
+    positionAbove: boolean = true
+  ) => {
     const coords = editor.view.coordsAtPos(from);
     const selectionWidth = coords.right - coords.left;
-    const menuHeight = 40;
-    const baseMenuWidth = 400;
     const viewportPadding = 8;
-    const menuGap = 8;
+    const elementGap = 8;
     
-    const menuWidth = Math.min(baseMenuWidth, window.innerWidth - (viewportPadding * 2));
+    const finalWidth = Math.min(elementWidth, window.innerWidth - (viewportPadding * 2));
     
-    let top = coords.top - menuHeight - menuGap;
-    let left = coords.left + (selectionWidth / 2) - (menuWidth / 2);
+    let top = positionAbove 
+      ? coords.top - elementHeight - elementGap
+      : coords.bottom + elementGap;
+    let left = coords.left + (selectionWidth / 2) - (finalWidth / 2);
     
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
     if (left < viewportPadding) {
       left = viewportPadding;
-    } else if (left + menuWidth > viewportWidth - viewportPadding) {
-      left = viewportWidth - menuWidth - viewportPadding;
+    } else if (left + finalWidth > viewportWidth - viewportPadding) {
+      left = viewportWidth - finalWidth - viewportPadding;
     }
     
-    if (top < viewportPadding) {
-      top = coords.bottom + menuGap;
-    }
-    
-    if (top + menuHeight > viewportHeight - viewportPadding) {
-      top = viewportHeight - menuHeight - viewportPadding;
+    if (positionAbove) {
+      if (top < viewportPadding) {
+        top = coords.bottom + elementGap;
+      }
+      if (top + elementHeight > viewportHeight - viewportPadding) {
+        top = viewportHeight - elementHeight - viewportPadding;
+      }
+    } else {
+      if (top + elementHeight > viewportHeight - viewportPadding) {
+        top = coords.top - elementHeight - elementGap;
+      }
+      if (top < viewportPadding) {
+        top = viewportPadding;
+      }
     }
 
-    setFloatingMenuPosition({ top, left });
-  }, [enableFloatingMenu]);
+    return { top, left };
+  }, []);
+
+  const updateFloatingMenuPosition = useCallback((editor: any, from: number) => {
+    if (!enableFloatingMenu || !editor) return;
+
+    const position = calculateElementPosition(editor, from, 40, 400, true);
+    setFloatingMenuPosition(position);
+  }, [enableFloatingMenu, calculateElementPosition]);
 
   // Handle floating menu for text selection
   const handleSelectionUpdate = useCallback((editor: any) => {
@@ -540,36 +559,8 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
         }
         
         if (showImprovePopover && savedSelection) {
-          const coords = editor.view.coordsAtPos(savedSelection.from);
-          const selectionWidth = coords.right - coords.left;
-          const popoverHeight = 192;
-          const basePopoverWidth = 288;
-          const viewportPadding = 8;
-          const popoverGap = 8;
-          
-          const popoverWidth = Math.min(basePopoverWidth, window.innerWidth - (viewportPadding * 2));
-          
-          let top = coords.bottom + popoverGap;
-          let left = coords.left + (selectionWidth / 2) - (popoverWidth / 2);
-          
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
-          
-          if (left < viewportPadding) {
-            left = viewportPadding;
-          } else if (left + popoverWidth > viewportWidth - viewportPadding) {
-            left = viewportWidth - popoverWidth - viewportPadding;
-          }
-          
-          if (top + popoverHeight > viewportHeight - viewportPadding) {
-            top = coords.top - popoverHeight - popoverGap;
-          }
-          
-          if (top < viewportPadding) {
-            top = viewportPadding;
-          }
-
-          setImprovePosition({ top, left });
+          const position = calculateElementPosition(editor, savedSelection.from, 192, 288, false);
+          setImprovePosition(position);
         }
       }
     };
@@ -634,36 +625,8 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
         setShowFloatingMenu(false); // Hide floating menu when showing popover
 
         if (eventSavedSelection) {
-          const coords = editor.view.coordsAtPos(eventSavedSelection.from);
-          const selectionWidth = coords.right - coords.left;
-          const popoverHeight = 192;
-          const basePopoverWidth = 288;
-          const viewportPadding = 8;
-          const popoverGap = 8;
-          
-          const popoverWidth = Math.min(basePopoverWidth, window.innerWidth - (viewportPadding * 2));
-          
-          let top = coords.bottom + popoverGap;
-          let left = coords.left + (selectionWidth / 2) - (popoverWidth / 2);
-          
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
-          
-          if (left < viewportPadding) {
-            left = viewportPadding;
-          } else if (left + popoverWidth > viewportWidth - viewportPadding) {
-            left = viewportWidth - popoverWidth - viewportPadding;
-          }
-          
-          if (top + popoverHeight > viewportHeight - viewportPadding) {
-            top = coords.top - popoverHeight - popoverGap;
-          }
-          
-          if (top < viewportPadding) {
-            top = viewportPadding;
-          }
-
-          setImprovePosition({ top, left });
+          const position = calculateElementPosition(editor, eventSavedSelection.from, 192, 288, false);
+          setImprovePosition(position);
         }
 
         setShowImprovePopover(true);
