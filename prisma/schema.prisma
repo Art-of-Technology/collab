@@ -2273,9 +2273,9 @@ model App {
   name            String
   slug            String   @unique
   iconUrl         String?
-  manifestUrl     String
+  manifestUrl     String?  // Optional for DRAFT apps, required when publishing
   publisherId     String  // user/org
-  status          AppStatus @default(IN_REVIEW)
+  status          AppStatus @default(DRAFT)  // Changed default from IN_REVIEW to DRAFT
   latestVersionId String?
   versions        AppVersion[]
   visibility      AppVisibility @default(PUBLIC)

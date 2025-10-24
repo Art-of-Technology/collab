@@ -48,13 +48,6 @@ export async function POST(
       return NextResponse.json({ error: 'No client secret available' }, { status: 404 });
     }
 
-    // Check if secret has already been revealed
-    if (app.oauthClient.secretRevealed) {
-      return NextResponse.json({ 
-        error: 'Client secret has already been revealed and cannot be shown again for security reasons' 
-      }, { status: 403 });
-    }
-
     try {
       // Decrypt the client secret
       const decryptedSecret = await decryptToken(Buffer.from(app.oauthClient.clientSecret));

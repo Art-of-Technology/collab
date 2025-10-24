@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,13 +29,14 @@ interface RevealSecretResponse {
 interface OAuthCredentialsCardProps {
   oauthClient: OAuthClient;
   appId: string;
+  appStatus: string;
 }
 
-export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCardProps) {
+export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCredentialsCardProps) {
   const [showClientSecret, setShowClientSecret] = useState(false);
   const [copied, setCopied] = useState('');
-  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
-  const [isRevealing, setIsRevealing] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   const handleCopyToClipboard = async (text: string, label: string) => {
@@ -55,13 +56,8 @@ export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCar
     return value;
   };
 
-  const isConfidential = oauthClient.clientType === 'confidential';
-  const hasSecretBeenRevealed = oauthClient.secretRevealed || revealedSecret !== null;
-
-  const revealClientSecret = async () => {
-    if (isRevealing || hasSecretBeenRevealed) return;
-
-    setIsRevealing(true);
+  const fetchClientSecret = useCallback(async () => {
+    setIsLoading(true);
     try {
       const response = await fetch(`/api/apps/by-id/${appId}/reveal-secret`, {
         method: 'POST',
@@ -73,27 +69,27 @@ export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCar
       const data: RevealSecretResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to reveal client secret');
+        throw new Error(data.error || 'Failed to fetch client secret');
       }
 
       if (data.success && data.clientSecret) {
-        setRevealedSecret(data.clientSecret);
-        toast({
-          title: 'Client Secret Revealed',
-          description: data.warning || 'Client secret revealed successfully. This is the only time it will be shown.',
-        });
+        setClientSecret(data.clientSecret);
       }
     } catch (error) {
-      console.error('Error revealing client secret:', error);
+      console.error('Error fetching client secret:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to reveal client secret',
+        description: error instanceof Error ? error.message : 'Failed to fetch client secret',
         variant: 'destructive',
       });
     } finally {
-      setIsRevealing(false);
+      setIsLoading(false);
     }
-  };
+  }, [appId, toast]);
+
+  useEffect(() => {
+    fetchClientSecret();
+  }, [fetchClientSecret]);
 
   return (
     <Card>
@@ -103,18 +99,18 @@ export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCar
           OAuth Credentials
         </CardTitle>
         <CardDescription className="text-xs sm:text-sm">
-          Use these credentials in your app's OAuth configuration
+          {appStatus === 'DRAFT' 
+            ? 'Use these credentials to develop and test your app' 
+            : 'Use these credentials in your app\'s OAuth configuration'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 sm:space-y-6">
-        {isConfidential && (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription className="text-xs sm:text-sm">
-              <strong>Important:</strong> Store these credentials securely. The client secret should not be exposed in client-side code.
-            </AlertDescription>
-          </Alert>
-        )}
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="text-xs sm:text-sm">
+            <strong>Important:</strong> Store these credentials securely. The client secret should not be exposed in client-side code. Once revealed, it will not be shown again.
+          </AlertDescription>
+        </Alert>
 
         <div className="grid gap-4 sm:gap-6">
           {/* Client ID */}
@@ -145,54 +141,41 @@ export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCar
             </p>
           </div>
 
-          {/* Client Secret - only show for confidential clients */}
-          {isConfidential && (
+          {/* Client Secret */}
+          <div className="space-y-2">
+            <Label htmlFor="clientSecret" className="text-xs sm:text-sm font-medium">Client Secret</Label>
+            
             <div className="space-y-2">
-              <Label htmlFor="clientSecret" className="text-xs sm:text-sm font-medium">Client Secret</Label>
-              
-              {!hasSecretBeenRevealed ? (
-                <div className="space-y-3">
-                  <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription className="text-xs sm:text-sm">
-                      <strong>Security Notice:</strong> The client secret can only be revealed once for security reasons. Make sure you're ready to copy and store it securely.
-                    </AlertDescription>
-                  </Alert>
-                  <Button
-                    onClick={revealClientSecret}
-                    disabled={isRevealing}
-                    className="w-full"
-                  >
-                    {isRevealing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Revealing Secret...
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4 mr-2" />
-                        Reveal Client Secret (One Time Only)
-                      </>
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1 min-w-0">
+              <div className="flex gap-2">
+                <div className="relative flex-1 min-w-0">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-10 border rounded-md">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : oauthClient.secretRevealed ? (
+                    <Input
+                      id="clientSecret"
+                      value={clientSecret ? `****${clientSecret.slice(-4)}` : '••••••••••••••••'}
+                      readOnly
+                      className="font-mono text-xs sm:text-sm"
+                      type="text"
+                    />
+                  ) : (
+                    <>
                       <Input
                         id="clientSecret"
-                        value={revealedSecret ? maskValue(revealedSecret, showClientSecret) : '••••••••••••••••'}
+                        value={clientSecret ? maskValue(clientSecret, showClientSecret) : '••••••••••••••••'}
                         readOnly
                         className="font-mono text-xs sm:text-sm pr-8 sm:pr-10"
                         type={showClientSecret ? "text" : "password"}
                       />
-                      {revealedSecret && (
+                      {clientSecret && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 sm:h-8 sm:w-8"
                           onClick={() => setShowClientSecret(!showClientSecret)}
+                          aria-label={showClientSecret ? "Hide client secret" : "Show client secret"}
                         >
                           {showClientSecret ? (
                             <EyeOff className="h-3 w-3" />
@@ -201,42 +184,38 @@ export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCar
                           )}
                         </Button>
                       )}
-                    </div>
-                    {revealedSecret && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCopyToClipboard(revealedSecret, 'Client Secret')}
-                        className="flex-shrink-0"
-                      >
-                        {copied === 'Client Secret' ? (
-                          <Check className="h-3 w-3 sm:h-4 sm:w-4" />
-                        ) : (
-                          <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                  {revealedSecret ? (
-                    <p className="text-xs text-muted-foreground">
-                      Secret key for OAuth authentication (keep confidential)
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground text-orange-600">
-                      Client secret has been revealed previously and cannot be shown again for security reasons.
-                    </p>
+                    </>
                   )}
                 </div>
+                {clientSecret && !isLoading && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopyToClipboard(clientSecret, 'Client Secret')}
+                    className="flex-shrink-0"
+                  >
+                    {copied === 'Client Secret' ? (
+                      <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                    ) : (
+                      <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              {isLoading ? (
+                <p className="text-xs text-muted-foreground">
+                  Loading client secret...
+                </p>
+              ) : oauthClient.secretRevealed ? (
+                <p className="text-xs text-muted-foreground text-orange-600">
+                  Client secret has been revealed previously and cannot be shown again for security reasons.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Secret key for OAuth authentication (keep confidential). Click the eye icon to reveal.
+                </p>
               )}
             </div>
-          )}
-
-          {/* Client Type */}
-          <div className="space-y-2">
-            <div className="text-xs sm:text-sm font-medium text-muted-foreground">Client Type</div>
-            <Badge variant="outline" className="text-xs capitalize">
-              {oauthClient.clientType || 'public'}
-            </Badge>
           </div>
 
           {/* Redirect URIs */}
@@ -259,7 +238,7 @@ export function OAuthCredentialsCard({ oauthClient, appId }: OAuthCredentialsCar
           <h4 className="font-medium text-xs sm:text-sm mb-2">Usage in your app:</h4>
           <ol className="text-xs sm:text-sm text-muted-foreground space-y-1 list-decimal list-inside">
             <li>Use the Client ID in your OAuth authorization requests</li>
-            {isConfidential && <li>Use the Client Secret for token exchange (server-side only)</li>}
+            <li>Use the Client Secret for token exchange (server-side only)</li>
             <li>Ensure your redirect URIs match those configured above</li>
             <li>Request only the scopes your app needs</li>
           </ol>
