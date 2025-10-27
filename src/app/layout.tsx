@@ -45,8 +45,6 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Critical CSS is automatically handled by Next.js */}
-        
         {/* Preload Logo */}
         <link rel="preload" href="/logo-text.svg" as="image" />
         

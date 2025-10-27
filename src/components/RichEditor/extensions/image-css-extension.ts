@@ -17,18 +17,19 @@ const imageCSS = `
   border-radius: 4px;
   box-shadow: 0 1px 3px hsl(var(--foreground) / 0.1);
   border: 1px solid hsl(var(--border) / 0.5);
+  margin:0;
 }
 .image-resizable-container:hover .resizable-image {
   filter: brightness(0.98);
   box-shadow: 0 2px 8px hsl(var(--foreground) / 0.15);
-  border-color: hsl(var(--primary) / 0.3);
+  border-color: hsl(var(--foreground) / 0.3);
 }
 .resize-handle {
   position: absolute;
   width: 9px;
   height: 9px;
   background-color: hsl(var(--background));
-  border: 1.5px solid hsl(var(--primary) / 0.8);
+  border: 1.5px solid hsl(var(--foreground) / 0.8);
   border-radius: 50%;
   z-index: 2;
   opacity: 0;
@@ -41,13 +42,13 @@ const imageCSS = `
   transform: scale(1);
 }
 .resize-handle:hover {
-  background-color: hsl(var(--primary) / 0.9);
+  background-color: hsl(var(--foreground) / 0.9);
   border-color: hsl(var(--background));
-  transform: scale(1.2);
+  transform: scale(1.1);
 }
 .resize-handle:active {
-  background-color: hsl(var(--primary));
-  transform: scale(1.3);
+  background-color: hsl(var(--foreground));
+  transform: scale(1.2);
 }
 .image-tooltip {
   position: absolute;

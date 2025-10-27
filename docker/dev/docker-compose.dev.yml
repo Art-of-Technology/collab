@@ -6,6 +6,19 @@ services:
     build:
       context: ../../
       dockerfile: docker/dev/Dockerfile.dev
+      # Pass all NEXT_PUBLIC_ variables as build args
+      args:
+        # All environment variables from .env are available here
+        # We explicitly list NEXT_PUBLIC_ ones for the build
+        NEXT_PUBLIC_APP_URL: http://localhost:3000
+        NEXT_PUBLIC_API_URL: http://localhost:3000/api
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+        NEXT_PUBLIC_HOCUSPOCUS_URL: ${NEXT_PUBLIC_HOCUSPOCUS_URL}
+        NEXT_PUBLIC_ONESIGNAL_APP_ID: ${NEXT_PUBLIC_ONESIGNAL_APP_ID_DEV}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+        NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
+        # Database URL needed for Prisma generate during build
+        DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
     environment:
       # External Database Configuration (NeonDB)
@@ -63,6 +76,19 @@ services:
       # Security & Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       
+      # Collab Apps Store
+      AS_ISSUER: ${AS_ISSUER}
+      APP_TOKENS_KEY: ${APP_TOKENS_KEY}
+      NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
+      
+      # Content Security Policy
+      CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-1}
+      CSP_SCRIPT_SRC: ${CSP_SCRIPT_SRC}
+      CSP_STYLE_SRC: ${CSP_STYLE_SRC}
+      CSP_IMG_SRC: ${CSP_IMG_SRC}
+      CSP_FRAME_ANCESTORS: ${CSP_FRAME_ANCESTORS}
+      CSP_FRAME_SRC: ${CSP_FRAME_SRC}
+      
       # Auto-seed database in development
       SEED_DATABASE: true
       
@@ -71,32 +97,12 @@ services:
       
     ports:
       - "3000:3000"
-      - "9229:9229"  # Node.js debugger port
     volumes:
-      # Mount source code for hot-reload
-      - ../../:/app
-      - /app/node_modules
-      - /app/.next
       # Mount uploads and logs as named volumes  
       - dev_uploads:/app/uploads
       - dev_logs:/app/logs
     networks:
       - collab-dev-network
-    # Override command for development - fix permissions and start
-    user: root
-    entrypoint: ["sh", "-c"]
-    command: |
-      "echo '🚀 Starting Collab Development...' &&
-       echo '🔧 Fixing permissions for Next.js directories and files...' &&
-       mkdir -p .next && chown -R nextjs:nodejs .next &&
-       chown nextjs:nodejs /app/next-env.d.ts 2>/dev/null || touch /app/next-env.d.ts && chown nextjs:nodejs /app/next-env.d.ts &&
-       chown nextjs:nodejs /app/tsconfig.json 2>/dev/null || true &&
-       chown -R nextjs:nodejs /app/uploads || true &&
-       chown -R nextjs:nodejs /app/logs || true &&
-       echo '🔧 Switching to nextjs user and generating Prisma client...' &&
-       su -s /bin/sh nextjs -c 'npx prisma generate' &&
-       echo '🏢 Starting development server as nextjs user...' &&
-       exec su -s /bin/sh nextjs -c 'npm run dev'"
 
   # Redis Commander - View/manage Redis keys, memory usage, performance
   redis-commander-dev:

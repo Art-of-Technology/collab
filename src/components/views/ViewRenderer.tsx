@@ -197,14 +197,6 @@ export default function ViewRenderer({
   const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
   const [recentIssueCreated, setRecentIssueCreated] = useState(false);
 
-  // Reset recentIssueCreated flag after a delay
-  useEffect(() => {
-    if (recentIssueCreated) {
-      const timeout = setTimeout(() => setRecentIssueCreated(false), 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [recentIssueCreated]);
-
   // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
     view.id,

@@ -81,6 +81,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // If workspaceId is provided, validate it exists and user has access
+    if (workspaceId) {
+      const workspace = await prisma.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          OR: [
+            { ownerId: session.user.id },
+            {
+              members: {
+                some: {
+                  userId: session.user.id,
+                  status: true
+                }
+              }
+            }
+          ]
+        }
+      });
+
+      if (!workspace) {
+        return NextResponse.json(
+          { error: "Workspace not found or you don't have access" },
+          { status: 403 }
+        );
+      }
+    }
+
     const tag = await prisma.noteTag.create({
       data: {
         name,

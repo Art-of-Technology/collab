@@ -16,11 +16,11 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
   const handleIssueMentionClick = useCallback(async (issueKey: string) => {
     try {
       const response = await fetch(`/api/issues/resolve?issueKey=${encodeURIComponent(issueKey)}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         const workspaceSlug = data.workspace?.slug;
-        
+
         if (workspaceSlug) {
           const issueUrl = `/${workspaceSlug}/issues/${issueKey}`;
           window.open(issueUrl, '_blank');
@@ -46,7 +46,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
     const handleMentionClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const mentionElement = target.closest('[data-type="mention"], [data-type="issue-mention"]') as HTMLElement | null;
-      
+
       if (mentionElement && containerRef.current?.contains(mentionElement)) {
         // prevent default text selection behavior
         event.preventDefault();
@@ -54,7 +54,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         (event as any).stopImmediatePropagation?.();
 
         const dataType = mentionElement.getAttribute('data-type');
-        
+
         if (dataType === 'mention') {
           const userId = mentionElement.getAttribute('data-user-id') || mentionElement.getAttribute('data-id');
           if (userId && currentWorkspace?.slug) {
@@ -66,7 +66,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
 
         if (dataType === 'issue-mention') {
           const issueKey = mentionElement.getAttribute('data-issue-key') || mentionElement.getAttribute('data-label');
-          
+
           if (issueKey) {
             // Resolve the issue to its correct workspace
             handleIssueMentionClick(issueKey);
@@ -78,7 +78,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
     const container = containerRef.current;
     if (container) {
       container.addEventListener('click', handleMentionClick, true);
-      
+
       return () => {
         container.removeEventListener('click', handleMentionClick, true);
       };
@@ -101,7 +101,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         )}
         dangerouslySetInnerHTML={{ __html: content }}
       />
-      
+
       {/* Global CSS for mention styling - same as RichEditor */}
       <style jsx global>{`
         /* Ensure inner elements don't steal click events */
@@ -146,6 +146,31 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           width: 10px;
           opacity: 1;
           margin-left: 4px;
+        }
+        
+        /* Video wrapper styles */
+        .video-resizable-container {
+          position: relative;
+          display: inline-block;
+          max-width: 100%;
+          margin: 1rem 0;
+          line-height: 0;
+        }
+        
+        .video-resizable-container .resizable-video,
+        .video-resizable-container video {
+          display: block;
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+          transition: box-shadow 0.2s ease;
+          margin:0;
+        }
+        
+        .video-resizable-container:hover .resizable-video,
+        .video-resizable-container:hover video {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
       `}</style>
     </>

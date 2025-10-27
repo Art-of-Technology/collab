@@ -6,6 +6,19 @@ services:
     build:
       context: ../../
       dockerfile: docker/prod/Dockerfile.prod
+      # Pass all NEXT_PUBLIC_ variables as build args
+      args:
+        # All environment variables from .env.prod.local are available here
+        # We explicitly list NEXT_PUBLIC_ ones for the build
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+        NEXT_PUBLIC_HOCUSPOCUS_URL: ${NEXT_PUBLIC_HOCUSPOCUS_URL}
+        NEXT_PUBLIC_ONESIGNAL_APP_ID: ${NEXT_PUBLIC_ONESIGNAL_APP_ID_PROD}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+        NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
+        # Database URL needed for Prisma generate during build
+        DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
     environment:
       # External Database Configuration (AWS RDS)
@@ -68,6 +81,19 @@ services:
       
       # Chat Integration
       CHAT_PROJECT_API_KEY: ${CHAT_PROJECT_API_KEY}
+      
+      # Collab Apps Store
+      AS_ISSUER: ${AS_ISSUER}
+      APP_TOKENS_KEY: ${APP_TOKENS_KEY}
+      NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
+      
+      # Content Security Policy
+      CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-0}
+      CSP_SCRIPT_SRC: ${CSP_SCRIPT_SRC}
+      CSP_STYLE_SRC: ${CSP_STYLE_SRC}
+      CSP_IMG_SRC: ${CSP_IMG_SRC}
+      CSP_FRAME_ANCESTORS: ${CSP_FRAME_ANCESTORS}
+      CSP_FRAME_SRC: ${CSP_FRAME_SRC}
       
       # Production database seeding (usually false)
       SEED_DATABASE: ${SEED_DATABASE:-false}

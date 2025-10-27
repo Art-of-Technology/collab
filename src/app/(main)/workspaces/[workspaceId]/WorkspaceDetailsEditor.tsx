@@ -31,7 +31,7 @@ export default function WorkspaceDetailsEditor({ workspace }: WorkspaceDetailsEd
               Update information about your workspace. Changes will be visible to all members.
             </DialogDescription>
           </DialogHeader>
-          <EditWorkspaceForm workspace={workspace} />
+          <EditWorkspaceForm workspace={workspace} onClose={() => setIsOpen(false)} />
         </DialogContent>
       </Dialog>
     </>

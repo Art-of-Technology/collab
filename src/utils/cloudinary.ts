@@ -8,16 +8,56 @@ cloudinary.config({
 });
 
 /**
+ * Allowed file extensions for different media types
+ */
+const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+const ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+
+/**
+ * Extract and validate file extension from filename
+ * @param filename - The original filename
+ * @param allowedExtensions - Array of allowed extensions
+ * @param defaultExtension - Default extension if none found or invalid
+ * @returns The validated file extension
+ */
+function extractFileExtension(
+  filename: string, 
+  allowedExtensions: string[], 
+  defaultExtension: string
+): string {
+  // Match the last extension in the filename (e.g., 'file.tar.gz' -> 'gz')
+  const match = filename.match(/\.([^.]+)$/);
+  
+  if (match) {
+    const ext = match[1].toLowerCase();
+    // Return the extension if it's in the allowed list
+    if (allowedExtensions.includes(ext)) {
+      return ext;
+    }
+  }
+  
+  // Return default if no valid extension found
+  return defaultExtension;
+}
+
+/**
  * Generate a unique filename to prevent overwrites and caching issues
  * @param originalFilename - The original file name
+ * @param prefix - The prefix for the filename (image, video, etc.)
  * @returns A unique filename with timestamp and random string
  */
-function generateUniqueFilename(originalFilename: string): string {
+function generateUniqueFilename(originalFilename: string, prefix: string = 'image'): string {
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).substring(2, 8);
-  const fileExtension = originalFilename.split('.').pop() || 'png';
   
-  return `image_${timestamp}_${randomString}.${fileExtension}`;
+  // Determine allowed extensions and default based on prefix
+  const isVideo = prefix === 'video';
+  const allowedExtensions = isVideo ? ALLOWED_VIDEO_EXTENSIONS : ALLOWED_IMAGE_EXTENSIONS;
+  const defaultExtension = isVideo ? 'mp4' : 'png';
+  
+  const fileExtension = extractFileExtension(originalFilename, allowedExtensions, defaultExtension);
+  
+  return `${prefix}_${timestamp}_${randomString}.${fileExtension}`;
 }
 
 /**
@@ -44,7 +84,7 @@ export async function uploadImage(file: File): Promise<string> {
     const base64Data = await fileToBase64(file);
     
     // Generate unique filename to prevent overwrites
-    const uniqueFilename = generateUniqueFilename(file.name);
+    const uniqueFilename = generateUniqueFilename(file.name, 'image');
     
     // Upload to Cloudinary via API route to protect API key and secret
     const response = await fetch('/api/upload/image', {
@@ -66,6 +106,36 @@ export async function uploadImage(file: File): Promise<string> {
     return data.url;
   } catch (error) {
     console.error('Error uploading image:', error);
+    throw error;
+  }
+}
+
+/**
+ * Upload a video to Cloudinary
+ * @param file - The file to upload
+ * @returns The URL of the uploaded video
+ */
+export async function uploadVideo(file: File): Promise<string> {
+  try {
+    // Create FormData and append the video file
+    const formData = new FormData();
+    formData.append('video', file);
+    
+    // Upload to Cloudinary via API route to protect API key and secret
+    const response = await fetch('/api/upload/video', {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload video');
+    }
+    
+    const data = await response.json();
+    return data.url;
+  } catch (error) {
+    console.error('Error uploading video:', error);
     throw error;
   }
 }
@@ -119,7 +189,7 @@ export function fileToBase64(file: File): Promise<string> {
     
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        // Remove data:image/jpeg;base64, prefix
+        // Remove data:image/jpeg;base64, or data:video/mp4;base64, prefix
         const base64 = reader.result.split(',')[1];
         resolve(base64);
       } else {
@@ -133,4 +203,22 @@ export function fileToBase64(file: File): Promise<string> {
     
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Check if a file is a video
+ * @param file - The file to check
+ * @returns True if the file is a video
+ */
+export function isVideoFile(file: File): boolean {
+  return file.type.startsWith('video/');
+}
+
+/**
+ * Check if a file is an image
+ * @param file - The file to check
+ * @returns True if the file is an image
+ */
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
 } 

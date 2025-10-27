@@ -59,11 +59,51 @@ export const ResizableImageExtension = Image.extend({
       img.classList.add('resizable-image');
       img.style.cursor = 'pointer';
       
-      // Add a tooltip to show resize instructions
-      const tooltip = document.createElement('div');
-      tooltip.className = 'image-tooltip';
-      tooltip.textContent = '✨ Drag corners to resize • Click to view full size';
-      container.appendChild(tooltip);
+      // Add delete button
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'image-delete-button';
+      deleteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
+      deleteButton.style.position = 'absolute';
+      deleteButton.style.top = '4px';
+      deleteButton.style.right = '4px';
+      deleteButton.style.width = '28px';
+      deleteButton.style.height = '28px';
+      deleteButton.style.display = 'none';
+      deleteButton.style.alignItems = 'center';
+      deleteButton.style.justifyContent = 'center';
+      deleteButton.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+      deleteButton.style.color = 'rgba(239, 68, 68, 1)';
+      deleteButton.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      deleteButton.style.borderRadius = '4px';
+      deleteButton.style.cursor = 'pointer';
+      deleteButton.style.zIndex = '100';
+      deleteButton.style.transition = 'all 0.2s ease';
+      deleteButton.style.padding = '0';
+      
+      deleteButton.addEventListener('mouseenter', () => {
+        deleteButton.style.backgroundColor = 'rgba(239, 68, 68, 1)';
+        deleteButton.style.color = 'white';
+        deleteButton.style.transform = 'scale(1.05)';
+      });
+      
+      deleteButton.addEventListener('mouseleave', () => {
+        deleteButton.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+        deleteButton.style.color = 'rgba(239, 68, 68, 1)';
+        deleteButton.style.transform = 'scale(1)';
+      });
+      
+      deleteButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof getPos === 'function') {
+          const pos = getPos();
+          if (typeof pos === 'number') {
+            editor.commands.deleteRange({ from: pos, to: pos + node.nodeSize });
+          }
+        }
+      });
+      
+      container.appendChild(deleteButton);
       
       // Make image resizable
       let isResizing = false;
@@ -71,6 +111,11 @@ export const ResizableImageExtension = Image.extend({
       let startY = 0;
       let startWidth = 0;
       let startHeight = 0;
+      let currentHandlePos = '';
+      
+      // Define resize handlers outside the loop so they can be properly cleaned up in destroy
+      let handleResize: ((e: MouseEvent) => void) | null = null;
+      let stopResize: (() => void) | null = null;
       
       // Add click handler to open full size image in new tab/window
       img.addEventListener('click', () => {
@@ -88,29 +133,29 @@ export const ResizableImageExtension = Image.extend({
         handle.style.width = '8px';
         handle.style.height = '8px';
         handle.style.backgroundColor = 'hsl(var(--background))';
-        handle.style.border = '1px solid hsl(var(--primary))';
+        handle.style.border = '1px solid hsl(var(--foreground))';
         handle.style.zIndex = '2';
         
         // Position the handle based on its position code
         switch(handlePos) {
           case 'se': // bottom-right
-            handle.style.bottom = '-4px';
-            handle.style.right = '-4px';
+            handle.style.bottom = '0';
+            handle.style.right = '-2px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'sw': // bottom-left
-            handle.style.bottom = '-4px';
-            handle.style.left = '-4px';
+            handle.style.bottom = '0';
+            handle.style.left = '-2px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'ne': // top-right
-            handle.style.top = '-4px';
-            handle.style.right = '-4px';
+            handle.style.top = '0';
+            handle.style.right = '-2px';
             handle.style.cursor = 'nesw-resize';
             break;
           case 'nw': // top-left
-            handle.style.top = '-4px';
-            handle.style.left = '-4px';
+            handle.style.top = '0';
+            handle.style.left = '-2px';
             handle.style.cursor = 'nwse-resize';
             break;
           case 'n': // top-center
@@ -142,92 +187,97 @@ export const ResizableImageExtension = Image.extend({
         // Only show handles when image is hovered
         handle.style.display = 'none';
         
+        // Define resize handlers (only once, not per handle)
+        if (!handleResize) {
+          handleResize = (e: MouseEvent) => {
+            if (!isResizing) return;
+            
+            // Calculate new dimensions based on handle position
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            
+            // Determine resize behavior based on current handle position
+            if (currentHandlePos.includes('e')) {
+              newWidth = startWidth + (e.clientX - startX);
+            } else if (currentHandlePos.includes('w')) {
+              newWidth = startWidth - (e.clientX - startX);
+            }
+            
+            if (currentHandlePos.includes('s')) {
+              newHeight = startHeight + (e.clientY - startY);
+            } else if (currentHandlePos.includes('n')) {
+              newHeight = startHeight - (e.clientY - startY);
+            }
+            
+            // Maintain aspect ratio by default (unless shift key is pressed)
+            if (!e.shiftKey) {
+              const ratio = startWidth / startHeight;
+              // Determine which dimension is dominant in this resize operation
+              const widthDominant = Math.abs(newWidth / startWidth - 1) > Math.abs(newHeight / startHeight - 1);
+              
+              if (widthDominant) {
+                newHeight = newWidth / ratio;
+              } else {
+                newWidth = newHeight * ratio;
+              }
+            }
+            
+            // Apply size limits
+            newWidth = Math.max(30, newWidth);  // min width 30px
+            newHeight = Math.max(30, newHeight); // min height 30px
+            
+            // Update image dimensions
+            img.width = Math.round(newWidth);
+            img.height = Math.round(newHeight);
+            
+            // Update the node attributes for persistence
+            if (typeof getPos === 'function') {
+              editor.commands.command(({ tr }) => {
+                tr.setNodeMarkup(getPos(), undefined, { 
+                  ...node.attrs, 
+                  width: Math.round(newWidth),
+                  height: Math.round(newHeight),
+                });
+                return true;
+              });
+            }
+          };
+          
+          stopResize = () => {
+            isResizing = false;
+            if (handleResize) document.removeEventListener('mousemove', handleResize);
+            if (stopResize) document.removeEventListener('mouseup', stopResize);
+          };
+        }
+        
         // Add resize functionality
         handle.addEventListener('mousedown', (e: MouseEvent) => {
           isResizing = true;
+          currentHandlePos = handlePos;
           startX = e.clientX;
           startY = e.clientY;
           startWidth = img.width;
           startHeight = img.height;
           
           // Add event listeners to handle resize
-          document.addEventListener('mousemove', handleResize);
-          document.addEventListener('mouseup', stopResize);
+          if (handleResize) document.addEventListener('mousemove', handleResize);
+          if (stopResize) document.addEventListener('mouseup', stopResize);
           
           // Prevent default behavior and propagation
           e.preventDefault();
           e.stopPropagation();
         });
         
-        const handleResize = (e: MouseEvent) => {
-          if (!isResizing) return;
-          
-          // Calculate new dimensions based on handle position
-          let newWidth = startWidth;
-          let newHeight = startHeight;
-          
-          // Determine resize behavior based on handle position
-          if (handlePos.includes('e')) {
-            newWidth = startWidth + (e.clientX - startX);
-          } else if (handlePos.includes('w')) {
-            newWidth = startWidth - (e.clientX - startX);
-          }
-          
-          if (handlePos.includes('s')) {
-            newHeight = startHeight + (e.clientY - startY);
-          } else if (handlePos.includes('n')) {
-            newHeight = startHeight - (e.clientY - startY);
-          }
-          
-          // Maintain aspect ratio by default (unless shift key is pressed)
-          if (!e.shiftKey) {
-            const ratio = startWidth / startHeight;
-            // Determine which dimension is dominant in this resize operation
-            const widthDominant = Math.abs(newWidth / startWidth - 1) > Math.abs(newHeight / startHeight - 1);
-            
-            if (widthDominant) {
-              newHeight = newWidth / ratio;
-            } else {
-              newWidth = newHeight * ratio;
-            }
-          }
-          
-          // Apply size limits
-          newWidth = Math.max(30, newWidth);  // min width 30px
-          newHeight = Math.max(30, newHeight); // min height 30px
-          
-          // Update image dimensions
-          img.width = Math.round(newWidth);
-          img.height = Math.round(newHeight);
-          
-          // Update the node attributes for persistence
-          if (typeof getPos === 'function') {
-            editor.commands.command(({ tr }) => {
-              tr.setNodeMarkup(getPos(), undefined, { 
-                ...node.attrs, 
-                width: Math.round(newWidth),
-                height: Math.round(newHeight),
-              });
-              return true;
-            });
-          }
-        };
-        
-        const stopResize = () => {
-          isResizing = false;
-          document.removeEventListener('mousemove', handleResize);
-          document.removeEventListener('mouseup', stopResize);
-        };
-        
         container.appendChild(handle);
       });
       
-      // Show handles on hover, hide on mouseout
+      // Show handles and delete button on hover, hide on mouseout
       container.addEventListener('mouseenter', () => {
         if (!isResizing) {
           container.querySelectorAll('.resize-handle').forEach(handle => {
             (handle as HTMLElement).style.display = 'block';
           });
+          deleteButton.style.display = 'flex';
         }
       });
       
@@ -236,6 +286,7 @@ export const ResizableImageExtension = Image.extend({
           container.querySelectorAll('.resize-handle').forEach(handle => {
             (handle as HTMLElement).style.display = 'none';
           });
+          deleteButton.style.display = 'none';
         }
       });
       
@@ -280,6 +331,13 @@ export const ResizableImageExtension = Image.extend({
         destroy: () => {
           // Clean up event listeners
           img.onload = null;
+          
+          // Clean up resize event listeners if they exist and resizing is in progress
+          if (isResizing && handleResize && stopResize) {
+            isResizing = false;
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopResize);
+          }
         }
       };
     }) as NodeViewRenderer;

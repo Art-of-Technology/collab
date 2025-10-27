@@ -6,6 +6,7 @@ import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { emitIssueCreated } from "@/lib/event-bus";
 import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
 
 const RELATED_ISSUE_SELECT = {
@@ -260,6 +261,13 @@ export async function POST(request: NextRequest) {
         },
         include: {
           labels: true,
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true
+            }
+          },
           projectStatus: {
             select: {
               id: true,
@@ -388,6 +396,23 @@ export async function POST(request: NextRequest) {
       }
     } catch (e) {
       console.warn('[ISSUES_POST_MENTIONS]', e);
+    }
+
+    // Emit webhook event for issue creation
+    try {
+      await emitIssueCreated(
+        created,
+        {
+          userId: session.user.id,
+          workspaceId: created.workspaceId,
+          workspaceName: created.workspace?.name || '',
+          workspaceSlug: created.workspace?.slug || '',
+          source: 'api'
+        },
+        { async: true } // Don't block the response
+      );
+    } catch (e) {
+      console.warn('[ISSUES_POST_WEBHOOK]', e);
     }
 
     return NextResponse.json({ issue: created }, { status: 201 });

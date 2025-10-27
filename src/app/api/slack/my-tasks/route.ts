@@ -36,16 +36,16 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // Get user's assigned tasks
-        const tasks = await prisma.task.findMany({
+        // Get user's assigned issues
+        const issues = await prisma.issue.findMany({
             where: {
                 assigneeId: user.id,
-                status: {
+                statusValue: {
                     not: 'Done'
                 }
             },
             include: {
-                taskBoard: {
+                project: {
                     select: {
                         id: true,
                         name: true
@@ -61,38 +61,38 @@ export async function POST(req: NextRequest) {
                 { priority: 'desc' },
                 { createdAt: 'desc' }
             ],
-            take: 10 // Limit to 10 tasks to avoid message being too long
+            take: 10 // Limit to 10 issues to avoid message being too long
         });
 
-        if (tasks.length === 0) {
+        if (issues.length === 0) {
             return NextResponse.json({
                 response_type: 'ephemeral',
-                text: `👋 Hi *${userName}*!\n🎉 Great news! You have no pending tasks assigned to you right now.`,
+                text: `👋 Hi *${userName}*!\n🎉 Great news! You have no pending issues assigned to you right now.`,
             });
         }
 
-        // Count in-progress tasks
-        const inProgressTasks = tasks.filter(task =>
-            task.status?.toLowerCase().includes('progress') ||
-            task.status?.toLowerCase().includes('doing') ||
-            task.status === 'In Progress'
+        // Count in-progress issues
+        const inProgressIssues = issues.filter(issue =>
+            issue.statusValue?.toLowerCase().includes('progress') ||
+            issue.statusValue?.toLowerCase().includes('doing') ||
+            issue.statusValue === 'In Progress'
         );
 
-        // Format tasks as clickable links
-        const taskList = tasks.map(task => {
-            const boardName = task.taskBoard?.name || 'Unknown Board';
-            const taskKey = task.issueKey || `#${task.id.slice(-6)}`;
-            // Create a clickable link with workspaceId/tasks/taskId format
-            const taskUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app.com'}/${task.workspace.id}/tasks/${task.id}`;
-            return `• <${taskUrl}|${taskKey}: ${task.title}> (${boardName})`;
+        // Format issues as clickable links
+        const issueList = issues.map(issue => {
+            const projectName = issue.project?.name || 'Unknown Project';
+            const issueKey = issue.issueKey || `#${issue.id.slice(-6)}`;
+            // Create a clickable link with workspaceId/issues/issueId format
+            const issueUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-app.com'}/${issue.workspace.id}/issues/${issue.id}`;
+            return `• <${issueUrl}|${issueKey}: ${issue.title}> (${projectName})`;
         }).join('\n');
 
         // Build the message
-        let message = `👋 Hi *${userName}*!\nHere are your pending tasks:\n\n${taskList}`;
+        let message = `👋 Hi *${userName}*!\nHere are your pending issues:\n\n${issueList}`;
 
-        // Add warning if multiple in-progress tasks
-        if (inProgressTasks.length > 1) {
-            message += `\n\n⚠️ *Note:* You have ${inProgressTasks.length} tasks in progress. Consider focusing on completing one task at a time for better productivity.`;
+        // Add warning if multiple in-progress issues
+        if (inProgressIssues.length > 1) {
+            message += `\n\n⚠️ *Note:* You have ${inProgressIssues.length} issues in progress. Consider focusing on completing one issue at a time for better productivity.`;
         }
 
         return NextResponse.json({
