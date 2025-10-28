@@ -368,8 +368,7 @@ export default function ListViewRenderer({
   const IssueRow = ({ issue }: { issue: Issue }) => {
     // Build URL for the issue
     const issueIdOrKey = issue.issueKey || issue.id;
-    const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
-    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
+    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || (view as any)?.workspaceId;
     const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
     const issueUrl = workspaceSegment 
       ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
@@ -378,7 +377,6 @@ export default function ListViewRenderer({
     return (
       <a 
         href={issueUrl}
-        rel="noopener noreferrer"
         className={cn(
           "group relative cursor-pointer transition-all duration-200 block",
           // Mobile-first: Card-like design with glassmorphism
