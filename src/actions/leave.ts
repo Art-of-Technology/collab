@@ -10,6 +10,7 @@ import {
 } from "@/lib/leave-service";
 import { checkUserPermission, Permission } from "@/lib/permissions";
 import { NotificationService } from "@/lib/notification-service";
+import { emitLeaveCreated } from "@/lib/event-bus";
 
 /**
  * Get leave policies for a workspace
@@ -354,11 +355,11 @@ export async function approveLeaveRequest(requestId: string, notes?: string) {
     where: { email: session.user.email },
     select: { id: true },
   });
-
+  
   if (!user) {
     throw new Error("User not found");
   }
-
+  
   const result = await approveLeaveRequestWithBalance(requestId, notes);
 
   // Send notifications
@@ -377,6 +378,50 @@ export async function approveLeaveRequest(requestId: string, notes?: string) {
       notificationError
     );
   }
+
+    // Emit webhook event for leave creation
+    try {
+      const policyWorkspace = await prisma.workspace.findUnique({
+        where: { id: result.policy.workspaceId },
+        select: { name: true, slug: true },
+      });
+    
+      if (!policyWorkspace) {
+        throw new Error("Workspace not found");
+      }
+      
+      await emitLeaveCreated(
+        {
+          id: result.id,
+          userId: result.userId,
+          workspaceId: result.policy.workspaceId,
+          startDate: result.startDate.toISOString(),
+          endDate: result.endDate.toISOString(),
+          isAllDay: result.duration === "FULL_DAY",
+          startTime:
+            result.duration === "HALF_DAY" ? "09:00:00" : undefined,
+          endTime:
+            result.duration === "HALF_DAY" ? "17:00:00" : undefined,
+          status: result.status.toLowerCase(),
+          type: result.policy.name,
+          reason: result.notes,
+          notes: result.notes,
+          timezone: "Europe/London", // Default timezone - could be made configurable
+          updatedAt: result.updatedAt.toISOString(),
+        },
+        {
+          userId: user.id,
+          workspaceId: result.policy.workspaceId,
+          workspaceName: policyWorkspace.name,
+          workspaceSlug: policyWorkspace.slug,
+          source: "server-action",
+        },
+        { async: true }
+      );
+    } catch (webhookError) {
+      // Log but don't fail the request creation
+      console.error("Failed to emit leave created webhook:", webhookError);
+    }
 
   // Remove notification data from response
   const { notificationData, ...updatedRequest } = result;

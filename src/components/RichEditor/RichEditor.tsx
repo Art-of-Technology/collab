@@ -39,7 +39,7 @@ import {
 import { StaticToolbar, UserMentionSuggestion, IssueMentionSuggestion, AIImprovePopover } from './components';
 
 // Import our hooks
-import { useImageUpload } from './hooks';
+import { useMediaUpload } from './hooks';
 
 // Import types
 import { RichEditorProps, RichEditorRef } from './types';
@@ -48,7 +48,7 @@ import { RichEditorProps, RichEditorRef } from './types';
 import { findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove } from './utils';
 
 // Import extensions
-import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ImageCSSExtension } from './extensions';
+import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ResizableVideoExtension, ImageCSSExtension } from './extensions';
 
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   value = '',
@@ -76,7 +76,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const isExternalUpdateRef = useRef(false);
   // Guard to suppress transient checks during mention insertion
   const isInsertingMentionRef = useRef(false);
-  
+
   // Helper to release guards on the next tick after ProseMirror updates
   const releaseMentionGuardsNextTick = () => {
     setTimeout(() => {
@@ -84,15 +84,15 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       isExternalUpdateRef.current = false;
     }, 0);
   };
-  
+
   // Generate unique ID for this editor instance to avoid CSS conflicts
   const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
-  
+
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
   const [mentionSuggestion, setMentionSuggestion] = useState<{ position: { top: number; left: number }; query: string; type: 'user' | 'issue' } | null>(null);
-  
+
   // AI Improve state
   const [isImproving, setIsImproving] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number; originalText: string } | null>(null);
   const [hasContent, setHasContent] = useState(false);
   const [isEmpty, setIsEmpty] = useState(!value || value === '' || value === '<p></p>' || value === '<p><br></p>');
-  
+
   // Initialize editor with extensions
   const editor = useEditor({
     autofocus: autofocus,
@@ -121,6 +121,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           class: 'resizable-image',
         },
       }),
+      ResizableVideoExtension,
       ImageCSSExtension,
       Underline,
       Strike,
@@ -160,7 +161,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         // First, call the parent's onKeyDown handler if provided
         if (onKeyDown) {
           let eventHandled = false;
-          
+
           // Create React-compatible event object
           const reactEvent = {
             key: event.key,
@@ -188,17 +189,17 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             timeStamp: event.timeStamp,
             isDefaultPrevented: () => event.defaultPrevented || eventHandled,
             isPropagationStopped: () => eventHandled,
-            persist: () => {},
+            persist: () => { },
           } as unknown as React.KeyboardEvent;
 
           onKeyDown(reactEvent);
-          
+
           // If the event was handled, return true to stop processing
           if (eventHandled || event.defaultPrevented) {
             return true;
           }
         }
-        
+
         // Handle @ and # for mentions
         if (event.key === '@' || event.key === '#') {
           setTimeout(() => {
@@ -212,11 +213,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             checkForMentionTrigger();
           }, 0);
         }
-        
+
         return false;
       },
       handlePaste: (view, event, slice) => {
-        // Handle image paste
+        // Handle image and video paste
         const items = event.clipboardData?.items;
         if (items) {
           for (const item of Array.from(items)) {
@@ -227,19 +228,30 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                 uploadAndInsertImage(file);
                 return true;
               }
+            } else if (item.type.indexOf('video') === 0) {
+              const file = item.getAsFile();
+              if (file) {
+                event.preventDefault();
+                uploadAndInsertVideo(file);
+                return true;
+              }
             }
           }
         }
         return false;
       },
       handleDrop: (view, event, slice, moved) => {
-        // Handle image drop
+        // Handle image and video drop
         const files = event.dataTransfer?.files;
         if (files) {
           for (const file of Array.from(files)) {
             if (file.type.indexOf('image') === 0) {
               event.preventDefault();
               uploadAndInsertImage(file);
+              return true;
+            } else if (file.type.indexOf('video') === 0) {
+              event.preventDefault();
+              uploadAndInsertVideo(file);
               return true;
             }
           }
@@ -261,14 +273,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const hasMentions = html.includes('data-type="mention"') || html.includes('data-type="issue-mention"');
       const isTextEmpty = !text.trim() || html === '<p></p>' || html === '<p><br></p>';
       const shouldShowPlaceholder = isTextEmpty && !hasMentions;
-      
+
       // Update isEmpty state
       setIsEmpty(shouldShowPlaceholder);
-      
+
       // Update hasContent for AI Improve button
       const hasTextContent = text.trim().length > 0;
       setHasContent(hasTextContent);
-      
+
       // Manually manage placeholder visibility by adding/removing a CSS class
       const editorElement = editor.view.dom;
       if (shouldShowPlaceholder) {
@@ -288,7 +300,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     onSelectionUpdate: ({ editor }) => {
       // Handle text selection for floating menu (only in floating mode)
       const { from, to, empty } = editor.state.selection;
-      
+
       if (toolbarMode === 'floating' && !empty && from !== to && !readOnly) {
         // Text is selected - show floating menu
         const selectedText = editor.state.doc.textBetween(from, to, ' ');
@@ -315,14 +327,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           setSavedSelection(null);
         }
       }
-      
+
       // Call external selection update callback
       onSelectionUpdate?.(editor);
     },
   });
 
-  // Image upload hook
-  const { isUploading: isUploadingImage, uploadAndInsertImage } = useImageUpload(editor);
+  // Media upload hook (images and videos)
+  const { isUploading: isUploadingMedia, uploadAndInsertImage, uploadAndInsertVideo } = useMediaUpload(editor);
 
 
 
@@ -382,11 +394,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
     const { from } = editor.state.selection;
     const trigger = findMentionTrigger(editor, from);
-    
+
     if (trigger) {
       // Ensure we have a valid label - fallback to email if name is not available
       const label = user.name || user.email || 'Unknown User';
-      
+
       // Use the insertMention utility
       isInsertingMentionRef.current = true;
       isExternalUpdateRef.current = true;
@@ -404,7 +416,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       // Release guards on next tick after ProseMirror updates
       releaseMentionGuardsNextTick();
     }
-    
+
     setMentionSuggestion(null);
   }, [editor, mentionSuggestion]);
 
@@ -413,13 +425,13 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
     const { from } = editor.state.selection;
     const trigger = findMentionTrigger(editor, from);
-    
+
     if (trigger) {
       // Ensure we have valid data with fallbacks
       const label = issue.issueKey || issue.title || 'Unknown Issue';
       const title = issue.title || label;
       const type = issue.type || 'TASK';
-      
+
       isInsertingMentionRef.current = true;
       isExternalUpdateRef.current = true;
       insertMention(
@@ -437,27 +449,27 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       // Release guards on next tick after ProseMirror updates
       releaseMentionGuardsNextTick();
     }
-    
+
     setMentionSuggestion(null);
   }, [editor, mentionSuggestion]);
 
   // AI improvement functionality
   const handleAiImprove = useCallback(() => {
     if (!editor || isImproving) return;
-    
+
     if (toolbarMode === 'static') {
       // Static mode: handle AI improve directly
       const { from, to, empty } = editor.state.selection;
-      
+
       if (empty) {
         return; // No selection
       }
-      
+
       const selectedText = editor.state.doc.textBetween(from, to, ' ');
       if (!selectedText.trim()) {
         return;
       }
-      
+
       // Set popup position
       const editorRect = editorRef.current?.getBoundingClientRect();
       if (editorRect) {
@@ -466,12 +478,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           left: (editorRect.width - 500) / 2,
         });
       }
-      
+
       // Save selection for later use
       setSavedSelection({ from, to, originalText: selectedText });
-      
+
       setIsImproving(true);
-      
+
       // Call AI improve directly
       builtInAiImprove(selectedText)
         .then((improvedText) => {
@@ -485,14 +497,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           console.error('Error improving text:', error);
           setIsImproving(false);
         });
-      
+
       return;
     }
-    
+
     // Floating mode: use extension
     setIsImproving(true);
     const result = editor.commands.improveSelection();
-    
+
     if (!result) {
       setIsImproving(false);
     }
@@ -624,12 +636,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         // Silent fallback - don't log errors
       }
     }
-    
+
     // Clean up state
     setImprovedText(null);
     setShowImprovePopover(false);
     setSavedSelection(null);
-  }, [editor, improvedText, savedSelection, toolbarMode]);
+  }, [editor, improvedText, savedSelection]);
 
   const cancelImproveText = useCallback(() => {
     setShowImprovePopover(false);
@@ -658,11 +670,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const handleIssueMentionClick = useCallback(async (issueKey: string) => {
     try {
       const response = await fetch(`/api/issues/resolve?issueKey=${encodeURIComponent(issueKey)}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         const workspaceSlug = data.workspace?.slug;
-        
+
         if (workspaceSlug) {
           const issueUrl = `/${workspaceSlug}/issues/${issueKey}`;
           window.open(issueUrl, '_blank');
@@ -691,11 +703,49 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         // Check if click is on AI Improve popup
         const target = event.target as HTMLElement;
         const isClickOnPopover = target.closest('[data-ai-improve-popover]');
-        
+
         if (!isClickOnPopover) {
-        setShowFloatingMenu(false);
-        setMentionSuggestion(null);
-        setShowImprovePopover(false);
+          setShowFloatingMenu(false);
+          setMentionSuggestion(null);
+          setShowImprovePopover(false);
+        }
+      }
+    };
+
+    // Handle hr delete button clicks - detect clicks in the delete button area
+    const handleHrDelete = (event: MouseEvent) => {
+      if (!editor || readOnly) return;
+
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'HR') {
+        const hrElement = target;
+        const rect = hrElement.getBoundingClientRect();
+        const clickX = event.clientX;
+        const clickY = event.clientY;
+
+        // Check if click is in the delete button area (right side, top-right corner)
+        const buttonWidth = 28;
+        const buttonHeight = 28;
+        const buttonRight = rect.right - 8; // 8px from right edge
+        const buttonLeft = buttonRight - buttonWidth;
+        const buttonTop = rect.top + (rect.height / 2) - (buttonHeight / 2);
+        const buttonBottom = buttonTop + buttonHeight;
+
+        if (clickX >= buttonLeft && clickX <= buttonRight &&
+          clickY >= buttonTop && clickY <= buttonBottom) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Find the position of the hr element in the editor
+          try {
+            const pos = editor.view.posAtDOM(hrElement, 0);
+            if (pos !== null && pos !== undefined) {
+              // Delete the hr node
+              editor.commands.deleteRange({ from: pos, to: pos + 1 });
+            }
+          } catch (error) {
+            console.error('Error deleting hr:', error);
+          }
         }
       }
     };
@@ -703,7 +753,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     const handleMentionClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const mentionElement = target.closest('[data-type="mention"], [data-type="issue-mention"]') as HTMLElement | null;
-      
+
       if (mentionElement && editorRef.current?.contains(mentionElement)) {
         // prevent editor selection/focus handlers
         event.preventDefault();
@@ -711,7 +761,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         (event as any).stopImmediatePropagation?.();
 
         const dataType = mentionElement.getAttribute('data-type');
-        
+
         if (dataType === 'mention') {
           const userId = mentionElement.getAttribute('data-user-id') || mentionElement.getAttribute('data-id');
           if (userId && currentWorkspace?.slug) {
@@ -734,7 +784,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     // AI Improve event handlers
     const handleAiImproveReady = (event: CustomEvent) => {
       const { improvedText, savedSelection } = event.detail;
-      
+
       // Only handle this event in floating mode
       if (toolbarMode === 'floating') {
         setImprovedText(improvedText);
@@ -755,23 +805,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('click', handleMentionClick, true);
-    
+    document.addEventListener('click', handleHrDelete, true);
+
     const currentEditorRef = editorRef.current;
     if (currentEditorRef) {
       currentEditorRef.addEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
       currentEditorRef.addEventListener('ai-improve-error', handleAiImproveError as EventListener);
     }
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('click', handleMentionClick, true);
-      
+      document.removeEventListener('click', handleHrDelete, true);
+
       if (currentEditorRef) {
         currentEditorRef.removeEventListener('ai-improve-ready', handleAiImproveReady as EventListener);
         currentEditorRef.removeEventListener('ai-improve-error', handleAiImproveError as EventListener);
       }
     };
-  }, [currentWorkspace, toast, handleIssueMentionClick]);
+  }, [currentWorkspace, toast, handleIssueMentionClick, editor, readOnly, toolbarMode]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -820,25 +872,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       )}
 
       {/* Editor Container */}
-      <div 
+      <div
         className={cn(
-          "relative cursor-text flex-1", 
+          "relative cursor-text flex-1",
           toolbarMode === 'static' ? "p-0" : "",
           maxHeight && maxHeight !== 'none' ? "overflow-y-auto" : "",
           editorId // Add unique class for scoped CSS
-        )} 
+        )}
         ref={editorRef}
         onClick={() => editor?.commands.focus()}
-        style={{ 
+        style={{
           minHeight: toolbarMode === 'static' ? 'auto' : minHeight,
           maxHeight: maxHeight && maxHeight !== 'none' ? maxHeight : undefined
         }}
       >
         {/* Custom Placeholder Overlay */}
         {isEmpty && !readOnly && (
-          <div 
+          <div
             className="absolute pointer-events-none text-[#6e7681] text-sm z-0"
-            style={{ 
+            style={{
               // In static mode, offset by the container's p-2 padding (8px)
               top: toolbarMode === 'static' ? '8px' : '0',
               left: toolbarMode === 'static' ? '8px' : '0',
@@ -849,14 +901,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             {placeholder}
           </div>
         )}
-        
-        <EditorContent 
-          editor={editor} 
+
+        <EditorContent
+          editor={editor}
           className={cn(
             "w-full text-[#e6edf3] bg-transparent border-none outline-none resize-none leading-relaxed focus:ring-0 relative z-10",
             "focus-within:outline-none"
           )}
-          style={{ 
+          style={{
             minHeight: toolbarMode === 'static' ? '100px' : (maxHeight && maxHeight !== 'none' ? 'auto' : minHeight),
             padding: toolbarMode === 'static' ? '8px' : '0' // Remove any default padding
           }}
@@ -869,6 +921,15 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             outline: none;
             padding: 0;
             line-height: 1.5;
+          }
+
+          .${editorId} .ProseMirror-selectednode > div,
+          .${editorId} .ProseMirror-selectednode > img {
+            border: 1px solid #22c55e;
+          }
+
+          .${editorId} hr.ProseMirror-selectednode {
+            border-color: #22c55e;
           }
           
           .${editorId} .ProseMirror:focus {
@@ -980,243 +1041,331 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             opacity: 1;
             margin-left: 4px;
           }
+          
+          /* Video wrapper styles */
+          .video-resizable-container {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            margin: 1rem 0;
+            line-height: 0;
+          }
+          
+          .video-resizable-container .resizable-video {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: box-shadow 0.2s ease;
+            margin:0;
+          }
+          
+          .video-resizable-container:hover .resizable-video {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          }
+          
+          /* Video resize handles */
+          .video-resizable-container .resize-handle {
+            transition: all 0.15s ease;
+          }
+          
+          .video-resizable-container:hover .resize-handle {
+            opacity: 1;
+          }
+          
+          /* Horizontal rule styles with delete button */
+          .${editorId} .ProseMirror hr {
+            position: relative;
+            margin: 1.5rem 0;
+            border: none;
+            border-top: 2px solid #333;
+            cursor: default;
+          }
+          
+          .${editorId} .ProseMirror hr::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            background: transparent;
+            z-index: 1;
+          }
+          
+          .${editorId} .ProseMirror hr::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 28px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+          }
+          
+          .${editorId} .ProseMirror hr:hover::after {
+            opacity: 1;
+            pointer-events: auto;
+          }
+          
+          .${editorId} .ProseMirror hr:hover::after:hover {
+            background-color: #ef4444;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E");
+            transform: translateY(-50%) scale(1.05);
+          }
         `}</style>
-        
+
         {/* Floating Selection Menu (only in floating mode) */}
         {toolbarMode === 'floating' && showFloatingMenu && (
-        <div
-          className="absolute z-[9998] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
-          style={{
-            top: floatingMenuPosition.top,
-            left: floatingMenuPosition.left,
-          }}
-        >
-          <TooltipProvider delayDuration={200}>
-            {/* Text Formatting */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('bold') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleBold().run()}
-                >
-                  <Bold className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Bold</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('italic') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleItalic().run()}
-                >
-                  <Italic className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Italic</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('underline') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleUnderline().run()}
-                >
-                  <UnderlineIcon className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Underline</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('strike') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleStrike().run()}
-                >
-                  <Strikethrough className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Strikethrough</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('code') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleCode().run()}
-                >
-                  <Code className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Code</TooltipContent>
-            </Tooltip>
-
-            {/* Separator */}
-            <div className="w-px h-6 bg-[#444] mx-1" />
-
-            {/* Headings */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                >
-                  <Heading1 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Heading 1</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                >
-                  <Heading2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Heading 2</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
-                  )}
-                  onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                >
-                  <Heading3 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Heading 3</TooltipContent>
-            </Tooltip>
-
-            {/* Separator */}
-            <div className="w-px h-6 bg-[#444] mx-1" />
-
-            {/* Mention Triggers */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 hover:bg-blue-500/20 transition-colors"
-                  onClick={() => {
-                    editor.chain().focus().insertContent('@').run();
-                    setTimeout(() => checkForMentionTrigger(), 0);
-                  }}
-                >
-                  <AtSign className="h-4 w-4 text-blue-400" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Mention User</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 hover:bg-green-500/20 transition-colors"
-                  onClick={() => {
-                    editor.chain().focus().insertContent('#').run();
-                    setTimeout(() => checkForMentionTrigger(), 0);
-                  }}
-                >
-                  <Hash className="h-4 w-4 text-green-400" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Mention Issue</TooltipContent>
-            </Tooltip>
-
-            {/* Separator */}
-            <div className="w-px h-6 bg-[#444] mx-1" />
-
-            {/* AI Improve */}
-            {showAiImprove && (
+          <div
+            className="absolute z-[9998] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
+            style={{
+              top: floatingMenuPosition.top,
+              left: floatingMenuPosition.left,
+            }}
+          >
+            <TooltipProvider delayDuration={200}>
+              {/* Text Formatting */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 hover:bg-purple-500/20 transition-colors"
-                    onClick={handleAiImprove}
-                    disabled={isImproving}
-                  >
-                    {isImproving ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
-                    ) : (
-                      <WandSparkles className="h-4 w-4 text-purple-400" />
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('bold') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
                     )}
+                    onClick={() => editor.chain().focus().toggleBold().run()}
+                  >
+                    <Bold className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">AI Improve Selection</TooltipContent>
+                <TooltipContent side="top">Bold</TooltipContent>
               </Tooltip>
-            )}
-          </TooltipProvider>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('italic') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleItalic().run()}
+                  >
+                    <Italic className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Italic</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('underline') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleUnderline().run()}
+                  >
+                    <UnderlineIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Underline</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('strike') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleStrike().run()}
+                  >
+                    <Strikethrough className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Strikethrough</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('code') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleCode().run()}
+                  >
+                    <Code className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Code</TooltipContent>
+              </Tooltip>
+
+              {/* Separator */}
+              <div className="w-px h-6 bg-[#444] mx-1" />
+
+              {/* Headings */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                  >
+                    <Heading1 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Heading 1</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                  >
+                    <Heading2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Heading 2</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 transition-colors",
+                      editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    )}
+                    onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                  >
+                    <Heading3 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Heading 3</TooltipContent>
+              </Tooltip>
+
+              {/* Separator */}
+              <div className="w-px h-6 bg-[#444] mx-1" />
+
+              {/* Mention Triggers */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-blue-500/20 transition-colors"
+                    onClick={() => {
+                      editor.chain().focus().insertContent('@').run();
+                      setTimeout(() => checkForMentionTrigger(), 0);
+                    }}
+                  >
+                    <AtSign className="h-4 w-4 text-blue-400" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Mention User</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-green-500/20 transition-colors"
+                    onClick={() => {
+                      editor.chain().focus().insertContent('#').run();
+                      setTimeout(() => checkForMentionTrigger(), 0);
+                    }}
+                  >
+                    <Hash className="h-4 w-4 text-green-400" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Mention Issue</TooltipContent>
+              </Tooltip>
+
+              {/* Separator */}
+              <div className="w-px h-6 bg-[#444] mx-1" />
+
+              {/* AI Improve */}
+              {showAiImprove && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-purple-500/20 transition-colors"
+                      onClick={handleAiImprove}
+                      disabled={isImproving}
+                    >
+                      {isImproving ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                      ) : (
+                        <WandSparkles className="h-4 w-4 text-purple-400" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">AI Improve Selection</TooltipContent>
+                </Tooltip>
+              )}
+            </TooltipProvider>
           </div>
         )}
 
 
         {/* Upload overlay */}
-        {isUploadingImage && (
+        {isUploadingMedia && (
           <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-[9999]">
             <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-background border shadow-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Uploading image...</span>
+              <span className="text-sm">Uploading...</span>
             </div>
           </div>
         )}
@@ -1252,17 +1401,17 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         )}
       </div>
 
-       {/* AI Improve Popover */}
-       <AIImprovePopover
-         isVisible={showImprovePopover}
-         improvedText={improvedText || ''}
-         position={floatingMenuPosition}
-         onApply={applyImprovedText}
-         onCancel={cancelImproveText}
-         isImproving={isImproving}
-       />
+      {/* AI Improve Popover */}
+      <AIImprovePopover
+        isVisible={showImprovePopover}
+        improvedText={improvedText || ''}
+        position={floatingMenuPosition}
+        onApply={applyImprovedText}
+        onCancel={cancelImproveText}
+        isImproving={isImproving}
+      />
     </div>
   );
- });
+});
 
 RichEditor.displayName = 'RichEditor';

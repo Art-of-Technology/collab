@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
-import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension } from './extensions';
+import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension, LinkPreviewExtension } from './extensions';
 import { parseMarkdownToTipTap } from './utils/ai-improve';
 import {
   Heading1,
@@ -260,6 +260,60 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     }
   }, []);
 
+  const calculateElementPosition = useCallback((
+    editor: any,
+    from: number,
+    elementHeight: number,
+    elementWidth: number,
+    positionAbove: boolean = true
+  ) => {
+    const coords = editor.view.coordsAtPos(from);
+    const selectionWidth = coords.right - coords.left;
+    const viewportPadding = 8;
+    const elementGap = 8;
+    
+    const finalWidth = Math.min(elementWidth, window.innerWidth - (viewportPadding * 2));
+    
+    let top = positionAbove 
+      ? coords.top - elementHeight - elementGap
+      : coords.bottom + elementGap;
+    let left = coords.left + (selectionWidth / 2) - (finalWidth / 2);
+    
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    if (left < viewportPadding) {
+      left = viewportPadding;
+    } else if (left + finalWidth > viewportWidth - viewportPadding) {
+      left = viewportWidth - finalWidth - viewportPadding;
+    }
+    
+    if (positionAbove) {
+      if (top < viewportPadding) {
+        top = coords.bottom + elementGap;
+      }
+      if (top + elementHeight > viewportHeight - viewportPadding) {
+        top = viewportHeight - elementHeight - viewportPadding;
+      }
+    } else {
+      if (top + elementHeight > viewportHeight - viewportPadding) {
+        top = coords.top - elementHeight - elementGap;
+      }
+      if (top < viewportPadding) {
+        top = viewportPadding;
+      }
+    }
+
+    return { top, left };
+  }, []);
+
+  const updateFloatingMenuPosition = useCallback((editor: any, from: number) => {
+    if (!enableFloatingMenu || !editor) return;
+
+    const position = calculateElementPosition(editor, from, 40, 400, true);
+    setFloatingMenuPosition(position);
+  }, [enableFloatingMenu, calculateElementPosition]);
+
   // Handle floating menu for text selection
   const handleSelectionUpdate = useCallback((editor: any) => {
     if (!enableFloatingMenu) return;
@@ -270,27 +324,14 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       const selectedText = editor.state.doc.textBetween(from, to, ' ');
       if (selectedText.trim().length > 0) {
         setTimeout(() => {
-          const coords = editor.view.coordsAtPos(from);
-
-          // Account for any scrollable containers
-          const scrollContainer = editor.view.dom.closest('.overflow-y-auto');
-          let scrollTop = 0;
-          if (scrollContainer) {
-            scrollTop = scrollContainer.scrollTop;
-          }
-
-          // Use viewport coordinates for a fixed-position, portaled menu
-          setFloatingMenuPosition({
-            top: Math.max(8, coords.top - 60 - scrollTop),
-            left: Math.max(8, coords.left - 100),
-          });
+          updateFloatingMenuPosition(editor, from);
           setShowFloatingMenu(true);
         }, 10);
       }
     } else {
       setShowFloatingMenu(false);
     }
-  }, [enableFloatingMenu]);
+  }, [enableFloatingMenu, updateFloatingMenuPosition]);
 
   // Handle AI improve
   const handleAiImprove = useCallback(() => {
@@ -503,6 +544,57 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Handle scroll events to update floating menu and AI improve popup positions
+  useEffect(() => {
+    if ((!showFloatingMenu && !showImprovePopover) || !enableFloatingMenu) return;
+
+    const handleScroll = () => {
+      const editor = editorRef.current?.getEditor();
+      if (!editor) return;
+
+      const { from, to, empty } = editor.state.selection;
+      if (!empty && from !== to) {
+        if (showFloatingMenu) {
+          updateFloatingMenuPosition(editor, from);
+        }
+        
+        if (showImprovePopover && savedSelection) {
+          const position = calculateElementPosition(editor, savedSelection.from, 192, 288, false);
+          setImprovePosition(position);
+        }
+      }
+    };
+
+    // Add scroll listeners to window and any scrollable containers
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Also listen for scroll events on scrollable containers within the editor
+    const editorElement = editorRef.current?.getEditor()?.view.dom;
+    if (editorElement) {
+      const scrollContainer = editorElement.closest('.overflow-y-auto') || 
+                              editorElement.closest('.overflow-auto') ||
+                              editorElement.closest('[data-scroll-container]');
+      
+      if (scrollContainer) {
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+      }
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      const editorElement = editorRef.current?.getEditor()?.view.dom;
+      if (editorElement) {
+        const scrollContainer = editorElement.closest('.overflow-y-auto') || 
+                               editorElement.closest('.overflow-auto') ||
+                               editorElement.closest('[data-scroll-container]');
+        
+        if (scrollContainer) {
+          scrollContainer.removeEventListener('scroll', handleScroll);
+        }
+      }
+    };
+  }, [showFloatingMenu, showImprovePopover, enableFloatingMenu, updateFloatingMenuPosition, savedSelection]);
+
   // Handle AI improve events - set up listeners when editor is ready
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -532,13 +624,9 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
         setIsImproving(false);
         setShowFloatingMenu(false); // Hide floating menu when showing popover
 
-        // Calculate position for the popover
         if (eventSavedSelection) {
-          const coords = editor.view.coordsAtPos(eventSavedSelection.from);
-          setImprovePosition({
-            top: coords.top - 100,
-            left: coords.left,
-          });
+          const position = calculateElementPosition(editor, eventSavedSelection.from, 192, 288, false);
+          setImprovePosition(position);
         }
 
         setShowImprovePopover(true);
@@ -630,6 +718,9 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       // noop: manager may not be ready yet
     }
   }
+
+  // Add link preview extension
+  additionalExtensions.push(LinkPreviewExtension);
 
   return (
     <div ref={containerRef} className="relative">

@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { processLeaveRequestAction } from "@/lib/leave-service";
 import { NotificationService } from "@/lib/notification-service";
+import { emitLeaveUpdated, emitLeaveDeleted } from "@/lib/event-bus";
 import { z } from "zod";
 
 const updateLeaveRequestSchema = z.object({
@@ -101,6 +102,45 @@ export async function PATCH(
         "Failed to send leave request status notifications:",
         notificationError
       );
+    }
+
+    // Emit webhook event for leave status update
+    try {
+      // Fetch workspace data for webhook context
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: result.policy?.workspaceId },
+        select: { name: true, slug: true },
+      });
+
+      await emitLeaveUpdated(
+        {
+          id: result.id,
+          userId: result.userId,
+          workspaceId: result.policy?.workspaceId || "",
+          startDate: result.startDate.toISOString(),
+          endDate: result.endDate.toISOString(),
+          isAllDay: result.duration === "FULL_DAY",
+          startTime: result.duration === "HALF_DAY" ? "09:00:00" : undefined,
+          endTime: result.duration === "HALF_DAY" ? "17:00:00" : undefined,
+          status: result.status.toLowerCase(),
+          type: result.policy?.name || "Leave",
+          reason: result.notes,
+          notes: result.notes,
+          timezone: "Europe/London",
+          updatedAt: result.updatedAt.toISOString(),
+        },
+        { status: status.toLowerCase() }, // changes object
+        {
+          userId: user.id,
+          workspaceId: result.policy?.workspaceId || "",
+          workspaceName: workspace?.name || "Unknown",
+          workspaceSlug: workspace?.slug || "unknown",
+          source: "api",
+        },
+        { async: true }
+      );
+    } catch (webhookError) {
+      console.error("Failed to emit leave updated webhook:", webhookError);
     }
 
     // Remove notification data from response
@@ -305,6 +345,41 @@ export async function PUT(
       );
     }
 
+    // Emit webhook event for leave edit
+    try {
+      await emitLeaveUpdated(
+        {
+          id: updatedRequest.id,
+          userId: updatedRequest.userId,
+          workspaceId: updatedRequest.policy.workspaceId,
+          startDate: updatedRequest.startDate.toISOString(),
+          endDate: updatedRequest.endDate.toISOString(),
+          isAllDay: updatedRequest.duration === "FULL_DAY",
+          startTime:
+            updatedRequest.duration === "HALF_DAY" ? "09:00:00" : undefined,
+          endTime:
+            updatedRequest.duration === "HALF_DAY" ? "17:00:00" : undefined,
+          status: updatedRequest.status.toLowerCase(),
+          type: updatedRequest.policy.name,
+          reason: updatedRequest.notes,
+          notes: updatedRequest.notes,
+          timezone: "Europe/London",
+          updatedAt: updatedRequest.updatedAt.toISOString(),
+        },
+        updateData, // changes object
+        {
+          userId: user.id,
+          workspaceId: updatedRequest.policy.workspaceId,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          source: "api",
+        },
+        { async: true }
+      );
+    } catch (webhookError) {
+      console.error("Failed to emit leave updated webhook:", webhookError);
+    }
+
     return NextResponse.json(updatedRequest);
   } catch (error) {
     console.error("Error editing leave request:", error);
@@ -442,6 +517,40 @@ export async function DELETE(
         "Failed to send leave request cancellation notifications:",
         notificationError
       );
+    }
+
+    // Emit webhook event for leave cancellation/deletion
+    try {
+      await emitLeaveDeleted(
+        {
+          id: cancelledRequest.id,
+          userId: cancelledRequest.userId,
+          workspaceId: cancelledRequest.policy.workspaceId,
+          startDate: cancelledRequest.startDate.toISOString(),
+          endDate: cancelledRequest.endDate.toISOString(),
+          isAllDay: cancelledRequest.duration === "FULL_DAY",
+          startTime:
+            cancelledRequest.duration === "HALF_DAY" ? "09:00:00" : undefined,
+          endTime:
+            cancelledRequest.duration === "HALF_DAY" ? "17:00:00" : undefined,
+          status: cancelledRequest.status.toLowerCase(),
+          type: cancelledRequest.policy.name,
+          reason: cancelledRequest.notes,
+          notes: cancelledRequest.notes,
+          timezone: "Europe/London",
+          updatedAt: cancelledRequest.updatedAt.toISOString(),
+        },
+        {
+          userId: user.id,
+          workspaceId: cancelledRequest.policy.workspaceId,
+          workspaceName: existingRequest.policy.workspace.name,
+          workspaceSlug: existingRequest.policy.workspace.slug,
+          source: "api",
+        },
+        { async: true }
+      );
+    } catch (webhookError) {
+      console.error("Failed to emit leave deleted webhook:", webhookError);
     }
 
     // TODO: Release any pre-deducted leave balance (if applicable)

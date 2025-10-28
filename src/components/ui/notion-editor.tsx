@@ -53,7 +53,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { 
+import {
   Popover,
   PopoverContent,
   PopoverTrigger
@@ -108,7 +108,7 @@ const handleSlashCommand = (editor: Editor, command: string) => {
 // Floating toolbar extension
 const FloatingToolbar = Extension.create({
   name: 'floatingToolbar',
-  
+
   addOptions() {
     return {
       element: null,
@@ -173,11 +173,11 @@ export function NotionEditor({
   const [slashQuery, setSlashQuery] = useState('');
   const [slashPosition, setSlashPosition] = useState({ top: 0, left: 0 });
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
-  
+
   // Keyboard navigation for slash commands
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(-1);
   const [isKeyboardNavigation, setIsKeyboardNavigation] = useState(false);
-  
+
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   const initialContentRef = useRef(initialValue || content);
@@ -236,12 +236,32 @@ export function NotionEditor({
       attributes: {
         class: cn(
           "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
-          "min-h-[80px] p-4 rounded-md border-0",
+          "min-h-[80px] p-4 sm:p-6 rounded-md border-0",
           "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border",
-          "notion-editor"
+          "notion-editor transition-all duration-200"
         ),
         style: `min-height: ${minHeight}; max-height: ${maxHeight};`,
-      }
+        spellcheck: "true",
+      },
+      handleKeyDown: (view, event) => {
+        // Add keyboard shortcuts similar to Apple Notes
+        if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
+          event.preventDefault();
+          editor?.chain().focus().toggleBold().run();
+          return true;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === 'i') {
+          event.preventDefault();
+          editor?.chain().focus().toggleItalic().run();
+          return true;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === 'u') {
+          event.preventDefault();
+          editor?.chain().focus().toggleUnderline().run();
+          return true;
+        }
+        return false;
+      },
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
@@ -258,7 +278,7 @@ export function NotionEditor({
         const { from } = editor.state.selection;
         const domPosition = editor.view.coordsAtPos(from);
         const editorContainer = editor.view.dom.getBoundingClientRect();
-        
+
         setSlashPosition({
           top: domPosition.bottom - editorContainer.top,
           left: domPosition.left - editorContainer.left,
@@ -275,24 +295,24 @@ export function NotionEditor({
         } else if (event.key === 'ArrowDown') {
           event.preventDefault();
           setIsKeyboardNavigation(true);
-          const filteredCommands = slashCommands.filter(cmd => 
+          const filteredCommands = slashCommands.filter(cmd =>
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
-          setSelectedCommandIndex(prev => 
+          setSelectedCommandIndex(prev =>
             prev < filteredCommands.length - 1 ? prev + 1 : 0
           );
         } else if (event.key === 'ArrowUp') {
           event.preventDefault();
           setIsKeyboardNavigation(true);
-          const filteredCommands = slashCommands.filter(cmd => 
+          const filteredCommands = slashCommands.filter(cmd =>
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
-          setSelectedCommandIndex(prev => 
+          setSelectedCommandIndex(prev =>
             prev > 0 ? prev - 1 : filteredCommands.length - 1
           );
         } else if (event.key === 'Enter') {
           event.preventDefault();
-          const filteredCommands = slashCommands.filter(cmd => 
+          const filteredCommands = slashCommands.filter(cmd =>
             cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
           );
           if (selectedCommandIndex >= 0 && filteredCommands[selectedCommandIndex]) {
@@ -317,7 +337,7 @@ export function NotionEditor({
     };
 
     editor.view.dom.addEventListener('keydown', handleKeyDown);
-    
+
     return () => {
       editor.view.dom.removeEventListener('keydown', handleKeyDown);
     };
@@ -342,19 +362,19 @@ export function NotionEditor({
 
     const handlePaste = async (event: ClipboardEvent) => {
       if (!event.clipboardData?.items) return;
-      
+
       for (let i = 0; i < event.clipboardData.items.length; i++) {
         const item = event.clipboardData.items[i];
-        
+
         if (item.type.indexOf('image') === 0) {
           event.preventDefault();
-          
+
           try {
             setIsUploadingImage(true);
-            
+
             const file = item.getAsFile();
             if (!file) continue;
-            
+
             const imageUrl = await uploadImage(file);
             editor.chain().focus().setImage({ src: imageUrl }).run();
           } catch (error) {
@@ -366,19 +386,19 @@ export function NotionEditor({
         }
       }
     };
-    
+
     const handleDrop = async (event: DragEvent) => {
       if (!event.dataTransfer?.files) return;
-      
+
       for (let i = 0; i < event.dataTransfer.files.length; i++) {
         const file = event.dataTransfer.files[i];
-        
+
         if (file.type.indexOf('image') === 0) {
           event.preventDefault();
-          
+
           try {
             setIsUploadingImage(true);
-            
+
             const imageUrl = await uploadImage(file);
             editor.chain().focus().setImage({ src: imageUrl }).run();
           } catch (error) {
@@ -396,12 +416,12 @@ export function NotionEditor({
     };
 
     const editorElement = editorContainerRef.current;
-    
+
     if (editorElement) {
       editorElement.addEventListener('paste', handlePaste);
       editorElement.addEventListener('drop', handleDrop);
       editorElement.addEventListener('dragover', handleDragOver);
-      
+
       return () => {
         editorElement.removeEventListener('paste', handlePaste);
         editorElement.removeEventListener('drop', handleDrop);
@@ -412,46 +432,46 @@ export function NotionEditor({
 
   const addLink = useCallback(() => {
     if (!editor || !linkUrl) return;
-    
+
     editor
       .chain()
       .focus()
       .extendMarkRange('link')
       .setLink({ href: linkUrl })
       .run();
-    
+
     setLinkUrl('');
     setShowLinkPopover(false);
   }, [editor, linkUrl]);
 
   const addImage = useCallback(() => {
     if (!editor || !imageUrl) return;
-    
+
     editor
       .chain()
       .focus()
       .setImage({ src: imageUrl })
       .run();
-    
+
     setImageUrl('');
     setShowImagePopover(false);
   }, [editor, imageUrl]);
 
   const executeSlashCommand = useCallback((command: string) => {
     if (!editor) return;
-    
+
     // Remove the slash and command text
     const { from } = editor.state.selection;
     const content = editor.state.doc.textBetween(0, from, ' ', ' ');
     const lastSlashIndex = content.lastIndexOf('/');
-    
+
     if (lastSlashIndex >= 0) {
       editor.chain()
         .focus()
         .deleteRange({ from: lastSlashIndex, to: from })
         .run();
     }
-    
+
     // Execute the command
     handleSlashCommand(editor, command);
     setShowSlashCommands(false);
@@ -475,13 +495,13 @@ export function NotionEditor({
     { title: 'Divider', icon: Minus, command: 'horizontalRule' },
   ];
 
-  const filteredCommands = slashCommands.filter(cmd => 
+  const filteredCommands = slashCommands.filter(cmd =>
     cmd.title.toLowerCase().includes(slashQuery.toLowerCase())
   );
 
   return (
-    <div className={cn("flex flex-col rounded-md border bg-background", className)}>
-      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
+    <div className={cn("flex flex-col rounded-md border bg-background focus-within:border-primary/50 transition-colors", className)}>
+      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/10 backdrop-blur-sm">
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -689,7 +709,7 @@ export function NotionEditor({
           {editor.isActive('table') && (
             <>
               <Separator orientation="vertical" className="mx-1 h-6" />
-              
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -878,7 +898,7 @@ export function NotionEditor({
 
       <div className="flex-1 relative" ref={editorContainerRef}>
         <EditorContent editor={editor} className="w-full" />
-        
+
         {/* Overlay when uploading */}
         {isUploadingImage && (
           <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
@@ -888,11 +908,11 @@ export function NotionEditor({
             </div>
           </div>
         )}
-        
+
         {/* Slash commands popup */}
         {showSlashCommands && (
-          <div 
-            style={{ 
+          <div
+            style={{
               position: "absolute",
               top: `${slashPosition.top}px`,
               left: `${slashPosition.left}px`,
@@ -907,11 +927,10 @@ export function NotionEditor({
                   key={cmd.command}
                   onClick={() => executeSlashCommand(cmd.command)}
                   onMouseEnter={() => setIsKeyboardNavigation(false)}
-                  className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${
-                    selectedCommandIndex === index && isKeyboardNavigation
+                  className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${selectedCommandIndex === index && isKeyboardNavigation
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-muted'
-                  }`}
+                    }`}
                   data-command-index={index}
                 >
                   <cmd.icon size={16} className="text-muted-foreground" />
@@ -929,62 +948,108 @@ export function NotionEditor({
 
       <style jsx>{`
         .notion-editor {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-          line-height: 1.6;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
+          line-height: 1.7;
+          font-size: 16px;
+        }
+        
+        .notion-editor:focus-within {
+          caret-color: #3b82f6;
         }
         
         .notion-editor p {
-          margin: 0.5em 0;
+          margin: 0.75em 0;
+          line-height: 1.7;
+        }
+        
+        .notion-editor p:first-child {
+          margin-top: 0;
+        }
+        
+        .notion-editor .ProseMirror p.is-editor-empty:first-child::before {
+          color: #9ca3af;
+          content: attr(data-placeholder);
+          float: left;
+          height: 0;
+          pointer-events: none;
+          font-size: 16px;
         }
         
         .notion-editor h1 {
-          font-size: 1.875rem;
+          font-size: 2rem;
           font-weight: 700;
           margin: 1.5em 0 0.5em 0;
+          line-height: 1.3;
+          letter-spacing: -0.025em;
         }
         
         .notion-editor h2 {
-          font-size: 1.5rem;
+          font-size: 1.625rem;
           font-weight: 600;
           margin: 1.25em 0 0.5em 0;
+          line-height: 1.35;
+          letter-spacing: -0.02em;
         }
         
         .notion-editor h3 {
-          font-size: 1.25rem;
+          font-size: 1.375rem;
           font-weight: 600;
           margin: 1em 0 0.5em 0;
+          line-height: 1.4;
+          letter-spacing: -0.015em;
         }
         
         .notion-editor ul, .notion-editor ol {
-          margin: 0.5em 0;
-          padding-left: 1.5em;
+          margin: 0.75em 0;
+          padding-left: 1.75em;
+        }
+        
+        .notion-editor li {
+          margin: 0.25em 0;
+          line-height: 1.7;
+        }
+        
+        .notion-editor li p {
+          margin: 0.25em 0;
         }
         
         .notion-editor blockquote {
-          border-left: 3px solid #e5e7eb;
-          padding-left: 1em;
-          margin: 1em 0;
+          border-left: 4px solid #e5e7eb;
+          padding-left: 1.25em;
+          margin: 1.25em 0;
           color: #6b7280;
+          font-style: normal;
         }
         
         .notion-editor code {
           background-color: #f3f4f6;
-          padding: 0.125em 0.25em;
-          border-radius: 0.25rem;
-          font-size: 0.875em;
+          padding: 0.2em 0.4em;
+          border-radius: 0.375rem;
+          font-size: 0.9em;
+          font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
         }
         
         .notion-editor pre {
           background-color: #f3f4f6;
-          padding: 1em;
-          border-radius: 0.5rem;
+          padding: 1.25em;
+          border-radius: 0.75rem;
           overflow-x: auto;
+          margin: 1.25em 0;
+          line-height: 1.6;
+        }
+        
+        .notion-editor pre code {
+          background-color: transparent;
+          padding: 0;
+          border-radius: 0;
         }
         
         .notion-editor img {
           max-width: 100%;
           height: auto;
-          border-radius: 0.5rem;
+          border-radius: 0.75rem;
+          margin: 1.5em 0;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
         
         .notion-editor table {
@@ -1048,6 +1113,56 @@ export function NotionEditor({
         
         .notion-editor .ProseMirror-selectednode {
           outline: 2px solid #3b82f6;
+          outline-offset: 2px;
+          border-radius: 0.5rem;
+        }
+        
+        .notion-editor a {
+          color: #3b82f6;
+          text-decoration: underline;
+          text-decoration-thickness: 1px;
+          text-underline-offset: 2px;
+          cursor: pointer;
+        }
+        
+        .notion-editor a:hover {
+          color: #2563eb;
+        }
+        
+        .notion-editor strong {
+          font-weight: 600;
+        }
+        
+        .notion-editor em {
+          font-style: italic;
+        }
+        
+        /* Smoother selection */
+        .notion-editor ::selection {
+          background-color: #dbeafe;
+        }
+        
+        /* Focus state improvements */
+        .notion-editor:focus {
+          outline: none;
+        }
+        
+        /* Better spacing for empty editor */
+        .notion-editor .ProseMirror:focus {
+          outline: none;
+        }
+        
+        /* Improve readability */
+        .notion-editor {
+          color: #1f2937;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+          .notion-editor {
+            color: #f9fafb;
+          }
         }
       `}</style>
     </div>

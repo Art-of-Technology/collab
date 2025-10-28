@@ -16,6 +16,7 @@ services:
         NEXT_PUBLIC_HOCUSPOCUS_URL: ${NEXT_PUBLIC_HOCUSPOCUS_URL}
         NEXT_PUBLIC_ONESIGNAL_APP_ID: ${NEXT_PUBLIC_ONESIGNAL_APP_ID_UAT}
         NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+        NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
         # Database URL needed for Prisma generate during build
         DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
@@ -80,6 +81,19 @@ services:
       
       # Chat Integration
       CHAT_PROJECT_API_KEY: ${CHAT_PROJECT_API_KEY}
+      
+      # Collab Apps Store
+      AS_ISSUER: ${AS_ISSUER}
+      APP_TOKENS_KEY: ${APP_TOKENS_KEY}
+      NEXT_PUBLIC_FEATURE_APPS: ${NEXT_PUBLIC_FEATURE_APPS:-true}
+      
+      # Content Security Policy
+      CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-1}
+      CSP_SCRIPT_SRC: ${CSP_SCRIPT_SRC}
+      CSP_STYLE_SRC: ${CSP_STYLE_SRC}
+      CSP_IMG_SRC: ${CSP_IMG_SRC}
+      CSP_FRAME_ANCESTORS: ${CSP_FRAME_ANCESTORS}
+      CSP_FRAME_SRC: ${CSP_FRAME_SRC}
       
       # UAT database seeding (configurable)
       SEED_DATABASE: ${SEED_DATABASE:-false}
