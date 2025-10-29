@@ -5,6 +5,7 @@ import { trackFieldChanges, createActivity, compareObjects, trackAssignment } fr
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
 import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
 
 export const dynamic = 'force-dynamic';
@@ -210,6 +211,7 @@ export async function PUT(
     });
 
     // Track activities for changed fields (Issue-centric)
+    let changes: any[] = [];
     try {
       // Handle assignee changes separately with proper user name resolution
       if (assigneeChanged) {
@@ -280,7 +282,7 @@ export async function PUT(
       ];
       
       // Use the existing compareObjects function to detect changes
-      const changes = compareObjects(oldIssue, updatedIssue, fieldsToTrack);
+      changes = compareObjects(oldIssue, updatedIssue, fieldsToTrack);
 
       if (changes.length > 0) {
         await trackFieldChanges(
@@ -394,6 +396,24 @@ export async function PUT(
       console.warn('[ISSUES_PUT_NOTIFY]', notificationError);
     }
 
+    // Emit webhook event for issue update
+    try {
+      await emitIssueUpdated(
+        updatedIssue,
+        changes, // Include the changes that were made
+        {
+          userId: currentUser.id,
+          workspaceId: updatedIssue.workspaceId,
+          workspaceName: updatedIssue.workspace?.name || '',
+          workspaceSlug: updatedIssue.workspace?.slug || '',
+          source: 'api'
+        },
+        { async: true } // Don't block the response
+      );
+    } catch (webhookError) {
+      console.warn('[ISSUES_PUT_WEBHOOK]', webhookError);
+    }
+
     return NextResponse.json({ issue: updatedIssue });
 
   } catch (error) {
@@ -432,6 +452,12 @@ export async function DELETE(
     if (!existingIssue) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
+    
+    // Get full issue data with workspace for webhook
+    const issueWithWorkspace = await prisma.issue.findUnique({
+      where: { id: existingIssue.id },
+      include: { workspace: { select: { id: true, name: true, slug: true } } }
+    });
 
     // Check workspace access and ownership
     const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
@@ -479,6 +505,23 @@ export async function DELETE(
       deletionRecipients = Array.from(recipientIds).filter(id => id !== currentUser.id);
     } catch (prepErr) {
       console.warn('[ISSUES_DELETE_NOTIFY_PREP]', prepErr);
+    }
+
+    // Emit webhook event before deletion (while we still have the data)
+    try {
+      await emitIssueDeleted(
+        existingIssue,
+        {
+          userId: currentUser.id,
+          workspaceId: existingIssue.workspaceId,
+          workspaceName: issueWithWorkspace?.workspace?.name || '',
+          workspaceSlug: issueWithWorkspace?.workspace?.slug || '',
+          source: 'api'
+        },
+        { async: true } // Don't block the deletion
+      );
+    } catch (webhookError) {
+      console.warn('[ISSUES_DELETE_WEBHOOK]', webhookError);
     }
 
     // Delete the issue

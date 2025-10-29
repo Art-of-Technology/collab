@@ -6,6 +6,8 @@ This document provides comprehensive instructions for running Collab using Docke
 
 ## 🚀 Quick Start
 
+> **💡 Tip**: For a faster getting started guide, see [QUICK_START.md](./QUICK_START.md)
+
 ### Prerequisites
 
 - Docker Engine 20.10+
@@ -19,7 +21,7 @@ This document provides comprehensive instructions for running Collab using Docke
 
 ```bash
 git clone <your-repo-url>
-cd collab
+cd collab/docker
 ```
 
 ### 2. Choose Your Environment
@@ -33,13 +35,17 @@ Collab supports three environments with separate configurations:
 ### 3. Environment Configuration
 
 ```bash
-# Copy the appropriate environment template
-cp docker/dev/.env.dev.template docker/dev/.env.dev.local     # Development
-cp docker/uat/.env.uat.template docker/uat/.env.uat.local     # UAT
-cp docker/prod/.env.prod.template docker/prod/.env.prod.local # Production
+# Use the Makefile to set up all environments at once
+cd docker
+make setup
+
+# Or copy environment files manually:
+cp docker/dev/.env.example docker/dev/.env                    # Development
+cp docker/uat/.env.example docker/uat/.env.uat.local         # UAT
+cp docker/prod/.env.example docker/prod/.env.prod.local      # Production
 
 # Edit the environment file with your actual values
-nano docker/dev/.env.dev.local  # or your preferred editor
+nano docker/dev/.env  # or your preferred editor
 ```
 
 **Important**: Fill in at least these required variables:
@@ -85,21 +91,21 @@ docker/
 ├── dev/                          # Development environment
 │   ├── docker-compose.dev.yml    # Development services
 │   ├── Dockerfile.dev            # Development build
-│   ├── .env.dev.template         # Development environment template
+│   ├── .env.example              # Development environment template
 │   ├── docker-entrypoint-dev.sh  # Development startup script
-│   └── .env.dev.local            # Your development config (gitignored)
+│   └── .env                      # Your development config (gitignored)
 │
 ├── uat/                          # UAT/Staging environment
 │   ├── docker-compose.uat.yml    # UAT services
 │   ├── Dockerfile.uat            # UAT build
-│   ├── .env.uat.template         # UAT environment template
+│   ├── .env.example              # UAT environment template
 │   ├── docker-entrypoint-uat.sh  # UAT startup script
 │   └── .env.uat.local            # Your UAT config (gitignored)
 │
 ├── prod/                         # Production environment
 │   ├── docker-compose.prod.yml   # Production services
 │   ├── Dockerfile.prod           # Production build
-│   ├── .env.prod.template        # Production environment template
+│   ├── .env.example              # Production environment template
 │   ├── docker-entrypoint-prod.sh # Production startup script
 │   └── .env.prod.local           # Your production config (gitignored)
 │
@@ -107,21 +113,25 @@ docker/
 │   └── .dockerignore             # Common Docker ignore file
 │
 ├── README.md                     # This file
+├── QUICK_START.md                # Quick reference guide
+├── ENV_SETUP_GUIDE.md            # Comprehensive setup guide
+├── CHANGELOG_ENV_SETUP.md        # Environment setup change log
 └── Makefile                      # Environment management commands
 ```
 
 ## 🛠 Environment Details
 
 ### Development Environment
-- **Purpose**: Active development with hot-reload
+- **Purpose**: Development with optimized build (production-like performance)
 - **Database**: External NeonDB PostgreSQL
 - **Cache**: External Cloud Redis
 - **Features**: 
-  - Live code reloading
-  - Debug tools (Node.js debugger on port 9229)
-  - Email testing with MailHog
+  - Production-like optimized build for better performance
+  - `NODE_ENV=development` for better debugging
+  - Auto-seeding enabled
   - External database migrations and seeding
-  - Admin tools for external services
+  - Admin tools for external services (Redis Commander, Uptime Kuma, Portainer)
+  - **Note**: Code changes require rebuild (`make dev-rebuild`)
 
 ### UAT Environment
 - **Purpose**: Staging/testing environment
@@ -158,7 +168,8 @@ make prod-first-run    # Complete production setup
 ```bash
 make dev               # Start development environment
 make dev-down          # Stop development environment
-make dev-restart       # Restart development environment
+make dev-restart       # Restart development (no rebuild)
+make dev-rebuild       # Rebuild and restart (apply code changes)
 
 make uat               # Start UAT environment
 make uat-down          # Stop UAT environment
@@ -224,9 +235,11 @@ REDIS_URL=redis://default:password@your-redis-host:port
 
 Each environment uses its own configuration file:
 
-- **Development**: `docker/dev/.env.dev.local`
-- **UAT**: `docker/uat/.env.uat.local`
-- **Production**: `docker/prod/.env.prod.local`
+- **Development**: `docker/dev/.env` (created from `.env.example`)
+- **UAT**: `docker/uat/.env.uat.local` (created from `.env.example`)
+- **Production**: `docker/prod/.env.prod.local` (created from `.env.example`)
+
+See [ENV_SETUP_GUIDE.md](./ENV_SETUP_GUIDE.md) for comprehensive setup instructions and [QUICK_START.md](./QUICK_START.md) for quick reference.
 
 ### Key Configuration Areas
 
@@ -256,9 +269,9 @@ Each environment uses its own configuration file:
 ### Port Conflicts
 Each environment uses different ports to avoid conflicts:
 
-- **Dev**: 3000 (app), 5050 (pgadmin), 8081 (redis-commander), 8025 (mailhog)
-- **UAT**: 3001 (app), 5051 (pgadmin), 8082 (redis-commander)
-- **Prod**: 3002 (app), 5052 (pgadmin), 8083 (redis-commander)
+- **Dev**: 3000 (app), 8081 (redis-commander), 3001 (uptime-kuma), 9000 (portainer)
+- **UAT**: 3004 (app), 8082 (redis-commander), 3005 (uptime-kuma), 9001 (portainer)
+- **Prod**: 3002 (app), 8083 (redis-commander), 3003 (uptime-kuma), 9002 (portainer)
 
 ### External Services Issues
 
@@ -314,6 +327,13 @@ make uat-db-reset     # ⚠️ DESTRUCTIVE
 - SSL/TLS ready configuration
 - Secrets management integration ready
 
+## 📚 Additional Documentation
+
+- **[QUICK_START.md](./QUICK_START.md)** - Quick reference for common tasks
+- **[ENV_SETUP_GUIDE.md](./ENV_SETUP_GUIDE.md)** - Comprehensive environment setup guide
+- **[CHANGELOG_ENV_SETUP.md](./CHANGELOG_ENV_SETUP.md)** - Recent environment configuration updates
+- **[Makefile](./Makefile)** - All available make commands with descriptions
+
 ## 📚 Migration from Root Docker Files
 
 If you have existing Docker files in the root directory, migrate using:
@@ -322,7 +342,7 @@ If you have existing Docker files in the root directory, migrate using:
 # The new structure replaces these root files:
 # Dockerfile → docker/prod/Dockerfile.prod
 # docker-compose.yml → docker/prod/docker-compose.prod.yml
-# .env.docker → docker/prod/.env.prod.template
+# .env.docker → docker/prod/.env.example
 ```
 
 ## 🆘 Support

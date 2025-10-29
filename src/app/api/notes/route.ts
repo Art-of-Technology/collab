@@ -133,6 +133,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Verify user exists in database
+    const userExists = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true }
+    });
+
+    if (!userExists) {
+      console.error("User not found in database:", session.user.id);
+      return NextResponse.json(
+        { error: "User not found. Please sign in again." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { title, content, isPublic, isFavorite, workspaceId, tagIds } = body;
 
@@ -142,7 +156,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
     const note = await prisma.note.create({
       data: {
         title,

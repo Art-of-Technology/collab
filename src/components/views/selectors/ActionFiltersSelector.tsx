@@ -113,7 +113,8 @@ export function ActionFiltersSelector({
     enabled: projectIds.length > 0
   });
 
-  const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.name, s])).values());
+  // Create unique statuses map using ID as key to ensure lookup by ID works correctly
+  const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.id, s])).values());
 
   const statusIcon = (status: any) => {
     const iconMap = {

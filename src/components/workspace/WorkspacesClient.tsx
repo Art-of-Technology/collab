@@ -15,7 +15,6 @@ import { usePendingInvitations } from '@/hooks/queries/useInvitation';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
-import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 
 interface WorkspacesClientProps {
   initialWorkspaces: any[];
@@ -35,7 +34,6 @@ export default function WorkspacesClient({
   // Get the active tab from URL params
   const activeTab = searchParams?.get('tab') === 'invitations' ? 'invitations' : 'workspaces';
   const [currentTab, setCurrentTab] = useState(activeTab);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
   // Fetch workspaces with TanStack Query
   const { data: workspacesData, isLoading: isLoadingWorkspaces } = useUserWorkspaces();
@@ -49,7 +47,7 @@ export default function WorkspacesClient({
   const { data: workspaceLimit } = useWorkspaceLimit();
   
   // Use the fetched data or fall back to the initial data
-  const workspaces = workspacesData?.all || initialWorkspaces;
+  const workspaces = workspacesData || initialWorkspaces;
   const pendingInvitations = pendingInvitationsData || initialInvitations;
   
   // Handle tab change
@@ -81,7 +79,7 @@ export default function WorkspacesClient({
               variant="ghost"
               size="sm"
               className={pageHeaderButtonStyles.primary}
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={() => router.push('/create-workspace')}
             >
               <Plus className="h-3 w-3 mr-1" />
               Create Workspace
@@ -271,7 +269,7 @@ export default function WorkspacesClient({
                   <Button 
                     size="sm" 
                     className="bg-[#238636] hover:bg-[#2ea043] text-white border-0"
-                    onClick={() => setIsCreateModalOpen(true)}
+                    onClick={() => router.push('/create-workspace')}
                   >
                     <Plus className="mr-1.5 h-3 w-3" />
                     Create Your First Workspace
@@ -387,12 +385,6 @@ export default function WorkspacesClient({
           )}
         </div>
       </div>
-
-      {/* Create Workspace Modal */}
-      <CreateWorkspaceModal 
-        open={isCreateModalOpen}
-        onOpenChange={setIsCreateModalOpen}
-      />
     </div>
   );
 } 

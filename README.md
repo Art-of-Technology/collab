@@ -101,8 +101,116 @@ Collab is designed to streamline internal communication and work tracking by off
 3. Set up environment variables:
    ```bash
    cp .env .env.local
-   # Edit .env.local and add:
-   # DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPENAI_KEY
+   ```
+   
+   Edit `.env.local` and configure the following environment variables:
+
+   ### Required Variables
+
+   #### Database Configuration
+   ```bash
+   DATABASE_URL="postgresql://username:password@localhost:5432/collab_db"
+   ```
+
+   #### Authentication (NextAuth.js)
+   ```bash
+   NEXTAUTH_URL="http://localhost:3000"  # Your app's URL
+   NEXTAUTH_SECRET="your-super-secret-jwt-secret-here"  # Generate with: openssl rand -base64 32
+   
+   # Google OAuth (required for Google sign-in)
+   GOOGLE_CLIENT_ID="your-google-client-id"
+   GOOGLE_CLIENT_SECRET="your-google-client-secret"
+   ```
+
+   #### Media Storage (Cloudinary)
+   ```bash
+   NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME="your-cloudinary-cloud-name"
+   CLOUDINARY_API_KEY="your-cloudinary-api-key"
+   CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
+   ```
+
+   ### Optional Variables
+
+   #### AI Features (OpenAI)
+   ```bash
+   OPENAPI_KEY="sk-your-openai-api-key-here"  # Required for AI text improvement and board generation
+   ```
+
+   #### Email Configuration (SMTP)
+   ```bash
+   EMAIL_FROM="Collab Team <noreply@yourapp.com>"
+   EMAIL_HOST="smtp.example.com"  # Your SMTP server
+   EMAIL_PORT="587"  # SMTP port (587 for TLS, 465 for SSL)
+   EMAIL_USER="your-smtp-username"
+   EMAIL_PASSWORD="your-smtp-password"
+   EMAIL_SECURE="false"  # Set to "true" for port 465, "false" for other ports
+   ```
+
+   #### App Store & OAuth (for third-party apps)
+   ```bash
+   APP_TOKENS_KEY="your-32-character-encryption-key-here"  # Generate with: openssl rand -hex 32
+   ```
+
+   #### Chat Integration (optional)
+   ```bash
+   CHAT_PROJECT_API_KEY="your-chat-project-api-key"  # For chat widget integration
+   ```
+
+   #### Error Monitoring (Sentry - optional)
+   ```bash
+   SENTRY_DSN="https://your-sentry-dsn@sentry.io/project-id"
+   ```
+
+   #### Feature Flags
+   ```bash
+   NEXT_PUBLIC_FEATURE_APPS="true"  # Enable app store features
+   NEXT_PUBLIC_APP_URL="https://your-app-domain.com"  # Public URL for invitation links
+   ```
+
+   ### Environment-Specific Variables
+   ```bash
+   NODE_ENV="development"  # or "production"
+   CI="true"  # Set in CI/CD environments for build optimizations
+   ```
+
+   ### How to Obtain Credentials
+
+   #### Google OAuth Setup
+   1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+   2. Create a new project or select an existing one
+   3. Enable the Google+ API
+   4. Go to "Credentials" and create OAuth 2.0 Client IDs
+   5. Add your domain to authorized origins and redirect URIs
+
+   #### Cloudinary Setup
+   1. Sign up at [Cloudinary](https://cloudinary.com/)
+   2. Get your cloud name, API key, and API secret from your dashboard
+   3. The cloud name should be public (prefixed with `NEXT_PUBLIC_`)
+
+   #### OpenAI API Setup
+   1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+   2. Sign in or create an account
+   3. Create a new API key
+   4. Copy the key (starts with `sk-`)
+
+   #### Email Provider Setup
+   For development, you can use:
+   - [Mailtrap](https://mailtrap.io/) - Email testing service
+   - [Ethereal Email](https://ethereal.email/) - Fake SMTP service
+   
+   For production, consider:
+   - [SendGrid](https://sendgrid.com/)
+   - [Mailgun](https://www.mailgun.com/)
+   - [Amazon SES](https://aws.amazon.com/ses/)
+
+   #### Database Setup
+   For development:
+   ```bash
+   # Using Docker
+   docker run --name collab-postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=collab_db -p 5432:5432 -d postgres:15
+   
+   # Or install PostgreSQL locally and create a database
+   createdb collab_db
    ```
 4. Generate Prisma client and run migrations:
    ```bash

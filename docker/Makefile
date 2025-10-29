@@ -35,27 +35,27 @@ help: ## Show this help message
 setup: ## Initial setup - copy environment templates and generate secrets
 	@echo "🔧 Setting up Collab Docker environments..."
 	@mkdir -p dev uat prod shared
-	@if [ ! -f dev/.env.dev.local ]; then \
-		cp dev/.env.dev.template dev/.env.dev.local; \
-		echo "📋 Created dev/.env.dev.local from template"; \
+	@if [ ! -f dev/.env ]; then \
+		cp dev/.env.example dev/.env; \
+		echo "📋 Created dev/.env from .env.example"; \
 	else \
-		echo "⚠️  dev/.env.dev.local already exists"; \
+		echo "⚠️  dev/.env already exists"; \
 	fi
 	@if [ ! -f uat/.env.uat.local ]; then \
-		cp uat/.env.uat.template uat/.env.uat.local; \
-		echo "📋 Created uat/.env.uat.local from template"; \
+		cp uat/.env.example uat/.env.uat.local; \
+		echo "📋 Created uat/.env.uat.local from .env.example"; \
 	else \
 		echo "⚠️  uat/.env.uat.local already exists"; \
 	fi
 	@if [ ! -f prod/.env.prod.local ]; then \
-		cp prod/.env.prod.template prod/.env.prod.local; \
-		echo "📋 Created prod/.env.prod.local from template"; \
+		cp prod/.env.example prod/.env.prod.local; \
+		echo "📋 Created prod/.env.prod.local from .env.example"; \
 	else \
 		echo "⚠️  prod/.env.prod.local already exists"; \
 	fi
 	@echo ""
 	@echo "✅ Setup complete! Please edit environment files with your credentials:"
-	@echo "📝 Development: docker/dev/.env.dev.local"
+	@echo "📝 Development: docker/dev/.env"
 	@echo "📝 UAT: docker/uat/.env.uat.local"
 	@echo "📝 Production: docker/prod/.env.prod.local"
 
@@ -64,37 +64,46 @@ setup: ## Initial setup - copy environment templates and generate secrets
 # ============================================================================
 
 dev-build: ## Build development images
-	@echo "🏗️  Building Collab development images..."
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local build
+	@echo "🏗️  Building Collab development images (optimized build)..."
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env build --no-cache
 
-dev: dev-build ## Start development environment with hot-reload
+dev: dev-build ## Start development environment with optimized build
 	@echo "🚀 Starting Collab development environment..."
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local up -d
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env up -d
 	@echo "✅ Development services started!"
 	@echo "🏢 Collab: http://localhost:3000"
-	@echo "🗄️  pgAdmin: http://localhost:5050 (dev@collab.local / devpassword)"
-	@echo "📧 MailHog: http://localhost:8025"
 	@echo "📊 Redis Commander: http://localhost:8081"
+	@echo "📈 Uptime Kuma: http://localhost:3001"
+	@echo "🐳 Portainer: http://localhost:9000"
+	@echo ""
+	@echo "⚡ Performance Note: Dev now uses production-like build for better performance"
+	@echo "💡 Code changes require rebuild: make dev-rebuild"
 
 dev-down: ## Stop development environment
 	@echo "🛑 Stopping development services..."
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local down
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env down
 	@echo "✅ Development services stopped"
 
-dev-restart: ## Restart development environment
+dev-restart: ## Restart development environment (no rebuild)
 	@echo "🔄 Restarting development services..."
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env restart
+	@echo "✅ Development services restarted"
+
+dev-rebuild: ## Rebuild and restart development (apply code changes)
+	@echo "🔄 Rebuilding development environment with code changes..."
 	$(MAKE) dev-down
 	$(MAKE) dev
+	@echo "✅ Development rebuilt and restarted with latest code"
 
 dev-logs: ## View development logs
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local logs -f
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env logs -f
 
 dev-status: ## Check development service status
 	@echo "📊 Development Service Status:"
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local ps
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env ps
 
 dev-shell: ## Access development application shell
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local exec collab-dev sh
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env exec collab-dev sh
 
 dev-first-run: setup dev ## Complete development setup and start
 	@echo ""
@@ -105,20 +114,20 @@ dev-first-run: setup dev ## Complete development setup and start
 # Development Database Operations (External NeonDB)
 dev-db-migrate: ## Run database migrations in development (external NeonDB)
 	@echo "🔄 Running development database migrations on external NeonDB..."
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local exec collab-dev npx prisma migrate deploy
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env exec collab-dev npx prisma migrate deploy
 
 dev-db-seed: ## Seed development database (external NeonDB)
 	@echo "🌱 Seeding external development database..."
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local exec collab-dev npm run prisma:init-workspace
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env exec collab-dev npm run prisma:init-workspace
 
 dev-db-reset: ## Reset development database using Prisma (⚠️ DESTRUCTIVE - affects external NeonDB)
 	@echo "⚠️  WARNING: This will reset your external NeonDB development database!"
 	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local exec collab-dev npx prisma migrate reset --force
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env exec collab-dev npx prisma migrate reset --force
 
 dev-db-studio: ## Open Prisma Studio for development database
 	@echo "🔍 Opening Prisma Studio for development database..."
-	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local exec collab-dev npx prisma studio
+	cd dev && docker-compose -f docker-compose.dev.yml --env-file .env exec collab-dev npx prisma studio
 
 # ============================================================================
 # UAT ENVIRONMENT
@@ -132,9 +141,10 @@ uat: uat-build ## Start UAT environment
 	@echo "🚀 Starting Collab UAT environment..."
 	cd uat && docker-compose -f docker-compose.uat.yml --env-file .env.uat.local up -d
 	@echo "✅ UAT services started!"
-	@echo "🏢 Collab: http://localhost:3001"
-	@echo "🗄️  pgAdmin: http://localhost:5051 (uat@collab.local / uatpassword)"
+	@echo "🏢 Collab: http://localhost:3004"
 	@echo "📊 Redis Commander: http://localhost:8082"
+	@echo "📈 Uptime Kuma: http://localhost:3005"
+	@echo "🐳 Portainer: http://localhost:9001"
 
 uat-down: ## Stop UAT environment
 	@echo "🛑 Stopping UAT services..."
@@ -159,7 +169,7 @@ uat-shell: ## Access UAT application shell
 uat-first-run: setup uat ## Complete UAT setup and start
 	@echo ""
 	@echo "🎉 Collab UAT environment is ready!"
-	@echo "🏢 Access Collab UAT at: http://localhost:3001"
+	@echo "🏢 Access Collab UAT at: http://localhost:3004"
 
 # UAT Database Operations (External AWS RDS or similar)
 uat-db-migrate: ## Run database migrations in UAT (external database)
@@ -194,8 +204,9 @@ prod-admin: prod-build ## Start production environment with admin tools
 	cd prod && docker-compose -f docker-compose.prod.yml --env-file .env.prod.local --profile admin up -d
 	@echo "✅ Production services with admin tools started!"
 	@echo "🏢 Collab: http://localhost:3002"
-	@echo "🗄️  pgAdmin: http://localhost:5052"
 	@echo "📊 Redis Commander: http://localhost:8083"
+	@echo "📈 Uptime Kuma: http://localhost:3003"
+	@echo "🐳 Portainer: http://localhost:9002"
 
 prod-down: ## Stop production environment
 	@echo "🛑 Stopping production services..."
@@ -247,7 +258,7 @@ clean: ## Remove all containers, networks, and volumes (⚠️ DESTRUCTIVE)
 	@echo "⚠️  WARNING: This will delete all data and containers!"
 	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
 	@echo "🧹 Cleaning up all environments..."
-	-cd dev && docker-compose -f docker-compose.dev.yml --env-file .env.dev.local down -v --remove-orphans
+	-cd dev && docker-compose -f docker-compose.dev.yml --env-file .env down -v --remove-orphans
 	-cd uat && docker-compose -f docker-compose.uat.yml --env-file .env.uat.local down -v --remove-orphans
 	-cd prod && docker-compose -f docker-compose.prod.yml --env-file .env.prod.local down -v --remove-orphans
 	docker system prune -f
@@ -267,8 +278,8 @@ health: ## Check health of all running services
 	@echo "Development (port 3000):"
 	@curl -s -o /dev/null -w "Status: %{http_code}\n" http://localhost:3000 || echo "Not running"
 	@echo ""
-	@echo "UAT (port 3001):"
-	@curl -s -o /dev/null -w "Status: %{http_code}\n" http://localhost:3001 || echo "Not running"
+	@echo "UAT (port 3004):"
+	@curl -s -o /dev/null -w "Status: %{http_code}\n" http://localhost:3004 || echo "Not running"
 	@echo ""
 	@echo "Production (port 3002):"
 	@curl -s -o /dev/null -w "Status: %{http_code}\n" http://localhost:3002 || echo "Not running"

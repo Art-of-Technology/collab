@@ -89,6 +89,110 @@ export enum NotificationType {
 
 export class NotificationService {
   /**
+   * Bounce helper: returns true if the user's last notification content is the same.
+   * This prevents duplicate rapid-fire notifications with identical content.
+   */
+  private static async shouldBounceNotification(
+    userId: string,
+    content: string
+  ): Promise<boolean> {
+    try {
+      const map = await NotificationService.getLatestNotificationContentByUserIds([userId]);
+      const lastContent = map.get(userId);
+      return !!lastContent && lastContent === content;
+    } catch (error) {
+      logger.error("Bounce check failed; proceeding without bounce", error, {
+        userId,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Returns a mapping from userId -> last notification content for the provided userIds,
+   * fetched efficiently using groupBy + a single follow-up query.
+   */
+  private static async getLatestNotificationContentByUserIds(
+    userIds: string[]
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (!userIds || userIds.length === 0) return result;
+
+    try {
+      const groups = await prisma.notification.groupBy({
+        by: ["userId"],
+        where: { userId: { in: userIds } },
+        _max: { createdAt: true },
+      });
+
+      const targets = groups
+        .filter((g) => !!g._max.createdAt)
+        .map((g) => ({ userId: g.userId, createdAt: g._max.createdAt as Date }));
+
+      if (targets.length === 0) return result;
+
+      // Build a lookup of latest createdAt per userId
+      const latestCreatedAtByUser: Record<string, Date> = {};
+      for (const t of targets) {
+        latestCreatedAtByUser[t.userId] = t.createdAt;
+      }
+
+      // Fetch all notifications for these userIds with createdAt in the set of latest dates
+      const rows = await prisma.notification.findMany({
+        where: {
+          userId: { in: targets.map((t) => t.userId) },
+          createdAt: { in: targets.map((t) => t.createdAt) },
+        },
+        select: { userId: true, content: true, createdAt: true, id: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+
+      for (const row of rows) {
+        // If multiple notifications have the same createdAt, pick the one with the highest id
+        if (
+          !result.has(row.userId) ||
+          (result.has(row.userId) && row.id > (result.get(row.userId + "_id") ?? -1))
+        ) {
+          result.set(row.userId, row.content);
+          result.set(row.userId + "_id", row.id);
+        }
+      }
+
+      // Remove temporary "_id" keys before returning
+      for (const key of Array.from(result.keys())) {
+        if (key.endsWith("_id")) {
+          result.delete(key);
+        }
+      }
+      return result;
+    } catch (error) {
+      logger.error("Failed to fetch latest notifications in batch", error, {
+        userCount: userIds.length,
+      });
+      return result; // fail-open
+    }
+  }
+
+  /**
+   * Given userIds and a content, returns the set of userIds whose latest notification
+   * already has exactly the same content (i.e., should bounce).
+   */
+  private static async getBouncedUserIdsForContent(
+    userIds: string[],
+    content: string
+  ): Promise<Set<string>> {
+    const bounced = new Set<string>();
+    if (!userIds || userIds.length === 0) return bounced;
+
+    const latestMap = await NotificationService.getLatestNotificationContentByUserIds(userIds);
+    for (const userId of userIds) {
+      const last = latestMap.get(userId);
+      if (last !== undefined && last === content) bounced.add(userId);
+    }
+    return bounced;
+  }
+
+  /**
    * Create notifications for a specific list of users, optionally filtering by preferences.
    * Returns the number of notifications created. Also sends push notifications when
    * postId or issueId are provided (used for URL generation).
@@ -166,7 +270,18 @@ export class NotificationService {
 
       if (recipientIds.length === 0) return 0;
 
-      const data = recipientIds.map((userId) => ({
+      // Bounce filter: skip users whose last notification has identical content
+      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
+        recipientIds,
+        content
+      );
+      const dedupedRecipientIds = recipientIds.filter(
+        (uid) => !bouncedSet.has(uid)
+      );
+
+      if (dedupedRecipientIds.length === 0) return 0;
+
+      const data = dedupedRecipientIds.map((userId) => ({
         ...baseData,
         userId,
       }));
@@ -175,7 +290,7 @@ export class NotificationService {
 
       // Push notifications (best-effort)
       if (issueId || postId) {
-        const pushPromises = recipientIds.map((userId) =>
+        const pushPromises = dedupedRecipientIds.map((userId) =>
           this.sendPushNotificationForUser(
             userId,
             (type as unknown) as NotificationType,
@@ -188,11 +303,11 @@ export class NotificationService {
       }
 
       logger.info("Direct user notifications created", {
-        count: result.count ?? recipientIds.length,
+        count: result.count ?? dedupedRecipientIds.length,
         type,
       });
 
-      return result.count ?? recipientIds.length;
+      return result.count ?? dedupedRecipientIds.length;
     } catch (error) {
       logger.error("Failed to notify users", error, { type });
       return 0;
@@ -226,9 +341,16 @@ export class NotificationService {
 
       // Filter followers based on their notification preferences
       const validNotifications = [];
+      // Precompute bounce info for all followerIds in one go
+      const followerIds = followers.map((f) => f.userId);
+      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
+        followerIds,
+        content
+      );
       for (const follower of followers) {
         const preferences = await this.getUserPreferences(follower.userId);
         if (this.shouldNotifyUser(preferences, notificationType)) {
+          if (bouncedSet.has(follower.userId)) continue;
           validNotifications.push({
             type: notificationType.toString(),
             content,
@@ -790,15 +912,28 @@ export class NotificationService {
           read: false,
         }));
 
-      if (notifications.length > 0) {
-        await prisma.notification.createMany({ data: notifications });
+      // Return early if there are no notifications to process
+      if (notifications.length === 0) return;
+
+      // Bounce filter per user/content (batch)
+      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
+        notifications.map((n) => n.userId),
+        // content is uniform per n due to safeContent-based string building
+        notifications[0].content
+      );
+      const dedupedNotifications = notifications.filter(
+        (n) => !bouncedSet.has(n.userId)
+      );
+
+      if (dedupedNotifications.length > 0) {
+        await prisma.notification.createMany({ data: dedupedNotifications });
         logger.info("Task comment mention notifications created", {
-          count: notifications.length,
+          count: dedupedNotifications.length,
           taskId,
           taskCommentId,
         });
 
-        const pushPromises = notifications.map((n) =>
+        const pushPromises = dedupedNotifications.map((n) =>
           this.sendPushNotificationForUser(
             n.userId,
             NotificationType.ISSUE_MENTION,
@@ -1175,6 +1310,11 @@ export class NotificationService {
       actionType
     );
 
+    // Bounce: skip if last notification matches
+    if (await NotificationService.shouldBounceNotification(leaveRequest.userId, content)) {
+      return;
+    }
+
     // Create in-app notification
     await prisma.notification.create({
       data: {
@@ -1233,8 +1373,17 @@ export class NotificationService {
       actionType
     );
 
+    // Bounce filter recipients
+    const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
+      recipientIds,
+      content
+    );
+    const dedupedRecipientIds = recipientIds.filter((uid) => !bouncedSet.has(uid));
+
+    if (dedupedRecipientIds.length === 0) return;
+
     // Create notifications for each manager
-    const notifications = recipientIds.map((managerId) => ({
+    const notifications = dedupedRecipientIds.map((managerId) => ({
       userId: managerId,
       senderId: leaveRequest.userId,
       type: notificationType,
@@ -1247,7 +1396,7 @@ export class NotificationService {
     });
 
     // Send push notifications
-    for (const managerId of recipientIds) {
+    for (const managerId of dedupedRecipientIds) {
       const preferences = await NotificationService.getUserPreferences(
         managerId
       );
@@ -1302,8 +1451,14 @@ export class NotificationService {
       actionType
     );
 
+    // Bounce filter recipients
+    const bouncedSet = await NotificationService.getBouncedUserIdsForContent(hrIds, content);
+    const dedupedHrIds = hrIds.filter((uid) => !bouncedSet.has(uid));
+
+    if (dedupedHrIds.length === 0) return;
+
     // Create notifications for each HR person
-    const notifications = hrIds.map((hrId) => ({
+    const notifications = dedupedHrIds.map((hrId) => ({
       userId: hrId,
       senderId: leaveRequest.userId,
       type: notificationType,
@@ -1316,7 +1471,7 @@ export class NotificationService {
     });
 
     // Send push notifications
-    for (const hrId of hrIds) {
+    for (const hrId of dedupedHrIds) {
       const preferences = await NotificationService.getUserPreferences(hrId);
 
       if (

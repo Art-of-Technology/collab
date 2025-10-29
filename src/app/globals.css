@@ -202,15 +202,14 @@
     @apply border-border;
   }
   
-  html {
+  html,
+  body {
     height: 100%;
-    overflow: hidden;
   }
   
   body {
     @apply bg-background text-foreground;
-    height: 100%;
-    overflow: hidden;
+    overflow-x: hidden;
   }
 }
 
