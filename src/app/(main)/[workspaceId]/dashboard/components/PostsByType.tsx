@@ -26,7 +26,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
   const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   const { data: currentUser } = useCurrentUser();
   const resolvePostMutation = useResolvePost();
-  const { checkPermission, isSystemAdmin } = usePermissions(workspaceId);
+  const { checkPermission, isSystemAdmin } = usePermissions(effectiveWorkspaceId);
 
   // Use TanStack Query for data fetching with initial data from server
   const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, effectiveWorkspaceId);
