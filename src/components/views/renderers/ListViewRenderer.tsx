@@ -689,7 +689,7 @@ export default function ListViewRenderer({
 
         {/* Created / Updated Dates */}
         {(displaySettings.displayProperties.includes('Created') || displaySettings.displayProperties.includes('Updated')) && (
-          <div className="flex items-center gap-2 flex-shrink-0 w-24 justify-end">
+          <div className="flex items-center gap-2 flex-shrink-0 w-auto justify-end">
             {displaySettings.displayProperties.includes('Created') && (
               <span className="text-[#6e7681] text-xs">
                 {format(new Date(issue.createdAt), 'MMM d')}
