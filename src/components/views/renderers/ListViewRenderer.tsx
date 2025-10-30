@@ -703,8 +703,9 @@ export default function ListViewRenderer({
           </div>
         )}
       </div>
-    </div>
+    </a>
   );
+};
 
   // Calculate total issues count
   const totalIssues = groupedIssues.reduce((sum, group) => sum + group.count, 0);
@@ -758,4 +759,4 @@ export default function ListViewRenderer({
 
     </div>
   );
-} 
+}
