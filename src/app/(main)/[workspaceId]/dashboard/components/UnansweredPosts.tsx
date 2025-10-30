@@ -35,8 +35,9 @@ interface UnansweredPostsProps {
 
 export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: unansweredPosts = initialPosts || [], isLoading } = useUnansweredPosts(workspaceId);
+  const { data: unansweredPosts = initialPosts || [], isLoading } = useUnansweredPosts(effectiveWorkspaceId);
 
   const truncateText = (text: string, maxLength = 120) => {
     // Strip HTML tags

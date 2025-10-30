@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, Heart, MessageSquare, TrendingUp, Loader2 } from "lucide-react";
 import { useTeamMetrics } from "@/hooks/queries/useDashboard";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface TeamMetricsProps {
   workspaceId: string;
@@ -10,8 +11,10 @@ interface TeamMetricsProps {
 }
 
 export function TeamMetrics({ workspaceId, initialMetrics }: TeamMetricsProps) {
+  const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: metrics = initialMetrics || [0, 0, 0, 0], isLoading } = useTeamMetrics(workspaceId);
+  const { data: metrics = initialMetrics || [0, 0, 0, 0], isLoading } = useTeamMetrics(effectiveWorkspaceId);
 
   if (isLoading && !initialMetrics?.length) {
     return (

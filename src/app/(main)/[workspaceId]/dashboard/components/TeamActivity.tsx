@@ -16,8 +16,9 @@ interface TeamActivityProps {
 
 export function TeamActivity({ workspaceId, initialActivities }: TeamActivityProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: activities = initialActivities || [], isLoading, error } = useRecentActivities(workspaceId);
+  const { data: activities = initialActivities || [], isLoading, error } = useRecentActivities(effectiveWorkspaceId);
 
   if (isLoading && !initialActivities?.length) {
     return (

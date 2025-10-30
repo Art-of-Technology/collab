@@ -22,8 +22,9 @@ interface PopularTagsProps {
 
 export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: popularTags = initialTags || [], isLoading } = usePopularTags(workspaceId);
+  const { data: popularTags = initialTags || [], isLoading } = usePopularTags(effectiveWorkspaceId);
   
   if (isLoading && !initialTags?.length) {
     return (
