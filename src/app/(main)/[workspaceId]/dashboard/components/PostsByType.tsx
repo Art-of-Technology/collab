@@ -23,12 +23,13 @@ interface PostsByTypeProps {
 
 export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   const { data: currentUser } = useCurrentUser();
   const resolvePostMutation = useResolvePost();
   const { checkPermission, isSystemAdmin } = usePermissions(workspaceId);
 
   // Use TanStack Query for data fetching with initial data from server
-  const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, workspaceId);
+  const { data: posts = initialPosts || [], isLoading } = useRecentPostsByType(type, effectiveWorkspaceId);
 
   // Check if user can resolve blocker posts
   const canResolveBlocker = (post: any) => {
