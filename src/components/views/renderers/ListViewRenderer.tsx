@@ -492,7 +492,7 @@ export default function ListViewRenderer({
             )}
 
             {/* Due Date */}
-            {displaySettings.displayProperties.includes('Due Date') && issue.dueDate && (
+            {(displaySettings.displayProperties.includes('Due Date') || displaySettings.displayProperties.includes('Due date')) && issue.dueDate && (
               <Badge className="h-5 px-2 text-xs font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md">
                 {format(new Date(issue.dueDate), 'MMM d')}
               </Badge>
@@ -628,7 +628,7 @@ export default function ListViewRenderer({
           )}
 
           {/* Due Date */}
-          {displaySettings.displayProperties.includes('Due Date') && issue.dueDate && (
+          {(displaySettings.displayProperties.includes('Due Date') || displaySettings.displayProperties.includes('Due date')) && issue.dueDate && (
             <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md hover:bg-orange-500/40 transition-all">
               {format(new Date(issue.dueDate), 'MMM d')}
             </Badge>
