@@ -1,4 +1,4 @@
-import { COLUMN_COLORS, PRIORITY_COLORS, DEFAULT_COLUMNS } from './constants';
+import { COLUMN_COLORS, PRIORITY_COLORS, DEFAULT_COLUMNS, ISSUE_TYPE_LABELS, PRIORITY_LABELS } from './constants';
 import type { FilterType, FilterState, Column } from './types';
 
 // Create collator once to avoid instantiation on every comparison
@@ -114,8 +114,8 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
       });
     });
   } else if (groupField === 'assignee' || groupField === 'priority' || groupField === 'type') {
-    // For assignee grouping, don't create any default columns - only create them dynamically from actual data
-    // This prevents empty status columns from appearing when grouping by assignee
+    // For assignee, priority, type grouping, don't create any default columns - only create them dynamically from actual data
+    // This prevents empty status columns from appearing when grouping by assignee, priority, or type
   } else {
     // Fallback to hardcoded columns for other non-status grouping or when project statuses are not available
     const defaultColumns = DEFAULT_COLUMNS[groupField as keyof typeof DEFAULT_COLUMNS] || ['todo', 'in_progress', 'done'];
@@ -183,11 +183,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         }
         break;
       case 'priority':
-        groupValue = issue.priority === 'URGENT' ? 'Urgent' :
-          issue.priority === 'HIGH' ? 'High' :
-            issue.priority === 'MEDIUM' ? 'Medium' :
-              issue.priority === 'LOW' ? 'Low' :
-                'Medium';
+        groupValue = PRIORITY_LABELS[issue.priority as keyof typeof PRIORITY_LABELS] || 'Medium';
         groupKey = groupValue.toLowerCase();
         break;
       case 'assignee':
@@ -195,13 +191,7 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
         groupKey = groupValue.toLowerCase().replace(/\s+/g, '-');
         break;
       case 'type':
-        groupValue = issue.type === 'EPIC' ? 'Epic' :
-          issue.type === 'STORY' ? 'Story' :
-            issue.type === 'TASK' ? 'Task' :
-              issue.type === 'BUG' ? 'Bug' :
-                issue.type === 'MILESTONE' ? 'Milestone' :
-                  issue.type === 'SUBTASK' ? 'Subtask' :
-                    'Task';
+        groupValue = ISSUE_TYPE_LABELS[issue.type as keyof typeof ISSUE_TYPE_LABELS] || 'Task';
         groupKey = groupValue.toLowerCase();
         break;
       default:
