@@ -64,7 +64,14 @@ const KanbanIssueCard = React.memo(({
 
   const handleCardClick = useCallback((event: React.MouseEvent) => {
     const keyOrId = issue.issueKey || issue.id;
-    onCardClick(keyOrId);
+    onCardClick(keyOrId, event);
+  }, [onCardClick, issue.issueKey, issue.id]);
+
+  const handleAuxClick = useCallback((event: React.MouseEvent) => {
+    if (event.button === 1) {
+      event.preventDefault();
+      onCardClick(issue.issueKey || issue.id, event);
+    }
   }, [onCardClick, issue.issueKey, issue.id]);
 
   const issueTypeKey = mapToIssueTypeKey(issue.type);
@@ -98,6 +105,7 @@ const KanbanIssueCard = React.memo(({
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
           onClick={handleCardClick}
+          onAuxClick={handleAuxClick}
         >
           <div className="flex flex-col gap-1.5">
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
@@ -277,11 +285,25 @@ const KanbanIssueCard = React.memo(({
                     return (
                       <div
                         key={relation.id}
-                        onClick={() => {
+                        onClick={(e) => {
                           if (!relation.issueKey) return;
                           const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
                           if (!workspaceSlug) return;
-                          router.push(`/${workspaceSlug}/issues/${relation.issueKey}`);
+                          const url = `/${workspaceSlug}/issues/${relation.issueKey}`;
+                          if (e.ctrlKey || e.metaKey) {
+                            window.open(url, '_blank', 'noopener,noreferrer');
+                          } else {
+                            router.push(url);
+                          }
+                        }}
+                        onAuxClick={(e) => {
+                          if (e.button === 1 && relation.issueKey) {
+                            e.preventDefault();
+                            const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
+                            if (workspaceSlug) {
+                              window.open(`/${workspaceSlug}/issues/${relation.issueKey}`, '_blank', 'noopener,noreferrer');
+                            }
+                          }
                         }}
                         className="flex items-center transition-colors duration-150 justify-between gap-2 rounded-md border border-[#1a1a1a] bg-[#0f0f0f] px-2 py-1 cursor-pointer hover:bg-[#1a1a1a]"
                       >

@@ -763,7 +763,7 @@ export const useKanbanState = ({
   }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field, onOrderingChange, view?.ordering, view?.sorting?.field]);
 
   // Issue handlers
-  const handleIssueClick = useCallback((issueIdOrKey: string) => {
+  const handleIssueClick = useCallback((issueIdOrKey: string, event?: React.MouseEvent) => {
     // Navigate directly to the issue page (Linear-style)
     // Use workspace slug if available, else id; fallback to issue's workspaceId
     const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
@@ -772,10 +772,14 @@ export const useKanbanState = ({
     // Build URL with view context for proper back navigation
     const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
     
-    if (workspaceSegment) {
-      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
+    const url = workspaceSegment 
+      ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
+      : `/issues/${issueIdOrKey}${viewParams}`;
+    
+    if (event?.ctrlKey || event?.metaKey || event?.button === 1) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     } else {
-      router.push(`/issues/${issueIdOrKey}${viewParams}`);
+      router.push(url);
     }
   }, [issues, router, view, workspace]);
 

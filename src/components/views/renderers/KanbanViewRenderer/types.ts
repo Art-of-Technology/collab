@@ -1,3 +1,5 @@
+import React from 'react';
+
 export interface KanbanViewRendererProps {
   view: any;
   issues: any[];
@@ -57,7 +59,7 @@ export interface KanbanColumnProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onIssueClick: (issueId: string) => void;
+  onIssueClick: (issueId: string, event?: React.MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
@@ -71,7 +73,7 @@ export interface KanbanIssueCardProps {
   index: number;
   displayProperties: string[];
   operationsInProgress?: Set<string>;
-  onCardClick: (issueId: string) => void;
+  onCardClick: (issueId: string, event?: React.MouseEvent) => void;
 }
 
 
@@ -98,7 +100,7 @@ export interface KanbanBoardProps {
   onDragEnd: (result: any) => void;
   onDragStart: (start: any) => void;
   onDragUpdate: (update: any) => void;
-  onIssueClick: (issueId: string) => void;
+  onIssueClick: (issueId: string, event?: React.MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
