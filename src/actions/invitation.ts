@@ -105,7 +105,7 @@ export async function acceptInvitation(token: string) {
   const session = await getAuthSession();
 
   if (!session?.user) {
-    throw new Error('You must be logged in to accept an invitation');
+    return { success: false, message: 'You must be logged in to accept this invitation.' } as const;
   }
 
   const invitation = await prisma.workspaceInvitation.findUnique({
@@ -114,19 +114,19 @@ export async function acceptInvitation(token: string) {
   });
 
   if (!invitation) {
-    throw new Error('Invitation not found');
+    return { success: false, message: 'We could not find this invitation. It may have been withdrawn.' } as const;
   }
 
   if (invitation.status !== 'pending') {
-    throw new Error('This invitation has already been processed');
+    return { success: false, message: 'This invitation has already been processed.' } as const;
   }
 
   if (invitation.expiresAt < new Date()) {
-    throw new Error('This invitation has expired');
+    return { success: false, message: 'This invitation has expired.' } as const;
   }
 
   if (invitation.email !== session.user.email) {
-    throw new Error('This invitation was not sent to your email address');
+    return { success: false, message: 'This invitation is for a different email. Please sign in with the invited account.' } as const;
   }
 
   // Check if user is already a member of the workspace
@@ -141,26 +141,32 @@ export async function acceptInvitation(token: string) {
   });
 
   if (existingMember) {
-    throw new Error('You are already a member of this workspace');
+    return { success: false, message: 'You are already a member of this workspace.' } as const;
   }
 
-  // Add user as a member
-  await prisma.workspaceMember.create({
-    data: {
-      workspaceId: invitation.workspaceId,
-      userId: session.user.id,
-      // Use default role if not specified
-      role: 'MEMBER'
-    }
-  });
+  try {
+    // Add user as a member
+    await prisma.workspaceMember.create({
+      data: {
+        workspaceId: invitation.workspaceId,
+        userId: session.user.id,
+        // Use default role if not specified
+        role: 'MEMBER'
+      }
+    });
 
-  // Update invitation status
-  await prisma.workspaceInvitation.update({
-    where: { id: invitation.id },
-    data: {
-      status: 'accepted'
-    }
-  });
+    // Update invitation status
+    await prisma.workspaceInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        status: 'accepted'
+      }
+    });
+  } catch (e) {
+    // Avoid leaking internal errors to clients; log and return safe message
+    console.error('Failed to accept invitation:', e);
+    return { success: false, message: 'We couldn’t accept the invitation. Please try again.' } as const;
+  }
 
   return {
     success: true,
