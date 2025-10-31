@@ -16,7 +16,8 @@ export default function RightSidebar() {
     currentView, 
     issues, 
     workspace, 
-    currentUser 
+    currentUser,
+    onAssigneesChangeFromViewOptions
   } = useViewFilters();
   
   const { toast } = useToast();
@@ -82,6 +83,7 @@ export default function RightSidebar() {
         selectedFilters={filters}
         onFiltersChange={setFilters}
         viewType={viewType}
+        onAssigneesChangeFromViewOptions={onAssigneesChangeFromViewOptions}
         onVisibilityChange={async (visibility) => {
           try {
             const response = await fetch(`/api/workspaces/${workspace.id}/views/${currentView.id}`, {
