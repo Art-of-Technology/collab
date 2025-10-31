@@ -58,7 +58,7 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
     return (
       <div className="container max-w-4xl py-4 sm:py-8 px-0 sm:px-0">
         <div className="mb-6 text-left">
-          <Link href={`/${workspaceId}/features`}>
+          <Link href="/features">
             <Button variant="ghost" className="gap-1 pl-1">
               <ChevronLeft className="h-4 w-4" />
               Back to Feature Requests
@@ -73,7 +73,7 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
             isAdmin={featureRequest.isAdmin}
             currentUserId={session.user.id}
           />
-          
+
           <div className="mt-8 bg-card/95 backdrop-blur-sm border rounded-lg border-border/50 p-4 sm:p-6">
             <FeatureRequestComments
               featureRequestId={id}

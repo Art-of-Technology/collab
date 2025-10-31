@@ -15,6 +15,7 @@ interface WorkspaceLayoutProps {
   children: React.ReactNode;
   params: Promise<{
     workspaceId: string;
+    skipWorkspaceCheck?: boolean;
   }>;
 }
 
@@ -22,16 +23,16 @@ export default async function WorkspaceLayout({
   children,
   params,
 }: WorkspaceLayoutProps) {
-  const { workspaceId } = await params;
-  
+  const { workspaceId, skipWorkspaceCheck } = await params;
+
   // Get the current user session
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     redirect("/login");
   }
-  
-    // Verify the workspace exists and user has access to it
+
+  // Verify the workspace exists and user has access to it
   // First try to find by slug, then by ID for backward compatibility
   let workspace = await prisma.workspace.findFirst({
     where: {
@@ -44,7 +45,7 @@ export default async function WorkspaceLayout({
   });
 
   // If not found by slug, try by ID (for backward compatibility)
-  if (!workspace) {
+  if (!workspace && !skipWorkspaceCheck) {
     workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
@@ -56,16 +57,16 @@ export default async function WorkspaceLayout({
     });
   }
 
-  if (!workspace) {
+  if (!workspace && !skipWorkspaceCheck) {
     redirect("/welcome");
   }
-  
+
   return (
     <SidebarProvider>
       <BoardGenerationProvider workspaceId={workspaceId}>
         <TaskGenerationProvider workspaceId={workspaceId}>
           <StoryGenerationProvider workspaceId={workspaceId}>
-            <LayoutWithSidebar 
+            <LayoutWithSidebar
               pathname={`/${workspaceId}`}
             >
               {children}
