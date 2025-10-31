@@ -17,7 +17,7 @@ export function useBoardGeneration() {
   return useContext(BoardGenerationContext);
 }
 
-export function BoardGenerationProvider({ workspaceId, children }: { workspaceId: string, children: ReactNode }) {
+export function BoardGenerationProvider({ workspaceId, children }: { workspaceId?: string, children: ReactNode }) {
   const [jobs, setJobs] = useState<JobStatus[]>([]);
 
   const fetchJobs = async () => {
