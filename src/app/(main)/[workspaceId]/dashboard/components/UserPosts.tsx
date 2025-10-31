@@ -18,8 +18,9 @@ interface UserPostsProps {
 
 export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: userPosts = initialUserPosts || [], isLoading } = useUserPosts(userId, workspaceId);
+  const { data: userPosts = initialUserPosts || [], isLoading } = useUserPosts(userId, effectiveWorkspaceId);
 
   // Get badge variant based on post type
   const getPostBadgeVariant = (type: string) => {

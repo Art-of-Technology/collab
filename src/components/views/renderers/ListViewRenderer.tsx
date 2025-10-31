@@ -402,9 +402,11 @@ export default function ListViewRenderer({
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {/* Status Icon */}
-            <div className="flex items-center shrink-0">
-              {getStatusIcon(issue.status)}
-            </div>
+            {displaySettings.displayProperties.includes('Status') && (
+              <div className="flex items-center shrink-0">
+                {getStatusIcon(issue.status)}
+              </div>
+            )}
 
             {/* Priority Icon */}
             {displaySettings.displayProperties.includes('Priority') && issue.priority && (
@@ -482,11 +484,36 @@ export default function ListViewRenderer({
               </Badge>
             )}
 
+            {/* Status (text badge) */}
+            {displaySettings.displayProperties.includes('Status') && issue.status && (
+              <Badge className="h-5 px-2 text-xs font-medium leading-none bg-white/10 text-gray-300 border-0 rounded-md">
+                {normalizeStatus(issue.status)}
+              </Badge>
+            )}
+
             {/* Due Date */}
-            {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
+            {(displaySettings.displayProperties.includes('Due Date') || displaySettings.displayProperties.includes('Due date')) && issue.dueDate && (
               <Badge className="h-5 px-2 text-xs font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md">
                 {format(new Date(issue.dueDate), 'MMM d')}
               </Badge>
+            )}
+
+            {/* Reporter */}
+            {displaySettings.displayProperties.includes('Reporter') && (
+              <div className="flex items-center">
+                {issue.reporter ? (
+                  <Avatar className="h-5 w-5">
+                    <AvatarImage src={issue.reporter.image} />
+                    <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                      {issue.reporter.name?.charAt(0)?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
+                    <User className="h-2.5 w-2.5 text-[#666]" />
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Comments Meta */}
@@ -506,21 +533,30 @@ export default function ListViewRenderer({
             )}
           </div>
 
-          {/* Updated Date */}
-          {displaySettings.displayProperties.includes('Updated') && (
-            <span className="text-gray-500 text-xs">
-              {format(new Date(issue.updatedAt), 'MMM d')}
-            </span>
-          )}
+          {/* Created / Updated Dates */}
+          <div className="flex items-center gap-2">
+            {displaySettings.displayProperties.includes('Created') && (
+              <span className="text-gray-500 text-xs">
+                {format(new Date(issue.createdAt), 'MMM d')}
+              </span>
+            )}
+            {displaySettings.displayProperties.includes('Updated') && (
+              <span className="text-gray-500 text-xs">
+                {format(new Date(issue.updatedAt), 'MMM d')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Desktop Layout - Original structure */}
       <div className="hidden md:flex md:items-center">
         {/* Status Icon */}
-        <div className="flex items-center w-6 mr-3 flex-shrink-0">
-          {getStatusIcon(issue.status)}
-        </div>
+        {displaySettings.displayProperties.includes('Status') && (
+          <div className="flex items-center w-6 mr-3 flex-shrink-0">
+            {getStatusIcon(issue.status)}
+          </div>
+        )}
 
         {/* Issue Key */}
         {displaySettings.displayProperties.includes('ID') && (
@@ -569,7 +605,7 @@ export default function ListViewRenderer({
           )}
         </div>
 
-        {/* Project, Due Date, and Meta section */}
+        {/* Project, Status, Due Date, and Meta section */}
         <div className="flex items-center gap-2 flex-shrink-0 mr-4">
           {/* Project Badge */}
           {displaySettings.displayProperties.includes('Project') && issue.project && (
@@ -584,8 +620,15 @@ export default function ListViewRenderer({
             </Badge>
           )}
 
+          {/* Status (text badge) */}
+          {displaySettings.displayProperties.includes('Status') && issue.status && (
+            <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-white/10 text-gray-300 border-0 rounded-md">
+              {normalizeStatus(issue.status)}
+            </Badge>
+          )}
+
           {/* Due Date */}
-          {displaySettings.displayProperties.includes('Due date') && issue.dueDate && (
+          {(displaySettings.displayProperties.includes('Due Date') || displaySettings.displayProperties.includes('Due date')) && issue.dueDate && (
             <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md hover:bg-orange-500/40 transition-all">
               {format(new Date(issue.dueDate), 'MMM d')}
             </Badge>
@@ -626,17 +669,43 @@ export default function ListViewRenderer({
           </div>
         )}
 
-        {/* Updated Date */}
-        {displaySettings.displayProperties.includes('Updated') && (
-          <div className="flex-shrink-0 w-12">
-            <span className="text-[#6e7681] text-xs">
-              {format(new Date(issue.updatedAt), 'MMM d')}
-            </span>
+        {/* Reporter */}
+        {displaySettings.displayProperties.includes('Reporter') && (
+          <div className="flex items-center w-8 mr-3 flex-shrink-0">
+            {issue.reporter ? (
+              <Avatar className="h-6 w-6">
+                <AvatarImage src={issue.reporter.image} />
+                <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                  {issue.reporter.name?.charAt(0)?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div className="h-6 w-6 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
+                <User className="h-3 w-3 text-[#666]" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Created / Updated Dates */}
+        {(displaySettings.displayProperties.includes('Created') || displaySettings.displayProperties.includes('Updated')) && (
+          <div className="flex items-center gap-2 flex-shrink-0 w-auto justify-end">
+            {displaySettings.displayProperties.includes('Created') && (
+              <span className="text-[#6e7681] text-xs">
+                {format(new Date(issue.createdAt), 'MMM d')}
+              </span>
+            )}
+            {displaySettings.displayProperties.includes('Updated') && (
+              <span className="text-[#6e7681] text-xs">
+                {format(new Date(issue.updatedAt), 'MMM d')}
+              </span>
+            )}
           </div>
         )}
       </div>
-    </div>
+    </a>
   );
+};
 
   // Calculate total issues count
   const totalIssues = groupedIssues.reduce((sum, group) => sum + group.count, 0);
@@ -690,4 +759,4 @@ export default function ListViewRenderer({
 
     </div>
   );
-} 
+}
