@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { AppScope } from '@/lib/apps/types';
 import { installApp } from '@/actions/appInstallation';
+import { SCOPE_DESCRIPTIONS } from './constants';
 
 interface ConsentDialogProps {
   open: boolean;
@@ -39,48 +40,7 @@ interface ConsentDialogProps {
   workspaceName: string;
 }
 
-const SCOPE_DESCRIPTIONS: Record<AppScope, { label: string; description: string; level: 'low' | 'medium' | 'high' }> = {
-  'workspace:read': {
-    label: 'Read workspace information',
-    description: 'Access workspace name, settings, and basic information',
-    level: 'low'
-  },
-  'issues:read': {
-    label: 'Read issues',
-    description: 'View issues, comments, and related data',
-    level: 'medium'
-  },
-  'user:read': {
-    label: 'Read user profile',
-    description: 'Access your name, email, and profile information',
-    level: 'low'
-  },
-  'issues:write': {
-    label: 'Create and modify issues',
-    description: 'Create, update, and manage issues on your behalf',
-    level: 'high'
-  },
-  'comments:read': {
-    label: 'Read comments',
-    description: 'View comments on issues and tasks',
-    level: 'medium'
-  },
-  'comments:write': {
-    label: 'Create comments',
-    description: 'Post comments on issues and tasks on your behalf',
-    level: 'high'
-  },
-  'leave:read': {
-    label: 'Read leaves',
-    description: 'View leaves and related data',
-    level: 'medium'
-  },
-  'leave:write': {
-    label: 'Create and modify leaves',
-    description: 'Create, update, and manage leaves on your behalf',
-    level: 'high'
-  }
-};
+
 
 function getScopeLevel(scope: AppScope): 'low' | 'medium' | 'high' {
   return SCOPE_DESCRIPTIONS[scope]?.level || 'medium';

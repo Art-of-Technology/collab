@@ -79,7 +79,7 @@ export default function Sidebar({
   const { toast } = useToast();
   const { currentWorkspace, workspaces, isLoading, switchWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
-  const { canManageLeave } = useWorkspacePermissions();
+  const { canManageLeave, isWorkspaceAdmin, isWorkspaceOwner } = useWorkspacePermissions();
   const workspaceSegment = currentWorkspace ? (currentWorkspace.slug || currentWorkspace.id) : undefined;
 
   // Use Mention context for notifications
@@ -107,7 +107,28 @@ export default function Sidebar({
   const { data: installedApps = [], isLoading: isAppsLoading } = useInstalledApps(
     currentWorkspace?.id
   );
+  // Determine which installed apps are visible based on app permissions
+  const visibleInstalledApps = useMemo(() => {
+    if (!installedApps || installedApps.length === 0) return [];
+    const isPrivileged = !!(isWorkspaceAdmin || isWorkspaceOwner);
+    return installedApps.filter((installation) => {
+      const perms = installation.app.permissions as any;
+      const org = perms?.org === true;
+      const user = perms?.user === true;
+      // If both org and user are false, do not show the app
+      if (perms && !org && !user) {
+        return false;
+      }
+      // If org=true and user=false, only admins/owners should see it
+      if (org && !user) {
+        return isPrivileged;
+      }
+      // Otherwise visible to all members
+      return true;
+    });
+  }, [installedApps, isWorkspaceAdmin, isWorkspaceOwner]);
 
+  console.log("installedApps", installedApps);
   // View favorite toggle mutation
   const toggleViewFavoriteMutation = useToggleViewFavorite();
 
@@ -942,7 +963,7 @@ export default function Sidebar({
           </div>
 
           {/* Apps Section */}
-          {isAppsEnabled && installedApps.length > 0 && (
+          {isAppsEnabled && visibleInstalledApps.length > 0 && (
             <div>
               <Collapsible open={!collapsedSections.apps} onOpenChange={() => toggleSection("apps")}>
                 <CollapsibleTrigger asChild>
@@ -954,8 +975,8 @@ export default function Sidebar({
                       Apps
                     </div>
                     <div className="flex items-center">
-                      <Badge variant="secondary" className="mr-2 h-4 px-1 text-[10px] bg-[#1f1f1f]">
-                        {installedApps.length}
+                      <Badge variant="secondary" className="mr-2 h-4 px-1 text-[10px] bg-[#1f1f1f]" aria-label={`Installed apps: ${visibleInstalledApps.length}`}>
+                        {visibleInstalledApps.length}
                       </Badge>
                       {collapsedSections.apps ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </div>
@@ -969,7 +990,7 @@ export default function Sidebar({
                         <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                       </div>
                     ) : (
-                      installedApps.map((installation) => (
+                      visibleInstalledApps.map((installation) => (
                         <Button
                           key={installation.id}
                           variant="ghost"
