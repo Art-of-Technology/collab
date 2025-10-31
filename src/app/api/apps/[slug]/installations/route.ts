@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { logAppInstallAttempt, logAppInstallFailed } from '@/lib/audit';
 import { validateAppManifestSecurity } from '@/lib/security';
+import { checkUserPermission, Permission } from '@/lib/permissions';
 
 const prisma = new PrismaClient();
 
@@ -33,19 +34,15 @@ export async function POST(
     }
 
     // Check if user is workspace admin
-    const member = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-        role: { in: ['OWNER', 'ADMIN'] }
-      }
-    });
+    const { hasPermission } = await checkUserPermission(
+      session.user.id,
+      workspaceId,
+      Permission.MANAGE_APPS
+    );
 
-    if (!member) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions. Only workspace admins can install apps.' },
-        { status: 403 }
-      );
+    if (!hasPermission) {
+      await logAppInstallFailed(workspaceId, session.user.id, slug, 'Insufficient permissions to install apps');
+      throw new Error('Insufficient permissions. Only workspace owners and admins can install apps.');
     }
 
     // Get app with OAuth client details
@@ -94,24 +91,40 @@ export async function POST(
       }
     });
 
-    if (existingInstallation) {
-      return NextResponse.json(
-        { error: 'App is already installed in this workspace' },
-        { status: 409 }
-      );
-    }
+    let installation;
 
-    // Create installation record - always start as PENDING
-    const installation = await prisma.appInstallation.create({
-      data: {
-        appId: app.id,
-        workspaceId,
-        installedById: session.user.id,
-        status: 'PENDING',
-        scopes: scopes || app.scopes.map(s => s.scope),
-        settings: {}
+    if (existingInstallation) {
+      // If installation is ACTIVE, return error
+      if (existingInstallation.status === 'ACTIVE') {
+        return NextResponse.json(
+          { error: 'App is already installed in this workspace' },
+          { status: 409 }
+        );
       }
-    });
+
+      // If installation exists but is not ACTIVE (PENDING, SUSPENDED, etc.), update it
+      installation = await prisma.appInstallation.update({
+        where: { id: existingInstallation.id },
+        data: {
+          status: 'PENDING',
+          scopes: scopes || app.scopes.map(s => s.scope),
+          installedById: session.user.id,
+          settings: {}
+        }
+      });
+    } else {
+      // Create new installation record - always start as PENDING
+      installation = await prisma.appInstallation.create({
+        data: {
+          appId: app.id,
+          workspaceId,
+          installedById: session.user.id,
+          status: 'PENDING',
+          scopes: scopes || app.scopes.map(s => s.scope),
+          settings: {}
+        }
+      });
+    }
 
     // Log installation attempt
     await logAppInstallAttempt(workspaceId, session.user.id, app.id, { 

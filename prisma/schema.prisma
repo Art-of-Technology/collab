@@ -108,6 +108,9 @@ model User {
   mergedPullRequests     PullRequest[]           @relation("PRMergedBy")
   deployments            Deployment[]            @relation("DeploymentUser")
   prReviews              PRReview[]              // PR reviews by this user
+
+  // App Store relations
+  publishedApps          App[]                   @relation("UserApps")
 }
 
 model Account {
@@ -2161,6 +2164,7 @@ enum Permission {
   PIN_POST
   RESOLVE_BLOCKER
   MANAGE_LEAVE
+  MANAGE_APPS
 }
 enum IssueType {
   EPIC
@@ -2275,6 +2279,7 @@ model App {
   iconUrl         String?
   manifestUrl     String?  // Optional for DRAFT apps, required when publishing
   publisherId     String  // user/org
+  userId          String?
   status          AppStatus @default(DRAFT)  // Changed default from IN_REVIEW to DRAFT
   latestVersionId String?
   versions        AppVersion[]
@@ -2287,9 +2292,11 @@ model App {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  user            User?             @relation("UserApps", fields: [userId], references: [id], onDelete: Cascade)
   @@index([slug])
   @@index([status])
   @@index([publisherId])
+  @@index([userId])
 }
 
 model AppVersion {
