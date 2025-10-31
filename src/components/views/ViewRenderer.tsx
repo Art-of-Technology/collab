@@ -450,7 +450,11 @@ export default function ViewRenderer({
   // Callback for View Options to update dropdown filter
   const handleViewOptionsAssigneeChange = useCallback((assignees: unknown) => {
     // Guard against Event objects and ensure assignees is an array
-    if (!assignees || assignees instanceof Event || typeof assignees === 'object' && !Array.isArray(assignees)) {
+    if (
+      !assignees ||
+      assignees instanceof Event ||
+      (typeof assignees === 'object' && assignees !== null && !Array.isArray(assignees))
+    ) {
       console.warn('Invalid assignees passed to handleViewOptionsAssigneeChange:', assignees);
       return;
     }

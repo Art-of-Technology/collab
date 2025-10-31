@@ -205,7 +205,7 @@ export default function ViewFilters({
     issues.forEach((issue: any) => {
       // Count assignees
       const assigneeId = issue.assigneeId || 'unassigned';
-      if (!assignees.has(assigneeId) && issue.assignee) {
+      if (!assignees.has(assigneeId) && assigneeId !== 'unassigned' && issue.assignee) {
         assignees.set(assigneeId, {
           id: assigneeId,
           name: issue.assignee.name,
