@@ -42,7 +42,14 @@ export const useAcceptInvitation = (options?: UseAcceptInvitationOptions) => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: acceptInvitation,
+    mutationFn: async (token: string) => {
+      const res = await acceptInvitation(token);
+      if (!res || (res as any).success === false) {
+        const message = (res as any)?.message || 'Failed to accept invitation';
+        throw new Error(message);
+      }
+      return res as any;
+    },
     onSuccess: (data) => {
       // Invalidate workspace queries using proper query keys
       queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
