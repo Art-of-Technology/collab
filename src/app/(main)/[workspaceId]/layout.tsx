@@ -65,11 +65,15 @@ export default async function WorkspaceLayout({
     redirect("/welcome");
   }
 
+  // Only pass workspaceId to providers if we have a valid workspace
+  // This prevents passing invalid workspaceIds when skipWorkspaceCheck is true
+  const validWorkspaceId = workspace?.id || undefined;
+
   return (
     <SidebarProvider>
-      <BoardGenerationProvider workspaceId={workspaceId}>
-        <TaskGenerationProvider workspaceId={workspaceId}>
-          <StoryGenerationProvider workspaceId={workspaceId}>
+      <BoardGenerationProvider workspaceId={validWorkspaceId}>
+        <TaskGenerationProvider workspaceId={validWorkspaceId}>
+          <StoryGenerationProvider workspaceId={validWorkspaceId}>
             <LayoutWithSidebar
               pathname={workspaceId ? `/${workspaceId}` : "/features"}
             >
