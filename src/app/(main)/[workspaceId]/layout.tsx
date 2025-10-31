@@ -14,7 +14,7 @@ import { StoryGenerationProvider } from "@/context/StoryGenerationContext";
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
   params: Promise<{
-    workspaceId: string;
+    workspaceId?: string;
     skipWorkspaceCheck?: boolean;
   }>;
 }
@@ -32,29 +32,33 @@ export default async function WorkspaceLayout({
     redirect("/login");
   }
 
-  // Verify the workspace exists and user has access to it
-  // First try to find by slug, then by ID for backward compatibility
-  let workspace = await prisma.workspace.findFirst({
-    where: {
-      slug: workspaceId,
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
-    },
-  });
+  // Only verify workspace if workspaceId is provided and skipWorkspaceCheck is false
+  let workspace = null;
 
-  // If not found by slug, try by ID (for backward compatibility)
-  if (!workspace && !skipWorkspaceCheck) {
+  if (workspaceId && !skipWorkspaceCheck) {
+    // First try to find by slug, then by ID for backward compatibility
     workspace = await prisma.workspace.findFirst({
       where: {
-        id: workspaceId,
+        slug: workspaceId,
         OR: [
           { ownerId: session.user.id },
           { members: { some: { userId: session.user.id } } }
         ]
       },
     });
+
+    // If not found by slug, try by ID (for backward compatibility)
+    if (!workspace) {
+      workspace = await prisma.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          OR: [
+            { ownerId: session.user.id },
+            { members: { some: { userId: session.user.id } } }
+          ]
+        },
+      });
+    }
   }
 
   if (!workspace && !skipWorkspaceCheck) {
@@ -67,7 +71,7 @@ export default async function WorkspaceLayout({
         <TaskGenerationProvider workspaceId={workspaceId}>
           <StoryGenerationProvider workspaceId={workspaceId}>
             <LayoutWithSidebar
-              pathname={`/${workspaceId}`}
+              pathname={workspaceId ? `/${workspaceId}` : "/features"}
             >
               {children}
               <BoardGenerationStatus />

@@ -5,12 +5,12 @@ interface FeaturesLayoutProps {
 }
 
 export default async function FeaturesLayout({ children }: FeaturesLayoutProps) {
-    // Use the workspace layout with a dummy workspaceId parameter
-    // The WorkspaceContext will handle the actual workspace resolution
-    const dummyParams = Promise.resolve({ workspaceId: "", skipWorkspaceCheck: true });
+    // Use the workspace layout without a workspaceId since features don't require one
+    // The WorkspaceContext will handle the actual workspace resolution when needed
+    const params = Promise.resolve({ skipWorkspaceCheck: true });
 
     return (
-        <WorkspaceLayout params={dummyParams}>
+        <WorkspaceLayout params={params}>
             {children}
         </WorkspaceLayout>
     );

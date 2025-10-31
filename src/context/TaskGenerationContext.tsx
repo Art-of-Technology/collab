@@ -17,7 +17,7 @@ export function useTaskGeneration() {
   return useContext(TaskGenerationContext);
 }
 
-export function TaskGenerationProvider({ workspaceId, children }: { workspaceId: string, children: ReactNode }) {
+export function TaskGenerationProvider({ workspaceId, children }: { workspaceId?: string, children: ReactNode }) {
   const [jobs, setJobs] = useState<JobStatus[]>([]);
 
   const fetchJobs = async () => {
