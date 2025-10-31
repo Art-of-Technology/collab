@@ -201,7 +201,7 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
       ) : (
         <div className="space-y-4">
           {featureRequests.map((request) => (
-            <Link href={currentWorkspace ? `/${currentWorkspace.id}/features/${request.id}` : `#`} key={request.id} className="block group">
+            <Link href={`/features/${request.id}`} key={request.id} className="block group">
               <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
                 <div className="p-6">
                   <div className="flex justify-between">

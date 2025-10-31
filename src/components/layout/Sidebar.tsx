@@ -288,7 +288,7 @@ export default function Sidebar({
     },
     {
       name: "Feature Requests",
-      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/features` : "#",
+      href: currentWorkspace ? `/features` : "#",
       icon: Lightbulb,
       current: pathname.includes("/features"),
     },
