@@ -37,6 +37,15 @@ const KanbanIssueCard = React.memo(({
 }: KanbanIssueCardProps) => {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
+  
+  // Build URL for <a> tag
+  const issueUrl = useMemo(() => {
+    const workspaceSlug = currentWorkspace?.slug || (issue as any)?.workspaceId;
+    if (workspaceSlug) {
+      return `/${workspaceSlug}/issues/${issue.issueKey || issue.id}`;
+    }
+    return `/issues/${issue.issueKey || issue.id}`;
+  }, [currentWorkspace?.slug, issue.issueKey, issue.id]);
   const showAssignee = displayProperties.includes('Assignee');
   const showPriority = displayProperties.includes('Priority');
   const showLabels = displayProperties.includes('Labels');
@@ -62,13 +71,10 @@ const KanbanIssueCard = React.memo(({
     event.stopPropagation();
   }, []);
 
-  const handleCardClick = useCallback((event: React.MouseEvent) => {
-    const keyOrId = issue.issueKey || issue.id;
-    onCardClick(keyOrId, event);
-  }, [onCardClick, issue.issueKey, issue.id]);
-
-  const handleAuxClick = useCallback((event: React.MouseEvent) => {
-    if (event.button === 1) {
+  const handleLinkClick = useCallback((event: React.MouseEvent) => {
+    // For normal clicks, prevent default and open programmatically
+    // Ctrl/Cmd+click will use native browser behavior
+    if (!event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       onCardClick(issue.issueKey || issue.id, event);
     }
@@ -92,20 +98,22 @@ const KanbanIssueCard = React.memo(({
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index} isDragDisabled={isIssueBeingProcessed}>
       {(provided, snapshot) => (
-        <div
+        <a
           ref={provided.innerRef}
           {...provided.draggableProps}
-          {...provided.dragHandleProps}
+          href={issueUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleLinkClick}
           className={cn(
-            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
+            "group block p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150 no-underline",
             hasRelations ? 'pb-1.5' : 'pb-3',
             isIssueBeingProcessed
               ? "opacity-60 cursor-not-allowed"
               : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
-          onClick={handleCardClick}
-          onAuxClick={handleAuxClick}
+          {...provided.dragHandleProps}
         >
           <div className="flex flex-col gap-1.5">
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
@@ -290,15 +298,13 @@ const KanbanIssueCard = React.memo(({
                           const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
                           if (!workspaceSlug) return;
                           const url = `/${workspaceSlug}/issues/${relation.issueKey}`;
-                          if (e.ctrlKey || e.metaKey) {
-                            window.open(url, '_blank', 'noopener,noreferrer');
-                          } else {
-                            router.push(url);
+                          if (!e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
                           }
+                          window.open(url, '_blank', 'noopener,noreferrer');
                         }}
                         onAuxClick={(e) => {
                           if (e.button === 1 && relation.issueKey) {
-                            e.preventDefault();
                             const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
                             if (workspaceSlug) {
                               window.open(`/${workspaceSlug}/issues/${relation.issueKey}`, '_blank', 'noopener,noreferrer');
@@ -336,7 +342,7 @@ const KanbanIssueCard = React.memo(({
               )}
             </>
           )}
-        </div>
+        </a>
       )}
     </Draggable>
   );

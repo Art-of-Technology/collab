@@ -776,10 +776,10 @@ export const useKanbanState = ({
       ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
       : `/issues/${issueIdOrKey}${viewParams}`;
     
-    if (event?.ctrlKey || event?.metaKey || event?.button === 1) {
+    // Only open programmatically for normal clicks
+    // Ctrl/Cmd+click and middle click use native browser behavior
+    if (!event || (!event.ctrlKey && !event.metaKey && event.button !== 1)) {
       window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      router.push(url);
     }
   }, [issues, router, view, workspace]);
 
