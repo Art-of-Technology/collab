@@ -1,4 +1,4 @@
-import React from 'react';
+import type { MouseEvent, KeyboardEvent } from 'react';
 
 export interface KanbanViewRendererProps {
   view: any;
@@ -59,11 +59,11 @@ export interface KanbanColumnProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onIssueClick: (issueId: string, event?: React.MouseEvent) => void;
+  onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: React.KeyboardEvent) => void;
+  onIssueKeyDown: (e: KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
@@ -73,7 +73,7 @@ export interface KanbanIssueCardProps {
   index: number;
   displayProperties: string[];
   operationsInProgress?: Set<string>;
-  onCardClick: (issueId: string, event?: React.MouseEvent) => void;
+  onCardClick: (issueId: string, event?: MouseEvent) => void;
 }
 
 
@@ -100,11 +100,11 @@ export interface KanbanBoardProps {
   onDragEnd: (result: any) => void;
   onDragStart: (start: any) => void;
   onDragUpdate: (update: any) => void;
-  onIssueClick: (issueId: string, event?: React.MouseEvent) => void;
+  onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: React.KeyboardEvent) => void;
+  onIssueKeyDown: (e: KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }

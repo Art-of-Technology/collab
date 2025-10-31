@@ -102,7 +102,6 @@ const KanbanIssueCard = React.memo(({
           ref={provided.innerRef}
           {...provided.draggableProps}
           href={issueUrl}
-          target="_blank"
           rel="noopener noreferrer"
           onClick={handleLinkClick}
           className={cn(
@@ -113,9 +112,11 @@ const KanbanIssueCard = React.memo(({
               : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
-          {...provided.dragHandleProps}
         >
-          <div className="flex flex-col gap-1.5">
+          <div
+            {...provided.dragHandleProps}
+            className="flex flex-col gap-1.5"
+          >
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -298,9 +299,11 @@ const KanbanIssueCard = React.memo(({
                           const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
                           if (!workspaceSlug) return;
                           const url = `/${workspaceSlug}/issues/${relation.issueKey}`;
-                          if (!e.ctrlKey && !e.metaKey) {
-                            e.preventDefault();
+                          if (e.ctrlKey || e.metaKey) {
+                            // Let native browser behavior handle Ctrl/Cmd+click
+                            return;
                           }
+                          e.preventDefault();
                           window.open(url, '_blank', 'noopener,noreferrer');
                         }}
                         onAuxClick={(e) => {
