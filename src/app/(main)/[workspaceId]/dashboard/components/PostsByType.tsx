@@ -48,7 +48,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
 
   // Type-specific UI elements
   const getTypeDetails = () => {
-    const baseUrl = currentWorkspace ? `/${currentWorkspace.id}` : '';
+    const baseUrl = currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}` : '';
 
     switch (type) {
       case 'BLOCKER':
@@ -129,7 +129,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
         </div>
       </div>
       <div className="text-xs mt-1.5">
-        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block hover:underline">
+        <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/posts/${post.id}` : '#'} className="block hover:underline">
           <p className="text-xs">
             <CollabText
               content={post.message}
@@ -146,7 +146,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           {post.tags?.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {post.tags.map((tag: any) => (
-                <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
+                <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                   <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer h-4 px-1.5">
                     {tag.name}
                   </Badge>
@@ -169,7 +169,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
       </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5">
-          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${post.author.id}` : '#'} className="font-medium text-xs hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile/${post.author.id}` : '#'} className="font-medium text-xs hover:underline">
             {post.author.name}
           </Link>
           <span className="text-xs text-muted-foreground">
@@ -179,7 +179,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
             {badge}
           </Link>
         </div>
-        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-0.5 hover:underline">
+        <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-0.5 hover:underline">
           <p className="text-xs text-muted-foreground">
             <CollabText
               content={post.message}
@@ -200,7 +200,7 @@ export function PostsByType({ type, workspaceId, initialPosts }: PostsByTypeProp
           {post.tags?.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {post.tags.map((tag: any) => (
-                <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
+                <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                   <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer h-4 px-1.5">
                     {tag.name}
                   </Badge>
