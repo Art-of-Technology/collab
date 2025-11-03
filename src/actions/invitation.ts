@@ -145,23 +145,26 @@ export async function acceptInvitation(token: string) {
   }
 
   try {
-    // Add user as a member
-    await prisma.workspaceMember.create({
-      data: {
-        workspaceId: invitation.workspaceId,
-        userId: session.user.id,
-        // Use default role if not specified
-        role: 'MEMBER'
-      }
-    });
+    await prisma.$transaction(async (tx) => {
+      // Create workspace member
+      await tx.workspaceMember.create({
+        data: {
+          workspaceId: invitation.workspaceId,
+          userId: session.user.id,
+          // Use default role if not specified
+          role: 'MEMBER'
+        }
+      });
 
-    // Update invitation status
-    await prisma.workspaceInvitation.update({
-      where: { id: invitation.id },
-      data: {
-        status: 'accepted'
-      }
+      // Update invitation status
+      await tx.workspaceInvitation.update({
+        where: { id: invitation.id },
+        data: {
+          status: 'accepted'
+        }
+      });
     });
+  
   } catch (e) {
     // Avoid leaking internal errors to clients; log and return safe message
     console.error('Failed to accept invitation:', e);
