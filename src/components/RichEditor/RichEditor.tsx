@@ -77,14 +77,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   // Guard to suppress transient checks during mention insertion
   const isInsertingMentionRef = useRef(false);
 
-  // Helper to release guards on the next tick after ProseMirror updates
-  const releaseMentionGuardsNextTick = () => {
-    setTimeout(() => {
-      isInsertingMentionRef.current = false;
-      isExternalUpdateRef.current = false;
-    }, 0);
-  };
-
   // Generate unique ID for this editor instance to avoid CSS conflicts
   const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
 
@@ -449,8 +441,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
     setMentionSuggestion(null);
   }, [editor, mentionSuggestion]);
-
-
 
   // AI improvement functionality
   const handleAiImprove = useCallback(() => {

@@ -22,8 +22,6 @@ export function CommentReplyForm({
   const addCommentMutation = useAddIssueComment();
   const editorRef = useRef<any>(null);
 
-  editorRef.current?.getEditor()?.commands.blur();
-
   const handleSubmit = async () => {
     // Force the editor to commit mentions before reading content
     editorRef.current?.getEditor()?.commands.blur();
