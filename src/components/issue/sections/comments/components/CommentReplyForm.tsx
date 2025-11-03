@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RichEditor } from "@/components/RichEditor";
 import { useAddIssueComment } from "@/hooks/queries/useIssueComment";
@@ -12,16 +12,22 @@ interface CommentReplyFormProps {
   onCancel?: () => void;
 }
 
-export function CommentReplyForm({ 
-  issueId, 
-  parentId, 
-  onSuccess, 
-  onCancel 
+export function CommentReplyForm({
+  issueId,
+  parentId,
+  onSuccess,
+  onCancel,
 }: CommentReplyFormProps) {
   const [content, setContent] = useState("");
   const addCommentMutation = useAddIssueComment();
+  const editorRef = useRef<any>(null);
+
+  editorRef.current?.getEditor()?.commands.blur();
 
   const handleSubmit = async () => {
+    // Force the editor to commit mentions before reading content
+    editorRef.current?.getEditor()?.commands.blur();
+
     if (!content.trim()) return;
 
     try {
@@ -32,8 +38,8 @@ export function CommentReplyForm({
       });
       setContent("");
       onSuccess?.();
-    } catch (error) {
-      // Error handled by mutation
+    } catch {
+      // handled by mutation
     }
   };
 
@@ -45,8 +51,9 @@ export function CommentReplyForm({
   return (
     <div className="mt-2 space-y-2">
       <RichEditor
+        ref={editorRef}
         value={content}
-        onChange={(html, text) => setContent(html)}
+        onChange={(html) => setContent(html)}
         placeholder="Write a reply..."
         minHeight="80px"
         toolbarMode="static"

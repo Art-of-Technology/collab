@@ -388,7 +388,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     }
   }, [editor]);
 
-  // Handle mention insertions
   const insertUserMention = useCallback((user: any) => {
     if (!editor || !mentionSuggestion || !user) return;
 
@@ -396,25 +395,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     const trigger = findMentionTrigger(editor, from);
 
     if (trigger) {
-      // Ensure we have a valid label - fallback to email if name is not available
       const label = user.name || user.email || 'Unknown User';
 
-      // Use the insertMention utility
       isInsertingMentionRef.current = true;
-      isExternalUpdateRef.current = true;
       insertMention(
         editor,
-        {
-          id: user.id || '',
-          label: label,
-          title: user.name || label
-        },
+        { id: user.id || '', label, title: user.name || label },
         trigger.position,
         from,
         trigger.char
       );
-      // Release guards on next tick after ProseMirror updates
-      releaseMentionGuardsNextTick();
+
+      // help TipTap settle selection/decoration
+      editor.commands.blur();
+      editor.commands.focus('end');
+
+      // release only the mention flag
+      setTimeout(() => {
+        isInsertingMentionRef.current = false;
+      }, 0);
     }
 
     setMentionSuggestion(null);
@@ -427,31 +426,31 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     const trigger = findMentionTrigger(editor, from);
 
     if (trigger) {
-      // Ensure we have valid data with fallbacks
       const label = issue.issueKey || issue.title || 'Unknown Issue';
       const title = issue.title || label;
       const type = issue.type || 'TASK';
 
       isInsertingMentionRef.current = true;
-      isExternalUpdateRef.current = true;
       insertMention(
         editor,
-        {
-          id: issue.id || '',
-          label: label,
-          title: title,
-          type: type
-        },
+        { id: issue.id || '', label, title, type },
         trigger.position,
         from,
         trigger.char
       );
-      // Release guards on next tick after ProseMirror updates
-      releaseMentionGuardsNextTick();
+
+      editor.commands.blur();
+      editor.commands.focus('end');
+
+      setTimeout(() => {
+        isInsertingMentionRef.current = false;
+      }, 0);
     }
 
     setMentionSuggestion(null);
   }, [editor, mentionSuggestion]);
+
+
 
   // AI improvement functionality
   const handleAiImprove = useCallback(() => {
