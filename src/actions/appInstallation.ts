@@ -47,8 +47,6 @@ export async function installApp(formData: FormData) {
       Permission.MANAGE_APPS
     );
 
-    console.log("hasPermission", hasPermission);
-
     if (!hasPermission.hasPermission) {
       await logAppInstallFailed(workspaceId, session.user.id, appSlug, 'Insufficient permissions to install apps');
       throw new Error('Insufficient permissions. Only workspace owners and admins can install apps.');

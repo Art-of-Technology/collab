@@ -34,11 +34,9 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
     Permission.MANAGE_WORKSPACE_PERMISSIONS
   );
 
-  // if (!hasPermission) {
-  //   notFound();
-  // }
-
-  console.log("workspaceId", workspaceId);
+  if (!hasPermission) {
+    notFound();
+  }
 
   // Get user's role in the workspace
   const userRole = await getUserWorkspaceRole(session.user.id, workspaceId);

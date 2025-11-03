@@ -112,7 +112,7 @@ export default function Sidebar({
     if (!installedApps || installedApps.length === 0) return [];
     const isPrivileged = !!(isWorkspaceAdmin || isWorkspaceOwner);
     return installedApps.filter((installation) => {
-      const perms = installation.app.permissions as any;
+      const perms = installation.app.permissions as { org: boolean, user: boolean };
       const org = perms?.org === true;
       const user = perms?.user === true;
       // If both org and user are false, do not show the app
@@ -128,7 +128,6 @@ export default function Sidebar({
     });
   }, [installedApps, isWorkspaceAdmin, isWorkspaceOwner]);
 
-  console.log("installedApps", installedApps);
   // View favorite toggle mutation
   const toggleViewFavoriteMutation = useToggleViewFavorite();
 

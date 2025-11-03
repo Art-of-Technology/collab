@@ -12,7 +12,7 @@ interface InstalledApp {
     slug: string;
     iconUrl?: string | null;
     publisherId: string;
-    permissions?: { org: boolean; user: boolean } | JsonValue | null;
+    permissions?: JsonValue | null;
   };
 }
 
