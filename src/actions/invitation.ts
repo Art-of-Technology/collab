@@ -144,22 +144,23 @@ export async function acceptInvitation(token: string) {
     throw new Error('You are already a member of this workspace');
   }
 
-  // Add user as a member
-  await prisma.workspaceMember.create({
-    data: {
-      workspaceId: invitation.workspaceId,
-      userId: session.user.id,
-      // Use default role if not specified
-      role: 'MEMBER'
-    }
-  });
+  await prisma.$transaction(async (tx) => {
+    // Create workspace member
+    await tx.workspaceMember.create({
+      data: {
+        workspaceId: invitation.workspaceId,
+        userId: session.user.id,
+        role: 'MEMBER'
+      }
+    });
 
-  // Update invitation status
-  await prisma.workspaceInvitation.update({
-    where: { id: invitation.id },
-    data: {
-      status: 'accepted'
-    }
+    // Update invitation status
+    await tx.workspaceInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        status: 'accepted'
+      }
+    });
   });
 
   return {
