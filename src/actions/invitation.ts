@@ -166,7 +166,6 @@ export async function acceptInvitation(token: string) {
     });
   
   } catch (e) {
-    // Avoid leaking internal errors to clients; log and return safe message
     console.error('Failed to accept invitation:', e);
     return { success: false, message: 'We couldn’t accept the invitation. Please try again.' } as const;
   }
