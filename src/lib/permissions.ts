@@ -123,6 +123,7 @@ export enum Permission {
   VIEW_REPORTS = "VIEW_REPORTS",
   PIN_POST = "PIN_POST",
   MANAGE_LEAVE = "MANAGE_LEAVE",
+  MANAGE_APPS = "MANAGE_APPS",
 }
 
 export interface UserWithRole extends User {
@@ -184,7 +185,6 @@ export async function checkUserPermission(
         reason: "User is not a member of this workspace",
       };
     }
-
     // Check role permission in the workspace
     const rolePermission = await (prisma as any).rolePermission.findUnique({
       where: {
@@ -529,6 +529,9 @@ export function getPermissionDisplayName(permission: Permission): string {
 
     // Leave management permission
     [Permission.MANAGE_LEAVE]: "Manage Leave",
+
+    // App permissions
+    [Permission.MANAGE_APPS]: "Can Install and Manage Apps"
   };
 
   return permissionNames[permission] || permission.replace(/_/g, " ");
