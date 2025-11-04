@@ -57,6 +57,7 @@ import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelecto
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
 import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
+import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 
 // Import types
 import type { IssueDetailProps, IssueFieldUpdate, IssueUser, PlayTime } from "@/types/issue";
@@ -318,8 +319,9 @@ export function IssueDetailContent({
   useEffect(() => {
     if (issue) {
       setTitle(issue.title || '');
-      setDescription(issue.description || '');
-      setLastSavedDescription(issue.description || '');
+      const normalizedDescription = normalizeDescriptionHTML(issue.description || '');
+      setDescription(normalizedDescription);
+      setLastSavedDescription(normalizedDescription);
       setAutosaveStatus("saved");
 
       setTimeout(() => {
@@ -357,12 +359,13 @@ export function IssueDetailContent({
 
     setAutosaveStatus("saving");
     try {
+      const normalizedContent = normalizeDescriptionHTML(content);
       const response = await fetch(`/api/issues/${issue.issueKey || issue.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ description: content }),
+        body: JSON.stringify({ description: normalizedContent }),
       });
 
       if (!response.ok) {
@@ -372,7 +375,7 @@ export function IssueDetailContent({
 
       // Only mark saved if this response corresponds to the latest content
       if (content === latestDescriptionRef.current) {
-        setLastSavedDescription(content);
+        setLastSavedDescription(normalizedContent);
       }
 
       setAutosaveStatus("saved");
@@ -440,7 +443,8 @@ export function IssueDetailContent({
     const handleBeforeUnload = () => {
       if (latestDescriptionRef.current !== lastSavedDescription) {
         const endpoint = `/api/issues/${issue.issueKey || issue.id}`;
-        const payload = JSON.stringify({ description: latestDescriptionRef.current });
+        const normalizedContent = normalizeDescriptionHTML(latestDescriptionRef.current);
+        const payload = JSON.stringify({ description: normalizedContent });
         try {
           // Prefer keepalive PUT to match API
           fetch(endpoint, {

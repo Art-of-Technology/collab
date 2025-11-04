@@ -46,6 +46,7 @@ import { RichEditorProps, RichEditorRef } from './types';
 
 // Import utils
 import { findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove } from './utils';
+import { normalizeDescriptionHTML } from '@/utils/html-normalizer';
 
 // Import extensions
 import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ResizableVideoExtension, ImageCSSExtension } from './extensions';
@@ -266,7 +267,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
       // Avoid feedback loops when we programmatically set content or insert mentions
       if (!isExternalUpdateRef.current) {
-        onChange?.(html, text);
+        const normalizedHtml = normalizeDescriptionHTML(html);
+        onChange?.(normalizedHtml, text);
       }
 
       // Check if editor has mentions when determining empty state
@@ -654,10 +656,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   useEffect(() => {
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
-      if (value !== currentContent) {
+      const normalizedValue = normalizeDescriptionHTML(value || '');
+      if (normalizedValue !== currentContent) {
         // Prevent update feedback loop when syncing external value
         isExternalUpdateRef.current = true;
-        editor.commands.setContent(value || '');
+        editor.commands.setContent(normalizedValue);
         // Release guard after ProseMirror processes this transaction
         setTimeout(() => {
           isExternalUpdateRef.current = false;
