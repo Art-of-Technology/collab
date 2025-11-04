@@ -90,8 +90,8 @@ export function TeamActivity({ workspaceId, initialActivities }: TeamActivityPro
                   <p className="text-xs mt-0.5 text-muted-foreground">
                     {activity.type === "like" && activity.post ? (
                       <>
-                        Liked <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${activity.post.author.id}` : '#'} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
-                        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${activity.post.id}` : '#'} className="text-foreground hover:underline">
+                        Liked <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile/${activity.post.author.id}` : '#'} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
+                        <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/posts/${activity.post.id}` : '#'} className="text-foreground hover:underline">
                           <CollabText
                             content={activity.post.message}
                             small
@@ -101,8 +101,8 @@ export function TeamActivity({ workspaceId, initialActivities }: TeamActivityPro
                       </>
                     ) : activity.type === "comment" && activity.post ? (
                       <>
-                        Commented on <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${activity.post.author.id}` : '#'} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
-                        <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${activity.post.id}` : '#'} className="text-foreground hover:underline">
+                        Commented on <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile/${activity.post.author.id}` : '#'} className="font-medium hover:underline">{activity.post.author.name}&apos;s</Link> post:
+                        <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/posts/${activity.post.id}` : '#'} className="text-foreground hover:underline">
                           <CollabText
                             content={activity.message}
                             small

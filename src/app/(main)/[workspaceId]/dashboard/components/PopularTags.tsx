@@ -44,7 +44,7 @@ export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
       </Card>
     );
   }
-  
+
   return (
     <Card className="border border-border/40 bg-card/50">
       <CardHeader className="pb-3 pt-4 px-4">
@@ -58,7 +58,7 @@ export function PopularTags({ workspaceId, initialTags }: PopularTagsProps) {
         <div className="flex flex-wrap gap-1.5">
           {popularTags.length > 0 ? (
             popularTags.map((tag: TagType) => (
-              <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
+              <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline?tag=${tag.name.toLowerCase()}` : '#'} key={tag.id}>
                 <Badge
                   variant="outline"
                   className="text-xs py-1 px-2 hover:bg-muted/50 cursor-pointer transition-colors h-6"
