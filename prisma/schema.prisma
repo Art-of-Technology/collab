@@ -94,8 +94,8 @@ model User {
   // Favorite relationships
   viewFavorites          ViewFavorite[]
   
-  // Notification preferences
-  notificationPreferences NotificationPreferences?
+  // Notification preferences (per-workspace)
+  notificationPreferences NotificationPreferences[]
   
   // OAuth authorization codes
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
@@ -394,6 +394,7 @@ model Workspace {
   // App Store relationships
   appInstallations    AppInstallation[]
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
+  notificationPreferences NotificationPreferences[]
 }
 
 model WorkspaceMember {
@@ -406,6 +407,12 @@ model WorkspaceMember {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   status Boolean @default(true) // Active status of the member
+  // Per-workspace profile fields
+  displayName  String?
+  team         String?
+  currentFocus String?
+  expertise    String[]
+  slackId      String?
   @@unique([userId, workspaceId])
 }
 
@@ -918,8 +925,8 @@ model BoardItemActivity {
   // Legacy support - keep taskId for backward compatibility
   taskId String? // Deprecated: use itemId + itemType instead
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
@@ -1251,8 +1258,8 @@ model BoardGenerationJob {
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([userId])
@@ -2219,8 +2226,9 @@ enum InstallationStatus {
 }
 
 model NotificationPreferences {
-  id     String @id @default(cuid())
-  userId String @unique
+  id          String @id @default(cuid())
+  userId      String
+  workspaceId String?
 
   // Task notifications
   taskCreated         Boolean @default(true)
@@ -2261,7 +2269,8 @@ model NotificationPreferences {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 // ========================================

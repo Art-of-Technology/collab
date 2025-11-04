@@ -2,6 +2,7 @@
 
 import { useCurrentUserProfile } from "@/hooks/queries/useUser";
 import ProfileForm from "@/components/profile/ProfileForm";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import PostList from "@/components/posts/PostList";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,8 +15,9 @@ interface ProfileClientProps {
 }
 
 export default function ProfileClient({ initialData }: ProfileClientProps) {
+  const { currentWorkspace } = useWorkspace();
   // Use the TanStack Query hook with initialData
-  const { data, isLoading } = useCurrentUserProfile();
+  const { data, isLoading } = useCurrentUserProfile(currentWorkspace?.id);
   
   // Use the latest data from the query or fall back to initialData
   const { user, posts, stats } = data || initialData;
@@ -90,7 +92,7 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
         </TabsContent>
         <TabsContent value="posts" className="mt-4">
           {posts.length > 0 ? (
-            <PostList posts={posts} currentUserId={user.id} />
+            <PostList posts={posts} currentUserId={user.id}/>
           ) : (
             <Card className="border-border/40 bg-card/95 shadow-md">
               <CardContent className="p-8 text-center text-muted-foreground">

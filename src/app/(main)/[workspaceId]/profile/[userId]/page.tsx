@@ -20,8 +20,8 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
   }
   
   try {
-    // Get profile data using server action
-    const profileData = await getUserProfile(userId);
+    // Get profile data using server action (workspace-scoped)
+    const profileData = await getUserProfile(userId, workspaceId);
     
     // Render the client component with initial data
     return <UserProfileClient userId={userId} initialData={profileData} />;

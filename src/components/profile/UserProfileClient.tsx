@@ -24,7 +24,7 @@ export default function UserProfileClient({
 }: UserProfileClientProps) {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
-  const { data, isLoading, error } = useUserProfile(userId);
+  const { data, isLoading, error } = useUserProfile(userId, currentWorkspace?.id);
   
   // Handle redirect to self profile
   useEffect(() => {
