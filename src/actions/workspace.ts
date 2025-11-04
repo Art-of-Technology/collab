@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthSession } from '@/lib/auth';
+import { generateWorkspaceSlug } from '@/lib/utils';
 
 /**
  * Get all workspaces for the current user
@@ -224,16 +225,7 @@ export async function createWorkspace(data: {
   }
   
   // Generate a slug if not provided
-  const generateSlug = (input: string) => {
-    return input
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-  };
-  
-  const baseSlug = slug?.trim() ? generateSlug(slug.trim()) : generateSlug(name.trim());
+  const baseSlug = generateWorkspaceSlug(slug?.trim() ? slug.trim() : name.trim());
   
   // Ensure slug is not empty after sanitization
   if (!baseSlug) {
