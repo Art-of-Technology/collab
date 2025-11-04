@@ -253,7 +253,7 @@ export default function CreateViewModal({
                   <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-[#1a1a1a] text-xs">
                     <div className="flex items-center gap-1.5">
                       {workspace.logoUrl ? (
-                        <Image src={workspace.logoUrl} alt="" className="h-3 w-3 rounded" />
+                        <Image src={workspace.logoUrl} alt={`${workspace.name} logo`} className="h-3 w-3 rounded" width={16} height={16}/>
                       ) : (
                         <Globe className="h-3 w-3" />
                       )}
