@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Popover,
   PopoverContent,
@@ -30,7 +30,7 @@ export function ViewProjectSelector({
 }: ViewProjectSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const selectedProjects = projects.filter(p => value.includes(p.id));
+  const selectedProjects = useMemo(() => projects.filter(p => value.includes(p.id)), [projects, value]);
   const isAllSelected = selectedProjects.length === projects.length;
 
   const getDisplayText = useCallback(() => {
