@@ -28,10 +28,10 @@ async function improveEnglishText(userInput: string) {
     5. If the text exceeds 160 characters, you MUST shorten it while preserving the core message.
     6. You MUST remove unnecessary or redundant words.
     7. You MUST classify the text into EXACTLY ONE of the following categories:
-       - "Update" (status reports, progress notes, completions)
+       - "Update" (status reports, progress notes, completions, statements about current state)
        - "Blocker" (obstacles, issues preventing progress, problems needing resolution)
        - "Idea" (suggestions, proposals, creative thoughts)
-       - "Question" (requests for information, clarification, or help)
+       - "Question" (explicit requests for information, clarification, or help - must contain a question mark OR clear interrogative structure like "how", "what", "when", "can you", etc.)
     8. If the text describes an issue that blocks progress, classify it as "Blocker".
     9. ONLY return invalid_content: true if the input is:
        - Completely empty or only whitespace
@@ -78,11 +78,11 @@ async function improveEnglishText(userInput: string) {
 
         const json = JSON.parse(content);
 
-        return NextResponse.json({
+        return {
             message: json.message,
             category: json.category,
             invalid_content: json.invalid_content
-        });
+        };
 
     } catch (error: any) {
         console.error('Error improving text:', error.response?.data || error.message);
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
             );
         }
 
-        return result;
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error in improve API:', error);
         return NextResponse.json(

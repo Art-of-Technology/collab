@@ -93,17 +93,25 @@ export default function CreatePostForm() {
         body: JSON.stringify({ text })
       });
 
-      const data = await response.json();
-
-      // Check if the API response is ok
+      // Check if the API response is ok before parsing JSON
       if (!response.ok) {
+        let errorMessage = "Failed to process request";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If response is not valid JSON (e.g., HTML error page), use default error message
+          errorMessage = `Request failed with status ${response.status}`;
+        }
         return {
           invalid_content: true,
-          error: data.error || "Failed to process request",
+          error: errorMessage,
           message: "",
           category: ""
         };
       }
+
+      const data = await response.json();
 
       // Check if the content is invalid
       if (data.invalid_content) {
@@ -115,8 +123,9 @@ export default function CreatePostForm() {
         };
       }
 
-      // Check if the message is empty
-      if (!data.message || !data.category) {
+      // Check if the message or category is missing (undefined/null)
+      // This distinguishes between missing fields and intentionally empty strings
+      if (data.message === undefined || data.category === undefined || data.message === null || data.category === null) {
         return {
           invalid_content: true,
           error: "No improvements suggested",
