@@ -73,7 +73,7 @@ export default function CreatePostForm() {
     }));
   };
 
-  const handleAiImprove = async (text: string): Promise<string> => {
+  const handleAiImprove = async (text: string): Promise<any> => {
     if (isImproving || !text.trim()) {
       return text;
     }
@@ -93,32 +93,61 @@ export default function CreatePostForm() {
         body: JSON.stringify({ text })
       });
 
+      const data = await response.json();
+
+      // Check if the API response is ok
       if (!response.ok) {
-        throw new Error("Failed to improve text");
+        return {
+          invalid_content: true,
+          error: data.error || "Failed to process request",
+          message: "",
+          category: ""
+        };
       }
 
-      const data = await response.json();
-      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
+      // Check if the content is invalid
+      if (data.invalid_content) {
+        return {
+          invalid_content: true,
+          error: "Please enter meaningful text that can be improved and classified.",
+          message: "",
+          category: ""
+        };
+      }
 
-      // Extract message from the response
-      const improvedText = data.message || data.improvedText || text;
+      // Check if the message is empty
+      if (!data.message || !data.category) {
+        return {
+          invalid_content: true,
+          error: "No improvements suggested",
+          message: "",
+          category: ""
+        };
+      }
+
+      // Update the category if the AI suggests a type change
+      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
       // Ensure options are open if AI suggests a type change
       if (data.category && !optionsOpen) {
         setOptionsOpen(true);
       }
 
-      // Return the improved text to be displayed in the popup
-      return improvedText;
+      // Return the full response object
+      return {
+        message: data.message,
+        category: data.category,
+        invalid_content: false
+      };
+
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to improve text. Please try again.",
-        variant: "destructive"
-      });
       console.error(error);
-      // Return original text if there was an error
-      return text;
+      return {
+        invalid_content: true,
+        error: "Failed to improve text. Please try again.",
+        message: "",
+        category: ""
+      };
     } finally {
       setIsImproving(false);
     }
