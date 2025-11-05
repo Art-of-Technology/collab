@@ -141,11 +141,11 @@ export async function updateUserProfile(
         },
       },
       update: {
-        displayName: name || undefined,
-        team: team || undefined,
-        currentFocus: currentFocus || undefined,
-        expertise: expertise || undefined,
-        slackId: slackId || undefined,
+        displayName: name || null,
+        team: team || null,
+        currentFocus: currentFocus || null,
+        expertise: expertise || [],
+        slackId: slackId || null,
       },
       create: {
         userId: currentUser.id,
@@ -166,11 +166,11 @@ export async function updateUserProfile(
       id: currentUser.id,
     },
     data: {
-      name: name || undefined,
-      team: team || undefined,
-      currentFocus: currentFocus || undefined,
-      expertise: expertise || undefined,
-      slackId: slackId || undefined,
+      name: name || null,
+      team: team || null,
+      currentFocus: currentFocus || null,
+      expertise: expertise || [],
+      slackId: slackId || null,
     },
   });
 
