@@ -113,7 +113,7 @@ export default function CreateViewModal({
     displayType: 'LIST',
     targetWorkspaceId: workspaceId,
     visibility: 'WORKSPACE',
-    projectIds: [] as string[],
+    projectIds: projects.map(p => p.id),
     grouping: 'none',
     ordering: 'manual',
     displayProperties: ['Priority', 'Status', 'Assignee'],

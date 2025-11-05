@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Popover,
   PopoverContent,
@@ -31,9 +31,9 @@ export function ViewProjectSelector({
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedProjects = projects.filter(p => value.includes(p.id));
-  const isAllSelected = value.length === 0 || value.length === projects.length;
+  const isAllSelected = selectedProjects.length === projects.length;
 
-  const getDisplayText = () => {
+  const getDisplayText = useCallback(() => {
     if (isAllSelected) {
       return "All projects";
     }
@@ -41,20 +41,24 @@ export function ViewProjectSelector({
       return selectedProjects[0].name;
     }
     return `${selectedProjects.length} projects`;
-  };
+  }, [isAllSelected, selectedProjects]);
 
-  const toggleProject = (projectId: string) => {
+  const toggleProject = useCallback((projectId: string) => {
     if (value.includes(projectId)) {
       onChange(value.filter(id => id !== projectId));
     } else {
       onChange([...value, projectId]);
     }
-  };
+  }, [value, onChange]);
 
-  const selectAllExplicit = () => {
+  const clearAll = useCallback(() => {
+    onChange([]);
+  }, [onChange]);
+
+  const selectAllExplicit = useCallback(() => {
     onChange(projects.map(p => p.id));
-  };
-
+  }, [projects, onChange]);
+  
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
@@ -81,30 +85,29 @@ export function ViewProjectSelector({
         sideOffset={4}
       >
         <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#333] mb-1">
-          Select projects
+          Select projects 
         </div>
-        
+      
         <div className="space-y-0.5 max-h-64 overflow-y-auto">
-          {/* Select all projects*/}
-          {!isAllSelected && selectedProjects.length < projects.length && (
+          {/* Quick actions */}
+          <div className="flex gap-1 p-1 border-b border-[#333] mb-1">
             <button
               type="button"
-              className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
               onClick={selectAllExplicit}
+              className="text-xs px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#6e7681] hover:text-[#e6edf3]"
+              aria-label="Select all projects"
             >
-              <Check className="h-4 w-4 text-[#6366f1]" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[#e6edf3] font-medium">Select all projects</div>
-                <div className="text-xs text-[#6e7681]">Select all {projects.length} projects</div>
-              </div>
+              All
             </button>
-          )}
-
-          {/* Separator - only show if there are projects and select all is shown */}
-          {!isAllSelected && selectedProjects.length < projects.length && projects.length > 0 && (
-            <div className="border-t border-[#333] my-1" />
-          )}
-
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-xs px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#6e7681] hover:text-[#e6edf3]"
+              aria-label="Clear project selection"
+            >
+              Clear
+            </button>
+          </div>
           {/* Individual projects */}
           {projects.map((project) => {
             const isSelected = value.includes(project.id);
@@ -115,6 +118,7 @@ export function ViewProjectSelector({
                 type="button"
                 className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
                 onClick={() => toggleProject(project.id)}
+                aria-pressed={isSelected}
               >
                 <div className="w-4 h-4 flex items-center justify-center">
                   {isSelected && <Check className="h-3 w-3 text-[#22c55e]" />}
@@ -122,6 +126,7 @@ export function ViewProjectSelector({
                 <div 
                   className="w-3 h-3 rounded flex-shrink-0"
                   style={{ backgroundColor: project.color || '#6b7280' }}
+                  aria-hidden="true"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="text-[#e6edf3] font-medium truncate">{project.name}</div>
