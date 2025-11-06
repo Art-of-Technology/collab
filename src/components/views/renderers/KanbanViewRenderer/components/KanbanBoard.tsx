@@ -291,15 +291,15 @@ export default function KanbanBoard({
   }, [removeContainerScrollListener, stopAutoScroll]);
 
   const removePointerListeners = useCallback(() => {
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerEnd);
-    window.removeEventListener("pointercancel", handlePointerEnd);
+    window.removeEventListener("pointermove", handlePointerMove, { passive: true });
+    window.removeEventListener("pointerup", handlePointerEnd, { passive: true });
+    window.removeEventListener("pointercancel", handlePointerEnd, { passive: true });
   }, [handlePointerEnd, handlePointerMove]);
 
   const addPointerListeners = useCallback(() => {
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerEnd);
-    window.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerup", handlePointerEnd, { passive: true });
+    window.addEventListener("pointercancel", handlePointerEnd, { passive: true });
   }, [handlePointerEnd, handlePointerMove]);
 
   const handleDragStartInternal = useCallback(
