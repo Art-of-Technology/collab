@@ -8,6 +8,10 @@ import type { KanbanBoardProps, KanbanDropResult, KanbanDragUpdate } from "../ty
 const EDGE_SCROLL_THRESHOLD = 120;
 const BASE_SCROLL_SPEED = 6;
 const EDGE_SCROLL_MAX_SPEED = 28;
+// Tolerance for scroll boundary checks to account for floating-point precision and sub-pixel scrolling
+const SCROLL_BOUNDARY_TOLERANCE = 1;
+
+type ScrollDirection = -1 | 0 | 1;
 
 export default function KanbanBoard({
   columns,
@@ -33,7 +37,6 @@ export default function KanbanBoard({
   onIssueInputChange,
   onIssueCreated,
 }: KanbanBoardProps) {
-  type ScrollDirection = -1 | 0 | 1;
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isIssueDragRef = useRef(false);
@@ -258,7 +261,7 @@ export default function KanbanBoard({
       let direction: ScrollDirection = 0;
 
       if (pointerX >= rect.right - EDGE_SCROLL_THRESHOLD) {
-        if (container.scrollLeft < maxScrollLeft - 1) {
+        if (container.scrollLeft < maxScrollLeft - SCROLL_BOUNDARY_TOLERANCE) {
           direction = 1;
           const distanceFromEdge = Math.max(0, rect.right - pointerX);
           autoScrollState.current.speed = computeEdgeSpeed(distanceFromEdge);
