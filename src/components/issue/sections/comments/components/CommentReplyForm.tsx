@@ -36,8 +36,8 @@ export function CommentReplyForm({
       });
       setContent("");
       onSuccess?.();
-    } catch {
-      // handled by mutation
+    } catch (error) {
+      // Error handled by mutation
     }
   };
 

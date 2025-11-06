@@ -434,6 +434,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       editor.commands.blur();
       editor.commands.focus('end');
 
+      // Release mention guard after ProseMirror completes the insertion transaction
       setTimeout(() => {
         isInsertingMentionRef.current = false;
       }, 0);

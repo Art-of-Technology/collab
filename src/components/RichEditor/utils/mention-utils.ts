@@ -26,33 +26,40 @@ export function findMentionTrigger(
     if (node.isText) {
       const nodeText = node.textContent || '';
       let searchFromIndex = currentPosition - pos - 1;
+      // Check for trigger characters: @ for users, # for issues
       const triggers = ['@', '#'];
 
       for (const trigger of triggers) {
         const processedPositions = new Set<number>();
         let relativeTriggerPos = nodeText.lastIndexOf(trigger, searchFromIndex);
         let iterationCount = 0;
+        const maxIterations = 100; // Prevent infinite loops
 
-        while (relativeTriggerPos !== -1 && relativeTriggerPos >= 0 && iterationCount < 100) {
+        // Search backwards for the most recent unprocessed trigger
+        while (relativeTriggerPos !== -1 && relativeTriggerPos >= 0 && iterationCount < maxIterations) {
           iterationCount++;
           const absoluteTriggerPos = pos + relativeTriggerPos;
 
+          // Skip if we've already processed this position
           if (processedPositions.has(absoluteTriggerPos)) break;
 
+          // Check if position is within search range
           if (absoluteTriggerPos >= searchLimit && absoluteTriggerPos < currentPosition) {
             textAfterTrigger = editor.state.doc.textBetween(absoluteTriggerPos + 1, currentPosition, "");
 
+            // Valid mention if no leading whitespace and no nested triggers
             if (!textAfterTrigger.match(/^\s/) && !triggers.some(t => textAfterTrigger.includes(t))) {
               triggerPosition = absoluteTriggerPos;
               triggerChar = trigger;
               return false;
             } else {
+              // Mark as processed and continue searching backwards
               processedPositions.add(absoluteTriggerPos);
               relativeTriggerPos = nodeText.lastIndexOf(trigger, Math.max(0, relativeTriggerPos - 1));
-              continue;
+              continue; // Skip to next iteration
             }
           } else {
-            break;
+            break; // Break out of while loop if position is outside range
           }
         }
       }
@@ -80,20 +87,24 @@ export function insertMention(
   currentPosition: number,
   triggerChar: string
 ) {
+  // Validate inputs
   if (!editor || !mention || typeof triggerPosition !== 'number' || typeof currentPosition !== 'number') {
     console.error('Invalid parameters passed to insertMention:', { editor: !!editor, mention, triggerPosition, currentPosition, triggerChar });
     return;
   }
 
   try {
+    // Ensure the range is valid
     const docSize = editor.state.doc.content.size;
     const fromPos = Math.max(0, Math.min(triggerPosition, docSize));
     const toPos = Math.max(fromPos, Math.min(currentPosition, docSize));
+    // Validate the range is sensible
     if (fromPos >= toPos || toPos > docSize) {
       console.warn('Invalid range for mention insertion:', { fromPos, toPos, docSize });
       return;
     }
 
+    // User mention - create proper node
     const safeLabel = mention.label || 'Unknown';
     const safeId = mention.id || '';
     const isUser = triggerChar === '@';
@@ -122,6 +133,7 @@ export function insertMention(
     editor.commands.focus('end');
   } catch (error) {
     console.error('Error inserting mention:', error);
+    // Fallback: just insert the text
     try {
       editor
         .chain()
