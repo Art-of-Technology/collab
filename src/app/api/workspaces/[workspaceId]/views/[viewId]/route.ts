@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+
+const paramsSchema = z.object({
+  workspaceId: z.string().min(1, 'workspaceId is required'),
+  viewId: z.string().min(1, 'viewId is required')
+});
+
+const updateViewSchema = z.object({
+  name: z.string().trim().min(1, 'View name cannot be empty').max(100, 'View name cannot exceed 100 characters').optional(),
+  displayType: z.string().optional(),
+  filters: z.any().optional(),
+  sorting: z.any().optional(),
+  grouping: z.any().optional(),
+  fields: z.any().optional(),
+  visibility: z.enum(['PERSONAL', 'WORKSPACE', 'SHARED']).optional(),
+  ownerId: z.string().min(1).optional(),
+  projectIds: z.array(z.string()).optional(),
+});
 
 export async function PUT(
   request: NextRequest,
@@ -14,8 +32,37 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { workspaceId, viewId } = await params;
-    const body = await request.json();
+    const resolvedParams = await params;
+    const parsedParams = paramsSchema.safeParse(resolvedParams);
+    if (!parsedParams.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid URL parameters',
+          details: parsedParams.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    const { workspaceId, viewId } = parsedParams.data;
+
+    const rawBody = await request.json();
+    const parsedBody = updateViewSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          details: parsedBody.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    const body = parsedBody.data;
     
     // Get user
     const user = await prisma.user.findUnique({
@@ -63,34 +110,11 @@ export async function PUT(
       return NextResponse.json({ error: 'View not found or insufficient permissions' }, { status: 404 });
     }
 
-    // Extract update fields from body
-    const { 
-      name,
-      displayType,
-      filters,
-      sorting,
-      grouping,
-      fields,
-      visibility,
-      ownerId
-    } = body;
-
-    // Validate visibility if provided
-    if (visibility !== undefined) {
-      const validVisibilities = ['PERSONAL', 'WORKSPACE', 'SHARED'];
-      if (!validVisibilities.includes(visibility)) {
-        return NextResponse.json(
-          { error: 'Invalid visibility' }, 
-          { status: 400 }
-        );
-      }
-    }
-
     // Validate ownerId if provided
-    if (ownerId !== undefined) {
+    if (body.ownerId !== undefined) {
       const newOwner = await prisma.user.findFirst({
         where: {
-          id: ownerId,
+          id: body.ownerId,
           workspaceMemberships: {
             some: {
               workspaceId
@@ -106,35 +130,8 @@ export async function PUT(
         );
       }
     }
-
-    // Validate name if provided
-    if (name !== undefined) {
-      if (!name.trim()) {
-        return NextResponse.json(
-          { error: 'View name cannot be empty' }, 
-          { status: 400 }
-        );
-      }
-      
-      if (name.length > 100) {
-        return NextResponse.json(
-          { error: 'View name cannot exceed 100 characters' }, 
-          { status: 400 }
-        );
-      }
-    }
-
     // Update the view with only the provided fields
-    const updateData: any = {};
-    
-    if (name !== undefined) updateData.name = name.trim();
-    if (displayType !== undefined) updateData.displayType = displayType;
-    if (filters !== undefined) updateData.filters = filters;
-    if (sorting !== undefined) updateData.sorting = sorting;
-    if (grouping !== undefined) updateData.grouping = grouping;
-    if (fields !== undefined) updateData.fields = fields;
-    if (visibility !== undefined) updateData.visibility = visibility;
-    if (ownerId !== undefined) updateData.ownerId = ownerId;
+    const updateData: any = { ...body };
 
     const updatedView = await prisma.view.update({
       where: { id: viewId },
@@ -153,31 +150,9 @@ export async function PUT(
 
     // Transform the data for the frontend
     const transformedView = {
-      id: updatedView.id,
-      slug: updatedView.slug,
-      name: updatedView.name,
-      description: updatedView.description,
-      displayType: updatedView.displayType,
-      visibility: updatedView.visibility,
+      ...updatedView,
       color: updatedView.color || '#3b82f6',
-      issueCount: 0, // TODO: Calculate actual issue count
-      filters: updatedView.filters,
-      sorting: updatedView.sorting,
-      grouping: updatedView.grouping,
-      fields: updatedView.fields,
-      layout: updatedView.layout,
-      projectIds: updatedView.projectIds,
-      workspaceIds: updatedView.workspaceIds,
-      isDefault: updatedView.isDefault,
-      isFavorite: updatedView.isFavorite,
-      ownerId: updatedView.ownerId,
-      owner: updatedView.owner,
-      createdBy: updatedView.ownerId,
-      sharedWith: updatedView.sharedWith,
-      lastAccessedAt: updatedView.lastAccessedAt,
-      accessCount: updatedView.accessCount,
-      createdAt: updatedView.createdAt,
-      updatedAt: updatedView.updatedAt
+      issueCount: 0 // TODO: Calculate actual issue count
     };
 
     return NextResponse.json({ view: transformedView });
@@ -202,7 +177,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { workspaceId, viewId } = await params;
+    const resolvedParams = await params;
+    const parsedParams = paramsSchema.safeParse(resolvedParams);
+    if (!parsedParams.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid URL parameters',
+          details: parsedParams.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    const { workspaceId, viewId } = parsedParams.data;
     
     // Get user
     const user = await prisma.user.findUnique({
