@@ -353,7 +353,11 @@ export default function KanbanBoard({
 
       let payload: KanbanDropResult | DropResult = result;
 
-      if (result.type === "issue" && override) {
+      // Only inject override when drag was actually completed (not cancelled)
+      // Check both reason === 'DROP' and destination !== null to be safe
+      const isDragCompleted = result.reason === 'DROP' || result.destination !== null;
+
+      if (result.type === "issue" && override && isDragCompleted) {
         const index = Math.max(0, override.issueIndex);
         const overrideDestination = {
           droppableId: override.columnId,
