@@ -1,14 +1,14 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { 
   getCurrentUser, 
   getUserById,
   updateUserAvatar,
-  getCurrentUserProfile,
   getUserProfile,
   updateUserProfile
 } from '@/actions/user';
+import { getPosts } from '@/actions/post';
 
 // Define query keys
 export const userKeys = {
@@ -61,11 +61,59 @@ export const useUpdateUserAvatar = () => {
   });
 };
 
-export function useCurrentUserProfile(workspaceId?: string) {
-  return useQuery({
-    queryKey: ['profile', 'current', workspaceId],
-    queryFn: () => getCurrentUserProfile(workspaceId),
-    enabled: workspaceId !== undefined,
+export function useInfiniteUserProfilePosts(
+  workspaceId: string,
+  limit = 10,
+  initialPosts?: any[]
+) {
+  const { data: currentUser } = useCurrentUser();
+  
+  // Create initial page data if initialPosts is provided (even if empty array)
+  const initialPageData = initialPosts !== undefined ? {
+    pages: [{
+      posts: initialPosts,
+      hasMore: initialPosts.length >= limit,
+      nextCursor: initialPosts.length > 0 ? initialPosts[initialPosts.length - 1].id : null
+    }],
+    pageParams: [undefined]
+  } : undefined;
+  
+  return useInfiniteQuery({
+    queryKey: ['profile', 'posts', 'infinite', workspaceId, currentUser?.id],
+    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
+      if (!currentUser?.id) {
+        throw new Error('User not found');
+      }
+      
+      const result = await getPosts({
+        authorId: currentUser.id,
+        workspaceId: workspaceId,
+        cursor: pageParam,
+        limit: limit,
+        includeProfileData: false
+      });
+      
+      if (Array.isArray(result)) {
+        return {
+          posts: result,
+          hasMore: false,
+          nextCursor: null
+        };
+      }
+      
+      return result;
+    },
+    getNextPageParam: (lastPage) => {
+      if (Array.isArray(lastPage)) {
+        return undefined;
+      }
+      return lastPage.hasMore ? lastPage.nextCursor : undefined;
+    },
+    initialPageParam: undefined as string | undefined,
+    enabled: !!currentUser?.id && !!workspaceId,
+    initialData: initialPageData,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: initialPosts === undefined,
   });
 }
 

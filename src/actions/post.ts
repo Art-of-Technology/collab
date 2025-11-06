@@ -31,7 +31,8 @@ export async function getPosts({
   authorId,
   workspaceId,
   limit = 20,
-  cursor
+  cursor,
+  includeProfileData = false
 }: {
   type?: PostType;
   tag?: string;
@@ -39,6 +40,7 @@ export async function getPosts({
   workspaceId?: string;
   limit?: number;
   cursor?: string;
+  includeProfileData?: boolean;
 }) {
   const session = await getServerSession(authOptions);
 
@@ -59,9 +61,51 @@ export async function getPosts({
     query.authorId = authorId;
   }
 
-  // Filter by workspace
+  // Filter by workspace - resolve slug to ID if needed
+  let resolvedWorkspaceId: string | undefined = undefined;
   if (workspaceId) {
-    query.workspaceId = workspaceId;
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { id: workspaceId },
+          { slug: workspaceId }
+        ]
+      },
+      select: { id: true }
+    });
+    
+    if (workspace) {
+      resolvedWorkspaceId = workspace.id;
+      query.workspaceId = workspace.id;
+    } else {
+      const emptyResult: any = {
+        posts: [],
+        hasMore: false,
+        nextCursor: null
+      };
+      
+      // If includeProfileData is requested, still fetch user and stats
+      if (includeProfileData && authorId) {
+        const user = await prisma.user.findUnique({
+          where: { id: authorId }
+        });
+
+        if (user) {
+          const whereCondition = { authorId: user.id };
+
+          const [postCount, commentCount, reactionsReceived] = await Promise.all([
+            prisma.post.count({ where: whereCondition }),
+            prisma.comment.count({ where: { authorId: user.id } }),
+            prisma.reaction.count({ where: { post: whereCondition } }),
+          ]);
+
+          emptyResult.user = { ...user };
+          emptyResult.stats = { postCount, commentCount, reactionsReceived };
+        }
+      }
+      
+      return emptyResult;
+    }
   } else {
     // Get workspaces the user has access to
     const accessibleWorkspaces = await prisma.workspace.findMany({
@@ -75,7 +119,74 @@ export async function getPosts({
     });
     
     if (accessibleWorkspaces.length === 0) {
-      return [];
+      // Return empty result in correct format
+      const emptyResult: any = {
+        posts: [],
+        hasMore: false,
+        nextCursor: null
+      };
+      
+      // If includeProfileData is requested, still fetch user and stats
+      if (includeProfileData && authorId) {
+        const user = await prisma.user.findUnique({
+          where: { id: authorId }
+        });
+
+        if (user) {
+          const member = workspaceId
+            ? await prisma.workspaceMember.findUnique({
+                where: {
+                  userId_workspaceId: { userId: user.id, workspaceId },
+                },
+                select: {
+                  id: true,
+                  role: true,
+                  displayName: true,
+                  team: true,
+                  currentFocus: true,
+                  expertise: true,
+                  slackId: true,
+                },
+              })
+            : null;
+
+          const whereCondition = {
+            authorId: user.id,
+          };
+
+          const [postCount, commentCount, reactionsReceived] = await Promise.all([
+            prisma.post.count({ where: whereCondition }),
+            prisma.comment.count({
+              where: {
+                authorId: user.id,
+              },
+            }),
+            prisma.reaction.count({
+              where: {
+                post: whereCondition,
+              },
+            }),
+          ]);
+
+          emptyResult.user = {
+            ...user,
+            name: member?.displayName ?? user.name,
+            team: member?.team ?? user.team,
+            currentFocus: member?.currentFocus ?? user.currentFocus,
+            expertise: member?.expertise ?? user.expertise,
+            role: member?.role ?? user.role,
+            workspaceMemberId: member?.id ?? null,
+          };
+
+          emptyResult.stats = {
+            postCount,
+            commentCount,
+            reactionsReceived
+          };
+        }
+      }
+      
+      return emptyResult;
     }
     
     // Include workspaceId IN filter
@@ -172,11 +283,82 @@ export async function getPosts({
     isFollowing: post.followers.some(follower => follower.userId === session.user.id),
   }));
 
-  return {
+  const result: any = {
     posts: postsWithFollowers,
     hasMore,
     nextCursor: actualPosts.length > 0 ? actualPosts[actualPosts.length - 1].id : null
   };
+
+  if (includeProfileData && authorId) {
+    const user = await prisma.user.findUnique({
+      where: { id: authorId }
+    });
+
+    if (user) {
+      const member = resolvedWorkspaceId
+        ? await prisma.workspaceMember.findUnique({
+            where: {
+              userId_workspaceId: { userId: user.id, workspaceId: resolvedWorkspaceId },
+            },
+            select: {
+              id: true,
+              role: true,
+              displayName: true,
+              team: true,
+              currentFocus: true,
+              expertise: true,
+              slackId: true,
+            },
+          })
+        : null;
+
+      const whereCondition = resolvedWorkspaceId
+        ? {
+            authorId: user.id,
+            workspaceId: resolvedWorkspaceId,
+          }
+        : {
+            authorId: user.id,
+          };
+
+      const [postCount, commentCount, reactionsReceived] = await Promise.all([
+        prisma.post.count({ where: whereCondition }),
+        prisma.comment.count({
+          where: {
+            authorId: user.id,
+            ...(resolvedWorkspaceId && {
+              post: {
+                workspaceId: resolvedWorkspaceId,
+              },
+            }),
+          },
+        }),
+        prisma.reaction.count({
+          where: {
+            post: whereCondition,
+          },
+        }),
+      ]);
+
+      result.user = {
+        ...user,
+        name: member?.displayName ?? user.name,
+        team: member?.team ?? user.team,
+        currentFocus: member?.currentFocus ?? user.currentFocus,
+        expertise: member?.expertise ?? user.expertise,
+        role: member?.role ?? user.role,
+        workspaceMemberId: member?.id ?? null,
+      };
+
+      result.stats = {
+        postCount,
+        commentCount,
+        reactionsReceived
+      };
+    }
+  }
+
+  return result;
 }
 
 /**
