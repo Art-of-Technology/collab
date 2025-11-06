@@ -22,15 +22,6 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
   
   const { data: profileData, isLoading: isProfileLoading } = useCurrentUserProfile(workspaceId);
   const { user, stats } = profileData || initialData || {};
-  
-  if ((isProfileLoading && !initialData) || !user || !stats) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
   const {
     data: infinitePostsData,
     fetchNextPage,
@@ -42,6 +33,14 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
     10, 
     initialWorkspaceId === workspaceId ? initialData?.posts : undefined
   );
+
+  if ((isProfileLoading && !initialData) || !user || !stats) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   
   const posts = infinitePostsData?.pages.flatMap((page: any) => {
     if (Array.isArray(page)) {
