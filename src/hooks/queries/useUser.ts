@@ -127,11 +127,43 @@ export function useUserProfile(userId: string, workspaceId?: string) {
 
 export function useUpdateProfile(workspaceId?: string) {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: any) => updateUserProfile(data, workspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile', 'current', workspaceId] });
     }
   });
-} 
+}
+
+export function useCurrentUserProfile(workspaceId?: string) {
+  const { data: currentUser } = useCurrentUser();
+
+  return useQuery({
+    queryKey: ['profile', 'current', workspaceId],
+    queryFn: async () => {
+      if (!currentUser?.id) {
+        throw new Error('User not found');
+      }
+
+      const result = await getPosts({
+        authorId: currentUser.id,
+        workspaceId: workspaceId,
+        limit: 1,
+        includeProfileData: true
+      });
+
+      if (Array.isArray(result)) {
+        return { user: null, stats: null, posts: [] };
+      }
+
+      return {
+        user: result.user || null,
+        stats: result.stats || null,
+        posts: result.posts || []
+      };
+    },
+    enabled: !!currentUser?.id && !!workspaceId,
+    staleTime: 5 * 60 * 1000,
+  });
+}

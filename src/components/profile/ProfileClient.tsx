@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useInfiniteUserProfilePosts } from "@/hooks/queries/useUser";
+import { useInfiniteUserProfilePosts, useCurrentUserProfile } from "@/hooks/queries/useUser";
 import ProfileForm from "@/components/profile/ProfileForm";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PostList from "@/components/posts/PostList";
@@ -20,9 +20,10 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
   const workspaceId = currentWorkspace?.id || '';
   const [initialWorkspaceId] = useState(() => workspaceId);
   
-  const { user, stats } = initialData || {};
+  const { data: profileData, isLoading: isProfileLoading } = useCurrentUserProfile(workspaceId);
+  const { user, stats } = profileData || initialData || {};
   
-  if (!user || !stats) {
+  if ((isProfileLoading && !initialData) || !user || !stats) {
     return (
       <div className="flex justify-center items-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
