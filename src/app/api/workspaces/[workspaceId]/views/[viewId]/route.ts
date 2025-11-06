@@ -9,9 +9,9 @@ const paramsSchema = z.object({
   viewId: z.string().min(1, 'viewId is required')
 });
 
-const updateViewSchema = z.object({
-  name: z.string().trim().min(1, 'View name cannot be empty').max(100, 'View name cannot exceed 100 characters').optional(),
-  displayType: z.string().optional(),
+const updateViewSchema = z.strictObject({
+  name: z.string().min(1, 'View name cannot be empty').max(100, 'View name cannot exceed 100 characters').optional().transform(val => val?.trim()),
+  displayType: z.enum(['KANBAN', 'LIST', 'TABLE', 'CALENDAR', 'TIMELINE', 'GANTT', 'BOARD']).optional(),
   filters: z.any().optional(),
   sorting: z.any().optional(),
   grouping: z.any().optional(),
@@ -131,7 +131,7 @@ export async function PUT(
       }
     }
     // Update the view with only the provided fields
-    const updateData: any = { ...body };
+    const updateData: z.infer<typeof updateViewSchema> = { ...body };
 
     const updatedView = await prisma.view.update({
       where: { id: viewId },

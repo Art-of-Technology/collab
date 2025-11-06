@@ -445,7 +445,7 @@ export default function ViewRenderer({
         assignees: dropdownAssignees
       });
     }
-  }, [allFilters.assignee]);
+  }, [allFilters.assignee, setViewFiltersState, viewFiltersState]);
 
   // Callback for View Options to update dropdown filter
   const handleViewOptionsAssigneeChange = useCallback((assignees: unknown) => {
@@ -490,7 +490,7 @@ export default function ViewRenderer({
   // Memoize action filters to prevent reference instability
   const actionFilters = useMemo(() => {
     return (allFilters.actions as ActionFilter[]) || [];
-  }, [JSON.stringify(allFilters.actions || [])]);
+  }, [allFilters.actions]);
 
   // Apply action filters first (async filtering)
   const {
@@ -684,11 +684,11 @@ export default function ViewRenderer({
     actionFilteredIssues,
     issueFilterType,
     searchQuery,
-    JSON.stringify(allFilters),
-    JSON.stringify(viewFiltersState),
+    allFilters,
+    viewFiltersState,
     viewPositionsData?.positions,
     sortedTempProjectIds,
-    JSON.stringify(originalProjectIds),
+    originalProjectIds,
     tempProjectIds.length
   ]);
 
@@ -904,10 +904,10 @@ export default function ViewRenderer({
   }, [
     actionFilteredIssues,
     sortedTempProjectIds,
-    JSON.stringify(originalProjectIds),
+    originalProjectIds,
     searchQuery,
-    JSON.stringify(allFilters),
-    JSON.stringify(viewFiltersState)
+    allFilters,
+    viewFiltersState
   ]);
 
   // Issue update handler - no page refresh, just API call
