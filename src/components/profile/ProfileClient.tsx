@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useInfiniteUserProfilePosts } from "@/hooks/queries/useUser";
 import ProfileForm from "@/components/profile/ProfileForm";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -16,7 +17,8 @@ interface ProfileClientProps {
 
 export default function ProfileClient({ initialData }: ProfileClientProps) {
   const { currentWorkspace } = useWorkspace();
-  const workspaceId = currentWorkspace?.id;
+  const workspaceId = currentWorkspace?.id || '';
+  const [initialWorkspaceId] = useState(() => workspaceId);
   
   const { user, stats } = initialData || {};
   
@@ -34,7 +36,11 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
     hasNextPage,
     isFetchingNextPage,
     isLoading: isPostsLoading
-  } = useInfiniteUserProfilePosts(workspaceId || '', 10, initialData?.posts);
+  } = useInfiniteUserProfilePosts(
+    workspaceId, 
+    10, 
+    initialWorkspaceId === workspaceId ? initialData?.posts : undefined
+  );
   
   const posts = infinitePostsData?.pages.flatMap((page: any) => {
     if (Array.isArray(page)) {
