@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect, type MouseEvent } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { DropResult } from "@hello-pangea/dnd";
 import { createColumns, countIssuesByType } from '../utils';
 import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
 import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
@@ -36,8 +35,10 @@ function detectTightSpacing(bulk: Array<{issueId: string, columnId: string, posi
   
   return false; // Spacing is fine
 }
-import type { 
-  KanbanViewRendererProps 
+import type {
+  KanbanViewRendererProps,
+  KanbanDragUpdate,
+  KanbanDropResult,
 } from '../types';
 
 export const useKanbanState = ({
@@ -264,28 +265,31 @@ export const useKanbanState = ({
     }
   }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
-  const handleDragUpdate = useCallback((update: any) => {
-    if (!update.destination) {
+  const handleDragUpdate = useCallback((update: KanbanDragUpdate) => {
+    const destination = update.overrideDestination ?? update.destination;
+
+    if (!destination) {
       setHoverState({ canDrop: true, columnId: '' });
       return;
     }
-    
-    if (update.type === 'issue' && update.destination) {
-      const targetColumnId = update.destination.droppableId;
-      
-      // Find the dragged issue and check if it can be moved to the target column
+
+    if (update.type === 'issue') {
+      const targetColumnId = destination.droppableId;
+
       if (draggedIssue) {
         const canDrop = canIssueMoveTo(draggedIssue, targetColumnId);
-
         setHoverState({ canDrop, columnId: targetColumnId });
+      } else {
+        setHoverState({ canDrop: true, columnId: targetColumnId });
       }
     } else {
       setHoverState({ canDrop: true, columnId: '' });
     }
   }, [draggedIssue, canIssueMoveTo]);
 
-  const handleDragEnd = useCallback(async (result: DropResult) => {
-    const { destination, source, draggableId, type } = result;
+  const handleDragEnd = useCallback(async (result: KanbanDropResult) => {
+    const { source, draggableId, type } = result;
+    const destination = result.overrideDestination ?? result.destination;
 
     // Safety check: if this specific issue operation is already in progress, ignore
     if (operationsInProgressRef.current.has(draggableId) && !isDraggingRef.current) {

@@ -104,6 +104,7 @@ const KanbanIssueCard = React.memo(({
           href={issueUrl}
           rel="noopener noreferrer"
           onClick={handleLinkClick}
+          data-issue-id={issue.id}
           className={cn(
             "group block p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150 no-underline",
             hasRelations ? 'pb-1.5' : 'pb-3',
