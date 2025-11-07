@@ -42,9 +42,61 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
     }
   }, [currentWorkspace?.slug, currentWorkspace?.id]);
 
+  const openImageInNewTab = useCallback((imageSrc: string) => {
+    // Check if it's a base64 data URL
+    if (imageSrc.startsWith('data:')) {
+      try {
+        // Parse the data URL
+        const [header, base64Data] = imageSrc.split(',');
+        const mimeMatch = header.match(/data:([^;]+)/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+
+        // Convert base64 to binary
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Create blob from binary data
+        const blob = new Blob([bytes], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const newWindow = window.open(blobUrl, '_blank');
+        if (newWindow) {
+          // Clean up blob URL after a delay to allow the browser to load it
+          setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+          }, 100);
+        } else {
+          // If popup was blocked, clean up immediately
+          URL.revokeObjectURL(blobUrl);
+        }
+      } catch (error) {
+        // Fallback: try opening data URL directly
+        window.open(imageSrc, '_blank');
+      }
+    } else {
+      // Regular URL - open directly
+      window.open(imageSrc, '_blank');
+    }
+  }, []);
+
   useEffect(() => {
     const handleMentionClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
+
+      // Check if clicked element is an image
+      if (target.tagName === 'IMG' && containerRef.current?.contains(target)) {
+        const imageSrc = target.getAttribute('src');
+        if (imageSrc) {
+          event.preventDefault();
+          event.stopPropagation();
+          openImageInNewTab(imageSrc);
+          return;
+        }
+      }
+
       const mentionElement = target.closest('[data-type="mention"], [data-type="issue-mention"]') as HTMLElement | null;
 
       if (mentionElement && containerRef.current?.contains(mentionElement)) {
@@ -83,7 +135,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         container.removeEventListener('click', handleMentionClick, true);
       };
     }
-  }, [currentWorkspace?.slug, handleIssueMentionClick]);
+  }, [currentWorkspace?.slug, handleIssueMentionClick, openImageInNewTab]);
 
   return (
     <>
@@ -171,6 +223,16 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         .video-resizable-container:hover .resizable-video,
         .video-resizable-container:hover video {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Make images clickable */
+        .prose img {
+          cursor: pointer;
+          transition: opacity 0.2s ease;
+        }
+        
+        .prose img:hover {
+          opacity: 0.9;
         }
       `}</style>
     </>
