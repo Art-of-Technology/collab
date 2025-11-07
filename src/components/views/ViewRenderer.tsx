@@ -988,13 +988,16 @@ export default function ViewRenderer({
               [groupField]: orderedIds
             }
           };
-          console.log('updatedLayout', updatedLayout);
-          await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+
+          const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ layout: updatedLayout })
           });
 
+          if (!response.ok) {
+            throw new Error('Failed to update view layout');
+          }
           // Invalidate cached views so layout order is refreshed
           queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
         }

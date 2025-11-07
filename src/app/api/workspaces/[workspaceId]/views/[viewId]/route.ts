@@ -19,6 +19,7 @@ const updateViewSchema = z.strictObject({
   visibility: z.enum(['PERSONAL', 'WORKSPACE', 'SHARED']).optional(),
   ownerId: z.string().min(1).optional(),
   projectIds: z.array(z.string()).optional(),
+  layout: z.any().optional(),
 });
 
 export async function PUT(
@@ -124,16 +125,6 @@ export async function PUT(
       projectIds,
     } = body;
 
-    // Validate visibility if provided
-    if (visibility !== undefined) {
-      const validVisibilities = ['PERSONAL', 'WORKSPACE', 'SHARED'];
-      if (!validVisibilities.includes(visibility)) {
-        return NextResponse.json(
-          { error: 'Invalid visibility' }, 
-          { status: 400 }
-        );
-      }
-    }
 
     // Validate ownerId if provided
     if (body.ownerId !== undefined) {
@@ -158,7 +149,7 @@ export async function PUT(
     // Update the view with only the provided fields
     const updateData: any = {};
     
-    if (name !== undefined) updateData.name = name.trim();
+    if (name !== undefined) updateData.name = name;
     if (displayType !== undefined) updateData.displayType = displayType;
     if (filters !== undefined) updateData.filters = filters;
     if (sorting !== undefined) updateData.sorting = sorting;
