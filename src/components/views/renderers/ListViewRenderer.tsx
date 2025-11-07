@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -124,9 +124,6 @@ export default function ListViewRenderer({
   displayProperties = ['ID', 'Priority', 'Status', 'Assignee', 'Project', 'Due date'],
   showSubIssues = true
 }: ListViewRendererProps) {
-  // Router for navigation
-  const router = useRouter();
-
   // State management
   const [hoveredIssueId, setHoveredIssueId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -265,22 +262,6 @@ export default function ListViewRenderer({
   }, [issues, selectedFilters, displaySettings]);
 
   // Handlers
-  const handleIssueClick = (issueIdOrKey: string) => {
-    // Navigate directly to the issue page (Linear-style)
-    // Use workspace slug if available, else id; fallback to issue's workspaceId
-    const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
-    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
-
-    // Build URL with view context for proper back navigation
-    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
-
-    if (workspaceSegment) {
-      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
-    } else {
-      router.push(`/issues/${issueIdOrKey}${viewParams}`);
-    }
-  };
-
   const handleGroupToggle = (groupKey: string) => {
     setCollapsedGroups(prev => {
       const newSet = new Set(prev);
@@ -381,10 +362,19 @@ export default function ListViewRenderer({
 
   // Issue Row Component - Mobile-first responsive design
   const IssueRow = ({ issue }: { issue: Issue }) => {
+    // Build URL for the issue
+    const issueIdOrKey = issue.issueKey || issue.id;
+    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || (view as any)?.workspaceId || (issue as any)?.workspaceId;
+    const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
+    const issueUrl = workspaceSegment 
+      ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
+      : `/issues/${issueIdOrKey}${viewParams}`;
+
     return (
-      <a
+      <Link
+        href={issueUrl}
         className={cn(
-          "group relative cursor-pointer transition-all duration-200",
+          "group relative cursor-pointer transition-all duration-200 block",
           // Mobile-first: Card-like design with glassmorphism
           "mx-3 mb-3 p-4 rounded-xl",
           "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
@@ -396,7 +386,6 @@ export default function ListViewRenderer({
         )}
         onMouseEnter={() => setHoveredIssueId(issue.id)}
         onMouseLeave={() => setHoveredIssueId(null)}
-        onClick={() => handleIssueClick(issue.issueKey || issue.id)}
       >
         {/* Mobile Layout */}
         <div className="md:hidden">
@@ -704,7 +693,7 @@ export default function ListViewRenderer({
             </div>
           )}
         </div>
-      </a>
+      </Link>
     );
   };
 
