@@ -373,6 +373,8 @@ export default function ListViewRenderer({
     return (
       <Link
         href={issueUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         className={cn(
           "group relative cursor-pointer transition-all duration-200 block",
           // Mobile-first: Card-like design with glassmorphism
