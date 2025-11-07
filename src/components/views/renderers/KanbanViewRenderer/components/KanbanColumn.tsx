@@ -41,6 +41,8 @@ export default function KanbanColumn({
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
+          data-column-id={column.id}
+          data-column-index={index}
           className={cn(
             "flex-shrink-0 w-80 flex flex-col h-full",
             snapshot.isDragging && "rotate-2 shadow-lg"

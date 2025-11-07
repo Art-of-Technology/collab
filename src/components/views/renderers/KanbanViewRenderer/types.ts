@@ -1,4 +1,5 @@
 import type { MouseEvent, KeyboardEvent } from 'react';
+import type { DragUpdate, DropResult } from '@hello-pangea/dnd';
 
 export interface KanbanViewRendererProps {
   view: any;
@@ -77,6 +78,20 @@ export interface KanbanIssueCardProps {
 }
 
 
+export interface OverrideDestination {
+  droppableId: string;
+  index: number;
+}
+
+export type KanbanDragUpdate = DragUpdate & {
+  overrideDestination?: OverrideDestination;
+};
+
+export type KanbanDropResult = DropResult & {
+  overrideDestination?: OverrideDestination;
+};
+
+
 
 export interface KanbanBoardProps {
   columns: Column[];
@@ -97,9 +112,9 @@ export interface KanbanBoardProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onDragEnd: (result: any) => void;
+  onDragEnd: (result: KanbanDropResult) => void;
   onDragStart: (start: any) => void;
-  onDragUpdate: (update: any) => void;
+  onDragUpdate: (update: KanbanDragUpdate) => void;
   onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
