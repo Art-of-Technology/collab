@@ -364,7 +364,7 @@ export default function ListViewRenderer({
   const IssueRow = ({ issue }: { issue: Issue }) => {
     // Build URL for the issue
     const issueIdOrKey = issue.issueKey || issue.id;
-    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || (view as any)?.workspaceId;
+    const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || (view as any)?.workspaceId || (issue as any)?.workspaceId;
     const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
     const issueUrl = workspaceSegment 
       ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
