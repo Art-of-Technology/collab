@@ -862,21 +862,25 @@ export default function ViewRenderer({
     }
   };
 
-  // Persist Kanban column order (project statuses) with debounce batching
+  // Persist Kanban column order with debounce batching
   const handleColumnUpdate = (columnId: string, updates: any) => {
-    // columnId here is the internal status name (e.g., 'in_progress')
-    if (typeof updates?.order === 'number') {
-      pendingColumnOrdersRef.current[columnId] = updates.order;
+    if (typeof updates?.order !== 'number') return;
 
-      if (commitColumnOrderRef.current) {
-        clearTimeout(commitColumnOrderRef.current);
-      }
+    pendingColumnOrdersRef.current[columnId] = updates.order;
 
-      commitColumnOrderRef.current = setTimeout(async () => {
-        const orders = pendingColumnOrdersRef.current;
-        pendingColumnOrdersRef.current = {};
+    if (commitColumnOrderRef.current) {
+      clearTimeout(commitColumnOrderRef.current);
+    }
 
-        try {
+    commitColumnOrderRef.current = setTimeout(async () => {
+      const orders = pendingColumnOrdersRef.current;
+      pendingColumnOrdersRef.current = {};
+
+      const groupField = (tempGrouping || view.grouping?.field || 'status');
+
+      try {
+        if (groupField === 'status') {
+          // Persist status column order to project statuses
           const projectIdsToUpdate = (tempProjectIds.length > 0
             ? tempProjectIds
             : view.projects.map(p => p.id));
@@ -895,14 +899,38 @@ export default function ViewRenderer({
 
           // Refresh statuses used by Kanban columns
           queryClient.invalidateQueries({ queryKey: ['multiple-project-statuses'] });
+        } else {
+          // Persist non-status column order per grouping into view.layout.kanbanColumnOrder
+          const orderedIds = Object.entries(orders)
+            .sort((a, b) => (a[1] as number) - (b[1] as number))
+            .map(([id]) => id);
 
-          toast({ title: 'Columns reordered', description: 'Saved new column order' });
-        } catch (error) {
-          console.error('Failed to reorder columns:', error);
-          toast({ title: 'Error', description: 'Failed to save column order', variant: 'destructive' });
+          const existingLayout = view?.layout || {};
+          const existingOrder = existingLayout.kanbanColumnOrder || {};
+          const updatedLayout = {
+            ...existingLayout,
+            kanbanColumnOrder: {
+              ...existingOrder,
+              [groupField]: orderedIds
+            }
+          };
+          console.log('updatedLayout', updatedLayout);
+          await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout: updatedLayout })
+          });
+
+          // Invalidate cached views so layout order is refreshed
+          queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
         }
-      }, 150);
-    }
+
+        toast({ title: 'Columns reordered', description: 'Saved new column order' });
+      } catch (error) {
+        console.error('Failed to reorder columns:', error);
+        toast({ title: 'Error', description: 'Failed to save column order', variant: 'destructive' });
+      }
+    }, 150);
   };
 
   const renderViewContent = () => {

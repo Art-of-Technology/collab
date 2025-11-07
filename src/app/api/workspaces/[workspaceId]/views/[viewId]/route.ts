@@ -72,7 +72,9 @@ export async function PUT(
       grouping,
       fields,
       visibility,
-      ownerId
+      ownerId,
+      layout,
+      projectIds,
     } = body;
 
     // Validate visibility if provided
@@ -135,7 +137,9 @@ export async function PUT(
     if (fields !== undefined) updateData.fields = fields;
     if (visibility !== undefined) updateData.visibility = visibility;
     if (ownerId !== undefined) updateData.ownerId = ownerId;
-
+    if (layout !== undefined) updateData.layout = layout;
+    if (projectIds !== undefined) updateData.projectIds = projectIds;
+    
     const updatedView = await prisma.view.update({
       where: { id: viewId },
       data: updateData,

@@ -184,16 +184,36 @@ export const useKanbanState = ({
     }
     const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames, previousOrderingMethod.current);
     previousOrderingMethod.current = view?.ordering || view?.sorting?.field || 'manual';
-    if (localColumnOrder && view.grouping?.field === 'status') {
+
+    // Start with base columns
+    let orderedColumns = baseColumns;
+
+    // Apply saved layout order from view for non-status groupings
+    if (groupField !== 'status') {
+      const savedOrder: string[] | undefined = view?.layout?.kanbanColumnOrder?.[groupField];
+      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+        const indexById = new Map(savedOrder.map((id, idx) => [id, idx]));
+        orderedColumns = orderedColumns
+          .map((col: any) => ({
+            ...col,
+            order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
+          }))
+          .sort((a: any, b: any) => a.order - b.order);
+      }
+    }
+
+    // Apply local drag-reordered order for all groupings (takes precedence during session)
+    if (localColumnOrder) {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
-      return baseColumns
+      orderedColumns = orderedColumns
         .map((col: any) => ({
           ...col,
           order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
         }))
         .sort((a: any, b: any) => a.order - b.order);
     }
-    return baseColumns;
+
+    return orderedColumns;
   }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder, activeFilters]);
 
   // Count issues for filter buttons
