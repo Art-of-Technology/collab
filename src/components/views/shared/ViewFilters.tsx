@@ -55,6 +55,7 @@ export interface ViewFiltersProps {
   onOwnerChange?: (ownerId: string) => void;
   onDeleteView?: () => void;
   onNameChange?: (name: string) => void;
+  onAssigneesChangeFromViewOptions?: (assignees: unknown) => void;
 }
 
 type FilterTab = 'assignees' | 'labels' | 'priority' | 'projects';
@@ -72,7 +73,8 @@ export default function ViewFilters({
   onVisibilityChange,
   onOwnerChange,
   onDeleteView,
-  onNameChange
+  onNameChange,
+  onAssigneesChangeFromViewOptions
 }: ViewFiltersProps) {
   const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('assignees');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -122,27 +124,44 @@ export default function ViewFilters({
     const currentFilters = selectedFilters[filterType];
     const isSelected = currentFilters.includes(filterId);
     
-    if (isSelected) {
-      onFiltersChange({
-        ...selectedFilters,
-        [filterType]: currentFilters.filter(id => id !== filterId)
-      });
-    } else {
-      onFiltersChange({
-        ...selectedFilters,
-        [filterType]: [...currentFilters, filterId]
-      });
+    const newFilters = isSelected
+      ? { ...selectedFilters, [filterType]: currentFilters.filter(id => id !== filterId) }
+      : { ...selectedFilters, [filterType]: [...currentFilters, filterId] };
+    
+    onFiltersChange(newFilters);
+    
+    // Update dropdown filter when assignees change from View Options
+    if (filterType === 'assignees' && onAssigneesChangeFromViewOptions) {
+      const assignees = newFilters.assignees;
+      // Ensure assignees is a valid array before calling callback
+      if (Array.isArray(assignees)) {
+        try {
+          onAssigneesChangeFromViewOptions([...assignees]);
+        } catch (error) {
+          console.warn('Error in onAssigneesChangeFromViewOptions:', error);
+        }
+      }
     }
-  }, [selectedFilters, onFiltersChange]);
+  }, [selectedFilters, onFiltersChange, onAssigneesChangeFromViewOptions]);
 
   const clearAllFilters = useCallback(() => {
-    onFiltersChange({
+    const emptyFilters = {
       assignees: [],
       labels: [],
       priority: [],
       projects: []
-    });
-  }, [onFiltersChange]);
+    };
+    onFiltersChange(emptyFilters);
+    
+    // Update dropdown filter when clearing assignees
+    if (onAssigneesChangeFromViewOptions) {
+      try {
+        onAssigneesChangeFromViewOptions([]);
+      } catch (error) {
+        console.warn('Error calling onAssigneesChangeFromViewOptions:', error);
+      }
+    }
+  }, [onFiltersChange, onAssigneesChangeFromViewOptions]);
 
   // Get filter data with counts
   const filterData = useMemo(() => {
@@ -185,8 +204,8 @@ export default function ViewFilters({
     // Process all issues for accurate counts
     issues.forEach((issue: any) => {
       // Count assignees
-      const assigneeId = issue.assignee?.id || 'unassigned';
-      if (!assignees.has(assigneeId) && issue.assignee) {
+      const assigneeId = issue.assigneeId || 'unassigned';
+      if (!assignees.has(assigneeId) && assigneeId !== 'unassigned' && issue.assignee) {
         assignees.set(assigneeId, {
           id: assigneeId,
           name: issue.assignee.name,

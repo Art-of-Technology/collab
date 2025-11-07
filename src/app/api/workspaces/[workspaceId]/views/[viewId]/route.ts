@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+
+const paramsSchema = z.object({
+  workspaceId: z.string().min(1, 'workspaceId is required'),
+  viewId: z.string().min(1, 'viewId is required')
+});
+
+const updateViewSchema = z.strictObject({
+  name: z.string().min(1, 'View name cannot be empty').max(100, 'View name cannot exceed 100 characters').optional().transform(val => val?.trim()),
+  displayType: z.enum(['KANBAN', 'LIST', 'TABLE', 'CALENDAR', 'TIMELINE', 'GANTT', 'BOARD']).optional(),
+  filters: z.any().optional(),
+  sorting: z.any().optional(),
+  grouping: z.any().optional(),
+  fields: z.any().optional(),
+  visibility: z.enum(['PERSONAL', 'WORKSPACE', 'SHARED']).optional(),
+  ownerId: z.string().min(1).optional(),
+  projectIds: z.array(z.string()).optional(),
+});
 
 export async function PUT(
   request: NextRequest,
@@ -14,8 +32,37 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { workspaceId, viewId } = await params;
-    const body = await request.json();
+    const resolvedParams = await params;
+    const parsedParams = paramsSchema.safeParse(resolvedParams);
+    if (!parsedParams.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid URL parameters',
+          details: parsedParams.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    const { workspaceId, viewId } = parsedParams.data;
+
+    const rawBody = await request.json();
+    const parsedBody = updateViewSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          details: parsedBody.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    const body = parsedBody.data;
     
     // Get user
     const user = await prisma.user.findUnique({
@@ -89,10 +136,10 @@ export async function PUT(
     }
 
     // Validate ownerId if provided
-    if (ownerId !== undefined) {
+    if (body.ownerId !== undefined) {
       const newOwner = await prisma.user.findFirst({
         where: {
-          id: ownerId,
+          id: body.ownerId,
           workspaceMemberships: {
             some: {
               workspaceId
@@ -108,24 +155,6 @@ export async function PUT(
         );
       }
     }
-
-    // Validate name if provided
-    if (name !== undefined) {
-      if (!name.trim()) {
-        return NextResponse.json(
-          { error: 'View name cannot be empty' }, 
-          { status: 400 }
-        );
-      }
-      
-      if (name.length > 100) {
-        return NextResponse.json(
-          { error: 'View name cannot exceed 100 characters' }, 
-          { status: 400 }
-        );
-      }
-    }
-
     // Update the view with only the provided fields
     const updateData: any = {};
     
@@ -157,31 +186,9 @@ export async function PUT(
 
     // Transform the data for the frontend
     const transformedView = {
-      id: updatedView.id,
-      slug: updatedView.slug,
-      name: updatedView.name,
-      description: updatedView.description,
-      displayType: updatedView.displayType,
-      visibility: updatedView.visibility,
+      ...updatedView,
       color: updatedView.color || '#3b82f6',
-      issueCount: 0, // TODO: Calculate actual issue count
-      filters: updatedView.filters,
-      sorting: updatedView.sorting,
-      grouping: updatedView.grouping,
-      fields: updatedView.fields,
-      layout: updatedView.layout,
-      projectIds: updatedView.projectIds,
-      workspaceIds: updatedView.workspaceIds,
-      isDefault: updatedView.isDefault,
-      isFavorite: updatedView.isFavorite,
-      ownerId: updatedView.ownerId,
-      owner: updatedView.owner,
-      createdBy: updatedView.ownerId,
-      sharedWith: updatedView.sharedWith,
-      lastAccessedAt: updatedView.lastAccessedAt,
-      accessCount: updatedView.accessCount,
-      createdAt: updatedView.createdAt,
-      updatedAt: updatedView.updatedAt
+      issueCount: 0 // TODO: Calculate actual issue count
     };
 
     return NextResponse.json({ view: transformedView });
@@ -206,7 +213,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { workspaceId, viewId } = await params;
+    const resolvedParams = await params;
+    const parsedParams = paramsSchema.safeParse(resolvedParams);
+    if (!parsedParams.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid URL parameters',
+          details: parsedParams.error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
+        { status: 400 }
+      );
+    }
+    const { workspaceId, viewId } = parsedParams.data;
     
     // Get user
     const user = await prisma.user.findUnique({

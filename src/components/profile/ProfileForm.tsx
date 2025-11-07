@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUpdateUserProfile } from "@/hooks/queries/useUser";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface ProfileFormProps {
   user: {
@@ -36,6 +37,7 @@ interface ProfileFormProps {
 
 export default function ProfileForm({ user }: ProfileFormProps) {
   const { toast } = useToast();
+  const { currentWorkspace } = useWorkspace();
   const [formData, setFormData] = useState({
     name: user.name || "",
     team: user.team || "",
@@ -45,7 +47,7 @@ export default function ProfileForm({ user }: ProfileFormProps) {
   });
 
   // Use TanStack Query mutations
-  const updateProfileMutation = useUpdateUserProfile();
+  const updateProfileMutation = useUpdateUserProfile(currentWorkspace?.id);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

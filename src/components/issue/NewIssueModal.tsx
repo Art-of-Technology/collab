@@ -14,6 +14,7 @@ import { IssueDateSelector } from "./selectors/IssueDateSelector";
 import { IssueProjectSelector } from "./selectors/IssueProjectSelector";
 import { IssueTypeSelector } from "./selectors/IssueTypeSelector";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
+import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 import { IssueRelationsManager } from "./IssueRelationsManager";
 
 export interface IssueRelation {
@@ -182,9 +183,10 @@ export default function NewIssueModal({
     
     try {
       // Create main issue first
+      const normalizedDescription = description.trim() ? normalizeDescriptionHTML(description.trim()) : undefined;
       const result = await createIssueMutation.mutateAsync({
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: normalizedDescription,
         type: issueType,
         status: status,
         priority,
@@ -204,9 +206,10 @@ export default function NewIssueModal({
         for (const relation of relations) {
           if (relation.type === 'create') {
             // Create new issue
+            const normalizedRelationDescription = relation.description ? normalizeDescriptionHTML(relation.description) : undefined;
             const childResult = await createIssueMutation.mutateAsync({
               title: relation.title!,
-              description: relation.description,
+              description: normalizedRelationDescription,
               type: relation.issueType || "SUBTASK",
               status: status,
               priority: relation.priority || "MEDIUM",

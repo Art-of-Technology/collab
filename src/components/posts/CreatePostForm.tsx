@@ -73,7 +73,7 @@ export default function CreatePostForm() {
     }));
   };
 
-  const handleAiImprove = async (text: string): Promise<string> => {
+  const handleAiImprove = async (text: string): Promise<any> => {
     if (isImproving || !text.trim()) {
       return text;
     }
@@ -93,32 +93,70 @@ export default function CreatePostForm() {
         body: JSON.stringify({ text })
       });
 
+      // Check if the API response is ok before parsing JSON
       if (!response.ok) {
-        throw new Error("Failed to improve text");
+        let errorMessage = "Failed to process request";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If response is not valid JSON (e.g., HTML error page), use default error message
+          errorMessage = `Request failed with status ${response.status}`;
+        }
+        return {
+          invalid_content: true,
+          error: errorMessage,
+          message: "",
+          category: ""
+        };
       }
 
       const data = await response.json();
-      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
-      // Extract message from the response
-      const improvedText = data.message || data.improvedText || text;
+      // Check if the content is invalid
+      if (data.invalid_content) {
+        return {
+          invalid_content: true,
+          error: "Please enter meaningful text that can be improved and classified.",
+          message: "",
+          category: ""
+        };
+      }
+
+      // Check if the message or category is missing (undefined/null)
+      // This distinguishes between missing fields and intentionally empty strings
+      if (data.message === undefined || data.category === undefined || data.message === null || data.category === null) {
+        return {
+          invalid_content: true,
+          error: "No improvements suggested",
+          message: "",
+          category: ""
+        };
+      }
+
+      // Update the category if the AI suggests a type change
+      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
       // Ensure options are open if AI suggests a type change
       if (data.category && !optionsOpen) {
         setOptionsOpen(true);
       }
 
-      // Return the improved text to be displayed in the popup
-      return improvedText;
+      // Return the full response object
+      return {
+        message: data.message,
+        category: data.category,
+        invalid_content: false
+      };
+
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to improve text. Please try again.",
-        variant: "destructive"
-      });
       console.error(error);
-      // Return original text if there was an error
-      return text;
+      return {
+        invalid_content: true,
+        error: "Failed to improve text. Please try again.",
+        message: "",
+        category: ""
+      };
     } finally {
       setIsImproving(false);
     }

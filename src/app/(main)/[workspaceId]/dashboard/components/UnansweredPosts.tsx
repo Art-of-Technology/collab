@@ -35,13 +35,14 @@ interface UnansweredPostsProps {
 
 export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: unansweredPosts = initialPosts || [], isLoading } = useUnansweredPosts(workspaceId);
+  const { data: unansweredPosts = initialPosts || [], isLoading } = useUnansweredPosts(effectiveWorkspaceId);
 
   const truncateText = (text: string, maxLength = 120) => {
     // Strip HTML tags
     const strippedText = text.replace(/<[^>]*>/g, '');
-    
+
     if (strippedText.length <= maxLength) return strippedText;
     return `${strippedText.substring(0, maxLength)}...`;
   };
@@ -78,7 +79,7 @@ export function UnansweredPosts({ workspaceId, initialPosts }: UnansweredPostsPr
         {unansweredPosts.length > 0 ? (
           <div className="space-y-2">
             {unansweredPosts.map((post) => (
-              <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} key={post.id} className="block">
+              <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/posts/${post.id}` : '#'} key={post.id} className="block">
                 <div className="border rounded p-2 hover:bg-muted/30 transition-colors border-border/20">
                   <div className="flex justify-between items-start mb-1">
                     <div className="flex items-center gap-1.5">

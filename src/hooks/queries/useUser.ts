@@ -35,14 +35,15 @@ export const useUserById = (userId: string) => {
 };
 
 // Update user profile mutation
-export const useUpdateUserProfile = () => {
+export const useUpdateUserProfile = (workspaceId?: string) => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: updateUserProfile,
+    mutationFn: (data: any) => updateUserProfile(data, workspaceId),
     onSuccess: () => {
       // Invalidate the current user query to refresh the data
       queryClient.invalidateQueries({ queryKey: userKeys.current() });
+      queryClient.invalidateQueries({ queryKey: ['profile', 'current', workspaceId] });
     },
   });
 };
@@ -60,28 +61,29 @@ export const useUpdateUserAvatar = () => {
   });
 };
 
-export function useCurrentUserProfile() {
+export function useCurrentUserProfile(workspaceId?: string) {
   return useQuery({
-    queryKey: ['profile', 'current'],
-    queryFn: getCurrentUserProfile,
+    queryKey: ['profile', 'current', workspaceId],
+    queryFn: () => getCurrentUserProfile(workspaceId),
+    enabled: workspaceId !== undefined,
   });
 }
 
-export function useUserProfile(userId: string) {
+export function useUserProfile(userId: string, workspaceId?: string) {
   return useQuery({
-    queryKey: ['profile', userId],
-    queryFn: () => getUserProfile(userId),
-    enabled: !!userId,
+    queryKey: ['profile', userId, workspaceId],
+    queryFn: () => getUserProfile(userId, workspaceId),
+    enabled: !!userId && workspaceId !== undefined,
   });
 }
 
-export function useUpdateProfile() {
+export function useUpdateProfile(workspaceId?: string) {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: any) => updateUserProfile(data),
+    mutationFn: (data: any) => updateUserProfile(data, workspaceId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', 'current'] });
+      queryClient.invalidateQueries({ queryKey: ['profile', 'current', workspaceId] });
     }
   });
 } 

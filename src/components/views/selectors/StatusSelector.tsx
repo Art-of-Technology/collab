@@ -35,10 +35,10 @@ export function StatusSelector({
   });
 
   if (isError) return null;
-
-  // Create unique statuses map using ID as key to ensure lookup by ID works correctly
-  const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.id, s])).values());
-
+  
+  // Create unique statuses map using Name as key to ensure lookup by Name works correctly
+  const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.name, s])).values());
+  
   const selectedStatuses = value.map(v => {
     return uniqueStatuses.find(s => s.id === v) || null
   }).filter(Boolean) as typeof uniqueStatuses;

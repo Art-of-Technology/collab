@@ -23,6 +23,8 @@ interface ViewFiltersContextType {
   setWorkspace: (workspace: any) => void;
   currentUser: any;
   setCurrentUser: (user: any) => void;
+  onAssigneesChangeFromViewOptions?: (assignees: unknown) => void;
+  setOnAssigneesChangeFromViewOptions: (callback: ((assignees: unknown) => void) | undefined) => void;
 }
 
 const ViewFiltersContext = createContext<ViewFiltersContextType | undefined>(undefined);
@@ -39,6 +41,7 @@ export function ViewFiltersProvider({ children }: { children: ReactNode }) {
   const [issues, setIssues] = useState<any[]>([]);
   const [workspace, setWorkspace] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [onAssigneesChangeFromViewOptions, setOnAssigneesChangeFromViewOptions] = useState<((assignees: unknown) => void) | undefined>(undefined);
 
   const toggleOpen = () => setIsOpen(prev => !prev);
 
@@ -58,6 +61,8 @@ export function ViewFiltersProvider({ children }: { children: ReactNode }) {
         setWorkspace,
         currentUser,
         setCurrentUser,
+        onAssigneesChangeFromViewOptions,
+        setOnAssigneesChangeFromViewOptions,
       }}
     >
       {children}
