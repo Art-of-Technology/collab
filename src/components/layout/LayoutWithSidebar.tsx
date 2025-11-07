@@ -44,7 +44,7 @@ export default function LayoutWithSidebar({
             className="app-sidebar hidden md:block"
             data-collapsed={isCollapsedDesktop}
           >
-            <div className="app-sidebar__content overflow-y-auto">
+            <div className="app-sidebar__content fixed">
               <Sidebar
                 pathname={pathname}
                 isCollapsed={isCollapsedDesktop}
@@ -53,9 +53,9 @@ export default function LayoutWithSidebar({
           </div>
 
           {/* Main content + right sidebar */}
-          <main className="bg-[#090909] flex h-full md:overflow-auto">
-            <div className="flex-1 p-2 min-w-0 md:overflow-auto">
-              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-y-auto">
+          <main className="bg-[#090909] flex h-full">
+            <div className="flex-1 p-2 min-w-0">
+              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md">
                 {children}
               </div>
             </div>
@@ -108,7 +108,7 @@ export default function LayoutWithSidebar({
         <AssistantWrapper />
         {/* <AppDock /> */}
         <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
-        
+
         {/* Global Command Menu */}
         <CommandMenu
           open={commandMenuOpen}
