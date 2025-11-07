@@ -144,7 +144,7 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-x-hidden">
       {/* Page Header */}
       <PageHeader
         icon={Clock}
@@ -241,126 +241,124 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
       </div>
 
       {/* Content - Fixed scroll container */}
-      <div className="flex-1 min-h-0">
-        <div className="h-full overflow-y-auto">
-          <div className="flex gap-6 px-6 py-4">
-            {/* Main Content */}
-            <div className="flex-1 max-w-4xl min-w-0">
-              <div className="mb-4">
-                <CreatePostForm />
-              </div>
-
-              <div className="pb-8">
-                {isLoading && initialPosts.length === 0 ? (
-                  <div className="flex items-center gap-2 text-[#8b949e] py-8">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading posts...</span>
-                  </div>
-                ) : isError ? (
-                  <div className="text-[#ef4444] text-sm py-8">
-                    Something went wrong loading posts.
-                  </div>
-                ) : (
-                  <PostList
-                    posts={displayPosts}
-                    currentUserId={currentUserId}
-                    hasNextPage={hasNextPage}
-                    isFetchingNextPage={isFetchingNextPage}
-                    onLoadMore={fetchNextPage}
-                  />
-                )}
-              </div>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="flex gap-6 px-6 py-4">
+          {/* Main Content */}
+          <div className="flex-1 max-w-4xl min-w-0">
+            <div className="mb-4">
+              <CreatePostForm />
             </div>
 
-            {/* Right Sidebar - Enhanced Activity */}
-            <div className="hidden xl:block w-64 flex-shrink-0">
-              <div className="sticky top-4 space-y-4">
-                {/* Activity Overview */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
-                    📊 Activity Overview
-                  </h3>
-                  <div className="space-y-2.5">
+            <div className="pb-8">
+              {isLoading && initialPosts.length === 0 ? (
+                <div className="flex items-center gap-2 text-[#8b949e] py-8">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading posts...</span>
+                </div>
+              ) : isError ? (
+                <div className="text-[#ef4444] text-sm py-8">
+                  Something went wrong loading posts.
+                </div>
+              ) : (
+                <PostList
+                  posts={displayPosts}
+                  currentUserId={currentUserId}
+                  hasNextPage={hasNextPage}
+                  isFetchingNextPage={isFetchingNextPage}
+                  onLoadMore={fetchNextPage}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Right Sidebar - Enhanced Activity */}
+          <div className="hidden xl:block w-64 flex-shrink-0">
+            <div className="sticky top-4 space-y-4">
+              {/* Activity Overview */}
+              <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
+                <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                  📊 Activity Overview
+                </h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8b949e]">Total Posts</span>
+                    <span className="text-[#e6edf3] font-medium">{activityStats.total}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8b949e]">Today</span>
+                    <span className="text-[#22c55e] font-medium">{activityStats.today}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8b949e]">This Week</span>
+                    <span className="text-[#58a6ff] font-medium">{activityStats.thisWeek}</span>
+                  </div>
+                  {activityStats.blockers > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Total Posts</span>
-                      <span className="text-[#e6edf3] font-medium">{activityStats.total}</span>
+                      <span className="text-[#8b949e]">🚫 Blockers</span>
+                      <span className="text-[#f85149] font-medium">{activityStats.blockers}</span>
                     </div>
+                  )}
+                  {activityStats.priorityPosts > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Today</span>
-                      <span className="text-[#22c55e] font-medium">{activityStats.today}</span>
+                      <span className="text-[#8b949e]">⚡ Priority</span>
+                      <span className="text-[#fbbf24] font-medium">{activityStats.priorityPosts}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">This Week</span>
-                      <span className="text-[#58a6ff] font-medium">{activityStats.thisWeek}</span>
-                    </div>
-                    {activityStats.blockers > 0 && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-[#8b949e]">🚫 Blockers</span>
-                        <span className="text-[#f85149] font-medium">{activityStats.blockers}</span>
-                      </div>
-                    )}
-                    {activityStats.priorityPosts > 0 && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-[#8b949e]">⚡ Priority</span>
-                        <span className="text-[#fbbf24] font-medium">{activityStats.priorityPosts}</span>
-                      </div>
-                    )}
+                  )}
+                </div>
+              </div>
+
+              {/* Team Activity */}
+              <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
+                <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                  👥 Team Activity
+                </h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8b949e]">Active Today</span>
+                    <span className="text-[#22c55e] font-medium">
+                      {activityStats.activeAuthorsToday} {activityStats.activeAuthorsToday === 1 ? 'person' : 'people'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8b949e]">Active This Week</span>
+                    <span className="text-[#58a6ff] font-medium">
+                      {activityStats.activeAuthorsThisWeek} {activityStats.activeAuthorsThisWeek === 1 ? 'person' : 'people'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8b949e]">Avg. per Person</span>
+                    <span className="text-[#e6edf3] font-medium">
+                      {activityStats.activeAuthorsThisWeek > 0
+                        ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek)
+                        : 0}
+                    </span>
                   </div>
                 </div>
+              </div>
 
-                {/* Team Activity */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
-                    👥 Team Activity
-                  </h3>
-                  <div className="space-y-2.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Active Today</span>
-                      <span className="text-[#22c55e] font-medium">
-                        {activityStats.activeAuthorsToday} {activityStats.activeAuthorsToday === 1 ? 'person' : 'people'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Active This Week</span>
-                      <span className="text-[#58a6ff] font-medium">
-                        {activityStats.activeAuthorsThisWeek} {activityStats.activeAuthorsThisWeek === 1 ? 'person' : 'people'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Avg. per Person</span>
-                      <span className="text-[#e6edf3] font-medium">
-                        {activityStats.activeAuthorsThisWeek > 0
-                          ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek)
-                          : 0}
-                      </span>
-                    </div>
+              {/* Quick Actions */}
+              <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
+                <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                  ⚡ Quick Stats
+                </h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-[#1a1a1a] rounded p-2 text-center">
+                    <div className="text-[#58a6ff] font-bold">{postCounts.updates}</div>
+                    <div className="text-[#8b949e]">Updates</div>
                   </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
-                    ⚡ Quick Stats
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#58a6ff] font-bold">{postCounts.updates}</div>
-                      <div className="text-[#8b949e]">Updates</div>
+                  <div className="bg-[#1a1a1a] rounded p-2 text-center">
+                    <div className="text-[#a5a5a5] font-bold">{postCounts.ideas}</div>
+                    <div className="text-[#8b949e]">Ideas</div>
+                  </div>
+                  <div className="bg-[#1a1a1a] rounded p-2 text-center">
+                    <div className="text-[#a5a5a5] font-bold">{postCounts.questions}</div>
+                    <div className="text-[#8b949e]">Questions</div>
+                  </div>
+                  <div className="bg-[#1a1a1a] rounded p-2 text-center">
+                    <div className="text-[#22c55e] font-bold">
+                      {activityStats.total > 0 ? Math.round((activityStats.today / activityStats.total) * 100) : 0}%
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#a5a5a5] font-bold">{postCounts.ideas}</div>
-                      <div className="text-[#8b949e]">Ideas</div>
-                    </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#a5a5a5] font-bold">{postCounts.questions}</div>
-                      <div className="text-[#8b949e]">Questions</div>
-                    </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#22c55e] font-bold">
-                        {activityStats.total > 0 ? Math.round((activityStats.today / activityStats.total) * 100) : 0}%
-                      </div>
-                      <div className="text-[#8b949e]">Today</div>
-                    </div>
+                    <div className="text-[#8b949e]">Today</div>
                   </div>
                 </div>
               </div>
