@@ -19,6 +19,7 @@ const updateViewSchema = z.strictObject({
   visibility: z.enum(['PERSONAL', 'WORKSPACE', 'SHARED']).optional(),
   ownerId: z.string().min(1).optional(),
   projectIds: z.array(z.string()).optional(),
+  layout: z.any().optional(),
 });
 
 export async function PUT(
@@ -110,6 +111,21 @@ export async function PUT(
       return NextResponse.json({ error: 'View not found or insufficient permissions' }, { status: 404 });
     }
 
+    // Extract update fields from body
+    const { 
+      name,
+      displayType,
+      filters,
+      sorting,
+      grouping,
+      fields,
+      visibility,
+      ownerId,
+      layout,
+      projectIds,
+    } = body;
+
+
     // Validate ownerId if provided
     if (body.ownerId !== undefined) {
       const newOwner = await prisma.user.findFirst({
@@ -131,8 +147,19 @@ export async function PUT(
       }
     }
     // Update the view with only the provided fields
-    const updateData: z.infer<typeof updateViewSchema> = { ...body };
-
+    const updateData: any = {};
+    
+    if (name !== undefined) updateData.name = name;
+    if (displayType !== undefined) updateData.displayType = displayType;
+    if (filters !== undefined) updateData.filters = filters;
+    if (sorting !== undefined) updateData.sorting = sorting;
+    if (grouping !== undefined) updateData.grouping = grouping;
+    if (fields !== undefined) updateData.fields = fields;
+    if (visibility !== undefined) updateData.visibility = visibility;
+    if (ownerId !== undefined) updateData.ownerId = ownerId;
+    if (layout !== undefined) updateData.layout = layout;
+    if (projectIds !== undefined) updateData.projectIds = projectIds;
+    
     const updatedView = await prisma.view.update({
       where: { id: viewId },
       data: updateData,
