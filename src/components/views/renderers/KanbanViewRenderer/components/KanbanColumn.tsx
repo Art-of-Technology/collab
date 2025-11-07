@@ -111,16 +111,19 @@ export default function KanbanColumn({
                   />
                 )}
                 {/* Issues */}
-                {column.issues.map((issue: any, index: number) => (
-                  <KanbanIssueCard
-                    key={issue.id}
-                    issue={issue}
-                    index={index}
-                    displayProperties={displayProperties}
-                    operationsInProgress={operationsInProgress}
-                    onCardClick={onIssueClick}
-                  />
-                ))}
+                <div className='flex flex-col gap-2 overflow-y-auto'>
+                  {column.issues.map((issue: any, index: number) => (
+                    <div key={issue.id}>
+                      <KanbanIssueCard
+                        issue={issue}
+                        index={index}
+                        displayProperties={displayProperties}
+                        operationsInProgress={operationsInProgress}
+                        onCardClick={onIssueClick}
+                      />
+                    </div>
+                  ))}
+                </div>
 
                 {provided.placeholder}
 
