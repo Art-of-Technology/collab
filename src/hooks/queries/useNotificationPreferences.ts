@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 export interface NotificationPreferences {
   id: string;
   userId: string;
+  workspaceId?: string;
   taskStatusChanged: boolean;
   taskCommentAdded: boolean;
   taskAssigned: boolean;
@@ -35,12 +36,12 @@ export type NotificationPreferenceUpdate = Partial<
 
 const notificationPreferencesKeys = {
   all: ["notificationPreferences"] as const,
-  user: () => [...notificationPreferencesKeys.all, "user"] as const,
+  user: (workspaceId?: string) => [...notificationPreferencesKeys.all, "user", workspaceId] as const,
 };
 
-export function useNotificationPreferences() {
+export function useNotificationPreferences(workspaceId?: string) {
   return useQuery<NotificationPreferences>({
-    queryKey: notificationPreferencesKeys.user(),
+    queryKey: notificationPreferencesKeys.user(workspaceId),
     queryFn: async () => {
       const response = await fetch("/api/user/notification-preferences");
       if (!response.ok) {
@@ -48,10 +49,11 @@ export function useNotificationPreferences() {
       }
       return response.json();
     },
+    enabled: workspaceId !== undefined,
   });
 }
 
-export function useUpdateNotificationPreferences() {
+export function useUpdateNotificationPreferences(workspaceId?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -70,12 +72,12 @@ export function useUpdateNotificationPreferences() {
     },
     onSuccess: (data) => {
       // Update the cached data
-      queryClient.setQueryData(notificationPreferencesKeys.user(), data);
+      queryClient.setQueryData(notificationPreferencesKeys.user(workspaceId), data);
     },
   });
 }
 
-export function useResetNotificationPreferences() {
+export function useResetNotificationPreferences(workspaceId?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -90,7 +92,7 @@ export function useResetNotificationPreferences() {
     },
     onSuccess: (data) => {
       // Update the cached data
-      queryClient.setQueryData(notificationPreferencesKeys.user(), data);
+      queryClient.setQueryData(notificationPreferencesKeys.user(workspaceId), data);
     },
   });
 }

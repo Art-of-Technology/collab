@@ -5,11 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Plus, Settings, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import { AppStatusBadge } from '@/components/apps/AppStatusBadge';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { redirect } from 'next/navigation';
 
 const prisma = new PrismaClient();
 
-async function getApps() {
+async function getApps(userId: string) {
   const apps = await prisma.app.findMany({
+    where: {
+      userId
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       versions: {
@@ -37,7 +43,13 @@ async function getApps() {
 
 
 export default async function DevAppsPage() {
-  const apps = await getApps();
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.id) {
+    redirect('/login');
+  }
+  
+  const apps = await getApps(session.user.id);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">

@@ -1,3 +1,6 @@
+import type { MouseEvent, KeyboardEvent } from 'react';
+import type { DragUpdate, DropResult } from '@hello-pangea/dnd';
+
 export interface KanbanViewRendererProps {
   view: any;
   issues: any[];
@@ -57,11 +60,11 @@ export interface KanbanColumnProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onIssueClick: (issueId: string) => void;
+  onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: React.KeyboardEvent) => void;
+  onIssueKeyDown: (e: KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
@@ -71,8 +74,22 @@ export interface KanbanIssueCardProps {
   index: number;
   displayProperties: string[];
   operationsInProgress?: Set<string>;
-  onCardClick: (issueId: string) => void;
+  onCardClick: (issueId: string, event?: MouseEvent) => void;
 }
+
+
+export interface OverrideDestination {
+  droppableId: string;
+  index: number;
+}
+
+export type KanbanDragUpdate = DragUpdate & {
+  overrideDestination?: OverrideDestination;
+};
+
+export type KanbanDropResult = DropResult & {
+  overrideDestination?: OverrideDestination;
+};
 
 
 
@@ -95,14 +112,14 @@ export interface KanbanBoardProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onDragEnd: (result: any) => void;
+  onDragEnd: (result: KanbanDropResult) => void;
   onDragStart: (start: any) => void;
-  onDragUpdate: (update: any) => void;
-  onIssueClick: (issueId: string) => void;
+  onDragUpdate: (update: KanbanDragUpdate) => void;
+  onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: React.KeyboardEvent) => void;
+  onIssueKeyDown: (e: KeyboardEvent) => void;
   onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }

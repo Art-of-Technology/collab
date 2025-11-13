@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getWorkspaceInstallations } from '@/actions/appInstallation';
+import { JsonValue } from '@prisma/client/runtime/library';
 
 interface InstalledApp {
   id: string;
@@ -11,6 +12,7 @@ interface InstalledApp {
     slug: string;
     iconUrl?: string | null;
     publisherId: string;
+    permissions?: JsonValue | null;
   };
 }
 

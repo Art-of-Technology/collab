@@ -7,6 +7,7 @@ import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
 import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -104,6 +105,11 @@ export async function PUT(
 
     // Handle status updates to work with new ProjectStatus system
     let updateData = { ...body, updatedAt: new Date() };
+
+    // Normalize description if provided
+    if (updateData.description !== undefined && typeof updateData.description === 'string') {
+      updateData.description = normalizeDescriptionHTML(updateData.description);
+    }
 
     // Normalize type casing if provided
     if (typeof updateData.type === 'string') {

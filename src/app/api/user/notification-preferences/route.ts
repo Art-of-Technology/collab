@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { cookies } from "next/headers";
 
 // Default preferences that match the schema defaults
 const DEFAULT_PREFERENCES = {
@@ -37,9 +38,16 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Determine current workspace
+    const cookieStore = await cookies();
+    const workspaceId = cookieStore.get("currentWorkspaceId")?.value;
+    if (!workspaceId) {
+      return NextResponse.json({ error: "Workspace not set" }, { status: 400 });
+    }
+
     // First try to get existing preferences
-    let preferences = await prisma.notificationPreferences.findUnique({
-      where: { userId: currentUser.id },
+    let preferences = await prisma.notificationPreferences.findFirst({
+      where: { userId: currentUser.id, workspaceId },
     });
 
     // If no preferences exist, create default ones
@@ -48,6 +56,7 @@ export async function GET() {
         preferences = await prisma.notificationPreferences.create({
           data: {
             userId: currentUser.id,
+            workspaceId,
             ...DEFAULT_PREFERENCES,
           },
         });
@@ -89,6 +98,12 @@ export async function PATCH(req: NextRequest) {
     const currentUser = await getCurrentUser();
     if (!currentUser?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const cookieStore = await cookies();
+    const workspaceId = cookieStore.get("currentWorkspaceId")?.value;
+    if (!workspaceId) {
+      return NextResponse.json({ error: "Workspace not set" }, { status: 400 });
     }
 
     const body = await req.json();
@@ -146,15 +161,25 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Update or create notification preferences
-    const preferences = await prisma.notificationPreferences.upsert({
-      where: { userId: currentUser.id },
-      update: updateData,
-      create: {
-        userId: currentUser.id,
-        ...DEFAULT_PREFERENCES,
-        ...updateData,
-      },
+    let preferences = await prisma.notificationPreferences.findFirst({
+      where: { userId: currentUser.id, workspaceId },
     });
+
+    if (preferences) {
+      preferences = await prisma.notificationPreferences.update({
+        where: { id: preferences.id },
+        data: updateData,
+      });
+    } else {
+      preferences = await prisma.notificationPreferences.create({
+        data: {
+          userId: currentUser.id,
+          workspaceId,
+          ...DEFAULT_PREFERENCES,
+          ...updateData,
+        },
+      });
+    }
 
     return NextResponse.json(preferences);
   } catch (error) {
@@ -182,15 +207,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Reset to default preferences
-    const defaultPreferences = await prisma.notificationPreferences.upsert({
-      where: { userId: currentUser.id },
-      update: DEFAULT_PREFERENCES,
-      create: {
-        userId: currentUser.id,
-        ...DEFAULT_PREFERENCES,
-      },
+    const cookieStore = await cookies();
+    const workspaceId = cookieStore.get("currentWorkspaceId")?.value;
+    if (!workspaceId) {
+      return NextResponse.json({ error: "Workspace not set" }, { status: 400 });
+    }
+
+    // Reset to default preferences for current workspace
+    const existing = await prisma.notificationPreferences.findFirst({
+      where: { userId: currentUser.id, workspaceId },
     });
+
+    const defaultPreferences = existing
+      ? await prisma.notificationPreferences.update({
+          where: { id: existing.id },
+          data: DEFAULT_PREFERENCES,
+        })
+      : await prisma.notificationPreferences.create({
+          data: { userId: currentUser.id, workspaceId, ...DEFAULT_PREFERENCES },
+        });
 
     return NextResponse.json(defaultPreferences);
   } catch (error) {

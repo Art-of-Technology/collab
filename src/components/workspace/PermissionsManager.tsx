@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle, Clock, UserCircleIcon } from 'lucide-react';
+import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle, Clock, UserCircleIcon, ShoppingBag } from 'lucide-react';
 import { WorkspaceRole, Permission, getRoleDisplayName, getPermissionDisplayName } from '@/lib/permissions';
 
 interface PermissionItem {
@@ -147,6 +147,12 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       Permission.MANAGE_LEAVE,
     ]
+  },
+  {
+    name: "App Store Management",
+    description: "Manage access to install apps",
+    icon: <ShoppingBag className="h-4 w-4" />,
+    permissions: [Permission.MANAGE_APPS],
   },
   {
     name: 'Workspace Administration',
@@ -420,6 +426,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                         Permission.MANAGE_BOARD_SETTINGS,
                         Permission.MANAGE_LEAVE,
                         Permission.INVITE_MEMBERS,
+                        Permission.MANAGE_APPS,
                       ];
                       const isPermissionImplemented = implementedPermissions.includes(permission);
                       

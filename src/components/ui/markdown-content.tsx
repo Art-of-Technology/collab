@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from "@/context/WorkspaceContext";
 import DOMPurify from 'dompurify';
@@ -22,49 +22,49 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
   // Process htmlContent to convert text-based mentions to HTML if needed
   const processedHtmlContent = useMemo(() => {
     if (!htmlContent) return content || '';
-    
+
     let processed = htmlContent;
-    
+
     // If content looks like text (contains mention patterns but not HTML), process it
     if (processed.includes('@[') || processed.includes('#[') || processed.includes('~[') || processed.includes('^[') || processed.includes('![')) {
       // Convert text-based mentions to HTML spans
-      
+
       // User mentions: @[name](id) -> clickable mention
       processed = processed.replace(
         /@\[([^\]]+)\]\(([^)]+)\)/g,
         '<span class="mention mention-link" data-user-id="$2"><span class="mention-symbol">@</span>$1</span>'
       );
-      
+
       // Epic mentions: ~[name](id) -> HTML span  
       processed = processed.replace(
         /~\[([^\]]+)\]\(([^)]+)\)/g,
         '<span class="epic-mention" data-id="$2"><span class="mention-symbol">~</span>$1</span>'
       );
-      
+
       // Story mentions: ^[name](id) -> HTML span
       processed = processed.replace(
         /\^\[([^\]]+)\]\(([^)]+)\)/g,
         '<span class="story-mention" data-id="$2"><span class="mention-symbol">^</span>$1</span>'
       );
-      
+
       // Milestone mentions: ![name](id) -> HTML span  
       processed = processed.replace(
         /!\[([^\]]+)\]\(([^)]+)\)/g,
         '<span class="milestone-mention" data-id="$2"><span class="mention-symbol">!</span>$1</span>'
       );
-      
+
       // Issue mentions: #[key](id) -> clickable mention span (routing handled via onClick)
       processed = processed.replace(
         /#\[([^\]]+)\]\(([^)]+)\)/g,
         '<span class="mention mention-link" data-issue-id="$2"><span class="mention-symbol">#</span>$1</span>'
       );
-      
+
       // Convert newlines to <br> tags if needed
       if (processed.includes('\n') && !processed.includes('<br>')) {
         processed = processed.replace(/\n/g, '<br>');
       }
     }
-    
+
     return processed;
   }, [htmlContent, content]);
 
@@ -178,22 +178,83 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         opacity: 0.7;
         margin-right: 0.125rem;
       }
+      
+      /* Make images clickable */
+      .prose img {
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+      }
+      
+      .prose img:hover {
+        opacity: 0.9;
+      }
     `;
-    
+
     if (!document.querySelector('[data-markdown-content-css]')) {
       document.head.appendChild(style);
     }
-    
+
     return () => {
       if (document.contains(style)) {
         document.head.removeChild(style);
       }
     };
   }, []);
-  
+
+  const openImageInNewTab = useCallback((imageSrc: string) => {
+    // Check if it's a base64 data URL
+    if (imageSrc.startsWith('data:')) {
+      try {
+        // Parse the data URL
+        const [header, base64Data] = imageSrc.split(',');
+        const mimeMatch = header.match(/data:([^;]+)/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+
+        // Convert base64 to binary
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Create blob from binary data
+        const blob = new Blob([bytes], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const newWindow = window.open(blobUrl, '_blank');
+        if (newWindow) {
+          // Clean up blob URL after a delay to allow the browser to load it
+          setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+          }, 100);
+        } else {
+          // If popup was blocked, clean up immediately
+          URL.revokeObjectURL(blobUrl);
+        }
+      } catch (error) {
+        // Fallback: try opening data URL directly
+        window.open(imageSrc, '_blank');
+      }
+    } else {
+      // Regular URL - open directly
+      window.open(imageSrc, '_blank');
+    }
+  }, []);
+
   // Click handler for event delegation
   const handleClick = (event: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
     const target = event.target as HTMLElement;
+
+    // Check if clicked element is an image
+    if (target.tagName === 'IMG') {
+      const imageSrc = target.getAttribute('src');
+      if (imageSrc) {
+        event.preventDefault();
+        event.stopPropagation();
+        openImageInNewTab(imageSrc);
+        return;
+      }
+    }
 
     // Check for different types of mentions
     const userMention = target.closest('.mention-link[data-user-id]') as HTMLElement | null;
@@ -217,9 +278,9 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
       }
     }
   };
-  
+
   return (
-    <Container 
+    <Container
       className={cn(
         !asSpan && "prose prose-sm dark:prose-invert max-w-full",
         !asSpan && "prose-headings:mt-2 prose-headings:mb-1 prose-headings:font-semibold prose-p:my-1.5",
@@ -230,7 +291,7 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         className
       )}
       // Render the processed HTML content
-      dangerouslySetInnerHTML={{ __html: sanitizedHtmlContent }} 
+      dangerouslySetInnerHTML={{ __html: sanitizedHtmlContent }}
       onClick={handleClick}
     />
   );

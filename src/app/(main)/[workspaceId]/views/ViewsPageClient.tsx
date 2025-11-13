@@ -35,6 +35,7 @@ import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/co
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
+import { useProjects } from '@/hooks/queries/useProjects';
 
 interface ViewsPageClientProps {
   workspaceId: string;
@@ -92,6 +93,11 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
   const [viewToDelete, setViewToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const { data: views = [], isLoading } = useViews({
+    workspaceId,
+    includeStats: true
+  });
+
+  const { data: projects = [] } = useProjects({
     workspaceId,
     includeStats: true
   });
@@ -533,6 +539,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           workspaceId={workspaceId}
+          projects={projects}
         />
       )}
 

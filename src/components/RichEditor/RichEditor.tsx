@@ -46,6 +46,7 @@ import { RichEditorProps, RichEditorRef } from './types';
 
 // Import utils
 import { findMentionTrigger, getCaretPosition, insertMention, builtInAiImprove } from './utils';
+import { normalizeDescriptionHTML } from '@/utils/html-normalizer';
 
 // Import extensions
 import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ResizableVideoExtension, ImageCSSExtension } from './extensions';
@@ -76,14 +77,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const isExternalUpdateRef = useRef(false);
   // Guard to suppress transient checks during mention insertion
   const isInsertingMentionRef = useRef(false);
-
-  // Helper to release guards on the next tick after ProseMirror updates
-  const releaseMentionGuardsNextTick = () => {
-    setTimeout(() => {
-      isInsertingMentionRef.current = false;
-      isExternalUpdateRef.current = false;
-    }, 0);
-  };
 
   // Generate unique ID for this editor instance to avoid CSS conflicts
   const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
@@ -266,7 +259,8 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
       // Avoid feedback loops when we programmatically set content or insert mentions
       if (!isExternalUpdateRef.current) {
-        onChange?.(html, text);
+        const normalizedHtml = normalizeDescriptionHTML(html);
+        onChange?.(normalizedHtml, text);
       }
 
       // Check if editor has mentions when determining empty state
@@ -388,7 +382,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     }
   }, [editor]);
 
-  // Handle mention insertions
   const insertUserMention = useCallback((user: any) => {
     if (!editor || !mentionSuggestion || !user) return;
 
@@ -396,25 +389,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     const trigger = findMentionTrigger(editor, from);
 
     if (trigger) {
-      // Ensure we have a valid label - fallback to email if name is not available
       const label = user.name || user.email || 'Unknown User';
 
-      // Use the insertMention utility
       isInsertingMentionRef.current = true;
-      isExternalUpdateRef.current = true;
       insertMention(
         editor,
-        {
-          id: user.id || '',
-          label: label,
-          title: user.name || label
-        },
+        { id: user.id || '', label, title: user.name || label },
         trigger.position,
         from,
         trigger.char
       );
-      // Release guards on next tick after ProseMirror updates
-      releaseMentionGuardsNextTick();
+
+      // help TipTap settle selection/decoration
+      editor.commands.blur();
+      editor.commands.focus('end');
+
+      // release only the mention flag
+      setTimeout(() => {
+        isInsertingMentionRef.current = false;
+      }, 0);
     }
 
     setMentionSuggestion(null);
@@ -427,27 +420,26 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     const trigger = findMentionTrigger(editor, from);
 
     if (trigger) {
-      // Ensure we have valid data with fallbacks
       const label = issue.issueKey || issue.title || 'Unknown Issue';
       const title = issue.title || label;
       const type = issue.type || 'TASK';
 
       isInsertingMentionRef.current = true;
-      isExternalUpdateRef.current = true;
       insertMention(
         editor,
-        {
-          id: issue.id || '',
-          label: label,
-          title: title,
-          type: type
-        },
+        { id: issue.id || '', label, title, type },
         trigger.position,
         from,
         trigger.char
       );
-      // Release guards on next tick after ProseMirror updates
-      releaseMentionGuardsNextTick();
+
+      editor.commands.blur();
+      editor.commands.focus('end');
+
+      // Release mention guard after ProseMirror completes the insertion transaction
+      setTimeout(() => {
+        isInsertingMentionRef.current = false;
+      }, 0);
     }
 
     setMentionSuggestion(null);
@@ -654,10 +646,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   useEffect(() => {
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
-      if (value !== currentContent) {
+      const normalizedValue = normalizeDescriptionHTML(value || '');
+      if (normalizedValue !== currentContent) {
         // Prevent update feedback loop when syncing external value
         isExternalUpdateRef.current = true;
-        editor.commands.setContent(value || '');
+        editor.commands.setContent(normalizedValue);
         // Release guard after ProseMirror processes this transaction
         setTimeout(() => {
           isExternalUpdateRef.current = false;

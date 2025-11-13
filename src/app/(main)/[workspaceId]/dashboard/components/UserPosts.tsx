@@ -18,8 +18,9 @@ interface UserPostsProps {
 
 export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsProps) {
   const { currentWorkspace } = useWorkspace();
+  const effectiveWorkspaceId = currentWorkspace?.id || workspaceId;
   // Use TanStack Query for data fetching with initial data from server
-  const { data: userPosts = initialUserPosts || [], isLoading } = useUserPosts(userId, workspaceId);
+  const { data: userPosts = initialUserPosts || [], isLoading } = useUserPosts(userId, effectiveWorkspaceId);
 
   // Get badge variant based on post type
   const getPostBadgeVariant = (type: string) => {
@@ -47,7 +48,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
           </CardTitle>
           <CardDescription className="text-xs">
             Posts you&apos;ve created recently
-            <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-1 text-foreground hover:underline">
+            <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile` : '#'} className="ml-1 text-foreground hover:underline">
               View all
             </Link>
           </CardDescription>
@@ -70,7 +71,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
         </CardTitle>
         <CardDescription className="text-xs">
           Posts you&apos;ve created recently
-          <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile` : '#'} className="ml-1 text-foreground hover:underline">
+          <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile` : '#'} className="ml-1 text-foreground hover:underline">
             View all
           </Link>
         </CardDescription>
@@ -85,13 +86,13 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
                     </span>
-                    <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline?filter=${post.type.toLowerCase()}s` : '#'}>
+                    <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline?filter=${post.type.toLowerCase()}s` : '#'}>
                       <Badge variant={getPostBadgeVariant(post.type)} className="text-xs cursor-pointer hover:bg-muted h-4 px-1.5">
                         {post.type}
                       </Badge>
                     </Link>
                   </div>
-                  <Link href={currentWorkspace ? `/${currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-0.5 hover:underline">
+                  <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/posts/${post.id}` : '#'} className="block mt-0.5 hover:underline">
                     <p className="text-xs text-muted-foreground">
                       <CollabText
                         content={post.message}
@@ -117,7 +118,7 @@ export function UserPosts({ userId, workspaceId, initialUserPosts }: UserPostsPr
             <div className="py-3 text-center text-muted-foreground">
               <p className="text-sm">You haven&apos;t created any posts yet</p>
               <Button size="sm" className="mt-2">
-                <Link href={currentWorkspace ? `/${currentWorkspace.id}/timeline` : '#'}>Create your first post</Link>
+                <Link href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline` : '#'}>Create your first post</Link>
               </Button>
             </div>
           )}

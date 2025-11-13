@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import { TextAreaWithAI } from "@/components/ui/text-area-with-ai";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { extractMentionUserIds } from "@/utils/mentions";
@@ -72,15 +73,19 @@ export function UnifiedCommentsSection({
     organizeTaskCommentsIntoTree(comments as any), [comments]
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const isNote = itemType === 'note';
 
+  const submitComment = async () => {
     if (!content.trim()) {
       toast({
         title: "Error",
         description: "Comment cannot be empty",
         variant: "destructive",
       });
+      return;
+    }
+
+    if (addCommentMutation.isPending) {
       return;
     }
 
@@ -117,8 +122,17 @@ export function UnifiedCommentsSection({
     }
   };
 
-  const handleEditorChange = (markdown: string) => {
-    setContent(markdown);
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await submitComment();
+  };
+
+  const handleContentChange = (value: string) => {
+    setContent(value);
+  };
+
+  const handleMarkdownEditorChange = (markdown: string, _html?: string) => {
+    handleContentChange(markdown);
   };
 
   const handleAiImprove = async (text: string): Promise<string> => {
@@ -211,25 +225,42 @@ export function UnifiedCommentsSection({
               </Avatar>
             )}
             <div className="flex-1 -mt-3">
-              <MarkdownEditor
-                onChange={handleEditorChange}
-                placeholder="Add a comment..."
-                minHeight="80px"
-                maxHeight="200px"
-                content={content}
-                onAiImprove={handleAiImprove}
-              />
+              {isNote ? (
+                <TextAreaWithAI
+                  value={content}
+                  onChange={handleContentChange}
+                  placeholder="Add a comment..."
+                  minHeight="80px"
+                  maxHeight="200px"
+                  onAiImprove={handleAiImprove}
+                  onSubmit={submitComment}
+                  submitLabel="Post"
+                  loading={isSubmitting}
+                  disabled={isImproving}
+                />
+              ) : (
+                <MarkdownEditor
+                  onChange={handleMarkdownEditorChange}
+                  placeholder="Add a comment..."
+                  minHeight="80px"
+                  maxHeight="200px"
+                  content={content}
+                  onAiImprove={handleAiImprove}
+                />
+              )}
             </div>
           </div>
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isSubmitting || !content.trim() || isImproving}
-            >
-              {isSubmitting ? "Posting..." : "Post Comment"}
-            </Button>
-          </div>
+          {!isNote && (
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSubmitting || !content.trim() || isImproving}
+              >
+                {isSubmitting ? "Posting..." : "Post Comment"}
+              </Button>
+            </div>
+          )}
         </form>
       </div>
     </div>
