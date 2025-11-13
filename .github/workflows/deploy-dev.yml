@@ -29,8 +29,10 @@ jobs:
         echo "REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
     - name: Create .env file from secrets
+      env:
+        ENV_CONTENT: ${{ secrets.ENV_FILE_DEV }}
       run: |
-        printf '%s\n' "${{ secrets.ENV_FILE_DEV }}" > .env
+        echo "$ENV_CONTENT" > .env
         echo "✅ Development environment file created"
 
     - name: Login to GitHub Container Registry
