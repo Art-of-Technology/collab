@@ -28,13 +28,13 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
   }
 
   // Check if user has permission to manage workspace permissions
-  const hasPermission = await checkUserPermission(
+  const { hasPermission } = await checkUserPermission(
     session.user.id,
     workspaceId,
     Permission.MANAGE_WORKSPACE_PERMISSIONS
   );
 
-  if (!hasPermission.hasPermission) {
+  if (!hasPermission) {
     notFound();
   }
 

@@ -37,6 +37,15 @@ const KanbanIssueCard = React.memo(({
 }: KanbanIssueCardProps) => {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
+  
+  // Build URL for <a> tag
+  const issueUrl = useMemo(() => {
+    const workspaceSlug = currentWorkspace?.slug || (issue as any)?.workspaceId;
+    if (workspaceSlug) {
+      return `/${workspaceSlug}/issues/${issue.issueKey || issue.id}`;
+    }
+    return `/issues/${issue.issueKey || issue.id}`;
+  }, [currentWorkspace?.slug, issue.issueKey, issue.id]);
   const showAssignee = displayProperties.includes('Assignee');
   const showPriority = displayProperties.includes('Priority');
   const showLabels = displayProperties.includes('Labels');
@@ -62,9 +71,13 @@ const KanbanIssueCard = React.memo(({
     event.stopPropagation();
   }, []);
 
-  const handleCardClick = useCallback((event: React.MouseEvent) => {
-    const keyOrId = issue.issueKey || issue.id;
-    onCardClick(keyOrId);
+  const handleLinkClick = useCallback((event: React.MouseEvent) => {
+    // For normal clicks, prevent default and open programmatically
+    // Ctrl/Cmd+click will use native browser behavior
+    if (!event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      onCardClick(issue.issueKey || issue.id, event);
+    }
   }, [onCardClick, issue.issueKey, issue.id]);
 
   const issueTypeKey = mapToIssueTypeKey(issue.type);
@@ -85,21 +98,26 @@ const KanbanIssueCard = React.memo(({
   return (
     <Draggable key={issue.id} draggableId={issue.id} index={index} isDragDisabled={isIssueBeingProcessed}>
       {(provided, snapshot) => (
-        <div
+        <a
           ref={provided.innerRef}
           {...provided.draggableProps}
-          {...provided.dragHandleProps}
+          href={issueUrl}
+          rel="noopener noreferrer"
+          onClick={handleLinkClick}
+          data-issue-id={issue.id}
           className={cn(
-            "group p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150",
+            "group block p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150 no-underline",
             hasRelations ? 'pb-1.5' : 'pb-3',
             isIssueBeingProcessed
               ? "opacity-60 cursor-not-allowed"
               : "hover:border-[#333] cursor-pointer",
             snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
           )}
-          onClick={handleCardClick}
         >
-          <div className="flex flex-col gap-1.5">
+          <div
+            {...provided.dragHandleProps}
+            className="flex flex-col gap-1.5"
+          >
             {/* Header: Issue ID + Type Indicator + Priority + Assignee */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -277,11 +295,25 @@ const KanbanIssueCard = React.memo(({
                     return (
                       <div
                         key={relation.id}
-                        onClick={() => {
+                        onClick={(e) => {
                           if (!relation.issueKey) return;
                           const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
                           if (!workspaceSlug) return;
-                          router.push(`/${workspaceSlug}/issues/${relation.issueKey}`);
+                          const url = `/${workspaceSlug}/issues/${relation.issueKey}`;
+                          if (e.ctrlKey || e.metaKey) {
+                            // Let native browser behavior handle Ctrl/Cmd+click
+                            return;
+                          }
+                          e.preventDefault();
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        }}
+                        onAuxClick={(e) => {
+                          if (e.button === 1 && relation.issueKey) {
+                            const workspaceSlug = relation.workspaceSlug || currentWorkspace?.slug;
+                            if (workspaceSlug) {
+                              window.open(`/${workspaceSlug}/issues/${relation.issueKey}`, '_blank', 'noopener,noreferrer');
+                            }
+                          }
                         }}
                         className="flex items-center transition-colors duration-150 justify-between gap-2 rounded-md border border-[#1a1a1a] bg-[#0f0f0f] px-2 py-1 cursor-pointer hover:bg-[#1a1a1a]"
                       >
@@ -314,7 +346,7 @@ const KanbanIssueCard = React.memo(({
               )}
             </>
           )}
-        </div>
+        </a>
       )}
     </Draggable>
   );

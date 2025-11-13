@@ -29,6 +29,7 @@ import {
   useResetNotificationPreferences,
   type NotificationPreferenceUpdate
 } from "@/hooks/queries/useNotificationPreferences";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 
@@ -162,9 +163,11 @@ const settingGroups: SettingGroup[] = [
 
 export default function NotificationSettings() {
   const { toast } = useToast();
-  const { data: preferences, isLoading } = useNotificationPreferences();
-  const updateMutation = useUpdateNotificationPreferences();
-  const resetMutation = useResetNotificationPreferences();
+  const { currentWorkspace } = useWorkspace();
+  const workspaceId = currentWorkspace?.id;
+  const { data: preferences, isLoading } = useNotificationPreferences(workspaceId);
+  const updateMutation = useUpdateNotificationPreferences(workspaceId);
+  const resetMutation = useResetNotificationPreferences(workspaceId);
   const [openSections, setOpenSections] = useState<string[]>(["issues", "projects", "leave"]);
   const {
     isSupported: isPushSupported,

@@ -33,13 +33,13 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
         filter === 'questions' ? 'QUESTION' : undefined;
 
   // TanStack Query for infinite posts with filters
-  const { 
-    data: infiniteData, 
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage, 
-    isLoading, 
-    isError 
+  const {
+    data: infiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError
   } = useInfinitePosts({
     type: filterType,
     tag: tag || undefined,
@@ -49,46 +49,39 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
 
   // Get post statistics efficiently
   const { data: postStats } = usePostStats(currentWorkspace?.id);
-  
+
   // Get all posts for detailed calculations (with higher limit)
   const { data: allPosts } = usePosts({
     workspaceId: currentWorkspace?.id,
-    limit: 1000 // High limit for detailed calculations
+    limit: 1000, // High limit for detailed calculations
+    tag: tag || undefined,
   });
 
   // Flatten infinite pages data or fallback to initial posts
-  const displayPosts = infiniteData 
+  const displayPosts = infiniteData
     ? infiniteData.pages.flatMap((page: any) => {
-        // Handle both old and new response formats
-        if (Array.isArray(page)) {
-          return page; // Old format: direct array
-        }
-        return page.posts || []; // New format: object with posts property
-      })
+      // Handle both old and new response formats
+      if (Array.isArray(page)) {
+        return page; // Old format: direct array
+      }
+      return page.posts || []; // New format: object with posts property
+    })
     : initialPosts;
 
   // Calculate counts for each filter type (use stats for accurate totals)
   const postCounts = useMemo(() => {
-    if (postStats) {
-      return {
-        all: postStats.total,
-        updates: postStats.updates,
-        blockers: postStats.blockers,
-        ideas: postStats.ideas,
-        questions: postStats.questions,
-      };
-    }
-    
-    // Fallback to calculated counts from loaded posts
     const allPostsList = allPosts || initialPosts;
+
+    const filteredPosts = tag ? allPostsList.filter((p: any) => p.tags.some((t: any) => t.name === tag)) : allPostsList;
+
     return {
-      all: allPostsList.length,
-      updates: allPostsList.filter((p: any) => p.type === 'UPDATE').length,
-      blockers: allPostsList.filter((p: any) => p.type === 'BLOCKER').length,
-      ideas: allPostsList.filter((p: any) => p.type === 'IDEA').length,
-      questions: allPostsList.filter((p: any) => p.type === 'QUESTION').length,
+      all: filteredPosts.length,
+      updates: filteredPosts.filter((p: any) => p.type === 'UPDATE').length,
+      blockers: filteredPosts.filter((p: any) => p.type === 'BLOCKER').length,
+      ideas: filteredPosts.filter((p: any) => p.type === 'IDEA').length,
+      questions: filteredPosts.filter((p: any) => p.type === 'QUESTION').length,
     };
-  }, [postStats, allPosts, initialPosts]);
+  }, [allPosts, initialPosts, tag]);
 
   // Calculate activity statistics
   const activityStats = useMemo(() => {
@@ -96,29 +89,29 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    
+
     const todaysPosts = allPostsList.filter((p: any) => {
       const postDate = new Date(p.createdAt);
       return postDate >= today;
     });
-    
+
     const thisWeeksPosts = allPostsList.filter((p: any) => {
       const postDate = new Date(p.createdAt);
       return postDate >= weekAgo;
     });
-    
+
     const activeAuthorsToday = new Set(
       todaysPosts.map((p: any) => p.authorId)
     ).size;
-    
+
     const activeAuthorsThisWeek = new Set(
       thisWeeksPosts.map((p: any) => p.authorId)
     ).size;
-    
-    const priorityPosts = allPostsList.filter((p: any) => 
+
+    const priorityPosts = allPostsList.filter((p: any) =>
       p.priority === 'high' || p.priority === 'critical'
     ).length;
-    
+
     return {
       total: postStats?.total || allPostsList.length,
       today: todaysPosts.length,
@@ -132,13 +125,13 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
 
   const handleFilterChange = (newFilter: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    
+
     if (newFilter === 'all') {
       params.delete('filter');
     } else {
       params.set('filter', newFilter);
     }
-    
+
     const newPath = `${window.location.pathname}?${params.toString()}`;
     router.push(newPath);
   };
@@ -155,8 +148,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             <div className="flex items-center">
               <span className="text-sm text-[#8b949e] mr-2">Filtered by:</span>
               <div className="flex items-center">
-                <Badge 
-                  variant="secondary" 
+                <Badge
+                  variant="secondary"
                   className="bg-[#1a1a1a] text-[#e6edf3] border-[#333] px-2 py-1 text-xs"
                 >
                   #{tag}
@@ -181,11 +174,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('all')}
-            className={`h-6 px-2 text-xs border ${
-              !filter || filter === 'all'
-                ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${!filter || filter === 'all'
+              ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]'
+              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              }`}
           >
             All
             <span className="ml-1 text-xs opacity-70">{postCounts.all}</span>
@@ -194,11 +186,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('updates')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'updates'
-                ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'updates'
+              ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]'
+              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              }`}
           >
             Updates
             <span className="ml-1 text-xs opacity-70">{postCounts.updates}</span>
@@ -207,11 +198,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('blockers')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'blockers'
-                ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'blockers'
+              ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]'
+              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              }`}
           >
             Blockers
             <span className="ml-1 text-xs opacity-70">{postCounts.blockers}</span>
@@ -220,11 +210,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('ideas')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'ideas'
-                ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'ideas'
+              ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]'
+              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              }`}
           >
             Ideas
             <span className="ml-1 text-xs opacity-70">{postCounts.ideas}</span>
@@ -233,11 +222,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('questions')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'questions'
-                ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'questions'
+              ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]'
+              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              }`}
           >
             Questions
             <span className="ml-1 text-xs opacity-70">{postCounts.questions}</span>
@@ -254,7 +242,7 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
               <div className="mb-4">
                 <CreatePostForm />
               </div>
-              
+
               <div className="pb-8">
                 {isLoading && initialPosts.length === 0 ? (
                   <div className="flex items-center gap-2 text-[#8b949e] py-8">
@@ -266,8 +254,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
                     Something went wrong loading posts.
                   </div>
                 ) : (
-                  <PostList 
-                    posts={displayPosts} 
+                  <PostList
+                    posts={displayPosts}
                     currentUserId={currentUserId}
                     hasNextPage={hasNextPage}
                     isFetchingNextPage={isFetchingNextPage}
@@ -334,8 +322,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
                     <div className="flex justify-between text-xs">
                       <span className="text-[#8b949e]">Avg. per Person</span>
                       <span className="text-[#e6edf3] font-medium">
-                        {activityStats.activeAuthorsThisWeek > 0 
-                          ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek) 
+                        {activityStats.activeAuthorsThisWeek > 0
+                          ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek)
                           : 0}
                       </span>
                     </div>

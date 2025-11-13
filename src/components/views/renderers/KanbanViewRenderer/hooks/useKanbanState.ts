@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo, useRef, useCallback, useEffect, type MouseEvent } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { DropResult } from "@hello-pangea/dnd";
 import { createColumns, countIssuesByType } from '../utils';
 import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
 import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
@@ -37,8 +35,10 @@ function detectTightSpacing(bulk: Array<{issueId: string, columnId: string, posi
   
   return false; // Spacing is fine
 }
-import type { 
-  KanbanViewRendererProps 
+import type {
+  KanbanViewRendererProps,
+  KanbanDragUpdate,
+  KanbanDropResult,
 } from '../types';
 
 export const useKanbanState = ({
@@ -58,7 +58,6 @@ export const useKanbanState = ({
   const requestSequenceRef = useRef(0);
   const pendingRequestsRef = useRef<Map<string, { sequence: number, batchId: string }>>(new Map());
   const lastDragOperationRef = useRef<number>(0);
-  const router = useRouter();
   const updateIssueMutation = useUpdateIssue();
   
   // State management with optimistic updates
@@ -184,16 +183,36 @@ export const useKanbanState = ({
     }
     const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames, previousOrderingMethod.current);
     previousOrderingMethod.current = view?.ordering || view?.sorting?.field || 'manual';
-    if (localColumnOrder && view.grouping?.field === 'status') {
+
+    // Start with base columns
+    let orderedColumns = baseColumns;
+
+    // Apply saved layout order from view for non-status groupings
+    if (groupField !== 'status') {
+      const savedOrder: string[] | undefined = view?.layout?.kanbanColumnOrder?.[groupField];
+      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+        const indexById = new Map(savedOrder.map((id, idx) => [id, idx]));
+        orderedColumns = orderedColumns
+          .map((col: any) => ({
+            ...col,
+            order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
+          }))
+          .sort((a: any, b: any) => a.order - b.order);
+      }
+    }
+
+    // Apply local drag-reordered order for all groupings (takes precedence during session)
+    if (localColumnOrder) {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
-      return baseColumns
+      orderedColumns = orderedColumns
         .map((col: any) => ({
           ...col,
           order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
         }))
         .sort((a: any, b: any) => a.order - b.order);
     }
-    return baseColumns;
+
+    return orderedColumns;
   }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder, activeFilters]);
 
   // Count issues for filter buttons
@@ -266,28 +285,31 @@ export const useKanbanState = ({
     }
   }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
-  const handleDragUpdate = useCallback((update: any) => {
-    if (!update.destination) {
+  const handleDragUpdate = useCallback((update: KanbanDragUpdate) => {
+    const destination = update.overrideDestination ?? update.destination;
+
+    if (!destination) {
       setHoverState({ canDrop: true, columnId: '' });
       return;
     }
-    
-    if (update.type === 'issue' && update.destination) {
-      const targetColumnId = update.destination.droppableId;
-      
-      // Find the dragged issue and check if it can be moved to the target column
+
+    if (update.type === 'issue') {
+      const targetColumnId = destination.droppableId;
+
       if (draggedIssue) {
         const canDrop = canIssueMoveTo(draggedIssue, targetColumnId);
-
         setHoverState({ canDrop, columnId: targetColumnId });
+      } else {
+        setHoverState({ canDrop: true, columnId: targetColumnId });
       }
     } else {
       setHoverState({ canDrop: true, columnId: '' });
     }
   }, [draggedIssue, canIssueMoveTo]);
 
-  const handleDragEnd = useCallback(async (result: DropResult) => {
-    const { destination, source, draggableId, type } = result;
+  const handleDragEnd = useCallback(async (result: KanbanDropResult) => {
+    const { source, draggableId, type } = result;
+    const destination = result.overrideDestination ?? result.destination;
 
     // Safety check: if this specific issue operation is already in progress, ignore
     if (operationsInProgressRef.current.has(draggableId) && !isDraggingRef.current) {
@@ -763,7 +785,7 @@ export const useKanbanState = ({
   }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field, onOrderingChange, view?.ordering, view?.sorting?.field]);
 
   // Issue handlers
-  const handleIssueClick = useCallback((issueIdOrKey: string) => {
+  const handleIssueClick = useCallback((issueIdOrKey: string, event?: MouseEvent) => {
     // Navigate directly to the issue page (Linear-style)
     // Use workspace slug if available, else id; fallback to issue's workspaceId
     const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
@@ -772,12 +794,16 @@ export const useKanbanState = ({
     // Build URL with view context for proper back navigation
     const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
     
-    if (workspaceSegment) {
-      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
-    } else {
-      router.push(`/issues/${issueIdOrKey}${viewParams}`);
+    const url = workspaceSegment 
+      ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
+      : `/issues/${issueIdOrKey}${viewParams}`;
+    
+    // Only open programmatically for normal left-clicks
+    // Ctrl/Cmd+click and middle click use native browser behavior
+    if (!event || (!event.ctrlKey && !event.metaKey)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
-  }, [issues, router, view, workspace]);
+  }, [issues, view, workspace]);
 
   const handleCreateIssue = useCallback(async (columnId: string) => {
     if (!newIssueTitle.trim()) return;

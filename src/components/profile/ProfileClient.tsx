@@ -1,7 +1,9 @@
 'use client';
 
-import { useCurrentUserProfile } from "@/hooks/queries/useUser";
+import { useState } from 'react';
+import { useInfiniteUserProfilePosts, useCurrentUserProfile } from "@/hooks/queries/useUser";
 import ProfileForm from "@/components/profile/ProfileForm";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import PostList from "@/components/posts/PostList";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,13 +16,40 @@ interface ProfileClientProps {
 }
 
 export default function ProfileClient({ initialData }: ProfileClientProps) {
-  // Use the TanStack Query hook with initialData
-  const { data, isLoading } = useCurrentUserProfile();
+  const { currentWorkspace } = useWorkspace();
+  const workspaceId = currentWorkspace?.id || '';
+  const [initialWorkspaceId] = useState(() => workspaceId);
   
-  // Use the latest data from the query or fall back to initialData
-  const { user, posts, stats } = data || initialData;
+  const { data: profileData, isLoading: isProfileLoading } = useCurrentUserProfile(workspaceId);
+  const { user, stats } = profileData || initialData || {};
+  const {
+    data: infinitePostsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isPostsLoading
+  } = useInfiniteUserProfilePosts(
+    workspaceId, 
+    10, 
+    initialWorkspaceId === workspaceId ? initialData?.posts : undefined
+  );
+
+  if ((isProfileLoading && !initialData) || !user || !stats) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   
-  if (isLoading && !initialData) {
+  const posts = infinitePostsData?.pages.flatMap((page: any) => {
+    if (Array.isArray(page)) {
+      return page;
+    }
+    return page.posts || [];
+  }) || initialData?.posts || [];
+  
+  if (isPostsLoading && !initialData) {
     return (
       <div className="flex justify-center items-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -89,15 +118,23 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
           }} />
         </TabsContent>
         <TabsContent value="posts" className="mt-4">
-          {posts.length > 0 ? (
-            <PostList posts={posts} currentUserId={user.id} />
-          ) : (
-            <Card className="border-border/40 bg-card/95 shadow-md">
-              <CardContent className="p-8 text-center text-muted-foreground">
-                <p>You haven&apos;t created any posts yet.</p>
-              </CardContent>
-            </Card>
-          )}
+          <div className="overflow-y-auto max-h-[calc(100vh-400px)]">
+            {posts.length > 0 ? (
+              <PostList 
+                posts={posts} 
+                currentUserId={user.id}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={() => fetchNextPage()}
+              />
+            ) : (
+              <Card className="border-border/40 bg-card/95 shadow-md">
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <p>You haven&apos;t created any posts yet.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationSettings />

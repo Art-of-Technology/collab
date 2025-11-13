@@ -118,6 +118,7 @@ export default function ViewRenderer({
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const pendingColumnOrdersRef = useRef<Record<string, number>>({});
   const commitColumnOrderRef = useRef<any>(null);
+  const handleFilterChangeRef = useRef<typeof handleFilterChange | null>(null);
 
   // ViewFilters context
   const {
@@ -129,7 +130,8 @@ export default function ViewRenderer({
     setCurrentView,
     setIssues,
     setWorkspace,
-    setCurrentUser
+    setCurrentUser,
+    setOnAssigneesChangeFromViewOptions
   } = useViewFilters();
   // Fetch all workspace projects for the project selector
   const { data: allProjects = [] } = useProjects({
@@ -347,10 +349,17 @@ export default function ViewRenderer({
       });
     } else {
       // Remove the filter if it matches the original view filter
-      const { [filterKey]: removed, ...rest } = tempFilters;
-      setTempFilters(rest);
+      setTempFilters(prev => {
+        const { [filterKey]: removed, ...rest } = prev;
+        return rest;
+      });
     }
-  }, [queryClient, workspace.id, tempFilters]);
+  }, [queryClient, workspace.id]);
+
+  // Keep ref updated with latest handleFilterChange
+  useEffect(() => {
+    handleFilterChangeRef.current = handleFilterChange;
+  }, [handleFilterChange]);
 
   // Track the last saved state to properly detect changes
   const [lastSavedState, setLastSavedState] = useState({
@@ -379,10 +388,9 @@ export default function ViewRenderer({
   // Update ViewFilters context with current data
   useEffect(() => {
     setCurrentView(view);
-    setIssues(allIssues);
     setWorkspace(workspace);
     setCurrentUser(currentUser);
-  }, [view, allIssues, workspace, currentUser, setCurrentView, setIssues, setWorkspace, setCurrentUser]);
+  }, [view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser]);
 
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
@@ -418,10 +426,71 @@ export default function ViewRenderer({
     return combinedFilters;
   }, [view.filters, tempFilters]);
 
+  // Sync dropdown assignees to View Options for bidirectional sync
+  // Only sync when dropdown changes (not when View Options changes to avoid loops)
+  const isSyncingFromViewOptionsRef = useRef(false);
+  
+  useEffect(() => {
+    if (isSyncingFromViewOptionsRef.current) {
+      isSyncingFromViewOptionsRef.current = false;
+      return;
+    }
+    
+    const dropdownAssignees = allFilters.assignee || [];
+    const currentViewAssignees = viewFiltersState.assignees || [];
+    
+    if (JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...currentViewAssignees].sort())) {
+      setViewFiltersState({
+        ...viewFiltersState,
+        assignees: dropdownAssignees
+      });
+    }
+  }, [allFilters.assignee, setViewFiltersState, viewFiltersState]);
+
+  // Callback for View Options to update dropdown filter
+  const handleViewOptionsAssigneeChange = useCallback((assignees: unknown) => {
+    // Guard against Event objects and ensure assignees is an array
+    if (
+      !assignees ||
+      assignees instanceof Event ||
+      (typeof assignees === 'object' && assignees !== null && !Array.isArray(assignees))
+    ) {
+      console.warn('Invalid assignees passed to handleViewOptionsAssigneeChange:', assignees);
+      return;
+    }
+    
+    // Ensure assignees is an array
+    const assigneesArray = Array.isArray(assignees) ? assignees : [];
+    
+    if (handleFilterChangeRef.current) {
+      isSyncingFromViewOptionsRef.current = true;
+      const viewAssignees = view.filters?.assignee || [];
+      const sortedNewAssignees = [...assigneesArray].sort();
+      const sortedViewAssignees = [...viewAssignees].sort();
+      
+      // Always update tempFilters to match View Options selection
+      if (JSON.stringify(sortedNewAssignees) !== JSON.stringify(sortedViewAssignees)) {
+        handleFilterChangeRef.current('assignee', sortedNewAssignees, sortedViewAssignees);
+      } else {
+        // If matches view filter, remove from tempFilters
+        setTempFilters(prev => {
+          const { assignee, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
+  }, [view.filters?.assignee]);
+
+  // Set callback in context for View Options
+  useEffect(() => {
+    setOnAssigneesChangeFromViewOptions(handleViewOptionsAssigneeChange);
+    return () => setOnAssigneesChangeFromViewOptions(undefined);
+  }, [handleViewOptionsAssigneeChange, setOnAssigneesChangeFromViewOptions]);
+
   // Memoize action filters to prevent reference instability
   const actionFilters = useMemo(() => {
     return (allFilters.actions as ActionFilter[]) || [];
-  }, [JSON.stringify(allFilters.actions || [])]);
+  }, [allFilters.actions]);
 
   // Apply action filters first (async filtering)
   const {
@@ -577,7 +646,7 @@ export default function ViewRenderer({
     // Assignee filter
     if (viewFiltersState.assignees.length > 0) {
       filtered = filtered.filter(issue => {
-        const assigneeId = issue.assignee?.id || 'unassigned';
+        const assigneeId = issue.assigneeId || 'unassigned';
         return viewFiltersState.assignees.includes(assigneeId);
       });
     }
@@ -615,13 +684,18 @@ export default function ViewRenderer({
     actionFilteredIssues,
     issueFilterType,
     searchQuery,
-    JSON.stringify(allFilters),
-    JSON.stringify(viewFiltersState),
+    allFilters,
+    viewFiltersState,
     viewPositionsData?.positions,
     sortedTempProjectIds,
-    JSON.stringify(originalProjectIds),
+    originalProjectIds,
     tempProjectIds.length
   ]);
+
+  // Update issues in context after filteredIssues is calculated (for accurate counts)
+  useEffect(() => {
+    setIssues(filteredIssues);
+  }, [filteredIssues, setIssues]);
 
   const handleUpdateView = async () => {
     try {
@@ -786,7 +860,7 @@ export default function ViewRenderer({
     // Sidebar ViewFilters (assignees, labels, priority, projects)
     if (viewFiltersState.assignees.length > 0) {
       countingIssues = countingIssues.filter(issue => {
-        const assigneeId = issue.assignee?.id || 'unassigned';
+        const assigneeId = issue.assigneeId || 'unassigned';
         return viewFiltersState.assignees.includes(assigneeId);
       });
     }
@@ -830,10 +904,10 @@ export default function ViewRenderer({
   }, [
     actionFilteredIssues,
     sortedTempProjectIds,
-    JSON.stringify(originalProjectIds),
+    originalProjectIds,
     searchQuery,
-    JSON.stringify(allFilters),
-    JSON.stringify(viewFiltersState)
+    allFilters,
+    viewFiltersState
   ]);
 
   // Issue update handler - no page refresh, just API call
@@ -862,21 +936,25 @@ export default function ViewRenderer({
     }
   };
 
-  // Persist Kanban column order (project statuses) with debounce batching
+  // Persist Kanban column order with debounce batching
   const handleColumnUpdate = (columnId: string, updates: any) => {
-    // columnId here is the internal status name (e.g., 'in_progress')
-    if (typeof updates?.order === 'number') {
-      pendingColumnOrdersRef.current[columnId] = updates.order;
+    if (typeof updates?.order !== 'number') return;
 
-      if (commitColumnOrderRef.current) {
-        clearTimeout(commitColumnOrderRef.current);
-      }
+    pendingColumnOrdersRef.current[columnId] = updates.order;
 
-      commitColumnOrderRef.current = setTimeout(async () => {
-        const orders = pendingColumnOrdersRef.current;
-        pendingColumnOrdersRef.current = {};
+    if (commitColumnOrderRef.current) {
+      clearTimeout(commitColumnOrderRef.current);
+    }
 
-        try {
+    commitColumnOrderRef.current = setTimeout(async () => {
+      const orders = pendingColumnOrdersRef.current;
+      pendingColumnOrdersRef.current = {};
+
+      const groupField = (tempGrouping || view.grouping?.field || 'status');
+
+      try {
+        if (groupField === 'status') {
+          // Persist status column order to project statuses
           const projectIdsToUpdate = (tempProjectIds.length > 0
             ? tempProjectIds
             : view.projects.map(p => p.id));
@@ -895,14 +973,41 @@ export default function ViewRenderer({
 
           // Refresh statuses used by Kanban columns
           queryClient.invalidateQueries({ queryKey: ['multiple-project-statuses'] });
+        } else {
+          // Persist non-status column order per grouping into view.layout.kanbanColumnOrder
+          const orderedIds = Object.entries(orders)
+            .sort((a, b) => (a[1] as number) - (b[1] as number))
+            .map(([id]) => id);
 
-          toast({ title: 'Columns reordered', description: 'Saved new column order' });
-        } catch (error) {
-          console.error('Failed to reorder columns:', error);
-          toast({ title: 'Error', description: 'Failed to save column order', variant: 'destructive' });
+          const existingLayout = view?.layout || {};
+          const existingOrder = existingLayout.kanbanColumnOrder || {};
+          const updatedLayout = {
+            ...existingLayout,
+            kanbanColumnOrder: {
+              ...existingOrder,
+              [groupField]: orderedIds
+            }
+          };
+
+          const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout: updatedLayout })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to update view layout');
+          }
+          // Invalidate cached views so layout order is refreshed
+          queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
         }
-      }, 150);
-    }
+
+        toast({ title: 'Columns reordered', description: 'Saved new column order' });
+      } catch (error) {
+        console.error('Failed to reorder columns:', error);
+        toast({ title: 'Error', description: 'Failed to save column order', variant: 'destructive' });
+      }
+    }, 150);
   };
 
   const renderViewContent = () => {
