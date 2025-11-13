@@ -90,9 +90,9 @@ jobs:
       run: |
         # Create Docker config from .env file (configs are better than secrets for env files)
         CONFIG_NAME="collab_dev_env_$(date +%s)"
-        docker config create \$CONFIG_NAME .env
-        echo "CONFIG_NAME=\$CONFIG_NAME" >> $GITHUB_ENV
-        echo "✅ Created Docker config: \$CONFIG_NAME"
+        docker config create $CONFIG_NAME .env
+        echo "CONFIG_NAME=$CONFIG_NAME" >> $GITHUB_ENV
+        echo "✅ Created Docker config: $CONFIG_NAME"
 
     - name: Deploy with Docker Stack
       run: |
