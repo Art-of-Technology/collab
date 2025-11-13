@@ -42,10 +42,14 @@ jobs:
 
     - name: Build Docker image
       run: |
-        # Load environment variables for build args
-        set -a
-        source .env
-        set +a
+        # Extract only NEXT_PUBLIC_* and DATABASE_URL for build args
+        NEXT_PUBLIC_APP_URL=$(grep "^NEXT_PUBLIC_APP_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_API_URL=$(grep "^NEXT_PUBLIC_API_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=$(grep "^NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_HOCUSPOCUS_URL=$(grep "^NEXT_PUBLIC_HOCUSPOCUS_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_ONESIGNAL_APP_ID=$(grep "^NEXT_PUBLIC_ONESIGNAL_APP_ID=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY=$(grep "^NEXT_PUBLIC_VAPID_PUBLIC_KEY=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        DATABASE_URL=$(grep "^DATABASE_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
 
         DOCKER_BUILDKIT=1 docker build \
           --progress=plain \
