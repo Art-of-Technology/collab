@@ -2,6 +2,8 @@ name: Build and Deploy to Development
 
 on:
   push:
+    branches:
+      - devops  # Temporary: for testing on devops branch
     tags:
       - 'dev-v*'
       - 'dev-release-*'
@@ -13,7 +15,6 @@ env:
 jobs:
   build-and-deploy:
     runs-on: self-hosted
-    environment: development
 
     steps:
     - name: Checkout code

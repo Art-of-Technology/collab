@@ -13,7 +13,6 @@ env:
 jobs:
   build-and-deploy:
     runs-on: self-hosted
-    environment: uat
 
     steps:
     - name: Checkout code
