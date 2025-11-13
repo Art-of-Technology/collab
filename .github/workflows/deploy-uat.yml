@@ -84,17 +84,13 @@ jobs:
         docker push ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:${{ steps.vars.outputs.TAG }}
         docker push ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:uat-latest
 
-    - name: Create or update Docker secrets
+    - name: Create Docker Config for env file
       run: |
-        # Create a combined environment file for Docker secret
-        if ! docker secret inspect collab_uat_env >/dev/null 2>&1; then
-          cat .env.uat | docker secret create collab_uat_env -
-          echo "✅ Created collab_uat_env secret"
-        else
-          echo "ℹ️ collab_uat_env secret already exists"
-          # Note: Docker secrets are immutable. To update, you need to remove and recreate
-          # or handle versioning (e.g., collab_uat_env_v2)
-        fi
+        # Create Docker config from .env file
+        CONFIG_NAME="collab_uat_env_$(date +%s)"
+        docker config create $CONFIG_NAME .env
+        echo "CONFIG_NAME=$CONFIG_NAME" >> $GITHUB_ENV
+        echo "✅ Created Docker config: $CONFIG_NAME"
 
     - name: Deploy with Docker Stack
       run: |
@@ -109,8 +105,9 @@ jobs:
             image: ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:${{ steps.vars.outputs.TAG }}
             ports:
               - "${APP_PORT}:3000"
-            env_file:
-              - .env
+            configs:
+              - source: ${CONFIG_NAME}
+                target: /app/.env
             environment:
               - NODE_ENV=production
               - HOSTNAME=0.0.0.0
@@ -146,6 +143,10 @@ jobs:
               options:
                 max-size: "10m"
                 max-file: "3"
+
+        configs:
+          ${CONFIG_NAME}:
+            external: true
 
         networks:
           collab-uat-network:
