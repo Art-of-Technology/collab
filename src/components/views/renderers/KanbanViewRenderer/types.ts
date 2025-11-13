@@ -42,6 +42,7 @@ export interface KanbanState {
 
 export interface KanbanColumnProps {
   column: Column;
+  hoverColumnId?: string;
   issues: any[];
   index: number;
   groupField: string;
@@ -84,7 +85,7 @@ export interface OverrideDestination {
 }
 
 export type KanbanDragUpdate = DragUpdate & {
-  overrideDestination?: OverrideDestination;
+  overrideColumnId?: string;
 };
 
 export type KanbanDropResult = DropResult & {

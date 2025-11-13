@@ -286,7 +286,13 @@ export const useKanbanState = ({
   }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
   const handleDragUpdate = useCallback((update: KanbanDragUpdate) => {
-    const destination = update.overrideDestination ?? update.destination;
+    let destination = update.destination;
+    if(update.overrideColumnId) {
+      destination = {
+        droppableId: update.overrideColumnId,
+        index: 0,
+      };
+    }
 
     if (!destination) {
       setHoverState({ canDrop: true, columnId: '' });

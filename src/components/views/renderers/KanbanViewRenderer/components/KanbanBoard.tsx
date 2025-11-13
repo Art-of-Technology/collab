@@ -5,9 +5,10 @@ import { DragDropContext, Droppable, type DragStart, type DragUpdate, type DropR
 import KanbanColumn from "./KanbanColumn";
 import type { KanbanBoardProps, KanbanDropResult, KanbanDragUpdate } from "../types";
 
-const EDGE_SCROLL_THRESHOLD = 120;
-const BASE_SCROLL_SPEED = 6;
-const EDGE_SCROLL_MAX_SPEED = 28;
+const EDGE_SCROLL_THRESHOLD = 256;
+// px/sec speeds for refresh-rate independence
+const BASE_SCROLL_SPEED_PX_PER_SEC = 160;
+const EDGE_SCROLL_MAX_SPEED_PX_PER_SEC = 16;
 // Tolerance for scroll boundary checks to account for floating-point precision and sub-pixel scrolling
 const SCROLL_BOUNDARY_TOLERANCE = 1;
 
@@ -40,14 +41,21 @@ export default function KanbanBoard({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isIssueDragRef = useRef(false);
-  const autoScrollState = useRef<{ rafId: number; direction: ScrollDirection; speed: number }>({
+  const autoScrollState = useRef<{ rafId: number; direction: ScrollDirection; speedPxPerSec: number; lastTs: number | null }>({
     rafId: 0,
     direction: 0,
-    speed: 0,
+    speedPxPerSec: 0,
+    lastTs: null,
   });
   const pointerOverrideRef = useRef<{ columnId: string; columnIndex: number; issueIndex: number } | null>(null);
+  const lastOverrideSigRef = useRef<{ columnId: string; issueIndex: number } | null>(null);
   const lastPointerPositionRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const isScrollListenerAttachedRef = useRef(false);
+  const dragWorkRafRef = useRef<number>(0);
+  const runDragWorkRef = useRef<() => void>(() => { });
+  const dragMonitorRafRef = useRef<number>(0);
+  const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const columnHoverPositionRef = useRef<string | undefined>(undefined);
 
   const updatePointerOverride = useCallback((clientX: number, clientY: number) => {
     const container = scrollContainerRef.current;
@@ -56,83 +64,51 @@ export default function KanbanBoard({
       return;
     }
 
-    const columnNodes = Array.from(container.querySelectorAll<HTMLElement>("[data-column-id]"));
+    const containerRect = container.getBoundingClientRect();
+    const columnNodes = columns
+      .map((c) => columnRefs.current[c.id])
+      .filter((n): n is HTMLDivElement => Boolean(n));
+
     if (!columnNodes.length) {
       pointerOverrideRef.current = null;
       return;
     }
 
-    const containerRect = container.getBoundingClientRect();
-    const xWithinContainer = clientX + container.scrollLeft - containerRect.left;
+    const x = clientX;
 
-    let bestIndex = 0;
-    let bestNode: HTMLElement | null = columnNodes[0];
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (let idx = 0; idx < columnNodes.length; idx += 1) {
-      const node = columnNodes[idx];
-      const rect = node.getBoundingClientRect();
-      const left = rect.left + container.scrollLeft - containerRect.left;
-      const right = left + rect.width;
-
-      let distance: number;
-      let candidateIndex: number;
-      let candidateNode: HTMLElement;
-
-      if (xWithinContainer < left) {
-        distance = left - xWithinContainer;
-        candidateIndex = idx;
-        candidateNode = node;
-      } else if (xWithinContainer > right) {
-        distance = xWithinContainer - right;
-        const nextIndex = Math.min(idx + 1, columnNodes.length - 1);
-        candidateIndex = nextIndex;
-        candidateNode = columnNodes[nextIndex];
-      } else {
-        distance = 0;
-        candidateIndex = idx;
-        candidateNode = node;
-      }
-
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = candidateIndex;
-        bestNode = candidateNode;
-      }
-
-      if (distance === 0) {
-        break;
-      }
+    let targetIndex = 0;
+    let targetNode: HTMLElement = columnNodes[0];
+    for (let i = 0; i < columnNodes.length; i += 1) {
+      const r = columnNodes[i].getBoundingClientRect();
+      const left = r.x;
+      const right = left + r.width;
+      if (x < left) { targetIndex = i; targetNode = columnNodes[i]; break; }
+      if (x <= right) { targetIndex = i; targetNode = columnNodes[i]; break; }
+      if (i === columnNodes.length - 1) { targetIndex = i; targetNode = columnNodes[i]; }
     }
 
-    const targetNode = bestNode ?? columnNodes[Math.min(bestIndex, columnNodes.length - 1)];
-    const columnId = targetNode?.dataset.columnId;
+    columnHoverPositionRef.current = targetNode.dataset.columnId;
+
+    const columnId = targetNode.dataset.columnId;
     if (!columnId) {
       pointerOverrideRef.current = null;
       return;
     }
 
-    const issueNodes = Array.from(
-      targetNode.querySelectorAll<HTMLElement>("[data-issue-id]")
-    ).filter((node) => node.offsetParent !== null);
+    const scrollArea = targetNode.querySelector<HTMLElement>(".kanban-column-scroll") || targetNode;
+    const issues = Array.from(targetNode.querySelectorAll<HTMLElement>("[data-issue-id]")).filter((n) => n.offsetParent !== null);
+    const scrollRect = scrollArea.getBoundingClientRect();
+    const y = clientY - scrollRect.top + scrollArea.scrollTop;
 
-    let issueIndex = issueNodes.length;
-    for (let idx = 0; idx < issueNodes.length; idx += 1) {
-      const issueRect = issueNodes[idx].getBoundingClientRect();
-      const midpoint = issueRect.top + issueRect.height / 2;
-      if (clientY < midpoint) {
-        issueIndex = idx;
-        break;
-      }
+    let issueIndex = issues.length;
+    for (let i = 0; i < issues.length; i += 1) {
+      const mid = issues[i].offsetTop + (issues[i].offsetHeight / 2);
+      if (y < mid) { issueIndex = i; break; }
     }
 
-    const previous = pointerOverrideRef.current;
-    if (!previous || previous.columnId !== columnId || previous.issueIndex !== issueIndex) {
-      pointerOverrideRef.current = {
-        columnId,
-        columnIndex: bestIndex,
-        issueIndex,
-      };
+    const prev = pointerOverrideRef.current;
+    if (!prev || prev.columnId !== columnId || prev.issueIndex !== issueIndex) {
+      pointerOverrideRef.current = { columnId, columnIndex: targetIndex, issueIndex };
     }
   }, []);
 
@@ -140,8 +116,14 @@ export default function KanbanBoard({
     if (!isIssueDragRef.current) return;
     const lastPointer = lastPointerPositionRef.current;
     if (!lastPointer) return;
-    updatePointerOverride(lastPointer.clientX, lastPointer.clientY);
-  }, [updatePointerOverride]);
+    // Schedule per-frame work rather than compute immediately
+    if (!dragWorkRafRef.current) {
+      dragWorkRafRef.current = window.requestAnimationFrame(() => {
+        dragWorkRafRef.current = 0;
+        runDragWorkRef.current();
+      });
+    }
+  }, []);
 
   const addContainerScrollListener = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -157,27 +139,35 @@ export default function KanbanBoard({
     isScrollListenerAttachedRef.current = false;
   }, [handleContainerScroll]);
 
-  const runAutoScroll = useCallback(() => {
+  const runAutoScroll = useCallback((timestamp?: number) => {
     const container = scrollContainerRef.current;
     if (!container) {
       autoScrollState.current.rafId = 0;
       return;
     }
 
-    const { direction, speed } = autoScrollState.current;
+    const { direction, speedPxPerSec, lastTs } = autoScrollState.current;
     if (!direction) {
       autoScrollState.current.rafId = 0;
+      autoScrollState.current.lastTs = null;
       return;
     }
 
-    const scrollDelta = Math.max(BASE_SCROLL_SPEED, speed || BASE_SCROLL_SPEED) * direction;
+    const now = timestamp ?? performance.now();
+    const prev = lastTs ?? now;
+    const deltaMs = Math.max(0, now - prev);
+    autoScrollState.current.lastTs = now;
+
+    const pxPerSec = Math.max(BASE_SCROLL_SPEED_PX_PER_SEC, speedPxPerSec || BASE_SCROLL_SPEED_PX_PER_SEC);
+    const scrollDelta = Math.max(EDGE_SCROLL_MAX_SPEED_PX_PER_SEC, pxPerSec * (deltaMs / 1000)) * direction;
     const previousScrollLeft = container.scrollLeft;
-    container.scrollLeft += scrollDelta;
+    container.scrollLeft = previousScrollLeft + scrollDelta;
 
     if (container.scrollLeft === previousScrollLeft) {
       autoScrollState.current.direction = 0;
-      autoScrollState.current.speed = 0;
+      autoScrollState.current.speedPxPerSec = 0;
       autoScrollState.current.rafId = 0;
+      autoScrollState.current.lastTs = null;
       return;
     }
 
@@ -192,6 +182,7 @@ export default function KanbanBoard({
         if (direction === 0 && state.rafId) {
           window.cancelAnimationFrame(state.rafId);
           state.rafId = 0;
+          state.lastTs = null;
         }
         return;
       }
@@ -199,7 +190,8 @@ export default function KanbanBoard({
       state.direction = direction;
 
       if (direction === 0) {
-        state.speed = 0;
+        state.speedPxPerSec = 0;
+        state.lastTs = null;
         if (state.rafId) {
           window.cancelAnimationFrame(state.rafId);
           state.rafId = 0;
@@ -209,6 +201,7 @@ export default function KanbanBoard({
 
       if (!state.rafId) {
         state.rafId = window.requestAnimationFrame(runAutoScroll);
+        state.lastTs = null;
       }
     },
     [runAutoScroll]
@@ -216,7 +209,8 @@ export default function KanbanBoard({
 
   const stopAutoScroll = useCallback(() => {
     const state = autoScrollState.current;
-    state.speed = 0;
+    state.speedPxPerSec = 0;
+    state.lastTs = null;
     if (state.direction !== 0) {
       state.direction = 0;
     }
@@ -230,59 +224,122 @@ export default function KanbanBoard({
     const clampedDistance = Math.min(Math.max(distanceFromEdge, 0), EDGE_SCROLL_THRESHOLD);
     const proximity = EDGE_SCROLL_THRESHOLD - clampedDistance;
     const normalized = proximity / EDGE_SCROLL_THRESHOLD;
-    const speedRange = EDGE_SCROLL_MAX_SPEED - BASE_SCROLL_SPEED;
-    const speed = BASE_SCROLL_SPEED + Math.round(normalized * speedRange);
-    return Math.max(BASE_SCROLL_SPEED, Math.min(EDGE_SCROLL_MAX_SPEED, speed));
+    const speedRange = EDGE_SCROLL_MAX_SPEED_PX_PER_SEC - BASE_SCROLL_SPEED_PX_PER_SEC;
+    const speed = BASE_SCROLL_SPEED_PX_PER_SEC + Math.round(normalized * speedRange);
+    return Math.max(BASE_SCROLL_SPEED_PX_PER_SEC, Math.min(EDGE_SCROLL_MAX_SPEED_PX_PER_SEC, speed));
   }, []);
+
+  const runDragWork = useCallback(() => {
+    dragWorkRafRef.current = 0;
+    if (!isIssueDragRef.current) return;
+    const container = scrollContainerRef.current;
+    const lastPointer = lastPointerPositionRef.current;
+    if (!container || !lastPointer) return;
+
+    // Recompute pointer override using latest pointer position
+    updatePointerOverride(lastPointer.clientX, lastPointer.clientY);
+
+    const rect = container.getBoundingClientRect();
+    const pointerX = lastPointer.clientX;
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+
+    if (maxScrollLeft <= 0) {
+      updateAutoScroll(0);
+      return;
+    }
+
+    let direction: ScrollDirection = 0;
+
+    if (pointerX >= rect.right - EDGE_SCROLL_THRESHOLD) {
+      if (container.scrollLeft < maxScrollLeft - SCROLL_BOUNDARY_TOLERANCE) {
+        direction = 1;
+        const distanceFromEdge = Math.max(0, rect.right - pointerX);
+        autoScrollState.current.speedPxPerSec = computeEdgeSpeed(distanceFromEdge);
+      }
+    } else if (pointerX <= rect.left + EDGE_SCROLL_THRESHOLD) {
+      if (container.scrollLeft > 0) {
+        direction = -1;
+        const distanceFromEdge = Math.max(0, pointerX - rect.left);
+        autoScrollState.current.speedPxPerSec = computeEdgeSpeed(distanceFromEdge);
+      }
+    } else {
+      autoScrollState.current.speedPxPerSec = 0;
+    }
+
+    if (direction === 0) {
+      autoScrollState.current.speedPxPerSec = 0;
+    }
+
+    updateAutoScroll(direction);
+  }, [computeEdgeSpeed, updateAutoScroll, updatePointerOverride]);
+
+  const dragMonitorLoop = useCallback(() => {
+    if (!isIssueDragRef.current) {
+      dragMonitorRafRef.current = 0;
+      return;
+    }
+    const container = scrollContainerRef.current;
+    const lastPointer = lastPointerPositionRef.current;
+    if (container && lastPointer) {
+      updatePointerOverride(lastPointer.clientX, lastPointer.clientY);
+      const rect = container.getBoundingClientRect();
+      const pointerX = lastPointer.clientX;
+      const maxScrollLeft = container.scrollWidth - container.clientWidth;
+
+      let direction: ScrollDirection = 0;
+      if (maxScrollLeft > 0) {
+        if (pointerX >= rect.right - EDGE_SCROLL_THRESHOLD) {
+          if (container.scrollLeft < maxScrollLeft - SCROLL_BOUNDARY_TOLERANCE) {
+            direction = 1;
+            const distanceFromEdge = Math.max(0, rect.right - pointerX);
+            autoScrollState.current.speedPxPerSec = computeEdgeSpeed(distanceFromEdge);
+          }
+        } else if (pointerX <= rect.left + EDGE_SCROLL_THRESHOLD) {
+          if (container.scrollLeft > 0) {
+            direction = -1;
+            const distanceFromEdge = Math.max(0, pointerX - rect.left);
+            autoScrollState.current.speedPxPerSec = computeEdgeSpeed(distanceFromEdge);
+          }
+        } else {
+          autoScrollState.current.speedPxPerSec = 0;
+        }
+        if (direction === 0) {
+          autoScrollState.current.speedPxPerSec = 0;
+        }
+        updateAutoScroll(direction);
+
+        const override = pointerOverrideRef.current;
+        if (override) {
+          const sig = { columnId: override.columnId, issueIndex: Math.max(0, override.issueIndex) };
+          const lastSig = lastOverrideSigRef.current;
+          if (!lastSig || lastSig.columnId !== sig.columnId || lastSig.issueIndex !== sig.issueIndex) {
+            lastOverrideSigRef.current = sig;
+            const extendedUpdate: KanbanDragUpdate = {
+              type: "issue",
+              overrideColumnId: sig.columnId,
+            } as KanbanDragUpdate;
+            onDragUpdate(extendedUpdate);
+          }
+        }
+      } else {
+        updateAutoScroll(0);
+      }
+    }
+    dragMonitorRafRef.current = window.requestAnimationFrame(dragMonitorLoop);
+  }, [computeEdgeSpeed, updateAutoScroll, updatePointerOverride, onDragUpdate]);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
       if (!isIssueDragRef.current) return;
-
-      const container = scrollContainerRef.current;
-      if (!container) return;
-
       lastPointerPositionRef.current = {
         clientX: event.clientX,
         clientY: event.clientY,
       };
-
-      updatePointerOverride(event.clientX, event.clientY);
-
-      const rect = container.getBoundingClientRect();
-      const pointerX = event.clientX;
-      const maxScrollLeft = container.scrollWidth - container.clientWidth;
-
-      if (maxScrollLeft <= 0) {
-        updateAutoScroll(0);
-        return;
+      if (!dragWorkRafRef.current) {
+        dragWorkRafRef.current = window.requestAnimationFrame(() => runDragWorkRef.current());
       }
-
-      let direction: ScrollDirection = 0;
-
-      if (pointerX >= rect.right - EDGE_SCROLL_THRESHOLD) {
-        if (container.scrollLeft < maxScrollLeft - SCROLL_BOUNDARY_TOLERANCE) {
-          direction = 1;
-          const distanceFromEdge = Math.max(0, rect.right - pointerX);
-          autoScrollState.current.speed = computeEdgeSpeed(distanceFromEdge);
-        }
-      } else if (pointerX <= rect.left + EDGE_SCROLL_THRESHOLD) {
-        if (container.scrollLeft > 0) {
-          direction = -1;
-          const distanceFromEdge = Math.max(0, pointerX - rect.left);
-          autoScrollState.current.speed = computeEdgeSpeed(distanceFromEdge);
-        }
-      } else {
-        autoScrollState.current.speed = 0;
-      }
-
-      if (direction === 0) {
-        autoScrollState.current.speed = 0;
-      }
-
-      updateAutoScroll(direction);
     },
-    [computeEdgeSpeed, updatePointerOverride, updateAutoScroll]
+    []
   );
 
   const handlePointerEnd = useCallback(() => {
@@ -291,16 +348,27 @@ export default function KanbanBoard({
     stopAutoScroll();
     lastPointerPositionRef.current = null;
     removeContainerScrollListener();
+    if (dragWorkRafRef.current) {
+      window.cancelAnimationFrame(dragWorkRafRef.current);
+      dragWorkRafRef.current = 0;
+    }
+    if (dragMonitorRafRef.current) {
+      window.cancelAnimationFrame(dragMonitorRafRef.current);
+      dragMonitorRafRef.current = 0;
+    }
   }, [removeContainerScrollListener, stopAutoScroll]);
 
   const removePointerListeners = useCallback(() => {
-    window.removeEventListener("pointermove", handlePointerMove, { passive: true });
-    window.removeEventListener("pointerup", handlePointerEnd, { passive: true });
-    window.removeEventListener("pointercancel", handlePointerEnd, { passive: true });
+    window.removeEventListener("pointermove", handlePointerMove as EventListener);
+    window.removeEventListener("mousemove", handlePointerMove as EventListener, true as any);
+    window.removeEventListener("pointerup", handlePointerEnd as EventListener);
+    window.removeEventListener("pointercancel", handlePointerEnd as EventListener);
   }, [handlePointerEnd, handlePointerMove]);
 
   const addPointerListeners = useCallback(() => {
-    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    // Use pointer and mouse move (capture) to ensure we get updates under different sensors
+    window.addEventListener("pointermove", handlePointerMove, { passive: true, capture: true });
+    window.addEventListener("mousemove", handlePointerMove as EventListener, { passive: true, capture: true } as any);
     window.addEventListener("pointerup", handlePointerEnd, { passive: true });
     window.addEventListener("pointercancel", handlePointerEnd, { passive: true });
   }, [handlePointerEnd, handlePointerMove]);
@@ -316,27 +384,27 @@ export default function KanbanBoard({
         isIssueDragRef.current = true;
         addPointerListeners();
         addContainerScrollListener();
+        if (!dragMonitorRafRef.current) {
+          dragMonitorRafRef.current = window.requestAnimationFrame(dragMonitorLoop);
+        }
       } else {
         isIssueDragRef.current = false;
       }
 
       onDragStart(start);
     },
-    [addContainerScrollListener, addPointerListeners, onDragStart, stopAutoScroll]
+    [addContainerScrollListener, addPointerListeners, dragMonitorLoop, onDragStart, stopAutoScroll]
   );
 
   const handleDragUpdateInternal = useCallback(
     (update: DragUpdate) => {
       if (update.type === "issue") {
-        const override = pointerOverrideRef.current;
-        if (override) {
+        const overrideColumnId = columnHoverPositionRef.current;
+        if (overrideColumnId) {
           const extendedUpdate: KanbanDragUpdate = {
             ...update,
-            overrideDestination: {
-              droppableId: override.columnId,
-              index: Math.max(0, override.issueIndex),
-            },
-          };
+            overrideColumnId: overrideColumnId,
+          } as KanbanDragUpdate;
           onDragUpdate(extendedUpdate);
           return;
         }
@@ -384,12 +452,24 @@ export default function KanbanBoard({
   );
 
   useEffect(() => {
+    runDragWorkRef.current = runDragWork;
+  }, [runDragWork]);
+
+  useEffect(() => {
     return () => {
       removePointerListeners();
       handlePointerEnd();
       removeContainerScrollListener();
       pointerOverrideRef.current = null;
       lastPointerPositionRef.current = null;
+      if (dragWorkRafRef.current) {
+        window.cancelAnimationFrame(dragWorkRafRef.current);
+        dragWorkRafRef.current = 0;
+      }
+      if (dragMonitorRafRef.current) {
+        window.cancelAnimationFrame(dragMonitorRafRef.current);
+        dragMonitorRafRef.current = 0;
+      }
     };
   }, [handlePointerEnd, removeContainerScrollListener, removePointerListeners]);
 
@@ -412,6 +492,7 @@ export default function KanbanBoard({
             {columns.map((column, index) => (
               <KanbanColumn
                 key={column.id}
+                ref={(el) => { columnRefs.current[column.id] = el; }}
                 column={column}
                 issues={issues}
                 index={index}
@@ -432,6 +513,7 @@ export default function KanbanBoard({
                 onIssueKeyDown={onIssueKeyDown}
                 onIssueInputChange={onIssueInputChange}
                 onIssueCreated={onIssueCreated}
+                hoverColumnId={columnHoverPositionRef.current}
               />
             ))}
             {provided.placeholder}
