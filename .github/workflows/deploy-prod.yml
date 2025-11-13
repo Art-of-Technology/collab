@@ -21,7 +21,15 @@ jobs:
     - name: Set environment variables
       id: vars
       run: |
-        echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        # If it's a tag, use the tag name; otherwise use branch name with commit SHA
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          TAG=${GITHUB_REF#refs/tags/}
+        else
+          BRANCH=${GITHUB_REF#refs/heads/}
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="${BRANCH}-${SHORT_SHA}"
+        fi
+        echo "TAG=${TAG}" >> $GITHUB_OUTPUT
         echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
         echo "REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
