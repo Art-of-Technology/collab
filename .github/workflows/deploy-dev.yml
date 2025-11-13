@@ -90,13 +90,8 @@ jobs:
 
     - name: Deploy with Docker Stack
       run: |
-        # Load environment variables to get PORT
-        set -a
-        source .env
-        set +a
-
-        # Use PORT from .env or default to 3000
-        APP_PORT=${PORT:-3000}
+        # Extract PORT from .env
+        APP_PORT=$(grep "^PORT=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "3000")
 
         cat > /tmp/collab-dev-stack.yml <<EOF
         version: '3.8'

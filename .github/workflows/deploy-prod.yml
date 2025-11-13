@@ -40,10 +40,14 @@ jobs:
 
     - name: Build Docker image
       run: |
-        # Load environment variables for build args
-        set -a
-        source .env
-        set +a
+        # Extract only NEXT_PUBLIC_* and DATABASE_URL for build args
+        NEXT_PUBLIC_APP_URL=$(grep "^NEXT_PUBLIC_APP_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_API_URL=$(grep "^NEXT_PUBLIC_API_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=$(grep "^NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_HOCUSPOCUS_URL=$(grep "^NEXT_PUBLIC_HOCUSPOCUS_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_ONESIGNAL_APP_ID=$(grep "^NEXT_PUBLIC_ONESIGNAL_APP_ID=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY=$(grep "^NEXT_PUBLIC_VAPID_PUBLIC_KEY=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+        DATABASE_URL=$(grep "^DATABASE_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
 
         DOCKER_BUILDKIT=1 docker build \
           --progress=plain \
@@ -84,13 +88,8 @@ jobs:
 
     - name: Deploy with Docker Stack
       run: |
-        # Load environment variables to get PORT
-        set -a
-        source .env
-        set +a
-
-        # Use PORT from .env or default to 3000
-        APP_PORT=${PORT:-3000}
+        # Extract PORT from .env
+        APP_PORT=$(grep "^PORT=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "3000")
 
         cat > /tmp/collab-prod-stack.yml <<EOF
         version: '3.8'
@@ -171,10 +170,8 @@ jobs:
         # Wait for service to be fully available
         sleep 30
 
-        # Load environment variables to get app URL
-        set -a
-        source .env
-        set +a
+        # Extract app URL from .env
+        NEXT_PUBLIC_APP_URL=$(grep "^NEXT_PUBLIC_APP_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
 
         # Basic health check
         if [ ! -z "$NEXT_PUBLIC_APP_URL" ]; then
