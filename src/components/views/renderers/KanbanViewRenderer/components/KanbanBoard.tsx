@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, type DragStart, type DragUpdate, type DropResult } from "@hello-pangea/dnd";
 import KanbanColumn from "./KanbanColumn";
 import type { KanbanBoardProps, KanbanDropResult, KanbanDragUpdate } from "../types";
@@ -14,13 +14,11 @@ const SCROLL_BOUNDARY_TOLERANCE = 1;
 
 type ScrollDirection = -1 | 0 | 1;
 
-export default function KanbanBoard({
+function KanbanBoard({
   columns,
-  issues,
   displayProperties,
   groupField,
   isCreatingIssue,
-  newIssueTitle,
   projects,
   workspaceId,
   currentUserId,
@@ -31,15 +29,13 @@ export default function KanbanBoard({
   onDragStart,
   onDragUpdate,
   onIssueClick,
-  onCreateIssue,
   onStartCreatingIssue,
   onCancelCreatingIssue,
-  onIssueKeyDown,
-  onIssueInputChange,
   onIssueCreated,
 }: KanbanBoardProps) {
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const columnsRef = useRef(columns);
   const isIssueDragRef = useRef(false);
   const autoScrollState = useRef<{ rafId: number; direction: ScrollDirection; speedPxPerSec: number; lastTs: number | null }>({
     rafId: 0,
@@ -57,6 +53,10 @@ export default function KanbanBoard({
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const columnHoverPositionRef = useRef<string | undefined>(undefined);
 
+  useEffect(() => {
+    columnsRef.current = columns;
+  }, [columns]);
+
   const updatePointerOverride = useCallback((clientX: number, clientY: number) => {
     const container = scrollContainerRef.current;
     if (!container) {
@@ -64,8 +64,7 @@ export default function KanbanBoard({
       return;
     }
 
-    const containerRect = container.getBoundingClientRect();
-    const columnNodes = columns
+    const columnNodes = columnsRef.current
       .map((c) => columnRefs.current[c.id])
       .filter((n): n is HTMLDivElement => Boolean(n));
 
@@ -229,12 +228,16 @@ export default function KanbanBoard({
     return Math.max(BASE_SCROLL_SPEED_PX_PER_SEC, Math.min(EDGE_SCROLL_MAX_SPEED_PX_PER_SEC, speed));
   }, []);
 
-  const runDragWork = useCallback(() => {
-    dragWorkRafRef.current = 0;
-    if (!isIssueDragRef.current) return;
+  const processPointerState = useCallback((notifyOverride: boolean) => {
+    if (!isIssueDragRef.current) {
+      return false;
+    }
     const container = scrollContainerRef.current;
     const lastPointer = lastPointerPositionRef.current;
-    if (!container || !lastPointer) return;
+    if (!container || !lastPointer) {
+      updateAutoScroll(0);
+      return false;
+    }
 
     // Recompute pointer override using latest pointer position
     updatePointerOverride(lastPointer.clientX, lastPointer.clientY);
@@ -245,7 +248,7 @@ export default function KanbanBoard({
 
     if (maxScrollLeft <= 0) {
       updateAutoScroll(0);
-      return;
+      return false;
     }
 
     let direction: ScrollDirection = 0;
@@ -271,62 +274,37 @@ export default function KanbanBoard({
     }
 
     updateAutoScroll(direction);
-  }, [computeEdgeSpeed, updateAutoScroll, updatePointerOverride]);
+    if (notifyOverride) {
+      const override = pointerOverrideRef.current;
+      if (override) {
+        const sig = { columnId: override.columnId, issueIndex: Math.max(0, override.issueIndex) };
+        const lastSig = lastOverrideSigRef.current;
+        if (!lastSig || lastSig.columnId !== sig.columnId || lastSig.issueIndex !== sig.issueIndex) {
+          lastOverrideSigRef.current = sig;
+          const extendedUpdate: KanbanDragUpdate = {
+            type: "issue",
+            overrideColumnId: sig.columnId,
+          } as KanbanDragUpdate;
+          onDragUpdate(extendedUpdate);
+        }
+      }
+    }
+
+    return true;
+  }, [computeEdgeSpeed, onDragUpdate, updateAutoScroll, updatePointerOverride]);
+
+  const runDragWork = useCallback(() => {
+    dragWorkRafRef.current = 0;
+    processPointerState(false);
+  }, [processPointerState]);
 
   const dragMonitorLoop = useCallback(() => {
-    if (!isIssueDragRef.current) {
+    if (!processPointerState(true)) {
       dragMonitorRafRef.current = 0;
       return;
     }
-    const container = scrollContainerRef.current;
-    const lastPointer = lastPointerPositionRef.current;
-    if (container && lastPointer) {
-      updatePointerOverride(lastPointer.clientX, lastPointer.clientY);
-      const rect = container.getBoundingClientRect();
-      const pointerX = lastPointer.clientX;
-      const maxScrollLeft = container.scrollWidth - container.clientWidth;
-
-      let direction: ScrollDirection = 0;
-      if (maxScrollLeft > 0) {
-        if (pointerX >= rect.right - EDGE_SCROLL_THRESHOLD) {
-          if (container.scrollLeft < maxScrollLeft - SCROLL_BOUNDARY_TOLERANCE) {
-            direction = 1;
-            const distanceFromEdge = Math.max(0, rect.right - pointerX);
-            autoScrollState.current.speedPxPerSec = computeEdgeSpeed(distanceFromEdge);
-          }
-        } else if (pointerX <= rect.left + EDGE_SCROLL_THRESHOLD) {
-          if (container.scrollLeft > 0) {
-            direction = -1;
-            const distanceFromEdge = Math.max(0, pointerX - rect.left);
-            autoScrollState.current.speedPxPerSec = computeEdgeSpeed(distanceFromEdge);
-          }
-        } else {
-          autoScrollState.current.speedPxPerSec = 0;
-        }
-        if (direction === 0) {
-          autoScrollState.current.speedPxPerSec = 0;
-        }
-        updateAutoScroll(direction);
-
-        const override = pointerOverrideRef.current;
-        if (override) {
-          const sig = { columnId: override.columnId, issueIndex: Math.max(0, override.issueIndex) };
-          const lastSig = lastOverrideSigRef.current;
-          if (!lastSig || lastSig.columnId !== sig.columnId || lastSig.issueIndex !== sig.issueIndex) {
-            lastOverrideSigRef.current = sig;
-            const extendedUpdate: KanbanDragUpdate = {
-              type: "issue",
-              overrideColumnId: sig.columnId,
-            } as KanbanDragUpdate;
-            onDragUpdate(extendedUpdate);
-          }
-        }
-      } else {
-        updateAutoScroll(0);
-      }
-    }
     dragMonitorRafRef.current = window.requestAnimationFrame(dragMonitorLoop);
-  }, [computeEdgeSpeed, updateAutoScroll, updatePointerOverride, onDragUpdate]);
+  }, [processPointerState]);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
@@ -494,12 +472,10 @@ export default function KanbanBoard({
                 key={column.id}
                 ref={(el) => { columnRefs.current[column.id] = el; }}
                 column={column}
-                issues={issues}
                 index={index}
                 groupField={groupField}
                 displayProperties={displayProperties}
                 isCreatingIssue={isCreatingIssue === column.id}
-                newIssueTitle={newIssueTitle}
                 projects={projects}
                 workspaceId={workspaceId}
                 currentUserId={currentUserId}
@@ -507,11 +483,8 @@ export default function KanbanBoard({
                 hoverState={hoverState}
                 operationsInProgress={operationsInProgress}
                 onIssueClick={onIssueClick}
-                onCreateIssue={onCreateIssue}
                 onStartCreatingIssue={onStartCreatingIssue}
                 onCancelCreatingIssue={onCancelCreatingIssue}
-                onIssueKeyDown={onIssueKeyDown}
-                onIssueInputChange={onIssueInputChange}
                 onIssueCreated={onIssueCreated}
                 hoverColumnId={columnHoverPositionRef.current}
               />
@@ -523,3 +496,6 @@ export default function KanbanBoard({
     </DragDropContext>
   );
 }
+
+
+export default memo(KanbanBoard);

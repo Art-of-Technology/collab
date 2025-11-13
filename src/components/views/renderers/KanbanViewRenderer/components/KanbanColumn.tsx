@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, type MutableRefObject } from "react";
+import { forwardRef, useCallback, useMemo, type MutableRefObject } from "react";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,6 @@ import { getColumnColor } from '../utils';
 import KanbanIssueCard from './KanbanIssueCard';
 import QuickIssueCreate from './QuickIssueCreate';
 import type { KanbanColumnProps } from '../types';
-import { useKanbanState } from "../hooks/useKanbanState";
 
 const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function KanbanColumn({
   column,
@@ -36,7 +35,12 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
 }: KanbanColumnProps, ref) {
 
   const shouldShowDisabledState = hoverColumnId === column.id && !hoverState.canDrop;
-  const cannotDropReason = `Cannot drop issue from ${draggedIssue?.project?.name || 'different project'} here`;
+  const cannotDropReason = useMemo(() => {
+    return `Cannot drop issue from ${draggedIssue?.project?.name || 'different project'} here`;
+  }, [draggedIssue?.project?.name]);
+  const handleStartCreatingIssue = useCallback(() => {
+    onStartCreatingIssue(column.id);
+  }, [column.id, onStartCreatingIssue]);
 
   return (
     <Draggable key={column.id} draggableId={column.id} index={index}>
@@ -89,7 +93,7 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 text-[#666] hover:text-white"
-                onClick={() => onStartCreatingIssue(column.id)}
+                onClick={handleStartCreatingIssue}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -149,7 +153,7 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                         isDraggingOver && draggedIssue && "pointer-events-none",
                         !isDraggingOver && draggedIssue && "hover:border-[#0969da]"
                       )}
-                      onClick={() => onStartCreatingIssue(column.id)}
+                      onClick={handleStartCreatingIssue}
                     >
                       <div className="text-center">
                         <Plus className="h-6 w-6 mx-auto mb-2 text-[#666]" />

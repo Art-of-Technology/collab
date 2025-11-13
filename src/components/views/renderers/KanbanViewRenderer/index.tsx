@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useMemo } from 'react';
 import KanbanBoard from './components/KanbanBoard';
 import { useKanbanState } from './hooks/useKanbanState';
 import type { KanbanViewRendererProps } from './types';
@@ -12,24 +13,26 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
 }) {
   const {
     view,
-    issues,
     workspace,
-    projectId,
     workspaceId,
     currentUserId,
     onIssueCreated,
   } = props;
 
+  const groupField = useMemo(() => view.grouping?.field || 'status', [view.grouping?.field]);
+  const projects = useMemo(() => view.projects ?? [], [view.projects]);
+  const resolvedWorkspaceId = useMemo(() => workspaceId || workspace?.id || '', [workspaceId, workspace]);
+  const resolvedCurrentUserId = currentUserId || '';
+  const handleIssueCreated = useCallback((issue: any) => {
+    onIssueCreated?.(issue);
+  }, [onIssueCreated]);
+
   const {
     // State
     isCreatingIssue,
-    newIssueTitle,
-    setNewIssueTitle,
 
     // Computed values
-    filteredIssues,
     columns,
-    issueCounts,
     displayProperties,
     isLoadingStatuses,
     draggedIssue,
@@ -41,11 +44,8 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     handleDragUpdate,
     handleDragEnd,
     handleIssueClick,
-    handleCreateIssue,
-    handleToggleSubIssues,
     handleStartCreatingIssue,
-    handleCancelCreatingIssue,
-    handleIssueKeyDown
+    handleCancelCreatingIssue
   } = useKanbanState(props);
 
   return (
@@ -53,21 +53,19 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
       {/* Kanban Board Container - Full height scrollable area */}
       <div className="h-full">
         <div className="h-full p-6">
-          {isLoadingStatuses && (view.grouping?.field || 'status') === 'status' ? (
+          {isLoadingStatuses && groupField === 'status' ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
           ) : (
             <KanbanBoard
               columns={columns}
-              issues={issues}
               displayProperties={displayProperties}
-              groupField={view.grouping?.field || 'status'}
+              groupField={groupField}
               isCreatingIssue={isCreatingIssue}
-              newIssueTitle={newIssueTitle}
-              projects={view.projects || []}
-              workspaceId={workspaceId || workspace?.id || ''}
-              currentUserId={currentUserId || ''}
+              projects={projects}
+              workspaceId={resolvedWorkspaceId}
+              currentUserId={resolvedCurrentUserId}
               draggedIssue={draggedIssue}
               hoverState={hoverState}
               operationsInProgress={operationsInProgress}
@@ -75,12 +73,9 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
               onDragStart={handleDragStart}
               onDragUpdate={handleDragUpdate}
               onIssueClick={handleIssueClick}
-              onCreateIssue={handleCreateIssue}
               onStartCreatingIssue={handleStartCreatingIssue}
               onCancelCreatingIssue={handleCancelCreatingIssue}
-              onIssueKeyDown={handleIssueKeyDown}
-              onIssueInputChange={setNewIssueTitle}
-              onIssueCreated={onIssueCreated || (() => { })}
+              onIssueCreated={handleIssueCreated}
             />
           )}
         </div>

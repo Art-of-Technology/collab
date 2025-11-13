@@ -43,12 +43,10 @@ export interface KanbanState {
 export interface KanbanColumnProps {
   column: Column;
   hoverColumnId?: string;
-  issues: any[];
   index: number;
   groupField: string;
   displayProperties: string[];
   isCreatingIssue: boolean;
-  newIssueTitle: string;
   projects: Array<{
     id: string;
     name: string;
@@ -62,11 +60,8 @@ export interface KanbanColumnProps {
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
   onIssueClick: (issueId: string, event?: MouseEvent) => void;
-  onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: KeyboardEvent) => void;
-  onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
 
@@ -96,11 +91,9 @@ export type KanbanDropResult = DropResult & {
 
 export interface KanbanBoardProps {
   columns: Column[];
-  issues: any[];
   displayProperties: string[];
   groupField: string;
   isCreatingIssue: string | null;
-  newIssueTitle: string;
   projects: Array<{
     id: string;
     name: string;
@@ -117,10 +110,7 @@ export interface KanbanBoardProps {
   onDragStart: (start: any) => void;
   onDragUpdate: (update: KanbanDragUpdate) => void;
   onIssueClick: (issueId: string, event?: MouseEvent) => void;
-  onCreateIssue: (columnId: string) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: KeyboardEvent) => void;
-  onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
