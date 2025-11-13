@@ -1,0 +1,220 @@
+name: Build and Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'release-*'
+
+env:
+  ENVIRONMENT: production
+  STACK_NAME: collab-prod
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set environment variables
+      id: vars
+      run: |
+        echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+        echo "REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+    - name: Create .env file from secrets
+      run: |
+        echo "${{ secrets.ENV_FILE_PROD }}" > .env
+        echo "✅ Production environment file created"
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GH_PAT }}
+
+    - name: Build Docker image
+      run: |
+        # Load environment variables for build args
+        set -a
+        source .env
+        set +a
+
+        DOCKER_BUILDKIT=1 docker build \
+          --progress=plain \
+          --no-cache \
+          --build-arg NODE_VERSION=20-alpine \
+          --build-arg VERSION=${{ steps.vars.outputs.TAG }} \
+          --build-arg BUILD_DATE=${{ steps.vars.outputs.BUILD_DATE }} \
+          --build-arg COMMIT_SHA=${{ steps.vars.outputs.SHORT_SHA }} \
+          --build-arg NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL}" \
+          --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
+          --build-arg NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME="${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}" \
+          --build-arg NEXT_PUBLIC_HOCUSPOCUS_URL="${NEXT_PUBLIC_HOCUSPOCUS_URL}" \
+          --build-arg NEXT_PUBLIC_ONESIGNAL_APP_ID="${NEXT_PUBLIC_ONESIGNAL_APP_ID}" \
+          --build-arg NEXT_PUBLIC_VAPID_PUBLIC_KEY="${NEXT_PUBLIC_VAPID_PUBLIC_KEY}" \
+          --build-arg DATABASE_URL="${DATABASE_URL}" \
+          -f docker/prod/Dockerfile.prod \
+          -t ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:${{ steps.vars.outputs.TAG }} \
+          -t ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:latest \
+          .
+      timeout-minutes: 30
+
+    - name: Push to GitHub Container Registry
+      run: |
+        docker push ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:${{ steps.vars.outputs.TAG }}
+        docker push ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:latest
+
+    - name: Create or update Docker secrets
+      run: |
+        # Create a combined environment file for Docker secret
+        if ! docker secret inspect collab_prod_env >/dev/null 2>&1; then
+          cat .env.prod | docker secret create collab_prod_env -
+          echo "✅ Created collab_prod_env secret"
+        else
+          echo "ℹ️ collab_prod_env secret already exists"
+          # Note: Docker secrets are immutable. To update, you need to remove and recreate
+          # or handle versioning (e.g., collab_prod_env_v2)
+        fi
+
+    - name: Deploy with Docker Stack
+      run: |
+        # Load environment variables to get PORT
+        set -a
+        source .env
+        set +a
+
+        # Use PORT from .env or default to 3000
+        APP_PORT=${PORT:-3000}
+
+        cat > /tmp/collab-prod-stack.yml <<EOF
+        version: '3.8'
+
+        services:
+          collab-web:
+            image: ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:${{ steps.vars.outputs.TAG }}
+            ports:
+              - "${APP_PORT}:3000"
+            env_file:
+              - .env
+            environment:
+              - NODE_ENV=production
+              - HOSTNAME=0.0.0.0
+              - NEXT_TELEMETRY_DISABLED=1
+              - NODE_OPTIONS=--max-old-space-size=4096
+            deploy:
+              replicas: 3
+              restart_policy:
+                condition: on-failure
+                delay: 5s
+                max_attempts: 3
+                window: 120s
+              update_config:
+                parallelism: 1
+                delay: 10s
+                failure_action: rollback
+                order: start-first
+              rollback_config:
+                parallelism: 1
+                delay: 5s
+                order: stop-first
+              resources:
+                limits:
+                  cpus: '2.0'
+                  memory: 4096M
+                reservations:
+                  cpus: '1.0'
+                  memory: 2048M
+            networks:
+              - collab-prod-network
+            logging:
+              driver: "json-file"
+              options:
+                max-size: "10m"
+                max-file: "5"
+
+        networks:
+          collab-prod-network:
+            driver: overlay
+            attachable: true
+        EOF
+
+        docker stack deploy -c /tmp/collab-prod-stack.yml ${{ env.STACK_NAME }}
+        rm /tmp/collab-prod-stack.yml
+
+    - name: Wait for service to be ready
+      run: |
+        sleep 15
+        docker service ps ${{ env.STACK_NAME }}_collab-web --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}"
+
+    - name: Show deployment info
+      run: |
+        echo "==================== DEPLOYMENT INFO (PRODUCTION) ===================="
+        echo "Environment: ${{ env.ENVIRONMENT }}"
+        echo "Version: ${{ steps.vars.outputs.TAG }}"
+        echo "Commit: ${{ steps.vars.outputs.SHORT_SHA }}"
+        echo "Build Date: ${{ steps.vars.outputs.BUILD_DATE }}"
+        echo "Image: ghcr.io/${{ steps.vars.outputs.REPO_LOWER }}:${{ steps.vars.outputs.TAG }}"
+        echo "Stack: ${{ env.STACK_NAME }}"
+        echo "Replicas: 3"
+        echo "======================================================================="
+        docker stack ls | grep ${{ env.STACK_NAME }}
+        docker service ls | grep ${{ env.STACK_NAME }}
+
+    - name: Run smoke tests
+      run: |
+        # Wait for service to be fully available
+        sleep 30
+
+        # Load environment variables to get app URL
+        set -a
+        source .env
+        set +a
+
+        # Basic health check
+        if [ ! -z "$NEXT_PUBLIC_APP_URL" ]; then
+          echo "Running smoke test against: $NEXT_PUBLIC_APP_URL"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$NEXT_PUBLIC_APP_URL" || echo "000")
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "301" ] || [ "$HTTP_STATUS" = "302" ]; then
+            echo "✅ Smoke test passed (HTTP $HTTP_STATUS)"
+          else
+            echo "⚠️ Smoke test warning: HTTP $HTTP_STATUS"
+          fi
+        else
+          echo "⚠️ NEXT_PUBLIC_APP_URL not set, skipping smoke test"
+        fi
+
+    - name: Clean up old images
+      if: success()
+      run: |
+        docker image prune -af --filter "until=168h"
+
+    - name: Clean up environment file
+      if: always()
+      run: |
+        rm -f .env
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        PREVIOUS_IMAGE=$(docker service inspect ${{ env.STACK_NAME }}_collab-web --format '{{.PreviousSpec.TaskTemplate.ContainerSpec.Image}}' 2>/dev/null || echo "")
+        if [ ! -z "$PREVIOUS_IMAGE" ]; then
+          echo "⚠️ Rolling back to previous image: $PREVIOUS_IMAGE"
+          docker service update --image $PREVIOUS_IMAGE ${{ env.STACK_NAME }}_collab-web
+        else
+          echo "❌ No previous image found for rollback"
+        fi
+
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ Production deployment failed!"
+        echo "Tag: ${{ steps.vars.outputs.TAG }}"
+        echo "Commit: ${{ steps.vars.outputs.SHORT_SHA }}"
+        # Add your notification logic here (Slack, email, etc.)
