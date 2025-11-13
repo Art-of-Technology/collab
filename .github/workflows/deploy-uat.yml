@@ -28,7 +28,7 @@ jobs:
 
     - name: Create .env file from secrets
       run: |
-        echo "${{ secrets.ENV_FILE_UAT }}" > .env
+        printf '%s\n' "${{ secrets.ENV_FILE_UAT }}" > .env
         echo "✅ UAT environment file created"
 
     - name: Login to GitHub Container Registry
