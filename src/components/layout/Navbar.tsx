@@ -151,7 +151,7 @@ export default function Navbar({
       case 'feature_mention':
       case 'feature_comment':
       case 'feature_vote':
-        return featureRequestId ? `/${workspaceId}/features/${featureRequestId}` : `/${workspaceId}/features`;
+        return featureRequestId ? `/features/${featureRequestId}` : `/features`;
       case 'task_mention':
       case 'task_assigned':
       case 'task_status_change':
@@ -233,8 +233,8 @@ export default function Navbar({
               currentWorkspace?.slug
                 ? `/${currentWorkspace.slug}/dashboard`
                 : currentWorkspace?.id
-                ? `/${currentWorkspace.id}/dashboard`
-                : `/dashboard`
+                  ? `/${currentWorkspace.id}/dashboard`
+                  : `/dashboard`
             }
             className="flex items-center"
           >
@@ -247,57 +247,57 @@ export default function Navbar({
           {shouldShowSearch && (
             <>
               {/* Mobile search button */}
-            <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
-                >
-                    <MagnifyingGlassIcon className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-                <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
-                <DialogHeader>
-                  <DialogTitle className="text-white">Search</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSearch} className="mt-2">
-                  <div className="relative">
-                      <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      type="search"
-                      placeholder="Search..."
-                        className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
+              <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+                <DialogTrigger asChild>
                   <Button
-                    type="submit"
-                      className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden hover:bg-[#1f1f1f] text-gray-400 hover:text-white h-8 w-8"
                   >
-                    Search
+                    <MagnifyingGlassIcon className="h-4 w-4" />
                   </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md bg-[#090909] border-[#1f1f1f]">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Search</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSearch} className="mt-2">
+                    <div className="relative">
+                      <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        type="search"
+                        placeholder="Search..."
+                        className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="mt-3 w-full bg-[#22c55e] hover:bg-[#16a34a] text-white"
+                    >
+                      Search
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
 
-          {/* Desktop search */}
+              {/* Desktop search */}
               <div className="hidden md:block w-full max-w-md">
-              <form onSubmit={handleSearch} className="relative">
-                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 flex items-center justify-center">
-                  <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
-                </div>
-                <Input
-                  type="search"
+                <form onSubmit={handleSearch} className="relative">
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 flex items-center justify-center">
+                    <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <Input
+                    type="search"
                     placeholder="Search..."
                     className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] focus:border-[#22c55e] text-white placeholder-gray-500 h-9"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </form>
-            </div>
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </form>
+              </div>
             </>
           )}
         </div>
@@ -317,17 +317,17 @@ export default function Navbar({
                         className="relative hover:bg-[#1c1c1c] text-gray-400"
                         onClick={() => refetchNotifications()}
                       >
-                    <BellIcon className="h-4 w-4" />
+                        <BellIcon className="h-4 w-4" />
                         {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
                             {unreadCount > 9 ? '9+' : unreadCount}
                           </span>
                         )}
                       </Button>
                     </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
-                  <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
-                    <h3 className="font-medium text-white">Notifications</h3>
+                    <PopoverContent className="w-80 p-0 bg-[#090909] border-[#1f1f1f]" align="end" alignOffset={-5} forceMount>
+                      <div className="flex items-center justify-between p-3 border-b border-[#1f1f1f]">
+                        <h3 className="font-medium text-white">Notifications</h3>
                         {unreadCount > 0 && (
                           <Button
                             variant="ghost"
@@ -342,11 +342,11 @@ export default function Navbar({
 
                       <ScrollArea className="h-80">
                         {notificationsLoading ? (
-                      <div className="p-4 text-center text-gray-400 text-sm">
+                          <div className="p-4 text-center text-gray-400 text-sm">
                             Loading notifications...
                           </div>
                         ) : notifications.length === 0 ? (
-                      <div className="p-4 text-center text-gray-400 text-sm">
+                          <div className="p-4 text-center text-gray-400 text-sm">
                             No notifications yet
                           </div>
                         ) : (
@@ -358,7 +358,7 @@ export default function Navbar({
                               return (
                                 <div
                                   key={notification.id}
-                              className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? 'bg-[#22c55e]/5' : ''}`}
+                                  className={`flex items-start gap-3 p-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] ${!notification.read ? 'bg-[#22c55e]/5' : ''}`}
                                   onClick={() => handleNotificationClick(notification.id, url)}
                                 >
                                   {/* Sender Avatar */}
@@ -370,7 +370,7 @@ export default function Navbar({
                                         src={notification.sender.image || undefined}
                                         alt={notification.sender.name || "User"}
                                       />
-                                  <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
+                                      <AvatarFallback className="bg-[#1f1f1f] text-white text-xs">
                                         {getInitials(notification.sender.name || "U")}
                                       </AvatarFallback>
                                     </Avatar>
@@ -379,9 +379,9 @@ export default function Navbar({
                                   {/* Notification Content */}
                                   <div className="flex-1 space-y-1">
                                     <p className="text-sm">
-                                  <span className="font-medium text-white">{notification.sender.name}</span>
+                                      <span className="font-medium text-white">{notification.sender.name}</span>
                                       {' '}
-                                  <span className="text-gray-400">
+                                      <span className="text-gray-400">
                                         {isHtmlContent ? (
                                           <MarkdownContent
                                             htmlContent={notification.content}
@@ -397,14 +397,14 @@ export default function Navbar({
                                         )}
                                       </span>
                                     </p>
-                                <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-gray-500">
                                       {formatNotificationTime(notification.createdAt)}
                                     </p>
                                   </div>
 
                                   {/* Read Indicator */}
                                   {!notification.read && (
-                                <div className="h-2 w-2 rounded-full bg-[#22c55e] mt-1.5" />
+                                    <div className="h-2 w-2 rounded-full bg-[#22c55e] mt-1.5" />
                                   )}
                                 </div>
                               );
@@ -444,8 +444,8 @@ export default function Navbar({
               </DropdownMenu>
             </>
           ) : (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="border-[#1f1f1f] hover:bg-[#1f1f1f] text-gray-300 hover:text-white h-8 px-3 text-sm"
               asChild
             >

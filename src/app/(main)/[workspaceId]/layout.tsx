@@ -14,7 +14,8 @@ import { StoryGenerationProvider } from "@/context/StoryGenerationContext";
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
   params: Promise<{
-    workspaceId: string;
+    workspaceId?: string;
+    skipWorkspaceCheck?: boolean;
   }>;
 }
 
@@ -22,51 +23,59 @@ export default async function WorkspaceLayout({
   children,
   params,
 }: WorkspaceLayoutProps) {
-  const { workspaceId } = await params;
-  
+  const { workspaceId, skipWorkspaceCheck } = await params;
+
   // Get the current user session
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     redirect("/login");
   }
-  
-    // Verify the workspace exists and user has access to it
-  // First try to find by slug, then by ID for backward compatibility
-  let workspace = await prisma.workspace.findFirst({
-    where: {
-      slug: workspaceId,
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
-    },
-  });
 
-  // If not found by slug, try by ID (for backward compatibility)
-  if (!workspace) {
+  // Only verify workspace if workspaceId is provided and skipWorkspaceCheck is false
+  let workspace = null;
+
+  if (workspaceId && !skipWorkspaceCheck) {
+    // First try to find by slug, then by ID for backward compatibility
     workspace = await prisma.workspace.findFirst({
       where: {
-        id: workspaceId,
+        slug: workspaceId,
         OR: [
           { ownerId: session.user.id },
           { members: { some: { userId: session.user.id } } }
         ]
       },
     });
+
+    // If not found by slug, try by ID (for backward compatibility)
+    if (!workspace) {
+      workspace = await prisma.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          OR: [
+            { ownerId: session.user.id },
+            { members: { some: { userId: session.user.id } } }
+          ]
+        },
+      });
+    }
   }
 
-  if (!workspace) {
+  if (!workspace && !skipWorkspaceCheck) {
     redirect("/welcome");
   }
-  
+
+  // Only pass workspaceId to providers if we have a valid workspace
+  // This prevents passing invalid workspaceIds when skipWorkspaceCheck is true
+  const validWorkspaceId = workspace?.id || undefined;
+
   return (
     <SidebarProvider>
-      <BoardGenerationProvider workspaceId={workspaceId}>
-        <TaskGenerationProvider workspaceId={workspaceId}>
-          <StoryGenerationProvider workspaceId={workspaceId}>
-            <LayoutWithSidebar 
-              pathname={`/${workspaceId}`}
+      <BoardGenerationProvider workspaceId={validWorkspaceId}>
+        <TaskGenerationProvider workspaceId={validWorkspaceId}>
+          <StoryGenerationProvider workspaceId={validWorkspaceId}>
+            <LayoutWithSidebar
+              pathname={workspaceId ? `/${workspaceId}` : "/features"}
             >
               {children}
               <BoardGenerationStatus />

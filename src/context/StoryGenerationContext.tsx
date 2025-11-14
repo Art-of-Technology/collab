@@ -17,7 +17,7 @@ export function useStoryGeneration() {
   return useContext(StoryGenerationContext);
 }
 
-export function StoryGenerationProvider({ workspaceId, children }: { workspaceId: string, children: ReactNode }) {
+export function StoryGenerationProvider({ workspaceId, children }: { workspaceId?: string, children: ReactNode }) {
   const [jobs, setJobs] = useState<JobStatus[]>([]);
 
   const fetchJobs = async () => {
