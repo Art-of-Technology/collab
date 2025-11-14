@@ -392,6 +392,7 @@ export default function ViewRenderer({
     setCurrentUser(currentUser);
   }, [view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser]);
 
+
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
 
@@ -429,23 +430,31 @@ export default function ViewRenderer({
   // Sync dropdown assignees to View Options for bidirectional sync
   // Only sync when dropdown changes (not when View Options changes to avoid loops)
   const isSyncingFromViewOptionsRef = useRef(false);
+  const previousDropdownAssigneesRef = useRef<string[]>([]);
   
   useEffect(() => {
-    if (isSyncingFromViewOptionsRef.current) {
-      isSyncingFromViewOptionsRef.current = false;
-      return;
-    }
-    
     const dropdownAssignees = allFilters.assignee || [];
     const currentViewAssignees = viewFiltersState.assignees || [];
     
-    if (JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...currentViewAssignees].sort())) {
+    // Only sync if dropdown actually changed (not when View Options changes)
+    const dropdownChanged = JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...previousDropdownAssigneesRef.current].sort());
+    
+    if (isSyncingFromViewOptionsRef.current) {
+      isSyncingFromViewOptionsRef.current = false;
+      previousDropdownAssigneesRef.current = dropdownAssignees;
+      return;
+    }
+    
+    // Only sync if dropdown changed, not when View Options changed
+    if (dropdownChanged && JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...currentViewAssignees].sort())) {
       setViewFiltersState({
         ...viewFiltersState,
         assignees: dropdownAssignees
       });
     }
-  }, [allFilters.assignee, setViewFiltersState, viewFiltersState]);
+    
+    previousDropdownAssigneesRef.current = dropdownAssignees;
+  }, [allFilters.assignee, setViewFiltersState]);
 
   // Callback for View Options to update dropdown filter
   const handleViewOptionsAssigneeChange = useCallback((assignees: unknown) => {
@@ -461,9 +470,9 @@ export default function ViewRenderer({
     
     // Ensure assignees is an array
     const assigneesArray = Array.isArray(assignees) ? assignees : [];
+    isSyncingFromViewOptionsRef.current = true;
     
     if (handleFilterChangeRef.current) {
-      isSyncingFromViewOptionsRef.current = true;
       const viewAssignees = view.filters?.assignee || [];
       const sortedNewAssignees = [...assigneesArray].sort();
       const sortedViewAssignees = [...viewAssignees].sort();
@@ -692,10 +701,10 @@ export default function ViewRenderer({
     tempProjectIds.length
   ]);
 
-  // Update issues in context after filteredIssues is calculated (for accurate counts)
+  // Update issues in context with allIssues (unfiltered) so ViewFilters shows all options
   useEffect(() => {
-    setIssues(filteredIssues);
-  }, [filteredIssues, setIssues]);
+    setIssues(allIssues);
+  }, [allIssues, setIssues]);
 
   const handleUpdateView = async () => {
     try {

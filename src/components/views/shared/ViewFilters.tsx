@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspaceMembers } from '@/hooks/queries/useWorkspaceMembers';
+import { useQuery } from '@tanstack/react-query';
+import { useProjects } from '@/hooks/queries/useProjects';
 
 export interface ViewFiltersProps {
   issues: any[];
@@ -83,7 +85,27 @@ export default function ViewFilters({
   // Use TanStack Query for workspace members with caching
   const { data: workspaceMembers = [], isLoading: isLoadingMembers } = useWorkspaceMembers(workspace?.id);
 
-  // No need for manual fetching anymore - using TanStack Query
+  // Fetch workspace labels
+  const { data: workspaceLabels = [] } = useQuery({
+    queryKey: ['workspace-labels', workspace?.id],
+    queryFn: async () => {
+      if (!workspace?.id) return [];
+      const response = await fetch(`/api/workspaces/${workspace.id}/labels`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch labels');
+      }
+      const data = await response.json();
+      return data.labels || [];
+    },
+    enabled: !!workspace?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch workspace projects
+  const { data: allProjects = [] } = useProjects({
+    workspaceId: workspace?.id,
+    includeStats: false,
+  });
 
   // Update editedName when view name changes
   useEffect(() => {
@@ -163,56 +185,81 @@ export default function ViewFilters({
     }
   }, [onFiltersChange, onAssigneesChangeFromViewOptions]);
 
-  // Get filter data with counts
+    // Get filter data with counts - show all options, count from issues
   const filterData = useMemo(() => {
     const assignees = new Map();
     const labels = new Map();
     const priorities = new Map();
     const projects = new Map();
     
-    // Count unassigned
+    // Initialize all assignees from workspace members
     assignees.set('unassigned', {
       id: 'unassigned',
       name: 'No assignee',
       count: 0,
       avatar: null
     });
+    workspaceMembers.forEach((member: any) => {
+      assignees.set(member.id, {
+        id: member.id,
+        name: member.name,
+        avatar: member.image,
+        count: 0
+      });
+    });
     
-    // Count no labels
+    // Initialize all labels from workspace
     labels.set('no-labels', {
       id: 'no-labels',
       name: 'No labels',
       count: 0,
       color: null
     });
-    
-    // Count no priority
-    priorities.set('no-priority', {
-      id: 'no-priority',
-      name: 'No priority',
-      count: 0
+    workspaceLabels.forEach((label: any) => {
+      labels.set(label.id, {
+        id: label.id,
+        name: label.name,
+        color: label.color,
+        count: 0
+      });
     });
     
-    // Count no project
+    // Initialize all priority options
+    const priorityOptions = [
+      { id: 'URGENT', name: 'Urgent' },
+      { id: 'HIGH', name: 'High' },
+      { id: 'MEDIUM', name: 'Medium' },
+      { id: 'LOW', name: 'Low' },
+      { id: 'no-priority', name: 'No priority' }
+    ];
+    priorityOptions.forEach(priority => {
+      priorities.set(priority.id, {
+        id: priority.id,
+        name: priority.name,
+        count: 0
+      });
+    });
+    
+    // Initialize all projects from workspace
     projects.set('no-project', {
       id: 'no-project',
       name: 'No project',
       count: 0,
       color: null
     });
+    allProjects.forEach((project: any) => {
+      projects.set(project.id, {
+        id: project.id,
+        name: project.name,
+        color: project.color,
+        count: 0
+      });
+    });
     
-    // Process all issues for accurate counts
+    // Count from issues
     issues.forEach((issue: any) => {
       // Count assignees
       const assigneeId = issue.assigneeId || 'unassigned';
-      if (!assignees.has(assigneeId) && assigneeId !== 'unassigned' && issue.assignee) {
-        assignees.set(assigneeId, {
-          id: assigneeId,
-          name: issue.assignee.name,
-          avatar: issue.assignee.image,
-          count: 0
-        });
-      }
       const assigneeData = assignees.get(assigneeId);
       if (assigneeData) {
         assigneeData.count++;
@@ -224,31 +271,15 @@ export default function ViewFilters({
         if (noLabelsData) noLabelsData.count++;
       } else {
         issue.labels.forEach((label: any) => {
-          if (!labels.has(label.id)) {
-            labels.set(label.id, {
-              id: label.id,
-              name: label.name,
-              color: label.color,
-              count: 0
-            });
-          }
           const labelData = labels.get(label.id);
-          if (labelData) labelData.count++;
+          if (labelData) {
+            labelData.count++;
+          }
         });
       }
       
       // Count priorities
       const priority = issue.priority || 'no-priority';
-      if (!priorities.has(priority) && issue.priority) {
-        priorities.set(priority, {
-          id: priority,
-          name: priority === 'URGENT' ? 'Urgent' :
-                priority === 'HIGH' ? 'High' :
-                priority === 'MEDIUM' ? 'Medium' :
-                priority === 'LOW' ? 'Low' : priority,
-          count: 0
-        });
-      }
       const priorityData = priorities.get(priority);
       if (priorityData) {
         priorityData.count++;
@@ -256,14 +287,6 @@ export default function ViewFilters({
       
       // Count projects
       const projectId = issue.project?.id || 'no-project';
-      if (!projects.has(projectId) && issue.project) {
-        projects.set(projectId, {
-          id: projectId,
-          name: issue.project.name,
-          color: issue.project.color,
-          count: 0
-        });
-      }
       const projectData = projects.get(projectId);
       if (projectData) {
         projectData.count++;
@@ -276,7 +299,7 @@ export default function ViewFilters({
       priorities: Array.from(priorities.values()).sort((a, b) => b.count - a.count),
       projects: Array.from(projects.values()).sort((a, b) => b.count - a.count)
     };
-  }, [issues]);
+  }, [issues, workspaceMembers, workspaceLabels, allProjects]);
 
   // Check if any filters are active
   const hasActiveFilters = selectedFilters.assignees.length > 0 || 
