@@ -7,8 +7,8 @@ import type { KanbanBoardProps, KanbanDropResult, KanbanDragUpdate } from "../ty
 
 const EDGE_SCROLL_THRESHOLD = 256;
 // px/sec speeds for refresh-rate independence
-const BASE_SCROLL_SPEED_PX_PER_SEC = 16;
-const EDGE_SCROLL_MAX_SPEED_PX_PER_SEC = 160;
+const BASE_SCROLL_SPEED_PX_PER_SEC = 160;
+const EDGE_SCROLL_MAX_SPEED_PX_PER_SEC = 16;
 // Tolerance for scroll boundary checks to account for floating-point precision and sub-pixel scrolling
 const SCROLL_BOUNDARY_TOLERANCE = 1;
 
@@ -157,8 +157,8 @@ function KanbanBoard({
     const deltaMs = Math.max(0, now - prev);
     autoScrollState.current.lastTs = now;
 
-    const pxPerSec = Math.min(EDGE_SCROLL_MAX_SPEED_PX_PER_SEC, Math.max(BASE_SCROLL_SPEED_PX_PER_SEC, speedPxPerSec || BASE_SCROLL_SPEED_PX_PER_SEC));
-    const scrollDelta = pxPerSec * (deltaMs / 1000) * direction;
+    const pxPerSec = Math.max(BASE_SCROLL_SPEED_PX_PER_SEC, speedPxPerSec || BASE_SCROLL_SPEED_PX_PER_SEC);
+    const scrollDelta = Math.max(EDGE_SCROLL_MAX_SPEED_PX_PER_SEC, pxPerSec * (deltaMs / 1000)) * direction;
     const previousScrollLeft = container.scrollLeft;
     container.scrollLeft = previousScrollLeft + scrollDelta;
 
