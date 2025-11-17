@@ -110,9 +110,9 @@ export function RelationItem({
         href={itemUrl}
         className="flex items-center flex-1 min-w-0"
       >
-        {/* Issue title and key section */}
+        {/* Issue title, key, and priority on same line */}
         <div className="flex-1 min-w-0 mr-3">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2">
             {/* Priority Icon */}
             {item.priority && (
               <div className="flex items-center flex-shrink-0">
@@ -121,13 +121,11 @@ export function RelationItem({
             )}
 
             {/* Issue key */}
-            <span className="text-[#8b949e] text-[10px] font-mono font-medium">
+            <span className="text-[#8b949e] text-xs font-mono font-medium flex-shrink-0">
               {item.issueKey}
             </span>
-          </div>
 
-          {/* Issue title*/}
-          <div className="flex items-center">
+            {/* Issue title */}
             <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
               {item.title}
             </span>

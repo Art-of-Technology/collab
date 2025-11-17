@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getIssuePriorityBadge } from '@/utils/issueHelpers';
 import { format } from 'date-fns';
+import { ParentIssueBadge, ParentIssueBadgeMinimal } from '@/components/issue/ParentIssueBadge';
 
 interface Issue {
   id: string;
@@ -43,6 +44,13 @@ interface Issue {
     id: string;
     name: string;
     image?: string;
+  };
+  parent?: {
+    id: string;
+    issueKey: string;
+    title: string;
+    type?: string;
+    status?: string;
   };
   project?: {
     id: string;
@@ -439,6 +447,16 @@ export default function ListViewRenderer({
             {issue.title}
           </h3>
 
+          {/* Parent Issue Badge */}
+          {issue.parent && (
+            <div className="mb-2">
+              <ParentIssueBadge
+                parent={issue.parent}
+                workspaceSlug={workspaceSegment}
+              />
+            </div>
+          )}
+
           {/* Labels */}
           {displaySettings.displayProperties.includes('Labels') && issue.labels && issue.labels.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
@@ -573,6 +591,15 @@ export default function ListViewRenderer({
               <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
                 {issue.title}
               </span>
+
+              {/* Parent Issue Badge */}
+              {issue.parent && (
+                <ParentIssueBadgeMinimal
+                  parent={issue.parent}
+                  workspaceSlug={workspaceSegment}
+                  className="ml-2 flex-shrink-0"
+                />
+              )}
             </div>
 
             {/* Labels - shown on same line in Linear style */}

@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, ArrowUp, ArrowDown, Shield, ShieldAlert, Link2, Copy } from "lucide-react";
+import { Plus, ArrowUp, ArrowDown, Shield, ShieldAlert, Link2, Copy, ChevronDown, ChevronRight } from "lucide-react";
 import type { RelationGroupProps, IssueRelationType } from "../types/relation";
 import { RelationItem } from "./RelationItem";
 import { getRelationConfig, getRelationCountText } from "../utils/relationConfig";
+import { cn } from "@/lib/utils";
 
 const RELATION_ICONS: Record<IssueRelationType, React.ComponentType<{ className?: string }>> = {
   parent: ArrowUp,
@@ -33,15 +35,17 @@ export function RelationGroup({
   workspaceId,
   onAddRelation,
   onRemoveRelation,
-  canEdit = true
+  canEdit = true,
+  showInlineCreator = false,
+  defaultExpanded = false,
 }: RelationGroupProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const config = getRelationConfig(relationType);
   const colorClass = RELATION_COLORS[relationType];
   const count = relations.length;
   const countText = getRelationCountText(relationType, count);
 
   const handleAddRelation = () => {
-    console.log('relationType', relationType);
     onAddRelation(relationType);
   };
 
@@ -49,8 +53,8 @@ export function RelationGroup({
     onRemoveRelation(relationId, relationType);
   };
 
-  // Don't render if no relations and it's a parent type (parent can be empty)
-  if (count === 0 && relationType !== 'parent') {
+  // Don't render if no relations and not showing inline creator
+  if (count === 0 && !showInlineCreator && relationType !== 'parent') {
     return null;
   }
 
@@ -81,31 +85,53 @@ export function RelationGroup({
     );
   }
 
+  // Sub-issues render without the header (handled in IssueRelationsSection)
+  if (relationType === 'child' && showInlineCreator === false) {
+    return (
+      <div className="space-y-1">
+        {relations.map((relation) => (
+          <RelationItem
+            key={relation.id}
+            item={relation}
+            workspaceId={workspaceId}
+            relationType={relationType}
+            onRemove={() => handleRemoveRelation(relation.dbId)}
+            canRemove={canEdit}
+            compact={true}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-0">
-      <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 ${colorClass} rounded-full`}></div>
-        <h4 className="text-xs font-medium text-[#ccc] uppercase tracking-wide">
-          {config.label}
-        </h4>
-        {countText && (
-          <Badge className="bg-[#333] text-[#ccc] text-xs px-1.5 py-0.5">
-            {countText}
-          </Badge>
-        )}
-        {canEdit && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-5 w-5 p-0 text-[#666] hover:text-[#ccc] transition-colors ml-auto"
-            onClick={handleAddRelation}
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
+      {/* Only show header for non-child relations or when explicitly showing inline creator */}
+      {(relationType !== 'child' || showInlineCreator) && (
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 ${colorClass} rounded-full`}></div>
+          <h4 className="text-xs font-medium text-[#ccc] uppercase tracking-wide">
+            {config.label}
+          </h4>
+          {countText && (
+            <Badge className="bg-[#333] text-[#ccc] text-xs px-1.5 py-0.5">
+              {countText}
+            </Badge>
+          )}
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0 text-[#666] hover:text-[#ccc] transition-colors ml-auto"
+              onClick={handleAddRelation}
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      )}
       
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {relations.map((relation) => (
           <RelationItem
             key={relation.id}

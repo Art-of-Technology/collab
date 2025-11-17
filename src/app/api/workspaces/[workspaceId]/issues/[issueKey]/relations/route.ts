@@ -210,12 +210,28 @@ export async function GET(
       }
     });
 
+    // Calculate progress for children (sub-issues)
+    const childrenProgress = {
+      completed: 0,
+      total: relations.children.length,
+      percentage: 0
+    };
+
+    if (relations.children.length > 0) {
+      childrenProgress.completed = relations.children.filter(child => {
+        const status = child.status?.toLowerCase();
+        return status === 'done' || status === 'completed';
+      }).length;
+      childrenProgress.percentage = Math.round((childrenProgress.completed / childrenProgress.total) * 100);
+    }
+
     return NextResponse.json({
       ...relations,
       workspace: {
         id: workspace.id,
         slug: workspace.slug
-      }
+      },
+      childrenProgress
     });
 
   } catch (error) {

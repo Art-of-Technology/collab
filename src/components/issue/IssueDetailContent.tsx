@@ -854,18 +854,19 @@ export function IssueDetailContent({
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if we're in a text input
+      const activeElement = document.activeElement as HTMLElement | null;
+      const isTextInputFocused = !!activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.isContentEditable ||
+        !!activeElement.closest('[contenteditable="true"]')
+      );
+
       if (event.metaKey || event.ctrlKey) {
         switch (event.key) {
           case 'c':
             {
-              const activeElement = document.activeElement as HTMLElement | null;
-              const isTextInputFocused = !!activeElement && (
-                activeElement.tagName === 'INPUT' ||
-                activeElement.tagName === 'TEXTAREA' ||
-                activeElement.isContentEditable ||
-                !!activeElement.closest('[contenteditable="true"]')
-              );
-
               if (!editingTitle && !isTextInputFocused) {
                 event.preventDefault();
                 handleCopyLink();
@@ -876,6 +877,27 @@ export function IssueDetailContent({
             if (editingTitle) {
               event.preventDefault();
               handleSaveTitle();
+            }
+            break;
+        }
+      }
+
+      // Single key shortcuts (only when not in text input)
+      if (!isTextInputFocused && !editingTitle) {
+        switch (event.key.toLowerCase()) {
+          case 's':
+            // Focus the Relations tab (where sub-issues are)
+            event.preventDefault();
+            const relationsTab = document.querySelector('[value="relations"]') as HTMLElement;
+            if (relationsTab) {
+              relationsTab.click();
+              // Scroll to the sub-issues section after a short delay
+              setTimeout(() => {
+                const subIssuesSection = document.querySelector('[data-sub-issues-section]') as HTMLElement;
+                if (subIssuesSection) {
+                  subIssuesSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+              }, 100);
             }
             break;
         }
