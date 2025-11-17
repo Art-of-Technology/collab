@@ -27,6 +27,7 @@ import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
 import TimelineViewRenderer from './renderers/TimelineViewRenderer';
+import PlanningViewRenderer from './renderers/PlanningViewRenderer';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
@@ -98,7 +99,8 @@ const VIEW_TYPE_ICONS = {
   CALENDAR: Calendar,
   TIMELINE: BarChart3,
   GANTT: BarChart3,
-  BOARD: Grid
+  BOARD: Grid,
+  PLANNING: Calendar
 };
 
 export default function ViewRenderer({
@@ -1080,6 +1082,8 @@ export default function ViewRenderer({
         return <TableViewRenderer {...sharedProps} />;
       case 'TIMELINE':
         return <TimelineViewRenderer {...sharedProps} />;
+      case 'PLANNING':
+        return <PlanningViewRenderer {...sharedProps} />;
       default:
         return <ListViewRenderer {...sharedProps} />;
     }
@@ -1227,7 +1231,8 @@ export default function ViewRenderer({
         }}
       />
 
-      {/* Filters and Display Controls Bar */}
+      {/* Filters and Display Controls Bar - Hidden for PLANNING view */}
+      {tempDisplayType !== 'PLANNING' && (
       <div className={cn(
         "border-b bg-[#101011] transition-colors",
         // Mobile: Glassmorphism styling
@@ -1391,6 +1396,7 @@ export default function ViewRenderer({
           </div>
         </div>
       </div>
+      )}
 
       {/* View Content */}
       <div className="flex-1 overflow-hidden relative">

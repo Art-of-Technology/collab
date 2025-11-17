@@ -189,6 +189,7 @@ export default function CreateViewModal({
       switch (newType) {
         case 'LIST': return ['Priority', 'Status', 'Assignee'];
         case 'KANBAN': return ['Assignee', 'Priority', 'Labels'];
+        case 'PLANNING': return ['Priority', 'Assignee'];
         default: return ['Priority', 'Status', 'Assignee'];
       }
     })();
@@ -305,7 +306,7 @@ export default function CreateViewModal({
           {/* Properties - Badge Selectors like NewIssueModal */}
           <div className="flex flex-wrap gap-1 mt-2 mb-6">
             <ViewTypeSelector
-              value={formData.displayType as "LIST" | "KANBAN"}
+              value={formData.displayType as "LIST" | "KANBAN" | "PLANNING"}
               onChange={handleDisplayTypeChange}
             />
             <ViewProjectSelector
@@ -313,32 +314,8 @@ export default function CreateViewModal({
               onChange={(projectIds) => setFormData(prev => ({ ...prev, projectIds }))}
               projects={projects}
             />
-            <ViewGroupingSelector
-              value={formData.grouping}
-              onChange={(grouping) => setFormData(prev => ({ ...prev, grouping }))}
-              displayType={formData.displayType}
-            />
-            <ViewDisplayPropertiesSelector
-              value={formData.displayProperties}
-              onChange={(properties) => setFormData(prev => ({ ...prev, displayProperties: properties }))}
-            />
-            <StatusSelector
-              value={formData.filters.status}
-              onChange={(status) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, status } }))}
-              projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
-            />
-            <PrioritySelector
-              value={formData.filters.priority}
-              onChange={(priority) => {
-                setFormData(prev => ({ ...prev, filters: { ...prev.filters, priority } }));
-              }}
-            />
-            <TypeSelector
-              value={formData.filters.type}
-              onChange={(type) => {
-                setFormData(prev => ({ ...prev, filters: { ...prev.filters, type } }));
-              }}
-            />
+            
+            {/* Assignee selector for all views */}
             <AssigneeSelector
               value={formData.filters.assignee}
               onChange={(assignee) => {
@@ -346,30 +323,62 @@ export default function CreateViewModal({
               }}
               assignees={workspaceMembers}
             />
-            <ReporterSelector
-              value={formData.filters.reporter}
-              onChange={(reporter) => {
-                setFormData(prev => ({ ...prev, filters: { ...prev.filters, reporter } }));
-              }}
-              reporters={workspaceMembers}
-            />
-            <LabelsSelector
-              value={formData.filters.labels}
-              onChange={(labels) => {
-                setFormData(prev => ({ ...prev, filters: { ...prev.filters, labels } }));
-              }}
-              labels={workspaceLabels}
-            />
-            <ViewUpdatedAtSelector
-              value={formData.filters.updatedAt}
-              onChange={(updatedAt) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, updatedAt } }))}
-            />
-            <ActionFiltersSelector
-              value={formData.filters.actions}
-              onChange={(actions: ActionFilter[]) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, actions } }))}
-              projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
-              workspaceMembers={workspaceMembers}
-            />
+            
+            {/* Show these only for non-PLANNING views */}
+            {formData.displayType !== 'PLANNING' && (
+              <>
+                <ViewGroupingSelector
+                  value={formData.grouping}
+                  onChange={(grouping) => setFormData(prev => ({ ...prev, grouping }))}
+                  displayType={formData.displayType}
+                />
+                <ViewDisplayPropertiesSelector
+                  value={formData.displayProperties}
+                  onChange={(properties) => setFormData(prev => ({ ...prev, displayProperties: properties }))}
+                />
+                <StatusSelector
+                  value={formData.filters.status}
+                  onChange={(status) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, status } }))}
+                  projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
+                />
+                <PrioritySelector
+                  value={formData.filters.priority}
+                  onChange={(priority) => {
+                    setFormData(prev => ({ ...prev, filters: { ...prev.filters, priority } }));
+                  }}
+                />
+                <TypeSelector
+                  value={formData.filters.type}
+                  onChange={(type) => {
+                    setFormData(prev => ({ ...prev, filters: { ...prev.filters, type } }));
+                  }}
+                />
+                <ReporterSelector
+                  value={formData.filters.reporter}
+                  onChange={(reporter) => {
+                    setFormData(prev => ({ ...prev, filters: { ...prev.filters, reporter } }));
+                  }}
+                  reporters={workspaceMembers}
+                />
+                <LabelsSelector
+                  value={formData.filters.labels}
+                  onChange={(labels) => {
+                    setFormData(prev => ({ ...prev, filters: { ...prev.filters, labels } }));
+                  }}
+                  labels={workspaceLabels}
+                />
+                <ViewUpdatedAtSelector
+                  value={formData.filters.updatedAt}
+                  onChange={(updatedAt) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, updatedAt } }))}
+                />
+                <ActionFiltersSelector
+                  value={formData.filters.actions}
+                  onChange={(actions: ActionFilter[]) => setFormData(prev => ({ ...prev, filters: { ...prev.filters, actions } }))}
+                  projectIds={formData.projectIds.length > 0 ? formData.projectIds : initialProjectIds}
+                  workspaceMembers={workspaceMembers}
+                />
+              </>
+            )}
           </div>
 
           {/* Actions */}
