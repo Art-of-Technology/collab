@@ -62,18 +62,6 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
-
-  // Update document title when issue is loaded
-  useEffect(() => {
-    if (issue?.issueKey && issue?.title) {
-      document.title = `[${issue.issueKey}] ${issue.title} - Collab by Weezboo`;
-    }
-
-    // Cleanup: restore default title when component unmounts
-    return () => {
-      document.title = 'Collab by Weezboo';
-    };
-  }, [issue]);
   
   // Fetch creator separately to avoid conflicts with other useIssueActivities calls
   useEffect(() => {
@@ -152,6 +140,14 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   }, [fetchIssue]);
 
   return (
+    <>
+      <title>
+        {issue?.issueKey && issue?.title 
+          ? `[${issue.issueKey}] ${issue.title} - Collab by Weezboo`
+          : 'Collab by Weezboo'
+        }
+      </title>
+      
     <IssueDetailContent
       issue={issue}
       error={error}
@@ -164,5 +160,6 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
       viewName={viewName || undefined}
       createdByUser={createdByUser || undefined}
     />
+    </>
   );
 }
