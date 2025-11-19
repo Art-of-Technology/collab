@@ -31,15 +31,17 @@ export function normalizeDescriptionHTML(html: string): string {
 
   // Remove multiple consecutive empty paragraphs between content
   // Replace 2+ consecutive empty paragraphs with nothing (remove them entirely)
-  normalized = normalized.replace(/(<\/p>\s*)(<p[^>]*>[\s\u00A0]*<\/p>\s*){2,}(<p[^>]*>)/gi, '$1$3');
-  normalized = normalized.replace(/(<\/p>\s*)(<p[^>]*><br\s*\/?><\/p>\s*){2,}(<p[^>]*>)/gi, '$1$3');
+  
+  //normalized = normalized.replace(/(<\/p>\s*)(<p[^>]*>[\s\u00A0]*<\/p>\s*){2,}(<p[^>]*>)/gi, '$1$3');
+  //normalized = normalized.replace(/(<\/p>\s*)(<p[^>]*><br\s*\/?><\/p>\s*){2,}(<p[^>]*>)/gi, '$1$3');
 
   // Remove single empty paragraphs between content blocks
   // This handles cases like: <p>content</p><p></p><p>more content</p>
   // But preserves: <p>content</p><p>more content</p>
   // Use capture groups to preserve attributes from the following paragraph tag
-  normalized = normalized.replace(/(<\/p>)\s*<p[^>]*>[\s\u00A0]*<\/p>\s*(<p[^>]*>)/gi, '$1$2');
-  normalized = normalized.replace(/(<\/p>)\s*<p[^>]*><br\s*\/?><\/p>\s*(<p[^>]*>)/gi, '$1$2');
+
+  //normalized = normalized.replace(/(<\/p>)\s*<p[^>]*>[\s\u00A0]*<\/p>\s*(<p[^>]*>)/gi, '$1$2');
+  //normalized = normalized.replace(/(<\/p>)\s*<p[^>]*><br\s*\/?><\/p>\s*(<p[^>]*>)/gi, '$1$2');
 
   // Final trim to remove any remaining whitespace
   normalized = normalized.trim();
