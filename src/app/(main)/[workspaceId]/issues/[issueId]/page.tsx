@@ -63,6 +63,18 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [isLoading, setIsLoading] = useState(true);
   const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
 
+  // Update document title when issue is loaded
+  useEffect(() => {
+    if (issue?.issueKey && issue?.title) {
+      document.title = `[${issue.issueKey}] ${issue.title} - Collab by Weezboo`;
+    }
+
+    // Cleanup: restore default title when component unmounts
+    return () => {
+      document.title = 'Collab by Weezboo';
+    };
+  }, [issue]);
+  
   // Fetch creator separately to avoid conflicts with other useIssueActivities calls
   useEffect(() => {
     let isMounted = true;
