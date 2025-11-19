@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useCallback } from 'react';
 import KanbanBoard from './components/KanbanBoard';
 import { useKanbanState } from './hooks/useKanbanState';
 import type { KanbanViewRendererProps } from './types';
+import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 
 export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
   projectId?: string;
@@ -19,6 +21,8 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     currentUserId,
     onIssueCreated,
   } = props;
+
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
 
   const {
     // State
@@ -48,6 +52,28 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     handleIssueKeyDown
   } = useKanbanState(props);
 
+  // Wrap handleIssueClick to open modal instead of navigating
+  const handleIssueClickWithModal = useCallback((issueIdOrKey: string, event?: MouseEvent) => {
+    // For Ctrl/Cmd+click, still open in new tab
+    if (event && (event.ctrlKey || event.metaKey)) {
+      const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
+      const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
+      const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
+      const url = workspaceSegment 
+        ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
+        : `/issues/${issueIdOrKey}${viewParams}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // For normal clicks, open modal
+    setSelectedIssueId(issueIdOrKey);
+  }, [issues, view, workspace]);
+
+  const handleCloseModal = useCallback(() => {
+    setSelectedIssueId(null);
+  }, []);
+
   return (
     <div className="h-full flex-1 bg-[#101011] overflow-hidden">
       {/* Kanban Board Container - Full height scrollable area */}
@@ -74,7 +100,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
             onDragUpdate={handleDragUpdate}
-            onIssueClick={handleIssueClick}
+            onIssueClick={handleIssueClickWithModal}
             onCreateIssue={handleCreateIssue}
             onStartCreatingIssue={handleStartCreatingIssue}
             onCancelCreatingIssue={handleCancelCreatingIssue}
@@ -85,6 +111,12 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
           )}
         </div>
       </div>
+
+      {/* Issue Detail Modal */}
+      <IssueDetailModal
+        issueId={selectedIssueId}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }
