@@ -5,9 +5,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, ArrowUp, ArrowDown, Shield, ShieldAlert, Link2, Copy } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import type { IssueRelationType } from "@/components/issue/sections/relations/types/relation";
 
 interface RelationTypeOption {
@@ -15,7 +14,6 @@ interface RelationTypeOption {
   label: string;
   description: string;
   color: string;
-  icon: React.ComponentType<{ className?: string }>;
 }
 
 const RELATION_TYPE_OPTIONS: RelationTypeOption[] = [
@@ -24,49 +22,42 @@ const RELATION_TYPE_OPTIONS: RelationTypeOption[] = [
     label: 'Sub-issue',
     description: 'Break down into smaller tasks',
     color: 'bg-green-500',
-    icon: ArrowDown
   },
   {
     value: 'parent',
     label: 'Parent',
     description: 'This issue is part of a larger issue',
     color: 'bg-blue-500',
-    icon: ArrowUp
   },
   {
     value: 'blocks',
     label: 'Blocks',
     description: 'Prevents other issues from progressing',
     color: 'bg-red-500',
-    icon: Shield
   },
   {
     value: 'blocked_by',
     label: 'Blocked by',
     description: 'Cannot progress due to other issues',
     color: 'bg-orange-500',
-    icon: ShieldAlert
   },
   {
     value: 'relates_to',
     label: 'Related',
     description: 'Loosely connected to other issues',
     color: 'bg-purple-500',
-    icon: Link2
   },
   {
     value: 'duplicates',
     label: 'Duplicates',
     description: 'Same as another issue',
     color: 'bg-gray-500',
-    icon: Copy
   },
   {
     value: 'duplicated_by',
     label: 'Duplicated by',
     description: 'Another issue is the same as this',
     color: 'bg-gray-500',
-    icon: Copy
   },
 ];
 
@@ -84,7 +75,6 @@ export function IssueRelationTypeSelector({
   className,
 }: IssueRelationTypeSelectorProps) {
   const selectedOption = RELATION_TYPE_OPTIONS.find(opt => opt.value === value);
-  const SelectedIcon = selectedOption?.icon || Link2;
 
   return (
     <Popover>
@@ -107,7 +97,6 @@ export function IssueRelationTypeSelector({
       >
         <div className="space-y-0.5">
           {RELATION_TYPE_OPTIONS.map((option) => {
-            const Icon = option.icon;
             const isSelected = option.value === value;
 
             return (

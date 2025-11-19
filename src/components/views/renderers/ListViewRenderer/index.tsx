@@ -27,7 +27,7 @@ export default function ListViewRenderer({
     // State management
     const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-    const [selectedFilters, setSelectedFilters] = useState<{
+    const [selectedFilters, _setSelectedFilters] = useState<{
         assignees: string[];
         labels: string[];
         priority: string[];
@@ -214,15 +214,6 @@ export default function ListViewRenderer({
 
     const handleCloseModal = () => {
         setSelectedIssueId(null);
-    };
-
-
-
-    // Optimized issue update to prevent infinite loops
-    const handleIssueUpdate = async (issueId: string, field: string, value: any) => {
-        if (onIssueUpdate) {
-            await onIssueUpdate(issueId, { [field]: value });
-        }
     };
 
     // List Header Component

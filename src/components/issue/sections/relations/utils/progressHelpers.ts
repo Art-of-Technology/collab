@@ -73,8 +73,8 @@ export function formatProgressText(completed: number, total: number): string {
  * Get status-based completion description
  */
 export function getProgressDescription(progress: SubIssueProgress): string {
-  const { completed, total, percentage } = progress;
-  
+  const { total, percentage } = progress;
+
   if (total === 0) return 'No sub-issues yet';
   if (percentage === 0) return 'Not started';
   if (percentage === 100) return 'All complete!';
