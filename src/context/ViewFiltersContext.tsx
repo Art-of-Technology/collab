@@ -31,7 +31,7 @@ const ViewFiltersContext = createContext<ViewFiltersContextType | undefined>(und
 
 export function ViewFiltersProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [filters, setFiltersState] = useState<ViewFiltersState>({
+  const [filters, setFilters] = useState<ViewFiltersState>({
     assignees: [],
     labels: [],
     priority: [],
@@ -43,9 +43,6 @@ export function ViewFiltersProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [onAssigneesChangeFromViewOptions, setOnAssigneesChangeFromViewOptions] = useState<((assignees: unknown) => void) | undefined>(undefined);
 
-  const setFilters = useCallback((newFilters: ViewFiltersState) => {
-    setFiltersState(newFilters);
-  }, []);
 
   const toggleOpen = () => setIsOpen(prev => !prev);
 

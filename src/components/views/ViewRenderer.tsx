@@ -469,7 +469,7 @@ export default function ViewRenderer({
     }
     
     previousDropdownAssigneesRef.current = dropdownAssignees;
-  }, [allFilters.assignee, setViewFiltersState, viewFiltersState]);
+  }, [allFilters.assignee, setViewFiltersState, viewFiltersState.assignees]);
   
   // Sync View Options → Dropdown
   useEffect(() => {
@@ -515,7 +515,7 @@ export default function ViewRenderer({
     }
     
     previousViewOptionsAssigneesRef.current = currentViewAssignees;
-  }, [viewFiltersState.assignees, view.filters?.assignee]);
+  }, [viewFiltersState.assignees, view.filters?.assignee, allFilters.assignee,setTempFilters]);
 
   // Callback for View Options to update dropdown filter
   // This is called immediately when View Options changes, but the actual sync
