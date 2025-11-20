@@ -646,11 +646,43 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   useEffect(() => {
     if (editor && value !== undefined) {
       const currentContent = editor.getHTML();
+      const normalizedCurrentContent = normalizeDescriptionHTML(currentContent);
       const normalizedValue = normalizeDescriptionHTML(value || '');
-      if (normalizedValue !== currentContent) {
+      // Only update if content actually changed (compare normalized versions)
+      if (normalizedValue !== normalizedCurrentContent) {
+        // Save cursor position before updating content
+        const { from, to } = editor.state.selection;
+        const wasFocused = editor.view.hasFocus();
+        
         // Prevent update feedback loop when syncing external value
         isExternalUpdateRef.current = true;
         editor.commands.setContent(normalizedValue);
+        
+        // Restore cursor position after content update if editor was focused
+        if (wasFocused) {
+          // Use requestAnimationFrame to ensure DOM is updated
+          requestAnimationFrame(() => {
+            try {
+              const docSize = editor.state.doc.content.size;
+              // Clamp cursor position to valid range
+              const safeFrom = Math.min(from, docSize);
+              const safeTo = Math.min(to, docSize);
+              
+              // Only restore if the position is still valid
+              if (safeFrom >= 0 && safeTo >= 0 && safeFrom <= docSize && safeTo <= docSize) {
+                editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
+                editor.commands.focus();
+              } else {
+                // Fallback: focus at the end if position is invalid
+                editor.commands.focus('end');
+              }
+            } catch (error) {
+              // If restoration fails, just focus at end
+              editor.commands.focus('end');
+            }
+          });
+        }
+        
         // Release guard after ProseMirror processes this transaction
         setTimeout(() => {
           isExternalUpdateRef.current = false;

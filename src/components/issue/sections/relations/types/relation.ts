@@ -43,6 +43,12 @@ export interface RelationItem {
     comments?: number;
     children?: number;
   };
+  // Progress tracking for items with children
+  childrenProgress?: {
+    completed: number;
+    total: number;
+    percentage: number;
+  };
 }
 
 // Grouped relations structure
@@ -57,6 +63,12 @@ export interface IssueRelations {
   workspace?: {
     id: string;
     slug: string;
+  };
+  // Progress data for children
+  childrenProgress?: {
+    completed: number;
+    total: number;
+    percentage: number;
   };
 }
 
@@ -82,7 +94,7 @@ export interface IssueRelationsSectionProps {
 export interface RelationItemProps {
   item: RelationItem;
   workspaceId: string; // Can be either workspace slug or ID, URL generation handles it
-  relationType: IssueRelationType;
+  relationTypeConfig: RelationConfig;
   onRemove?: () => void;
   canRemove?: boolean;
   compact?: boolean;
@@ -95,6 +107,21 @@ export interface RelationGroupProps {
   onAddRelation: (type: IssueRelationType) => void;
   onRemoveRelation: (relationId: string, type: IssueRelationType) => void;
   canEdit?: boolean;
+  // For inline creation
+  showInlineCreator?: boolean;
+  onInlineCreate?: (issueId: string, issueKey: string) => void;
+  onLinkExisting?: (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => Promise<void>;
+  parentIssueId?: string;
+  parentIssueKey?: string;
+  projectId?: string;
+  // Progress data for children
+  progress?: {
+    completed: number;
+    total: number;
+    percentage: number;
+  };
+  // Collapsible state
+  defaultExpanded?: boolean;
 }
 
 export interface AddRelationModalProps {
@@ -119,4 +146,22 @@ export interface RelationSearchFilters {
   assignee?: string[];
   project?: string[];
   query?: string;
+}
+
+// Inline creator mode
+export type InlineCreatorMode = 'create' | 'link';
+
+// Inline creator props
+export interface InlineCreatorProps {
+  workspaceId: string;
+  projectId?: string;
+  parentIssueId?: string;
+  parentIssueKey?: string;
+  defaultRelationType?: IssueRelationType;
+  defaultAssigneeId?: string;
+  onIssueCreated?: (issueId: string, issueKey: string) => void;
+  onLinkExisting?: (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => Promise<void>;
+  onCancel?: () => void;
+  autoFocus?: boolean;
+  className?: string;
 }
