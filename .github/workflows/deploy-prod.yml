@@ -4,9 +4,8 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [released]
   workflow_dispatch:
 
 jobs:
@@ -31,13 +30,20 @@ jobs:
 
       - name: Build Docker image
         run: |
-          VERSION="${{ github.sha }}"
+          # Use the tag name as the version
+          VERSION="${{ github.ref_name }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           
-          docker build -t ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION \
-                       .
+          if [ -z "${{ secrets.DOCKER_REGISTRY_URL }}" ]; then
+            IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/collab"
+          else
+            IMAGE_NAME="${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab"
+          fi
           
-          docker tag ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:latest
+          docker build -t $IMAGE_NAME:$VERSION .
+          
+          docker tag $IMAGE_NAME:$VERSION $IMAGE_NAME:latest
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
 
       - name: Log in to Docker Registry
         uses: docker/login-action@v3
@@ -48,8 +54,8 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION
-          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:latest
+          docker push $IMAGE_NAME:$VERSION
+          docker push $IMAGE_NAME:latest
 
       - name: Check and fix network configuration
         run: |
