@@ -105,6 +105,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         heading: {
           levels: [1, 2, 3],
         },
+        codeBlock: false,
       }),
       Link.configure({
         openOnClick: false,

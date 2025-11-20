@@ -109,19 +109,7 @@ const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
     label: 'Code block',
     icon: Code,
     description: 'Capture a code snippet',
-    command: (editor: any) => {
-      // If already in code block, exit first then create new one
-      if (editor.isActive('codeBlock')) {
-        editor.chain()
-          .focus()
-          .exitCode()
-          .insertContent('<p></p>')
-          .toggleCodeBlock()
-          .run();
-      } else {
-        editor.chain().focus().toggleCodeBlock().run();
-      }
-    }
+    command: (editor: any) => editor.chain().focus().toggleCodeBlock().run()
   },
   {
     id: 'divider',
