@@ -48,5 +48,5 @@ services:
 
 networks:
   collab_default:
-    external: true
-    name: collab_default
+    driver: overlay
+    attachable: true
