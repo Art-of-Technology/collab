@@ -459,6 +459,10 @@ textarea::selection {
 .kanban-horizontal-scroll {
   scrollbar-width: thin;
   scrollbar-color: #374151 #1f1f1f;
+  /* Improve scroll stability; avoid constraints that can disrupt DnD sensors */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+  will-change: scroll-position;
 }
 
 .kanban-horizontal-scroll::-webkit-scrollbar {
@@ -481,14 +485,10 @@ textarea::selection {
   background-color: #4b5563;
 }
 
-/* Kanban Column Scroll - Completely hidden scrollbars */
-.kanban-column-scroll {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
-}
-
-.kanban-column-scroll::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+/* Column container containment to reduce reflow/repaint impact */
+.kanban-column-container {
+  /* Avoid paint containment to prevent clipping dragged items */
+  contain: layout;
 }
 
 /* Line clamp utility for issue cards */

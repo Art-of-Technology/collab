@@ -429,16 +429,16 @@ export default function ViewRenderer({
   // Sync dropdown assignees to View Options for bidirectional sync
   // Only sync when dropdown changes (not when View Options changes to avoid loops)
   const isSyncingFromViewOptionsRef = useRef(false);
-  
+
   useEffect(() => {
     if (isSyncingFromViewOptionsRef.current) {
       isSyncingFromViewOptionsRef.current = false;
       return;
     }
-    
+
     const dropdownAssignees = allFilters.assignee || [];
     const currentViewAssignees = viewFiltersState.assignees || [];
-    
+
     if (JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...currentViewAssignees].sort())) {
       setViewFiltersState({
         ...viewFiltersState,
@@ -458,16 +458,16 @@ export default function ViewRenderer({
       console.warn('Invalid assignees passed to handleViewOptionsAssigneeChange:', assignees);
       return;
     }
-    
+
     // Ensure assignees is an array
     const assigneesArray = Array.isArray(assignees) ? assignees : [];
-    
+
     if (handleFilterChangeRef.current) {
       isSyncingFromViewOptionsRef.current = true;
       const viewAssignees = view.filters?.assignee || [];
       const sortedNewAssignees = [...assigneesArray].sort();
       const sortedViewAssignees = [...viewAssignees].sort();
-      
+
       // Always update tempFilters to match View Options selection
       if (JSON.stringify(sortedNewAssignees) !== JSON.stringify(sortedViewAssignees)) {
         handleFilterChangeRef.current('assignee', sortedNewAssignees, sortedViewAssignees);
@@ -1393,7 +1393,7 @@ export default function ViewRenderer({
       </div>
 
       {/* View Content */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 relative">
         {isLoadingAdditionalIssues && (
           <div className="absolute top-4 right-4 z-10 bg-[#0d1117] border border-[#30363d] rounded-md px-3 py-2 shadow-lg">
             <div className="flex items-center gap-2 text-[#8b949e]">
