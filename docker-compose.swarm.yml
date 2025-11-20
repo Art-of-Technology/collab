@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   collab:
-    image: ${DOCKER_REGISTRY_URL}/${DOCKER_USERNAME}/collab:${IMAGE_VERSION:-latest}
+    image: collab:${IMAGE_VERSION:-latest}
     networks:
       - collab_default
     ports:

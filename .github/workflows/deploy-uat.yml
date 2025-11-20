@@ -46,36 +46,18 @@ jobs:
           echo "$ENV_FILE" > .env
 
       - name: Build Docker image
-        env:
-          DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           
-          if [ -n "$DOCKER_REGISTRY_URL" ]; then
-            IMAGE_NAME="${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab"
-          else
-            IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/collab"
-          fi
+          docker build -t collab:$VERSION .
           
-          docker build -t $IMAGE_NAME:$VERSION .
-          
-          docker tag $IMAGE_NAME:$VERSION $IMAGE_NAME:uat-latest
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          # Also tag as uat-latest
+          docker tag collab:$VERSION collab:uat-latest
 
-      - name: Log in to Docker Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Push Docker image
+      - name: Prune old Docker images
         run: |
-          docker push $IMAGE_NAME:$VERSION
-          docker push $IMAGE_NAME:uat-latest
-
-      - name: Check and fix network configuration
+          docker image prune -a --force --filter "until=24h" --filter "label=org.opencontainers.image.title=Collab" || true
         run: |
           NETWORK_NAME="collab_default"
           if docker network inspect $NETWORK_NAME >/dev/null 2>&1; then
@@ -97,8 +79,6 @@ jobs:
         env:
           IMAGE_VERSION: ${{ env.VERSION }}
           APP_PORT: 3004
-          DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
       - name: Wait for services to be ready
         run: |
