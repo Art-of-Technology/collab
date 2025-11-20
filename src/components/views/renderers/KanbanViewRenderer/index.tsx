@@ -14,6 +14,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
 }) {
   const {
     view,
+    issues,
     workspace,
     workspaceId,
     currentUserId,

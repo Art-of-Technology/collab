@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { IssueRelationsSectionProps, IssueRelationType, RelationItem, IssueRelations } from "./types/relation";
+import type { IssueRelationsSectionProps, IssueRelationType, RelationItem } from "./types/relation";
 import { useIssueRelations } from "./hooks/useIssueRelations";
 import { useAddMultipleRelations, useRemoveRelation } from "./hooks/useRelationMutations";
 import { hasAnyRelations } from "./utils/relationHelpers";
@@ -27,8 +27,6 @@ const RELATION_ORDER: IssueRelationType[] = [
 export function IssueRelationsSection({
   issue,
   workspaceId,
-  currentUserId,
-  onRefresh
 }: IssueRelationsSectionProps) {
   const [activeInlineCreator, setActiveInlineCreator] = useState<IssueRelationType | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<IssueRelationType>>(
@@ -37,7 +35,7 @@ export function IssueRelationsSection({
   const [isRelationsSectionExpanded, setIsRelationsSectionExpanded] = useState(true);
 
   // Data fetching
-  const { data: relations, isLoading, refetch } = useIssueRelations(workspaceId, issue?.issueKey);
+  const { data: relations, isLoading } = useIssueRelations(workspaceId, issue?.issueKey);
   
   // Mutations
   const addMultipleRelationsMutation = useAddMultipleRelations();

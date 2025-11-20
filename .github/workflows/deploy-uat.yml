@@ -1,0 +1,80 @@
+name: Deploy UAT
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - uat
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    environment: uat
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE_UAT }}" > .env
+
+      - name: Build Docker image
+        run: |
+          VERSION="uat-${{ github.sha }}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          docker build -t ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION \
+                       .
+          
+          docker tag ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:uat-latest
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:uat-latest
+
+      - name: Check and fix network configuration
+        run: |
+          NETWORK_NAME="collab_default"
+          if docker network inspect $NETWORK_NAME >/dev/null 2>&1; then
+            DRIVER=$(docker network inspect $NETWORK_NAME --format '{{.Driver}}')
+            if [ "$DRIVER" != "overlay" ]; then
+              docker stack rm collab-uat || true
+              sleep 15
+              docker network rm $NETWORK_NAME || true
+            fi
+          fi
+        continue-on-error: true
+
+      - name: Deploy to Docker Swarm
+        run: |
+          export IMAGE_VERSION=$VERSION
+          export DOMAIN_NAME="uat-collab.weez.boo" # Update with actual uat domain
+          export APP_PORT=3004
+          docker stack deploy -c docker-compose.swarm.yml collab-uat --prune
+        env:
+          IMAGE_VERSION: ${{ env.VERSION }}
+          APP_PORT: 3004
+          DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+      - name: Wait for services to be ready
+        run: |
+          sleep 30
+          docker service ps collab-uat_collab --no-trunc
