@@ -50,6 +50,9 @@ import { normalizeDescriptionHTML } from '@/utils/html-normalizer';
 
 // Import extensions
 import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ResizableVideoExtension, ImageCSSExtension } from './extensions';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { all, createLowlight } from 'lowlight';
+const lowlight = createLowlight(all);
 
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   value = '',
@@ -118,6 +121,9 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       ImageCSSExtension,
       Underline,
       Strike,
+      CodeBlockLowlight.configure({
+        lowlight: lowlight,
+      }),
       Placeholder.configure({
         placeholder,
         showOnlyWhenEditable: true,
@@ -143,7 +149,6 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         class: cn(
           "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
           "text-[#e6edf3] prose-headings:text-white prose-strong:text-white",
-          "prose-code:text-[#e6edf3] prose-code:bg-[#1a1a1a] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
           "prose-blockquote:border-l-[#444] prose-blockquote:text-[#9ca3af]",
           "prose-hr:border-[#333]",
           "prose-ul:text-[#e6edf3] prose-ol:text-[#e6edf3] prose-li:text-[#e6edf3]",
@@ -190,6 +195,88 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           // If the event was handled, return true to stop processing
           if (eventHandled || event.defaultPrevented) {
             return true;
+          }
+        }
+
+        // Handle Enter key in code blocks - exit code block when pressing Enter on empty line
+        if (event.key === 'Enter' && editor) {
+          const { state } = view;
+          const { selection } = state;
+          const { $from } = selection;
+          
+          // Check if we're in a code block
+          if ($from.parent.type.name === 'codeBlock') {
+            const codeBlockContent = $from.parent.textContent || '';
+            const cursorPosition = $from.parentOffset;
+            
+            // Get text before cursor to determine current line
+            const textBeforeCursor = codeBlockContent.slice(0, cursorPosition);
+            const lines = textBeforeCursor.split('\n');
+            const currentLine = lines[lines.length - 1] || '';
+            
+            // Check if current line is empty (no content, just whitespace)
+            // This happens when you've pressed Enter twice and are now on an empty line
+            const isEmptyLine = currentLine.trim() === '';
+            
+            // If pressing Enter on an empty line (and we have at least one previous line), exit code block
+            if (isEmptyLine && lines.length > 1) {
+              event.preventDefault();
+              
+              // Remove trailing newlines from code block content
+              const contentToKeep = textBeforeCursor.replace(/\n+$/, '');
+              
+              // Move cursor to end of code block content (before trailing newlines)
+              const currentPos = $from.pos;
+              const codeBlockStartPos = currentPos - cursorPosition;
+              const newCursorPos = codeBlockStartPos + contentToKeep.length;
+              
+              // Update code block, then insert paragraph after it
+              // First update code block content, then use insertContent to add paragraph
+              // which will automatically position cursor correctly
+              editor.chain()
+                .focus()
+                .setTextSelection(newCursorPos)
+                .command(({ tr, dispatch }) => {
+                  if (dispatch) {
+                    try {
+                      // Find code block node
+                      const codeBlockNode = tr.doc.nodeAt(codeBlockStartPos);
+                      
+                      if (codeBlockNode && codeBlockNode.type.name === 'codeBlock') {
+                        // Update code block content (remove trailing newlines)
+                        const updatedCodeBlock = state.schema.nodes.codeBlock.create(
+                          codeBlockNode.attrs,
+                          contentToKeep ? state.schema.text(contentToKeep) : undefined
+                        );
+                        
+                        const codeBlockEnd = codeBlockStartPos + codeBlockNode.nodeSize;
+                        tr.replaceWith(codeBlockStartPos, codeBlockEnd, updatedCodeBlock);
+                      }
+                    } catch (error) {
+                      // If position calculation fails, skip content update
+                    }
+                  }
+                  return true;
+                })
+                .run();
+              
+              // After code block is updated, move cursor to end and insert paragraph
+              // This ensures cursor is positioned correctly inside the paragraph
+              requestAnimationFrame(() => {
+                if (editor) {
+                  const { $from } = editor.state.selection;
+                  if ($from.parent.type.name === 'codeBlock') {
+                    const codeBlockEnd = $from.end($from.depth);
+                    editor.chain()
+                      .focus()
+                      .setTextSelection(codeBlockEnd)
+                      .insertContent('<p></p>')
+                      .run();
+                  }
+                }
+              });
+              return true;
+            }
           }
         }
 
@@ -1131,6 +1218,139 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             background-color: #ef4444;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E");
             transform: translateY(-50%) scale(1.05);
+          }
+          
+          /* Code block highlighting styles */
+          .${editorId} .ProseMirror :first-child,
+          .prose :first-child,
+          .tiptap :first-child {
+            margin-top: 0;
+          }
+          
+          .${editorId} .ProseMirror pre,
+          .prose pre,
+          .tiptap pre {
+            background: #000000;
+            border-radius: 0.5rem;
+            color: #ffffff;
+            font-family: 'JetBrainsMono', monospace;
+            margin: 1.5rem 0;
+            padding: 0.75rem 1rem;
+          }
+          
+          .${editorId} .ProseMirror pre code,
+          .prose pre code,
+          .tiptap pre code {
+            background: none;
+            color: inherit;
+            font-size: 0.8rem;
+            padding: 0;
+          }
+          
+          /* Code syntax highlighting */
+          .${editorId} .ProseMirror pre .hljs-comment,
+          .${editorId} .ProseMirror pre .hljs-quote,
+          .prose pre .hljs-comment,
+          .prose pre .hljs-quote,
+          .tiptap pre .hljs-comment,
+          .tiptap pre .hljs-quote {
+            color: #616161;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-variable,
+          .${editorId} .ProseMirror pre .hljs-template-variable,
+          .${editorId} .ProseMirror pre .hljs-attribute,
+          .${editorId} .ProseMirror pre .hljs-tag,
+          .${editorId} .ProseMirror pre .hljs-regexp,
+          .${editorId} .ProseMirror pre .hljs-link,
+          .${editorId} .ProseMirror pre .hljs-name,
+          .${editorId} .ProseMirror pre .hljs-selector-id,
+          .${editorId} .ProseMirror pre .hljs-selector-class,
+          .prose pre .hljs-variable,
+          .prose pre .hljs-template-variable,
+          .prose pre .hljs-attribute,
+          .prose pre .hljs-tag,
+          .prose pre .hljs-regexp,
+          .prose pre .hljs-link,
+          .prose pre .hljs-name,
+          .prose pre .hljs-selector-id,
+          .prose pre .hljs-selector-class,
+          .tiptap pre .hljs-variable,
+          .tiptap pre .hljs-template-variable,
+          .tiptap pre .hljs-attribute,
+          .tiptap pre .hljs-tag,
+          .tiptap pre .hljs-regexp,
+          .tiptap pre .hljs-link,
+          .tiptap pre .hljs-name,
+          .tiptap pre .hljs-selector-id,
+          .tiptap pre .hljs-selector-class {
+            color: #f98181;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-number,
+          .${editorId} .ProseMirror pre .hljs-meta,
+          .${editorId} .ProseMirror pre .hljs-built_in,
+          .${editorId} .ProseMirror pre .hljs-builtin-name,
+          .${editorId} .ProseMirror pre .hljs-literal,
+          .${editorId} .ProseMirror pre .hljs-type,
+          .${editorId} .ProseMirror pre .hljs-params,
+          .prose pre .hljs-number,
+          .prose pre .hljs-meta,
+          .prose pre .hljs-built_in,
+          .prose pre .hljs-builtin-name,
+          .prose pre .hljs-literal,
+          .prose pre .hljs-type,
+          .prose pre .hljs-params,
+          .tiptap pre .hljs-number,
+          .tiptap pre .hljs-meta,
+          .tiptap pre .hljs-built_in,
+          .tiptap pre .hljs-builtin-name,
+          .tiptap pre .hljs-literal,
+          .tiptap pre .hljs-type,
+          .tiptap pre .hljs-params {
+            color: #fbbc88;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-string,
+          .${editorId} .ProseMirror pre .hljs-symbol,
+          .${editorId} .ProseMirror pre .hljs-bullet,
+          .prose pre .hljs-string,
+          .prose pre .hljs-symbol,
+          .prose pre .hljs-bullet,
+          .tiptap pre .hljs-string,
+          .tiptap pre .hljs-symbol,
+          .tiptap pre .hljs-bullet {
+            color: #b9f18d;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-title,
+          .${editorId} .ProseMirror pre .hljs-section,
+          .prose pre .hljs-title,
+          .prose pre .hljs-section,
+          .tiptap pre .hljs-title,
+          .tiptap pre .hljs-section {
+            color: #faf594;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-keyword,
+          .${editorId} .ProseMirror pre .hljs-selector-tag,
+          .prose pre .hljs-keyword,
+          .prose pre .hljs-selector-tag,
+          .tiptap pre .hljs-keyword,
+          .tiptap pre .hljs-selector-tag {
+            color: #70cff8;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-emphasis,
+          .prose pre .hljs-emphasis,
+          .tiptap pre .hljs-emphasis {
+            font-style: italic;
+          }
+          
+          .${editorId} .ProseMirror pre .hljs-strong,
+          .prose pre .hljs-strong,
+          .tiptap pre .hljs-strong {
+            font-weight: 700;
           }
         `}</style>
 
