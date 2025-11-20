@@ -73,7 +73,8 @@ jobs:
               docker network rm $NETWORK_NAME || true
             fi
           else
-            echo "Network $NETWORK_NAME does not exist. Will be created on deploy."
+            echo "Network $NETWORK_NAME does not exist. Creating it..."
+            docker network create --driver overlay $NETWORK_NAME
           fi
         continue-on-error: true
 
