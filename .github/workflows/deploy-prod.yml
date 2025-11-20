@@ -66,9 +66,11 @@ jobs:
         run: |
           export IMAGE_VERSION=$VERSION
           export DOMAIN_NAME="collab.weez.boo" # Update with actual prod domain
+          export APP_PORT=3002
           docker stack deploy -c docker-compose.swarm.yml collab-prod --prune
         env:
           IMAGE_VERSION: ${{ env.VERSION }}
+          APP_PORT: 3002
           DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 

@@ -66,9 +66,11 @@ jobs:
         run: |
           export IMAGE_VERSION=$VERSION
           export DOMAIN_NAME="uat-collab.weez.boo" # Update with actual uat domain
+          export APP_PORT=3004
           docker stack deploy -c docker-compose.swarm.yml collab-uat --prune
         env:
           IMAGE_VERSION: ${{ env.VERSION }}
+          APP_PORT: 3004
           DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
