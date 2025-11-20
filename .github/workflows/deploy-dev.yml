@@ -92,4 +92,10 @@ jobs:
         run: |
           sleep 30
           docker service ls
-          docker service ps collab-dev_collab --no-trunc
+      - name: Show service logs
+        run: |
+          echo "=========================================="
+          echo "Service logs (last 50 lines):"
+          echo "=========================================="
+          docker service logs collab-dev_collab --tail 50
+        if: always()
