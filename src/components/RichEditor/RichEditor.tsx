@@ -252,6 +252,16 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         return false;
       },
     },
+    onCreate: ({ editor }) => {
+      if (!autofocus) return;
+
+      const hasContent = !editor.isEmpty && editor.getText().trim().length > 0;
+      if (!hasContent) return;
+
+      requestAnimationFrame(() => {
+        editor.commands.focus("end");
+      });
+    },
     onUpdate: ({ editor }) => {
       // Always compute current content
       const html = editor.getHTML();
