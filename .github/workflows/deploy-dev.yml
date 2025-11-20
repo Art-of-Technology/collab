@@ -1,0 +1,86 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    environment: development
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE_DEV }}" > .env
+
+      - name: Build Docker image
+        run: |
+          # We use the commit sha as the version for dev builds
+          VERSION="dev-${{ github.sha }}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          docker build -t ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION \
+                       --build-arg NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }} \
+                       .
+          
+          # Also tag as dev-latest
+          docker tag ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:dev-latest
+
+      - name: Log in to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:$VERSION
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab:dev-latest
+
+      - name: Prune old Docker images
+        run: |
+          docker image prune -a --force --filter "until=24h" --filter "label=org.opencontainers.image.title=Collab" || true
+
+      - name: Check and fix network configuration
+        run: |
+          NETWORK_NAME="collab_default"
+          if docker network inspect $NETWORK_NAME >/dev/null 2>&1; then
+            DRIVER=$(docker network inspect $NETWORK_NAME --format '{{.Driver}}')
+            if [ "$DRIVER" != "overlay" ]; then
+              echo "Network is using wrong driver ($DRIVER). Removing stack and network..."
+              docker stack rm collab-dev || true
+              sleep 15
+              docker network rm $NETWORK_NAME || true
+            fi
+          else
+            echo "Network $NETWORK_NAME does not exist. Will be created on deploy."
+          fi
+        continue-on-error: true
+
+      - name: Deploy to Docker Swarm
+        run: |
+          export IMAGE_VERSION=$VERSION
+          export DOMAIN_NAME="dev-collab.weez.boo" # Update with actual dev domain
+          docker stack deploy -c docker-compose.swarm.yml collab-dev --prune
+        env:
+          IMAGE_VERSION: ${{ env.VERSION }}
+          DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+      - name: Wait for services to be ready
+        run: |
+          sleep 30
+          docker service ls
+          docker service ps collab-dev_collab --no-trunc
