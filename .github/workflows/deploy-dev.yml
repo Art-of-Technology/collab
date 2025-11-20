@@ -4,19 +4,35 @@ permissions:
   contents: read
 
 on:
-  release:
-    types: [prereleased]
+  push:
+    tags:
+      - 'v*.*.*-dev*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., 1.0.0-dev.1)'
+        required: false
+        default: 'latest'
 
 jobs:
   build-and-deploy:
-    if: github.event_name == 'workflow_dispatch' || contains(github.ref_name, '-dev')
     runs-on: self-hosted
     environment: development
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,8 +49,7 @@ jobs:
         env:
           DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
         run: |
-          # Use the tag name as the version
-          VERSION="${{ github.ref_name }}"
+          VERSION="${{ steps.version.outputs.version }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           
           # Construct image name based on registry presence
