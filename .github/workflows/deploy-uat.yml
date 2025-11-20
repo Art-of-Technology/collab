@@ -1,5 +1,8 @@
 name: Deploy UAT
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:

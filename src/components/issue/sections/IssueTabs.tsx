@@ -108,7 +108,6 @@ export function IssueTabs({
               <IssueRelationsSection
                 issue={issue}
                 workspaceId={workspaceId}
-                onRefresh={onRefresh}
               />
             </TabsContent>
           )}
