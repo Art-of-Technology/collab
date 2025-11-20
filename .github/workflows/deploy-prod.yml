@@ -52,7 +52,17 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           
-          docker build -t collab:$VERSION .
+          # Extract all NEXT_PUBLIC_ variables from .env and format as --build-arg
+          BUILD_ARGS=""
+          while IFS='=' read -r key value; do
+            if [[ $key == NEXT_PUBLIC_* ]]; then
+              # Remove quotes if present
+              value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+              BUILD_ARGS="$BUILD_ARGS --build-arg $key=$value"
+            fi
+          done < .env
+
+          docker build -t collab:$VERSION $BUILD_ARGS .
           
           # Also tag as latest
           docker tag collab:$VERSION collab:latest
@@ -84,8 +94,16 @@ jobs:
         env:
           IMAGE_VERSION: ${{ env.VERSION }}
           APP_PORT: 3002
+          NODE_OPTIONS: "--max-old-space-size=2048"
 
       - name: Wait for services to be ready
         run: |
           sleep 30
           docker service ps collab-prod_collab --no-trunc
+      - name: Show service logs
+        run: |
+          echo "=========================================="
+          echo "Service logs (last 50 lines):"
+          echo "=========================================="
+          docker service logs collab-prod_collab --tail 50
+        if: always()
