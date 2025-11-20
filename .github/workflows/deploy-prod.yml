@@ -24,8 +24,10 @@ jobs:
           node-version: '22'
 
       - name: Create .env file
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE_PROD }}
         run: |
-          echo "${{ secrets.ENV_FILE_PROD }}" > .env
+          echo "$ENV_FILE" > .env
 
       - name: Build Docker image
         run: |
