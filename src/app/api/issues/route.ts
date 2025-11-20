@@ -18,12 +18,44 @@ const RELATED_ISSUE_SELECT = {
 
 // Reuse a compact include set similar to the detail route
 const LIST_INCLUDE = {
-  project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true } },
+  project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true, color: true } },
   assignee: { select: { id: true, name: true, email: true, image: true } },
   reporter: { select: { id: true, name: true, email: true, image: true } },
   labels: { select: { id: true, name: true, color: true } },
-  parent: { select: { id: true, title: true, issueKey: true, type: true } },
-  children: { select: { id: true, title: true, issueKey: true, type: true, status: true } },
+  parent: { 
+    select: { 
+      id: true, 
+      title: true, 
+      issueKey: true, 
+      type: true, 
+      status: true,
+      projectStatus: { 
+        select: { 
+          id: true, 
+          name: true, 
+          displayName: true, 
+          color: true 
+        } 
+      }
+    } 
+  },
+  children: { 
+    select: { 
+      id: true, 
+      title: true, 
+      issueKey: true, 
+      type: true, 
+      status: true,
+      projectStatus: { 
+        select: { 
+          id: true, 
+          name: true, 
+          displayName: true, 
+          color: true 
+        } 
+      }
+    } 
+  },
   column: { select: { id: true, name: true, color: true, order: true } },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
   _count: { select: { children: true, comments: true } },
@@ -144,13 +176,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify access to workspace and project
+    // Support both workspace ID and slug
     const workspace = await prisma.workspace.findFirst({
       where: {
-        id: workspaceId,
-        OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } },
-        ],
+        AND: [
+          {
+            OR: [
+              { id: workspaceId },
+              { slug: workspaceId }
+            ]
+          },
+          {
+            OR: [
+              { ownerId: session.user.id },
+              { members: { some: { userId: session.user.id } } },
+            ]
+          }
+        ]
       },
     });
     if (!workspace) {
@@ -158,7 +200,7 @@ export async function POST(request: NextRequest) {
     }
 
     const project = await prisma.project.findFirst({
-      where: { id: projectId, workspaceId },
+      where: { id: projectId, workspaceId: workspace.id },
     });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -249,7 +291,7 @@ export async function POST(request: NextRequest) {
           status: status || undefined,
           priority,
           projectId,
-          workspaceId,
+          workspaceId: workspace.id,
           assigneeId: assigneeId || null,
           reporterId: reporterId || session.user.id,
           issueKey,
@@ -304,16 +346,27 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // If this is a sub-issue (has a parent), create the PARENT relation
+      if (parentId) {
+        await tx.issueRelation.create({
+          data: {
+            sourceIssueId: newIssue.id,
+            targetIssueId: parentId,
+            relationType: 'PARENT',
+          },
+        });
+      }
+
       return newIssue;
     });
 
     // Track creation as activity
-    await trackCreation('ISSUE', created.id, session.user.id, workspaceId, undefined, created);
+    await trackCreation('ISSUE', created.id, session.user.id, workspace.id, undefined, created);
 
     // Publish realtime creation event
-    await publishEvent(`workspace:${workspaceId}:events`, {
+    await publishEvent(`workspace:${workspace.id}:events`, {
       type: 'issue.created',
-      workspaceId,
+      workspaceId: workspace.id,
       projectId: created.projectId,
       issueId: created.id,
       issueKey: created.issueKey,

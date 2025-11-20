@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  collab:
+    image: collab:${IMAGE_VERSION:-latest}
+    networks:
+      - collab_default
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file:
+      - .env
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.collab.rule=Host(`${DOMAIN_NAME}`)"
+        - "traefik.http.routers.collab.entrypoints=websecure"
+        - "traefik.http.routers.collab.tls=true"
+        - "traefik.http.routers.collab.tls.certresolver=letsencrypt"
+        - "traefik.http.services.collab.loadbalancer.server.port=3000"
+        # Health check
+        - "traefik.http.services.collab.loadbalancer.healthcheck.path=/api/health"
+        - "traefik.http.services.collab.loadbalancer.healthcheck.interval=30s"
+        - "traefik.http.services.collab.loadbalancer.healthcheck.timeout=3s"
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+networks:
+  collab_default:
+    external: true
+    name: collab_default

@@ -1,0 +1,109 @@
+name: Deploy Prod
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '!v*.*.*-dev*'
+      - '!v*.*.*-rc*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., 1.0.0)'
+        required: false
+        default: 'latest'
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Create .env file
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE_PROD }}
+        run: |
+          echo "$ENV_FILE" > .env
+
+      - name: Build Docker image
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          # Extract all NEXT_PUBLIC_ variables from .env and format as --build-arg
+          BUILD_ARGS=""
+          while IFS='=' read -r key value; do
+            if [[ $key == NEXT_PUBLIC_* ]]; then
+              # Remove quotes if present
+              value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+              BUILD_ARGS="$BUILD_ARGS --build-arg $key=$value"
+            fi
+          done < .env
+
+          docker build -t collab:$VERSION $BUILD_ARGS .
+          
+          # Also tag as latest
+          docker tag collab:$VERSION collab:latest
+
+      - name: Prune old Docker images
+        run: |
+          docker image prune -a --force --filter "until=24h" --filter "label=org.opencontainers.image.title=Collab" || true
+        run: |
+          NETWORK_NAME="collab_default"
+          if docker network inspect $NETWORK_NAME >/dev/null 2>&1; then
+            DRIVER=$(docker network inspect $NETWORK_NAME --format '{{.Driver}}')
+            if [ "$DRIVER" != "overlay" ]; then
+              docker stack rm collab-prod || true
+              sleep 15
+              docker network rm $NETWORK_NAME || true
+            fi
+          else
+            echo "Network $NETWORK_NAME does not exist. Creating it..."
+            docker network create --driver overlay $NETWORK_NAME
+          fi
+        continue-on-error: true
+
+      - name: Deploy to Docker Swarm
+        run: |
+          export IMAGE_VERSION=$VERSION
+          export DOMAIN_NAME="collab.weez.boo" # Update with actual prod domain
+          export APP_PORT=3002
+          docker stack deploy -c docker-compose.swarm.yml collab-prod --prune
+        env:
+          IMAGE_VERSION: ${{ env.VERSION }}
+          APP_PORT: 3002
+          NODE_OPTIONS: "--max-old-space-size=2048"
+
+      - name: Wait for services to be ready
+        run: |
+          sleep 30
+          docker service ps collab-prod_collab --no-trunc
+      - name: Show service logs
+        run: |
+          echo "=========================================="
+          echo "Service logs (last 50 lines):"
+          echo "=========================================="
+          docker service logs collab-prod_collab --tail 50
+        if: always()

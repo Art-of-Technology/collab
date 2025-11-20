@@ -26,6 +26,7 @@ import {
   RELATION_TYPE_LABELS,
   mapToIssueTypeKey
 } from '@/utils/issueRelations';
+import { ParentIssueBadgeMinimal } from '@/components/issue/ParentIssueBadge';
 
 
 const KanbanIssueCard = React.memo(({
@@ -63,11 +64,13 @@ const KanbanIssueCard = React.memo(({
   const hasRelations = relationCount > 0;
 
   const handleToggleRelations = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     event.stopPropagation();
     setAreRelationsCollapsed(prev => !prev);
   }, []);
 
   const handleRelationsPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     event.stopPropagation();
   }, []);
 
@@ -165,6 +168,17 @@ const KanbanIssueCard = React.memo(({
             <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-[#58a6ff] transition-colors">
               {issue.title}
             </h4>
+
+            {/* Parent Issue Badge */}
+            {(issue as any).parent && (
+              <div className="mt-1">
+                <ParentIssueBadgeMinimal
+                  parent={(issue as any).parent}
+                  workspaceSlug={currentWorkspace?.slug || (issue as any)?.workspaceId}
+                  asButton={true}
+                />
+              </div>
+            )}
 
             {/* All Badges Row: Labels, Project, Due Date, Story Points, Reporter - Flex Wrap */}
             <div className="flex flex-row justify-between gap-2">

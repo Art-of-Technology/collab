@@ -164,6 +164,38 @@ export function useUpdateIssue() {
       }
 
       return response.json();
+    },
+    onSuccess: (data, variables) => {
+      if (!variables.skipInvalidate) {
+        // Update the issue cache with the response
+        const updatedIssue = data.issue || data;
+        if (updatedIssue) {
+          queryClient.setQueryData(issueKeys.detail(variables.id), { issue: updatedIssue });
+          // Also update by issueKey if different
+          if (updatedIssue.issueKey && variables.id !== updatedIssue.issueKey) {
+            queryClient.setQueryData(issueKeys.detail(updatedIssue.issueKey), { issue: updatedIssue });
+          }
+        }
+        
+        // Invalidate related queries
+        queryClient.invalidateQueries({ 
+          queryKey: issueKeys.detail(variables.id),
+          refetchType: 'none' // Don't trigger refetch, just mark as stale
+        });
+        
+        // Invalidate workspace and project queries
+        if (updatedIssue.workspaceId) {
+          queryClient.invalidateQueries({ 
+            predicate: (query) => 
+              query.queryKey[0] === 'issues' && 
+              query.queryKey[1] === 'workspace' && 
+              query.queryKey[2] === updatedIssue.workspaceId
+          });
+        }
+        if (updatedIssue.projectId) {
+          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(updatedIssue.projectId) });
+        }
+      }
     }
   });
 }
