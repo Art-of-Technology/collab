@@ -33,6 +33,10 @@ interface PageHeaderProps {
   className?: string;
   // Whether to show border at the bottom
   showBorder?: boolean;
+  // Whether to disable backdrop blur (useful for modals)
+  disableBlur?: boolean;
+  // Whether to make the header sticky (useful for modals)
+  sticky?: boolean;
 }
 
 export default function PageHeader({
@@ -44,13 +48,20 @@ export default function PageHeader({
   actions,
   rightContent,
   className,
-  showBorder = true
+  showBorder = true,
+  disableBlur = false,
+  sticky = false
 }: PageHeaderProps) {
+  // Determine if blur should be disabled (when disableBlur is true OR when sticky is true)
+  const shouldDisableBlur = disableBlur || sticky;
+  
   return (
     <div className={cn(
-      // Base styling with glassmorphism
-      "backdrop-blur-xl border-white/10",
-      "bg-black/40 md:bg-[#101011]", // Glassmorphism on mobile, solid on desktop
+      // Base styling with glassmorphism (disabled if shouldDisableBlur is true)
+      !shouldDisableBlur && "backdrop-blur-xl border-white/10",
+      shouldDisableBlur && "border-white/10",
+      // Background: use solid when sticky or disableBlur, otherwise glassmorphism
+      shouldDisableBlur ? "bg-[#101011]" : "bg-black/40 md:bg-[#101011]",
 
       // Responsive padding and spacing
       "px-4 py-3 md:px-6 md:py-2",
@@ -60,10 +71,17 @@ export default function PageHeader({
 
       // Mobile-specific styling
       "max-md:sticky max-md:top-0 max-md:z-40 max-md:shadow-lg",
+      
+      // Sticky styling (for modal mode)
+      sticky && "sticky top-0 z-50 shadow-lg",
 
       className
     )}
-      style={{
+      style={shouldDisableBlur ? {
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+        backgroundColor: '#101011',
+      } : {
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
       }}

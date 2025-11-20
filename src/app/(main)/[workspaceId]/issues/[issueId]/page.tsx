@@ -62,7 +62,7 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
-
+  
   // Fetch creator separately to avoid conflicts with other useIssueActivities calls
   useEffect(() => {
     let isMounted = true;
@@ -140,6 +140,14 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   }, [fetchIssue]);
 
   return (
+    <>
+      <title>
+        {issue?.issueKey && issue?.title 
+          ? `[${issue.issueKey}] ${issue.title} - Collab by Weezboo`
+          : 'Collab by Weezboo'
+        }
+      </title>
+      
     <IssueDetailContent
       issue={issue}
       error={error}
@@ -152,5 +160,6 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
       viewName={viewName || undefined}
       createdByUser={createdByUser || undefined}
     />
+    </>
   );
 }
