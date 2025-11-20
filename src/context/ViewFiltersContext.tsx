@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 interface ViewFiltersState {
   assignees: string[];
@@ -42,6 +42,7 @@ export function ViewFiltersProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [onAssigneesChangeFromViewOptions, setOnAssigneesChangeFromViewOptions] = useState<((assignees: unknown) => void) | undefined>(undefined);
+
 
   const toggleOpen = () => setIsOpen(prev => !prev);
 

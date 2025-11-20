@@ -25,11 +25,20 @@ export async function POST(
       );
     }
 
-    // Resolve workspace by ID
+    // Resolve workspace by ID or slug
     const workspace = await prisma.workspace.findFirst({
       where: {
-        id: workspaceId,
-        members: { some: { userId: session.user.id } }
+        AND: [
+          {
+            OR: [{ id: workspaceId }, { slug: workspaceId }]
+          },
+          {
+            OR: [
+              { ownerId: session.user.id },
+              { members: { some: { userId: session.user.id } } }
+            ]
+          }
+        ]
       }
     });
 
@@ -54,8 +63,11 @@ export async function POST(
     }
 
     // Validate all target issues exist and user has access to their workspaces
+    // Handle both database IDs and issue keys
     const targetIssueIds = relations.map((r: any) => r.targetIssueId);
-    const targetIssues = await prisma.issue.findMany({
+    
+    // Try to find issues by ID first (most common case)
+    let targetIssues = await prisma.issue.findMany({
       where: {
         id: { in: targetIssueIds }
       },
@@ -74,6 +86,37 @@ export async function POST(
       }
     });
 
+    // If some issues weren't found by ID, they might be issue keys
+    const foundIds = new Set(targetIssues.map(issue => issue.id));
+    const notFoundIds = targetIssueIds.filter(id => !foundIds.has(id));
+    
+    if (notFoundIds.length > 0) {
+      // Try to find remaining issues by issueKey
+      const issuesByKey = await Promise.all(
+        notFoundIds.map(idOrKey => 
+          findIssueByIdOrKey(idOrKey, {
+            userId: session.user.id,
+            include: {
+              workspace: {
+                select: {
+                  id: true,
+                  name: true,
+                  ownerId: true,
+                  members: {
+                    where: { userId: session.user.id },
+                    select: { id: true }
+                  }
+                }
+              }
+            }
+          })
+        )
+      );
+      
+      // Filter out null results and add to targetIssues
+      const foundByKey = issuesByKey.filter(Boolean) as typeof targetIssues;
+      targetIssues = [...targetIssues, ...foundByKey];
+    }
 
     if (targetIssues.length !== targetIssueIds.length) {
       return NextResponse.json(
@@ -95,12 +138,25 @@ export async function POST(
       );
     }
 
+    // Create a map of original ID/key to resolved database ID
+    const idMap = new Map<string, string>();
+    targetIssues.forEach(issue => {
+      // Map both the database ID and issueKey to the database ID
+      idMap.set(issue.id, issue.id);
+      if (issue.issueKey) {
+        idMap.set(issue.issueKey, issue.id);
+      }
+    });
+
     // Create relations - normalize CHILD to PARENT with reversed direction
     const relationData = relations.map((relation: any) => {
       const providedType = String(relation.relationType || '').toUpperCase();
+      // Resolve the target issue ID (could be either database ID or issueKey)
+      const resolvedTargetId = idMap.get(relation.targetIssueId) || relation.targetIssueId;
+      
       if (providedType === 'CHILD') {
         return {
-          sourceIssueId: relation.targetIssueId,
+          sourceIssueId: resolvedTargetId,
           targetIssueId: sourceIssue.id,
           relationType: 'PARENT',
           createdBy: session.user.id
@@ -108,7 +164,7 @@ export async function POST(
       }
       return {
         sourceIssueId: sourceIssue.id,
-        targetIssueId: relation.targetIssueId,
+        targetIssueId: resolvedTargetId,
         relationType: providedType,
         createdBy: session.user.id
       };

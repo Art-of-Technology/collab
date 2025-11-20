@@ -159,7 +159,7 @@ export function CommentItem({
               <div className="space-y-2">
                 <RichEditor
                   value={editContent}
-                  onChange={setEditContent}
+                  onChange={(html) => setEditContent(html)}
                   placeholder="Edit your comment..."
                   minHeight="80px"
                   maxHeight="200px"

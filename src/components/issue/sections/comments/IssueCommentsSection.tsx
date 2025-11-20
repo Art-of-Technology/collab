@@ -8,7 +8,7 @@ import { organizeCommentsIntoTree } from "./utils/commentHelpers";
 import { CommentItem } from "./components/CommentItem";
 import { CommentForm } from "./components/CommentForm";
 import { EmptyCommentsState } from "./components/EmptyCommentsState";
-import { LoadingState } from "./components/LoadingState";
+import { CommentsSkeleton } from "./components/CommentsSkeleton";
 
 export function IssueCommentsSection({
   issueId,
@@ -38,7 +38,7 @@ export function IssueCommentsSection({
   }, []);
 
   if (isLoading) {
-    return <LoadingState />;
+    return <CommentsSkeleton />;
   }
 
   return (
