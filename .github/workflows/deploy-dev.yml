@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-deploy:
-    if: contains(github.ref, '-dev')
+    if: github.event_name == 'workflow_dispatch' || contains(github.ref_name, '-dev')
     runs-on: self-hosted
     environment: development
 
@@ -30,16 +30,18 @@ jobs:
           echo "$ENV_FILE" > .env
 
       - name: Build Docker image
+        env:
+          DOCKER_REGISTRY_URL: ${{ secrets.DOCKER_REGISTRY_URL }}
         run: |
           # Use the tag name as the version
           VERSION="${{ github.ref_name }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           
           # Construct image name based on registry presence
-          if [ -z "${{ secrets.DOCKER_REGISTRY_URL }}" ]; then
-            IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/collab"
-          else
+          if [ -n "$DOCKER_REGISTRY_URL" ]; then
             IMAGE_NAME="${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/collab"
+          else
+            IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/collab"
           fi
           
           docker build -t $IMAGE_NAME:$VERSION \
