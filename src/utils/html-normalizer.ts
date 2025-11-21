@@ -29,16 +29,10 @@ export function normalizeDescriptionHTML(html: string): string {
   normalized = normalized.replace(/(<p[^>]*>[\s\u00A0]*<\/p>\s*)+$/gi, '');
   normalized = normalized.replace(/(<p[^>]*><br\s*\/?><\/p>\s*)+$/gi, '');
 
-  // Remove multiple consecutive empty paragraphs between content
-  // Replace 2+ consecutive empty paragraphs with nothing (remove them entirely)
-  
-
-
-  // Remove single empty paragraphs between content blocks
-  // This handles cases like: <p>content</p><p></p><p>more content</p>
-  // But preserves: <p>content</p><p>more content</p>
-  // Use capture groups to preserve attributes from the following paragraph tag
-
+  // Normalize excessive empty paragraphs between content blocks
+  // Preserve 1-4 empty paragraphs (intended spacing), reduce 5+ to 4 empty paragraphs
+  normalized = normalized.replace(/(<\/p>)\s*((?:<p[^>]*>[\s\u00A0]*<\/p>\s*){5,})(<p[^>]*>)/gi, '$1<p></p>\n<p></p>\n<p></p>\n<p></p>\n$3');
+  normalized = normalized.replace(/(<\/p>)\s*((?:<p[^>]*><br\s*\/?><\/p>\s*){5,})(<p[^>]*>)/gi, '$1<p><br></p>\n<p><br></p>\n<p><br></p>\n<p><br></p>\n$3');
 
 
   // Final trim to remove any remaining whitespace
