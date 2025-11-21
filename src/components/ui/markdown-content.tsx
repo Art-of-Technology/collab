@@ -285,7 +285,6 @@ export function MarkdownContent({ content, htmlContent, className, asSpan = fals
         !asSpan && "prose prose-sm dark:prose-invert max-w-full",
         !asSpan && "prose-headings:mt-2 prose-headings:mb-1 prose-headings:font-semibold prose-p:my-1.5",
         !asSpan && "prose-pre:bg-muted prose-pre:text-muted-foreground prose-pre:p-2 prose-pre:rounded-md",
-        !asSpan && "prose-code:text-primary prose-code:font-medium",
         !asSpan && "prose-img:my-1 prose-img:rounded-md",
         !asSpan && "prose-blockquote:border-l-2 prose-blockquote:border-primary/40 prose-blockquote:pl-4 prose-blockquote:my-1",
         className

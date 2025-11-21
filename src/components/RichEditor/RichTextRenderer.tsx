@@ -144,7 +144,6 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         className={cn(
           "prose prose-sm dark:prose-invert max-w-none",
           "text-[#e6edf3] prose-headings:text-white prose-strong:text-white",
-          "prose-code:text-[#e6edf3] prose-code:bg-[#1a1a1a] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
           "prose-blockquote:border-l-[#444] prose-blockquote:text-[#9ca3af]",
           "prose-hr:border-[#333]",
           "prose-ul:text-[#e6edf3] prose-ol:text-[#e6edf3] prose-li:text-[#e6edf3]",
@@ -233,6 +232,109 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         
         .prose img:hover {
           opacity: 0.9;
+        }
+        
+        /* Code block highlighting styles */
+        .prose :first-child,
+        .tiptap :first-child {
+          margin-top: 0;
+        }
+        
+        .prose pre,
+        .tiptap pre {
+          background: #000000;
+          border-radius: 0.5rem;
+          color: #ffffff;
+          font-family: 'JetBrainsMono', monospace;
+          margin: 1.5rem 0;
+          padding: 0.75rem 1rem;
+        }
+        
+        .prose pre code,
+        .tiptap pre code {
+          background: none;
+          color: inherit;
+          font-size: 0.8rem;
+          padding: 0;
+        }
+        
+        /* Code syntax highlighting */
+        .prose pre .hljs-comment,
+        .prose pre .hljs-quote,
+        .tiptap pre .hljs-comment,
+        .tiptap pre .hljs-quote {
+          color: #616161;
+        }
+        
+        .prose pre .hljs-variable,
+        .prose pre .hljs-template-variable,
+        .prose pre .hljs-attribute,
+        .prose pre .hljs-tag,
+        .prose pre .hljs-regexp,
+        .prose pre .hljs-link,
+        .prose pre .hljs-name,
+        .prose pre .hljs-selector-id,
+        .prose pre .hljs-selector-class,
+        .tiptap pre .hljs-variable,
+        .tiptap pre .hljs-template-variable,
+        .tiptap pre .hljs-attribute,
+        .tiptap pre .hljs-tag,
+        .tiptap pre .hljs-regexp,
+        .tiptap pre .hljs-link,
+        .tiptap pre .hljs-name,
+        .tiptap pre .hljs-selector-id,
+        .tiptap pre .hljs-selector-class {
+          color: #f98181;
+        }
+        
+        .prose pre .hljs-number,
+        .prose pre .hljs-meta,
+        .prose pre .hljs-built_in,
+        .prose pre .hljs-builtin-name,
+        .prose pre .hljs-literal,
+        .prose pre .hljs-type,
+        .prose pre .hljs-params,
+        .tiptap pre .hljs-number,
+        .tiptap pre .hljs-meta,
+        .tiptap pre .hljs-built_in,
+        .tiptap pre .hljs-builtin-name,
+        .tiptap pre .hljs-literal,
+        .tiptap pre .hljs-type,
+        .tiptap pre .hljs-params {
+          color: #fbbc88;
+        }
+        
+        .prose pre .hljs-string,
+        .prose pre .hljs-symbol,
+        .prose pre .hljs-bullet,
+        .tiptap pre .hljs-string,
+        .tiptap pre .hljs-symbol,
+        .tiptap pre .hljs-bullet {
+          color: #b9f18d;
+        }
+        
+        .prose pre .hljs-title,
+        .prose pre .hljs-section,
+        .tiptap pre .hljs-title,
+        .tiptap pre .hljs-section {
+          color: #faf594;
+        }
+        
+        .prose pre .hljs-keyword,
+        .prose pre .hljs-selector-tag,
+        .tiptap pre .hljs-keyword,
+        .tiptap pre .hljs-selector-tag {
+          color: #70cff8;
+        }
+        
+        .prose pre .hljs-emphasis,
+        .tiptap pre .hljs-emphasis {
+          font-style: italic;
+        }
+        
+        .prose pre .hljs-strong,
+        .tiptap pre .hljs-strong {
+          font-weight: 700;
         }
       `}</style>
     </>

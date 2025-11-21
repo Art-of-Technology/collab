@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Trash2, MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -9,20 +10,21 @@ import { NoteCommentsList } from "@/components/notes/NoteCommentsList";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
-export default function NoteDetailPage({ params }: { params: { workspaceId: string; id: string } }) {
+export default function NoteDetailPage({ params }: { params: Promise<{ workspaceId: string; id: string }> }) {
+  const resolvedParams = use(params);
   const { toast } = useToast();
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
 
   const handleDelete = async () => {
-    if (!params.id) return;
+    if (!resolvedParams.id) return;
 
     if (!confirm("Are you sure you want to delete this note?")) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/notes/${params.id}`, {
+      const response = await fetch(`/api/notes/${resolvedParams.id}`, {
         method: "DELETE",
       });
 
@@ -35,7 +37,7 @@ export default function NoteDetailPage({ params }: { params: { workspaceId: stri
         description: "Note deleted successfully",
       });
 
-      router.push(`/${params.workspaceId}/notes`);
+      router.push(`/${resolvedParams.workspaceId}/notes`);
     } catch (error) {
       console.error("Error deleting note:", error);
       toast({
@@ -51,7 +53,7 @@ export default function NoteDetailPage({ params }: { params: { workspaceId: stri
       {/* Sticky top bar - minimal */}
       <div className="sticky top-0 z-10 bg-[#101011]/95 backdrop-blur-sm border-b border-border/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
-          <Link href={`/${params.workspaceId}/notes`}>
+          <Link href={`/${resolvedParams.workspaceId}/notes`}>
             <Button
               variant="ghost"
               size="sm"
@@ -76,10 +78,10 @@ export default function NoteDetailPage({ params }: { params: { workspaceId: stri
 
       {/* Main content - always in edit mode */}
       <div className="max-w-6xl mx-auto px-8 py-4">
-        {currentWorkspace?.id && params.id ? (
+        {currentWorkspace?.id && resolvedParams.id ? (
           <NoteFormEditor
             mode="edit"
-            noteId={params.id}
+            noteId={resolvedParams.id}
             workspaceId={currentWorkspace.id}
             showCancelButton={false}
           />
@@ -90,13 +92,13 @@ export default function NoteDetailPage({ params }: { params: { workspaceId: stri
         )}
 
         {/* Comments section */}
-        {params.id && (
+        {resolvedParams.id && (
           <div className=" bg-black/40 rounded-sm mt-12 p-8 gap-4 border-t border-border/20">
             <div className="flex items-center gap-2 mb-4">
               <MessageSquare className="h-4 w-4 text-muted-foreground/60" />
               <h3 className="m-0 text-sm font-semibold text-foreground/80">Comments</h3>
             </div>
-            <NoteCommentsList noteId={params.id} />
+            <NoteCommentsList noteId={resolvedParams.id} />
           </div>
         )}
       </div>
