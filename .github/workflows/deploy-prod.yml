@@ -70,6 +70,8 @@ jobs:
       - name: Prune old Docker images
         run: |
           docker image prune -a --force --filter "until=24h" --filter "label=org.opencontainers.image.title=Collab" || true
+
+      - name: Check and fix network configuration
         run: |
           NETWORK_NAME="collab_default"
           if docker network inspect $NETWORK_NAME >/dev/null 2>&1; then
