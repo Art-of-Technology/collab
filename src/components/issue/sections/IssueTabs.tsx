@@ -15,6 +15,7 @@ interface IssueTabsProps {
   currentUserId: string;
   workspaceId: string;
   onRefresh: () => void;
+  mode?: 'modal' | 'page';
 }
 
 export function IssueTabs({
@@ -23,6 +24,7 @@ export function IssueTabs({
   currentUserId,
   workspaceId,
   onRefresh,
+  mode,
 }: IssueTabsProps) {
   // Determine which tabs to show based on issue type and settings
   // Always show the Time tab; the inner content will display an informative
@@ -43,8 +45,8 @@ export function IssueTabs({
   // Default tab based on what's available
   const defaultTab = showRelations ? "relations" :
     showGitHub ? "github" :
-    showSessions ? "sessions" :
-      showHelpers ? "helpers" : "activity";
+      showSessions ? "sessions" :
+        showHelpers ? "helpers" : "activity";
 
   return (
     <div className="mt-6">
@@ -108,6 +110,7 @@ export function IssueTabs({
               <IssueRelationsSection
                 issue={issue}
                 workspaceId={workspaceId}
+                mode={mode}
               />
             </TabsContent>
           )}

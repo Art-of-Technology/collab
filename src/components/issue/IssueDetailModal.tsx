@@ -2,22 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { ExternalLink, X } from "lucide-react";
-import Link from "next/link";
 import { IssueDetailContent } from "./IssueDetailContent";
 import { IssueDetailSkeleton } from "./IssueDetailSkeleton";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useIssue } from "@/hooks/queries/useIssues";
-import type { Issue, IssueModalProps } from "@/types/issue";
+import type { IssueModalProps } from "@/types/issue";
+import { useIssueModalUrlState } from "@/hooks/useIssueModalUrlState";
 
 export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
   const { currentWorkspace } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
-  
+  const { parentIssueInfo } = useIssueModalUrlState();
+
   // Use React Query to fetch issue data
   const { data: issueData, isLoading, error: queryError } = useIssue(issueId || "");
-  
+
   const issue = issueData?.issue || issueData;
   const error = queryError instanceof Error ? queryError.message : queryError ? "Failed to load issue" : null;
 
@@ -44,11 +43,11 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
 
   const handleOpenExternal = () => {
     if (!issue?.issueKey) return;
-    
-    const url = currentWorkspace?.slug 
+
+    const url = currentWorkspace?.slug
       ? `/${currentWorkspace.slug}/issues/${issue.issueKey}`
       : `/issues/${issue.issueKey}`;
-    
+
     window.open(url, '_blank');
   };
 
@@ -56,7 +55,9 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className={`
+      <DialogContent
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        className={`
         max-w-[95vw] md:max-w-[90vw] lg:max-w-[85vw] xl:max-w-[80vw]
         max-h-[95vh] min-h-[600px] h-full bg-[#0a0a0a]
         border-[#1f1f1f]
@@ -83,6 +84,7 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
               mode="modal"
               workspaceId={currentWorkspace?.slug || currentWorkspace?.id}
               issueId={issueId}
+              parentIssueInfo={parentIssueInfo}
             />
           )}
         </div>

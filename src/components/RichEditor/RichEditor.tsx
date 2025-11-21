@@ -204,33 +204,33 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           const { state } = view;
           const { selection } = state;
           const { $from } = selection;
-          
+
           // Check if we're in a code block
           if ($from.parent.type.name === 'codeBlock') {
             const codeBlockContent = $from.parent.textContent || '';
             const cursorPosition = $from.parentOffset;
-            
+
             // Get text before cursor to determine current line
             const textBeforeCursor = codeBlockContent.slice(0, cursorPosition);
             const lines = textBeforeCursor.split('\n');
             const currentLine = lines[lines.length - 1] || '';
-            
+
             // Check if current line is empty (no content, just whitespace)
             // This happens when you've pressed Enter twice and are now on an empty line
             const isEmptyLine = currentLine.trim() === '';
-            
+
             // If pressing Enter on an empty line (and we have at least one previous line), exit code block
             if (isEmptyLine && lines.length > 1) {
               event.preventDefault();
-              
+
               // Remove trailing newlines from code block content
               const contentToKeep = textBeforeCursor.replace(/\n+$/, '');
-              
+
               // Move cursor to end of code block content (before trailing newlines)
               const currentPos = $from.pos;
               const codeBlockStartPos = currentPos - cursorPosition;
               const newCursorPos = codeBlockStartPos + contentToKeep.length;
-              
+
               // Update code block, then insert paragraph after it
               // First update code block content, then use insertContent to add paragraph
               // which will automatically position cursor correctly
@@ -242,14 +242,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     try {
                       // Find code block node
                       const codeBlockNode = tr.doc.nodeAt(codeBlockStartPos);
-                      
+
                       if (codeBlockNode && codeBlockNode.type.name === 'codeBlock') {
                         // Update code block content (remove trailing newlines)
                         const updatedCodeBlock = state.schema.nodes.codeBlock.create(
                           codeBlockNode.attrs,
                           contentToKeep ? state.schema.text(contentToKeep) : undefined
                         );
-                        
+
                         const codeBlockEnd = codeBlockStartPos + codeBlockNode.nodeSize;
                         tr.replaceWith(codeBlockStartPos, codeBlockEnd, updatedCodeBlock);
                       }
@@ -260,7 +260,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                   return true;
                 })
                 .run();
-              
+
               // After code block is updated, move cursor to end and insert paragraph
               // This ensures cursor is positioned correctly inside the paragraph
               requestAnimationFrame(() => {
@@ -466,7 +466,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       }
 
       const adjustedPosition = {
-        top: Math.max(5, Math.min(position.top, editorRect.height - 200)), // Prevent vertical overflow
+        top: Math.max(5, position.top), // Prevent going above top, but allow following cursor down
         left: adjustedLeft
       };
 
@@ -751,11 +751,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         // Save cursor position before updating content
         const { from, to } = editor.state.selection;
         const wasFocused = editor.view.hasFocus();
-        
+
         // Prevent update feedback loop when syncing external value
         isExternalUpdateRef.current = true;
         editor.commands.setContent(normalizedValue);
-        
+
         // Restore cursor position after content update if editor was focused
         if (wasFocused) {
           // Use requestAnimationFrame to ensure DOM is updated
@@ -765,7 +765,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
               // Clamp cursor position to valid range
               const safeFrom = Math.min(from, docSize);
               const safeTo = Math.min(to, docSize);
-              
+
               // Only restore if the position is still valid
               if (safeFrom >= 0 && safeTo >= 0 && safeFrom <= docSize && safeTo <= docSize) {
                 editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
@@ -780,7 +780,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             }
           });
         }
-        
+
         // Release guard after ProseMirror processes this transaction
         setTimeout(() => {
           isExternalUpdateRef.current = false;

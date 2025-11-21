@@ -1,7 +1,7 @@
 // Relation types supported in the issue system
-export type IssueRelationType = 
+export type IssueRelationType =
   | 'parent'
-  | 'child' 
+  | 'child'
   | 'blocks'
   | 'blocked_by'
   | 'relates_to'
@@ -89,6 +89,7 @@ export interface IssueRelationsSectionProps {
   workspaceId: string;
   currentUserId?: string;
   onRefresh?: () => void;
+  mode?: 'modal' | 'page';
 }
 
 export interface RelationItemProps {
@@ -98,6 +99,7 @@ export interface RelationItemProps {
   onRemove?: () => void;
   canRemove?: boolean;
   compact?: boolean;
+  mode?: 'modal' | 'page';
 }
 
 export interface RelationGroupProps {
@@ -110,7 +112,7 @@ export interface RelationGroupProps {
   // For inline creation
   showInlineCreator?: boolean;
   onInlineCreate?: (issueId: string, issueKey: string) => void;
-  onLinkExisting?: (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => Promise<void>;
+  onLinkExisting?: (relations: Array<{ item: RelationItem; relationType: IssueRelationType }>) => Promise<void>;
   parentIssueId?: string;
   parentIssueKey?: string;
   projectId?: string;
@@ -122,12 +124,13 @@ export interface RelationGroupProps {
   };
   // Collapsible state
   defaultExpanded?: boolean;
+  mode?: 'modal' | 'page';
 }
 
 export interface AddRelationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => Promise<void>;
+  onAdd: (relations: Array<{ item: RelationItem; relationType: IssueRelationType }>) => Promise<void>;
   relationType: IssueRelationType | null;
   workspaceId: string;
   currentIssueId: string;
@@ -160,7 +163,7 @@ export interface InlineCreatorProps {
   defaultRelationType?: IssueRelationType;
   defaultAssigneeId?: string;
   onIssueCreated?: (issueId: string, issueKey: string) => void;
-  onLinkExisting?: (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => Promise<void>;
+  onLinkExisting?: (relations: Array<{ item: RelationItem; relationType: IssueRelationType }>) => Promise<void>;
   onCancel?: () => void;
   autoFocus?: boolean;
   className?: string;

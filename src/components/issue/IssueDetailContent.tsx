@@ -70,6 +70,7 @@ interface IssueDetailContentProps extends IssueDetailProps {
   viewSlug?: string;
   createdByUser?: IssueUser;
   mode?: "modal" | "page";
+  parentIssueInfo?: { title: string; key: string } | null;
 }
 
 export function IssueDetailContent({
@@ -84,7 +85,8 @@ export function IssueDetailContent({
   viewName,
   viewSlug,
   createdByUser,
-  mode = "page"
+  mode = "page",
+  parentIssueInfo
 }: IssueDetailContentProps) {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
@@ -142,14 +144,10 @@ export function IssueDetailContent({
         const isEditor = element.closest('.ProseMirror') || element.classList.contains('ProseMirror');
 
         if (isEditor && editorRef.current) {
-          // Focus the editor at the end instead of beginning
-          const editor = editorRef.current.getEditor();
-          if (editor) {
-            editor.commands.focus('end');
-            return;
-          }
+          // Don't force focus to end - let the editor maintain its own cursor position
+          // The editor component handles its own focus state
+          return;
         }
-
         // For other elements, use normal focus
         element.focus();
       } catch (error) {
@@ -227,14 +225,15 @@ export function IssueDetailContent({
         if (!editingTitle) {
           // If editor is available and we're restoring focus, focus at end
           if (editorRef.current) {
-            const editor = editorRef.current.getEditor();
-            if (editor) {
-              // Small delay to ensure editor is fully initialized
-              setTimeout(() => {
-                editor.commands.focus('end');
-              }, 100);
-              return;
-            }
+            // Don't force focus to end - let the editor maintain its own cursor position
+            // The editor component handles its own focus state
+            // const editor = editorRef.current.getEditor();
+            // if (editor) {
+            //   setTimeout(() => {
+            //     editor.commands.focus('end');
+            //   }, 100);
+            //   return;
+            // }
           }
           restoreFocusState();
         }
@@ -286,7 +285,8 @@ export function IssueDetailContent({
       // Restore focus after successful autosave
       Promise.resolve().then(() => {
         if (!editingTitle) {
-          restoreFocusState();
+          // Don't restore focus for editor - it handles itself
+          // restoreFocusState(); 
         }
       });
     } catch (error: any) {
@@ -303,7 +303,8 @@ export function IssueDetailContent({
       // Restore focus even on error
       Promise.resolve().then(() => {
         if (!editingTitle) {
-          restoreFocusState();
+          // Don't restore focus for editor - it handles itself
+          // restoreFocusState();
         }
       });
     }
@@ -437,12 +438,9 @@ export function IssueDetailContent({
           const isEditor = element.closest('.ProseMirror') || element.classList.contains('ProseMirror');
 
           if (isEditor && editorRef.current) {
-            // Focus the editor at the end
-            const editor = editorRef.current.getEditor();
-            if (editor) {
-              editor.commands.focus('end');
-              return;
-            }
+            // Don't force focus to end - let the editor maintain its own cursor position
+            // The editor component handles its own focus state
+            return;
           }
 
           lastFocusedElementRef.current.focus();
@@ -906,7 +904,11 @@ export function IssueDetailContent({
             className="flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] transition-colors text-sm"
           >
             <ArrowLeft className="h-3 w-3" />
-            <span>Back to {viewName || (issue?.project?.name ? `${issue.project.name}: Default` : 'Views')}</span>
+            <span>
+              {parentIssueInfo
+                ? `Back to ${parentIssueInfo.key}`
+                : `Back to ${viewName || (issue?.project?.name ? `${issue.project.name}: Default` : 'Views')}`}
+            </span>
           </button>
         }
         actions={
@@ -1069,7 +1071,7 @@ export function IssueDetailContent({
                     {issue.issueKey}
                   </Badge>
                   <div className="flex flex-row items-center gap-2 min-h-[2rem] sm:h-8">
-                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1 min-w-0 break-words">
+                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1 min-w-0 break-words" data-issue-title>
                       {issue.title}
                     </h1>
                     <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
@@ -1258,6 +1260,7 @@ export function IssueDetailContent({
                 currentUserId={workspaceId || ""} // TODO: Replace with actual current user ID
                 workspaceId={workspaceId || ""}
                 onRefresh={onRefresh}
+                mode={mode}
               />
 
               {/* Separate Comments Section - Always visible */}

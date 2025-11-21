@@ -27,6 +27,7 @@ const RELATION_ORDER: IssueRelationType[] = [
 export function IssueRelationsSection({
   issue,
   workspaceId,
+  mode,
 }: IssueRelationsSectionProps) {
   const [activeInlineCreator, setActiveInlineCreator] = useState<IssueRelationType | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<IssueRelationType>>(
@@ -36,7 +37,7 @@ export function IssueRelationsSection({
 
   // Data fetching
   const { data: relations, isLoading } = useIssueRelations(workspaceId, issue?.issueKey);
-  
+
   // Mutations
   const addMultipleRelationsMutation = useAddMultipleRelations();
   const removeRelationMutation = useRemoveRelation();
@@ -68,7 +69,7 @@ export function IssueRelationsSection({
     setActiveInlineCreator(null);
   }, []);
 
-  const handleLinkExisting = useCallback(async (relations: Array<{item: RelationItem; relationType: IssueRelationType}>) => {
+  const handleLinkExisting = useCallback(async (relations: Array<{ item: RelationItem; relationType: IssueRelationType }>) => {
     if (!issue?.issueKey || relations.length === 0) return;
 
     const relationData = relations.map(rel => ({
@@ -142,7 +143,7 @@ export function IssueRelationsSection({
               )}
             </h3>
           </button>
-          
+
           {/* Compact Progress Indicator */}
           {hasSubIssues && subIssueProgress && subIssueProgress.total > 0 && (
             <div className="flex items-center gap-2 ml-4">
@@ -179,6 +180,7 @@ export function IssueRelationsSection({
                   progress={subIssueProgress || undefined}
                   showInlineCreator={false}
                   defaultExpanded={true}
+                  mode={mode}
                 />
               </div>
             )}
@@ -245,68 +247,69 @@ export function IssueRelationsSection({
             </h3>
           </button>
         </div>
-        
+
         {isRelationsSectionExpanded && (
           <div className="pl-2">
-          {RELATION_ORDER.filter(type => type !== 'child').map((relationType) => {
-            const relationItems = relationType === 'parent' 
-              ? (relations?.parent ? [relations.parent] : [])
-              : relations?.[relationType] || [];
+            {RELATION_ORDER.filter(type => type !== 'child').map((relationType) => {
+              const relationItems = relationType === 'parent'
+                ? (relations?.parent ? [relations.parent] : [])
+                : relations?.[relationType] || [];
 
-            const hasItems = relationItems.length > 0;
+              const hasItems = relationItems.length > 0;
 
-            // Skip if no items (empty sections are hidden)
-            if (!hasItems) {
-              return null;
-            }
+              // Skip if no items (empty sections are hidden)
+              if (!hasItems) {
+                return null;
+              }
 
-            return (
-              <RelationGroup
-                key={relationType}
-                relationType={relationType}
-                relations={relationItems}
-                workspaceId={relations?.workspace?.slug || workspaceId}
-                onAddRelation={handleAddRelation}
-                onRemoveRelation={handleRemoveRelation}
-                canEdit={!removeRelationMutation.isPending}
-                showInlineCreator={false}
-                defaultExpanded={true}
+              return (
+                <RelationGroup
+                  key={relationType}
+                  relationType={relationType}
+                  relations={relationItems}
+                  workspaceId={relations?.workspace?.slug || workspaceId}
+                  onAddRelation={handleAddRelation}
+                  onRemoveRelation={handleRemoveRelation}
+                  canEdit={!removeRelationMutation.isPending}
+                  showInlineCreator={false}
+                  defaultExpanded={true}
+                  mode={mode}
+                />
+              );
+            })}
+
+            {/* No relations message - only show when no relations AND creator is not active for relations */}
+            {!hasRelations && (activeInlineCreator === null || activeInlineCreator === 'child') && (
+              <div className="text-xs text-[#6e7681] italic">
+                No relations yet
+              </div>
+            )}
+
+            {/* Inline Creator at bottom - after all relation items */}
+            {/* Show creator when any relation type is active (except 'child' which has its own section) */}
+            {activeInlineCreator !== null && activeInlineCreator !== 'child' ? (
+              <InlineIssueCreator
+                workspaceId={workspaceId}
+                projectId={issue?.projectId}
+                parentIssueId={issue?.id}
+                parentIssueKey={issue?.issueKey}
+                defaultRelationType={activeInlineCreator}
+                defaultAssigneeId={issue?.assigneeId}
+                onLinkExisting={handleLinkExisting}
+                onCancel={handleCancelInlineCreator}
+                autoFocus={true}
               />
-            );
-          })}
-
-          {/* No relations message - only show when no relations AND creator is not active for relations */}
-          {!hasRelations && (activeInlineCreator === null || activeInlineCreator === 'child') && (
-            <div className="text-xs text-[#6e7681] italic">
-              No relations yet
-            </div>
-          )}
-
-          {/* Inline Creator at bottom - after all relation items */}
-          {/* Show creator when any relation type is active (except 'child' which has its own section) */}
-          {activeInlineCreator !== null && activeInlineCreator !== 'child' ? (
-            <InlineIssueCreator
-              workspaceId={workspaceId}
-              projectId={issue?.projectId}
-              parentIssueId={issue?.id}
-              parentIssueKey={issue?.issueKey}
-              defaultRelationType={activeInlineCreator}
-              defaultAssigneeId={issue?.assigneeId}
-              onLinkExisting={handleLinkExisting}
-              onCancel={handleCancelInlineCreator}
-              autoFocus={true}
-            />
-          ) : activeInlineCreator === null || activeInlineCreator === 'child' ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleAddRelation('relates_to')}
-              className="h-7 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a] border border-transparent hover:border-[#333] transition-all w-full justify-start"
-            >
-              <span className="text-lg mr-2 leading-none">+</span>
-              Add relation
-            </Button>
-          ) : null}
+            ) : activeInlineCreator === null || activeInlineCreator === 'child' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleAddRelation('relates_to')}
+                className="h-7 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a] border border-transparent hover:border-[#333] transition-all w-full justify-start"
+              >
+                <span className="text-lg mr-2 leading-none">+</span>
+                Add relation
+              </Button>
+            ) : null}
           </div>
         )}
       </div>

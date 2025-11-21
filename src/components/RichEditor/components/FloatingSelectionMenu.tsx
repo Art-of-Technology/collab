@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -17,6 +17,8 @@ import {
   WandSparkles,
   Loader2,
   GitBranch,
+  FileCode,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +39,27 @@ export function FloatingSelectionMenu({
   onCreateSubIssue,
   isImproving = false,
 }: FloatingSelectionMenuProps) {
+  const setLink = useCallback(() => {
+    if (!editor) return;
+
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt('URL', previousUrl);
+
+    // cancelled
+    if (url === null) {
+      return;
+    }
+
+    // empty
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+
+    // update
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  }, [editor]);
+
   if (!isVisible || !editor) return null;
 
   // Render in a portal to avoid clipping by overflow-hidden ancestors
@@ -162,6 +185,54 @@ export function FloatingSelectionMenu({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">Code</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('codeBlock') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleCodeBlock().run();
+              }}
+            >
+              <FileCode className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Code Block</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
+                editor.isActive('link') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (editor.isActive('link')) {
+                  editor.chain().focus().unsetLink().run();
+                } else {
+                  setLink();
+                }
+              }}
+            >
+              <LinkIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Link</TooltipContent>
         </Tooltip>
 
         {/* Separator */}

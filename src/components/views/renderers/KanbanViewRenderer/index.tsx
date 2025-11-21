@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, type MouseEvent } from 'react';
 import KanbanBoard from './components/KanbanBoard';
 import { useKanbanState } from './hooks/useKanbanState';
 import type { KanbanViewRendererProps } from './types';
 import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
+import { useIssueModalUrlState } from '@/hooks/useIssueModalUrlState';
 
 export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
   projectId?: string;
@@ -21,7 +22,12 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     onIssueCreated,
   } = props;
 
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const {
+    selectedIssueId,
+    setSelectedIssueId,
+    closeModal: handleCloseModal
+  } = useIssueModalUrlState();
+
   const groupField = useMemo(() => view.grouping?.field || 'status', [view.grouping?.field]);
   const projects = useMemo(() => view.projects ?? [], [view.projects]);
   const resolvedWorkspaceId = useMemo(() => workspaceId || workspace?.id || '', [workspaceId, workspace]);
@@ -46,7 +52,6 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
     handleDragStart,
     handleDragUpdate,
     handleDragEnd,
-    handleIssueClick,
     handleStartCreatingIssue,
     handleCancelCreatingIssue
   } = useKanbanState(props);
@@ -58,7 +63,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
       const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
       const workspaceSegment = (workspace as any)?.slug || (workspace as any)?.id || sampleIssue?.workspaceId || (view as any)?.workspaceId;
       const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
-      const url = workspaceSegment 
+      const url = workspaceSegment
         ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
         : `/issues/${issueIdOrKey}${viewParams}`;
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -67,11 +72,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
 
     // For normal clicks, open modal
     setSelectedIssueId(issueIdOrKey);
-  }, [issues, view, workspace]);
-
-  const handleCloseModal = useCallback(() => {
-    setSelectedIssueId(null);
-  }, []);
+  }, [issues, view, workspace, setSelectedIssueId]);
 
   return (
     <div className="h-full flex-1 bg-[#101011]">
