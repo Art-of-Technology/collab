@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useLayoutEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,31 +15,18 @@ import {
   MessageSquare,
   Copy,
   Trash2,
-  Clock,
   ArrowLeft,
-  Play,
-  Pause,
-  StopCircle,
   Bell,
-  BellOff
+  BellOff,
+  ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
-import { useDeleteIssue } from "@/hooks/queries/useIssues";
+import { useDeleteIssue, useUpdateIssue } from "@/hooks/queries/useIssues";
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { useSession } from "next-auth/react";
-import { useActivity } from "@/context/ActivityContext";
-import { formatLiveTime } from "@/utils/taskHelpers";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { IssueTabs } from "./sections/IssueTabs";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
@@ -60,9 +47,8 @@ import { LoadingState } from "@/components/issue/sections/activity/components/Lo
 import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 
 // Import types
-import type { IssueDetailProps, IssueFieldUpdate, IssueUser, PlayTime } from "@/types/issue";
+import type { IssueDetailProps, IssueFieldUpdate, IssueUser } from "@/types/issue";
 
-type PlayState = "playing" | "paused" | "stopped";
 
 // Helper function for getting type color (still used for the type indicator dot)
 const getTypeColor = (type: string) => {
@@ -83,6 +69,8 @@ interface IssueDetailContentProps extends IssueDetailProps {
   viewName?: string;
   viewSlug?: string;
   createdByUser?: IssueUser;
+  mode?: "modal" | "page";
+  parentIssueInfo?: { title: string; key: string } | null;
 }
 
 export function IssueDetailContent({
@@ -96,10 +84,14 @@ export function IssueDetailContent({
   issueId,
   viewName,
   viewSlug,
-  createdByUser
+  createdByUser,
+  mode = "page",
+  parentIssueInfo
 }: IssueDetailContentProps) {
   const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
   const deleteIssueMutation = useDeleteIssue();
+  const updateIssueMutation = useUpdateIssue();
   const [isUpdating, setIsUpdating] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
@@ -113,17 +105,10 @@ export function IssueDetailContent({
   const [labels, setLabels] = useState<any[]>([]);
   const { toast } = useToast();
 
-  // Session and activity hooks
+  // Session hooks
   const { data: session } = useSession();
-  const { userStatus, handleTaskAction } = useActivity();
   const currentUserId = session?.user?.id;
 
-  // Time tracking state
-  const [totalPlayTime, setTotalPlayTime] = useState<PlayTime | null>(null);
-  const [isTimerLoading, setIsTimerLoading] = useState(false);
-  const [isLoadingPlayTime, setIsLoadingPlayTime] = useState(false);
-  const [liveTimeDisplay, setLiveTimeDisplay] = useState<string | null>(null);
-  const [showHelperModal, setShowHelperModal] = useState(false);
 
   // Follow state
   const [isFollowingIssue, setIsFollowingIssue] = useState(false);
@@ -141,12 +126,6 @@ export function IssueDetailContent({
   // History modal state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // Time tracking utilities
-  const canControlTimer = useMemo(() => {
-    if (!issue || !currentUserId) return false;
-    // Allow assignee, reporter, or any user to control their own timer
-    return true;
-  }, [issue, currentUserId]);
 
   // Focus management utilities
   const saveFocusState = useCallback(() => {
@@ -159,7 +138,18 @@ export function IssueDetailContent({
   const restoreFocusState = useCallback(() => {
     if (lastFocusedElementRef.current && document.contains(lastFocusedElementRef.current)) {
       try {
-        lastFocusedElementRef.current.focus();
+        const element = lastFocusedElementRef.current;
+
+        // Check if it's the ProseMirror editor (contenteditable)
+        const isEditor = element.closest('.ProseMirror') || element.classList.contains('ProseMirror');
+
+        if (isEditor && editorRef.current) {
+          // Don't force focus to end - let the editor maintain its own cursor position
+          // The editor component handles its own focus state
+          return;
+        }
+        // For other elements, use normal focus
+        element.focus();
       } catch (error) {
         // Ignore focus errors
       }
@@ -208,112 +198,6 @@ export function IssueDetailContent({
     };
   }, [handleFocusChange]);
 
-  // Get current play state from user activity status
-  const currentPlayState: PlayState = useMemo(() => {
-    if (!userStatus || !issue?.id) return "stopped";
-
-    const isMyIssue = userStatus.currentTaskId === issue.id;
-    if (!isMyIssue) return "stopped";
-
-    return userStatus.currentTaskPlayState || "stopped";
-  }, [userStatus, issue?.id]);
-
-  // Fetch total play time for the issue
-  const fetchTotalPlayTime = useCallback(async () => {
-    if (!issue?.id) return;
-    setIsLoadingPlayTime(true);
-    try {
-      const response = await fetch(`/api/issues/${issue.id}/playtime`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch total play time");
-      }
-      const data: PlayTime = await response.json();
-      setTotalPlayTime(data);
-    } catch (err) {
-      console.error("Error fetching total play time:", err);
-    } finally {
-      setIsLoadingPlayTime(false);
-    }
-  }, [issue?.id]);
-
-  // Handle play/pause/stop actions
-  const handlePlayPauseStop = async (action: "play" | "pause" | "stop") => {
-    if (!issue?.id) return;
-
-    // Check if user is assigned to this issue before starting
-    if (action === "play") {
-      const isAssignedToMe = issue.assigneeId === currentUserId;
-
-      if (!isAssignedToMe) {
-        // User is not assigned, show helper modal
-        setShowHelperModal(true);
-        return;
-      }
-    }
-
-    setIsTimerLoading(true);
-    try {
-      // Use the ActivityContext for proper state management
-      await handleTaskAction(action, issue.id);
-
-      // Fetch updated play time
-      await fetchTotalPlayTime();
-
-    } catch (err: any) {
-      console.error(`Error ${action} issue:`, err);
-    } finally {
-      setIsTimerLoading(false);
-    }
-  };
-
-  const handleHelperConfirm = async () => {
-    if (!issue?.id) return;
-
-    try {
-      // First, send help request
-      const helpResponse = await fetch(`/api/issues/${issue.id}/request-help`, {
-        method: 'POST',
-      });
-
-      if (!helpResponse.ok) {
-        const error = await helpResponse.json();
-        throw new Error(error.message || 'Failed to request help');
-      }
-
-      const helpData = await helpResponse.json();
-
-      // Then, start working on the issue as a helper
-      setIsTimerLoading(true);
-      await handleTaskAction("play", issue.id);
-
-      if (helpData.status === "approved") {
-        toast({
-          title: "Started as Helper",
-          description: "You are already approved! Timer started and your time will be tracked separately.",
-        });
-      } else {
-        toast({
-          title: "Started as Helper",
-          description: "Help request sent and timer started. Your time will be tracked separately.",
-        });
-      }
-
-      setShowHelperModal(false);
-      await fetchTotalPlayTime();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to start as helper",
-        variant: "destructive",
-      });
-    } finally {
-      setIsTimerLoading(false);
-    }
-  };
-
-  const handleHelperCancel = () => {
-    setShowHelperModal(false);
-  };
 
   // Initialize local state from issue data (only when issue changes)
   useEffect(() => {
@@ -339,6 +223,18 @@ export function IssueDetailContent({
       // Use a microtask to restore focus after renders
       Promise.resolve().then(() => {
         if (!editingTitle) {
+          // If editor is available and we're restoring focus, focus at end
+          if (editorRef.current) {
+            // Don't force focus to end - let the editor maintain its own cursor position
+            // The editor component handles its own focus state
+            // const editor = editorRef.current.getEditor();
+            // if (editor) {
+            //   setTimeout(() => {
+            //     editor.commands.focus('end');
+            //   }, 100);
+            //   return;
+            // }
+          }
           restoreFocusState();
         }
       });
@@ -389,7 +285,8 @@ export function IssueDetailContent({
       // Restore focus after successful autosave
       Promise.resolve().then(() => {
         if (!editingTitle) {
-          restoreFocusState();
+          // Don't restore focus for editor - it handles itself
+          // restoreFocusState(); 
         }
       });
     } catch (error: any) {
@@ -406,7 +303,8 @@ export function IssueDetailContent({
       // Restore focus even on error
       Promise.resolve().then(() => {
         if (!editingTitle) {
-          restoreFocusState();
+          // Don't restore focus for editor - it handles itself
+          // restoreFocusState();
         }
       });
     }
@@ -487,45 +385,6 @@ export function IssueDetailContent({
     fetchLabels();
   }, [workspaceId]);
 
-  // Effect for live timer when issue is playing
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
-    // Wait for play time to be loaded before starting timer
-    if (isLoadingPlayTime) {
-      return;
-    }
-
-    if (userStatus?.statusStartedAt && issue?.id) {
-      const isMyIssue = userStatus.currentTaskId === issue.id;
-      const isPlaying = userStatus.currentTaskPlayState === "playing";
-
-      if (isMyIssue && isPlaying) {
-        const tick = () => {
-          const start = new Date(userStatus.statusStartedAt);
-          const now = new Date();
-          const sessionElapsed = now.getTime() - start.getTime();
-
-          // Use the totalTimeMs from the API if available, otherwise 0
-          const baseTime = totalPlayTime?.totalTimeMs || 0;
-          const currentTotalMs = baseTime + sessionElapsed;
-          const formatted = formatLiveTime(currentTotalMs);
-          setLiveTimeDisplay(formatted);
-        };
-
-        tick();
-        intervalId = setInterval(tick, 1000);
-      } else if (!isPlaying && totalPlayTime) {
-        setLiveTimeDisplay(totalPlayTime.formattedTime);
-      }
-    } else if (totalPlayTime && userStatus?.currentTaskId !== issue?.id) {
-      setLiveTimeDisplay(totalPlayTime.formattedTime);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [userStatus?.currentTaskId, userStatus?.currentTaskPlayState, userStatus?.statusStartedAt, issue?.id, totalPlayTime, isLoadingPlayTime]);
 
   // Title editing focus management - Keep focus on title input when editing
   useEffect(() => {
@@ -574,6 +433,16 @@ export function IssueDetailContent({
       const activeElement = document.activeElement;
       if (!activeElement || activeElement === document.body) {
         try {
+          const element = lastFocusedElementRef.current;
+          // Check if it's the ProseMirror editor
+          const isEditor = element.closest('.ProseMirror') || element.classList.contains('ProseMirror');
+
+          if (isEditor && editorRef.current) {
+            // Don't force focus to end - let the editor maintain its own cursor position
+            // The editor component handles its own focus state
+            return;
+          }
+
           lastFocusedElementRef.current.focus();
         } catch (error) {
           // Ignore focus errors
@@ -582,12 +451,43 @@ export function IssueDetailContent({
     }
   }, [editingTitle]);
 
-  // Fetch playtime when issue ID changes or onRefresh is called
+  // Handle initial editor focus when issue loads - focus at end
   useEffect(() => {
-    if (issue?.id) {
-      fetchTotalPlayTime();
+    if (issue && editorRef.current && !editingTitle) {
+      const editor = editorRef.current.getEditor();
+      if (!editor) return;
+
+      let hasMovedCursor = false;
+
+      const moveCursorToEnd = () => {
+        if (!hasMovedCursor) {
+          const { from } = editor.state.selection;
+          // If cursor is at the beginning (position 1 or very close), move to end
+          if (from <= 1) {
+            editor.commands.focus('end');
+            hasMovedCursor = true;
+          }
+        }
+      };
+
+      // Listen for focus events on the editor
+      const editorElement = editor.view.dom;
+      editorElement.addEventListener('focus', moveCursorToEnd, { once: true });
+
+      // Also check after a short delay in case autofocus already happened
+      const timeoutId = setTimeout(() => {
+        if (editor.view.hasFocus()) {
+          moveCursorToEnd();
+        }
+      }, 100);
+
+      return () => {
+        editorElement.removeEventListener('focus', moveCursorToEnd);
+        clearTimeout(timeoutId);
+      };
     }
-  }, [issue?.id, fetchTotalPlayTime, onRefresh]);
+  }, [issue, editingTitle]);
+
 
   // Fetch follow status for this issue
   useEffect(() => {
@@ -647,31 +547,35 @@ export function IssueDetailContent({
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/issues/${issue.issueKey || issue.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
+      const issueId = issue.issueKey || issue.id;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorData
-        });
-        throw new Error(errorData.message || errorData.error || `Failed to update issue (${response.status})`);
+      // Transform updates to match UpdateIssueData format
+      const updateData: any = {
+        id: issueId,
+        ...updates,
+      };
+
+      // Convert labels array to label IDs if present
+      if (updates.labels && Array.isArray(updates.labels)) {
+        updateData.labels = updates.labels.map((label: any) =>
+          typeof label === 'string' ? label : label.id
+        );
       }
+
+      // Use React Query mutation for proper cache invalidation
+      // The mutation's onSuccess handler will update the cache automatically
+      await updateIssueMutation.mutateAsync(updateData);
 
       toast({
         title: "Updated",
         description: "Issue updated successfully",
       });
 
-      // Refresh the issue data
-      onRefresh();
+      // Only call onRefresh in page mode, not modal mode
+      // In modal mode, React Query cache updates will handle the UI update automatically
+      if (mode === 'page') {
+        onRefresh();
+      }
 
       // Restore focus after update
       Promise.resolve().then(() => {
@@ -690,7 +594,7 @@ export function IssueDetailContent({
     } finally {
       setIsUpdating(false);
     }
-  }, [issue, onRefresh, toast, saveFocusState, restoreFocusState, preventFocusSteal, editingTitle]);
+  }, [issue, mode, onRefresh, toast, saveFocusState, restoreFocusState, preventFocusSteal, editingTitle, updateIssueMutation]);
 
   // Handle title save
   const handleSaveTitle = useCallback(async () => {
@@ -827,6 +731,12 @@ export function IssueDetailContent({
 
   // Handle back navigation
   const handleBackNavigation = useCallback(async () => {
+    // If in modal mode, close the modal instead of navigating
+    if (mode === "modal" && onClose) {
+      onClose();
+      return;
+    }
+
     if (!workspaceId) {
       router.back();
       return;
@@ -854,28 +764,42 @@ export function IssueDetailContent({
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if we're in a text input
+      const activeElement = document.activeElement as HTMLElement | null;
+      const isTextInputFocused = !!activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.isContentEditable ||
+        !!activeElement.closest('[contenteditable="true"]')
+      );
+
       if (event.metaKey || event.ctrlKey) {
         switch (event.key) {
-          case 'c':
-            {
-              const activeElement = document.activeElement as HTMLElement | null;
-              const isTextInputFocused = !!activeElement && (
-                activeElement.tagName === 'INPUT' ||
-                activeElement.tagName === 'TEXTAREA' ||
-                activeElement.isContentEditable ||
-                !!activeElement.closest('[contenteditable="true"]')
-              );
-
-              if (!editingTitle && !isTextInputFocused) {
-                event.preventDefault();
-                handleCopyLink();
-              }
-            }
-            break;
           case 'Enter':
             if (editingTitle) {
               event.preventDefault();
               handleSaveTitle();
+            }
+            break;
+        }
+      }
+
+      // Single key shortcuts (only when not in text input)
+      if (!isTextInputFocused && !editingTitle) {
+        switch (event.key.toLowerCase()) {
+          case 's':
+            // Focus the Relations tab (where sub-issues are)
+            event.preventDefault();
+            const relationsTab = document.querySelector('[value="relations"]') as HTMLElement;
+            if (relationsTab) {
+              relationsTab.click();
+              // Scroll to the sub-issues section after a short delay
+              setTimeout(() => {
+                const subIssuesSection = document.querySelector('[data-sub-issues-section]') as HTMLElement;
+                if (subIssuesSection) {
+                  subIssuesSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+              }, 100);
             }
             break;
         }
@@ -891,7 +815,7 @@ export function IssueDetailContent({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editingTitle, handleSaveTitle, handleCopyLink, issue, onClose]);
+  }, [editingTitle, handleSaveTitle, issue, onClose]);
 
   // Loading state
   if (isLoading) {
@@ -972,92 +896,23 @@ export function IssueDetailContent({
     )}>
       {/* Page Header */}
       <PageHeader
+        disableBlur={mode === "modal"}
+        sticky={mode === "modal"}
         title={
           <button
             onClick={handleBackNavigation}
             className="flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] transition-colors text-sm"
           >
             <ArrowLeft className="h-3 w-3" />
-            <span>Back to {viewName || (issue?.project?.name ? `${issue.project.name}: Default` : 'Views')}</span>
+            <span>
+              {parentIssueInfo
+                ? `Back to ${parentIssueInfo.key}`
+                : `Back to ${viewName || (issue?.project?.name ? `${issue.project.name}: Default` : 'Views')}`}
+            </span>
           </button>
         }
         actions={
           <div className="flex items-center gap-2">
-            {/* Time tracking controls - Only show if time tracking is enabled */}
-            {false && (
-              <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded-md border border-border/50 shadow-sm mr-2">
-                {currentPlayState === "stopped" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("play")}
-                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Start Timer"
-                  >
-                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                )}
-                {currentPlayState === "playing" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("pause")}
-                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-amber-500/10 text-amber-600 hover:text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Pause Timer"
-                  >
-                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
-                  </Button>
-                )}
-                {currentPlayState === "paused" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("play")}
-                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-green-500/10 text-green-600 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Resume Timer"
-                  >
-                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                )}
-                {(currentPlayState === "playing" || currentPlayState === "paused") && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handlePlayPauseStop("stop")}
-                    disabled={isTimerLoading || !issue?.id || !canControlTimer}
-                    className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Stop Timer"
-                  >
-                    {isTimerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />}
-                  </Button>
-                )}
-
-                <div className="border-l h-5 border-border/70 mx-1"></div>
-
-                {isLoadingPlayTime ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : userStatus?.currentTaskId === issue?.id && userStatus?.currentTaskPlayState === "playing" ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent (live): ${liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}`}>
-                    <Clock className="h-3.5 w-3.5 text-green-500" />
-                    <span className="text-green-500 font-semibold">{liveTimeDisplay || totalPlayTime?.formattedTime || '0h 0m 0s'}</span>
-                  </div>
-                ) : totalPlayTime ? (
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 pl-1" title={`Total time spent: ${totalPlayTime?.formattedTime}`}>
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{totalPlayTime?.formattedTime}</span>
-                  </div>
-                ) : (
-                  <div className="text-xs font-medium text-muted-foreground/60 flex items-center gap-1 pl-1" title="No time logged yet">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>0h 0m 0s</span>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Follow Issue Toggle */}
             <Button
               variant="ghost"
@@ -1082,6 +937,32 @@ export function IssueDetailContent({
                 {isFollowingIssue ? 'Unfollow' : 'Follow'}
               </span>
             </Button>
+
+            {/* Open in new tab button - only show in modal mode */}
+            {mode === "modal" && issue?.issueKey && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const url = currentWorkspace?.slug
+                    ? `/${currentWorkspace.slug}/issues/${issue.issueKey}`
+                    : workspaceId
+                      ? `/${workspaceId}/issues/${issue.issueKey}`
+                      : `/issues/${issue.issueKey}`;
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+                className={cn(
+                  pageHeaderButtonStyles.ghost,
+                  "text-[#7d8590] hover:text-[#e6edf3]"
+                )}
+                title="Open in new tab"
+              >
+                <ExternalLink className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">
+                  Open in tab
+                </span>
+              </Button>
+            )}
 
             <Button
               variant="ghost"
@@ -1110,371 +991,327 @@ export function IssueDetailContent({
         }
       />
 
-      <div className="flex-1 max-w-7xl mx-auto p-6 w-full flex flex-col min-h-0">
-        {/* Header */}
-        <div className="flex-none space-y-4 mb-6">
-
-
-          {/* Title */}
-          <div className="space-y-3">
-            {editingTitle ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 title-editing-controls">
+      <div className="flex-1 overflow-y-auto min-h-0 w-full">
+        <div className="max-w-7xl mx-auto p-6 flex flex-col">
+          {/* Header */}
+          <div className="flex-none space-y-4 mb-6">
+            {/* Title */}
+            <div className="space-y-3">
+              {editingTitle ? (
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 title-editing-controls">
+                    {/* Issue Key Badge */}
+                    <Badge
+                      className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0 w-fit"
+                      onClick={handleCopyLink}
+                    >
+                      {issue.issueKey}
+                    </Badge>
+                    <Input
+                      ref={titleInputRef}
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="text-lg sm:text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] h-auto py-1 flex-1 min-w-0"
+                      placeholder="Issue title"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSaveTitle();
+                        } else if (e.key === 'Escape') {
+                          setEditingTitle(false);
+                          setTitle(issue.title);
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2 title-editing-actions flex-shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleSaveTitle}
+                        disabled={isUpdating}
+                        className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+                      >
+                        {isUpdating ? (
+                          <Loader2 className="h-3 w-3 animate-spin sm:mr-1" />
+                        ) : (
+                          <Check className="h-3 w-3 sm:mr-1" />
+                        )}
+                        <span className="hidden sm:inline">Save</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTitle(false);
+                          setTitle(issue.title);
+                        }}
+                        disabled={isUpdating}
+                        className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                      >
+                        <X className="h-3 w-3 sm:mr-1" />
+                        <span className="hidden sm:inline">Cancel</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="group cursor-pointer flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
+                  onClick={() => setEditingTitle(true)}
+                >
                   {/* Issue Key Badge */}
                   <Badge
-                    className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
-                    onClick={handleCopyLink}
+                    className="font-mono text-xs px-2 pt-1 pb-0.5 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0 w-fit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyLink();
+                    }}
                   >
                     {issue.issueKey}
                   </Badge>
-                  <Input
-                    ref={titleInputRef}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] h-auto py-1 flex-1"
-                    placeholder="Issue title"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSaveTitle();
-                      } else if (e.key === 'Escape') {
-                        setEditingTitle(false);
-                        setTitle(issue.title);
-                      }
-                    }}
-                  />
-                  <div className="flex gap-2 title-editing-actions">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleSaveTitle}
-                      disabled={isUpdating}
-                      className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-                    >
-                      {isUpdating ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      ) : (
-                        <Check className="h-3 w-3 mr-1" />
-                      )}
-                      Save
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditingTitle(false);
-                        setTitle(issue.title);
-                      }}
-                      disabled={isUpdating}
-                      className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Cancel
-                    </Button>
+                  <div className="flex flex-row items-center gap-2 min-h-[2rem] sm:h-8">
+                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1 min-w-0 break-words" data-issue-title>
+                      {issue.title}
+                    </h1>
+                    <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div
-                className="group cursor-pointer flex items-center gap-3"
-                onClick={() => setEditingTitle(true)}
-              >
-                {/* Issue Key Badge */}
-                <Badge
-                  className="font-mono text-xs px-2 pt-1 pb-0.5 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCopyLink();
-                  }}
-                >
-                  {issue.issueKey}
-                </Badge>
-                <div className="flex flex-row items-center gap-2 h-8">
-                  <h1 className="text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1">
-                    {issue.title}
-                  </h1>
-                  <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* Properties Row - Using New Selectors */}
-            <div className={cn("flex flex-wrap items-center gap-2", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
-              {/* Status Selector */}
-              <IssueStatusSelector
-                value={issue.status}
-                onChange={(value) => handleUpdate({ status: value })}
-                projectId={issue.projectId}
-                currentStatus={issue.projectStatus}
-                disabled={isUpdating}
-              />
+              {/* Properties Row - Using New Selectors */}
+              <div className={cn("flex flex-wrap items-center gap-2", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
+                {/* Core Selectors - Always visible */}
+                {/* Status Selector */}
+                <IssueStatusSelector
+                  value={issue.status}
+                  onChange={(value) => handleUpdate({ status: value })}
+                  projectId={issue.projectId}
+                  currentStatus={issue.projectStatus}
+                  disabled={isUpdating}
+                />
 
-              {/* Priority Selector */}
-              <IssuePrioritySelector
-                value={issue.priority || 'MEDIUM'}
-                onChange={(value) => handleUpdate({ priority: value })}
-                disabled={isUpdating}
-              />
+                {/* Priority Selector */}
+                <IssuePrioritySelector
+                  value={issue.priority || 'MEDIUM'}
+                  onChange={(value) => handleUpdate({ priority: value })}
+                  disabled={isUpdating}
+                />
 
-              {/* Type Selector */}
-              <IssueTypeSelector
-                value={issue.type}
-                onChange={(value) => handleUpdate({ type: value })}
-                disabled={isUpdating}
-              />
+                {/* Type Selector */}
+                <IssueTypeSelector
+                  value={issue.type}
+                  onChange={(value) => handleUpdate({ type: value })}
+                  disabled={isUpdating}
+                />
 
-              {/* Assignee Selector */}
-              <IssueAssigneeSelector
-                value={issue.assigneeId}
-                onChange={(value) => handleUpdate({ assigneeId: value })}
-                workspaceId={workspaceId}
-                disabled={isUpdating}
-              />
+                {/* Assignee Selector */}
+                <IssueAssigneeSelector
+                  value={issue.assigneeId}
+                  onChange={(value) => handleUpdate({ assigneeId: value })}
+                  workspaceId={workspaceId}
+                  disabled={isUpdating}
+                />
 
-              {/* Reporter Selector */}
-              <IssueReporterSelector
-                value={issue.reporterId}
-                onChange={(value) => handleUpdate({ reporterId: value })}
-                workspaceId={workspaceId}
-                disabled={isUpdating}
-              />
-
-              {/* Labels Selector */}
-              <IssueLabelSelector
-                value={issue.labels?.map(l => l.id) || []}
-                onChange={(labelIds) => {
-                  // Convert label IDs back to label objects for the update
-                  const labelObjects = labels.filter(label => labelIds.includes(label.id));
-                  handleUpdate({ labels: labelObjects });
-                }}
-                workspaceId={workspaceId}
-                disabled={isUpdating}
-              />
-
-              {/* Project Selector */}
-              <IssueProjectSelector
-                value={issue.projectId}
-                onChange={(value) => handleUpdate({ projectId: value })}
-                workspaceId={workspaceId || ''}
-                disabled={isUpdating}
-              />
-
-              {/* Due Date Selector */}
-              <IssueDateSelector
-                value={issue.dueDate}
-                onChange={(value) => handleUpdate({ dueDate: value })}
-                disabled={isUpdating}
-              />
-            </div>
-
-            <div className={cn("flex items-center justify-between", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
-              {/* Created info */}
-              <div className="flex items-center gap-1 text-xs text-[#6e7681]">
-                <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
-                {createdByUser && (
-                  <>
-                    <span>by</span>
-                    <div className="flex items-center gap-1">
-                      <Avatar className="h-4 w-4">
-                        <AvatarImage src={createdByUser?.image} />
-                        <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
-                          {createdByUser?.name?.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span>{createdByUser?.name}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Autosave status indicator and Editor Controls */}
-              <div className="flex items-center gap-4 text-xs text-[#8b949e]">
-                {/* Autosave Status */}
-                <div className="flex items-center gap-2 border-r border-[#21262d] pr-4">
-                  {autosaveStatus === "idle" && (
-                    <>
-                      <span className="text-[#8b949e]">Autosave is active</span>
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    </>
-                  )}
-
-                  {autosaveStatus === "saving" && (
-                    <>
-                      <span>Saving…</span>
-                      <Loader2 className="h-2 w-2 animate-spin text-green-500" />
-                    </>
-                  )}
-                  {autosaveStatus === "saved" && showSavedIndicator && (
-                    <>
-                      <span>Saved</span>
-                      <Check className="h-2 w-2 text-green-500 animate-pulse" />
-                    </>
-                  )}
-
-                  {autosaveStatus === "error" && (
-                    <>
-                      <X className="h-3 w-3" />
-                      <span>Autosave failed</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs text-[#ff6b6b] hover:bg-[#2a1212]"
-                        onClick={() => autosaveDescription(description)}
-                      >
-                        Retry
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {/* Editor Mini Toolbar */}
-                {collabDocumentId && (
-                  <EditorMiniToolbar
-                    editorRef={editorRef}
-                    onHistoryClick={handleHistoryClick}
+                {/* Secondary Selectors - Hide on small screens */}
+                {/* Reporter Selector */}
+                <div className="hidden md:block">
+                  <IssueReporterSelector
+                    value={issue.reporterId}
+                    onChange={(value) => handleUpdate({ reporterId: value })}
+                    workspaceId={workspaceId}
+                    disabled={isUpdating}
                   />
-                )}
+                </div>
+
+                {/* Labels Selector */}
+                <IssueLabelSelector
+                  value={issue.labels?.map(l => l.id) || []}
+                  onChange={(labelIds) => {
+                    // Convert label IDs back to label objects for the update
+                    const labelObjects = labels.filter(label => labelIds.includes(label.id));
+                    handleUpdate({ labels: labelObjects });
+                  }}
+                  workspaceId={workspaceId}
+                  disabled={isUpdating}
+                />
+
+                {/* Project Selector */}
+                <div className="hidden sm:block">
+                  <IssueProjectSelector
+                    value={issue.projectId}
+                    onChange={(value) => handleUpdate({ projectId: value })}
+                    workspaceId={workspaceId || ''}
+                    disabled={isUpdating}
+                  />
+                </div>
+
+                {/* Due Date Selector */}
+                <div className="hidden sm:block">
+                  <IssueDateSelector
+                    value={issue.dueDate}
+                    onChange={(value) => handleUpdate({ dueDate: value })}
+                    disabled={isUpdating}
+                  />
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Main Content - Full Width Experience */}
-        <div className={cn("flex-1 overflow-y-auto min-h-0", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
-          <div className="space-y-6 pb-8">
-            {/* Seamless Description Editor - Full Width */}
-            <div className="w-full relative">
+              <div className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
+                {/* Created info */}
+                <div className="flex items-center gap-1 text-xs text-[#6e7681] flex-wrap">
+                  <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
+                  {createdByUser && (
+                    <>
+                      <span className="hidden sm:inline">by</span>
+                      <div className="flex items-center gap-1">
+                        <Avatar className="h-4 w-4">
+                          <AvatarImage src={createdByUser?.image} />
+                          <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
+                            {createdByUser?.name?.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="hidden sm:inline">{createdByUser?.name}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
 
-              <IssueRichEditor
-                ref={editorRef}
-                value={description}
-                onChange={handleDescriptionChange}
-                placeholder="Add a description..."
-                onAiImprove={handleAiImprove}
-                className="w-full"
-                enableSlashCommands={true}
-                enableFloatingMenu={true}
-                collabDocumentId={collabDocumentId}
-                minHeight="400px"
-                maxHeight="none"
-                issueId={issue.id}
-              />
-            </div>
+                {/* Autosave status indicator and Editor Controls */}
+                <div className="flex items-center gap-2 sm:gap-4 text-xs text-[#8b949e]">
+                  {/* Autosave Status */}
+                  <div className="flex items-center gap-2 border-r border-[#21262d] pr-2 sm:pr-4">
+                    {autosaveStatus === "idle" && (
+                      <>
+                        <span className="hidden sm:inline text-[#8b949e]">Autosave is active</span>
+                        <span className="sm:hidden text-[#8b949e]">Autosave</span>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      </>
+                    )}
 
+                    {autosaveStatus === "saving" && (
+                      <>
+                        <span>Saving…</span>
+                        <Loader2 className="h-2 w-2 animate-spin text-green-500" />
+                      </>
+                    )}
+                    {autosaveStatus === "saved" && showSavedIndicator && (
+                      <>
+                        <span>Saved</span>
+                        <Check className="h-2 w-2 text-green-500 animate-pulse" />
+                      </>
+                    )}
 
-
-            {/* Issue Tabs Section - Relations, Sub-issues, Time, Team, Activity (without Comments) */}
-            <IssueTabs
-              issue={issue}
-              initialComments={issue.comments || []}
-              currentUserId={workspaceId || ""} // TODO: Replace with actual current user ID
-              workspaceId={workspaceId || ""}
-              onRefresh={onRefresh}
-            />
-
-            {/* Separate Comments Section - Always visible */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-[#e1e7ef] border-b border-[#21262d] pb-2">
-                <MessageSquare className="h-4 w-4" />
-                <span>Comments</span>
-                {issue.comments && issue.comments.length > 0 && (
-                  <span className="ml-1 text-xs bg-[#333] text-[#aaa] px-1.5 py-0.5 rounded-full">
-                    {issue.comments.length}
-                  </span>
-                )}
-              </div>
-              <IssueCommentsSection
-                issueId={issue.id}
-                initialComments={(issue.comments || []) as any}
-                currentUserId={currentUserId}
-                workspaceId={workspaceId || ""}
-                autofocus={false}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Helper Confirmation Modal */}
-      <Dialog open={showHelperModal} onOpenChange={setShowHelperModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Work as Helper</DialogTitle>
-            <DialogDescription>
-              You are not assigned to this issue. You will be added as a helper and your time will be tracked separately.
-              {issue?.assigneeId && (
-                <span className="block mt-2 text-sm">
-                  This issue is assigned to someone else.
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {issue && (
-            <div className="py-4">
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                <Play className="h-4 w-4 text-muted-foreground" />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">{issue.title}</p>
-                  {issue.issueKey && (
-                    <p className="text-xs text-muted-foreground font-mono">{issue.issueKey}</p>
+                    {autosaveStatus === "error" && (
+                      <>
+                        <X className="h-3 w-3" />
+                        <span className="hidden sm:inline">Autosave failed</span>
+                        <span className="sm:hidden">Failed</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs text-[#ff6b6b] hover:bg-[#2a1212]"
+                          onClick={() => autosaveDescription(description)}
+                        >
+                          Retry
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {/* Editor Mini Toolbar */}
+                  {collabDocumentId && (
+                    <EditorMiniToolbar
+                      editorRef={editorRef}
+                      onHistoryClick={handleHistoryClick}
+                    />
                   )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={handleHelperCancel}
-              disabled={isTimerLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleHelperConfirm}
-              disabled={isTimerLoading}
-            >
-              {isTimerLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                "Yes, Start as Helper"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* Main Content - Full Width Experience */}
+          <div className={cn("flex-1", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
+            <div className="space-y-6 pb-8">
+              {/* Seamless Description Editor - Full Width */}
+              <div className="w-full relative">
 
-      {/* Delete Confirm Dialog */}
-      <ConfirmDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Delete Issue"
-        description="Are you sure you want to delete this issue? This action cannot be undone."
-        variant="danger"
-        confirmText="Delete Issue"
-        isLoading={deleteIssueMutation.isPending}
-        onConfirm={handleDeleteConfirm}
-        metadata={issue ? {
-          title: issue.title,
-          subtitle: issue.issueKey
-        } : undefined}
-      />
+                <IssueRichEditor
+                  ref={editorRef}
+                  value={description}
+                  onChange={handleDescriptionChange}
+                  placeholder="Add a description..."
+                  onAiImprove={handleAiImprove}
+                  className="w-full"
+                  enableSlashCommands={true}
+                  enableFloatingMenu={true}
+                  collabDocumentId={collabDocumentId}
+                  minHeight="400px"
+                  maxHeight="none"
+                  issueId={issue.id}
+                />
+              </div>
 
-      {/* History Modal */}
-      <EditorHistoryModal
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        collabDocumentId={collabDocumentId}
-        issueId={issue?.id}
-        editorRef={editorRef}
-      />
 
-      {/* Autosave is always on; no unsaved changes modal */}
+
+              {/* Issue Tabs Section - Relations, Sub-issues, Time, Team, Activity (without Comments) */}
+              <IssueTabs
+                issue={issue}
+                initialComments={issue.comments || []}
+                currentUserId={workspaceId || ""} // TODO: Replace with actual current user ID
+                workspaceId={workspaceId || ""}
+                onRefresh={onRefresh}
+                mode={mode}
+              />
+
+              {/* Separate Comments Section - Always visible */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-[#e1e7ef] border-b border-[#21262d] pb-2">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Comments</span>
+                  {issue.comments && issue.comments.length > 0 && (
+                    <span className="ml-1 text-xs bg-[#333] text-[#aaa] px-1.5 py-0.5 rounded-full">
+                      {issue.comments.length}
+                    </span>
+                  )}
+                </div>
+                <IssueCommentsSection
+                  issueId={issue.id}
+                  initialComments={(issue.comments || []) as any}
+                  currentUserId={currentUserId}
+                  workspaceId={workspaceId || ""}
+                  autofocus={false}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {/* Delete Confirm Dialog */}
+        <ConfirmDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          title="Delete Issue"
+          description="Are you sure you want to delete this issue? This action cannot be undone."
+          variant="danger"
+          confirmText="Delete Issue"
+          isLoading={deleteIssueMutation.isPending}
+          onConfirm={handleDeleteConfirm}
+          metadata={issue ? {
+            title: issue.title,
+            subtitle: issue.issueKey
+          } : undefined}
+        />
+
+        {/* History Modal */}
+        <EditorHistoryModal
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          collabDocumentId={collabDocumentId}
+          issueId={issue?.id}
+          editorRef={editorRef}
+        />
+      </div>
     </div>
   );
 } 

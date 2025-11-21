@@ -1,5 +1,4 @@
 import { Editor } from '@tiptap/react';
-import { IssueType } from '../types';
 
 export const MENTION_TRIGGERS = {
   user: '@',
@@ -45,10 +44,10 @@ export function findMentionTrigger(
 
           // Check if position is within search range
           if (absoluteTriggerPos >= searchLimit && absoluteTriggerPos < currentPosition) {
-            textAfterTrigger = editor.state.doc.textBetween(absoluteTriggerPos + 1, currentPosition, "");
+            textAfterTrigger = editor.state.doc.textBetween(absoluteTriggerPos + 1, currentPosition, "\n");
 
-            // Valid mention if no leading whitespace and no nested triggers
-            if (!textAfterTrigger.match(/^\s/) && !triggers.some(t => textAfterTrigger.includes(t))) {
+            // Valid mention if no leading whitespace, no nested triggers, and NO NEWLINES
+            if (!textAfterTrigger.match(/^\s/) && !triggers.some(t => textAfterTrigger.includes(t)) && !textAfterTrigger.match(/[\n\r]/)) {
               triggerPosition = absoluteTriggerPos;
               triggerChar = trigger;
               return false;

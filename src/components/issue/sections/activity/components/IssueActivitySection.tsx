@@ -3,14 +3,14 @@
 import { IssueActivitySectionProps } from '../types/activity';
 import { useIssueActivities } from '../hooks/useIssueActivities';
 import { ActivityItem } from './ActivityItem';
-import { LoadingState } from './LoadingState';
+import { ActivitySkeleton } from './ActivitySkeleton';
 import { EmptyActivityState } from './EmptyActivityState';
 
 export function IssueActivitySection({ issueId, limit = 50 }: IssueActivitySectionProps) {
   const { activities, loading, error } = useIssueActivities({ issueId, limit });
 
   if (loading) {
-    return <LoadingState />;
+    return <ActivitySkeleton />;
   }
 
   if (error) {
