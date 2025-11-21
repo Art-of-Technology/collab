@@ -72,12 +72,12 @@ export interface Issue {
   status?: string;
   priority: IssuePriority;
   storyPoints?: number;
-  
+
   // Hierarchy
   parentId?: string;
   parent?: Issue;
   children?: Issue[];
-  
+
   // Relationships
   assigneeId?: string;
   assignee?: IssueUser;
@@ -93,7 +93,7 @@ export interface Issue {
   } | null;
   columnId?: string;
   column?: IssueColumn;
-  
+
   // Status system
   statusId?: string;
   projectStatus?: {
@@ -104,25 +104,25 @@ export interface Issue {
     iconName?: string;
     order: number;
   } | null;
-  
+
   // Dates
   dueDate?: Date;
   startDate?: Date;
   createdAt: Date;
   updatedAt: Date;
-  
+
   // Metadata
   issueKey?: string;
   key?: string; // Alias for issueKey for backward compatibility
   position?: number;
   progress?: number;
   color?: string;
-  
+
   // Related data
   labels?: IssueLabel[];
   comments?: IssueComment[];
   activities?: IssueActivity[];
-  
+
   // Legacy support
   postId?: string;
 }

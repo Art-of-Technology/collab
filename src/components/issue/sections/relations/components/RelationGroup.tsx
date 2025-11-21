@@ -11,6 +11,7 @@ export function RelationGroup({
   onRemoveRelation,
   canEdit = true,
   showInlineCreator = false,
+  mode,
 }: RelationGroupProps) {
   const handleRemoveRelation = (relationId: string) => {
     onRemoveRelation(relationId, relationType);
@@ -42,6 +43,7 @@ export function RelationGroup({
             onRemove={() => handleRemoveRelation(relation.dbId)}
             canRemove={canEdit}
             compact={true}
+            mode={mode}
           />
         ))}
       </>
@@ -60,6 +62,7 @@ export function RelationGroup({
           onRemove={() => handleRemoveRelation(relation.dbId)}
           canRemove={canEdit}
           compact={true}
+          mode={mode}
         />
       ))}
     </>

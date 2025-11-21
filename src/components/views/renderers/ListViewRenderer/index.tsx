@@ -12,20 +12,22 @@ import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 import { ListViewRendererProps, Issue } from './types';
 import { normalizeStatus, getStatusIcon, COLUMN_WIDTHS } from './utils';
 import IssueRow from './IssueRow';
+import { useIssueModalUrlState } from '@/hooks/useIssueModalUrlState';
 
 export default function ListViewRenderer({
     view,
     issues,
     workspace,
-    currentUser,
-    activeFilters,
-    setActiveFilters,
-    onIssueUpdate,
     displayProperties = ['ID', 'Priority', 'Status', 'Assignee', 'Project', 'Due date'],
     showSubIssues = true
 }: ListViewRendererProps) {
     // State management
-    const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+    const {
+        selectedIssueId,
+        setSelectedIssueId,
+        closeModal: handleCloseModal
+    } = useIssueModalUrlState();
+
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
     const [selectedFilters, _setSelectedFilters] = useState<{
         assignees: string[];
@@ -210,11 +212,7 @@ export default function ListViewRenderer({
         // For normal clicks, prevent default and open modal
         event.preventDefault();
         setSelectedIssueId(issueIdOrKey);
-    }, []);
-
-    const handleCloseModal = () => {
-        setSelectedIssueId(null);
-    };
+    }, [setSelectedIssueId]);
 
     // List Header Component
     const ListHeader = () => {

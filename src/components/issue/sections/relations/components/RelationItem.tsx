@@ -13,8 +13,9 @@ import { ISSUE_TYPE_CONFIG, type IssueType } from "@/constants/issue-types";
 import { InfoBadge } from "./InfoBadge";
 import { getIssuePriorityBadge, PRIORITY_CONFIG } from "@/utils/issueHelpers";
 import type { IssuePriority } from "@/types/issue";
-import type { RelationConfig } from "../types/relation";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useIssueModalUrlState } from "@/hooks/useIssueModalUrlState";
+import { useSearchParams, usePathname } from "next/navigation";
 
 // Status badge component similar to IssueStatusSelector
 const getStatusIcon = (status: string) => {
@@ -107,16 +108,22 @@ const StatusBadge = ({ status }: { status: string }) => {
     </InfoBadge>
   );
 };
-
 export function RelationItem({
   item,
   workspaceId,
   relationTypeConfig,
   onRemove,
   canRemove = false,
+  mode,
 }: RelationItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+  const { setSelectedIssueId } = useIssueModalUrlState();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // Get current issue info from URL for parent tracking
+  const currentIssueKey = pathname.split('/').pop() || '';
+
   // Use the target issue's workspace slug if available (for cross-workspace relations),
   // otherwise fall back to the current workspace
   const targetWorkspaceSlug = item.workspace?.slug || workspaceId;
@@ -126,11 +133,28 @@ export function RelationItem({
   const RelationIcon = relationTypeConfig?.icon ? getRelationIcon(relationTypeConfig.icon) : Link2;
   const relationColorClass = relationTypeConfig?.color ? getRelationColor(relationTypeConfig.color) : 'text-gray-500';
 
+  const handleRelationClick = (e: React.MouseEvent) => {
+    if (mode === 'page') {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Get parent issue info from URL params or pathname
+      const parentTitle = searchParams.get('parentTitle') ||
+        document.querySelector('[data-issue-title]')?.textContent ||
+        'Issue';
+      const parentKey = currentIssueKey;
+
+      // Open in modal by setting the query param with parent info
+      setSelectedIssueId(item.issueKey || item.id, { title: parentTitle, key: parentKey });
+    }
+    // If mode is modal, let the Link handle navigation (which will go to the page URL, effectively closing the modal)
+    // We also stop propagation to prevent bubbling
+    e.stopPropagation();
+  };
+
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
       <div className="group flex flex-col md:flex-row md:items-center px-2 py-1.5 md:py-1 transition-all duration-150 rounded-md hover:bg-[#0f1011] relative">
-        {/* Mobile: Main row with relation type, key, title, and expand button */}
-        {/* Desktop: Inline layout */}
         <div className="flex items-center flex-1 min-w-0">
           {relationTypeConfig && (
             <InfoBadge className="mr-2 flex-shrink-0">
@@ -138,10 +162,12 @@ export function RelationItem({
               {relationTypeConfig.label}
             </InfoBadge>
           )}
-          
+
           <Link
             href={itemUrl}
             className="flex items-center flex-1 min-w-0 overflow-hidden"
+            onClick={handleRelationClick}
+            target={mode === 'modal' ? '_blank' : undefined}
           >
             {/* Issue title and key - Always visible */}
             <div className="flex-1 min-w-0 mr-2 md:mr-3 overflow-hidden">
@@ -370,7 +396,7 @@ export function RelationItem({
                 <Link
                   href={itemUrl}
                   className="text-[#7d8590] hover:text-[#c9d1d9] transition-colors"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={handleRelationClick}
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Link>
