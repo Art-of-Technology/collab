@@ -88,8 +88,18 @@ jobs:
       - name: Deploy to Docker Swarm
         run: |
           export IMAGE_VERSION=$VERSION
-          export DOMAIN_NAME="uat-collab.weez.boo" # Update with actual uat domain
+          export DOMAIN_NAME="uat-collab.weez.boo"
           export APP_PORT=3004
+          
+          # Export all variables from .env to environment
+          echo "Exporting environment variables from .env..."
+          set -a  # automatically export all variables
+          source .env
+          set +a
+          
+          echo "Environment variables exported successfully"
+          
+          # Deploy stack - variables will be interpolated in compose file
           docker stack deploy -c docker-compose.swarm.yml collab-uat --prune
         env:
           IMAGE_VERSION: ${{ env.VERSION }}
@@ -100,10 +110,11 @@ jobs:
         run: |
           sleep 30
           docker service ps collab-uat_collab --no-trunc
+          
       - name: Show service logs
         run: |
           echo "=========================================="
-          echo "Service logs (last 50 lines):"
+          echo "Service logs (last 100 lines):"
           echo "=========================================="
-          docker service logs collab-uat_collab --tail 50
+          docker service logs collab-uat_collab --tail 100
         if: always()
