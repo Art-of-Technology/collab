@@ -21,17 +21,6 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.collab.rule=Host(`${DOMAIN_NAME}`)"
-        - "traefik.http.routers.collab.entrypoints=websecure"
-        - "traefik.http.routers.collab.tls=true"
-        - "traefik.http.routers.collab.tls.certresolver=letsencrypt"
-        - "traefik.http.services.collab.loadbalancer.server.port=3000"
-        # Health check
-        - "traefik.http.services.collab.loadbalancer.healthcheck.path=/api/health"
-        - "traefik.http.services.collab.loadbalancer.healthcheck.interval=30s"
-        - "traefik.http.services.collab.loadbalancer.healthcheck.timeout=3s"
       resources:
         limits:
           cpus: '1.0'
