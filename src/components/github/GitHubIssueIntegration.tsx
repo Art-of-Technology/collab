@@ -38,6 +38,8 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from '@/context/WorkspaceContext';
 
+import { GitHubSkeleton } from './GitHubSkeleton';
+
 interface GitHubIntegrationData {
   repository?: {
     id: string;
@@ -154,21 +156,7 @@ export function GitHubIssueIntegration({ issueId, issueKey, projectId, projectSl
   };
 
   if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Code className="h-5 w-5" />
-            GitHub Integration
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <GitHubSkeleton />;
   }
 
   if (error || !data?.repository) {
