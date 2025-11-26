@@ -23,7 +23,8 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
-import { useDeleteIssue, useUpdateIssue } from "@/hooks/queries/useIssues";
+import { useDeleteIssue, useUpdateIssue, issueKeys } from "@/hooks/queries/useIssues";
+import { useQueryClient } from "@tanstack/react-query";
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -92,6 +93,7 @@ export function IssueDetailContent({
   const { currentWorkspace } = useWorkspace();
   const deleteIssueMutation = useDeleteIssue();
   const updateIssueMutation = useUpdateIssue();
+  const queryClient = useQueryClient();
   const [isUpdating, setIsUpdating] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
@@ -264,9 +266,21 @@ export function IssueDetailContent({
         body: JSON.stringify({ description: normalizedContent }),
       });
 
+      // Parse response once
+      const responseData = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || `Autosave failed (${response.status})`);
+        throw new Error(responseData.message || responseData.error || `Autosave failed (${response.status})`);
+      }
+
+      // Get updated issue from response
+      const updatedIssue = responseData?.issue || responseData;
+
+      // Update React Query cache with the updated issue
+      // This ensures modal shows fresh data when reopened
+      if (updatedIssue) {
+        const issueIdForCache = issue.issueKey || issue.id;
+        queryClient.setQueryData(issueKeys.detail(issueIdForCache), { issue: updatedIssue });
       }
 
       // Only mark saved if this response corresponds to the latest content
@@ -308,7 +322,7 @@ export function IssueDetailContent({
         }
       });
     }
-  }, [issue, toast, saveFocusState, restoreFocusState, editingTitle]);
+  }, [issue, toast, saveFocusState, restoreFocusState, editingTitle, queryClient]);
 
   // Debounced autosave on description changes
   useEffect(() => {
