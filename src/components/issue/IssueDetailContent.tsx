@@ -276,15 +276,16 @@ export function IssueDetailContent({
       // Get updated issue from response
       const updatedIssue = responseData?.issue || responseData;
 
-      // Update React Query cache with the updated issue
-      // This ensures modal shows fresh data when reopened
-      if (updatedIssue) {
-        const issueIdForCache = issue.issueKey || issue.id;
-        queryClient.setQueryData(issueKeys.detail(issueIdForCache), { issue: updatedIssue });
-      }
-
-      // Only mark saved if this response corresponds to the latest content
+      // Only update cache and mark saved if this response corresponds to the latest content
+      // This prevents race conditions where a slower, stale response overwrites newer data
       if (content === latestDescriptionRef.current) {
+        // Update React Query cache with the updated issue
+        // This ensures modal shows fresh data when reopened
+        if (updatedIssue) {
+          const issueIdForCache = issue.issueKey || issue.id;
+          queryClient.setQueryData(issueKeys.detail(issueIdForCache), { issue: updatedIssue });
+        }
+        
         setLastSavedDescription(normalizedContent);
       }
 
