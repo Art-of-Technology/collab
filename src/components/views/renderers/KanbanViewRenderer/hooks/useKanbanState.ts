@@ -47,7 +47,8 @@ export const useKanbanState = ({
   workspace,
   onColumnUpdate,
   activeFilters,
-  onOrderingChange
+  onOrderingChange,
+  searchQuery
 }: KanbanViewRendererProps) => {
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
@@ -75,15 +76,26 @@ export const useKanbanState = ({
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   const previousIssuesRef = useRef<any[] | null>(null);
   const previousOrderingMethod = useRef<string | null>(null);
+  const previousSearchQueryRef = useRef<string>('');
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
   useEffect(() => {
     if (isDraggingRef.current || operationsInProgressRef.current.size > 0) return;
     
+    // Track search query changes - if search query changed, allow update to proceed
+    const searchQueryChanged = previousSearchQueryRef.current !== (searchQuery || '');
+    if (searchQueryChanged) {
+      previousSearchQueryRef.current = searchQuery || '';
+    }
+    
     // Additional protection: don't override if we have recent local changes that might not be reflected yet
-    const hasRecentLocalChanges = localIssues.some(localIssue => {
+    // IMPORTANT: Only check for status differences in issues that exist in BOTH localIssues and issues prop
+    // This prevents blocking updates when search query changes (which filters the issues prop)
+    const hasRecentLocalChanges = !searchQueryChanged && localIssues.some(localIssue => {
       const serverIssue = issues.find(issue => issue.id === localIssue.id);
+      // Only check status differences if the issue exists in both arrays
+      // If issue is not in issues prop (filtered out by search), don't block the update
       if (!serverIssue) return false;
       
       // Check if local issue has different status than server issue (recent cross-column move)
@@ -114,7 +126,7 @@ export const useKanbanState = ({
     
     stateVersionRef.current += 1;
     setLocalIssues(issues);
-  }, [issues]); // Removed localIssues dependency to prevent infinite loop when optimistic updates occur
+  }, [issues, searchQuery]); // Removed localIssues dependency to prevent infinite loop when optimistic updates occur
   
   // Removed state corruption watcher - identified as React closure issue, not actual corruption
   
