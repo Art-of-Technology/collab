@@ -1122,6 +1122,7 @@ export default function ViewRenderer({
         return (
           <KanbanViewRenderer
             {...sharedProps}
+            searchQuery={searchQuery}
             onOrderingChange={() => {
               // Sorting is locked; always enforce manual
               setTempOrdering('manual');
