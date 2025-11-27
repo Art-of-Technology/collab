@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 export function useIssueModalUrlState() {
@@ -7,9 +7,16 @@ export function useIssueModalUrlState() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
+    const isUpdatingFromCodeRef = useRef(false);
 
-    // Sync state from URL on mount and when URL changes
+    // Sync state from URL on mount and when URL changes (only from external sources like back button)
     useEffect(() => {
+        // Skip if we're updating from our own code to avoid circular updates
+        if (isUpdatingFromCodeRef.current) {
+            isUpdatingFromCodeRef.current = false;
+            return;
+        }
+
         const issueId = searchParams.get('selectedIssue');
         const parentTitle = searchParams.get('parentTitle');
         const parentKey = searchParams.get('parentKey');
@@ -54,9 +61,18 @@ export function useIssueModalUrlState() {
             params.delete('parentKey');
         }
 
-        // Use replace to avoid cluttering history, or push if you want back button support
-        // Using push here so back button closes the modal which is intuitive
-        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+        const newUrl = `${pathname}?${params.toString()}`;
+        const currentUrl = `${pathname}?${searchParams.toString()}`;
+        
+        // Only update URL if it's different to avoid unnecessary updates
+        if (newUrl !== currentUrl) {
+            // Mark that we're updating from code to prevent useEffect from triggering
+            isUpdatingFromCodeRef.current = true;
+            
+            // Use replace to avoid cluttering history, or push if you want back button support
+            // Using push here so back button closes the modal which is intuitive
+            router.push(newUrl, { scroll: false });
+        }
     }, [searchParams, pathname, router]);
 
     const handleSetSelectedIssueId = useCallback((issueId: string | null, parentInfo?: { title: string; key: string } | null) => {
