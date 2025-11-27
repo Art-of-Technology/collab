@@ -14,17 +14,26 @@ export function useIssueModalUrlState() {
         const parentTitle = searchParams.get('parentTitle');
         const parentKey = searchParams.get('parentKey');
 
-        if (issueId) {
-            setSelectedIssueId(issueId);
-        } else {
-            setSelectedIssueId(null);
-        }
+        // Only update state if it's different from current state to avoid unnecessary re-renders
+        setSelectedIssueId((currentIssueId) => {
+            if (issueId !== currentIssueId) {
+                return issueId || null;
+            }
+            return currentIssueId;
+        });
 
-        if (parentTitle && parentKey) {
-            setParentIssueInfo({ title: parentTitle, key: parentKey });
-        } else {
-            setParentIssueInfo(null);
-        }
+        setParentIssueInfo((currentParentInfo) => {
+            const newParentInfo = parentTitle && parentKey ? { title: parentTitle, key: parentKey } : null;
+            const parentInfoChanged = 
+                !newParentInfo && !currentParentInfo ? false :
+                !newParentInfo || !currentParentInfo ? true :
+                newParentInfo.title !== currentParentInfo.title || newParentInfo.key !== currentParentInfo.key;
+
+            if (parentInfoChanged) {
+                return newParentInfo;
+            }
+            return currentParentInfo;
+        });
     }, [searchParams]);
 
     const updateUrl = useCallback((issueId: string | null, parentInfo?: { title: string; key: string } | null) => {
