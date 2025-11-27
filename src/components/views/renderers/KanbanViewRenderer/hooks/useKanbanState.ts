@@ -76,23 +76,24 @@ export const useKanbanState = ({
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   const previousIssuesRef = useRef<any[] | null>(null);
   const previousOrderingMethod = useRef<string | null>(null);
-  const previousSearchQueryRef = useRef<string>('');
+  const previousSearchQueryRef = useRef<string>(searchQuery || '');
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
   useEffect(() => {
-    if (isDraggingRef.current || operationsInProgressRef.current.size > 0) return;
-    
-    // Track search query changes - if search query changed, allow update to proceed
+    // Track search query changes first - this must happen even during drag operations
+    // to ensure the ref is updated when operations complete
     const searchQueryChanged = previousSearchQueryRef.current !== (searchQuery || '');
     if (searchQueryChanged) {
       previousSearchQueryRef.current = searchQuery || '';
     }
     
+    if (isDraggingRef.current || operationsInProgressRef.current.size > 0) return;
+    
     // Additional protection: don't override if we have recent local changes that might not be reflected yet
     // IMPORTANT: Only check for status differences in issues that exist in BOTH localIssues and issues prop
     // This prevents blocking updates when search query changes (which filters the issues prop)
-    const hasRecentLocalChanges = !searchQueryChanged && localIssues.some(localIssue => {
+    const hasRecentLocalChanges = localIssues.some(localIssue => {
       const serverIssue = issues.find(issue => issue.id === localIssue.id);
       // Only check status differences if the issue exists in both arrays
       // If issue is not in issues prop (filtered out by search), don't block the update
@@ -108,8 +109,8 @@ export const useKanbanState = ({
     const shouldAllowServerUpdate = timeSinceLastDrag > 60000; // Fixed: 60 seconds = 60000ms
     
     // Sync check for server data vs local optimistic changes
-    
-    if (hasRecentLocalChanges && !shouldAllowServerUpdate) {
+    // Skip update if we have recent local changes AND search query hasn't changed AND enough time hasn't passed
+    if (hasRecentLocalChanges && !searchQueryChanged && !shouldAllowServerUpdate) {
       // Skip server data update to preserve recent local changes
       return;
     }
