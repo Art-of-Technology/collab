@@ -24,15 +24,19 @@ export function useIssueModalUrlState() {
 
         setParentIssueInfo((currentParentInfo) => {
             const newParentInfo = parentTitle && parentKey ? { title: parentTitle, key: parentKey } : null;
-            const parentInfoChanged = 
-                !newParentInfo && !currentParentInfo ? false :
-                !newParentInfo || !currentParentInfo ? true :
-                newParentInfo.title !== currentParentInfo.title || newParentInfo.key !== currentParentInfo.key;
-
-            if (parentInfoChanged) {
-                return newParentInfo;
+            
+            if (
+                (!newParentInfo && !currentParentInfo) ||
+                (newParentInfo &&
+                    currentParentInfo &&
+                    newParentInfo.title === currentParentInfo.title &&
+                    newParentInfo.key === currentParentInfo.key)
+            ) {
+                // No change in values, return previous reference
+                return currentParentInfo;
             }
-            return currentParentInfo;
+            // Values changed, return new object (or null)
+            return newParentInfo;
         });
     }, [searchParams]);
 

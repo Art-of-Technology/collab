@@ -41,10 +41,8 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
 
   if (!issueId) return null;
 
-  const isOpen = !!issueId;
-
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={true} onOpenChange={handleOpenChange}>
       <DialogContent
         onEscapeKeyDown={(e) => e.preventDefault()}
         className={`
