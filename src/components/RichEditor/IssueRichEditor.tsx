@@ -722,12 +722,36 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   // Add link preview extension
   additionalExtensions.push(LinkPreviewExtension);
 
+    // Wait for collaboration to be ready before rendering editor to prevent flicker
+    const isWaitingForCollab = isCollaborationEnabled && hasCollabDocumentId && collabReady === 0;
+
+    if (isWaitingForCollab) {
+      return (
+        <div 
+          ref={containerRef}
+          className={cn("relative", className)}
+          style={{ minHeight, maxHeight }}
+        >
+          <div 
+            className="w-full bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg p-4"
+            style={{ minHeight }}
+          >
+            <div className="space-y-3">
+              <div className="h-4 bg-[#1f1f1f] rounded w-3/4 animate-pulse" />
+              <div className="h-4 bg-[#1f1f1f] rounded w-full animate-pulse" />
+              <div className="h-4 bg-[#1f1f1f] rounded w-5/6 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
   return (
     <div ref={containerRef} className="relative">
       <RichEditor
-        autofocus={true}
-        key={isCollaborationEnabled ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
+        key={collabDocumentId || 'editor'}
         ref={editorRef}
+        autofocus={true}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
