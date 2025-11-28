@@ -749,9 +749,9 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   return (
     <div ref={containerRef} className="relative">
       <RichEditor
-        key={collabDocumentId || 'editor'}
-        ref={editorRef}
         autofocus={true}
+        key={collabDocumentId || issueId || 'editor'}
+        ref={editorRef}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
