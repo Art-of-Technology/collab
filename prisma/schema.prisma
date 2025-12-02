@@ -600,6 +600,8 @@ model Issue {
   @@index([status])      // Legacy index
   @@index([statusId])    // New index
   @@index([postId])
+  // Performance indexes for team sync/planning view
+  @@index([workspaceId, assigneeId, projectId, createdAt], name: "Issue_team_planning_idx")
   @@unique([issueKey, projectId])
 }
 
@@ -964,6 +966,9 @@ model BoardItemActivity {
   @@index([boardId])
   @@index([createdAt])
   @@index([action])
+  // Performance indexes for team sync/planning view
+  @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "BoardItemActivity_team_sync_idx")
+  @@index([itemId, itemType, action, createdAt], name: "BoardItemActivity_item_history_idx")
 }
 
 model Milestone {

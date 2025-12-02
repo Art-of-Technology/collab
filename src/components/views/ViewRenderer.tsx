@@ -1454,7 +1454,7 @@ export default function ViewRenderer({
       )}
 
       {/* View Content */}
-      <div className="flex-1 relative">
+      <div className="flex-1 min-h-0 relative overflow-hidden">
         {isLoadingAdditionalIssues && (
           <div className="absolute top-4 right-4 z-10 bg-[#0d1117] border border-[#30363d] rounded-md px-3 py-2 shadow-lg">
             <div className="flex items-center gap-2 text-[#8b949e]">
