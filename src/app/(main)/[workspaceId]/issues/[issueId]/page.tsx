@@ -7,6 +7,8 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useViewTracking } from "@/hooks/useViewTracking";
 import { Loader2 } from "lucide-react";
 import { IssueUser } from "@/types/issue";
+import { IssueDetailModal } from "@/components/issue/IssueDetailModal";
+import { useIssueModalUrlState } from "@/hooks/useIssueModalUrlState";
 
 export default function IssuePage() {
   const router = useRouter();
@@ -14,7 +16,7 @@ export default function IssuePage() {
   const searchParams = useSearchParams();
   const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const issueParam = params?.issueId as string;
-  
+
   // Extract view context from URL params or referrer
   const viewSlug = searchParams.get('view');
   const viewName = searchParams.get('viewName');
@@ -39,7 +41,7 @@ export default function IssuePage() {
           </div>
         }
       >
-        <IssuePageContent 
+        <IssuePageContent
           issueId={issueParam}
           workspaceId={workspaceId}
           viewSlug={viewSlug}
@@ -62,6 +64,7 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
+  const { selectedIssueId, closeModal } = useIssueModalUrlState();
 
   // Fetch creator separately to avoid conflicts with other useIssueActivities calls
   useEffect(() => {
@@ -112,9 +115,9 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
       if (workspaceId) {
         url.searchParams.set('workspaceId', workspaceId);
       }
-      
+
       const response = await fetch(url.toString());
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error("Issue not found");
@@ -140,17 +143,33 @@ function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }:
   }, [fetchIssue]);
 
   return (
-    <IssueDetailContent
-      issue={issue}
-      error={error}
-      isLoading={isLoading}
-      onRefresh={fetchIssue}
-      onClose={onClose}
-      workspaceId={workspaceId}
-      issueId={issueId}
-      viewSlug={viewSlug || undefined}
-      viewName={viewName || undefined}
-      createdByUser={createdByUser || undefined}
-    />
+    <>
+      <title>
+        {issue?.issueKey && issue?.title
+          ? `[${issue.issueKey}] ${issue.title} - Collab by Weezboo`
+          : 'Collab by Weezboo'
+        }
+      </title>
+
+      <IssueDetailContent
+        issue={issue}
+        error={error}
+        isLoading={isLoading}
+        onRefresh={fetchIssue}
+        onClose={onClose}
+        workspaceId={workspaceId}
+        issueId={issueId}
+        viewSlug={viewSlug || undefined}
+        viewName={viewName || undefined}
+        createdByUser={createdByUser || undefined}
+      />
+
+      {selectedIssueId && (
+        <IssueDetailModal
+          issueId={selectedIssueId}
+          onClose={closeModal}
+        />
+      )}
+    </>
   );
 }

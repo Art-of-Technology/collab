@@ -46,9 +46,9 @@ export const useKanbanState = ({
   issues,
   workspace,
   onColumnUpdate,
-  onCreateIssue,
   activeFilters,
-  onOrderingChange
+  onOrderingChange,
+  searchQuery
 }: KanbanViewRendererProps) => {
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
@@ -62,8 +62,6 @@ export const useKanbanState = ({
   
   // State management with optimistic updates
   const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
-  const [newIssueTitle, setNewIssueTitle] = useState('');
-  const [showSubIssues, setShowSubIssues] = useState(true);
   const [operationsInProgress, setOperationsInProgress] = useState<Set<string>>(new Set());
   
   // Removed corruption watcher - React closure issue identified and resolved
@@ -78,15 +76,27 @@ export const useKanbanState = ({
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   const previousIssuesRef = useRef<any[] | null>(null);
   const previousOrderingMethod = useRef<string | null>(null);
+  const previousSearchQueryRef = useRef<string>(searchQuery || '');
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
   useEffect(() => {
+    // Track search query changes first - this must happen even during drag operations
+    // to ensure the ref is updated when operations complete
+    const searchQueryChanged = previousSearchQueryRef.current !== (searchQuery || '');
+    if (searchQueryChanged) {
+      previousSearchQueryRef.current = searchQuery || '';
+    }
+    
     if (isDraggingRef.current || operationsInProgressRef.current.size > 0) return;
     
     // Additional protection: don't override if we have recent local changes that might not be reflected yet
+    // IMPORTANT: Only check for status differences in issues that exist in BOTH localIssues and issues prop
+    // This prevents blocking updates when search query changes (which filters the issues prop)
     const hasRecentLocalChanges = localIssues.some(localIssue => {
       const serverIssue = issues.find(issue => issue.id === localIssue.id);
+      // Only check status differences if the issue exists in both arrays
+      // If issue is not in issues prop (filtered out by search), don't block the update
       if (!serverIssue) return false;
       
       // Check if local issue has different status than server issue (recent cross-column move)
@@ -99,8 +109,8 @@ export const useKanbanState = ({
     const shouldAllowServerUpdate = timeSinceLastDrag > 60000; // Fixed: 60 seconds = 60000ms
     
     // Sync check for server data vs local optimistic changes
-    
-    if (hasRecentLocalChanges && !shouldAllowServerUpdate) {
+    // Skip update if we have recent local changes AND search query hasn't changed AND enough time hasn't passed
+    if (hasRecentLocalChanges && !searchQueryChanged && !shouldAllowServerUpdate) {
       // Skip server data update to preserve recent local changes
       return;
     }
@@ -117,7 +127,7 @@ export const useKanbanState = ({
     
     stateVersionRef.current += 1;
     setLocalIssues(issues);
-  }, [issues]); // Removed localIssues dependency to prevent infinite loop when optimistic updates occur
+  }, [issues, searchQuery]); // Removed localIssues dependency to prevent infinite loop when optimistic updates occur
   
   // Removed state corruption watcher - identified as React closure issue, not actual corruption
   
@@ -286,7 +296,13 @@ export const useKanbanState = ({
   }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
   const handleDragUpdate = useCallback((update: KanbanDragUpdate) => {
-    const destination = update.overrideDestination ?? update.destination;
+    let destination = update.destination;
+    if(update.overrideColumnId) {
+      destination = {
+        droppableId: update.overrideColumnId,
+        index: 0,
+      };
+    }
 
     if (!destination) {
       setHoverState({ canDrop: true, columnId: '' });
@@ -805,38 +821,6 @@ export const useKanbanState = ({
     }
   }, [issues, view, workspace]);
 
-  const handleCreateIssue = useCallback(async (columnId: string) => {
-    if (!newIssueTitle.trim()) return;
-    
-    const column = columns.find(col => col.id === columnId);
-    if (!column) return;
-    
-    const issueData = {
-      title: newIssueTitle,
-      status: column.id,  // Use internal name, not display name
-      statusValue: column.id,
-      type: 'TASK'
-    };
-    
-    if (onCreateIssue) {
-      await onCreateIssue(columnId, issueData);
-    }
-    
-    setNewIssueTitle('');
-    setIsCreatingIssue(null);
-    
-    toast({
-      title: "Issue created",
-      description: `${newIssueTitle} created in ${column.name}`
-    });
-  }, [newIssueTitle, columns, onCreateIssue, toast]);
-
-
-  // Sub-issues toggle handler
-  const handleToggleSubIssues = useCallback(() => {
-    setShowSubIssues(prev => !prev);
-  }, []);
-
   // Display properties: use raw values; respect empty array; fallback only if undefined
   const displayProperties = useMemo(() => {
     if (Array.isArray(view.fields)) return view.fields;
@@ -850,30 +834,18 @@ export const useKanbanState = ({
 
   const handleCancelCreatingIssue = useCallback(() => {
     setIsCreatingIssue(null);
-    setNewIssueTitle('');
   }, []);
-
-  const handleIssueKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && isCreatingIssue) {
-      handleCreateIssue(isCreatingIssue);
-    } else if (e.key === 'Escape') {
-      handleCancelCreatingIssue();
-    }
-  }, [isCreatingIssue, handleCreateIssue, handleCancelCreatingIssue]);
 
 
   return {
     // State
     isCreatingIssue,
-    newIssueTitle,
-    setNewIssueTitle,
     
     // Computed values
     filteredIssues,
     columns,
     issueCounts,
     displayProperties,
-    showSubIssues,
     isLoadingStatuses,
     draggedIssue,
     hoverState,
@@ -885,10 +857,7 @@ export const useKanbanState = ({
     handleDragUpdate,
     handleDragEnd,
     handleIssueClick,
-    handleCreateIssue,
-    handleToggleSubIssues,
     handleStartCreatingIssue,
-    handleCancelCreatingIssue,
-    handleIssueKeyDown
+    handleCancelCreatingIssue
   };
 };
