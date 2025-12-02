@@ -385,14 +385,23 @@ export default function ViewRenderer({
     setTempProjectIds(view.projects.map(p => p.id));
     // Sync temp display properties with view on view change
     setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
+    // Reset temp filters when view changes
+    setTempFilters({});
   }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
 
-  // Update ViewFilters context with current data
+  // Update ViewFilters context with current data and reset context filters on view change
   useEffect(() => {
     setCurrentView(view);
     setWorkspace(workspace);
     setCurrentUser(currentUser);
-  }, [view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser]);
+    // Reset ViewFilters context state when view changes to prevent filter bleeding between views
+    setViewFiltersState({
+      assignees: view.filters?.assignee || [],
+      labels: view.filters?.labels || [],
+      priority: view.filters?.priority || [],
+      projects: view.projects?.map((p: any) => p.id) || []
+    });
+  }, [view.id, view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser, setViewFiltersState]);
 
 
   // Issue type filtering state

@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, isToday } from 'date-fns';
+import { format, isToday, isFuture, startOfDay } from 'date-fns';
 import type { TeamMemberRangeSync } from '../../types';
 import { WeekViewDayCell } from './WeekViewDayCell';
 import { WeekViewStatBadge } from './WeekViewStatBadge';
@@ -25,15 +25,19 @@ export function WeekViewMemberRow({
 }: WeekViewMemberRowProps) {
   const hasWarnings = member.insights.warnings.length > 0;
 
-  // Calculate totals
+  // Calculate totals (only for past and current days, not future)
   let completed = 0;
   let sentToReview = 0;
   let started = 0;
 
-  Object.values(member.days).forEach(day => {
-    completed += day.completed.length;
-    sentToReview += day.movedToReview?.length || 0;
-    started += day.started.length;
+  Object.entries(member.days).forEach(([dateStr, day]) => {
+    const dayDate = new Date(dateStr);
+    // Only count days that are not in the future
+    if (!isFuture(dayDate)) {
+      completed += day.completed.length;
+      sentToReview += day.movedToReview?.length || 0;
+      started += day.started.length;
+    }
   });
 
   const totals = { completed, sentToReview, started };
@@ -81,10 +85,14 @@ export function WeekViewMemberRow({
         const dateStr = format(day, 'yyyy-MM-dd');
         const dayActivity = member.days[dateStr];
         const isTodayDay = isToday(day);
+        const isFutureDay = isFuture(startOfDay(day));
         
-        const totalItems = dayActivity 
-          ? dayActivity.completed.length + (dayActivity.movedToReview?.length || 0) + 
-            dayActivity.started.length + dayActivity.inProgress.length + dayActivity.inReview.length
+        // Don't show data for future days - we don't know what will happen
+        const effectiveActivity = isFutureDay ? undefined : dayActivity;
+        
+        const totalItems = effectiveActivity 
+          ? effectiveActivity.completed.length + (effectiveActivity.movedToReview?.length || 0) + 
+            effectiveActivity.started.length + effectiveActivity.inProgress.length + effectiveActivity.inReview.length
           : 0;
 
         return (
@@ -92,12 +100,13 @@ export function WeekViewMemberRow({
             key={dateStr}
             className={cn(
               "min-w-[280px] w-[280px] border-r border-[#27272a] align-top",
-              isTodayDay && "bg-blue-500/[0.03]"
+              isTodayDay && "bg-blue-500/[0.03]",
+              isFutureDay && "opacity-50"
             )}
           >
             {isExpanded ? (
               <WeekViewDayCell 
-                dayActivity={dayActivity}
+                dayActivity={effectiveActivity}
                 onOpenModal={onOpenModal}
               />
             ) : (

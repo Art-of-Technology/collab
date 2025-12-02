@@ -56,6 +56,8 @@ export interface IssueMovement {
   projectId: string;
   fromStatus: string | null;
   toStatus: string;
+  fromStatusDisplayName?: string;
+  toStatusDisplayName?: string;
   movedAt: Date;
   movementType: MovementType;
   userId?: string;
@@ -843,9 +845,39 @@ export async function getStatusMovements(
 
   const issueMap = new Map(issues.map(i => [i.id, i]));
 
+  // Get all unique project IDs from the issues
+  const projectIdsFromIssues = [...new Set(issues.map(i => i.projectId))];
+  
+  // Fetch all project statuses for the relevant projects to get display names
+  const projectStatuses = await prisma.projectStatus.findMany({
+    where: {
+      projectId: { in: projectIdsFromIssues },
+    },
+    select: {
+      projectId: true,
+      name: true,
+      displayName: true,
+    },
+  });
+
+  // Create a map for quick status display name lookup: projectId:statusName -> displayName
+  // Use lowercase keys to handle case-insensitive matching
+  const statusDisplayNameMap = new Map<string, string>();
+  for (const status of projectStatuses) {
+    const key = `${status.projectId}:${status.name.toLowerCase()}`;
+    statusDisplayNameMap.set(key, status.displayName || status.name);
+  }
+
   for (const activity of activities) {
     const issue = issueMap.get(activity.itemId);
     if (!issue) continue; // Skip if issue was filtered out by project
+
+    // Get display names for from/to statuses (use lowercase for case-insensitive matching)
+    const fromStatusKey = activity.oldValue ? `${issue.projectId}:${activity.oldValue.toLowerCase()}` : null;
+    const toStatusKey = `${issue.projectId}:${(activity.newValue || '').toLowerCase()}`;
+    
+    const fromStatusDisplayName = fromStatusKey ? statusDisplayNameMap.get(fromStatusKey) : undefined;
+    const toStatusDisplayName = statusDisplayNameMap.get(toStatusKey);
 
     movements.push({
       issueId: issue.id,
@@ -855,6 +887,8 @@ export async function getStatusMovements(
       projectId: issue.projectId,
       fromStatus: activity.oldValue || null,
       toStatus: activity.newValue || '',
+      fromStatusDisplayName: fromStatusDisplayName || activity.oldValue || undefined,
+      toStatusDisplayName: toStatusDisplayName || activity.newValue || '',
       movedAt: activity.createdAt,
       movementType: getMovementType(activity.oldValue, activity.newValue || ''),
       userId: activity.userId || undefined,
@@ -1103,6 +1137,17 @@ export async function generateTeamRangeSync(
   // Filter issues by project if needed (since status changes don't have project info)
   const relevantIssueIds = new Set(allIssues.map(i => i.id));
 
+  // Build status display name map for all projects (use lowercase keys for case-insensitive matching)
+  const projectIdsFromIssues = [...new Set(allIssues.map(i => i.projectId))];
+  const allProjectStatuses = await prisma.projectStatus.findMany({
+    where: { projectId: { in: projectIdsFromIssues } },
+    select: { projectId: true, name: true, displayName: true },
+  });
+  const statusDisplayNameMap = new Map<string, string>();
+  for (const status of allProjectStatuses) {
+    statusDisplayNameMap.set(`${status.projectId}:${status.name.toLowerCase()}`, status.displayName || status.name);
+  }
+
   // ============================================================================
   // STEP 3: COLLECT ALL DAYS IN RANGE
   // ============================================================================
@@ -1141,6 +1186,10 @@ export async function generateTeamRangeSync(
     const issue = issueMap.get(change.itemId);
     if (!issue) continue;
     
+    // Get display names for from/to statuses (use lowercase for case-insensitive matching)
+    const fromStatusKey = change.oldValue ? `${issue.projectId}:${change.oldValue.toLowerCase()}` : null;
+    const toStatusKey = `${issue.projectId}:${(change.newValue || '').toLowerCase()}`;
+
     movementsByDay.get(dateStr)!.push({
       issueId: issue.id,
       issueKey: issue.issueKey || '',
@@ -1149,6 +1198,8 @@ export async function generateTeamRangeSync(
       projectId: issue.projectId,
       fromStatus: change.oldValue || null,
       toStatus: change.newValue || '',
+      fromStatusDisplayName: fromStatusKey ? statusDisplayNameMap.get(fromStatusKey) || change.oldValue || undefined : undefined,
+      toStatusDisplayName: statusDisplayNameMap.get(toStatusKey) || change.newValue || '',
       movedAt: change.createdAt,
       movementType: getMovementType(change.oldValue, change.newValue || ''),
       userId: change.userId || undefined,

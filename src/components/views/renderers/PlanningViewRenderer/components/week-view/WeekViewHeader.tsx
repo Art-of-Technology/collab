@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from '@/lib/utils';
-import { format, isToday } from 'date-fns';
+import { format, isToday, isFuture, startOfDay } from 'date-fns';
 
 interface WeekViewHeaderProps {
   days: Date[];
@@ -20,12 +20,14 @@ export function WeekViewHeader({ days }: WeekViewHeaderProps) {
         </th>
         {days.map((day) => {
           const isTodayDay = isToday(day);
+          const isFutureDay = isFuture(startOfDay(day));
           return (
             <th 
               key={format(day, 'yyyy-MM-dd')} 
               className={cn(
                 "min-w-[280px] w-[280px] border-b border-r border-[#27272a] px-3 py-2 text-center font-normal",
-                isTodayDay ? "bg-[#1a1a1a]" : "bg-[#09090b]"
+                isTodayDay ? "bg-[#1a1a1a]" : "bg-[#09090b]",
+                isFutureDay && "opacity-50"
               )}
             >
               <div className="flex items-center justify-center gap-2">
