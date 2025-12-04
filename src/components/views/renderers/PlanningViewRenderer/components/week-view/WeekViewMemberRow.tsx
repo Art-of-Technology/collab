@@ -29,6 +29,7 @@ export function WeekViewMemberRow({
   let completed = 0;
   let sentToReview = 0;
   let started = 0;
+  let blocked = 0;
 
   Object.entries(member.days).forEach(([dateStr, day]) => {
     const dayDate = new Date(dateStr);
@@ -37,10 +38,11 @@ export function WeekViewMemberRow({
       completed += day.completed.length;
       sentToReview += day.movedToReview?.length || 0;
       started += day.started.length;
+      blocked += day.blocked?.length || 0;
     }
   });
 
-  const totals = { completed, sentToReview, started };
+  const totals = { completed, sentToReview, started, blocked };
 
   return (
     <tr className="border-b border-[#27272a]">
@@ -70,6 +72,7 @@ export function WeekViewMemberRow({
               <WeekViewStatBadge count={totals.completed} label="done" color="emerald" />
               <WeekViewStatBadge count={totals.sentToReview} label="sent" color="purple" />
               <WeekViewStatBadge count={totals.started} label="started" color="blue" />
+              <WeekViewStatBadge count={totals.blocked} label="blocked" color="amber" />
             </div>
           </div>
           
@@ -92,7 +95,8 @@ export function WeekViewMemberRow({
         
         const totalItems = effectiveActivity 
           ? effectiveActivity.completed.length + (effectiveActivity.movedToReview?.length || 0) + 
-            effectiveActivity.started.length + effectiveActivity.inProgress.length + effectiveActivity.inReview.length
+            effectiveActivity.started.length + effectiveActivity.inProgress.length + 
+            effectiveActivity.inReview.length + (effectiveActivity.blocked?.length || 0)
           : 0;
 
         return (

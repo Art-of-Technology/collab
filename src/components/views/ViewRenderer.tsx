@@ -1194,58 +1194,68 @@ export default function ViewRenderer({
           )
         }
         search={
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground z-10" />
-            <Input
-              placeholder="Search issues..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={pageHeaderSearchStyles}
-            />
-          </div>
+          view.displayType !== 'PLANNING' ? (
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground z-10" />
+              <Input
+                placeholder="Search issues..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={pageHeaderSearchStyles}
+              />
+            </div>
+          ) : null
         }
         actions={
           <>
-            {/* Follow Project Toggle */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleProjectFollow}
-              className={cn(
-                pageHeaderButtonStyles.ghost,
-                isFollowingProject ? "text-red-400 hover:bg-red-500/10" : "text-green-400 hover:bg-green-500/10"
-              )}
-              disabled={isTogglingFollow}
-              aria-pressed={isFollowingProject}
-              aria-label={isFollowingProject ? 'Unfollow' : 'Follow'}
-            >
-              {isFollowingProject ? (
-                <BellOff className="h-3 w-3 md:mr-1" />
-              ) : (
-                <Bell className="h-3 w-3 md:mr-1" />
-              )}
-              <span className="hidden md:inline ml-1">
-                {isFollowingProject ? 'Unfollow' : 'Follow'}
-              </span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleViewFilters}
-              className={pageHeaderButtonStyles.ghost}
-            >
-              {isViewFiltersOpen ? <EyeOff className="h-3 w-3 md:mr-1" /> : <Eye className="h-3 w-3 md:mr-1" />}
-              <span data-text className="hidden md:inline ml-1">View Options</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={pageHeaderButtonStyles.primary}
-              onClick={() => setIsNewIssueOpen(true)}
-            >
-              <Plus className="h-3 w-3 md:mr-1" />
-              <span data-text className="hidden md:inline ml-1">New Issue</span>
-            </Button>
+            {/* Follow Project Toggle - Hidden for Planning view */}
+            {view.displayType !== 'PLANNING' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleProjectFollow}
+                className={cn(
+                  pageHeaderButtonStyles.ghost,
+                  isFollowingProject ? "text-red-400 hover:bg-red-500/10" : "text-green-400 hover:bg-green-500/10"
+                )}
+                disabled={isTogglingFollow}
+                aria-pressed={isFollowingProject}
+                aria-label={isFollowingProject ? 'Unfollow' : 'Follow'}
+              >
+                {isFollowingProject ? (
+                  <BellOff className="h-3 w-3 md:mr-1" />
+                ) : (
+                  <Bell className="h-3 w-3 md:mr-1" />
+                )}
+                <span className="hidden md:inline ml-1">
+                  {isFollowingProject ? 'Unfollow' : 'Follow'}
+                </span>
+              </Button>
+            )}
+            {/* View Options - Hidden for Planning view */}
+            {view.displayType !== 'PLANNING' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleViewFilters}
+                className={pageHeaderButtonStyles.ghost}
+              >
+                {isViewFiltersOpen ? <EyeOff className="h-3 w-3 md:mr-1" /> : <Eye className="h-3 w-3 md:mr-1" />}
+                <span data-text className="hidden md:inline ml-1">View Options</span>
+              </Button>
+            )}
+            {/* New Issue - Hidden for Planning view */}
+            {view.displayType !== 'PLANNING' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={pageHeaderButtonStyles.primary}
+                onClick={() => setIsNewIssueOpen(true)}
+              >
+                <Plus className="h-3 w-3 md:mr-1" />
+                <span data-text className="hidden md:inline ml-1">New Issue</span>
+              </Button>
+            )}
           </>
         }
       />
