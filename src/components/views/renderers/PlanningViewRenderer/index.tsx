@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { ViewProjectSelector } from '@/components/views/selectors/ViewProjectSelector';
 import { AssigneeSelector } from '@/components/views/selectors/AssigneeSelector';
 import { useTeamSyncRange, useActivityFeed } from '@/hooks/queries/useTeamSync';
+import { useProjects } from '@/hooks/queries/useProjects';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, subDays, differenceInDays, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -52,34 +53,31 @@ export default function PlanningViewRenderer({
     };
   });
 
-  // Extract workspace projects and members
-  const workspaceProjects = useMemo(() => {
-    const projectSet = new Map();
-    issues.forEach(issue => {
-      if (issue.project && !projectSet.has(issue.project.id)) {
-        projectSet.set(issue.project.id, {
-          id: issue.project.id,
-          name: issue.project.name,
-          color: issue.project.color,
-        });
-      }
-    });
-    return Array.from(projectSet.values());
-  }, [issues]);
+  // Fetch all workspace projects (not just from filtered issues)
+  const { data: allProjects = [] } = useProjects({
+    workspaceId: workspace.id,
+    includeStats: false,
+  });
 
-  const workspaceMembers = useMemo(() => {
-    const memberSet = new Map();
-    issues.forEach(issue => {
-      if (issue.assignee && !memberSet.has(issue.assignee.id)) {
-        memberSet.set(issue.assignee.id, {
-          id: issue.assignee.id,
-          name: issue.assignee.name,
-          image: issue.assignee.image,
-        });
-      }
-    });
-    return Array.from(memberSet.values());
-  }, [issues]);
+  // Fetch all workspace members (not just from filtered issues)
+  const { data: workspaceMembers = [] } = useQuery({
+    queryKey: ['workspace-members', workspace.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/workspaces/${workspace.id}/members`);
+      if (!response.ok) throw new Error('Failed to fetch members');
+      const data = await response.json();
+      return data.members || data;
+    },
+  });
+
+  // Transform projects for selector
+  const workspaceProjects = useMemo(() => {
+    return allProjects.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+    }));
+  }, [allProjects]);
 
   // Filter states
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>(
