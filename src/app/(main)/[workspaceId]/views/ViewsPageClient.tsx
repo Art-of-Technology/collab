@@ -46,7 +46,8 @@ const viewTypeIcons = {
   LIST: List,
   TABLE: Table,
   CALENDAR: Calendar,
-  TIMELINE: BarChart3
+  TIMELINE: BarChart3,
+  PLANNING: Calendar
 };
 
 const viewTypeLabels = {
@@ -54,7 +55,8 @@ const viewTypeLabels = {
   LIST: 'List',
   TABLE: 'Table',
   CALENDAR: 'Calendar',
-  TIMELINE: 'Timeline'
+  TIMELINE: 'Timeline',
+  PLANNING: 'Planning'
 };
 
 const getVisibilityIcon = (visibility: string) => {
