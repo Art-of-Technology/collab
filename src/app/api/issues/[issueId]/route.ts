@@ -115,6 +115,9 @@ export async function PUT(
     if (typeof updateData.type === 'string') {
       updateData.type = updateData.type.toUpperCase();
     }
+
+    // Update lifecycle tracking
+    updateData.lastProgressAt = new Date();
     
     // Handle labels relation updates
     let relationalUpdates: any = {};
@@ -157,6 +160,15 @@ export async function PUT(
         updateData.statusId = projectStatus.id;
         updateData.statusValue = projectStatus.name; // Use the canonical name
         updateData.status = projectStatus.name; // Keep legacy field for compatibility
+        
+        // Lifecycle tracking: track first time moved to in-progress
+        const isMovingToInProgress = projectStatus.name.toLowerCase().includes('in_progress') || 
+                                      projectStatus.name.toLowerCase().includes('in progress');
+        const wasNotInProgress = !existingIssue.statusValue?.toLowerCase().includes('in_progress');
+        
+        if (isMovingToInProgress && wasNotInProgress && !existingIssue.firstStartedAt) {
+          updateData.firstStartedAt = new Date();
+        }
       } else {
         // No ProjectStatus found, just update the legacy status field
         updateData.status = statusValue;

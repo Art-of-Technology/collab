@@ -111,6 +111,15 @@ model User {
 
   // App Store relations
   publishedApps          App[]                   @relation("UserApps")
+  
+  // Daily Focus relations
+  dailyFocusEntries      DailyFocusEntry[]
+  assignedDailyFocus     DailyFocusAssignment[]  @relation("AssignedDailyFocus")
+  createdDailyFocus      DailyFocusAssignment[]  @relation("CreatedDailyFocus")
+  
+  // Planning relations
+  planEntries            PlanEntry[]             @relation("PlanEntries")
+  createdPlanEntries     PlanEntry[]             @relation("PlanEntryCreator")
 }
 
 model Account {
@@ -398,6 +407,9 @@ model Workspace {
   appInstallations    AppInstallation[]
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
   notificationPreferences NotificationPreferences[]
+  
+  // Daily Focus relationships
+  dailyFocusEntries   DailyFocusEntry[]
 }
 
 model WorkspaceMember {
@@ -523,6 +535,11 @@ model Issue {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   
+  // Lifecycle tracking
+  firstStartedAt DateTime?   // When first moved to In Progress
+  lastProgressAt DateTime?   // Last time had activity
+  daysInProgress Int         @default(0) // Auto-calculated
+  
   // Issue identification
   issueKey      String?
   position      Int?
@@ -564,6 +581,14 @@ model Issue {
   commits         Commit[]
   versionIssues   VersionIssue[]
   
+  // Daily Focus relationships
+  dailyFocusReflections DailyFocusReflection[]
+  dailyFocusPlans      DailyFocusPlan[]
+  dailyFocusAssignments DailyFocusAssignment[]
+  
+  // Planning relationships
+  planEntries          PlanEntry[]             @relation("PlanEntryIssues")
+  
   @@index([projectId])
   @@index([workspaceId])
   @@index([assigneeId])
@@ -575,6 +600,8 @@ model Issue {
   @@index([status])      // Legacy index
   @@index([statusId])    // New index
   @@index([postId])
+  // Performance indexes for team sync/planning view
+  @@index([workspaceId, assigneeId, projectId, createdAt], name: "Issue_team_planning_idx")
   @@unique([issueKey, projectId])
 }
 
@@ -939,6 +966,9 @@ model BoardItemActivity {
   @@index([boardId])
   @@index([createdAt])
   @@index([action])
+  // Performance indexes for team sync/planning view
+  @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "BoardItemActivity_team_sync_idx")
+  @@index([itemId, itemType, action, createdAt], name: "BoardItemActivity_item_history_idx")
 }
 
 model Milestone {
@@ -2200,6 +2230,7 @@ enum ViewDisplayType {
   TIMELINE
   GANTT
   BOARD
+  PLANNING
 }
 
 enum ViewVisibility {
@@ -2481,4 +2512,125 @@ model AppAuditLog {
   @@index([actorId])
   @@index([action])
   @@index([createdAt])
+}
+
+// ========================================
+// Daily Focus Planning Models
+// ========================================
+
+model DailyFocusEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  workspaceId   String
+  date          DateTime @db.Date
+  status        DailyFocusStatus @default(DRAFT)
+  submittedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reflections   DailyFocusReflection[]
+  plans         DailyFocusPlan[]
+  assignments   DailyFocusAssignment[]
+  
+  @@unique([userId, workspaceId, date])
+  @@index([workspaceId, date])
+  @@index([userId, date])
+  @@index([status])
+}
+
+model DailyFocusReflection {
+  id              String   @id @default(cuid())
+  entryId         String
+  issueId         String
+  status          ReflectionStatus
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  entry           DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  issue           Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  @@unique([entryId, issueId])
+  @@index([entryId])
+  @@index([issueId])
+}
+
+model DailyFocusPlan {
+  id              String   @id @default(cuid())
+  entryId         String
+  issueId         String
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  entry           DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  issue           Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  @@unique([entryId, issueId])
+  @@index([entryId])
+  @@index([issueId])
+}
+
+model DailyFocusAssignment {
+  id              String   @id @default(cuid())
+  entryId         String
+  issueId         String
+  assignedToId    String   // User assigned to start work
+  assignedById    String   // User who made the assignment
+  notes           String?
+  createdAt       DateTime @default(now())
+  
+  entry           DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  issue           Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  assignedTo      User    @relation("AssignedDailyFocus", fields: [assignedToId], references: [id])
+  assignedBy      User    @relation("CreatedDailyFocus", fields: [assignedById], references: [id])
+  
+  @@index([entryId])
+  @@index([issueId])
+  @@index([assignedToId])
+}
+
+enum DailyFocusStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum PlanSource {
+  AUTO_DETECTED    // Automatically detected from activities
+  MANUALLY_ADDED   // Manually added by user
+  SUGGESTED        // System suggested, awaiting confirmation
+}
+
+model PlanEntry {
+  id          String      @id @default(cuid())
+  userId      String      // Who this is planned for
+  issueId     String      // What issue
+  date        DateTime    // Which day (date only, normalized to start of day)
+  source      PlanSource  @default(AUTO_DETECTED)
+  addedBy     String?     // Who added it (if manual)
+  notes       String?     // Optional context
+  confirmed   Boolean     @default(false) // For SUGGESTED entries
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  user        User     @relation("PlanEntries", fields: [userId], references: [id], onDelete: Cascade)
+  issue       Issue    @relation("PlanEntryIssues", fields: [issueId], references: [id], onDelete: Cascade)
+  addedByUser User?    @relation("PlanEntryCreator", fields: [addedBy], references: [id], onDelete: SetNull)
+  
+  @@unique([userId, issueId, date])
+  @@index([userId, date])
+  @@index([issueId])
+  @@index([date])
+  @@index([source])
+}
+
+enum ReflectionStatus {
+  COMPLETED
+  COULD_NOT_COMPLETE
+  PAUSED
+  PENDING_INPUT
+  UNPLANNED_WORK
+  UNTOUCHED
 }

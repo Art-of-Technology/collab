@@ -11,7 +11,7 @@ const paramsSchema = z.object({
 
 const updateViewSchema = z.strictObject({
   name: z.string().min(1, 'View name cannot be empty').max(100, 'View name cannot exceed 100 characters').optional().transform(val => val?.trim()),
-  displayType: z.enum(['KANBAN', 'LIST', 'TABLE', 'CALENDAR', 'TIMELINE', 'GANTT', 'BOARD']).optional(),
+  displayType: z.enum(['KANBAN', 'LIST', 'TABLE', 'CALENDAR', 'TIMELINE', 'GANTT', 'BOARD', 'PLANNING']).optional(),
   filters: z.any().optional(),
   sorting: z.any().optional(),
   grouping: z.any().optional(),

@@ -27,6 +27,7 @@ import KanbanViewRenderer from './renderers/KanbanViewRenderer';
 import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
 import TimelineViewRenderer from './renderers/TimelineViewRenderer';
+import PlanningViewRenderer from './renderers/PlanningViewRenderer';
 import ViewTypeSelector from './shared/ViewTypeSelector';
 import { ViewProjectSelector } from './selectors/ViewProjectSelector';
 import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
@@ -98,7 +99,8 @@ const VIEW_TYPE_ICONS = {
   CALENDAR: Calendar,
   TIMELINE: BarChart3,
   GANTT: BarChart3,
-  BOARD: Grid
+  BOARD: Grid,
+  PLANNING: Calendar
 };
 
 export default function ViewRenderer({
@@ -383,14 +385,23 @@ export default function ViewRenderer({
     setTempProjectIds(view.projects.map(p => p.id));
     // Sync temp display properties with view on view change
     setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
+    // Reset temp filters when view changes
+    setTempFilters({});
   }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
 
-  // Update ViewFilters context with current data
+  // Update ViewFilters context with current data and reset context filters on view change
   useEffect(() => {
     setCurrentView(view);
     setWorkspace(workspace);
     setCurrentUser(currentUser);
-  }, [view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser]);
+    // Reset ViewFilters context state when view changes to prevent filter bleeding between views
+    setViewFiltersState({
+      assignees: view.filters?.assignee || [],
+      labels: view.filters?.labels || [],
+      priority: view.filters?.priority || [],
+      projects: view.projects?.map((p: any) => p.id) || []
+    });
+  }, [view.id, view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser, setViewFiltersState]);
 
 
   // Issue type filtering state
@@ -1135,6 +1146,8 @@ export default function ViewRenderer({
         return <TableViewRenderer {...sharedProps} />;
       case 'TIMELINE':
         return <TimelineViewRenderer {...sharedProps} />;
+      case 'PLANNING':
+        return <PlanningViewRenderer {...sharedProps} />;
       default:
         return <ListViewRenderer {...sharedProps} />;
     }
@@ -1282,7 +1295,8 @@ export default function ViewRenderer({
         }}
       />
 
-      {/* Filters and Display Controls Bar */}
+      {/* Filters and Display Controls Bar - Hidden for PLANNING view */}
+      {tempDisplayType !== 'PLANNING' && (
       <div className={cn(
         "border-b bg-[#101011] transition-colors",
         // Mobile: Glassmorphism styling
@@ -1446,9 +1460,10 @@ export default function ViewRenderer({
           </div>
         </div>
       </div>
+      )}
 
       {/* View Content */}
-      <div className="flex-1 relative">
+      <div className="flex-1 min-h-0 relative overflow-hidden">
         {isLoadingAdditionalIssues && (
           <div className="absolute top-4 right-4 z-10 bg-[#0d1117] border border-[#30363d] rounded-md px-3 py-2 shadow-lg">
             <div className="flex items-center gap-2 text-[#8b949e]">
