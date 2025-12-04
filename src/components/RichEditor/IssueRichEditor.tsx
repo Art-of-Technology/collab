@@ -151,6 +151,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   const containerRef = useRef<HTMLDivElement>(null);
   const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);
+  const [collabError, setCollabError] = useState(false);
   const { toast } = useToast();
   const { data: session } = useSession();
   const { data: currentUser } = useCurrentUser();
@@ -665,8 +666,12 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       try {
         await manager.initialize();
         setCollabReady((v) => v + 1);
+        setCollabError(false);
       } catch (e) {
         console.error('Failed to initialize collaboration:', e);
+        setCollabError(true);
+        // Allow editor to render without collaboration on error
+        setCollabReady(1);
       }
     };
 
@@ -722,11 +727,40 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   // Add link preview extension
   additionalExtensions.push(LinkPreviewExtension);
 
+    // Wait for collaboration to be ready before rendering editor to prevent flicker
+    // Don't wait if collaboration failed - render editor without collaboration
+    const isWaitingForCollab = isCollaborationEnabled && hasCollabDocumentId && collabReady === 0 && !collabError;
+
+    if (isWaitingForCollab) {
+      return (
+        <div 
+          ref={containerRef}
+          className={cn("relative", className)}
+          style={{ minHeight, maxHeight }}
+        >
+          <div 
+            className="w-full bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg p-4"
+            style={{ minHeight }}
+            role="status"
+            aria-live="polite"
+            aria-label="Loading editor"
+          >
+            <span className="sr-only">Loading issue content...</span>
+            <div className="space-y-3">
+              <div className="h-4 bg-[#1f1f1f] rounded w-3/4 animate-pulse" />
+              <div className="h-4 bg-[#1f1f1f] rounded w-full animate-pulse" />
+              <div className="h-4 bg-[#1f1f1f] rounded w-5/6 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
   return (
     <div ref={containerRef} className="relative">
       <RichEditor
         autofocus={true}
-        key={isCollaborationEnabled ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
+        key={collabDocumentId ? `collab-${collabDocumentId}` : `nocollab-${issueId || 'editor'}`}
         ref={editorRef}
         value={value}
         onChange={onChange}

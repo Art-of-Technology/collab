@@ -106,7 +106,7 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   className={cn(
-                    "relative flex-1 space-y-2 min-h-[200px] rounded-lg transition-all duration-200 overflow-y-auto kanban-column-scroll",
+                    "relative flex-1 min-h-0 space-y-2 rounded-lg transition-all duration-200 overflow-y-auto",
                     isDraggingOver && draggedIssue && !shouldShowDisabledState && "bg-[#1a1a1a] border border-[#0969da]",
                     isDraggingOver && draggedIssue && shouldShowDisabledState && "bg-[#1a1a1a] border border-red-500",
                   )}

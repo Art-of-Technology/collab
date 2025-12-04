@@ -75,10 +75,10 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
   }, [issues, view, workspace, setSelectedIssueId]);
 
   return (
-    <div className="h-full flex-1 bg-[#101011]">
+    <div className="h-full flex flex-col overflow-hidden bg-[#101011]">
       {/* Kanban Board Container - Full height scrollable area */}
-      <div className="h-full">
-        <div className="h-full p-6">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full p-6 overflow-hidden">
           {isLoadingStatuses && groupField === 'status' ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

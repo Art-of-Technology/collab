@@ -1,13 +1,14 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { Grid, List, BarChart3 } from 'lucide-react';
+import { Grid, List, BarChart3, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const VIEW_TYPES = [
   { id: 'LIST', name: 'List', icon: List },
   { id: 'KANBAN', name: 'Board', icon: Grid },
   { id: 'TIMELINE', name: 'Timeline', icon: BarChart3 },
+  { id: 'PLANNING', name: 'Planning', icon: Calendar },
 ];
 
 interface ViewTypeSelectorProps {

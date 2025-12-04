@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { IssueDetailContent } from "./IssueDetailContent";
 import { IssueDetailSkeleton } from "./IssueDetailSkeleton";
@@ -11,7 +10,6 @@ import { useIssueModalUrlState } from "@/hooks/useIssueModalUrlState";
 
 export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
   const { currentWorkspace } = useWorkspace();
-  const [isOpen, setIsOpen] = useState(false);
   const { parentIssueInfo } = useIssueModalUrlState();
 
   // Use React Query to fetch issue data
@@ -20,15 +18,6 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
   const issue = issueData?.issue || issueData;
   const error = queryError instanceof Error ? queryError.message : queryError ? "Failed to load issue" : null;
 
-  // Open modal when issueId is provided
-  useEffect(() => {
-    if (issueId) {
-      setIsOpen(true);
-    } else {
-      setIsOpen(false);
-    }
-  }, [issueId]);
-
   // No-op refresh handler - React Query handles updates automatically
   const handleRefresh = () => {
     // React Query will automatically refetch when queries are invalidated
@@ -36,7 +25,6 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setIsOpen(false);
       onClose();
     }
   };
@@ -54,7 +42,7 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
   if (!issueId) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={true} onOpenChange={handleOpenChange}>
       <DialogContent
         onEscapeKeyDown={(e) => e.preventDefault()}
         className={`
