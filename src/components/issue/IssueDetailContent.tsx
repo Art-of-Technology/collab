@@ -699,6 +699,9 @@ export function IssueDetailContent({
     if (!issue?.issueKey && !issue?.id) return;
 
     try {
+      // Store project info before deletion
+      const projectId = issue.projectId;
+      
       await deleteIssueMutation.mutateAsync(issue.issueKey || issue.id);
 
       toast({
@@ -706,31 +709,23 @@ export function IssueDetailContent({
         description: "The issue has been deleted successfully",
       });
 
-      // Navigate back based on context
-      if (viewSlug && workspaceId) {
-        router.push(`/${workspaceId}/views/${viewSlug}`);
-      } else {
-        // Try to detect if we came from a view by checking referrer
-        const referrer = document.referrer;
-        if (referrer && workspaceId) {
-          const url = new URL(referrer);
-          const pathSegments = url.pathname.split('/').filter(Boolean);
-
-          // Check if referrer is a view page: /workspace/views/viewSlug
-          if (pathSegments.length >= 3 && pathSegments[1] === 'views') {
-            router.push(referrer);
-            return;
-          }
-        }
-
-        // Fallback based on issue context
-        if (issue.projectId && workspaceId) {
-          router.push(`/${workspaceId}/projects/${issue.projectId}`);
-        } else if (workspaceId) {
+      // Navigate to the project's default view or fallback
+      if (workspaceId) {
+        try {
+          // Use the navigation helper to get the proper URL (resolves default view)
+          const backUrl = await generateBackNavigationUrl(
+            workspaceId, 
+            projectId ? { projectId } : null, 
+            viewSlug
+          );
+          router.push(backUrl);
+        } catch (navError) {
+          console.error('Error generating navigation URL:', navError);
+          // Fallback to views page
           router.push(`/${workspaceId}/views`);
-        } else {
-          router.push('/dashboard');
         }
+      } else {
+        router.push('/dashboard');
       }
     } catch (error) {
       console.error('Failed to delete issue:', error);
@@ -766,8 +761,6 @@ export function IssueDetailContent({
       // Fallback to original logic if helper fails
       if (viewSlug && workspaceId) {
         router.push(`/${workspaceId}/views/${viewSlug}`);
-      } else if (issue?.projectId && workspaceId) {
-        router.push(`/${workspaceId}/projects/${issue.projectId}`);
       } else if (workspaceId) {
         router.push(`/${workspaceId}/views`);
       } else {
