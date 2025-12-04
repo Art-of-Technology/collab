@@ -1322,7 +1322,7 @@ export async function generateTeamRangeSync(
             dayActivity.blocked.push({ ...activity, statusSymbol: '🚫' });
             break;
           case 'planned':
-            // Only include issues with "to_do" status (not backlog, won't fix, etc.)
+            // Only include issues with status containing 'todo', 'to do', or 'to_do' (filters out backlog, won't fix, etc.)
             const statusLower = (statusAtEndOfDay || '').toLowerCase();
             if (statusLower.includes('todo') || statusLower.includes('to do') || statusLower.includes('to_do')) {
               dayActivity.planned.push(activity);
