@@ -82,14 +82,14 @@ export default function NewAppPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="mb-8">
+    <div className="container mx-auto px-4 py-4 sm:py-8 max-w-2xl">
+      <div className="mb-4 sm:mb-8">
         <Link href="/dev/apps" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Apps
         </Link>
-        <h1 className="text-3xl font-bold tracking-tight">Create New App</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Create New App</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-2">
           Start building your app for the Collab platform
         </p>
       </div>
