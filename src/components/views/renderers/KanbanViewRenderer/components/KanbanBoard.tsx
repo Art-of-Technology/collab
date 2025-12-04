@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, type DragStart, type DragUpdate, type DropResult } from "@hello-pangea/dnd";
 import KanbanColumn from "./KanbanColumn";
+import { KanbanMinimap } from "./KanbanMinimap";
 import type { KanbanBoardProps, KanbanDropResult, KanbanDragUpdate } from "../types";
 
 const EDGE_SCROLL_THRESHOLD = 256;
@@ -452,48 +453,56 @@ function KanbanBoard({
   }, [handlePointerEnd, removeContainerScrollListener, removePointerListeners]);
 
   return (
-    <DragDropContext
-      onDragEnd={handleDragEndInternal}
-      onDragStart={handleDragStartInternal}
-      onDragUpdate={handleDragUpdateInternal}
-    >
-      <Droppable droppableId="board" direction="horizontal" type="column">
-        {(provided) => (
-          <div
-            className="flex gap-6 h-full min-w-0 overflow-x-auto kanban-horizontal-scroll"
-            ref={(node) => {
-              scrollContainerRef.current = node;
-              provided.innerRef(node);
-            }}
-            {...provided.droppableProps}
-          >
-            {columns.map((column, index) => (
-              <KanbanColumn
-                key={column.id}
-                ref={(el) => { columnRefs.current[column.id] = el; }}
-                column={column}
-                index={index}
-                groupField={groupField}
-                displayProperties={displayProperties}
-                isCreatingIssue={isCreatingIssue === column.id}
-                projects={projects}
-                workspaceId={workspaceId}
-                currentUserId={currentUserId}
-                draggedIssue={draggedIssue}
-                hoverState={hoverState}
-                operationsInProgress={operationsInProgress}
-                onIssueClick={onIssueClick}
-                onStartCreatingIssue={onStartCreatingIssue}
-                onCancelCreatingIssue={onCancelCreatingIssue}
-                onIssueCreated={onIssueCreated}
-                hoverColumnId={columnHoverPositionRef.current}
-              />
-            ))}
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-    </DragDropContext>
+    <>
+      <DragDropContext
+        onDragEnd={handleDragEndInternal}
+        onDragStart={handleDragStartInternal}
+        onDragUpdate={handleDragUpdateInternal}
+      >
+        <Droppable droppableId="board" direction="horizontal" type="column">
+          {(provided) => (
+            <div
+              className="flex gap-6 h-full min-w-0 overflow-x-auto kanban-horizontal-scroll"
+              ref={(node) => {
+                scrollContainerRef.current = node;
+                provided.innerRef(node);
+              }}
+              {...provided.droppableProps}
+            >
+              {columns.map((column, index) => (
+                <KanbanColumn
+                  key={column.id}
+                  ref={(el) => { columnRefs.current[column.id] = el; }}
+                  column={column}
+                  index={index}
+                  groupField={groupField}
+                  displayProperties={displayProperties}
+                  isCreatingIssue={isCreatingIssue === column.id}
+                  projects={projects}
+                  workspaceId={workspaceId}
+                  currentUserId={currentUserId}
+                  draggedIssue={draggedIssue}
+                  hoverState={hoverState}
+                  operationsInProgress={operationsInProgress}
+                  onIssueClick={onIssueClick}
+                  onStartCreatingIssue={onStartCreatingIssue}
+                  onCancelCreatingIssue={onCancelCreatingIssue}
+                  onIssueCreated={onIssueCreated}
+                  hoverColumnId={columnHoverPositionRef.current}
+                />
+              ))}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
+      
+      {/* Minimap for horizontal scroll navigation */}
+      <KanbanMinimap 
+        scrollContainerRef={scrollContainerRef}
+        columns={columns}
+      />
+    </>
   );
 }
 
