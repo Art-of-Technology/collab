@@ -73,7 +73,7 @@ export interface DayActivity {
   inProgress: IssueActivity[];     // Issues that were in progress during this day
   inReview: IssueActivity[];       // Issues that were in review during this day
   blocked: IssueActivity[];        // Issues that were blocked during this day
-  planned: IssueActivity[];        // Issues that were in todo/backlog (only to_do status)
+  planned: IssueActivity[];        // Issues with status containing 'todo', 'to do', or 'to_do' (filters out backlog, won't fix, etc.)
   movements: IssueMovement[];      // All status changes on this day
 }
 
