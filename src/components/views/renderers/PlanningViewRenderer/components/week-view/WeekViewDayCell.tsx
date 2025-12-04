@@ -5,7 +5,8 @@ import {
   PlayCircle,
   Clock,
   Eye,
-  Send
+  Send,
+  Ban
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DayActivity, IssueActivity } from '../../types';
@@ -51,6 +52,7 @@ export function WeekViewDayCell({ dayActivity, onOpenModal }: WeekViewDayCellPro
   const started = dayActivity.started || [];
   const inProgress = dayActivity.inProgress || [];
   const inReview = dayActivity.inReview || [];
+  const blocked = dayActivity.blocked || [];
   
   // Deduplicate
   const seenIds = new Set<string>();
@@ -65,9 +67,10 @@ export function WeekViewDayCell({ dayActivity, onOpenModal }: WeekViewDayCellPro
   const uniqueStarted = started.filter(dedupeFilter);
   const uniqueInProgress = inProgress.filter(dedupeFilter);
   const uniqueInReview = inReview.filter(dedupeFilter);
+  const uniqueBlocked = blocked.filter(dedupeFilter);
 
   const totalItems = uniqueCompleted.length + uniqueMovedToReview.length + 
-    uniqueStarted.length + uniqueInProgress.length + uniqueInReview.length;
+    uniqueStarted.length + uniqueInProgress.length + uniqueInReview.length + uniqueBlocked.length;
 
   if (totalItems === 0) {
     return <div className="text-[12px] text-[#3f3f46] px-3 py-3">—</div>;
@@ -140,6 +143,20 @@ export function WeekViewDayCell({ dayActivity, onOpenModal }: WeekViewDayCellPro
             icon={<Eye className="h-3.5 w-3.5" />}
           />
           {uniqueInReview.map(issue => (
+            <WeekViewIssueItem key={issue.issueId} issue={issue} onOpenModal={onOpenModal} />
+          ))}
+        </>
+      )}
+
+      {uniqueBlocked.length > 0 && (
+        <>
+          <GroupHeader 
+            title="Blocked" 
+            count={uniqueBlocked.length} 
+            color="text-red-400"
+            icon={<Ban className="h-3.5 w-3.5" />}
+          />
+          {uniqueBlocked.map(issue => (
             <WeekViewIssueItem key={issue.issueId} issue={issue} onOpenModal={onOpenModal} />
           ))}
         </>

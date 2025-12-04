@@ -206,15 +206,23 @@ function DayColumn({
   yesterdayInProgressIds,
   onOpenModal 
 }: DayColumnProps) {
-  // Separate carried over vs new in progress for today
-  const { carriedOver, currentInProgress } = useMemo(() => {
+  // Separate carried over vs new in progress for today (excluding blocked)
+  const { carriedOver, currentInProgress, carriedOverBlocked, currentBlocked } = useMemo(() => {
     if (!activity || !isToday || !yesterdayInProgressIds) {
-      return { carriedOver: [], currentInProgress: activity?.inProgress || [] };
+      return { 
+        carriedOver: [], 
+        currentInProgress: activity?.inProgress || [],
+        carriedOverBlocked: [],
+        currentBlocked: activity?.blocked || []
+      };
     }
     
     const carried: IssueActivity[] = [];
     const current: IssueActivity[] = [];
+    const carriedBlocked: IssueActivity[] = [];
+    const newBlocked: IssueActivity[] = [];
     
+    // Separate in progress issues
     activity.inProgress.forEach(issue => {
       if (yesterdayInProgressIds.has(issue.issueId)) {
         carried.push(issue);
@@ -222,8 +230,22 @@ function DayColumn({
         current.push(issue);
       }
     });
+
+    // Separate blocked issues
+    (activity.blocked || []).forEach(issue => {
+      if (yesterdayInProgressIds.has(issue.issueId)) {
+        carriedBlocked.push(issue);
+      } else {
+        newBlocked.push(issue);
+      }
+    });
     
-    return { carriedOver: carried, currentInProgress: current };
+    return { 
+      carriedOver: carried, 
+      currentInProgress: current,
+      carriedOverBlocked: carriedBlocked,
+      currentBlocked: newBlocked
+    };
   }, [activity, isToday, yesterdayInProgressIds]);
 
   const isEmpty = !activity || (
@@ -232,6 +254,7 @@ function DayColumn({
     (activity.movedToReview?.length || 0) === 0 &&
     activity.inProgress.length === 0 &&
     activity.inReview.length === 0 &&
+    (activity.blocked?.length || 0) === 0 &&
     activity.planned.length === 0
   );
 
@@ -326,7 +349,38 @@ function DayColumn({
               </>
             )}
 
-            {/* Planned (today only) */}
+            {/* Blocked (today: show carried and new separately, yesterday: show all) */}
+            {isToday ? (
+              <>
+                {carriedOverBlocked.length > 0 && (
+                  <>
+                    <GroupHeader title="Blocked (carried)" count={carriedOverBlocked.length} />
+                    {carriedOverBlocked.map(issue => (
+                      <IssueItem key={`blocked-carried-${issue.issueId}`} issue={issue} workspaceSlug={workspaceSlug} onOpenModal={onOpenModal} />
+                    ))}
+                  </>
+                )}
+                {currentBlocked.length > 0 && (
+                  <>
+                    <GroupHeader title="Blocked" count={currentBlocked.length} />
+                    {currentBlocked.map(issue => (
+                      <IssueItem key={`blocked-${issue.issueId}`} issue={issue} workspaceSlug={workspaceSlug} onOpenModal={onOpenModal} />
+                    ))}
+                  </>
+                )}
+              </>
+            ) : (
+              activity && activity.blocked && activity.blocked.length > 0 && (
+                <>
+                  <GroupHeader title="Blocked" count={activity.blocked.length} />
+                  {activity.blocked.map(issue => (
+                    <IssueItem key={`blocked-${issue.issueId}`} issue={issue} workspaceSlug={workspaceSlug} onOpenModal={onOpenModal} />
+                  ))}
+                </>
+              )
+            )}
+
+            {/* Planned (today only) - only shows to_do status issues */}
             {isToday && activity && activity.planned.length > 0 && (
               <>
                 <GroupHeader title="Planned" count={activity.planned.length} />
@@ -403,12 +457,13 @@ function MemberCard({
   const yesterdayActivity = member.days[yesterdayDate];
   const todayActivity = member.days[todayDate];
   
-  // IDs of issues that were in progress yesterday (for carried over detection)
+  // IDs of issues that were in progress/blocked yesterday (for carried over detection)
   const yesterdayInProgressIds = useMemo(() => {
     if (!yesterdayActivity) return new Set<string>();
     return new Set([
       ...yesterdayActivity.inProgress.map(i => i.issueId),
       ...yesterdayActivity.inReview.map(i => i.issueId),
+      ...(yesterdayActivity.blocked || []).map(i => i.issueId),
     ]);
   }, [yesterdayActivity]);
 
@@ -419,9 +474,11 @@ function MemberCard({
   const sentToReview = (yesterdayActivity?.movedToReview?.length || 0) + (todayActivity?.movedToReview?.length || 0);
   const inProgress = todayActivity?.inProgress.length || 0;
   const inReview = todayActivity?.inReview.length || 0;
+  const blocked = todayActivity?.blocked?.length || 0;
   const planned = todayActivity?.planned.length || 0;
   const carriedOver = yesterdayInProgressIds.size > 0 
-    ? (todayActivity?.inProgress.filter(i => yesterdayInProgressIds.has(i.issueId)).length || 0)
+    ? ((todayActivity?.inProgress.filter(i => yesterdayInProgressIds.has(i.issueId)).length || 0) +
+       (todayActivity?.blocked?.filter(i => yesterdayInProgressIds.has(i.issueId)).length || 0))
     : 0;
 
   return (
@@ -457,6 +514,7 @@ function MemberCard({
           <StatBadge count={sentToReview} label="sent" color="purple" />
           <StatBadge count={inProgress} label="active" color="blue" />
           <StatBadge count={inReview} label="review" color="violet" />
+          <StatBadge count={blocked} label="blocked" color="amber" />
           <StatBadge count={carriedOver} label="carried" color="orange" />
           <StatBadge count={planned} label="planned" color="slate" />
         </div>
