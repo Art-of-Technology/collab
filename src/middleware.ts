@@ -9,10 +9,10 @@ import { NextResponse, type NextRequest } from "next/server";
  * - Report-Only toggle and report-uri support
  */
 
-// Run this middleware on almost everything except static assets and next internals
+// Run this middleware on almost everything except static assets, next internals, and streaming endpoints
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|assets/|fonts/|images/|api/health).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|assets/|fonts/|images/|api/health|api/realtime).*)",
   ],
 };
 
@@ -42,20 +42,31 @@ export function middleware(req: NextRequest) {
   const connectExtra = (process.env.CSP_CONNECT_SRC ?? "").trim();
   const frameAncestorsExtra = (process.env.CSP_FRAME_ANCESTORS ?? "").trim();
   const frameSrcExtra = (process.env.CSP_FRAME_SRC ?? "").trim();
-
-  // In dev we allow inline/eval for React Fast Refresh and various tooling
-  const devScriptRelax = isDev ? "'unsafe-eval' 'unsafe-inline'" : "";
+  
+  // Allow unsafe-eval in production if needed by dependencies (some UI libraries require it)
+  const allowUnsafeEval = boolFromEnv("CSP_ALLOW_UNSAFE_EVAL", false);
 
   const directives: string[] = [
     // Baseline defaults
     "default-src 'self'",
 
-    // Scripts: No inline/eval in prod. In dev we relax to keep DX.
+    // Scripts: Next.js requires 'unsafe-inline' for inline scripts
+    // Some libraries also need 'unsafe-eval' (e.g., certain UI libs, date pickers)
+    // For maximum security, consider implementing nonce-based CSP with Next.js experimental features
     (() => {
-      const parts: string[] = ["'self'"];
-      if (devScriptRelax) parts.push(devScriptRelax);      // adds 'unsafe-eval' 'unsafe-inline' in dev
+      const parts: string[] = ["'self'", "'unsafe-inline'"];
+      // Add 'unsafe-eval' in dev for HMR, or in prod if CSP_ALLOW_UNSAFE_EVAL is set
+      if (isDev || allowUnsafeEval) parts.push("'unsafe-eval'");
       if (scriptExtra) parts.push(scriptExtra);
       return `script-src ${parts.join(" ")}`;
+    })(),
+
+    // Script-src-elem: Specifically for script elements (needed for Next.js)
+    (() => {
+      const parts: string[] = ["'self'", "'unsafe-inline'"];
+      if (isDev || allowUnsafeEval) parts.push("'unsafe-eval'");
+      if (scriptExtra) parts.push(scriptExtra);
+      return `script-src-elem ${parts.join(" ")}`;
     })(),
 
     // Styles: allow inline styles due to CSS-in-JS and Next.js style tags

@@ -72,7 +72,8 @@ export interface DayActivity {
   movedToReview: IssueActivity[];  // Issues moved to review/testing/deploy on this day
   inProgress: IssueActivity[];     // Issues that were in progress during this day
   inReview: IssueActivity[];       // Issues that were in review during this day
-  planned: IssueActivity[];        // Issues that were in todo/backlog
+  blocked: IssueActivity[];        // Issues that were blocked during this day
+  planned: IssueActivity[];        // Issues with status containing 'todo', 'to do', or 'to_do' (filters out backlog, won't fix, etc.)
   movements: IssueMovement[];      // All status changes on this day
 }
 
@@ -949,6 +950,7 @@ export async function analyzeDayActivity(
         movedToReview: [],
         inProgress: [],
         inReview: [],
+        blocked: [],
         planned: [],
         movements: [],
       });
@@ -993,10 +995,14 @@ export async function analyzeDayActivity(
         dayActivity.inReview.push(activity);
         break;
       case 'blocked':
-        dayActivity.inProgress.push({ ...activity, statusSymbol: '🚫' });
+        dayActivity.blocked.push({ ...activity, statusSymbol: '🚫' });
         break;
       case 'planned':
-        dayActivity.planned.push(activity);
+        // Only include issues with status containing 'todo', 'to do', or 'to_do' (filters out backlog, won't fix, etc.)
+        const statusLower = (statusAtEndOfDay || '').toLowerCase();
+        if (statusLower.includes('todo') || statusLower.includes('to do') || statusLower.includes('to_do')) {
+          dayActivity.planned.push(activity);
+        }
         break;
     }
 
@@ -1238,6 +1244,7 @@ export async function generateTeamRangeSync(
         movedToReview: [],
         inProgress: [],
         inReview: [],
+        blocked: [],
         planned: [],
         movements: [],
       };
@@ -1312,10 +1319,14 @@ export async function generateTeamRangeSync(
             dayActivity.inReview.push(activity);
             break;
           case 'blocked':
-            dayActivity.inProgress.push({ ...activity, statusSymbol: '🚫' });
+            dayActivity.blocked.push({ ...activity, statusSymbol: '🚫' });
             break;
           case 'planned':
-            dayActivity.planned.push(activity);
+            // Only include issues with status containing 'todo', 'to do', or 'to_do' (filters out backlog, won't fix, etc.)
+            const statusLower = (statusAtEndOfDay || '').toLowerCase();
+            if (statusLower.includes('todo') || statusLower.includes('to do') || statusLower.includes('to_do')) {
+              dayActivity.planned.push(activity);
+            }
             break;
         }
 
