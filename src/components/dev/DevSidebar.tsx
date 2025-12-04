@@ -83,7 +83,7 @@ export default function DevSidebar({
               )}
               asChild
             >
-              {item.href === "/docs" ? (
+              {item.href === "/dev/docs" ? (
                 <Link href={item.href} target="_blank" rel="noopener noreferrer" title={item.name}>
                   <item.icon className="h-5 w-5" />
                 </Link>
@@ -130,7 +130,7 @@ export default function DevSidebar({
                 )}
                 asChild
               >
-                {item.href === "/docs" ? (
+                {item.href === "/dev/docs" ? (
                   <Link href={item.href} target="_blank" rel="noopener noreferrer">
                     <item.icon className="mr-2 h-4 w-4" />
                     {item.name}

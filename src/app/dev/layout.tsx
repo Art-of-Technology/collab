@@ -7,7 +7,6 @@ import SidebarProvider from '@/components/providers/SidebarProvider';
 import { useSidebar } from '@/components/providers/SidebarProvider';
 import { Button } from '@/components/ui/button';
 import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { usePathname } from 'next/navigation';
 
 function DevLayoutContent({ children }: { children: React.ReactNode }) {
   const {
@@ -82,6 +81,7 @@ function DevLayoutContent({ children }: { children: React.ReactNode }) {
           data-open={isMobileOpen}
           aria-modal="true"
           role="dialog"
+          aria-hidden={!isMobileOpen}
         >
           <div className="h-full relative overflow-y-auto">
             <DevSidebar isCollapsed={false} />

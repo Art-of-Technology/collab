@@ -55,13 +55,13 @@ export default async function DevAppsPage() {
     <div className="container mx-auto px-4 py-4 sm:py-8 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-8">
         <div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Developer Console</h1>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">My Apps</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-2">
             Manage your apps for the Collab platform
           </p>
         </div>
         <Link href="/dev/apps/new">
-          <Button size="sm" className="sm:size-default">
+          <Button size="sm" className="sm:h-9 sm:px-4 sm:text-sm">
             <Plus className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Create App</span>
             <span className="sm:hidden">Create</span>

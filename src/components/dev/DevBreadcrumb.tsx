@@ -18,7 +18,7 @@ export default function DevBreadcrumb() {
     const href = '/dev/' + devSegments.slice(0, index + 1).join('/');
     const isLast = index === devSegments.length - 1;
     
-    let label = segment;
+    let label;
     if (segment === 'apps') label = 'My Apps';
     else if (segment === 'docs') label = 'API Documentation';
     else if (segment === 'webhooks') label = 'Webhooks';
@@ -33,7 +33,7 @@ export default function DevBreadcrumb() {
   return (
     <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground bg-transparent p-0 m-0 border-0 border-b-0" role="navigation" aria-label="Breadcrumb">
       <Link
-        href="/dev/apps"
+        href="/dev"
         className="hover:text-foreground transition-colors"
       >
         <Home className="h-3.5 w-3.5 sm:h-4 sm:w-4" />

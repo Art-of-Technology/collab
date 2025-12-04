@@ -2,9 +2,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
-import { LayoutDashboard, Grid3X3, Book, Webhook, Settings } from 'lucide-react';
+import { Grid3X3, Book, Webhook, Settings } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 
 export default async function DevDashboardPage() {
   const session = await getServerSession(authOptions);
