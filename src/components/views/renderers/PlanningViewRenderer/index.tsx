@@ -65,8 +65,16 @@ export default function PlanningViewRenderer({
     queryFn: async () => {
       const response = await fetch(`/api/workspaces/${workspace.id}/members`);
       if (!response.ok) throw new Error('Failed to fetch members');
-      const data = await response.json();
-      return data.members || data;
+      const members = await response.json();
+      
+      // Transform the data to extract user objects from members
+      return members.map((member: any) => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        image: member.user.image,
+        useCustomAvatar: member.user.useCustomAvatar,
+      }));
     },
   });
 
