@@ -7,7 +7,7 @@ interface CodeBlockProps {
   language?: string;
 }
 
-export function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
+export function CodeBlock({ code }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -26,7 +26,7 @@ export function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
           {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
-      <pre className="bg-[#090909] border border-[#1f1f1f] rounded-lg p-4 overflow-x-auto text-sm">
+      <pre className="bg-[#090909] border border-[#1f1f1f] rounded-lg p-4 overflow-x-auto text-sm whitespace-pre-wrap break-words">
         <code className="text-gray-300">{code}</code>
       </pre>
     </div>

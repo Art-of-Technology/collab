@@ -17,9 +17,11 @@ export default function ApiDocsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEndpoint, setSelectedEndpoint] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<DocSection>('endpoints');
   const [oauthContent, setOauthContent] = useState<string>('');
   const [thirdPartyContent, setThirdPartyContent] = useState<string>('');
+  const [apiKey, setApiKey] = useState<string | null>(null);
 
   // Handle hash changes for internal navigation
   useEffect(() => {
@@ -45,7 +47,9 @@ export default function ApiDocsPage() {
       .then((json) => {
         setData(json);
         if (json.endpoints && json.endpoints.length > 0) {
-          setSelectedEndpoint(json.endpoints[0].url);
+          const firstEndpoint = json.endpoints[0];
+          setSelectedEndpoint(firstEndpoint.url);
+          setSelectedMethod(firstEndpoint.method);
         }
         setLoading(false);
       })
@@ -122,8 +126,10 @@ export default function ApiDocsPage() {
 
   const currentEndpoint = useMemo(() => {
     if (!selectedEndpoint || !data?.endpoints) return null;
-    return data.endpoints.find((ep) => ep.url === selectedEndpoint);
-  }, [selectedEndpoint, data]);
+    return data.endpoints.find((ep) => 
+      ep.url === selectedEndpoint && (!selectedMethod || ep.method === selectedMethod)
+    ) || null;
+  }, [selectedEndpoint, selectedMethod, data]);
 
   if (loading) {
     return (
@@ -163,25 +169,29 @@ export default function ApiDocsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-12rem)]">
+      <div className="flex flex-col md:flex-row gap-4 md:h-[calc(100vh-12rem)] min-h-[400px]">
         <div className="hidden md:block">
-          <ApiDocsSidebar
-            endpoints={data.endpoints}
-            selectedEndpoint={selectedEndpoint}
-            selectedSection={selectedSection}
-            onSelectEndpoint={setSelectedEndpoint}
-            onSelectSection={setSelectedSection}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchResults={searchResults}
-          />
+              <ApiDocsSidebar
+                endpoints={data.endpoints}
+                selectedEndpoint={selectedEndpoint}
+                selectedMethod={selectedMethod}
+                selectedSection={selectedSection}
+                onSelectEndpoint={(url, method) => {
+                  setSelectedEndpoint(url);
+                  setSelectedMethod(method);
+                }}
+                onSelectSection={setSelectedSection}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchResults={searchResults}
+              />
         </div>
 
-        <div className="flex-1 overflow-auto">
-          <ScrollArea className="h-full pr-4">
+        <div className="flex-1 overflow-auto md:min-h-0">
+          <ScrollArea className="h-full md:pr-4">
             {selectedSection === 'endpoints' && (
               currentEndpoint ? (
-                <EndpointCard endpoint={currentEndpoint} baseUrl={data.info.baseUrl} />
+                <EndpointCard endpoint={currentEndpoint} baseUrl={data.info.baseUrl} apiKey={apiKey} />
               ) : (
                 <div className="text-center py-12">
                   <p className="text-muted-foreground">Select an endpoint to view details</p>
@@ -262,10 +272,13 @@ export default function ApiDocsPage() {
                     return (
                       <button
                         key={endpointKey}
-                        onClick={() => setSelectedEndpoint(endpoint.url)}
+                        onClick={() => {
+                          setSelectedEndpoint(endpoint.url);
+                          setSelectedMethod(endpoint.method);
+                        }}
                         className={cn(
                           'w-full text-left px-3 py-2 rounded text-sm transition-colors border',
-                          selectedEndpoint === endpoint.url
+                          selectedEndpoint === endpoint.url && selectedMethod === endpoint.method
                             ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
                             : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
                         )}

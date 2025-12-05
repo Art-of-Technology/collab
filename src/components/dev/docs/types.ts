@@ -22,6 +22,13 @@ export interface Endpoint {
   title: string;
   description: string;
   parameters?: any[];
+  requestBody?: {
+    type?: string;
+    schema?: any;
+    description?: string;
+    example?: any;
+    required?: string[];
+  };
   responses?: Record<string, any>;
   requestHeaders?: Array<{
     name: string;

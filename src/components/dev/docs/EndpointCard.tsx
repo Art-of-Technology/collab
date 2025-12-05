@@ -1,19 +1,43 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, AlertCircle, Zap, FileText, List, Database, Info } from 'lucide-react';
+import { Shield, AlertCircle, Zap, FileText, List, Database, Info, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Endpoint } from './types';
 import { CodeBlock } from './CodeBlock';
+import { TryItModal } from './TryItModal';
+
+function replaceApiKeyPlaceholders(code: string, apiKey: string): string {
+  // Replace common API key placeholders with the actual API key
+  // Handle various formats: YOUR_API_KEY, <your-api-key>, 'YOUR_API_KEY', "YOUR_API_KEY", etc.
+  return code
+    // Replace in quotes (single and double)
+    .replace(/(['"])(YOUR_API_KEY|YOUR_TOKEN|your-api-key|your-token)\1/g, `$1${apiKey}$1`)
+    // Replace without quotes (but preserve surrounding context)
+    .replace(/\bYOUR_API_KEY\b/g, apiKey)
+    .replace(/\bYOUR_TOKEN\b/g, apiKey)
+    // Replace in angle brackets
+    .replace(/<your-api-key>/g, apiKey)
+    .replace(/<your-token>/g, apiKey)
+    // Replace environment variable references
+    .replace(/process\.env\.API_KEY/g, `'${apiKey}'`)
+    .replace(/process\.env\.COLLAB_API_KEY/g, `'${apiKey}'`)
+    .replace(/process\.env\.NEXT_PUBLIC_API_KEY/g, `'${apiKey}'`);
+}
 
 interface EndpointCardProps {
   endpoint: Endpoint;
   baseUrl: string;
+  apiKey?: string | null;
 }
 
-export function EndpointCard({ endpoint, baseUrl }: EndpointCardProps) {
+export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
+  const [tryItOpen, setTryItOpen] = useState(false);
+  
   const methodColors: Record<string, string> = {
     GET: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     POST: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -25,30 +49,39 @@ export function EndpointCard({ endpoint, baseUrl }: EndpointCardProps) {
   const methodColor = methodColors[endpoint.method] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
   return (
-    <Card className="mb-6 border-[#1f1f1f] bg-[#101011]">
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <Badge className={cn('font-mono text-xs', methodColor)}>
-                {endpoint.method}
-              </Badge>
-              <code className="text-sm sm:text-base text-foreground break-all">{endpoint.url}</code>
-            </div>
-            <CardTitle className="text-lg sm:text-xl mb-1">{endpoint.title}</CardTitle>
-            {endpoint.summary && endpoint.summary !== endpoint.description && (
-              <CardDescription className="text-sm mb-1">{endpoint.summary}</CardDescription>
-            )}
-            <CardDescription className="text-sm">{endpoint.description}</CardDescription>
-            {endpoint.file && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <FileText className="h-3 w-3" />
-                <code className="text-xs">{endpoint.file}</code>
+    <>
+      <Card className="mb-6 border-[#1f1f1f] bg-[#101011]">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <Badge className={cn('font-mono text-xs', methodColor)}>
+                  {endpoint.method}
+                </Badge>
+                <code className="text-sm sm:text-base text-foreground break-all">{endpoint.url}</code>
               </div>
-            )}
+              <CardTitle className="text-lg sm:text-xl mb-1">{endpoint.title}</CardTitle>
+              {endpoint.summary && endpoint.summary !== endpoint.description && (
+                <CardDescription className="text-sm mb-1">{endpoint.summary}</CardDescription>
+              )}
+              <CardDescription className="text-sm">{endpoint.description}</CardDescription>
+              {endpoint.file && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <FileText className="h-3 w-3" />
+                  <code className="text-xs">{endpoint.file}</code>
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={() => setTryItOpen(true)}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              size="sm"
+            >
+              <Play className="h-4 w-4" />
+              Try it
+            </Button>
           </div>
-        </div>
-      </CardHeader>
+        </CardHeader>
       <CardContent className="space-y-4">
         {endpoint.requiresAuth && (
           <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
@@ -176,9 +209,9 @@ export function EndpointCard({ endpoint, baseUrl }: EndpointCardProps) {
           <div>
             <h4 className="text-sm font-semibold mb-2">Responses</h4>
             <Tabs defaultValue={Object.keys(endpoint.responses)[0]} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 gap-1">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 overflow-x-auto">
                 {Object.entries(endpoint.responses).map(([statusCode, response]: [string, any]) => (
-                  <TabsTrigger key={statusCode} value={statusCode} className="text-xs sm:text-sm">
+                  <TabsTrigger key={statusCode} value={statusCode} className="text-xs sm:text-sm whitespace-nowrap">
                     {statusCode}
                   </TabsTrigger>
                 ))}
@@ -233,7 +266,10 @@ export function EndpointCard({ endpoint, baseUrl }: EndpointCardProps) {
         {endpoint.codeExamples && (
           <div>
             <h4 className="text-sm font-semibold mb-2">Code Example</h4>
-            <CodeBlock code={endpoint.codeExamples.example} language={endpoint.codeExamples.language} />
+            <CodeBlock 
+              code={apiKey ? replaceApiKeyPlaceholders(endpoint.codeExamples.example, apiKey) : endpoint.codeExamples.example} 
+              language={endpoint.codeExamples.language} 
+            />
           </div>
         )}
 
@@ -261,10 +297,10 @@ export function EndpointCard({ endpoint, baseUrl }: EndpointCardProps) {
                 <p className="text-xs font-medium mb-2 text-muted-foreground">Endpoint-Specific Errors:</p>
                 <div className="space-y-2">
                   {(endpoint.errorHandling as any).endpointSpecific.map((error: any, idx: number) => (
-                    <div key={idx} className="p-2 bg-orange-500/10 border border-orange-500/20 rounded text-sm">
-                      <div className="font-medium text-orange-400">{error.statusCode}: {error.description}</div>
+                    <div key={idx} className="p-2 bg-green-500/10 border border-green-500/20 rounded text-sm">
+                      <div className="font-medium text-green-400">{error.statusCode}: {error.description}</div>
                       {error.handling && (
-                        <div className="text-orange-300/80 text-xs mt-1">{error.handling}</div>
+                        <div className="text-green-300/80 text-xs mt-1">{error.handling}</div>
                       )}
                     </div>
                   ))}
@@ -372,6 +408,13 @@ export function EndpointCard({ endpoint, baseUrl }: EndpointCardProps) {
         )}
       </CardContent>
     </Card>
+    <TryItModal
+      endpoint={endpoint}
+      baseUrl={baseUrl}
+      open={tryItOpen}
+      onOpenChange={setTryItOpen}
+    />
+    </>
   );
 }
 

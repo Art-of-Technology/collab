@@ -14,8 +14,9 @@ type DocSection = 'endpoints' | 'oauth' | 'third-party';
 interface ApiDocsSidebarProps {
   endpoints: Endpoint[];
   selectedEndpoint: string | null;
+  selectedMethod: string | null;
   selectedSection: DocSection;
-  onSelectEndpoint: (url: string) => void;
+  onSelectEndpoint: (url: string, method: string) => void;
   onSelectSection: (section: DocSection) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -29,6 +30,7 @@ interface ApiDocsSidebarProps {
 export function ApiDocsSidebar({
   endpoints,
   selectedEndpoint,
+  selectedMethod,
   selectedSection,
   onSelectEndpoint,
   onSelectSection,
@@ -62,14 +64,14 @@ export function ApiDocsSidebar({
 
   return (
     <div className="w-full md:w-64 border-r border-[#1f1f1f] bg-[#101011] flex flex-col h-full">
-      <div className="p-4 border-b border-[#1f1f1f]">
+      <div className="p-3 sm:p-4 border-b border-[#1f1f1f]">
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400" />
           <Input
             placeholder="Search documentation..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-8 h-8 text-sm bg-[#101011] border-[#1f1f1f]"
+            className="pl-7 sm:pl-8 h-8 text-xs sm:text-sm bg-[#101011] border-[#1f1f1f]"
           />
         </div>
       </div>
@@ -149,14 +151,14 @@ export function ApiDocsSidebar({
                   };
                   const methodColor = methodColors[endpoint.method] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
                   const endpointKey = `${endpoint.method}:${endpoint.url}:${endpoint.file}`;
-                  const isSelected = selectedEndpoint === endpoint.url;
+                  const isSelected = selectedEndpoint === endpoint.url && selectedMethod === endpoint.method;
 
                   return (
                     <TooltipProvider key={endpointKey}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
-                            onClick={() => onSelectEndpoint(endpoint.url)}
+                            onClick={() => onSelectEndpoint(endpoint.url, endpoint.method)}
                             className={cn(
                               'w-full text-left px-2 py-2 rounded text-sm transition-colors',
                               isSelected
