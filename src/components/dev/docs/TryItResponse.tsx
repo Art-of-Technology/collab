@@ -64,10 +64,14 @@ export function TryItResponse({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    generateCurlCommand(endpoint, baseUrl, pathParams, queryParams, requestBody, authHeader, bodyMode)
-                  );
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      generateCurlCommand(endpoint, baseUrl, pathParams, queryParams, requestBody, authHeader, bodyMode)
+                    );
+                  } catch (error) {
+                    console.error('Failed to copy to clipboard:', error);
+                  }
                 }}
                 className="h-6 text-xs"
               >
@@ -77,7 +81,6 @@ export function TryItResponse({
             </div>
             <CodeBlock 
               code={generateCurlCommand(endpoint, baseUrl, pathParams, queryParams, requestBody, authHeader, bodyMode)} 
-              language="bash" 
             />
           </div>
 
@@ -88,8 +91,12 @@ export function TryItResponse({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(buildUrl(endpoint.url, baseUrl, pathParams, queryParams));
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(buildUrl(endpoint.url, baseUrl, pathParams, queryParams));
+                  } catch (error) {
+                    console.error('Failed to copy to clipboard:', error);
+                  }
                 }}
                 className="h-6 text-xs"
               >
@@ -112,8 +119,12 @@ export function TryItResponse({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(response.data, null, 2));
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(JSON.stringify(response.data, null, 2));
+                    } catch (error) {
+                      console.error('Failed to copy to clipboard:', error);
+                    }
                   }}
                   className="h-6 text-xs"
                 >
@@ -141,7 +152,7 @@ export function TryItResponse({
             {/* Response Body */}
             <div className="mb-3">
               <p className="text-xs font-medium text-muted-foreground mb-2">Response body</p>
-              <CodeBlock code={JSON.stringify(response.data, null, 2)} language="json" />
+              <CodeBlock code={JSON.stringify(response.data, null, 2)} />
             </div>
 
             {/* Response Headers - Collapsible */}

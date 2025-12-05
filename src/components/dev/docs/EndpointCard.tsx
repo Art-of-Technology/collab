@@ -107,7 +107,7 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
                 {endpoint.authentication?.example && (
                   <div>
                     <p className="text-xs font-medium mb-1">Example Headers:</p>
-                    <CodeBlock code={JSON.stringify(endpoint.authentication.example, null, 2)} language="json" />
+                    <CodeBlock code={JSON.stringify(endpoint.authentication.example, null, 2)} />
                   </div>
                 )}
                 {endpoint.authentication?.steps && endpoint.authentication.steps.length > 0 && (
@@ -165,13 +165,13 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
               {(endpoint as any).requestBody.schema && (
                 <div>
                   <p className="text-xs font-medium mb-1">Schema:</p>
-                  <CodeBlock code={JSON.stringify((endpoint as any).requestBody.schema, null, 2)} language="json" />
+                  <CodeBlock code={JSON.stringify((endpoint as any).requestBody.schema, null, 2)} />
                 </div>
               )}
               {(endpoint as any).requestBody.example && (
                 <div>
                   <p className="text-xs font-medium mb-1">Example:</p>
-                  <CodeBlock code={JSON.stringify((endpoint as any).requestBody.example, null, 2)} language="json" />
+                  <CodeBlock code={JSON.stringify((endpoint as any).requestBody.example, null, 2)} />
                 </div>
               )}
               {(endpoint as any).requestBody.required && (endpoint as any).requestBody.required.length > 0 && (
@@ -243,7 +243,7 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
                     {response.example && (
                       <div>
                         <p className="text-xs font-medium mb-1">Example Response:</p>
-                        <CodeBlock code={JSON.stringify(response.example, null, 2)} language="json" />
+                        <CodeBlock code={JSON.stringify(response.example, null, 2)} />
                       </div>
                     )}
                   </div>
@@ -259,7 +259,7 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
               <Database className="h-4 w-4" />
               Response Schema
             </h4>
-            <CodeBlock code={JSON.stringify((endpoint as any).responseSchema, null, 2)} language="json" />
+            <CodeBlock code={JSON.stringify((endpoint as any).responseSchema, null, 2)} />
           </div>
         )}
 
@@ -268,7 +268,6 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
             <h4 className="text-sm font-semibold mb-2">Code Example</h4>
             <CodeBlock 
               code={apiKey ? replaceApiKeyPlaceholders(endpoint.codeExamples.example, apiKey) : endpoint.codeExamples.example} 
-              language={endpoint.codeExamples.language} 
             />
           </div>
         )}
@@ -381,7 +380,7 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
               {(endpoint.pagination as any).response && (
                 <div>
                   <p className="text-xs font-medium mb-1">Response Format:</p>
-                  <CodeBlock code={JSON.stringify((endpoint.pagination as any).response, null, 2)} language="json" />
+                  <CodeBlock code={JSON.stringify((endpoint.pagination as any).response, null, 2)} />
                 </div>
               )}
               {(endpoint.pagination as any).example && (
@@ -397,7 +396,7 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
                     {(endpoint.pagination as any).example.response && (
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Response:</p>
-                        <CodeBlock code={JSON.stringify((endpoint.pagination as any).example.response, null, 2)} language="json" />
+                        <CodeBlock code={JSON.stringify((endpoint.pagination as any).example.response, null, 2)} />
                       </div>
                     )}
                   </div>

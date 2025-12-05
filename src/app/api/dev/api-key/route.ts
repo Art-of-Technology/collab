@@ -3,13 +3,26 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 
-// Rate limiting: Simple in-memory store (for production, use Redis or similar)
+// Rate limiting: Simple in-memory store
+// NOTE: This implementation is suitable for single-instance deployments.
+// For production with multiple instances, use a persistent store like Redis
+// to ensure rate limiting works correctly across all instances.
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute
 
 function checkRateLimit(userId: string): boolean {
   const now = Date.now();
+  
+  // Cleanup expired entries periodically (every 100 calls to prevent memory leak)
+  if (rateLimitMap.size > 0 && Math.random() < 0.01) {
+    for (const [key, value] of rateLimitMap.entries()) {
+      if (now > value.resetTime) {
+        rateLimitMap.delete(key);
+      }
+    }
+  }
+  
   const userLimit = rateLimitMap.get(userId);
 
   if (!userLimit || now > userLimit.resetTime) {

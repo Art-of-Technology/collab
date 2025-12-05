@@ -77,36 +77,50 @@ export function TryItModal({ endpoint, baseUrl, open, onOpenChange }: TryItModal
       setRequestBody('');
     }
 
-    // Get default auth header - try to get from cookies
+    // Get default auth header - use secure API endpoint
     if (endpoint.requiresAuth) {
-      // Try to get token from cookies (NextAuth stores session in cookies)
-      const getTokenFromCookies = () => {
-        const cookies = document.cookie.split(';');
-        for (const cookie of cookies) {
-          const [name, value] = cookie.trim().split('=');
-          // NextAuth uses 'next-auth.session-token' or similar
-          if (name.includes('session-token') || name.includes('next-auth')) {
-            return value;
+      // Fetch token from secure API endpoint instead of reading from cookies
+      const fetchToken = async () => {
+        try {
+          const res = await fetch('/api/dev/auth-token', { 
+            credentials: 'include',
+            cache: 'no-store'
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            // Note: The endpoint returns null for token since OAuth access tokens
+            // must be obtained through the OAuth flow. Users should enter their
+            // OAuth access token manually in the Authorization header.
+            // We set a placeholder here.
+            if (endpoint.authentication?.headerFormat) {
+              setAuthHeader(endpoint.authentication.headerFormat.replace('<your-token>', 'YOUR_TOKEN'));
+            } else {
+              setAuthHeader('Bearer YOUR_TOKEN');
+            }
+          } else {
+            // Fallback to placeholder if token not available
+            if (endpoint.authentication?.headerFormat) {
+              setAuthHeader(endpoint.authentication.headerFormat.replace('<your-token>', 'YOUR_TOKEN'));
+            } else {
+              setAuthHeader('Bearer YOUR_TOKEN');
+            }
+          }
+        } catch (error) {
+          // Fallback to placeholder on error
+          if (endpoint.authentication?.headerFormat) {
+            setAuthHeader(endpoint.authentication.headerFormat.replace('<your-token>', 'YOUR_TOKEN'));
+          } else {
+            setAuthHeader('Bearer YOUR_TOKEN');
           }
         }
-        return null;
       };
-
-      const token = getTokenFromCookies();
-      if (token && endpoint.authentication?.headerFormat) {
-        const format = endpoint.authentication.headerFormat;
-        setAuthHeader(format.replace('<your-token>', token).replace('YOUR_TOKEN', token));
-      } else if (token) {
-        setAuthHeader(`Bearer ${token}`);
-      } else if (endpoint.authentication?.headerFormat) {
-        setAuthHeader(endpoint.authentication.headerFormat.replace('<your-token>', 'YOUR_TOKEN').replace('YOUR_TOKEN', 'YOUR_TOKEN'));
-      } else {
-        setAuthHeader('Bearer YOUR_TOKEN');
-      }
+      
+      fetchToken();
     } else {
       setAuthHeader('');
     }
-  }, [open, endpoint.url, endpoint.parameters, (endpoint as any).requestBody, endpoint.requiresAuth, endpoint.authentication]);
+  }, [open, endpoint.url, endpoint.parameters, (endpoint as any).requestBody, endpoint.requiresAuth, endpoint.authentication?.headerFormat]);
 
   const buildUrl = () => buildUrlUtil(endpoint.url, baseUrl, pathParams, queryParams);
 
@@ -172,7 +186,9 @@ export function TryItModal({ endpoint, baseUrl, open, onOpenChange }: TryItModal
       if (['POST', 'PUT', 'PATCH'].includes(endpoint.method) && requestBody && requestBody.trim() !== '') {
         try {
           if (bodyMode === 'json') {
-            options.body = JSON.parse(requestBody);
+            // Validate JSON format, then use as string (fetch requires string body)
+            JSON.parse(requestBody);
+            options.body = requestBody;
           } else {
             // Form mode: build JSON from form fields
             const formJson: Record<string, any> = {};
@@ -185,7 +201,8 @@ export function TryItModal({ endpoint, baseUrl, open, onOpenChange }: TryItModal
             options.body = JSON.stringify(formJson);
           }
         } catch (e) {
-          setError('Invalid JSON in request body');
+          const errorMessage = e instanceof Error ? e.message : 'Invalid JSON format';
+          setError(`Invalid JSON format in request body${errorMessage ? `: ${errorMessage}` : ''}`);
           setLoading(false);
           return;
         }

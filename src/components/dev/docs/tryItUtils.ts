@@ -132,7 +132,7 @@ export function getParameterHelp(paramName: string, paramType: 'path' | 'query' 
     };
   }
   
-  // Query parameters - genellikle description yeterli
+  // Query parameters - description is usually sufficient
   if (paramType === 'query') {
     return null;
   }

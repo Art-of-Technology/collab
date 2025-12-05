@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -85,6 +85,21 @@ export default function ApiDocsPage() {
     };
 
     loadDocs();
+
+    // Fetch API key
+    const fetchApiKey = async () => {
+      try {
+        const res = await fetch('/api/dev/api-key', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setApiKey(data.apiKey || null);
+        }
+      } catch (err) {
+        console.error('Error fetching API key:', err);
+      }
+    };
+
+    fetchApiKey();
   }, []);
 
   const filteredEndpoints = useMemo(() => {
@@ -112,17 +127,26 @@ export default function ApiDocsPage() {
     };
   }, [searchQuery, filteredEndpoints, oauthContent, thirdPartyContent]);
 
+  const prevSearchQueryRef = useRef<string>('');
+  
   useEffect(() => {
-    if (!searchQuery.trim()) return;
+    // Only auto-switch when search query actually changes, not when section changes
+    if (!searchQuery.trim() || searchQuery === prevSearchQueryRef.current) {
+      prevSearchQueryRef.current = searchQuery;
+      return;
+    }
     
-    if (searchResults.oauth && selectedSection !== 'oauth') {
+    prevSearchQueryRef.current = searchQuery;
+    
+    // Auto-switch to section with matches, prioritizing OAuth > Third-party > Endpoints
+    if (searchResults.oauth) {
       setSelectedSection('oauth');
-    } else if (searchResults.thirdParty && selectedSection !== 'third-party') {
+    } else if (searchResults.thirdParty) {
       setSelectedSection('third-party');
-    } else if (searchResults.endpoints && selectedSection !== 'endpoints' && filteredEndpoints.length > 0) {
+    } else if (searchResults.endpoints && filteredEndpoints.length > 0) {
       setSelectedSection('endpoints');
     }
-  }, [searchQuery, searchResults.oauth, searchResults.thirdParty, searchResults.endpoints, selectedSection, filteredEndpoints.length]);
+  }, [searchQuery, searchResults.oauth, searchResults.thirdParty, searchResults.endpoints, filteredEndpoints.length]);
 
   const currentEndpoint = useMemo(() => {
     if (!selectedEndpoint || !data?.endpoints) return null;
