@@ -12,21 +12,6 @@ interface MarkdownRendererProps {
 }
 
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
-  // Check if content contains HTML tags
-  const hasHtmlTags = /<[^>]*>/g.test(content);
-  
-  if (hasHtmlTags) {
-    // If content contains HTML, render it as HTML
-    return (
-      <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
-        <div 
-          className="text-foreground leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
       <ReactMarkdown
@@ -89,16 +74,25 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           li: ({ children }) => (
             <li className="text-foreground">{children}</li>
           ),
-          a: ({ children, href }) => (
-            <a
-              href={href}
-              className="text-primary hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ children, href }) => {
+            const isInternalLink = href?.startsWith('#');
+            return (
+              <a
+                href={href || '#'}
+                className="text-primary hover:underline"
+                target={isInternalLink ? undefined : "_blank"}
+                rel={isInternalLink ? undefined : "noopener noreferrer"}
+                onClick={(e) => {
+                  if (isInternalLink && href) {
+                    e.preventDefault();
+                    window.location.hash = href;
+                  }
+                }}
+              >
+                {children}
+              </a>
+            );
+          },
           table: ({ children }) => (
             <div className="overflow-x-auto mb-4">
               <table className="min-w-full border border-border rounded-lg">
