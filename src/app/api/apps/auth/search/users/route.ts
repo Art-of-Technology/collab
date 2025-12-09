@@ -4,10 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
-
-const prisma = new PrismaClient();
 
 /**
  * GET /api/apps/auth/search/users
@@ -71,11 +69,11 @@ export const GET = withAppAuth(
         where: { isFinal: true, isActive: true },
         select: { id: true },
       });
-      const finalStatusIds = finalStatuses.map(s => s.id);
+      const finalStatusIds = finalStatuses.map((s: any) => s.id);
 
       // Enrich with issue counts
       const results = await Promise.all(
-        members.map(async (member) => {
+        members.map(async (member: any) => {
           const [activeIssues, totalAssigned, completedIssues] = await Promise.all([
             prisma.issue.count({
               where: {
@@ -119,7 +117,7 @@ export const GET = withAppAuth(
 
       // Filter by hasActiveIssues if requested
       const filteredResults = hasActiveIssues
-        ? results.filter(r => r.issues.active > 0)
+        ? results.filter((r: any) => r.issues.active > 0)
         : results;
 
       return NextResponse.json({
@@ -139,8 +137,6 @@ export const GET = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['workspace:read'] }

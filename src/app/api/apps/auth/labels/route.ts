@@ -5,11 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 const CreateLabelSchema = z.object({
   name: z.string().min(1).max(50),
@@ -68,8 +66,6 @@ export const GET = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['workspace:read'] }
@@ -126,8 +122,6 @@ export const POST = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['workspace:write'] }
