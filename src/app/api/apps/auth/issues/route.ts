@@ -135,7 +135,7 @@ export const GET = withAppAuth(
       ]);
 
       const response = {
-        issues: issues.map(issue => ({
+        issues: issues.map((issue: any) => ({
           id: issue.id,
           issueKey: issue.issueKey,
           title: issue.title,
