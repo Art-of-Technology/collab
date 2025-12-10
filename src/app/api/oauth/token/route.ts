@@ -195,6 +195,7 @@ async function handleAuthorizationCodeGrant(
       await prisma.appToken.create({
         data: {
           installationId: installation.id,
+          userId: authCodeData.userId, // The user who authorized this token
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
           refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
           tokenExpiresAt: expiresAt,

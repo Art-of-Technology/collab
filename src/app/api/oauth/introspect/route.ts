@@ -222,7 +222,7 @@ async function findTokenInInstallations(
               token_type: tokenType === 'access' ? 'Bearer' : 'refresh_token',
               exp: expiresAt,
               iat: issuedAt,
-              sub: installation.installedById, // subject (user ID)
+              sub: appToken.userId || installation.installedById, // subject (user who generated this token, fallback to installer for legacy)
               aud: installation.app.slug, // audience (app)
               app_id: installation.appId,
               installation_id: installation.id,

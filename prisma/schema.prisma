@@ -2404,6 +2404,7 @@ model AppInstallation {
 model AppToken {
   id             String    @id @default(cuid())
   installationId String
+  userId         String?   // The user who generated this token (null for legacy tokens)
   accessToken    String    @unique // encrypted, unique for fast lookup
   refreshToken   String?   // encrypted
   tokenExpiresAt DateTime?
@@ -2416,6 +2417,7 @@ model AppToken {
   installation   AppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
 
   @@index([installationId])
+  @@index([userId])
   @@index([isRevoked])
   @@index([tokenExpiresAt])
 }

@@ -260,9 +260,10 @@ async function findInstallationByAccessToken(token: string) {
         if (decryptedToken === token) {
           const installation = appToken.installation;
 
-          // Fetch the user who installed the app separately since the relation doesn't exist in schema
-          const installedByUser = await prisma.user.findUnique({
-            where: { id: installation.installedById },
+          // Fetch the user who generated this token (or fallback to installer for legacy tokens)
+          const tokenUserId = appToken.userId || installation.installedById;
+          const tokenUser = await prisma.user.findUnique({
+            where: { id: tokenUserId },
             select: {
               id: true,
               email: true,
@@ -271,7 +272,7 @@ async function findInstallationByAccessToken(token: string) {
           });
 
           // If user not found, skip this token
-          if (!installedByUser) {
+          if (!tokenUser) {
             continue;
           }
 
@@ -280,7 +281,7 @@ async function findInstallationByAccessToken(token: string) {
             // Use scopes from the token if available, fallback to installation scopes
             scopes: appToken.scopes.length > 0 ? appToken.scopes : installation.scopes,
             tokenExpiresAt: appToken.tokenExpiresAt,
-            installedBy: installedByUser
+            installedBy: tokenUser // Now returns the token's user, not the installer
           };
         }
       } catch (error) {
