@@ -169,7 +169,7 @@ async function handleAuthorizationCodeGrant(
   // Generate tokens
   const accessToken = generateAccessToken();
   const refreshToken = generateRefreshToken();
-  const expiresIn = 3600; // 1 hour
+  const expiresIn = 365 * 24 * 3600; // 1 year
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
   try {
@@ -307,7 +307,7 @@ async function handleRefreshTokenGrant(
 
   // Generate new access token (and optionally rotate refresh token)
   const newAccessToken = generateAccessToken();
-  const expiresIn = 3600; // 1 hour
+  const expiresIn = 365 * 24 * 3600; // 1 year
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
   // Optional: Generate new refresh token for rotation (recommended for high security)
