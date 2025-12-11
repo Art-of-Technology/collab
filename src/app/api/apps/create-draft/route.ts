@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
           slug,
           manifestUrl: null, // Will be set when manifest is submitted
           publisherId: publisherId || session.user.id,
+          userId: session.user.id,
           status: 'DRAFT',
           visibility: 'PRIVATE'
         }
