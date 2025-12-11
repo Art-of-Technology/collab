@@ -147,19 +147,25 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
   };
 
   const handleRevealApiKey = async () => {
+    const wasApiKeyHidden = !showApiKey;
     setShowApiKey(!showApiKey);
-    if (!apiKeyRevealed && showApiKey === false) {
-      setApiKeyRevealed(true);
+    if (!apiKeyRevealed && wasApiKeyHidden) {
       try {
-        await fetch(`/api/apps/by-id/${appId}/mark-api-key-revealed`, {
+        const response = await fetch(`/api/apps/by-id/${appId}/mark-api-key-revealed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
+        if (response.ok) {
+          setApiKeyRevealed(true);
+        } else {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to mark API key as revealed');
+        }
       } catch (error) {
         console.error('Error marking API key as revealed:', error);
         toast({
           title: 'Error',
-          description: 'Failed to mark API key as revealed.',
+          description: error instanceof Error ? error.message : 'Failed to mark API key as revealed.',
           variant: 'destructive',
         });
       }
@@ -347,7 +353,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                   </Button>
                 )}
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 {apiKeyRevealed ? (
                   <p className="text-xs text-muted-foreground text-orange-600">
                     API key has been revealed previously and cannot be shown again for security reasons.
@@ -361,7 +367,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowRegenerateDialog(true)}
-                  className="text-xs h-7"
+                  className="text-xs h-7 self-start sm:self-auto"
                   disabled={isRegenerating}
                 >
                   {isRegenerating ? (
