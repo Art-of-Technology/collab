@@ -7,8 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Key, Copy, Eye, EyeOff, Check, AlertTriangle, Loader2 } from 'lucide-react';
+import { Key, Copy, Eye, EyeOff, Check, AlertTriangle, Loader2, RotateCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface OAuthClient {
   id: string;
@@ -16,6 +26,8 @@ interface OAuthClient {
   clientSecret?: Uint8Array | null;
   clientType?: string | null;
   secretRevealed?: boolean;
+  apiKey?: string | null;
+  apiKeyRevealed?: boolean;
   redirectUris?: string[];
 }
 
@@ -34,9 +46,14 @@ interface OAuthCredentialsCardProps {
 
 export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCredentialsCardProps) {
   const [showClientSecret, setShowClientSecret] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>(oauthClient.apiKey || null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+  const [apiKeyRevealed, setApiKeyRevealed] = useState(oauthClient.apiKeyRevealed || false);
   const { toast } = useToast();
 
   const handleCopyToClipboard = async (text: string, label: string) => {
@@ -90,6 +107,64 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
   useEffect(() => {
     fetchClientSecret();
   }, [fetchClientSecret]);
+
+  const handleRegenerateApiKey = async () => {
+    setIsRegenerating(true);
+    try {
+      const response = await fetch(`/api/apps/by-id/${appId}/regenerate-api-key`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to regenerate API key');
+      }
+
+      if (data.success && data.apiKey) {
+        setApiKey(data.apiKey);
+        setApiKeyRevealed(false);
+        setShowApiKey(true);
+        setShowRegenerateDialog(false);
+        toast({
+          title: 'Success',
+          description: 'API key regenerated successfully. Store it securely.',
+        });
+      }
+    } catch (error) {
+      console.error('Error regenerating API key:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to regenerate API key',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleRevealApiKey = async () => {
+    setShowApiKey(!showApiKey);
+    if (!apiKeyRevealed && showApiKey === false) {
+      setApiKeyRevealed(true);
+      try {
+        await fetch(`/api/apps/by-id/${appId}/mark-api-key-revealed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('Error marking API key as revealed:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to mark API key as revealed.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
 
   return (
     <Card>
@@ -218,6 +293,93 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
             </div>
           </div>
 
+          {/* API Key */}
+          {oauthClient.apiKey && (
+            <div className="space-y-2">
+              <Label htmlFor="apiKey" className="text-xs sm:text-sm font-medium">API Key</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1 min-w-0">
+                  {apiKeyRevealed ? (
+                    <Input
+                      id="apiKey"
+                      value={apiKey ? `****${apiKey.slice(-4)}` : '••••••••••••••••'}
+                      readOnly
+                      className="font-mono text-xs sm:text-sm"
+                      type="text"
+                    />
+                  ) : (
+                    <>
+                      <Input
+                        id="apiKey"
+                        value={apiKey ? maskValue(apiKey, showApiKey) : '••••••••••••••••'}
+                        readOnly
+                        className="font-mono text-xs sm:text-sm pr-8 sm:pr-10"
+                        type={showApiKey ? "text" : "password"}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 sm:h-8 sm:w-8"
+                        onClick={handleRevealApiKey}
+                        aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                      >
+                        {showApiKey ? (
+                          <EyeOff className="h-3 w-3" />
+                        ) : (
+                          <Eye className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </div>
+                {apiKey && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopyToClipboard(apiKey, 'API Key')}
+                    className="flex-shrink-0"
+                  >
+                    {copied === 'API Key' ? (
+                      <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                    ) : (
+                      <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                {apiKeyRevealed ? (
+                  <p className="text-xs text-muted-foreground text-orange-600">
+                    API key has been revealed previously and cannot be shown again for security reasons.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    API key for authentication (keep confidential). Click the eye icon to reveal.
+                  </p>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowRegenerateDialog(true)}
+                  className="text-xs h-7"
+                  disabled={isRegenerating}
+                >
+                  {isRegenerating ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCw className="h-3 w-3 mr-1" />
+                      Regenerate API Key
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Redirect URIs */}
           {oauthClient.redirectUris && oauthClient.redirectUris.length > 0 && (
             <div className="space-y-2">
@@ -239,11 +401,45 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
           <ol className="text-xs sm:text-sm text-muted-foreground space-y-1 list-decimal list-inside">
             <li>Use the Client ID in your OAuth authorization requests</li>
             <li>Use the Client Secret for token exchange (server-side only)</li>
+            <li>Use the API Key for API authentication</li>
             <li>Ensure your redirect URIs match those configured above</li>
             <li>Request only the scopes your app needs</li>
           </ol>
         </div>
       </CardContent>
+
+      {/* Regenerate API Key Dialog */}
+      <AlertDialog open={showRegenerateDialog} onOpenChange={setShowRegenerateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate API Key</AlertDialogTitle>
+            <AlertDialogDescription>
+              Regenerating will invalidate the old API key. Are you sure you want to continue?
+              <br />
+              <span className="text-xs text-orange-600 mt-2 block">
+                <strong>Warning:</strong> The old key will stop working immediately.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRegenerating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRegenerateApiKey}
+              disabled={isRegenerating}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isRegenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                'Regenerate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
