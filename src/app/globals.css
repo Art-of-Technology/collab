@@ -682,3 +682,17 @@ textarea::selection {
   white-space: nowrap;
   box-shadow: 0 1px 2px rgba(0,0,0,0.25);
 }
+
+.sr-only{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
