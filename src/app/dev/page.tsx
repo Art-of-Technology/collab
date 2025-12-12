@@ -1,9 +1,11 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
-import { Grid3X3, Book, Webhook, Settings } from 'lucide-react';
-import Link from 'next/link';
+import { Package, FileText, CheckCircle, Download } from 'lucide-react';
+import QuickActions from './dashboard/QuickActions';
+import SummaryCards from './dashboard/SummaryCards';
+import RecentActivityFeed from './dashboard/RecentActivityFeed';
+import { getDashboardStats, getRecentActivities } from './dashboard/data';
 
 export default async function DevDashboardPage() {
   const session = await getServerSession(authOptions);
@@ -12,76 +14,78 @@ export default async function DevDashboardPage() {
     redirect('/login');
   }
 
-  const quickLinks = [
+  const stats = await getDashboardStats(session.user.id);
+  const activities = await getRecentActivities(session.user.id, 10);
+
+  const summaryCards = [
     {
-      name: 'My Apps',
+      title: 'Total Apps',
+      value: stats.totalApps,
+      description: 'All your applications',
+      icon: Package,
+      color: 'text-blue-400',
+      bgColor: 'bg-blue-500/10',
       href: '/dev/apps',
-      icon: Grid3X3,
-      description: 'View and manage your applications',
     },
     {
-      name: 'API Documentation',
-      href: '/dev/docs',
-      icon: Book,
-      description: 'Browse API reference and guides',
-      external: true,
+      title: 'Draft',
+      value: stats.draftApps,
+      description: 'Apps in draft',
+      icon: FileText,
+      color: 'text-gray-400',
+      bgColor: 'bg-gray-500/10',
+      href: '/dev/apps?status=draft',
     },
     {
-      name: 'Webhooks Overview',
-      href: '/dev/webhooks',
-      icon: Webhook,
-      description: 'Manage and monitor webhooks',
+      title: 'In Review',
+      value: stats.inReviewApps,
+      description: 'Pending approval',
+      icon: FileText,
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/10',
+      href: '/dev/apps?status=in_review',
     },
     {
-      name: 'Settings',
-      href: '/dev/settings',
-      icon: Settings,
-      description: 'Account and developer settings',
+      title: 'Published',
+      value: stats.publishedApps,
+      description: 'Live applications',
+      icon: CheckCircle,
+      color: 'text-green-400',
+      bgColor: 'bg-green-500/10',
+      href: '/dev/apps?status=published',
+    },
+    {
+      title: 'Total Installations',
+      value: stats.totalInstallations,
+      description: 'Across all apps',
+      icon: Download,
+      color: 'text-purple-400',
+      bgColor: 'bg-purple-500/10',
+      href: '/dev/apps',
     },
   ];
+
+
 
   return (
     <div className="container mx-auto px-4 py-4 sm:py-8 max-w-6xl">
       <div className="mb-4 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm sm:text-base text-muted-foreground mt-2">
-          Welcome to the Developer Console
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-2">
+              Welcome to the Developer Console
+            </p>
+          </div>
+          
+          <QuickActions />
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-2">
-        {quickLinks.map((link) => {
-          const Icon = link.icon;
-          const linkContent = (
-            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="p-2 bg-muted rounded-lg">
-                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-base sm:text-lg mb-1">{link.name}</h3>
-                    <p className="text-sm text-muted-foreground">{link.description}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
+      <SummaryCards cards={summaryCards} />
 
-          if (link.external) {
-            return (
-              <Link key={link.name} href={link.href} target="_blank" rel="noopener noreferrer">
-                {linkContent}
-              </Link>
-            );
-          }
-
-          return (
-            <Link key={link.name} href={link.href}>
-              {linkContent}
-            </Link>
-          );
-        })}
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-2 mb-6 sm:mb-8">
+        <RecentActivityFeed activities={activities} />
       </div>
     </div>
   );
