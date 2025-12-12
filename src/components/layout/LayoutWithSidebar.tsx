@@ -37,81 +37,82 @@ export default function LayoutWithSidebar({
 
   return (
     <ViewFiltersProvider>
-      <div className="h-screen bg-[#101011]">
-        <div className="app-layout">
-          <div
-            className="app-sidebar hidden md:block"
-            data-collapsed={isCollapsedDesktop}
-          >
-            <div className="app-sidebar__content overflow-y-auto">
-              <Sidebar
-                pathname={pathname}
-                isCollapsed={isCollapsedDesktop}
-              />
-            </div>
-          </div>
-
-          {/* Main content + right sidebar */}
-          <main className="bg-[#090909] flex h-full md:overflow-hidden">
-            <div className="flex-1 p-2 min-w-0 md:overflow-hidden">
-              <div className="h-full bg-[#101011] border border-[#1f1f1f] rounded-md overflow-hidden">
-                {children}
-              </div>
-            </div>
-            <RightSidebar />
-          </main>
-
-          {/* Mobile overlay sidebar */}
-          <div
-            className="app-sidebar md:hidden"
-            data-open={isMobileOpen}
-            aria-modal="true"
-            role="dialog"
-          >
-            <div className="h-full relative overflow-y-auto">
-              <Sidebar
-                pathname={pathname}
-                isCollapsed={false}
-              />
-            </div>
-          </div>
-
-          {/* Mobile backdrop overlay */}
-          {isMobileOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-20 md:hidden"
-              onClick={toggleMobile}
+      <div className="app-layout">
+        <div
+          className="app-sidebar hidden md:block"
+          data-collapsed={isCollapsedDesktop}
+        >
+          <div className="app-sidebar__content overflow-y-auto">
+            <Sidebar
+              pathname={pathname}
+              isCollapsed={isCollapsedDesktop}
             />
-          )}
-
-          {/* Desktop sidebar toggle - hidden on mobile since we have bottom nav */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={isMdUp ? toggleDesktop : toggleMobile}
-            className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px] hidden md:flex
-                         bg-[#090909] border border-[#1f1f1f] hover:bg-[#1a1a1a]
-                         text-gray-400 hover:text-white rounded-r-md rounded-l-none border-l-0 shadow-md transition-all duration-200"
-            style={{ left: `calc(${sidebarLeft} + 8px)` }}
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? (
-              <ChevronRightIcon className="h-4 w-4" />
-            ) : (
-              <ChevronLeftIcon className="h-4 w-4" />
-            )}
-          </Button>
+          </div>
         </div>
 
-        {/* Mobile Navigation */}
-        <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
-        
-        {/* Global Command Menu */}
-        <CommandMenu
-          open={commandMenuOpen}
-          onOpenChange={setCommandMenuOpen}
-        />
+        {/* Main content + right sidebar */}
+        <main className="main-content">
+          {/* Page wrapper */}
+          <div className="p-4 pl-0 h-full w-full">
+            <div className="h-full border border-[#1f1f1f] rounded-lg bg-background overflow-auto">
+              {children}
+            </div>
+          </div>
+        </main>
+
+        {/* Right Sidebar */}
+        <RightSidebar />
+
+        {/* Mobile overlay sidebar */}
+        <div
+          className="app-sidebar md:hidden"
+          data-open={isMobileOpen}
+          aria-modal="true"
+          role="dialog"
+        >
+          <div className="h-full relative overflow-y-auto">
+            <Sidebar
+              pathname={pathname}
+              isCollapsed={false}
+            />
+          </div>
+        </div>
+
+        {/* Mobile backdrop overlay */}
+        {isMobileOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            onClick={toggleMobile}
+          />
+        )}
+
+        {/* Desktop sidebar toggle - hidden on mobile since we have bottom nav */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={isMdUp ? toggleDesktop : toggleMobile}
+          className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px] hidden md:flex
+                        bg-[#090909] border border-[#1f1f1f] hover:bg-[#1a1a1a]
+                        text-gray-400 hover:text-white rounded-r-md rounded-l-none border-l-0 shadow-md transition-all duration-200"
+          style={{ left: sidebarLeft }}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? (
+            <ChevronRightIcon className="h-4 w-4" />
+          ) : (
+            <ChevronLeftIcon className="h-4 w-4" />
+          )}
+        </Button>
       </div>
+
+      {/* Mobile Navigation */}
+      <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
+      
+      {/* Global Command Menu */}
+      <CommandMenu
+        open={commandMenuOpen}
+        onOpenChange={setCommandMenuOpen}
+      />
     </ViewFiltersProvider>
   );
 }
