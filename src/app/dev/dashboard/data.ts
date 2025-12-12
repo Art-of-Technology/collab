@@ -15,20 +15,26 @@ export async function getDashboardStats(userId: string) {
     }),
     prisma.app.count({
       where: {
-        ...whereClause,
-        status: 'DRAFT'
+        AND: [
+          whereClause,
+          { status: 'DRAFT' }
+        ]
       }
     }),
     prisma.app.count({
       where: {
-        ...whereClause,
-        status: 'IN_REVIEW'
+        AND: [
+          whereClause,
+          { status: 'IN_REVIEW' }
+        ]
       }
     }),
     prisma.app.count({
       where: {
-        ...whereClause,
-        status: 'PUBLISHED'
+        AND: [
+          whereClause,
+          { status: 'PUBLISHED' }
+        ]
       }
     }),
     prisma.appInstallation.count({

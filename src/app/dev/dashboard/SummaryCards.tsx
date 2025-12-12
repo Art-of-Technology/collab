@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, FileText, CheckCircle, Download, LucideIcon, ArrowRight } from 'lucide-react';
+import { LucideIcon, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 interface SummaryCard {

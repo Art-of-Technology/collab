@@ -131,6 +131,9 @@ export async function getWebhookStats(userId: string): Promise<WebhookStats> {
 }
 
 export async function getWebhooksWithStats(userId: string): Promise<WebhookWithStats[]> {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
   const webhooks = await prisma.appWebhook.findMany({
     where: {
       app: {
@@ -158,6 +161,9 @@ export async function getWebhooksWithStats(userId: string): Promise<WebhookWithS
         }
       },
       deliveries: {
+        where: {
+          createdAt: { gte: thirtyDaysAgo }
+        },
         select: {
           deliveredAt: true,
           failedAt: true,
@@ -166,8 +172,8 @@ export async function getWebhooksWithStats(userId: string): Promise<WebhookWithS
         },
         orderBy: {
           createdAt: 'desc'
-        },
-        take: 1
+        }
+        // No take limit - we need all deliveries for stats calculation
       },
       _count: {
         select: {
@@ -180,19 +186,35 @@ export async function getWebhooksWithStats(userId: string): Promise<WebhookWithS
     }
   });
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Get last delivery for each webhook in parallel
+  const lastDeliveries = await Promise.all(
+    webhooks.map(webhook =>
+      prisma.appWebhookDelivery.findFirst({
+        where: {
+          webhookId: webhook.id
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        select: {
+          deliveredAt: true,
+          failedAt: true,
+          httpStatus: true,
+          createdAt: true
+        }
+      })
+    )
+  );
 
-  return webhooks.map(webhook => {
-    // Get delivery stats for last 30 days
-    const recentDeliveries = webhook.deliveries.filter(
-      d => new Date(d.createdAt) >= thirtyDaysAgo
-    );
+  return webhooks.map((webhook, index) => {
+    // Delivery stats are already filtered to last 30 days from Prisma query
+    const recentDeliveries = webhook.deliveries;
     
     const successfulDeliveries = recentDeliveries.filter(d => d.deliveredAt !== null).length;
     const failedDeliveries = recentDeliveries.filter(d => d.failedAt !== null).length;
     
-    const lastDelivery = webhook.deliveries[0];
+    // Get the most recent delivery (not filtered by date) for last delivery status
+    const lastDelivery = lastDeliveries[index];
     let lastDeliveryStatus: 'success' | 'failed' | 'pending' | null = null;
     if (lastDelivery) {
       if (lastDelivery.deliveredAt) {
