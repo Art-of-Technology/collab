@@ -39,7 +39,6 @@ export const GET = withAppAuth(
           _count: {
             select: {
               issues: true,
-              tasks: true,
             },
           },
         },
@@ -54,8 +53,7 @@ export const GET = withAppAuth(
           updatedAt: label.updatedAt,
           usage: {
             issues: label._count.issues,
-            tasks: label._count.tasks,
-            total: label._count.issues + label._count.tasks,
+            total: label._count.issues,
           },
         })),
         total: labels.length,

@@ -7,7 +7,7 @@ export { CommentForm } from "./components/CommentForm";
 export { CommentReplyForm } from "./components/CommentReplyForm";
 export { CommentActions } from "./components/CommentActions";
 export { EmptyCommentsState } from "./components/EmptyCommentsState";
-export { LoadingState } from "./components/LoadingState";
+export { CommentsSkeleton } from "./components/CommentsSkeleton";
 
 // Hooks
 export { 

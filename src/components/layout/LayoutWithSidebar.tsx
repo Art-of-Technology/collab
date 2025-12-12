@@ -7,7 +7,6 @@ import { useSidebar } from "@/components/providers/SidebarProvider";
 import { ViewFiltersProvider } from "@/context/ViewFiltersContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
-import AssistantWrapper from "@/components/layout/AssistantWrapper";
 import { useCommandMenu, CommandMenu } from "@/components/ui/command-menu";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 
@@ -60,6 +59,7 @@ export default function LayoutWithSidebar({
             </div>
           </div>
         </main>
+
         {/* Right Sidebar */}
         <RightSidebar />
 
@@ -105,9 +105,7 @@ export default function LayoutWithSidebar({
         </Button>
       </div>
 
-      {/* AI Assistant, Chatbox, and Navigation */}
-      <AssistantWrapper />
-      {/* <AppDock /> */}
+      {/* Mobile Navigation */}
       <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
       
       {/* Global Command Menu */}

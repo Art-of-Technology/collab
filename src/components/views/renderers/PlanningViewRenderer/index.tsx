@@ -138,6 +138,39 @@ export default function PlanningViewRenderer({
 
   const isLoading = viewMode === 'activity' ? isLoadingActivity : isLoadingRange;
 
+  // Transform members to include flattened user properties for components
+  const transformedMembers = useMemo(() => {
+    if (!rangeData?.members) return [];
+    return rangeData.members.map((member: any) => {
+      // Generate warnings based on member data
+      const warnings: string[] = [];
+
+      // Check for issues stuck in progress too long
+      if (member.assignedIssues) {
+        const stuckIssues = member.assignedIssues.filter((issue: any) => {
+          const status = issue.status?.toLowerCase() || '';
+          const isInProgress = status.includes('progress');
+          // Could add daysInProgress check if available
+          return isInProgress;
+        });
+        if (stuckIssues.length > 3) {
+          warnings.push(`${stuckIssues.length} issues in progress`);
+        }
+      }
+
+      return {
+        ...member,
+        userName: member.user?.name || 'Unknown',
+        userImage: member.user?.image || null,
+        userEmail: member.user?.email || null,
+        useCustomAvatar: member.user?.useCustomAvatar || false,
+        insights: {
+          warnings,
+        },
+      };
+    });
+  }, [rangeData?.members]);
+
   // Handle date range change with week view constraint
   const handleDateRangeChange = (range: DateRange) => {
     // For week view, enforce max 7 days
@@ -329,14 +362,14 @@ export default function PlanningViewRenderer({
               />
             ) : viewMode === 'week' ? (
               <PlanningWeekView
-                members={rangeData?.members || []}
+                members={transformedMembers}
                 workspaceSlug={workspace.slug}
                 dateRange={dateRange}
               />
             ) : (
               /* Day View - Yesterday/Today Split */
               <PlanningDayView
-                members={rangeData?.members || []}
+                members={transformedMembers}
                 workspaceSlug={workspace.slug}
                 selectedDate={dateRange.endDate}
               />

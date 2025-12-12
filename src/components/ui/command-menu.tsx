@@ -40,6 +40,15 @@ import { NewIssueModal } from "@/components/issue";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
 
+export interface CommandOption {
+  id: string;
+  label: string;
+  type: 'action' | 'navigation' | 'insert';
+  icon?: React.ReactNode;
+  shortcut?: string;
+  action?: () => void;
+}
+
 interface CommandMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

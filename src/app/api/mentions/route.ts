@@ -11,12 +11,9 @@ const mentionSchema = z.object({
   sourceType: z.enum([
     "post",
     "comment",
-    "taskComment",
     "feature",
-    "task",
-    "epic",
-    "story",
-    "milestone",
+    "issue",
+    "issueComment",
   ]),
   sourceId: z.string().min(1, "Source ID is required"),
   content: z.string().min(1, "Content is required"),
@@ -48,14 +45,14 @@ export async function POST(req: NextRequest) {
     const recipientIds = userIds.filter((id) => id !== currentUser.id);
 
     let relationOptions: any = {};
-    if (sourceType === "taskComment") {
-      const taskComment = await prisma.taskComment.findUnique({
+    if (sourceType === "issueComment") {
+      const issueComment = await prisma.issueComment.findUnique({
         where: { id: sourceId },
-        select: { taskId: true },
+        select: { issueId: true },
       });
       relationOptions = {
-        taskCommentId: sourceId,
-        ...(taskComment?.taskId ? { taskId: taskComment.taskId } : {}),
+        issueCommentId: sourceId,
+        ...(issueComment?.issueId ? { issueId: issueComment.issueId } : {}),
       };
     } else if (sourceType === "post") {
       relationOptions = { postId: sourceId };
@@ -63,14 +60,8 @@ export async function POST(req: NextRequest) {
       relationOptions = { commentId: sourceId };
     } else if (sourceType === "feature") {
       relationOptions = { featureRequestId: sourceId };
-    } else if (sourceType === "task") {
-      relationOptions = { taskId: sourceId };
-    } else if (sourceType === "epic") {
-      relationOptions = { epicId: sourceId };
-    } else if (sourceType === "story") {
-      relationOptions = { storyId: sourceId };
-    } else if (sourceType === "milestone") {
-      relationOptions = { milestoneId: sourceId };
+    } else if (sourceType === "issue") {
+      relationOptions = { issueId: sourceId };
     }
 
     const notificationCount = await NotificationService.notifyUsers(

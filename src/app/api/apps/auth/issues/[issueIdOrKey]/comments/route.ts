@@ -203,7 +203,7 @@ export const POST = withAppAuth(
       });
 
       // Log activity
-      await prisma.boardItemActivity.create({
+      await prisma.issueActivity.create({
         data: {
           action: 'COMMENTED',
           itemType: 'ISSUE',

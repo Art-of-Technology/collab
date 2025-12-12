@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
-import { 
+import {
   Activity,
   CheckCircle2,
   PlayCircle,
@@ -11,6 +11,7 @@ import {
   UserPlus,
   Plus,
   ArrowRight,
+  ArrowLeft,
   Zap,
   Filter
 } from 'lucide-react';
@@ -93,6 +94,31 @@ const ACTIVITY_CONFIG: Record<MovementType, {
     bgColor: 'bg-slate-500',
     ringColor: 'ring-slate-500/20',
     icon: Plus,
+  },
+  // Movement types used for internal tracking
+  none: {
+    label: 'Updated',
+    verb: 'updated',
+    color: 'text-gray-400',
+    bgColor: 'bg-gray-500',
+    ringColor: 'ring-gray-500/20',
+    icon: Plus,
+  },
+  forward: {
+    label: 'Moved Forward',
+    verb: 'moved forward',
+    color: 'text-green-400',
+    bgColor: 'bg-green-500',
+    ringColor: 'ring-green-500/20',
+    icon: ArrowRight,
+  },
+  backward: {
+    label: 'Moved Back',
+    verb: 'moved back',
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500',
+    ringColor: 'ring-amber-500/20',
+    icon: ArrowLeft,
   },
 };
 
@@ -293,6 +319,9 @@ export function PlanningActivityFeed({
       unblocked: 0,
       assigned: 0,
       created: 0,
+      none: 0,
+      forward: 0,
+      backward: 0,
     };
     activities.forEach(a => { s[a.movementType]++; });
     return s;

@@ -128,8 +128,16 @@ export const GET = withAppAuth(
       }) : null;
 
       // Organize relations by type
-      const relations: Record<string, any[]> = {
-        parent: parent ? parent : null,
+      const relations: {
+        parent: typeof parent;
+        children: typeof children;
+        blocks: any[];
+        blocked_by: any[];
+        relates_to: any[];
+        duplicates: any[];
+        duplicated_by: any[];
+      } = {
+        parent: parent,
         children: children,
         blocks: [],
         blocked_by: [],
@@ -325,7 +333,7 @@ export const POST = withAppAuth(
       });
 
       // Log activity
-      await prisma.boardItemActivity.create({
+      await prisma.issueActivity.create({
         data: {
           action: 'RELATION_CREATED',
           itemType: 'ISSUE',
