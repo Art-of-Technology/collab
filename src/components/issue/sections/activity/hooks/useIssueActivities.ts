@@ -32,7 +32,7 @@ export function useIssueActivities({
       setError(null);
 
       // Build URL without undefined values
-      const url = new URL(`/api/board-items/issue/${issueId}/activities`, window.location.origin);
+      const url = new URL(`/api/issues/${issueId}/activities`, window.location.origin);
       url.searchParams.set('limit', String(limit));
       if (action) {
         url.searchParams.set('action', action);

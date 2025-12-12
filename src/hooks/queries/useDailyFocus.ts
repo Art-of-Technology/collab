@@ -236,7 +236,7 @@ export function useSubmitDailyFocusEntry(workspaceId: string) {
   });
 }
 
-// Hook for fetching smart suggestions based on BoardItemActivity
+// Hook for fetching smart suggestions based on IssueActivity
 export function useDailyFocusSuggestions(
   workspaceId: string,
   date?: Date | string,
