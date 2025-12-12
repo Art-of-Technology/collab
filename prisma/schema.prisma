@@ -1819,6 +1819,7 @@ model AppOAuthClient {
   jwksUri                   String?  // for private_key_jwt clients
   jwksValidated             Boolean  @default(false) // track JWKS validation status
   secretRevealed            Boolean  @default(false) // track if secret has been shown
+  apiKeyRevealed            Boolean  @default(false) // track if API key has been shown
   apiKey                    String?  @unique
   redirectUris              String[]
   postLogoutRedirectUris    String[] // post logout redirect URIs
