@@ -20,7 +20,6 @@ import { PopularTags } from "./components/PopularTags";
 import { UnansweredPosts } from "./components/UnansweredPosts";
 import { MyLeave } from "./components/MyLeave";
 import { LeaveRequestsDashboardContainer } from "@/components/hr/LeaveRequestsDashboardContainer";
-import { DailyFocusPanel } from "@/components/daily-focus/DailyFocusPanel";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -114,14 +113,6 @@ export default async function DashboardPage() {
         <MyLeave workspaceId={workspaceId} />
         {/* Leave Management Section (for managers) */}
         <LeaveRequestsDashboardContainer workspaceId={workspaceId} />
-      </div>
-      
-      {/* Daily Focus Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DailyFocusPanel 
-          workspaceId={workspaceId} 
-          userId={session.user.id}
-        />
       </div>
     </div>
   );

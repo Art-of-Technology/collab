@@ -2,7 +2,7 @@
  * Third-Party App API: Activity-Based Issue Search
  * GET /api/apps/auth/search/issues-by-activity - Find issues by their activity history
  *
- * This powerful endpoint allows querying issues based on BoardItemActivity records.
+ * This powerful endpoint allows querying issues based on IssueActivity records.
  * Use cases:
  * - Issues moved to "done" today
  * - Issues assigned in the last week
@@ -109,7 +109,7 @@ export const GET = withAppAuth(
       }
 
       // Find matching activities
-      const matchingActivities = await prisma.boardItemActivity.findMany({
+      const matchingActivities = await prisma.issueActivity.findMany({
         where: activityWhere,
         select: {
           itemId: true,

@@ -34,16 +34,12 @@ model User {
   bookmarks              Bookmark[]
   comments               Comment[]
   commentLikes           CommentLike[]
-  assignedEpics          Epic[]                  @relation("AssignedEpics")
-  reportedEpics          Epic[]                  @relation("ReportedEpics")
   featureRequests        FeatureRequest[]
   featureRequestComments FeatureRequestComment[]
   featureVotes           FeatureVote[]
   mentions               Mention[]
   receivedMessages       Message[]               @relation("ReceivedMessages")
   sentMessages           Message[]               @relation("SentMessages")
-  assignedMilestones     Milestone[]             @relation("AssignedMilestones")
-  reportedMilestones     Milestone[]             @relation("ReportedMilestones")
   notes                  Note[]
   noteTags               NoteTag[]
   sentNotifications      Notification[]          @relation("NotificationSender")
@@ -53,23 +49,10 @@ model User {
   pinnedPosts            Post[]                  @relation("PostPinnedBy")
   postActions            PostAction[]            @relation("PostActions")
   reactions              Reaction[]
-  assignedStories        Story[]                 @relation("AssignedStories")
-  reportedStories        Story[]                 @relation("ReportedStories")
-  assignedTasks          Task[]                  @relation("AssignedTasks")
-  reportedTasks          Task[]                  @relation("ReportedTasks")
-  boardItemActivities    BoardItemActivity[]
-  approvedTaskHelpers    TaskAssignee[]          @relation("TaskAssigneeApprover")
-  taskAssignees          TaskAssignee[]          @relation("TaskAssignee")
-  taskAttachments        TaskAttachment[]
-  taskComments           TaskComment[]
-  taskCommentReactions   TaskCommentReaction[]
-  userEvents             UserEvent[]
-  userStatus             UserStatus?
   ownedWorkspaces        Workspace[]             @relation("WorkspaceOwner")
   workspaceInvitations   WorkspaceInvitation[]
   workspaceMemberships   WorkspaceMember[]
   conversations          Conversation[]          @relation("UserConversations")
-  boardGenerationJobs    BoardGenerationJob[]
   leaveRequest           LeaveRequest[]
   leaveBalances          LeaveBalance[]
   
@@ -82,11 +65,10 @@ model User {
   approvedIssueHelpers   IssueAssignee[]         @relation("IssueAssigneeApprover")
   issueAssignees         IssueAssignee[]         @relation("IssueAssignee")
   issueComments          IssueComment[]          @relation("IssueCommentAuthor")
+  issueActivities        IssueActivity[]
   
   // Follower relationships
-  taskFollowers          TaskFollower[]
   postFollowers          PostFollower[]
-  boardFollowers         BoardFollower[]
   projectFollowers       ProjectFollower[]
   issueFollowers         IssueFollower[]
   viewFollowers          ViewFollower[]
@@ -167,7 +149,6 @@ model Post {
   actions       PostAction[]
   followers     PostFollower[]
   reactions     Reaction[]
-  tasks         Task[]
   tags          Tag[]          @relation("PostToTag")
 
   @@index([workspaceId])
@@ -216,18 +197,12 @@ model Comment {
   authorId         String
   parentId         String?
   featureRequestId String?
-  epicId           String?
-  storyId          String?
-  milestoneId      String?
   noteId           String?
   html             String?
   author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  epic             Epic?          @relation(fields: [epicId], references: [id], onDelete: Cascade)
-  milestone        Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   parent           Comment?       @relation("CommentToComment", fields: [parentId], references: [id], onDelete: Cascade)
   children         Comment[]      @relation("CommentToComment")
   post             Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  story            Story?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
   note             Note?          @relation(fields: [noteId], references: [id], onDelete: Cascade)
   likes            CommentLike[]
   notifications    Notification[]
@@ -236,9 +211,6 @@ model Comment {
   @@index([postId])
   @@index([authorId])
   @@index([parentId])
-  @@index([epicId])
-  @@index([storyId])
-  @@index([milestoneId])
   @@index([noteId])
 }
 
@@ -378,21 +350,14 @@ model Workspace {
   ownerId             String
   dockEnabled         Boolean               @default(true)
   timeTrackingEnabled Boolean               @default(true)
-  boardGenerationJobs BoardGenerationJob[]
-  boardItemActivities BoardItemActivity[]
   customRoles         CustomRole[]
-  epics               Epic[]
   featureRequests     FeatureRequest[]
   leavePolicies       LeavePolicy[]
-  milestones          Milestone[]
   notes               Note[]
   noteTags            NoteTag[]
   posts               Post[]
   rolePermissions     RolePermission[]
-  stories             Story[]
   tags                Tag[]
-  tasks               Task[]
-  taskBoards          TaskBoard[]
   taskLabels          TaskLabel[]
   owner               User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   invitations         WorkspaceInvitation[]
@@ -468,9 +433,6 @@ model Project {
   
   // GitHub Integration - One-to-one relationship with Repository
   repository      Repository?     // Connected GitHub repository
-  
-  // Legacy relationships for migration (will be removed after migration)
-  columns         TaskColumn[]    // Legacy column system
 
   @@unique([name, workspaceId])
   @@unique([slug, workspaceId])
@@ -479,30 +441,6 @@ model Project {
   @@index([workspaceId, isArchived])
 }
 
-// Legacy TaskBoard model for migration purposes (will be removed after migration)
-model TaskBoard {
-  id              String          @id @default(cuid())
-  name            String
-  slug            String
-  description     String?
-  workspaceId     String
-  isDefault       Boolean         @default(false)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  issuePrefix     String
-  nextIssueNumber Int             @default(1)
-  followers       BoardFollower[]
-  epics           Epic[]
-  milestones      Milestone[]
-  stories         Story[]
-  tasks           Task[]
-  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  columns         TaskColumn[]
-
-  @@unique([name, workspaceId])
-  @@unique([slug, workspaceId])
-  @@index([workspaceId])
-}
 
 model Issue {
   id            String      @id @default(cuid())
@@ -527,7 +465,6 @@ model Issue {
   reporterId    String?
   projectId     String
   workspaceId   String
-  columnId      String?     // Legacy field for migration
   
   // Dates and tracking
   dueDate       DateTime?
@@ -560,10 +497,7 @@ model Issue {
   
   // New status relationship
   projectStatus ProjectStatus?   @relation("IssueStatus", fields: [statusId], references: [id])
-  
-  // Legacy relationships
-  column        TaskColumn?      @relation(fields: [columnId], references: [id])
-  
+
   // Unified relationships
   comments      IssueComment[]
   labels        TaskLabel[]      @relation("IssueToLabel")
@@ -588,13 +522,12 @@ model Issue {
   
   // Planning relationships
   planEntries          PlanEntry[]             @relation("PlanEntryIssues")
-  
+
   @@index([projectId])
   @@index([workspaceId])
   @@index([assigneeId])
   @@index([reporterId])
   @@index([parentId])
-  @@index([columnId])
   @@index([issueKey])
   @@index([type])
   @@index([status])      // Legacy index
@@ -730,8 +663,7 @@ model StatusTemplate {
   
   // Relationships
   projectStatuses ProjectStatus[]
-  taskColumns     TaskColumn[]    // Legacy relationship for migration
-  
+
   @@index([category])
   @@index([isDefault])
   @@index([order])
@@ -771,153 +703,6 @@ model ProjectStatus {
   @@index([templateId])
 }
 
-model TaskColumn {
-  id              String                @id @default(cuid())
-  name            String                // Internal name for API/database queries
-  displayName     String?               // User-facing name for UI (nullable during migration)
-  order           Int                   @default(0)
-  color           String?
-  description     String?
-  iconName        String?               // Lucide icon name
-  isSystemDefault Boolean               @default(false) // Is this a system default column
-  isActive        Boolean               @default(true)  // Can be used to soft-delete columns
-  projectId       String?               // Made optional for migration, will be required after data migration
-  templateId      String?               // Reference to SystemColumnTemplate
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  
-  // New unified relationships
-  issues          Issue[]
-  
-  // Legacy relationships for migration (will be removed after migration)
-  epics           Epic[]
-  milestones      Milestone[]
-  stories         Story[]
-  tasks           Task[]
-  
-  project         Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  template        StatusTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  
-  // Legacy relationship for migration
-  taskBoard       TaskBoard?            @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
-  taskBoardId     String?
-
-  // Temporary: unique constraint will be updated after migration
-  // @@unique([name, projectId])  
-  @@unique([name, taskBoardId])  // Keep existing constraint during migration
-  @@index([projectId])
-  @@index([taskBoardId]) // Legacy index for migration
-  @@index([templateId])
-  @@index([projectId, order])
-}
-
-model Task {
-  id            String              @id @default(cuid())
-  title         String
-  description   String?
-  status        String?
-  priority      String              @default("medium")
-  type          String              @default("task")
-  storyPoints   Int?
-  dueDate       DateTime?
-  columnId      String?
-  taskBoardId   String?
-  workspaceId   String
-  assigneeId    String?
-  reporterId    String?
-  parentTaskId  String?
-  postId        String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  issueKey      String?
-  position      Int?
-  epicId        String?
-  milestoneId   String?
-  storyId       String?
-  activities    BoardItemActivity[]
-  notifications Notification[]
-  assignee      User?               @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  column        TaskColumn?         @relation(fields: [columnId], references: [id])
-  epic          Epic?               @relation(fields: [epicId], references: [id])
-  parentTask    Task?               @relation("TaskToSubtasks", fields: [parentTaskId], references: [id])
-  subtasks      Task[]              @relation("TaskToSubtasks")
-  post          Post?               @relation(fields: [postId], references: [id])
-  reporter      User?               @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: Cascade)
-  story         Story?              @relation(fields: [storyId], references: [id])
-  taskBoard     TaskBoard?          @relation(fields: [taskBoardId], references: [id])
-  workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignees     TaskAssignee[]
-  attachments   TaskAttachment[]
-  comments      TaskComment[]
-  followers     TaskFollower[]
-  userEvents    UserEvent[]
-  userStatuses  UserStatus[]
-  labels        TaskLabel[]         @relation("TaskToLabel")
-
-  @@index([columnId])
-  @@index([taskBoardId])
-  @@index([workspaceId])
-  @@index([assigneeId])
-  @@index([reporterId])
-  @@index([parentTaskId])
-  @@index([postId])
-  @@index([issueKey])
-  @@index([storyId])
-  @@index([epicId])
-  @@index([milestoneId])
-}
-
-model TaskComment {
-  id            String                @id @default(cuid())
-  content       String
-  taskId        String
-  authorId      String
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  html          String?
-  parentId      String?
-  notifications Notification[]
-  author        User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent        TaskComment?          @relation("TaskCommentToTaskComment", fields: [parentId], references: [id], onDelete: Cascade)
-  replies       TaskComment[]         @relation("TaskCommentToTaskComment")
-  task          Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  reactions     TaskCommentReaction[]
-
-  @@index([taskId])
-  @@index([authorId])
-  @@index([parentId])
-}
-
-model TaskCommentReaction {
-  id            String      @id @default(cuid())
-  type          String
-  taskCommentId String
-  authorId      String
-  createdAt     DateTime    @default(now())
-  author        User        @relation(fields: [authorId], references: [id])
-  taskComment   TaskComment @relation(fields: [taskCommentId], references: [id], onDelete: Cascade)
-
-  @@unique([authorId, taskCommentId, type])
-  @@index([taskCommentId])
-  @@index([authorId])
-}
-
-model TaskAttachment {
-  id         String   @id @default(cuid())
-  fileName   String
-  fileUrl    String
-  fileSize   Int?
-  fileType   String?
-  taskId     String
-  uploaderId String
-  createdAt  DateTime @default(now())
-  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  uploader   User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-  @@index([uploaderId])
-}
-
 model TaskLabel {
   id          String      @id @default(cuid())
   name        String
@@ -926,25 +711,21 @@ model TaskLabel {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  epics       Epic[]      @relation("EpicToLabel")
-  milestones  Milestone[] @relation("MilestoneToLabel")
-  stories     Story[]     @relation("StoryToLabel")
-  tasks       Task[]      @relation("TaskToLabel")
   issues      Issue[]     @relation("IssueToLabel")
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
 }
 
-model BoardItemActivity {
+model IssueActivity {
   id          String   @id @default(cuid())
   action      String // CREATED, UPDATED, MOVED, ASSIGNED, STATUS_CHANGED, etc.
   details     String? // JSON string with change details
-  itemType    String // TASK, MILESTONE, EPIC, STORY
-  itemId      String // ID of the affected item (taskId, milestoneId, epicId, storyId)
+  itemType    String   @default("ISSUE") // ISSUE (unified type)
+  itemId      String // ID of the affected issue
   userId      String // User who performed the action
   workspaceId String // For workspace-level filtering
-  boardId     String? // For board-level filtering
+  projectId   String? // For project-level filtering
   createdAt   DateTime @default(now())
 
   // Field-specific change tracking
@@ -952,140 +733,19 @@ model BoardItemActivity {
   oldValue  String? // Previous value (JSON string for complex values)
   newValue  String? // New value (JSON string for complex values)
 
-  // Legacy support - keep taskId for backward compatibility
-  taskId String? // Deprecated: use itemId + itemType instead
-
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
-  @@index([taskId])
   @@index([userId])
   @@index([workspaceId])
-  @@index([boardId])
+  @@index([projectId])
   @@index([createdAt])
   @@index([action])
   // Performance indexes for team sync/planning view
-  @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "BoardItemActivity_team_sync_idx")
-  @@index([itemId, itemType, action, createdAt], name: "BoardItemActivity_item_history_idx")
-}
+  @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "IssueActivity_team_sync_idx")
+  @@index([itemId, itemType, action, createdAt], name: "IssueActivity_item_history_idx")
 
-model Milestone {
-  id            String         @id @default(cuid())
-  title         String
-  description   String?
-  status        String         @default("planned")
-  startDate     DateTime?
-  dueDate       DateTime?
-  taskBoardId   String
-  workspaceId   String
-  color         String?        @default("#6366F1")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  columnId      String?
-  position      Int?
-  issueKey      String?
-  assigneeId    String?
-  reporterId    String?
-  comments      Comment[]
-  epics         Epic[]
-  assignee      User?          @relation("AssignedMilestones", fields: [assigneeId], references: [id])
-  column        TaskColumn?    @relation(fields: [columnId], references: [id])
-  reporter      User?          @relation("ReportedMilestones", fields: [reporterId], references: [id])
-  taskBoard     TaskBoard      @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  notifications Notification[]
-  labels        TaskLabel[]    @relation("MilestoneToLabel")
-
-  @@index([workspaceId])
-  @@index([taskBoardId])
-  @@index([columnId])
-  @@index([issueKey])
-  @@index([assigneeId])
-  @@index([reporterId])
-}
-
-model Epic {
-  id            String         @id @default(cuid())
-  title         String
-  description   String?
-  status        String         @default("backlog")
-  priority      String         @default("medium")
-  startDate     DateTime?
-  dueDate       DateTime?
-  milestoneId   String?
-  taskBoardId   String
-  workspaceId   String
-  color         String?        @default("#6366F1")
-  progress      Int            @default(0)
-  issueKey      String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  columnId      String?
-  position      Int?
-  assigneeId    String?
-  reporterId    String?
-  comments      Comment[]
-  assignee      User?          @relation("AssignedEpics", fields: [assigneeId], references: [id])
-  column        TaskColumn?    @relation(fields: [columnId], references: [id])
-  milestone     Milestone?     @relation(fields: [milestoneId], references: [id])
-  reporter      User?          @relation("ReportedEpics", fields: [reporterId], references: [id])
-  taskBoard     TaskBoard      @relation(fields: [taskBoardId], references: [id], onDelete: Cascade)
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  notifications Notification[]
-  stories       Story[]
-  tasks         Task[]
-  labels        TaskLabel[]    @relation("EpicToLabel")
-
-  @@index([workspaceId])
-  @@index([taskBoardId])
-  @@index([milestoneId])
-  @@index([issueKey])
-  @@index([columnId])
-  @@index([assigneeId])
-  @@index([reporterId])
-}
-
-model Story {
-  id            String         @id @default(cuid())
-  title         String
-  description   String?
-  status        String         @default("backlog")
-  priority      String         @default("medium")
-  type          String         @default("user-story")
-  storyPoints   Int?
-  startDate     DateTime?
-  dueDate       DateTime?
-  epicId        String?
-  taskBoardId   String?
-  workspaceId   String
-  issueKey      String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  color         String?        @default("#3B82F6")
-  columnId      String?
-  position      Int?
-  assigneeId    String?
-  reporterId    String?
-  comments      Comment[]
-  notifications Notification[]
-  assignee      User?          @relation("AssignedStories", fields: [assigneeId], references: [id])
-  column        TaskColumn?    @relation(fields: [columnId], references: [id])
-  epic          Epic?          @relation(fields: [epicId], references: [id])
-  reporter      User?          @relation("ReportedStories", fields: [reporterId], references: [id])
-  taskBoard     TaskBoard?     @relation(fields: [taskBoardId], references: [id])
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  tasks         Task[]
-  labels        TaskLabel[]    @relation("StoryToLabel")
-
-  @@index([workspaceId])
-  @@index([taskBoardId])
-  @@index([epicId])
-  @@index([issueKey])
-  @@index([columnId])
-  @@index([assigneeId])
-  @@index([reporterId])
+  @@map("BoardItemActivity")
 }
 
 model Notification {
@@ -1099,73 +759,19 @@ model Notification {
   postId           String?
   commentId        String?
   featureRequestId String?
-  taskId           String?
-  epicId           String?
-  storyId          String?
-  milestoneId      String?
-  taskCommentId    String?
   leaveRequestId   String?
   comment          Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
   leaveRequest     LeaveRequest?   @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
-  epic             Epic?           @relation(fields: [epicId], references: [id], onDelete: Cascade)
   featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
-  milestone        Milestone?      @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
   post             Post?           @relation(fields: [postId], references: [id], onDelete: Cascade)
   sender           User            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
-  story            Story?          @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  taskComment      TaskComment?    @relation(fields: [taskCommentId], references: [id], onDelete: Cascade)
-  task             Task?           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user             User            @relation("NotificationReceiver", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([postId])
   @@index([commentId])
-  @@index([taskCommentId])
-  @@index([taskId])
   @@index([featureRequestId])
-  @@index([epicId])
-  @@index([storyId])
-  @@index([milestoneId])
   @@index([leaveRequestId])
-}
-
-model UserEvent {
-  id          String    @id @default(cuid())
-  userId      String
-  eventType   EventType
-  taskId      String?
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
-  duration    Int?
-  description String?
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  task        Task?     @relation(fields: [taskId], references: [id])
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([taskId])
-  @@index([eventType])
-  @@index([startedAt])
-}
-
-model UserStatus {
-  id              String         @id @default(cuid())
-  userId          String         @unique
-  currentStatus   UserStatusType @default(AVAILABLE)
-  currentTaskId   String?
-  statusStartedAt DateTime       @default(now())
-  statusText      String?
-  isAvailable     Boolean        @default(true)
-  autoEndAt       DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  currentTask     Task?          @relation(fields: [currentTaskId], references: [id])
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([currentStatus])
 }
 
 model Note {
@@ -1205,27 +811,6 @@ model NoteTag {
   @@index([workspaceId])
 }
 
-model TaskAssignee {
-  id              String             @id @default(cuid())
-  taskId          String
-  userId          String
-  role            TaskAssigneeRole   @default(ASSIGNEE)
-  status          TaskAssigneeStatus @default(PENDING)
-  assignedAt      DateTime           @default(now())
-  approvedAt      DateTime?
-  approvedBy      String?
-  totalTimeWorked Int                @default(0)
-  lastWorkedAt    DateTime?
-  approver        User?              @relation("TaskAssigneeApprover", fields: [approvedBy], references: [id])
-  task            Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user            User               @relation("TaskAssignee", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([taskId, userId])
-  @@index([taskId])
-  @@index([userId])
-  @@index([role])
-  @@index([status])
-}
 
 model IssueAssignee {
   id              String             @id @default(cuid())
@@ -1275,45 +860,6 @@ model RolePermission {
   @@unique([workspaceId, role, permission])
 }
 
-model BoardGenerationJob {
-  id          String                @id @default(cuid())
-  workspaceId String
-  userId      String
-  description String
-  projectType String?
-  teamSize    String?
-  status      BoardGenerationStatus @default(PENDING)
-  progress    Int                   @default(0)
-  currentStep String?
-  boardData   Json?
-  boardId     String?
-  error       String?
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
-
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@index([workspaceId])
-  @@index([userId])
-  @@index([status])
-}
-
-model TaskFollower {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  createdAt DateTime @default(now())
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([taskId, userId])
-  @@index([taskId])
-  @@index([userId])
-  @@index([createdAt])
-  @@index([taskId, createdAt])
-}
-
 model PostFollower {
   id        String   @id @default(cuid())
   postId    String
@@ -1327,21 +873,6 @@ model PostFollower {
   @@index([userId])
   @@index([createdAt])
   @@index([postId, createdAt])
-}
-
-model BoardFollower {
-  id        String    @id @default(cuid())
-  boardId   String
-  userId    String
-  createdAt DateTime  @default(now())
-  board     TaskBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([boardId, userId])
-  @@index([boardId])
-  @@index([userId])
-  @@index([createdAt])
-  @@index([boardId, createdAt])
 }
 
 model ProjectFollower {
@@ -1402,21 +933,6 @@ model ViewFavorite {
   @@index([userId])
   @@index([createdAt])
   @@index([viewId, createdAt])
-}
-
-model TaskRelations {
-  id              String       @id @default(cuid())
-  taskId          String
-  relatedItemId   String
-  relatedItemType RelationType
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  // Indexes
-  @@unique([taskId, relatedItemId, relatedItemType])
-  @@index([taskId])
-  @@index([relatedItemId, relatedItemType])
-  @@map("task_relations")
 }
 
 model IssueRelation {
@@ -1982,50 +1498,6 @@ enum LeaveStatus {
   CANCELED
 }
 
-enum EventType {
-  TASK_START
-  TASK_PAUSE
-  TASK_STOP
-  TASK_COMPLETE
-  LUNCH_START
-  LUNCH_END
-  BREAK_START
-  BREAK_END
-  MEETING_START
-  MEETING_END
-  TRAVEL_START
-  TRAVEL_END
-  REVIEW_START
-  REVIEW_END
-  RESEARCH_START
-  RESEARCH_END
-  OFFLINE
-  AVAILABLE
-}
-
-enum UserStatusType {
-  WORKING
-  LUNCH
-  BREAK
-  MEETING
-  TRAVEL
-  REVIEW
-  RESEARCH
-  OFFLINE
-  AVAILABLE
-}
-
-enum TaskAssigneeRole {
-  ASSIGNEE
-  HELPER
-}
-
-enum TaskAssigneeStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 enum IssueAssigneeRole {
   ASSIGNEE
   HELPER
@@ -2099,23 +1571,6 @@ enum WorkspaceRole {
   MEMBER
   VIEWER
   GUEST
-}
-
-enum BoardGenerationStatus {
-  PENDING
-  GENERATING_MILESTONES
-  GENERATING_EPICS
-  GENERATING_STORIES
-  GENERATING_TASKS
-  COMPLETED
-  FAILED
-}
-
-enum RelationType {
-  EPIC
-  STORY
-  MILESTONE
-  PARENT_TASK
 }
 
 enum Permission {
@@ -2306,6 +1761,8 @@ model NotificationPreferences {
   updatedAt DateTime @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
 }
 
 // ========================================

@@ -64,7 +64,7 @@ export const DELETE = withAppAuth(
       });
 
       // Log activity
-      await prisma.boardItemActivity.create({
+      await prisma.issueActivity.create({
         data: {
           action: 'RELATION_DELETED',
           itemType: 'ISSUE',

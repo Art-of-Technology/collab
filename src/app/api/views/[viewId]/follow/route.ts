@@ -66,13 +66,6 @@ export const POST = withRateLimit(async function(
       }
     });
 
-    // Notify via NotificationService if it has view support
-    try {
-      await NotificationService.addViewFollower?.(viewId, currentUser.id);
-    } catch (error) {
-      console.warn("NotificationService.addViewFollower not available:", error);
-    }
-
     return NextResponse.json({ message: "Successfully following view" });
   } catch (error) {
     console.error("Error following view:", error);
@@ -127,13 +120,6 @@ export const DELETE = withRateLimit(async function(
         userId: currentUser.id
       }
     });
-
-    // Notify via NotificationService if it has view support
-    try {
-      await NotificationService.removeViewFollower?.(viewId, currentUser.id);
-    } catch (error) {
-      console.warn("NotificationService.removeViewFollower not available:", error);
-    }
 
     return NextResponse.json({ message: "Successfully unfollowed view" });
   } catch (error) {

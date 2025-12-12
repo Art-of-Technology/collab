@@ -51,7 +51,6 @@ export const GET = withAppAuth(
               members: true,
               projects: true,
               issues: true,
-              tasks: true
             }
           },
           // Include current user's membership details
@@ -90,7 +89,6 @@ export const GET = withAppAuth(
           memberCount: workspace._count.members,
           projectCount: workspace._count.projects,
           issueCount: workspace._count.issues,
-          taskCount: workspace._count.tasks
         },
         currentUser: {
           role: userMembership?.role,
