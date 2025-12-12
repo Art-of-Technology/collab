@@ -12,11 +12,9 @@
 
 /* Desktop: grid with fixed first column driven by CSS var */
 .app-layout {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  display: flex;
   width: 100%;
   height: 100dvh;
-  transition: grid-template-columns 200ms ease;
 }
 
 .app-sidebar {
@@ -30,12 +28,14 @@
   left: 0;
 }
 
-.app-layout .main-content {
-  grid-column: 2 / 3;
-  width: 100%;
+.main-content {
+  display: flex;
+  margin-left: var(--sidebar-width);
+  width: calc(100dvw - var(--sidebar-width));
   height: 100vh;
   background: #090909;
   overflow: hidden;
+  transition: margin-left 200ms ease;
 }
 
 .sidebar-toggle {
@@ -47,7 +47,7 @@
   .app-layout {
     grid-template-columns: 1fr;
   }
-
+ 
   .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -58,8 +58,9 @@
     z-index: 45;
     background: #090909;
   }
-  .app-layout .main-content {
-    grid-column: 1 / 2;
+  .main-content {
+    margin-left: 0;
+    width: 100dvw;
   }
   .app-sidebar[data-open="true"] {
     transform: translateX(0);

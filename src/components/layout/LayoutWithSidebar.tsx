@@ -59,8 +59,9 @@ export default function LayoutWithSidebar({
               {children}
             </div>
           </div>
-          <RightSidebar />
         </main>
+        {/* Right Sidebar */}
+        <RightSidebar />
 
         {/* Mobile overlay sidebar */}
         <div
