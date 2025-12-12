@@ -214,8 +214,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const grantedScopes = filterGrantedScopes(scope, installation.scopes);
-    
+    // If no scope requested, grant all installation scopes; otherwise filter requested against available
+    const grantedScopes = scope.trim()
+      ? filterGrantedScopes(scope, installation.scopes)
+      : normalizeScopes(installation.scopes);
+
     if (grantedScopes.length === 0) {
       return NextResponse.json(
         {
