@@ -22,7 +22,7 @@ export const SUPPORTED_SCOPES = [
   'user:write',
   'issues:read',
   'issues:write',
-  'posts:read', 
+  'posts:read',
   'posts:write',
   'workspace:read',
   'workspace:write',
@@ -31,7 +31,13 @@ export const SUPPORTED_SCOPES = [
   'comments:read',
   'comments:write',
   'leave:read',
-  'leave:write'
+  'leave:write',
+  'projects:read',
+  'projects:write', 
+  'views:read', 
+  'views:write', 
+  'labels:read', 
+  'labels:write'
 ] as const;
 
 export type SupportedScope = typeof SUPPORTED_SCOPES[number];
@@ -51,7 +57,7 @@ export function normalizeScopes(scopes: string | string[] | null | undefined): s
 
   if (Array.isArray(scopes)) {
     // Handle array of scopes
-    scopeArray = scopes.flatMap(scope => 
+    scopeArray = scopes.flatMap(scope =>
       typeof scope === 'string' ? scope.split(/\s+/) : []
     );
   } else if (typeof scopes === 'string') {
@@ -134,8 +140,8 @@ export function filterGrantedScopes(
 ): string[] {
   const normalizedRequested = normalizeScopes(requestedScopes);
   const normalizedAvailable = normalizeScopes(availableScopes);
-  
-  return normalizedRequested.filter(scope => 
+
+  return normalizedRequested.filter(scope =>
     normalizedAvailable.includes(scope)
   );
 }
@@ -148,7 +154,7 @@ export function filterGrantedScopes(
  * @returns True if the target scope is included
  */
 export function hasScope(
-  targetScope: string, 
+  targetScope: string,
   scopes: string | string[] | null | undefined
 ): boolean {
   const normalizedScopes = normalizeScopes(scopes);
@@ -168,8 +174,8 @@ export function hasAllScopes(
 ): boolean {
   const normalizedRequired = normalizeScopes(requiredScopes);
   const normalizedProvided = normalizeScopes(providedScopes);
-  
-  return normalizedRequired.every(scope => 
+
+  return normalizedRequired.every(scope =>
     normalizedProvided.includes(scope)
   );
 }
