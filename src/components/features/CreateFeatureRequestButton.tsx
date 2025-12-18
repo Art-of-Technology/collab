@@ -16,15 +16,35 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RichEditor } from "@/components/RichEditor";
 import { extractMentionUserIds } from "@/utils/mentions";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useProjects } from "@/hooks/queries/useProjects";
 import axios from "axios";
 
-export default function CreateFeatureRequestButton() {
+interface CreateFeatureRequestButtonProps {
+  projectId?: string;
+  projectName?: string;
+}
+
+export default function CreateFeatureRequestButton({ 
+  projectId: defaultProjectId,
+  projectName 
+}: CreateFeatureRequestButtonProps = {}) {
   const { toast } = useToast();
+  const { currentWorkspace } = useWorkspace();
+  const { data: projects = [] } = useProjects({ workspaceId: currentWorkspace?.id });
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(defaultProjectId || "");
   
   const createFeature = useCreateFeatureRequest();
 
@@ -44,6 +64,17 @@ export default function CreateFeatureRequestButton() {
     formData.append("title", title);
     formData.append("description", description);
     formData.append("html", description);
+    
+    // Add project ID (either from prop or selected)
+    const projectToUse = defaultProjectId || selectedProjectId;
+    if (projectToUse) {
+      formData.append("projectId", projectToUse);
+    }
+    
+    // Add workspace ID
+    if (currentWorkspace?.id) {
+      formData.append("workspaceId", currentWorkspace.id);
+    }
     
     try {
       createFeature.mutate(formData, {
@@ -75,6 +106,9 @@ export default function CreateFeatureRequestButton() {
           });
           setTitle("");
           setDescription("");
+          if (!defaultProjectId) {
+            setSelectedProjectId("");
+          }
           setOpen(false);
         },
         onError: () => {
@@ -107,6 +141,41 @@ export default function CreateFeatureRequestButton() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {/* Show project selector at workspace level (when no default project) */}
+            {!defaultProjectId && projects && projects.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="project">Project</Label>
+                <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a project (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        <div className="flex items-center gap-2">
+                          {project.color && (
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: project.color }}
+                            />
+                          )}
+                          {project.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Show project name badge when at project level */}
+            {defaultProjectId && projectName && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Project:</span>
+                <span className="font-medium text-foreground">{projectName}</span>
+              </div>
+            )}
+            
             <div className="grid gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
