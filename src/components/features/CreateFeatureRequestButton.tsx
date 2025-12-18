@@ -51,6 +51,9 @@ export default function CreateFeatureRequestButton({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Project is required
+    const projectToUse = defaultProjectId || selectedProjectId;
+    
     if (!title.trim() || !description.trim()) {
       toast({
         title: "Missing fields",
@@ -60,16 +63,20 @@ export default function CreateFeatureRequestButton({
       return;
     }
     
+    if (!projectToUse) {
+      toast({
+        title: "Project required",
+        description: "Please select a project for this feature request",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const formData = new FormData();
     formData.append("title", title);
     formData.append("description", description);
     formData.append("html", description);
-    
-    // Add project ID (either from prop or selected)
-    const projectToUse = defaultProjectId || selectedProjectId;
-    if (projectToUse) {
-      formData.append("projectId", projectToUse);
-    }
+    formData.append("projectId", projectToUse);
     
     // Add workspace ID
     if (currentWorkspace?.id) {
@@ -144,10 +151,10 @@ export default function CreateFeatureRequestButton({
             {/* Show project selector at workspace level (when no default project) */}
             {!defaultProjectId && projects && projects.length > 0 && (
               <div className="grid gap-2">
-                <Label htmlFor="project">Project</Label>
-                <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <Label htmlFor="project">Project <span className="text-destructive">*</span></Label>
+                <Select value={selectedProjectId} onValueChange={setSelectedProjectId} required>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a project (optional)" />
+                    <SelectValue placeholder="Select a project" />
                   </SelectTrigger>
                   <SelectContent>
                     {projects.map((project) => (

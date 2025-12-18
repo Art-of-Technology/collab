@@ -348,11 +348,15 @@ export async function createFeatureRequest(formData: FormData) {
     const description = formData.get("description") as string;
     // Get markdown HTML version if available
     const html = formData.get("html") as string || description;
-    const projectId = formData.get("projectId") as string | null;
+    const projectId = formData.get("projectId") as string;
     const workspaceId = formData.get("workspaceId") as string | null;
 
     if (!title || !description) {
       throw new Error("Title and description are required");
+    }
+
+    if (!projectId) {
+      throw new Error("Project is required for feature requests");
     }
 
     // Build the data object
@@ -363,13 +367,11 @@ export async function createFeatureRequest(formData: FormData) {
       status: "PENDING",
       author: {
         connect: { id: session.user.id }
+      },
+      project: {
+        connect: { id: projectId }
       }
     };
-
-    // Connect to project if provided
-    if (projectId) {
-      data.project = { connect: { id: projectId } };
-    }
 
     // Connect to workspace if provided
     if (workspaceId) {

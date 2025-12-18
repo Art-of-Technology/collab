@@ -8,7 +8,7 @@ const featureRequestSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(2000),
   html: z.string().optional(),
-  projectId: z.string().optional(),
+  projectId: z.string().min(1, "Project is required"),
   workspaceId: z.string().optional(),
 });
 
@@ -209,18 +209,14 @@ export async function POST(req: NextRequest) {
 
     const { title, description, html, projectId, workspaceId } = validated.data;
 
-    // Build the data object
+    // Build the data object - projectId is required
     const data: any = {
       title,
       description,
       html: html || null,
       authorId: session.user.id,
+      projectId, // Required field
     };
-
-    // Add projectId if provided
-    if (projectId) {
-      data.projectId = projectId;
-    }
 
     // Add workspaceId if provided
     if (workspaceId) {
