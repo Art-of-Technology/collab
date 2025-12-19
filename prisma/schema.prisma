@@ -1853,11 +1853,35 @@ model AppInstallation {
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   webhooks      AppWebhook[]
   authorizationCodes AppOAuthAuthorizationCode[]
-  
+  tokens        AppToken[]
+
   @@unique([appId, workspaceId])
   @@index([workspaceId])
   @@index([installedById])
   @@index([status])
+}
+
+// Stores multiple OAuth tokens per app installation
+// This allows multiple tokens to be active simultaneously (e.g., multiple users/sessions)
+model AppToken {
+  id             String    @id @default(cuid())
+  installationId String
+  userId         String?   // The user who generated this token (null for legacy tokens)
+  accessToken    String    @unique // encrypted, unique for fast lookup
+  refreshToken   String?   // encrypted
+  tokenExpiresAt DateTime?
+  scopes         String[]  // scopes granted for this specific token
+  isRevoked      Boolean   @default(false)
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  installation   AppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@index([installationId])
+  @@index([userId])
+  @@index([isRevoked])
+  @@index([tokenExpiresAt])
 }
 
 model AppScope { // catalog of app scopes (renamed from AppPermission for clarity)

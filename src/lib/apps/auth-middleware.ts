@@ -212,48 +212,58 @@ export async function authenticateAppRequest(
 
 /**
  * Find app installation by access token
+ * Now searches in AppToken table which supports multiple tokens per installation
  */
 async function findInstallationByAccessToken(token: string) {
   try {
-    // Find installations that have access tokens
-    const installations = await prisma.appInstallation.findMany({
+    // Find tokens from active installations
+    const appTokens = await prisma.appToken.findMany({
       where: {
-        accessToken: { not: null },
-        status: 'ACTIVE'
+        isRevoked: false,
+        installation: {
+          status: 'ACTIVE'
+        }
       },
       include: {
-        app: {
-          select: {
-            id: true,
-            slug: true,
-            name: true,
-            status: true
-          }
-        },
-        workspace: {
-          select: {
-            id: true,
-            slug: true,
-            name: true
+        installation: {
+          include: {
+            app: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                status: true
+              }
+            },
+            workspace: {
+              select: {
+                id: true,
+                slug: true,
+                name: true
+              }
+            }
           }
         }
       }
     });
 
-    // Check each installation's access token
-    for (const installation of installations) {
+    // Check each token's access token
+    for (const appToken of appTokens) {
       try {
-        if (!installation.accessToken) continue;
+        if (!appToken.accessToken) continue;
 
         // Decrypt the stored token
-        const storedTokenData = Buffer.from(installation.accessToken, 'base64');
+        const storedTokenData = Buffer.from(appToken.accessToken, 'base64');
         const decryptedToken = await decryptToken(storedTokenData);
 
         // Compare with provided token
         if (decryptedToken === token) {
-          // Fetch the user who installed the app separately since the relation doesn't exist in schema
-          const installedByUser = await prisma.user.findUnique({
-            where: { id: installation.installedById },
+          const installation = appToken.installation;
+
+          // Fetch the user who generated this token (or fallback to installer for legacy tokens)
+          const tokenUserId = appToken.userId || installation.installedById;
+          const tokenUser = await prisma.user.findUnique({
+            where: { id: tokenUserId },
             select: {
               id: true,
               email: true,
@@ -261,19 +271,22 @@ async function findInstallationByAccessToken(token: string) {
             }
           });
 
-          // If user not found, skip this installation
-          if (!installedByUser) {
+          // If user not found, skip this token
+          if (!tokenUser) {
             continue;
           }
 
           return {
             ...installation,
-            installedBy: installedByUser
+            // Use scopes from the token if available, fallback to installation scopes
+            scopes: appToken.scopes.length > 0 ? appToken.scopes : installation.scopes,
+            tokenExpiresAt: appToken.tokenExpiresAt,
+            installedBy: tokenUser // Now returns the token's user, not the installer
           };
         }
       } catch (error) {
-        // If decryption fails for this installation, continue to next
-        console.error('Failed to decrypt access token for installation:', installation.id, error);
+        // If decryption fails for this token, continue to next
+        console.error('Failed to decrypt access token for appToken:', appToken.id, error);
         continue;
       }
     }
