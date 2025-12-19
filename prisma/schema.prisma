@@ -90,6 +90,7 @@ model User {
   mergedPullRequests     PullRequest[]           @relation("PRMergedBy")
   deployments            Deployment[]            @relation("DeploymentUser")
   prReviews              PRReview[]              // PR reviews by this user
+  triggeredAIReviews     AIPRReview[]            @relation("AIReviewTriggeredBy")
 
   // App Store relations
   publishedApps          App[]                   @relation("UserApps")
@@ -1085,7 +1086,11 @@ model Repository {
   
   // Issue type mapping configuration
   issueTypeMapping Json?    // Custom mapping of issue types to version increments
-  
+
+  // AI Review configuration
+  aiReviewEnabled     Boolean   @default(false)
+  aiReviewAutoTrigger Boolean   @default(false)  // Auto on PR create/update
+
   project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   branches        Branch[]
   pullRequests    PullRequest[]
@@ -1095,7 +1100,8 @@ model Repository {
   deployments     Deployment[]
   versionFiles    VersionFile[]
   changelogEntries ChangelogEntry[]
-  
+  aiReviews       AIPRReview[]
+
   @@index([projectId])
   @@index([githubRepoId])
   @@index([owner, name])
@@ -1158,6 +1164,7 @@ model PullRequest {
   commits         Commit[]
   changelogEntries ChangelogEntry[]
   reviews         PRReview[]
+  aiReviews       AIPRReview[]
 
   @@unique([repositoryId, githubPrId])
   @@index([issueId])
@@ -1180,14 +1187,56 @@ model PRReview {
   submittedAt     DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  
+
   pullRequest     PullRequest   @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
   reviewer        User?         @relation(fields: [reviewerId], references: [id])
-  
+
   @@unique([pullRequestId, githubReviewId])
   @@index([pullRequestId])
   @@index([reviewerId])
   @@index([state])
+}
+
+// AI-Powered PR Review
+model AIPRReview {
+  id              String              @id @default(cuid())
+  pullRequestId   String
+  repositoryId    String
+
+  // Review content
+  summary         String              @db.Text
+  findings        Json                // Structured findings by category
+  fullReview      String              @db.Text // Complete markdown review
+
+  // Metrics
+  filesAnalyzed   Int                 @default(0)
+  linesAnalyzed   Int                 @default(0)
+  issuesFound     Int                 @default(0)
+  severity        AIPRReviewSeverity  @default(INFO)
+
+  // GitHub posting
+  githubCommentId String?
+  postedToGitHub  Boolean             @default(false)
+  postedAt        DateTime?
+
+  // Trigger info
+  triggerType     AIPRReviewTrigger   @default(MANUAL)
+  triggeredById   String?
+
+  // Status
+  status          AIPRReviewStatus    @default(PENDING)
+  errorMessage    String?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  pullRequest     PullRequest         @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  repository      Repository          @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  triggeredBy     User?               @relation("AIReviewTriggeredBy", fields: [triggeredById], references: [id])
+
+  @@index([pullRequestId])
+  @@index([repositoryId])
+  @@index([createdAt])
 }
 
 // Commit Tracking
@@ -1466,6 +1515,25 @@ enum CheckStatus {
   CANCELLED
   NEUTRAL
   SKIPPED
+}
+
+// AI PR Review Enums
+enum AIPRReviewSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AIPRReviewTrigger {
+  AUTOMATIC
+  MANUAL
+}
+
+enum AIPRReviewStatus {
+  PENDING
+  ANALYZING
+  COMPLETED
+  FAILED
 }
 
 

@@ -1,11 +1,26 @@
 import OpenAI from 'openai';
-import { IssueType } from '@prisma/client';
+import { IssueType, AIPRReviewSeverity } from '@prisma/client';
 
 interface IssueData {
   title: string;
   description?: string;
   type: IssueType;
   issueKey?: string;
+}
+
+interface AIReviewFindings {
+  security: Array<{ severity: string; message: string; file?: string; line?: number }>;
+  bugs: Array<{ severity: string; message: string; file?: string; line?: number }>;
+  performance: Array<{ severity: string; message: string; file?: string; line?: number }>;
+  codeQuality: Array<{ severity: string; message: string; file?: string; line?: number }>;
+  suggestions: Array<{ message: string; file?: string }>;
+}
+
+interface PRReviewResult {
+  summary: string;
+  findings: AIReviewFindings;
+  overallSeverity: AIPRReviewSeverity;
+  totalIssues: number;
 }
 
 export class AIContentGenerator {
@@ -242,6 +257,144 @@ export class AIContentGenerator {
       console.error('Error generating deployment notes:', error);
       return `Deployment includes ${issues.length} changes. Review individual items for specific impacts.`;
     }
+  }
+
+  /**
+   * Generate comprehensive PR code review using AI
+   */
+  async generatePRReview(
+    diff: string,
+    prTitle: string,
+    prDescription: string,
+    changedFiles: string[]
+  ): Promise<PRReviewResult> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert code reviewer analyzing pull requests. Your job is to provide thorough, actionable feedback focusing on:
+
+1. **Security**: SQL injection, XSS, CSRF, authentication issues, secrets exposure, input validation
+2. **Bugs**: Logic errors, null/undefined handling, race conditions, edge cases, error handling
+3. **Performance**: N+1 queries, memory leaks, inefficient algorithms, unnecessary re-renders, large bundle sizes
+4. **Code Quality**: Readability, naming conventions, code organization, DRY violations, complexity
+5. **Suggestions**: Better patterns, modern approaches, maintainability improvements
+
+Guidelines:
+- Be specific and reference file names and line numbers when possible
+- Focus on significant issues, not style nitpicks
+- Provide actionable recommendations
+- Use severity levels: CRITICAL, HIGH, MEDIUM, LOW
+- Keep feedback concise and professional
+
+Return your response as valid JSON with this exact structure:
+{
+  "summary": "2-3 sentence overview of the PR and key findings",
+  "findings": {
+    "security": [{"severity": "HIGH", "message": "description", "file": "filename", "line": 42}],
+    "bugs": [{"severity": "MEDIUM", "message": "description", "file": "filename"}],
+    "performance": [{"severity": "LOW", "message": "description"}],
+    "codeQuality": [{"severity": "LOW", "message": "description", "file": "filename"}],
+    "suggestions": [{"message": "suggestion text", "file": "filename"}]
+  }
+}
+
+Empty arrays are fine if no issues found in a category. Always include all five categories.`
+          },
+          {
+            role: 'user',
+            content: `Review this pull request:
+
+**Title**: ${prTitle}
+**Description**: ${prDescription || 'No description provided'}
+
+**Changed Files**:
+${changedFiles.join('\n')}
+
+**Diff**:
+\`\`\`diff
+${diff}
+\`\`\`
+
+Analyze the code changes and provide your review as JSON.`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return this.getDefaultPRReviewResult();
+      }
+
+      try {
+        const parsed = JSON.parse(content);
+        const findings: AIReviewFindings = {
+          security: parsed.findings?.security || [],
+          bugs: parsed.findings?.bugs || [],
+          performance: parsed.findings?.performance || [],
+          codeQuality: parsed.findings?.codeQuality || [],
+          suggestions: parsed.findings?.suggestions || [],
+        };
+
+        // Calculate total issues and severity
+        const totalIssues =
+          findings.security.length +
+          findings.bugs.length +
+          findings.performance.length +
+          findings.codeQuality.length;
+
+        // Determine overall severity
+        const hasCritical = [...findings.security, ...findings.bugs].some(
+          f => f.severity === 'CRITICAL'
+        );
+        const hasHigh = [...findings.security, ...findings.bugs].some(
+          f => f.severity === 'HIGH'
+        );
+
+        let overallSeverity: AIPRReviewSeverity = AIPRReviewSeverity.INFO;
+        if (hasCritical || hasHigh) {
+          overallSeverity = AIPRReviewSeverity.CRITICAL;
+        } else if (totalIssues > 0) {
+          overallSeverity = AIPRReviewSeverity.WARNING;
+        }
+
+        return {
+          summary: parsed.summary || 'Code review completed.',
+          findings,
+          overallSeverity,
+          totalIssues,
+        };
+      } catch (parseError) {
+        console.error('Error parsing AI review response:', parseError);
+        return this.getDefaultPRReviewResult();
+      }
+    } catch (error) {
+      console.error('Error generating PR review:', error);
+      return this.getDefaultPRReviewResult();
+    }
+  }
+
+  /**
+   * Get default PR review result when AI fails
+   */
+  private getDefaultPRReviewResult(): PRReviewResult {
+    return {
+      summary: 'Unable to complete automated code review. Please review the changes manually.',
+      findings: {
+        security: [],
+        bugs: [],
+        performance: [],
+        codeQuality: [],
+        suggestions: [],
+      },
+      overallSeverity: AIPRReviewSeverity.INFO,
+      totalIssues: 0,
+    };
   }
 
   // Helper methods
