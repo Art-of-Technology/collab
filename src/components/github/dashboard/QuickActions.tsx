@@ -9,11 +9,8 @@ import {
   Tag,
   Settings,
   GitBranch,
-  FileText,
   Zap,
-  Plus,
   BookOpen,
-  BarChart3,
 } from 'lucide-react';
 
 interface QuickActionsProps {

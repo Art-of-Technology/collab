@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area'; 
 import {
   Tag,
   ExternalLink,
@@ -14,11 +13,7 @@ import {
   ChevronRight,
   GitBranch,
   Sparkles,
-  Clock,
-  CheckCircle,
   Loader2,
-  FileText,
-  ArrowUpRight,
   Package,
 } from 'lucide-react';
 import { toast } from 'sonner';

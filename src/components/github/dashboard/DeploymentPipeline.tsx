@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import {
   Rocket,
   CheckCircle,
@@ -14,13 +13,10 @@ import {
   AlertCircle,
   ArrowRight,
   GitBranch,
-  Tag,
   Calendar,
   ExternalLink,
   Loader2,
   RefreshCw,
-  History,
-  Play,
   RotateCcw,
 } from 'lucide-react';
 
