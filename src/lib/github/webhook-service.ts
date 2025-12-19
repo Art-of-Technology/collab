@@ -420,6 +420,22 @@ export class GitHubWebhookService {
     sha: string
   ): Promise<{ additions: number; deletions: number } | null> {
     try {
+      // Validate inputs to prevent SSRF attacks
+      const ownerRepoPattern = /^[A-Za-z0-9_.-]+$/;
+      const shaPattern = /^[0-9a-fA-F]{40}$/;
+
+      if (!ownerRepoPattern.test(owner) || !ownerRepoPattern.test(repo)) {
+        console.error(
+          `Invalid owner or repo when fetching commit stats: owner="${owner}", repo="${repo}"`
+        );
+        return null;
+      }
+
+      if (!shaPattern.test(sha)) {
+        console.error(`Invalid commit SHA when fetching commit stats: sha="${sha}"`);
+        return null;
+      }
+
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`,
         {

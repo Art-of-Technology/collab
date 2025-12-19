@@ -24,6 +24,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// HTML escape function to prevent XSS when rendering changelog content
+const escapeHtml = (str: string): string => {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
 interface Release {
   id: string;
   tagName: string;
@@ -347,7 +357,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
                   <div
                     className="text-[#e6edf3] whitespace-pre-wrap font-mono text-sm p-4 bg-[#161b22] rounded-lg border border-[#21262d]"
                     dangerouslySetInnerHTML={{
-                      __html: changelog
+                      __html: escapeHtml(changelog)
                         .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold text-[#e6edf3] mb-4">$1</h1>')
                         .replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold text-[#e6edf3] mt-6 mb-3">$1</h2>')
                         .replace(/^### (.+)$/gm, '<h3 class="text-base font-medium text-[#e6edf3] mt-4 mb-2">$1</h3>')

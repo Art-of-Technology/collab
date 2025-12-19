@@ -9,8 +9,6 @@ import {
   GitBranch,
   Rocket,
   TrendingUp,
-  Calendar,
-  Clock,
   CheckCircle,
   XCircle,
 } from 'lucide-react';
