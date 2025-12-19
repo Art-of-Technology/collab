@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2, Filter, ArrowUpDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Filter, ArrowUpDown, FolderKanban } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,9 +24,15 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface FeatureRequestsListProps {
   currentUserId: string;
+  projectId?: string;
+  showProjectBadge?: boolean;
 }
 
-export default function FeatureRequestsList({ currentUserId }: FeatureRequestsListProps) {
+export default function FeatureRequestsList({ 
+  currentUserId, 
+  projectId,
+  showProjectBadge = true 
+}: FeatureRequestsListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -60,7 +66,9 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
     page,
     limit: 10,
     status,
-    orderBy
+    orderBy,
+    projectId,
+    workspaceId: currentWorkspace?.id
   });
 
   const featureRequests = data?.featureRequests || [];
@@ -200,8 +208,14 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
         </Card>
       ) : (
         <div className="space-y-4">
-          {featureRequests.map((request) => (
-            <Link href={currentWorkspace ? `/${currentWorkspace.id}/features/${request.id}` : `#`} key={request.id} className="block group">
+          {featureRequests.map((request) => {
+            // Build the correct link based on current context
+            const featureLink = currentWorkspace 
+              ? `${pathname.replace(/\?.*$/, '')}/${request.id}`.replace(/\/+/g, '/')
+              : '#';
+            
+            return (
+            <Link href={featureLink} key={request.id} className="block group">
               <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
                 <div className="p-6">
                   <div className="flex justify-between">
@@ -265,6 +279,16 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                       <span className="text-sm font-medium">
                         {request.author.id === currentUserId ? "You" : request.author.name}
                       </span>
+                      {showProjectBadge && !projectId && request.project && (
+                        <Badge 
+                          variant="outline" 
+                          className="ml-2 text-xs"
+                          style={{ borderColor: request.project.color || undefined }}
+                        >
+                          <FolderKanban className="h-3 w-3 mr-1" />
+                          {request.project.name}
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {request._count.comments} comment{request._count.comments !== 1 ? "s" : ""}
@@ -273,7 +297,8 @@ export default function FeatureRequestsList({ currentUserId }: FeatureRequestsLi
                 </div>
               </Card>
             </Link>
-          ))}
+          );
+          })}
         </div>
       )}
 
