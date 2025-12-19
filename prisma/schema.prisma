@@ -300,14 +300,17 @@ model FeatureRequest {
   authorId      String
   html          String?
   workspaceId   String?
+  projectId     String
   author        User                    @relation(fields: [authorId], references: [id], onDelete: Cascade)
   workspace     Workspace?              @relation(fields: [workspaceId], references: [id])
+  project       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   comments      FeatureRequestComment[]
   votes         FeatureVote[]
   notifications Notification[]
 
   @@index([authorId])
   @@index([workspaceId])
+  @@index([projectId])
 }
 
 model FeatureVote {
@@ -431,6 +434,7 @@ model Project {
   issues          Issue[]
   statuses        ProjectStatus[] // New status system
   followers       ProjectFollower[]
+  featureRequests FeatureRequest[] // Feature requests linked to this project
   
   // GitHub Integration - One-to-one relationship with Repository
   repository      Repository?     // Connected GitHub repository
