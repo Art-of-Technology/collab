@@ -62,7 +62,7 @@ jobs:
             fi
           done < .env
 
-          docker build -t collab:$VERSION $BUILD_ARGS .
+          docker build --no-cache -t collab:$VERSION $BUILD_ARGS .
           
           # Also tag as latest
           docker tag collab:$VERSION collab:latest

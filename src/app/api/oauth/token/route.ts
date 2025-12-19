@@ -169,7 +169,7 @@ async function handleAuthorizationCodeGrant(
   // Generate tokens
   const accessToken = generateAccessToken();
   const refreshToken = generateRefreshToken();
-  const expiresIn = 3600; // 1 hour
+  const expiresIn = 365 * 24 * 3600; // 1 year
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
   try {
@@ -187,17 +187,27 @@ async function handleAuthorizationCodeGrant(
     let webhookSecrets: WebhookCreationResult['webhookSecrets'] = [];
 
     if (installation) {
-      // Encrypt and store tokens
+      // Encrypt and store tokens in the new AppToken table (supports multiple tokens)
       const encryptedAccessToken = await encryptToken(accessToken);
       const encryptedRefreshToken = await encryptToken(refreshToken);
 
-      await prisma.appInstallation.update({
-        where: { id: installation.id },
+      // Create a new token record instead of overwriting the installation tokens
+      await prisma.appToken.create({
         data: {
+          installationId: installation.id,
+          userId: authCodeData.userId, // The user who authorized this token
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
           refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
           tokenExpiresAt: expiresAt,
-          status: 'ACTIVE', // Update status to ACTIVE after successful OAuth completion
+          scopes: authCodeData.scope ? authCodeData.scope.split(' ') : ['read'],
+        }
+      });
+
+      // Update installation status to ACTIVE (no longer store tokens directly on installation)
+      await prisma.appInstallation.update({
+        where: { id: installation.id },
+        data: {
+          status: 'ACTIVE',
           updatedAt: new Date()
         }
       });
@@ -297,36 +307,28 @@ async function handleRefreshTokenGrant(
 
   // Generate new access token (and optionally rotate refresh token)
   const newAccessToken = generateAccessToken();
-  const expiresIn = 3600; // 1 hour
+  const expiresIn = 365 * 24 * 3600; // 1 year
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
   // Optional: Generate new refresh token for rotation (recommended for high security)
   // const newRefreshToken = generateRefreshToken();
 
   try {
-    // Update stored tokens
-    if (tokenData.installationId) {
+    // Update the access token in the AppToken table
+    if (tokenData.tokenId) {
       const encryptedAccessToken = await encryptToken(newAccessToken);
-      
-      const updateData: any = {
-        accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
-        tokenExpiresAt: expiresAt,
-        updatedAt: new Date()
-      };
 
-      // Optional: Update refresh token for rotation
-      // if (newRefreshToken) {
-      //   const encryptedRefreshToken = await encryptToken(newRefreshToken);
-      //   updateData.refreshToken = Buffer.from(encryptedRefreshToken).toString('base64');
-      // }
-      
-      await prisma.appInstallation.update({
-        where: { id: tokenData.installationId },
-        data: updateData
+      await prisma.appToken.update({
+        where: { id: tokenData.tokenId },
+        data: {
+          accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+          tokenExpiresAt: expiresAt,
+          updatedAt: new Date()
+        }
       });
 
       // Log successful token refresh for audit
-      console.log(`Access token refreshed for installation ${tokenData.installationId}, app ${oauthClient.app.slug}`);
+      console.log(`Access token refreshed for token ${tokenData.tokenId}, app ${oauthClient.app.slug}`);
     }
 
     const response: any = {
@@ -446,13 +448,14 @@ async function validateAuthorizationCode(
   }
 }
 
-// Validate refresh token - Production Ready Version
+// Validate refresh token - Production Ready Version (using AppToken table)
 async function validateRefreshToken(
   refreshToken: string,
   oauthClient: any
 ): Promise<{
   valid: boolean;
   error?: string;
+  tokenId?: string;
   installationId?: string;
   scope?: string;
 }> {
@@ -467,59 +470,64 @@ async function validateRefreshToken(
       return { valid: false, error: 'Invalid refresh token format' };
     }
 
-    // Find active installations for this app that have refresh tokens
-    const installations = await prisma.appInstallation.findMany({
+    // Find active tokens for this app from AppToken table
+    const tokens = await prisma.appToken.findMany({
       where: {
-        appId: oauthClient.app.id,
         refreshToken: { not: null },
-        status: 'ACTIVE' // Only check active installations
+        isRevoked: false,
+        installation: {
+          appId: oauthClient.app.id,
+          status: 'ACTIVE'
+        }
       },
       select: {
         id: true,
         refreshToken: true,
         scopes: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        installationId: true
       }
     });
 
-    if (!installations || installations.length === 0) {
-      return { valid: false, error: 'No active installations found' };
+    if (!tokens || tokens.length === 0) {
+      return { valid: false, error: 'No active tokens found' };
     }
 
-    // Check each installation's refresh token
-    for (const installation of installations) {
+    // Check each token's refresh token
+    for (const token of tokens) {
       try {
-        if (!installation.refreshToken) continue;
+        if (!token.refreshToken) continue;
 
         // Decrypt the stored refresh token
-        const storedTokenData = Buffer.from(installation.refreshToken, 'base64');
+        const storedTokenData = Buffer.from(token.refreshToken, 'base64');
         const { decryptToken } = await import('@/lib/apps/crypto');
         const decryptedToken = await decryptToken(storedTokenData);
-        
+
         // Secure string comparison to prevent timing attacks
         if (secureCompare(decryptedToken, refreshToken)) {
           // Check if refresh token is too old (optional expiration policy)
           const maxRefreshTokenAge = 90 * 24 * 60 * 60 * 1000; // 90 days
-          const tokenAge = Date.now() - installation.updatedAt.getTime();
-          
+          const tokenAge = Date.now() - token.updatedAt.getTime();
+
           if (tokenAge > maxRefreshTokenAge) {
-            console.warn(`Refresh token expired for installation ${installation.id}: age=${Math.round(tokenAge / (24 * 60 * 60 * 1000))} days`);
-            continue; // Try next installation
+            console.warn(`Refresh token expired for token ${token.id}: age=${Math.round(tokenAge / (24 * 60 * 60 * 1000))} days`);
+            continue; // Try next token
           }
 
           // Log successful refresh token validation for audit
-          console.log(`Refresh token validated for installation ${installation.id}, app ${oauthClient.app.slug}`);
+          console.log(`Refresh token validated for token ${token.id}, app ${oauthClient.app.slug}`);
 
           return {
             valid: true,
-            installationId: installation.id,
-            scope: scopesToString(installation.scopes)
+            tokenId: token.id,
+            installationId: token.installationId,
+            scope: scopesToString(token.scopes)
           };
         }
       } catch (decryptionError) {
         // Log decryption failures for monitoring
-        console.error(`Failed to decrypt refresh token for installation ${installation.id}:`, decryptionError);
+        console.error(`Failed to decrypt refresh token for token ${token.id}:`, decryptionError);
         continue;
       }
     }

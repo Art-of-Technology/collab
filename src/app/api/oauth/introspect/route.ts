@@ -120,9 +120,9 @@ async function introspectToken(
   }
 }
 
-// Helper function to find token in app installations
+// Helper function to find token in AppToken table (new multi-token approach)
 async function findTokenInInstallations(
-  token: string, 
+  token: string,
   tokenType: 'access' | 'refresh',
   appId?: string
 ): Promise<{
@@ -131,39 +131,47 @@ async function findTokenInInstallations(
 }> {
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
-    
-    // Find installations that have tokens (optionally filtered by app)
+
+    // Build where clause for AppToken query
     const whereClause: any = {
       [tokenField]: { not: null },
-      status: 'ACTIVE'
+      isRevoked: false,
+      installation: {
+        status: 'ACTIVE'
+      }
     };
-    
+
     if (appId) {
-      whereClause.appId = appId;
+      whereClause.installation.appId = appId;
     }
 
-    const installations = await prisma.appInstallation.findMany({
+    // Search in AppToken table (supports multiple tokens per installation)
+    const appTokens = await prisma.appToken.findMany({
       where: whereClause,
       include: {
-        app: {
+        installation: {
           include: {
-            oauthClient: true
-          }
-        },
-        workspace: {
-          select: {
-            id: true,
-            slug: true,
-            name: true
+            app: {
+              include: {
+                oauthClient: true
+              }
+            },
+            workspace: {
+              select: {
+                id: true,
+                slug: true,
+                name: true
+              }
+            }
           }
         }
       }
     });
 
-    // Check each installation's token
-    for (const installation of installations) {
+    // Check each token
+    for (const appToken of appTokens) {
       try {
-        const storedToken = installation[tokenField as keyof typeof installation] as string | null;
+        const storedToken = appToken[tokenField as keyof typeof appToken] as string | null;
         if (!storedToken) continue;
 
         // Decrypt the stored token
@@ -173,8 +181,8 @@ async function findTokenInInstallations(
         // Compare with provided token
         if (decryptedToken === token) {
           // Check if token has expired
-          const isExpired = installation.tokenExpiresAt && installation.tokenExpiresAt < new Date();
-          
+          const isExpired = appToken.tokenExpiresAt && appToken.tokenExpiresAt < new Date();
+
           if (isExpired) {
             return {
               found: true,
@@ -197,29 +205,35 @@ async function findTokenInInstallations(
             }
           }
 
-          if (installation.tokenExpiresAt) {
-            expiresAt = Math.floor(installation.tokenExpiresAt.getTime() / 1000);
+          if (appToken.tokenExpiresAt) {
+            expiresAt = Math.floor(appToken.tokenExpiresAt.getTime() / 1000);
           }
+
+          const installation = appToken.installation;
+          // Use scopes from token if available, otherwise from installation
+          const scopes = appToken.scopes.length > 0 ? appToken.scopes : installation.scopes;
 
           return {
             found: true,
             info: {
               active: true,
-              scope: installation.scopes.join(' '),
+              scope: scopes.join(' '),
               client_id: installation.app.oauthClient?.clientId,
               token_type: tokenType === 'access' ? 'Bearer' : 'refresh_token',
               exp: expiresAt,
               iat: issuedAt,
-              sub: installation.installedById, // subject (user ID)
+              sub: appToken.userId || installation.installedById, // subject (user who generated this token, fallback to installer for legacy)
               aud: installation.app.slug, // audience (app)
+              app_id: installation.appId,
+              installation_id: installation.id,
               workspace_id: installation.workspace.id,
               workspace_slug: installation.workspace.slug
             }
           };
         }
       } catch (error) {
-        // If decryption fails for this installation, continue to next
-        console.error(`Failed to decrypt ${tokenType} token for installation:`, installation.id, error);
+        // If decryption fails for this token, continue to next
+        console.error(`Failed to decrypt ${tokenType} token for appToken:`, appToken.id, error);
         continue;
       }
     }
