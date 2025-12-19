@@ -1127,30 +1127,33 @@ model PullRequest {
   title           String
   description     String?
   state           PRState         // OPEN, CLOSED, MERGED
-  baseBranchId    String
-  headBranchId    String
+  baseBranchId    String?
+  headBranchId    String?
+  baseBranchName  String?         // Store branch name for display
+  headBranchName  String?         // Store branch name for display
   issueId         String?         // Linked collab issue
   createdById     String?
   mergedById      String?
+  authorName      String?         // GitHub username of author
   mergedAt        DateTime?
   closedAt        DateTime?
-  githubCreatedAt DateTime
-  githubUpdatedAt DateTime
+  githubCreatedAt DateTime?
+  githubUpdatedAt DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  
+
   repository      Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  baseBranch      Branch          @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
-  headBranch      Branch          @relation("PRHeadBranch", fields: [headBranchId], references: [id])
+  baseBranch      Branch?         @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
+  headBranch      Branch?         @relation("PRHeadBranch", fields: [headBranchId], references: [id])
   issue           Issue?          @relation(fields: [issueId], references: [id])
   createdBy       User?           @relation("PRCreatedBy", fields: [createdById], references: [id])
   mergedBy        User?           @relation("PRMergedBy", fields: [mergedById], references: [id])
-  
+
   checks          PRCheck[]
   commits         Commit[]
   changelogEntries ChangelogEntry[]
   reviews         PRReview[]
-  
+
   @@unique([repositoryId, githubPrId])
   @@index([issueId])
   @@index([state])

@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create repository connection in database
+    // Create repository connection in database (store encrypted access token for sync)
     const repository = await prisma.repository.create({
       data: {
         projectId,
@@ -173,6 +173,7 @@ export async function POST(request: NextRequest) {
         defaultBranch: repoDetails.default_branch,
         webhookSecret,
         webhookId: webhookId?.toString() || null,
+        accessToken: user.githubAccessToken, // Store the already-encrypted token for API calls
         isActive: true,
         syncedAt: new Date(),
       },
@@ -192,6 +193,159 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Auto-sync initial data from GitHub (branches, commits, releases)
+    let syncResults = { releases: 0, branches: 0, commits: 0 };
+    try {
+      // Sync branches
+      const branchesResponse = await fetch(
+        `https://api.github.com/repos/${repoDetails.full_name}/branches?per_page=30`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+          },
+        }
+      );
+
+      if (branchesResponse.ok) {
+        const branches = await branchesResponse.json();
+        for (const branch of branches) {
+          await prisma.branch.upsert({
+            where: {
+              repositoryId_name: {
+                repositoryId: repository.id,
+                name: branch.name,
+              },
+            },
+            update: {
+              headSha: branch.commit.sha,
+              isProtected: branch.protected,
+              isDefault: branch.name === repoDetails.default_branch,
+            },
+            create: {
+              repositoryId: repository.id,
+              name: branch.name,
+              headSha: branch.commit.sha,
+              isProtected: branch.protected,
+              isDefault: branch.name === repoDetails.default_branch,
+            },
+          });
+          syncResults.branches++;
+        }
+      }
+
+      // Sync recent commits
+      const commitsResponse = await fetch(
+        `https://api.github.com/repos/${repoDetails.full_name}/commits?per_page=50`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+          },
+        }
+      );
+
+      if (commitsResponse.ok) {
+        const commits = await commitsResponse.json();
+        for (const commit of commits) {
+          await prisma.commit.upsert({
+            where: { sha: commit.sha },
+            update: {
+              message: commit.commit.message,
+              authorName: commit.commit.author.name,
+              authorEmail: commit.commit.author.email,
+              commitDate: new Date(commit.commit.author.date),
+            },
+            create: {
+              repositoryId: repository.id,
+              sha: commit.sha,
+              message: commit.commit.message,
+              authorName: commit.commit.author.name,
+              authorEmail: commit.commit.author.email,
+              commitDate: new Date(commit.commit.author.date),
+            },
+          });
+          syncResults.commits++;
+        }
+      }
+
+      // Sync releases
+      const releasesResponse = await fetch(
+        `https://api.github.com/repos/${repoDetails.full_name}/releases?per_page=30`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+          },
+        }
+      );
+
+      if (releasesResponse.ok) {
+        const releases = await releasesResponse.json();
+        for (const release of releases) {
+          const versionString = release.tag_name.replace(/^v/, '');
+          const versionParts = versionString.match(/^(\d+)\.(\d+)\.(\d+)/);
+
+          let version = await prisma.version.findFirst({
+            where: { repositoryId: repository.id, version: versionString },
+          });
+
+          if (!version && versionParts) {
+            version = await prisma.version.create({
+              data: {
+                repositoryId: repository.id,
+                version: versionString,
+                major: parseInt(versionParts[1]),
+                minor: parseInt(versionParts[2]),
+                patch: parseInt(versionParts[3]),
+                releaseType: 'MINOR',
+                status: release.draft ? 'PENDING' : 'RELEASED',
+                environment: release.prerelease ? 'staging' : 'production',
+                releasedAt: release.published_at ? new Date(release.published_at) : null,
+              },
+            });
+          }
+
+          if (version) {
+            await prisma.release.upsert({
+              where: {
+                repositoryId_tagName: {
+                  repositoryId: repository.id,
+                  tagName: release.tag_name,
+                },
+              },
+              update: {
+                name: release.name || release.tag_name,
+                description: release.body,
+                isDraft: release.draft,
+                isPrerelease: release.prerelease,
+                publishedAt: release.published_at ? new Date(release.published_at) : null,
+                githubUrl: release.html_url,
+              },
+              create: {
+                repositoryId: repository.id,
+                versionId: version.id,
+                githubReleaseId: release.id.toString(),
+                tagName: release.tag_name,
+                name: release.name || release.tag_name,
+                description: release.body,
+                isDraft: release.draft,
+                isPrerelease: release.prerelease,
+                publishedAt: release.published_at ? new Date(release.published_at) : null,
+                githubUrl: release.html_url,
+              },
+            });
+            syncResults.releases++;
+          }
+        }
+      }
+
+      console.log(`Auto-sync completed for ${repoDetails.full_name}:`, syncResults);
+    } catch (syncError) {
+      console.error('Error during auto-sync:', syncError);
+      // Don't fail the connection if sync fails
+    }
+
     return NextResponse.json({
       success: true,
       repository: {
@@ -208,6 +362,11 @@ export async function POST(request: NextRequest) {
       webhook: {
         id: webhookId,
         url: webhookUrl,
+      },
+      sync: {
+        branches: syncResults.branches,
+        commits: syncResults.commits,
+        releases: syncResults.releases,
       },
     });
 

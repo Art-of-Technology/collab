@@ -189,19 +189,19 @@ export function GitHubIssueIntegration({ issueId, issueKey, projectId, projectSl
             <Code className="h-5 w-5" />
             GitHub Integration
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => {
               if (projectSlug && currentWorkspace?.slug) {
-                router.push(`/${currentWorkspace.slug}/projects/${projectSlug}/changelog`);
+                router.push(`/${currentWorkspace.slug}/projects/${projectSlug}/github`);
               } else {
                 console.error('Missing project slug or workspace slug:', { projectSlug, workspaceSlug: currentWorkspace?.slug });
               }
             }}
           >
-            <BookOpen className="h-4 w-4 mr-2" />
-            View Changelog
+            <Code className="h-4 w-4 mr-2" />
+            GitHub Dashboard
           </Button>
         </CardTitle>
         <CardDescription>
