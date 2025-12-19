@@ -568,7 +568,7 @@ export default function Sidebar({
     <div className="flex flex-col h-full min-w-0">
       {/* Header - Logo and Actions */}
       <div className="p-3 border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
             <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
