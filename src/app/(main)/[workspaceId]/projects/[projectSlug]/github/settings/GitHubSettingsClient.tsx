@@ -23,6 +23,7 @@ import {
   Clock,
   Webhook,
   Code,
+  Bot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ import { GitHubOAuthConnection } from '@/components/github/GitHubOAuthConnection
 import { VisualBranchMapper } from '@/components/github/settings/VisualBranchMapper';
 import { WebhookStatus } from '@/components/github/settings/WebhookStatus';
 import { VersioningConfig } from '@/components/github/settings/VersioningConfig';
+import { AIReviewConfig } from '@/components/github/settings/AIReviewConfig';
 
 interface Branch {
   id: string;
@@ -86,7 +88,7 @@ interface GitHubSettingsClientProps {
   workspaceSlug: string;
 }
 
-type TabType = 'connection' | 'branches' | 'versioning' | 'webhooks';
+type TabType = 'connection' | 'branches' | 'versioning' | 'webhooks' | 'ai-review';
 
 export function GitHubSettingsClient({
   project,
@@ -196,6 +198,7 @@ export function GitHubSettingsClient({
     { id: 'branches' as const, label: 'Branches', icon: GitBranch },
     { id: 'versioning' as const, label: 'Versioning', icon: Tag },
     { id: 'webhooks' as const, label: 'Webhooks', icon: Webhook },
+    { id: 'ai-review' as const, label: 'AI Review', icon: Bot },
   ];
 
   // No repository connected
@@ -449,6 +452,11 @@ export function GitHubSettingsClient({
               webhookSecret={repoData.webhookSecret}
               isConnected={true}
             />
+          )}
+
+          {/* AI Review Tab */}
+          {activeTab === 'ai-review' && (
+            <AIReviewConfig repositoryId={repoData.id} />
           )}
         </div>
       </ScrollArea>

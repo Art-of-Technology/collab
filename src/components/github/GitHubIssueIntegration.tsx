@@ -39,6 +39,41 @@ import { useRouter } from 'next/navigation';
 import { useWorkspace } from '@/context/WorkspaceContext';
 
 import { GitHubSkeleton } from './GitHubSkeleton';
+import { AIReviewsPanel } from './AIReviewsPanel';
+
+interface AIReviewData {
+  id: string;
+  summary: string;
+  findings: {
+    security: Array<{ severity: string; message: string; file?: string; line?: number }>;
+    bugs: Array<{ severity: string; message: string; file?: string; line?: number }>;
+    performance: Array<{ severity: string; message: string; file?: string; line?: number }>;
+    codeQuality: Array<{ severity: string; message: string; file?: string; line?: number }>;
+    suggestions: Array<{ message: string; file?: string }>;
+  };
+  fullReview: string;
+  filesAnalyzed: number;
+  linesAnalyzed: number;
+  issuesFound: number;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  status: 'PENDING' | 'ANALYZING' | 'COMPLETED' | 'FAILED';
+  triggerType: 'AUTOMATIC' | 'MANUAL';
+  postedToGitHub: boolean;
+  githubCommentId?: string;
+  errorMessage?: string;
+  createdAt: string;
+  triggeredBy?: {
+    id: string;
+    name: string;
+    image?: string;
+  };
+  pullRequest?: {
+    id: string;
+    githubPrId: number;
+    title: string;
+    state: string;
+  };
+}
 
 interface GitHubIntegrationData {
   repository?: {
@@ -46,6 +81,7 @@ interface GitHubIntegrationData {
     fullName: string;
     owner: string;
     name: string;
+    aiReviewEnabled?: boolean;
   };
   branch?: {
     id: string;
@@ -81,6 +117,7 @@ interface GitHubIntegrationData {
       conclusion?: string;
       detailsUrl?: string;
     }>;
+    aiReviews?: AIReviewData[];
   }>;
   versions: Array<{
     id: string;
@@ -378,64 +415,91 @@ function IssueOverview({ data }: { data: GitHubIntegrationData }) {
 
 // Reviews Tab Component
 function IssueReviews({ data }: { data: GitHubIntegrationData }) {
-  const allReviews = data.pullRequests.flatMap(pr => 
+  const allReviews = data.pullRequests.flatMap(pr =>
     (pr.reviews || []).map(review => ({ ...review, prTitle: pr.title, prNumber: pr.githubPrId }))
   );
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h4 className="font-medium flex items-center gap-2">
-          <Users className="h-4 w-4" />
-          Code Reviews ({allReviews.length})
-        </h4>
-      </div>
+  // Flatten AI reviews from all PRs
+  const allAIReviews = data.pullRequests.flatMap(pr =>
+    (pr.aiReviews || []).map(review => ({
+      ...review,
+      pullRequest: {
+        id: pr.id,
+        githubPrId: pr.githubPrId,
+        title: pr.title,
+        state: pr.state,
+      },
+    }))
+  );
 
-      {allReviews.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No code reviews yet</p>
+  return (
+    <div className="space-y-6">
+      {/* AI Reviews Section */}
+      <AIReviewsPanel
+        reviews={allAIReviews}
+        repositoryId={data.repository?.id}
+        repositoryFullName={data.repository?.fullName}
+        showRequestButton={data.pullRequests.some(pr => pr.state === 'OPEN')}
+        isAIReviewEnabled={data.repository?.aiReviewEnabled}
+        pullRequestId={data.pullRequests.find(pr => pr.state === 'OPEN')?.id}
+        githubPrId={data.pullRequests.find(pr => pr.state === 'OPEN')?.githubPrId}
+      />
+
+      {/* Human Reviews Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Human Reviews ({allReviews.length})
+          </h4>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {allReviews.map((review) => (
-            <div key={review.id} className="border rounded-lg p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    review.state === 'APPROVED' ? 'bg-green-100 text-green-600' :
-                    review.state === 'CHANGES_REQUESTED' ? 'bg-red-100 text-red-600' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>
-                    {review.state === 'APPROVED' ? <ThumbsUp className="h-4 w-4" /> :
-                     review.state === 'CHANGES_REQUESTED' ? <ThumbsDown className="h-4 w-4" /> :
-                     <Eye className="h-4 w-4" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{review.reviewerLogin}</span>
-                      <Badge variant={getBadgeVariant(review.state)} className="text-xs">
-                        {review.state.toLowerCase().replace('_', ' ')}
-                      </Badge>
+
+        {allReviews.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No human reviews yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {allReviews.map((review) => (
+              <div key={review.id} className="border rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      review.state === 'APPROVED' ? 'bg-green-100 text-green-600' :
+                      review.state === 'CHANGES_REQUESTED' ? 'bg-red-100 text-red-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {review.state === 'APPROVED' ? <ThumbsUp className="h-4 w-4" /> :
+                       review.state === 'CHANGES_REQUESTED' ? <ThumbsDown className="h-4 w-4" /> :
+                       <Eye className="h-4 w-4" />}
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      PR #{review.prNumber}: {review.prTitle}
-                    </div>
-                    {review.body && (
-                      <div className="text-sm mt-2 p-2 bg-muted/50 rounded">
-                        {review.body}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{review.reviewerLogin}</span>
+                        <Badge variant={getBadgeVariant(review.state)} className="text-xs">
+                          {review.state.toLowerCase().replace('_', ' ')}
+                        </Badge>
                       </div>
-                    )}
+                      <div className="text-sm text-muted-foreground">
+                        PR #{review.prNumber}: {review.prTitle}
+                      </div>
+                      {review.body && (
+                        <div className="text-sm mt-2 p-2 bg-muted/50 rounded">
+                          {review.body}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {review.submittedAt && new Date(review.submittedAt).toLocaleDateString()}
+                  <div className="text-xs text-muted-foreground">
+                    {review.submittedAt && new Date(review.submittedAt).toLocaleDateString()}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
