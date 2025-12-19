@@ -372,6 +372,7 @@ model Workspace {
   appInstallations    AppInstallation[]
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
   notificationPreferences NotificationPreferences[]
+  systemAppTokens     AppToken[] @relation("SystemAppWorkspaceTokens")  // Tokens for system apps
   
   // Daily Focus relationships
   dailyFocusEntries   DailyFocusEntry[]
@@ -1784,11 +1785,13 @@ model App {
   latestVersionId String?
   versions        AppVersion[]
   visibility      AppVisibility @default(PUBLIC)
+  isSystemApp     Boolean  @default(false)  // System apps are auto-available to all workspaces
   oauthClient     AppOAuthClient?
   scopes          AppScope[]
   permissions     Json?            // Store {org: boolean, user: boolean}
   installations   AppInstallation[]
   webhooks        AppWebhook[]
+  systemAppTokens AppToken[] @relation("SystemAppTokens")  // Direct tokens for system apps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1797,6 +1800,7 @@ model App {
   @@index([status])
   @@index([publisherId])
   @@index([userId])
+  @@index([isSystemApp])
 }
 
 model AppVersion {
@@ -1862,9 +1866,12 @@ model AppInstallation {
 
 // Stores multiple OAuth tokens per app installation
 // This allows multiple tokens to be active simultaneously (e.g., multiple users/sessions)
+// For system apps, installationId is null and appId/workspaceId are used directly
 model AppToken {
   id             String    @id @default(cuid())
-  installationId String
+  installationId String?   // Nullable for system app tokens
+  appId          String?   // Direct app reference for system app tokens
+  workspaceId    String?   // Workspace for system app tokens
   userId         String?   // The user who generated this token (null for legacy tokens)
   accessToken    String    @unique // encrypted, unique for fast lookup
   refreshToken   String?   // encrypted
@@ -1875,9 +1882,13 @@ model AppToken {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  installation   AppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  installation   AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  app            App?             @relation("SystemAppTokens", fields: [appId], references: [id], onDelete: Cascade)
+  workspace      Workspace?       @relation("SystemAppWorkspaceTokens", fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([installationId])
+  @@index([appId])
+  @@index([workspaceId])
   @@index([userId])
   @@index([isRevoked])
   @@index([tokenExpiresAt])
