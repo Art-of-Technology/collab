@@ -1251,6 +1251,8 @@ model Commit {
   branchId      String?
   pullRequestId String?
   issueId       String?     // Extracted from commit message
+  additions     Int         @default(0)  // Lines added in this commit
+  deletions     Int         @default(0)  // Lines removed in this commit
   createdAt     DateTime    @default(now())
   
   repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)

@@ -89,6 +89,19 @@ export async function GET(
           select: { commitDate: true },
         });
 
+        // Aggregate line stats from commits
+        const lineStats = await prisma.commit.aggregate({
+          where: {
+            repositoryId,
+            authorName: author.authorName,
+            ...(dateFilter && { commitDate: { gte: dateFilter } }),
+          },
+          _sum: {
+            additions: true,
+            deletions: true,
+          },
+        });
+
         return {
           id: `contributor-${index}`,
           name: author.authorName,
@@ -98,8 +111,8 @@ export async function GET(
             commits: author._count.id,
             pullRequests: prCount,
             reviews: reviewCount,
-            linesAdded: Math.floor(Math.random() * 10000), // Would need actual git stats
-            linesRemoved: Math.floor(Math.random() * 3000),
+            linesAdded: lineStats._sum.additions || 0,
+            linesRemoved: lineStats._sum.deletions || 0,
           },
           recentActivity: recentCommit?.commitDate?.toISOString(),
         };

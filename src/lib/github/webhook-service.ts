@@ -9,6 +9,8 @@ interface CommitData {
   authorEmail: string;
   commitDate: Date;
   branchName: string;
+  additions?: number;
+  deletions?: number;
   repository?: RepositoryWithProject;
 }
 
@@ -82,6 +84,8 @@ export class GitHubWebhookService {
           message: commitData.message,
           branchId: branch.id,
           issueId,
+          additions: commitData.additions ?? 0,
+          deletions: commitData.deletions ?? 0,
         },
         create: {
           repositoryId: commitData.repositoryId,
@@ -92,6 +96,8 @@ export class GitHubWebhookService {
           commitDate: commitData.commitDate,
           branchId: branch.id,
           issueId,
+          additions: commitData.additions ?? 0,
+          deletions: commitData.deletions ?? 0,
         },
       });
 
@@ -401,6 +407,70 @@ export class GitHubWebhookService {
     } catch (error) {
       console.error('Error linking commit to pull request:', error);
       // Don't throw - this is not critical
+    }
+  }
+
+  /**
+   * Fetch commit stats (additions/deletions) from GitHub API and update the commit record
+   */
+  async updateCommitStats(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    sha: string
+  ): Promise<{ additions: number; deletions: number } | null> {
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error(`Failed to fetch commit stats for ${sha}: ${response.statusText}`);
+        return null;
+      }
+
+      const data = await response.json();
+      const stats = {
+        additions: data.stats?.additions || 0,
+        deletions: data.stats?.deletions || 0,
+      };
+
+      // Update the commit record with stats
+      await this.prisma.commit.update({
+        where: { sha },
+        data: stats,
+      });
+
+      return stats;
+    } catch (error) {
+      console.error('Error fetching commit stats:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Batch update commit stats for multiple commits
+   */
+  async updateCommitStatsBatch(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    shas: string[]
+  ): Promise<void> {
+    // Process in parallel with a limit to avoid rate limiting
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < shas.length; i += BATCH_SIZE) {
+      const batch = shas.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(sha => this.updateCommitStats(accessToken, owner, repo, sha))
+      );
     }
   }
 }

@@ -1,70 +1,66 @@
-'use client';
+"use client";
 
-import { useSession } from 'next-auth/react';
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import Image from 'next/image';
-import { Shield, Settings, Puzzle, Users, BarChart3, ArrowLeft, ChevronRight, Code2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
-import { useEffect } from 'react';
+import { useSession } from "next-auth/react";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import { Settings, Puzzle, Users, BarChart3, ArrowLeft, Code2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import { useEffect } from "react";
 
 const adminNavItems = [
   {
-    name: 'Overview',
-    href: '/admin',
+    name: "Overview",
+    href: "/admin",
     icon: BarChart3,
     exact: true,
   },
   {
-    name: 'System Apps',
-    href: '/admin/system-apps',
+    name: "System Apps",
+    href: "/admin/system-apps",
     icon: Puzzle,
   },
   {
-    name: 'Users',
-    href: '/admin/users',
+    name: "Users",
+    href: "/admin/users",
     icon: Users,
   },
   {
-    name: 'Settings',
-    href: '/admin/settings',
+    name: "Settings",
+    href: "/admin/settings",
     icon: Settings,
   },
 ];
 
 const relatedLinks = [
   {
-    name: 'App Review Queue',
-    href: '/dev/manage',
+    name: "App Review Queue",
+    href: "/dev/manage",
     icon: Puzzle,
   },
   {
-    name: 'Developer Console',
-    href: '/dev',
+    name: "Developer Console",
+    href: "/dev",
     icon: Code2,
   },
 ];
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/signin');
-    } else if (status === 'authenticated' && session?.user?.role !== 'SYSTEM_ADMIN') {
-      router.push('/');
+    if (status === "unauthenticated") {
+      router.push("/auth/signin");
+    } else if (status === "authenticated" && session?.user?.role !== "SYSTEM_ADMIN") {
+      router.push("/");
     }
   }, [status, session, router]);
 
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <div className="min-h-screen bg-[#090909] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#22c55e]" />
@@ -72,7 +68,7 @@ export default function AdminLayout({
     );
   }
 
-  if (session?.user?.role !== 'SYSTEM_ADMIN') {
+  if (session?.user?.role !== "SYSTEM_ADMIN") {
     return null;
   }
 
@@ -105,10 +101,8 @@ export default function AdminLayout({
                   <Button
                     variant="ghost"
                     className={cn(
-                      'w-full justify-start h-8 px-2 text-sm transition-colors',
-                      active
-                        ? 'bg-[#1f1f1f] text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-[#1f1f1f]'
+                      "w-full justify-start h-8 px-2 text-sm transition-colors",
+                      active ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
                     )}
                   >
                     <item.icon className="mr-2 h-4 w-4" />
@@ -124,15 +118,10 @@ export default function AdminLayout({
 
           {/* Related Links */}
           <div className="space-y-0.5">
-            <p className="px-2 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-              Related
-            </p>
+            <p className="px-2 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Related</p>
             {relatedLinks.map((item) => (
               <Link key={item.href} href={item.href}>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-                >
+                <Button variant="ghost" className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]">
                   <item.icon className="mr-2 h-4 w-4" />
                   {item.name}
                 </Button>
@@ -144,10 +133,7 @@ export default function AdminLayout({
         {/* Footer */}
         <div className="p-2 border-t border-[#1f1f1f]">
           <Link href="/">
-            <Button
-              variant="ghost"
-              className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
-            >
+            <Button variant="ghost" className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Collab
             </Button>
@@ -157,9 +143,7 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 overflow-auto">
-        <div className="max-w-6xl mx-auto p-6">
-          {children}
-        </div>
+        <div className="max-w-6xl mx-auto p-6">{children}</div>
       </main>
     </div>
   );

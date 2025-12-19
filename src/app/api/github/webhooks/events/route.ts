@@ -93,6 +93,8 @@ async function handlePushEvent(
     const repository = await findRepository(payload.repository.id);
     if (!repository) return;
 
+    const commitShas: string[] = [];
+
     // Process commits - pass repository data to avoid N+1 queries
     for (const commit of payload.commits) {
       await webhookService.processCommit({
@@ -111,6 +113,19 @@ async function handlePushEvent(
           },
         },
       });
+      commitShas.push(commit.id);
+    }
+
+    // Fetch commit stats asynchronously (don't block webhook response)
+    if (repository.accessToken && commitShas.length > 0) {
+      webhookService.updateCommitStatsBatch(
+        repository.accessToken,
+        repository.owner,
+        repository.name,
+        commitShas
+      ).catch(error => {
+        console.error('Error fetching commit stats:', error);
+      });
     }
 
     // Check if this is a merge to main/master branch
@@ -123,7 +138,7 @@ async function handlePushEvent(
         message: commit.message,
         authorName: commit.author.name,
       }));
-      
+
       // Trigger version calculation for merged issues
       await versionManager.handleBranchMerge(repository.id, targetBranch, mappedCommits);
     }
