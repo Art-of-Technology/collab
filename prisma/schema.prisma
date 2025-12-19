@@ -90,6 +90,7 @@ model User {
   mergedPullRequests     PullRequest[]           @relation("PRMergedBy")
   deployments            Deployment[]            @relation("DeploymentUser")
   prReviews              PRReview[]              // PR reviews by this user
+  triggeredAIReviews     AIPRReview[]            @relation("AIReviewTriggeredBy")
 
   // App Store relations
   publishedApps          App[]                   @relation("UserApps")
@@ -375,6 +376,7 @@ model Workspace {
   appInstallations    AppInstallation[]
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
   notificationPreferences NotificationPreferences[]
+  systemAppTokens     AppToken[] @relation("SystemAppWorkspaceTokens")  // Tokens for system apps
   
   // Daily Focus relationships
   dailyFocusEntries   DailyFocusEntry[]
@@ -1084,7 +1086,11 @@ model Repository {
   
   // Issue type mapping configuration
   issueTypeMapping Json?    // Custom mapping of issue types to version increments
-  
+
+  // AI Review configuration
+  aiReviewEnabled     Boolean   @default(false)
+  aiReviewAutoTrigger Boolean   @default(false)  // Auto on PR create/update
+
   project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   branches        Branch[]
   pullRequests    PullRequest[]
@@ -1094,7 +1100,8 @@ model Repository {
   deployments     Deployment[]
   versionFiles    VersionFile[]
   changelogEntries ChangelogEntry[]
-  
+  aiReviews       AIPRReview[]
+
   @@index([projectId])
   @@index([githubRepoId])
   @@index([owner, name])
@@ -1131,30 +1138,34 @@ model PullRequest {
   title           String
   description     String?
   state           PRState         // OPEN, CLOSED, MERGED
-  baseBranchId    String
-  headBranchId    String
+  baseBranchId    String?
+  headBranchId    String?
+  baseBranchName  String?         // Store branch name for display
+  headBranchName  String?         // Store branch name for display
   issueId         String?         // Linked collab issue
   createdById     String?
   mergedById      String?
+  authorName      String?         // GitHub username of author
   mergedAt        DateTime?
   closedAt        DateTime?
-  githubCreatedAt DateTime
-  githubUpdatedAt DateTime
+  githubCreatedAt DateTime?
+  githubUpdatedAt DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  
+
   repository      Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  baseBranch      Branch          @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
-  headBranch      Branch          @relation("PRHeadBranch", fields: [headBranchId], references: [id])
+  baseBranch      Branch?         @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
+  headBranch      Branch?         @relation("PRHeadBranch", fields: [headBranchId], references: [id])
   issue           Issue?          @relation(fields: [issueId], references: [id])
   createdBy       User?           @relation("PRCreatedBy", fields: [createdById], references: [id])
   mergedBy        User?           @relation("PRMergedBy", fields: [mergedById], references: [id])
-  
+
   checks          PRCheck[]
   commits         Commit[]
   changelogEntries ChangelogEntry[]
   reviews         PRReview[]
-  
+  aiReviews       AIPRReview[]
+
   @@unique([repositoryId, githubPrId])
   @@index([issueId])
   @@index([state])
@@ -1176,14 +1187,56 @@ model PRReview {
   submittedAt     DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  
+
   pullRequest     PullRequest   @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
   reviewer        User?         @relation(fields: [reviewerId], references: [id])
-  
+
   @@unique([pullRequestId, githubReviewId])
   @@index([pullRequestId])
   @@index([reviewerId])
   @@index([state])
+}
+
+// AI-Powered PR Review
+model AIPRReview {
+  id              String              @id @default(cuid())
+  pullRequestId   String
+  repositoryId    String
+
+  // Review content
+  summary         String              @db.Text
+  findings        Json                // Structured findings by category
+  fullReview      String              @db.Text // Complete markdown review
+
+  // Metrics
+  filesAnalyzed   Int                 @default(0)
+  linesAnalyzed   Int                 @default(0)
+  issuesFound     Int                 @default(0)
+  severity        AIPRReviewSeverity  @default(INFO)
+
+  // GitHub posting
+  githubCommentId String?
+  postedToGitHub  Boolean             @default(false)
+  postedAt        DateTime?
+
+  // Trigger info
+  triggerType     AIPRReviewTrigger   @default(MANUAL)
+  triggeredById   String?
+
+  // Status
+  status          AIPRReviewStatus    @default(PENDING)
+  errorMessage    String?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  pullRequest     PullRequest         @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  repository      Repository          @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  triggeredBy     User?               @relation("AIReviewTriggeredBy", fields: [triggeredById], references: [id])
+
+  @@index([pullRequestId])
+  @@index([repositoryId])
+  @@index([createdAt])
 }
 
 // Commit Tracking
@@ -1198,6 +1251,8 @@ model Commit {
   branchId      String?
   pullRequestId String?
   issueId       String?     // Extracted from commit message
+  additions     Int         @default(0)  // Lines added in this commit
+  deletions     Int         @default(0)  // Lines removed in this commit
   createdAt     DateTime    @default(now())
   
   repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
@@ -1462,6 +1517,25 @@ enum CheckStatus {
   CANCELLED
   NEUTRAL
   SKIPPED
+}
+
+// AI PR Review Enums
+enum AIPRReviewSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AIPRReviewTrigger {
+  AUTOMATIC
+  MANUAL
+}
+
+enum AIPRReviewStatus {
+  PENDING
+  ANALYZING
+  COMPLETED
+  FAILED
 }
 
 
@@ -1785,11 +1859,13 @@ model App {
   latestVersionId String?
   versions        AppVersion[]
   visibility      AppVisibility @default(PUBLIC)
+  isSystemApp     Boolean  @default(false)  // System apps are auto-available to all workspaces
   oauthClient     AppOAuthClient?
   scopes          AppScope[]
   permissions     Json?            // Store {org: boolean, user: boolean}
   installations   AppInstallation[]
   webhooks        AppWebhook[]
+  systemAppTokens AppToken[] @relation("SystemAppTokens")  // Direct tokens for system apps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1798,6 +1874,7 @@ model App {
   @@index([status])
   @@index([publisherId])
   @@index([userId])
+  @@index([isSystemApp])
 }
 
 model AppVersion {
@@ -1863,9 +1940,12 @@ model AppInstallation {
 
 // Stores multiple OAuth tokens per app installation
 // This allows multiple tokens to be active simultaneously (e.g., multiple users/sessions)
+// For system apps, installationId is null and appId/workspaceId are used directly
 model AppToken {
   id             String    @id @default(cuid())
-  installationId String
+  installationId String?   // Nullable for system app tokens
+  appId          String?   // Direct app reference for system app tokens
+  workspaceId    String?   // Workspace for system app tokens
   userId         String?   // The user who generated this token (null for legacy tokens)
   accessToken    String    @unique // encrypted, unique for fast lookup
   refreshToken   String?   // encrypted
@@ -1876,9 +1956,13 @@ model AppToken {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  installation   AppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  installation   AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  app            App?             @relation("SystemAppTokens", fields: [appId], references: [id], onDelete: Cascade)
+  workspace      Workspace?       @relation("SystemAppWorkspaceTokens", fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([installationId])
+  @@index([appId])
+  @@index([workspaceId])
   @@index([userId])
   @@index([isRevoked])
   @@index([tokenExpiresAt])

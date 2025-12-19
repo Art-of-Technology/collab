@@ -92,10 +92,11 @@ async function AppsPageContent({ workspaceId: id }: { workspaceId: string }) {
     }
   });
 
-  // Get available apps for installation
+  // Get available apps for installation (excluding system apps which are auto-available)
   const availableApps = await prisma.app.findMany({
     where: {
       status: 'PUBLISHED',
+      isSystemApp: false,  // Hide system apps from app store
       NOT: {
         installations: {
           some: {

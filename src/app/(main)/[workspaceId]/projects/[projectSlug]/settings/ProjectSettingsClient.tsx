@@ -40,7 +40,7 @@ import { cn } from '@/lib/utils';
 import { DEFAULT_PROJECT_STATUSES, validateStatusDisplayName } from '@/constants/project-statuses';
 import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
 import { isValidNewIssuePrefix } from '@/lib/shared-issue-key-utils';
-import { GitHubRepositorySettings } from '@/components/github/GitHubRepositorySettings';
+import { GitHubConnectionCard } from '@/components/github/GitHubConnectionCard';
 
 interface ProjectSettingsClientProps {
   workspaceId: string;
@@ -441,8 +441,10 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
 
           {/* GitHub Integration */}
           <div className="space-y-6">
-            <GitHubRepositorySettings 
-              projectId={project.id} 
+            <GitHubConnectionCard
+              projectId={project.id}
+              projectSlug={projectSlug}
+              workspaceSlug={workspaceId}
               repository={project.repository}
               onUpdate={refetchProject}
             />

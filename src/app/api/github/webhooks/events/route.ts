@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { GitHubWebhookService } from "@/lib/github/webhook-service";
 import { VersionManager } from "@/lib/github/version-manager";
+import { aiPRReviewService } from "@/lib/github/ai-pr-review-service";
+import { AIPRReviewTrigger } from "@prisma/client";
 
 // POST /api/github/webhooks/events - Handle GitHub webhook events
 export async function POST(request: NextRequest) {
@@ -91,6 +93,8 @@ async function handlePushEvent(
     const repository = await findRepository(payload.repository.id);
     if (!repository) return;
 
+    const commitShas: string[] = [];
+
     // Process commits - pass repository data to avoid N+1 queries
     for (const commit of payload.commits) {
       await webhookService.processCommit({
@@ -109,6 +113,19 @@ async function handlePushEvent(
           },
         },
       });
+      commitShas.push(commit.id);
+    }
+
+    // Fetch commit stats asynchronously (don't block webhook response)
+    if (repository.accessToken && commitShas.length > 0) {
+      webhookService.updateCommitStatsBatch(
+        repository.accessToken,
+        repository.owner,
+        repository.name,
+        commitShas
+      ).catch(error => {
+        console.error('Error fetching commit stats:', error);
+      });
     }
 
     // Check if this is a merge to main/master branch
@@ -121,7 +138,7 @@ async function handlePushEvent(
         message: commit.message,
         authorName: commit.author.name,
       }));
-      
+
       // Trigger version calculation for merged issues
       await versionManager.handleBranchMerge(repository.id, targetBranch, mappedCommits);
     }
@@ -159,7 +176,10 @@ async function handlePullRequestEvent(
           githubUpdatedAt: new Date(pr.updated_at),
         });
 
-        // PR created successfully
+        // Trigger AI review if enabled and not a draft PR
+        if (pullRequest && !pr.draft) {
+          await triggerAIReviewIfEnabled(repository.id, pullRequest.id);
+        }
         break;
 
       case 'closed':
@@ -196,7 +216,8 @@ async function handlePullRequestEvent(
             data: { state: 'OPEN' },
           });
 
-          // PR is now ready for review
+          // Trigger AI review now that PR is ready for review
+          await triggerAIReviewIfEnabled(repository.id, existingPR.id);
         }
         break;
 
@@ -510,5 +531,34 @@ function mapCheckStatus(githubStatus: string): any {
   };
 
   return statusMap[githubStatus] || 'PENDING';
+}
+
+/**
+ * Trigger AI review if the repository has auto-trigger enabled
+ */
+async function triggerAIReviewIfEnabled(repositoryId: string, pullRequestId: string): Promise<void> {
+  try {
+    const shouldTrigger = await aiPRReviewService.shouldAutoTrigger(repositoryId);
+
+    if (shouldTrigger) {
+      console.log(`Auto-triggering AI review for PR ${pullRequestId}`);
+
+      // Perform the review asynchronously (don't block webhook response)
+      aiPRReviewService.performReview(
+        pullRequestId,
+        AIPRReviewTrigger.AUTOMATIC
+      ).then(result => {
+        if (result.success) {
+          console.log(`AI review completed for PR ${pullRequestId}`);
+        } else {
+          console.error(`AI review failed for PR ${pullRequestId}:`, result.error);
+        }
+      }).catch(error => {
+        console.error(`AI review error for PR ${pullRequestId}:`, error);
+      });
+    }
+  } catch (error) {
+    console.error('Error checking AI review trigger:', error);
+  }
 }
 

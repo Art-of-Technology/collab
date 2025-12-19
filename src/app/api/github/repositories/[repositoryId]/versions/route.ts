@@ -27,7 +27,7 @@ export async function GET(
       where.status = status;
     }
 
-    // Get versions with related data
+    // Get versions with related data including parent/child relationships
     const versions = await prisma.version.findMany({
       where,
       include: {
@@ -35,6 +35,7 @@ export async function GET(
           include: {
             issue: {
               select: {
+                id: true,
                 title: true,
                 type: true,
                 priority: true,
@@ -46,9 +47,13 @@ export async function GET(
         releases: {
           select: {
             id: true,
+            tagName: true,
             name: true,
+            description: true,
             githubUrl: true,
             publishedAt: true,
+            isDraft: true,
+            isPrerelease: true,
           },
         },
         deployments: {
@@ -57,8 +62,24 @@ export async function GET(
             environment: true,
             status: true,
             deployedAt: true,
+            deployedBy: true,
+            commitSha: true,
           },
           orderBy: { createdAt: 'desc' },
+        },
+        parentVersion: {
+          select: {
+            id: true,
+            version: true,
+            environment: true,
+          },
+        },
+        childVersions: {
+          select: {
+            id: true,
+            version: true,
+            environment: true,
+          },
         },
       },
       orderBy: [
@@ -70,7 +91,13 @@ export async function GET(
       take: limit,
     });
 
-    return NextResponse.json({ versions });
+    // Transform to include AI summary and proper formatting
+    const formattedVersions = versions.map(v => ({
+      ...v,
+      isProduction: v.environment === 'production',
+    }));
+
+    return NextResponse.json({ versions: formattedVersions });
   } catch (error) {
     console.error('[VERSIONS_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

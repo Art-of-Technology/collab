@@ -27,6 +27,7 @@ import {
   Calendar,
   Book,
   Grid3X3,
+  Shield,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { formatDistanceToNow } from "date-fns";
@@ -1080,6 +1081,17 @@ export default function Sidebar({
                 API Documentation
               </Link>
             </DropdownMenuItem>
+            {session?.user?.role === 'SYSTEM_ADMIN' && (
+              <>
+                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                <DropdownMenuItem asChild>
+                  <Link href="/admin" className="text-[#22c55e] hover:text-[#22c55e]">
+                    <Shield className="mr-2 h-4 w-4" />
+                    Admin Dashboard
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator className="bg-[#1f1f1f]" />
             <DropdownMenuItem className="text-gray-300 hover:text-white cursor-pointer" onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
