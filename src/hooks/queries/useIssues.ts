@@ -19,7 +19,7 @@ export interface CreateIssueData {
 
 export interface UpdateIssueData {
   id: string;
-  workspaceId?: string; // Optional workspace ID for proper scoping when same prefix exists in multiple workspaces
+  workspaceId?: string; // Workspace ID to scope updates; callers should provide this when the issue ID is an issue key (e.g., COF-123) that may exist in multiple workspaces
   title?: string;
   description?: string;
   type?: string;
@@ -83,7 +83,8 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
 // Hook for fetching a single issue
 export function useIssue(issueId: string, workspaceId?: string) {
   return useQuery({
-    queryKey: workspaceId ? [...issueKeys.detail(issueId), workspaceId] : issueKeys.detail(issueId),
+    // Always include workspaceId in query key for consistent caching
+    queryKey: [...issueKeys.detail(issueId), workspaceId ?? null],
     queryFn: async () => {
       const url = new URL(`/api/issues/${issueId}`, window.location.origin);
       if (workspaceId) {

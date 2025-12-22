@@ -638,7 +638,7 @@ export const useKanbanState = ({
         if (!isSameColumn) {
           await updateIssueMutation.mutateAsync({
             id: draggableId,
-            workspaceId: (workspace as any)?.id,
+            workspaceId: workspace?.id,
             status: updatedIssue.status,
             statusValue: updatedIssue.statusValue,
             skipInvalidate: true
