@@ -130,7 +130,7 @@ export async function GET(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    // Fetch projects (converted from TaskBoards) with issue counts
+    // Fetch projects (converted from TaskBoards) with issue counts and repository data
     const projects = await prisma.project.findMany({
       where: {
         workspaceId
@@ -139,6 +139,20 @@ export async function GET(
         _count: {
           select: {
             issues: true
+          }
+        },
+        repository: {
+          select: {
+            id: true,
+            fullName: true,
+            _count: {
+              select: {
+                branches: true,
+                commits: true,
+                releases: true,
+                versions: true,
+              }
+            }
           }
         }
       },
@@ -160,7 +174,12 @@ export async function GET(
       isArchived: project.isArchived,
       issueCount: project._count.issues,
       createdAt: project.createdAt,
-      updatedAt: project.updatedAt
+      updatedAt: project.updatedAt,
+      repository: project.repository ? {
+        id: project.repository.id,
+        fullName: project.repository.fullName,
+        _count: project.repository._count,
+      } : null,
     }));
 
     return NextResponse.json({ projects: transformedProjects });

@@ -119,8 +119,12 @@ export async function authenticateAppRequest(
       };
     }
 
-    // Check if installation is active
-    if (installation.status !== 'ACTIVE') {
+    // For system app tokens, we skip the installation status check
+    // since they don't have real installations
+    const isSystemAppToken = (installation as any).isSystemAppToken === true;
+
+    // Check if installation is active (skip for system app tokens)
+    if (!isSystemAppToken && installation.status !== 'ACTIVE') {
       return {
         success: false,
         error: {
@@ -211,23 +215,61 @@ export async function authenticateAppRequest(
 }
 
 /**
- * Find app installation by access token
+ * Find app installation or system app token by access token
+ * Now searches in AppToken table which supports:
+ * 1. Multiple tokens per installation (regular apps)
+ * 2. System app tokens (no installation required)
  */
 async function findInstallationByAccessToken(token: string) {
   try {
-    // Find installations that have access tokens
-    const installations = await prisma.appInstallation.findMany({
+    // Find tokens from active installations OR system app tokens
+    const appTokens = await prisma.appToken.findMany({
       where: {
-        accessToken: { not: null },
-        status: 'ACTIVE'
+        isRevoked: false,
+        OR: [
+          // Regular app tokens (linked to installation)
+          {
+            installation: {
+              status: 'ACTIVE'
+            }
+          },
+          // System app tokens (no installation, linked directly to app and workspace)
+          {
+            installationId: null,
+            appId: { not: null },
+            workspaceId: { not: null }
+          }
+        ]
       },
       include: {
+        installation: {
+          include: {
+            app: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                status: true,
+                isSystemApp: true
+              }
+            },
+            workspace: {
+              select: {
+                id: true,
+                slug: true,
+                name: true
+              }
+            }
+          }
+        },
+        // Include direct app and workspace relations for system app tokens
         app: {
           select: {
             id: true,
             slug: true,
             name: true,
-            status: true
+            status: true,
+            isSystemApp: true
           }
         },
         workspace: {
@@ -240,40 +282,78 @@ async function findInstallationByAccessToken(token: string) {
       }
     });
 
-    // Check each installation's access token
-    for (const installation of installations) {
+    // Check each token's access token
+    for (const appToken of appTokens) {
       try {
-        if (!installation.accessToken) continue;
+        if (!appToken.accessToken) continue;
 
         // Decrypt the stored token
-        const storedTokenData = Buffer.from(installation.accessToken, 'base64');
+        const storedTokenData = Buffer.from(appToken.accessToken, 'base64');
         const decryptedToken = await decryptToken(storedTokenData);
 
         // Compare with provided token
         if (decryptedToken === token) {
-          // Fetch the user who installed the app separately since the relation doesn't exist in schema
-          const installedByUser = await prisma.user.findUnique({
-            where: { id: installation.installedById },
-            select: {
-              id: true,
-              email: true,
-              name: true
+          // Check if this is a system app token (no installation)
+          if (!appToken.installation && appToken.app && appToken.workspace) {
+            // System app token - verify it's actually a system app
+            if (!appToken.app.isSystemApp) {
+              console.warn('Non-system app token found without installation:', appToken.id);
+              continue;
             }
-          });
 
-          // If user not found, skip this installation
-          if (!installedByUser) {
-            continue;
+            // Return virtual installation data for system app
+            return {
+              id: `system_${appToken.id}`, // Virtual installation ID
+              appId: appToken.app.id,
+              workspaceId: appToken.workspace.id,
+              installedById: appToken.userId || 'system',
+              status: 'ACTIVE',
+              scopes: appToken.scopes,
+              tokenExpiresAt: appToken.tokenExpiresAt,
+              app: appToken.app,
+              workspace: appToken.workspace,
+              installedBy: {
+                id: appToken.userId || 'system',
+                email: null,
+                name: 'System'
+              },
+              isSystemAppToken: true
+            };
           }
 
-          return {
-            ...installation,
-            installedBy: installedByUser
-          };
+          // Regular installation-based token
+          if (appToken.installation) {
+            const installation = appToken.installation;
+
+            // Fetch the user who generated this token (or fallback to installer for legacy tokens)
+            const tokenUserId = appToken.userId || installation.installedById;
+            const tokenUser = await prisma.user.findUnique({
+              where: { id: tokenUserId },
+              select: {
+                id: true,
+                email: true,
+                name: true
+              }
+            });
+
+            // If user not found, skip this token
+            if (!tokenUser) {
+              continue;
+            }
+
+            return {
+              ...installation,
+              // Use scopes from the token if available, fallback to installation scopes
+              scopes: appToken.scopes.length > 0 ? appToken.scopes : installation.scopes,
+              tokenExpiresAt: appToken.tokenExpiresAt,
+              installedBy: tokenUser, // Now returns the token's user, not the installer
+              isSystemAppToken: false
+            };
+          }
         }
       } catch (error) {
-        // If decryption fails for this installation, continue to next
-        console.error('Failed to decrypt access token for installation:', installation.id, error);
+        // If decryption fails for this token, continue to next
+        console.error('Failed to decrypt access token for appToken:', appToken.id, error);
         continue;
       }
     }

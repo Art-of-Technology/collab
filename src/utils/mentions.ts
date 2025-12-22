@@ -27,6 +27,11 @@ export function extractMentions(text: string): string[] {
 }
 
 /**
+ * Maximum input length to prevent ReDoS attacks
+ */
+const MAX_INPUT_LENGTH = 100000;
+
+/**
  * Extracts user IDs from mentioned format OR HTML content.
  * @param text - The text (potentially HTML) to extract mention user IDs from.
  * @returns An array of user IDs mentioned in the text.
@@ -36,27 +41,58 @@ export function extractMentionUserIds(text: string): string[] {
     return [];
   }
 
+  // Prevent ReDoS by limiting input length
+  const safeText = text.length > MAX_INPUT_LENGTH ? text.slice(0, MAX_INPUT_LENGTH) : text;
+
   const userIds = new Set<string>(); // Use a Set to avoid duplicates
 
-  // Be flexible: detect mention spans by data-type="mention", data-mention="true", or class contains "mention"
-  const spanRegex = /<span[^>]*>/gi;
-  let spanMatch: RegExpExecArray | null;
-  while ((spanMatch = spanRegex.exec(text)) !== null) {
-    const spanTag = spanMatch[0];
-    const looksLikeMention = /data-type=(?:"mention"|'mention')|data-mention=(?:"true"|'true')|class=(?:"[^"]*\bmention\b[^"]*"|'[^']*\bmention\b[^']*')/i.test(spanTag);
-    if (!looksLikeMention) continue;
+  // Extract mentions from HTML spans using a safer approach
+  // Split by <span to process each potential mention span individually
+  const spanParts = safeText.split(/<span\s+/i);
+  for (let i = 1; i < spanParts.length; i++) {
+    const part = spanParts[i];
+    // Find the end of the opening tag (first >)
+    const tagEndIndex = part.indexOf('>');
+    if (tagEndIndex === -1) continue;
+    
+    const spanAttributes = part.slice(0, tagEndIndex);
+    
+    // Check if this looks like a mention span
+    const isMention = 
+      spanAttributes.includes('data-type="mention"') ||
+      spanAttributes.includes("data-type='mention'") ||
+      spanAttributes.includes('data-mention="true"') ||
+      spanAttributes.includes("data-mention='true'") ||
+      /class=["'][^"']*\bmention\b[^"']*["']/.test(spanAttributes);
+    
+    if (!isMention) continue;
 
-    // Prefer data-user-id, fallback to data-id
-    const idMatch = /data-user-id=(?:"([^"]+)"|'([^']+)')/i.exec(spanTag) || /data-id=(?:"([^"]+)"|'([^']+)')/i.exec(spanTag);
-    const userId = (idMatch && (idMatch[1] || idMatch[2])) || null;
+    // Extract user ID using simple string matching first, then regex as fallback
+    let userId: string | null = null;
+    
+    // Try data-user-id first
+    const userIdMatch = spanAttributes.match(/data-user-id=["']([^"']+)["']/);
+    if (userIdMatch) {
+      userId = userIdMatch[1];
+    } else {
+      // Fallback to data-id
+      const idMatch = spanAttributes.match(/data-id=["']([^"']+)["']/);
+      if (idMatch) {
+        userId = idMatch[1];
+      }
+    }
+    
     if (userId) userIds.add(userId);
   }
 
   // Also check for the raw format @[username](userId) as a fallback
-  const rawMentionRegex = /@\[[^\]]+\]\(([^)]+)\)/g;
+  // Use a more specific regex that limits the username and userId lengths to prevent ReDoS
+  // Username: up to 100 chars, no ] allowed
+  // UserId: up to 50 chars (UUIDs are 36 chars), no ) allowed
+  const rawMentionRegex = /@\[([^\]]{1,100})\]\(([^)]{1,50})\)/g;
   let rawMatch: RegExpExecArray | null;
-  while ((rawMatch = rawMentionRegex.exec(text)) !== null) {
-    if (rawMatch[1]) userIds.add(rawMatch[1]);
+  while ((rawMatch = rawMentionRegex.exec(safeText)) !== null) {
+    if (rawMatch[2]) userIds.add(rawMatch[2]);
   }
   
   return Array.from(userIds); // Convert Set back to Array

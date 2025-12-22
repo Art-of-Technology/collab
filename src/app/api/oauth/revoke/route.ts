@@ -137,9 +137,9 @@ async function revokeToken(
   }
 }
 
-// Helper function to revoke token from app installations
+// Helper function to revoke token from AppToken table
 async function revokeTokenFromInstallations(
-  token: string, 
+  token: string,
   tokenType: 'access' | 'refresh',
   appId: string
 ): Promise<{
@@ -148,19 +148,29 @@ async function revokeTokenFromInstallations(
 }> {
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
-    
-    // Find installations for this specific app that have tokens
-    const installations = await prisma.appInstallation.findMany({
+
+    // Find tokens for this specific app that are not revoked
+    const tokens = await prisma.appToken.findMany({
       where: {
-        appId: appId,
-        [tokenField]: { not: null }
+        isRevoked: false,
+        [tokenField]: { not: null },
+        installation: {
+          appId: appId
+        }
+      },
+      include: {
+        installation: {
+          select: {
+            id: true
+          }
+        }
       }
     });
 
-    // Check each installation's token
-    for (const installation of installations) {
+    // Check each token
+    for (const appToken of tokens) {
       try {
-        const storedToken = installation[tokenField as keyof typeof installation] as string | null;
+        const storedToken = appToken[tokenField as keyof typeof appToken] as string | null;
         if (!storedToken) continue;
 
         // Decrypt the stored token
@@ -169,37 +179,24 @@ async function revokeTokenFromInstallations(
 
         // Compare with provided token
         if (decryptedToken === token) {
-          // Revoke the token by clearing it from the database
-          const updateData: any = {
-            updatedAt: new Date()
-          };
-
-          if (tokenType === 'access') {
-            updateData.accessToken = null;
-            updateData.tokenExpiresAt = null;
-          } else {
-            updateData.refreshToken = null;
-          }
-
-          // If revoking a refresh token, also revoke the access token for security
-          if (tokenType === 'refresh') {
-            updateData.accessToken = null;
-            updateData.tokenExpiresAt = null;
-          }
-
-          await prisma.appInstallation.update({
-            where: { id: installation.id },
-            data: updateData
+          // Revoke the token by marking it as revoked
+          await prisma.appToken.update({
+            where: { id: appToken.id },
+            data: {
+              isRevoked: true,
+              revokedAt: new Date(),
+              updatedAt: new Date()
+            }
           });
 
           return {
             success: true,
-            installationId: installation.id
+            installationId: appToken.installation.id
           };
         }
       } catch (error) {
-        // If decryption fails for this installation, continue to next
-        console.error(`Failed to decrypt ${tokenType} token for installation:`, installation.id, error);
+        // If decryption fails for this token, continue to next
+        console.error(`Failed to decrypt ${tokenType} token for appToken:`, appToken.id, error);
         continue;
       }
     }

@@ -120,7 +120,7 @@ export async function POST(
     const queryResults: Set<string>[] = [];
 
     for (const query of activityQueries) {
-      const activities = await prisma.boardItemActivity.findMany({
+      const activities = await prisma.issueActivity.findMany({
         where: query as any,
         select: { itemId: true, newValue: true },
         distinct: ['itemId']

@@ -120,9 +120,9 @@ async function introspectToken(
   }
 }
 
-// Helper function to find token in app installations
+// Helper function to find token in AppToken table (supports both regular and system app tokens)
 async function findTokenInInstallations(
-  token: string, 
+  token: string,
   tokenType: 'access' | 'refresh',
   appId?: string
 ): Promise<{
@@ -131,20 +131,51 @@ async function findTokenInInstallations(
 }> {
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
-    
-    // Find installations that have tokens (optionally filtered by app)
+
+    // Build where clause for AppToken query - include both regular and system app tokens
     const whereClause: any = {
       [tokenField]: { not: null },
-      status: 'ACTIVE'
+      isRevoked: false,
+      OR: [
+        // Regular app tokens (linked to installation)
+        {
+          installation: {
+            status: 'ACTIVE'
+          }
+        },
+        // System app tokens (no installation, linked directly to app and workspace)
+        {
+          installationId: null,
+          appId: { not: null },
+          workspaceId: { not: null }
+        }
+      ]
     };
-    
-    if (appId) {
-      whereClause.appId = appId;
-    }
 
-    const installations = await prisma.appInstallation.findMany({
+    // Note: appId filter applies to both regular and system app tokens
+    // but we handle it after the query for system app tokens
+
+    // Search in AppToken table (supports multiple tokens per installation + system app tokens)
+    const appTokens = await prisma.appToken.findMany({
       where: whereClause,
       include: {
+        installation: {
+          include: {
+            app: {
+              include: {
+                oauthClient: true
+              }
+            },
+            workspace: {
+              select: {
+                id: true,
+                slug: true,
+                name: true
+              }
+            }
+          }
+        },
+        // Include direct relations for system app tokens
         app: {
           include: {
             oauthClient: true
@@ -160,10 +191,10 @@ async function findTokenInInstallations(
       }
     });
 
-    // Check each installation's token
-    for (const installation of installations) {
+    // Check each token
+    for (const appToken of appTokens) {
       try {
-        const storedToken = installation[tokenField as keyof typeof installation] as string | null;
+        const storedToken = appToken[tokenField as keyof typeof appToken] as string | null;
         if (!storedToken) continue;
 
         // Decrypt the stored token
@@ -173,8 +204,8 @@ async function findTokenInInstallations(
         // Compare with provided token
         if (decryptedToken === token) {
           // Check if token has expired
-          const isExpired = installation.tokenExpiresAt && installation.tokenExpiresAt < new Date();
-          
+          const isExpired = appToken.tokenExpiresAt && appToken.tokenExpiresAt < new Date();
+
           if (isExpired) {
             return {
               found: true,
@@ -197,29 +228,72 @@ async function findTokenInInstallations(
             }
           }
 
-          if (installation.tokenExpiresAt) {
-            expiresAt = Math.floor(installation.tokenExpiresAt.getTime() / 1000);
+          if (appToken.tokenExpiresAt) {
+            expiresAt = Math.floor(appToken.tokenExpiresAt.getTime() / 1000);
           }
 
-          return {
-            found: true,
-            info: {
-              active: true,
-              scope: installation.scopes.join(' '),
-              client_id: installation.app.oauthClient?.clientId,
-              token_type: tokenType === 'access' ? 'Bearer' : 'refresh_token',
-              exp: expiresAt,
-              iat: issuedAt,
-              sub: installation.installedById, // subject (user ID)
-              aud: installation.app.slug, // audience (app)
-              workspace_id: installation.workspace.id,
-              workspace_slug: installation.workspace.slug
+          // Check if this is a system app token (no installation)
+          if (!appToken.installation && appToken.app && appToken.workspace) {
+            // System app token - verify app ID filter if provided
+            if (appId && appToken.appId !== appId) {
+              continue;
             }
-          };
+
+            return {
+              found: true,
+              info: {
+                active: true,
+                scope: appToken.scopes.join(' '),
+                client_id: appToken.app.oauthClient?.clientId,
+                token_type: tokenType === 'access' ? 'Bearer' : 'refresh_token',
+                exp: expiresAt,
+                iat: issuedAt,
+                sub: appToken.userId || 'system', // subject
+                aud: appToken.app.slug, // audience (app)
+                app_id: appToken.appId,
+                installation_id: null, // No installation for system apps
+                workspace_id: appToken.workspace.id,
+                workspace_slug: appToken.workspace.slug,
+                is_system_app: true
+              }
+            };
+          }
+
+          // Regular installation-based token
+          if (appToken.installation) {
+            const installation = appToken.installation;
+
+            // Apply appId filter if provided
+            if (appId && installation.appId !== appId) {
+              continue;
+            }
+
+            // Use scopes from token if available, otherwise from installation
+            const scopes = appToken.scopes.length > 0 ? appToken.scopes : installation.scopes;
+
+            return {
+              found: true,
+              info: {
+                active: true,
+                scope: scopes.join(' '),
+                client_id: installation.app.oauthClient?.clientId,
+                token_type: tokenType === 'access' ? 'Bearer' : 'refresh_token',
+                exp: expiresAt,
+                iat: issuedAt,
+                sub: appToken.userId || installation.installedById, // subject (user who generated this token, fallback to installer for legacy)
+                aud: installation.app.slug, // audience (app)
+                app_id: installation.appId,
+                installation_id: installation.id,
+                workspace_id: installation.workspace.id,
+                workspace_slug: installation.workspace.slug,
+                is_system_app: false
+              }
+            };
+          }
         }
       } catch (error) {
-        // If decryption fails for this installation, continue to next
-        console.error(`Failed to decrypt ${tokenType} token for installation:`, installation.id, error);
+        // If decryption fails for this token, continue to next
+        console.error(`Failed to decrypt ${tokenType} token for appToken:`, appToken.id, error);
         continue;
       }
     }

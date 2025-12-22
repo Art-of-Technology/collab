@@ -2,11 +2,10 @@
 
 import { use } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Trash2, MessageSquare } from "lucide-react";
+import { ChevronLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { NoteFormEditor } from "@/components/notes/NoteFormEditor";
-import { NoteCommentsList } from "@/components/notes/NoteCommentsList";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
@@ -91,16 +90,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           </div>
         )}
 
-        {/* Comments section */}
-        {resolvedParams.id && (
-          <div className=" bg-black/40 rounded-sm mt-12 p-8 gap-4 border-t border-border/20">
-            <div className="flex items-center gap-2 mb-4">
-              <MessageSquare className="h-4 w-4 text-muted-foreground/60" />
-              <h3 className="m-0 text-sm font-semibold text-foreground/80">Comments</h3>
-            </div>
-            <NoteCommentsList noteId={resolvedParams.id} />
-          </div>
-        )}
+        {/* Comments section - placeholder for future implementation */}
       </div>
     </div>
   );

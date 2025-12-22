@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppBridge } from '@/hooks/useAppBridge';
@@ -33,14 +33,19 @@ interface AppHostProps {
 }
 
 export function AppHost({ app, installation, workspace, user }: AppHostProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeElement, setIframeElement] = useState<HTMLIFrameElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  // Initialize the app bridge
+  // Callback ref to track iframe element in state (triggers re-render when iframe mounts)
+  const setIframeRef = useCallback((node: HTMLIFrameElement | null) => {
+    setIframeElement(node);
+  }, []);
+
+  // Initialize the app bridge with the state-tracked iframe element
   const { sendMessage, isReady } = useAppBridge({
-    iframe: iframeRef.current,
+    iframe: iframeElement,
     allowedOrigin: new URL(app.entrypointUrl).origin,
     context: {
       app: {
@@ -63,7 +68,7 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
         email: user.email,
         role: user.role
       },
-      theme: 'light', // TODO: Get from theme context
+      theme: 'dark', // TODO: Get from theme context
       locale: 'en-US' // TODO: Get from user preferences
     }
   });
@@ -82,14 +87,14 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
     setIsRetrying(true);
     setError(null);
     setIsLoading(true);
-    
-    if (iframeRef.current) {
+
+    if (iframeElement) {
       // Force reload the iframe
-      const currentSrc = iframeRef.current.src;
-      iframeRef.current.src = '';
+      const currentSrc = iframeElement.src;
+      iframeElement.src = '';
       setTimeout(() => {
-        if (iframeRef.current) {
-          iframeRef.current.src = currentSrc;
+        if (iframeElement) {
+          iframeElement.src = currentSrc;
         }
         setIsRetrying(false);
       }, 100);
@@ -162,7 +167,7 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
 
       {/* App iframe */}
       <iframe
-        ref={iframeRef}
+        ref={setIframeRef}
         src={app.entrypointUrl}
         title={`${app.name} - App`}
         className="w-full h-full border-0 min-h-[600px]"

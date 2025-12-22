@@ -73,9 +73,6 @@ export const STANDARD_ISSUE_INCLUDE = {
   reporter: {
     select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
   },
-  column: {
-    select: { id: true, name: true, color: true, order: true }
-  },
   project: {
     select: { id: true, name: true, slug: true, issuePrefix: true, description: true }
   },
