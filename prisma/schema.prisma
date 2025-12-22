@@ -301,10 +301,10 @@ model FeatureRequest {
   authorId      String
   html          String?
   workspaceId   String?
-  projectId     String
+  projectId     String?
   author        User                    @relation(fields: [authorId], references: [id], onDelete: Cascade)
   workspace     Workspace?              @relation(fields: [workspaceId], references: [id])
-  project       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   comments      FeatureRequestComment[]
   votes         FeatureVote[]
   notifications Notification[]
