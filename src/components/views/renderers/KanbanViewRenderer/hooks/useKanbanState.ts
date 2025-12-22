@@ -636,11 +636,12 @@ export const useKanbanState = ({
         
         // Handle status updates first (for cross-column moves)
         if (!isSameColumn) {
-          await updateIssueMutation.mutateAsync({ 
-            id: draggableId, 
-            status: updatedIssue.status, 
-            statusValue: updatedIssue.statusValue, 
-            skipInvalidate: true 
+          await updateIssueMutation.mutateAsync({
+            id: draggableId,
+            workspaceId: (workspace as any)?.id,
+            status: updatedIssue.status,
+            statusValue: updatedIssue.statusValue,
+            skipInvalidate: true
           });
         }
         

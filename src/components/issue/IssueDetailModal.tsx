@@ -12,8 +12,9 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
   const { currentWorkspace } = useWorkspace();
   const { parentIssueInfo } = useIssueModalUrlState();
 
-  // Use React Query to fetch issue data
-  const { data: issueData, isLoading, error: queryError } = useIssue(issueId || "");
+  // Use React Query to fetch issue data with workspace context
+  // This ensures we get the correct issue when the same prefix exists in multiple workspaces
+  const { data: issueData, isLoading, error: queryError } = useIssue(issueId || "", currentWorkspace?.id);
 
   const issue = issueData?.issue || issueData;
   const error = queryError instanceof Error ? queryError.message : queryError ? "Failed to load issue" : null;
