@@ -58,6 +58,44 @@ export const GITHUB_API_BASE = 'https://api.github.com';
 export const GITHUB_OAUTH_BASE = 'https://github.com/login/oauth';
 
 /**
+ * Validate GitHub owner/repo name to prevent SSRF attacks.
+ * GitHub usernames: alphanumeric and single hyphens (not at start/end), max 39 chars
+ * GitHub repo names: alphanumeric, hyphens, underscores, and periods, max 100 chars
+ * @throws Error if validation fails
+ */
+function validateGitHubIdentifier(value: string, type: 'owner' | 'repo'): void {
+  if (!value || typeof value !== 'string') {
+    throw new Error(`Invalid GitHub ${type}: must be a non-empty string`);
+  }
+
+  // Prevent path traversal and URL manipulation
+  if (value.includes('/') || value.includes('\\') || value.includes('..')) {
+    throw new Error(`Invalid GitHub ${type}: contains forbidden characters`);
+  }
+
+  if (type === 'owner') {
+    // GitHub username: 1-39 chars, alphanumeric and single hyphens (not at start/end)
+    if (value.length > 39) {
+      throw new Error('Invalid GitHub owner: exceeds maximum length of 39 characters');
+    }
+    if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(value) && !/^[a-zA-Z0-9]$/.test(value)) {
+      throw new Error('Invalid GitHub owner: must contain only alphanumeric characters and hyphens');
+    }
+    if (value.includes('--')) {
+      throw new Error('Invalid GitHub owner: cannot contain consecutive hyphens');
+    }
+  } else {
+    // GitHub repo: 1-100 chars, alphanumeric, hyphens, underscores, and periods
+    if (value.length > 100) {
+      throw new Error('Invalid GitHub repo: exceeds maximum length of 100 characters');
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+      throw new Error('Invalid GitHub repo: must contain only alphanumeric characters, hyphens, underscores, and periods');
+    }
+  }
+}
+
+/**
  * Generate GitHub OAuth authorization URL
  */
 export function getGitHubAuthUrl(state?: string): string {
@@ -179,10 +217,14 @@ export async function createRepositoryWebhook(
   webhookUrl: string,
   secret: string
 ): Promise<{ id: number; url: string }> {
+  // Validate inputs to prevent SSRF attacks
+  validateGitHubIdentifier(owner, 'owner');
+  validateGitHubIdentifier(repo, 'repo');
+
   console.log('Creating webhook for repository:', { owner, repo, webhookUrl });
 
   // First, check if user has admin permissions
-  const repoResponse = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, {
+  const repoResponse = await fetch(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/vnd.github.v3+json',
@@ -201,7 +243,7 @@ export async function createRepositoryWebhook(
   }
 
   // Check if webhook already exists
-  const existingHooksResponse = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/hooks`, {
+  const existingHooksResponse = await fetch(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hooks`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/vnd.github.v3+json',
@@ -223,7 +265,7 @@ export async function createRepositoryWebhook(
     }
   }
 
-  const response = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/hooks`, {
+  const response = await fetch(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hooks`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -295,7 +337,11 @@ export async function getRepositoryDetails(
   owner: string,
   repo: string
 ): Promise<GitHubRepository> {
-  const response = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, {
+  // Validate inputs to prevent SSRF attacks
+  validateGitHubIdentifier(owner, 'owner');
+  validateGitHubIdentifier(repo, 'repo');
+
+  const response = await fetch(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/vnd.github.v3+json',

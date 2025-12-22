@@ -13,7 +13,7 @@ export async function resolveIssueKeyToId(issueKey: string): Promise<string | nu
 
     return issue?.id || null;
   } catch (error) {
-    console.error(`Error resolving issue key ${issueKey}:`, error);
+    console.error('Error resolving issue key:', issueKey, error);
     return null;
   }
 }
@@ -31,7 +31,7 @@ export async function resolveIdToIssueKey(id: string): Promise<string | null> {
 
     return issue?.issueKey || null;
   } catch (error) {
-    console.error(`Error resolving ID ${id}:`, error);
+    console.error('Error resolving ID:', id, error);
     return null;
   }
 }
@@ -54,7 +54,7 @@ export async function resolveIssueIdOrKey(idOrKey: string): Promise<{ id: string
 
     return issue || null;
   } catch (error) {
-    console.error(`Error resolving issue ${idOrKey}:`, error);
+    console.error('Error resolving issue:', idOrKey, error);
     return null;
   }
 }
