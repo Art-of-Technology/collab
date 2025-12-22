@@ -19,6 +19,7 @@ export interface CreateIssueData {
 
 export interface UpdateIssueData {
   id: string;
+  workspaceId?: string; // Workspace ID to scope updates; callers should provide this when the issue ID is an issue key (e.g., COF-123) that may exist in multiple workspaces
   title?: string;
   description?: string;
   type?: string;
@@ -80,11 +81,16 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
 }
 
 // Hook for fetching a single issue
-export function useIssue(issueId: string) {
+export function useIssue(issueId: string, workspaceId?: string) {
   return useQuery({
-    queryKey: issueKeys.detail(issueId),
+    // Always include workspaceId in query key for consistent caching
+    queryKey: [...issueKeys.detail(issueId), workspaceId ?? null],
     queryFn: async () => {
-      const response = await fetch(`/api/issues/${issueId}`);
+      const url = new URL(`/api/issues/${issueId}`, window.location.origin);
+      if (workspaceId) {
+        url.searchParams.set('workspaceId', workspaceId);
+      }
+      const response = await fetch(url.toString());
       if (!response.ok) {
         throw new Error('Failed to fetch issue');
       }
@@ -145,12 +151,17 @@ export function useUpdateIssue() {
 
   return useMutation({
     mutationFn: async (data: UpdateIssueData & { skipInvalidate?: boolean }): Promise<any> => {
-      const { id, skipInvalidate, ...updateData } = data;
+      const { id, workspaceId, skipInvalidate, ...updateData } = data;
       // Normalize issue type casing
       if (updateData.type) {
         updateData.type = updateData.type.toUpperCase();
       }
-      const response = await fetch(`/api/issues/${id}`, {
+      // Build URL with workspace context for proper scoping
+      const url = new URL(`/api/issues/${id}`, window.location.origin);
+      if (workspaceId) {
+        url.searchParams.set('workspaceId', workspaceId);
+      }
+      const response = await fetch(url.toString(), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -565,8 +565,10 @@ export function IssueDetailContent({
       const issueId = issue.issueKey || issue.id;
 
       // Transform updates to match UpdateIssueData format
+      // Include workspaceId for proper scoping when same prefix exists in multiple workspaces
       const updateData: any = {
         id: issueId,
+        workspaceId: workspaceId || currentWorkspace?.id,
         ...updates,
       };
 
@@ -609,7 +611,7 @@ export function IssueDetailContent({
     } finally {
       setIsUpdating(false);
     }
-  }, [issue, mode, onRefresh, toast, saveFocusState, restoreFocusState, preventFocusSteal, editingTitle, updateIssueMutation]);
+  }, [issue, mode, onRefresh, toast, saveFocusState, restoreFocusState, preventFocusSteal, editingTitle, updateIssueMutation, workspaceId, currentWorkspace?.id]);
 
   // Handle title save
   const handleSaveTitle = useCallback(async () => {
