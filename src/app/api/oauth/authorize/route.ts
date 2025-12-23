@@ -74,7 +74,9 @@ export async function GET(request: NextRequest) {
             slug: true,
             name: true,
             status: true,
-            iconUrl: true
+            iconUrl: true,
+            isSystemApp: true,
+            scopes: true
           }
         }
       }
@@ -166,40 +168,45 @@ export async function GET(request: NextRequest) {
       targetWorkspaceId = userWorkspace.workspaceId;
     }
 
-    // Check if app is installed in the workspace
-    let installation;
-    
-    if (installationId) {
-      // If installation_id is provided, use it directly (for new installations)
-      installation = await prisma.appInstallation.findFirst({
-        where: {
-          id: installationId,
-          appId: oauthClient.app.id,
-          workspaceId: targetWorkspaceId!,
-          status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE during OAuth flow
-        }
-      });
-    } else {
-      // Fallback to existing installation lookup (for existing apps)
-      installation = await prisma.appInstallation.findFirst({
-        where: {
-          appId: oauthClient.app.id,
-          workspaceId: targetWorkspaceId!,
-          status: { in: ['PENDING', 'ACTIVE'] } // Allow both statuses
-        }
-      });
-    }
+    // Check if app is a system app - system apps don't require installation
+    const isSystemApp = oauthClient.app.isSystemApp;
 
-    if (!installation) {
-      return NextResponse.json(
-        {
-          error: 'access_denied',
-          error_description: installationId 
-            ? 'Installation not found or invalid' 
-            : 'App is not installed in the specified workspace'
-        },
-        { status: 403 }
-      );
+    // Check if app is installed in the workspace (skip for system apps)
+    let installation;
+
+    if (!isSystemApp) {
+      if (installationId) {
+        // If installation_id is provided, use it directly (for new installations)
+        installation = await prisma.appInstallation.findFirst({
+          where: {
+            id: installationId,
+            appId: oauthClient.app.id,
+            workspaceId: targetWorkspaceId!,
+            status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE during OAuth flow
+          }
+        });
+      } else {
+        // Fallback to existing installation lookup (for existing apps)
+        installation = await prisma.appInstallation.findFirst({
+          where: {
+            appId: oauthClient.app.id,
+            workspaceId: targetWorkspaceId!,
+            status: { in: ['PENDING', 'ACTIVE'] } // Allow both statuses
+          }
+        });
+      }
+
+      if (!installation) {
+        return NextResponse.json(
+          {
+            error: 'access_denied',
+            error_description: installationId
+              ? 'Installation not found or invalid'
+              : 'App is not installed in the specified workspace'
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Validate and normalize scopes using utility functions
@@ -214,10 +221,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If no scope requested, grant all installation scopes; otherwise filter requested against available
+    // For system apps, use app scopes; for regular apps, use installation scopes
+    const availableScopes = isSystemApp
+      ? oauthClient.app.scopes.map((s: { scope: string }) => s.scope)
+      : installation!.scopes;
+
+    // If no scope requested, grant all available scopes; otherwise filter requested against available
     const grantedScopes = scope.trim()
-      ? filterGrantedScopes(scope, installation.scopes)
-      : normalizeScopes(installation.scopes);
+      ? filterGrantedScopes(scope, availableScopes)
+      : normalizeScopes(availableScopes);
 
     if (grantedScopes.length === 0) {
       return NextResponse.json(
@@ -240,19 +252,19 @@ export async function GET(request: NextRequest) {
         clientId,
         userId: session.user.id,
         workspaceId: targetWorkspaceId!,
-        installationId: installation.id,
+        installationId: isSystemApp ? null : installation!.id,
         redirectUri,
         scope: scopesToString(grantedScopes),
         state,
         code_challenge,
         code_challenge_method,
-        nonce,
+        nonce: isSystemApp ? 'system_app' : nonce, // Mark system app authorizations
         expiresAt
       }
     });
 
     // Log authorization for audit trail
-    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, installation=${installation.id}, scopes=${scopesToString(grantedScopes)}`);
+    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, installation=${isSystemApp ? 'system_app' : installation!.id}, scopes=${scopesToString(grantedScopes)}`);
 
     // Redirect back to app with authorization code
     const callbackUrl = new URL(redirectUri);
@@ -260,9 +272,12 @@ export async function GET(request: NextRequest) {
     if (state) {
       callbackUrl.searchParams.set('state', state);
     }
-    // Include workspace_id and installation_id in callback for third-party apps
+    // Include workspace_id in callback for third-party apps
     callbackUrl.searchParams.set('workspace_id', targetWorkspaceId!);
-    callbackUrl.searchParams.set('installation_id', installation.id);
+    // Only include installation_id for non-system apps
+    if (!isSystemApp && installation) {
+      callbackUrl.searchParams.set('installation_id', installation.id);
+    }
 
     return NextResponse.redirect(callbackUrl);
 
