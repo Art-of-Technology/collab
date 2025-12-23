@@ -214,6 +214,7 @@ export async function getWorkspaceInstallations(workspaceId: string) {
       throw new Error('Access denied to workspace');
     }
 
+    // Get explicitly installed apps
     const installations = await prisma.appInstallation.findMany({
       where: { workspaceId },
       include: {
@@ -231,7 +232,51 @@ export async function getWorkspaceInstallations(workspaceId: string) {
       orderBy: { createdAt: 'desc' }
     });
 
-    return installations;
+    // Get system apps (available to all workspaces without installation)
+    // Use raw query to access isSystemApp field
+    const systemApps = await prisma.$queryRaw<Array<{
+      id: string;
+      name: string;
+      slug: string;
+      iconUrl: string | null;
+      publisherId: string;
+      permissions: any;
+    }>>`
+      SELECT id, name, slug, "iconUrl", "publisherId", permissions
+      FROM "App"
+      WHERE "isSystemApp" = true AND status = 'PUBLISHED'
+    `;
+
+    // Get scopes for system apps
+    const systemAppIds = systemApps.map(a => a.id);
+    const systemAppScopes = systemAppIds.length > 0
+      ? await prisma.appScope.findMany({
+          where: { appId: { in: systemAppIds } },
+          select: { appId: true, scope: true }
+        })
+      : [];
+
+    // Convert system apps to installation-like format for consistency
+    const installedAppIds = installations.map(inst => inst.app.id);
+    const systemAppInstallations = systemApps
+      .filter(sysApp => !installedAppIds.includes(sysApp.id)) // Exclude if already installed
+      .map(sysApp => ({
+        id: `system-${sysApp.id}`,
+        status: 'ACTIVE' as const,
+        createdAt: new Date(),
+        scopes: systemAppScopes.filter(s => s.appId === sysApp.id).map(s => s.scope),
+        app: {
+          id: sysApp.id,
+          name: sysApp.name,
+          slug: sysApp.slug,
+          iconUrl: sysApp.iconUrl,
+          publisherId: sysApp.publisherId,
+          permissions: sysApp.permissions
+        }
+      }));
+
+    // Combine regular installations with system app "installations"
+    return [...installations, ...systemAppInstallations];
 
   } catch (error) {
     console.error('Error fetching installations:', error);

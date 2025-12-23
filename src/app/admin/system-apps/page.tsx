@@ -2,11 +2,14 @@ import { Suspense } from 'react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Puzzle, Info } from 'lucide-react';
+import { Puzzle, Info, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Image from 'next/image';
 import { SystemAppToggle } from './SystemAppToggle';
+import { AppConfigEditor } from './AppConfigEditor';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 async function getPublishedApps() {
   const apps = await prisma.app.findMany({
@@ -21,6 +24,15 @@ async function getPublishedApps() {
       publisherId: true,
       isSystemApp: true,
       createdAt: true,
+      versions: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          version: true,
+          manifest: true,
+        }
+      },
       _count: {
         select: {
           installations: {
@@ -117,45 +129,88 @@ async function SystemAppsContent() {
 }
 
 function AppRow({ app }: { app: any }) {
+  const latestVersion = app.versions?.[0];
+  const manifest = latestVersion?.manifest as any;
+  const entrypointUrl = manifest?.entrypoint_url;
+
   return (
-    <div className="flex items-center justify-between p-4 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 transition-colors">
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        {app.iconUrl ? (
-          <Image
-            src={app.iconUrl}
-            alt={`${app.name} icon`}
-            width={40}
-            height={40}
-            className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+    <div className="p-4 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 transition-colors space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {app.iconUrl ? (
+            <Image
+              src={app.iconUrl}
+              alt={`${app.name} icon`}
+              width={40}
+              height={40}
+              className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-[#1f1f1f] rounded-lg flex items-center justify-center flex-shrink-0">
+              <Puzzle className="w-5 h-5 text-gray-500" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-white truncate">{app.name}</span>
+              {app.isSystemApp && (
+                <Badge className="bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20 text-xs">
+                  System
+                </Badge>
+              )}
+              {latestVersion && (
+                <Badge variant="outline" className="text-xs text-gray-400 border-gray-600">
+                  v{latestVersion.version}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 truncate">/{app.slug}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="text-right text-sm text-gray-500 hidden sm:block">
+            <div>{app._count.installations} installations</div>
+          </div>
+          <SystemAppToggle
+            appId={app.id}
+            appName={app.name}
+            isSystemApp={app.isSystemApp}
           />
-        ) : (
-          <div className="w-10 h-10 bg-[#1f1f1f] rounded-lg flex items-center justify-center flex-shrink-0">
-            <Puzzle className="w-5 h-5 text-gray-500" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-white truncate">{app.name}</span>
-            {app.isSystemApp && (
-              <Badge className="bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20 text-xs">
-                System
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 truncate">/{app.slug}</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 flex-shrink-0">
-        <div className="text-right text-sm text-gray-500 hidden sm:block">
-          <div>{app._count.installations} installations</div>
+      {/* Show entrypoint and config options for system apps */}
+      {app.isSystemApp && (
+        <div className="pt-2 border-t border-[#1f1f1f]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-gray-500 mb-1">Entrypoint URL</div>
+              {entrypointUrl ? (
+                <div className="flex items-center gap-2">
+                  <code className="text-xs text-gray-300 bg-[#1f1f1f] px-2 py-1 rounded truncate flex-1">
+                    {entrypointUrl}
+                  </code>
+                  <Link href={entrypointUrl} target="_blank">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-white">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500 italic">No entrypoint configured</span>
+              )}
+            </div>
+            <AppConfigEditor
+              appId={app.id}
+              appName={app.name}
+              appSlug={app.slug}
+              isSystemApp={app.isSystemApp}
+              version={latestVersion}
+            />
+          </div>
         </div>
-        <SystemAppToggle
-          appId={app.id}
-          appName={app.name}
-          isSystemApp={app.isSystemApp}
-        />
-      </div>
+      )}
     </div>
   );
 }

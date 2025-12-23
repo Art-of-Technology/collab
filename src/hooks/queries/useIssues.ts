@@ -181,25 +181,50 @@ export function useUpdateIssue() {
         // Update the issue cache with the response
         const updatedIssue = data.issue || data;
         if (updatedIssue) {
+          // Update cache for all possible query key variants (with and without workspaceId)
+          // The useIssue hook uses [...issueKeys.detail(issueId), workspaceId ?? null]
           queryClient.setQueryData(issueKeys.detail(variables.id), { issue: updatedIssue });
+
+          // Update with workspaceId included in key (used by modal)
+          if (variables.workspaceId) {
+            queryClient.setQueryData([...issueKeys.detail(variables.id), variables.workspaceId], { issue: updatedIssue });
+          }
+          // Also update with issue's actual workspaceId
+          if (updatedIssue.workspaceId) {
+            queryClient.setQueryData([...issueKeys.detail(variables.id), updatedIssue.workspaceId], { issue: updatedIssue });
+          }
+          // Update with null workspaceId variant
+          queryClient.setQueryData([...issueKeys.detail(variables.id), null], { issue: updatedIssue });
+
           // Also update by issueKey if different
           if (updatedIssue.issueKey && variables.id !== updatedIssue.issueKey) {
             queryClient.setQueryData(issueKeys.detail(updatedIssue.issueKey), { issue: updatedIssue });
+            if (variables.workspaceId) {
+              queryClient.setQueryData([...issueKeys.detail(updatedIssue.issueKey), variables.workspaceId], { issue: updatedIssue });
+            }
+            if (updatedIssue.workspaceId) {
+              queryClient.setQueryData([...issueKeys.detail(updatedIssue.issueKey), updatedIssue.workspaceId], { issue: updatedIssue });
+            }
+            queryClient.setQueryData([...issueKeys.detail(updatedIssue.issueKey), null], { issue: updatedIssue });
           }
         }
-        
-        // Invalidate related queries
-        queryClient.invalidateQueries({ 
-          queryKey: issueKeys.detail(variables.id),
-          refetchType: 'none' // Don't trigger refetch, just mark as stale
+
+        // Invalidate related queries - use predicate to match all variants with this issue id
+        // Use refetchType: 'active' to trigger refetch for queries being watched (e.g., by modal)
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'issues' &&
+            query.queryKey[1] === 'detail' &&
+            (query.queryKey[2] === variables.id || query.queryKey[2] === updatedIssue?.issueKey),
+          refetchType: 'active'
         });
-        
+
         // Invalidate workspace and project queries
         if (updatedIssue.workspaceId) {
-          queryClient.invalidateQueries({ 
-            predicate: (query) => 
-              query.queryKey[0] === 'issues' && 
-              query.queryKey[1] === 'workspace' && 
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              query.queryKey[0] === 'issues' &&
+              query.queryKey[1] === 'workspace' &&
               query.queryKey[2] === updatedIssue.workspaceId
           });
         }

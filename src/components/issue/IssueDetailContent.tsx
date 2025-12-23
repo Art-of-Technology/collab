@@ -566,9 +566,10 @@ export function IssueDetailContent({
 
       // Transform updates to match UpdateIssueData format
       // Include workspaceId for proper scoping when same prefix exists in multiple workspaces
+      // Use issue.workspaceId first to handle cross-workspace issue access correctly
       const updateData: any = {
         id: issueId,
-        workspaceId: workspaceId || currentWorkspace?.id,
+        workspaceId: issue?.workspaceId || workspaceId || currentWorkspace?.id,
         ...updates,
       };
 

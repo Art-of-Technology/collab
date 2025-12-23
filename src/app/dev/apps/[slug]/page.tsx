@@ -15,6 +15,7 @@ import { AppStatusBadge } from '@/components/apps/AppStatusBadge';
 import { OAuthCredentialsCard } from './OAuthCredentialsCard';
 import { ManifestSubmissionCard } from './ManifestSubmissionCard';
 import { DeleteButton } from './DeleteButton';
+import { AppConfigEditor } from './AppConfigEditor';
 
 const prisma = new PrismaClient();
 
@@ -159,10 +160,23 @@ export default async function AppDetailPage({
             {manifest && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Code className="w-5 h-5" />
-                    Manifest Details
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Code className="w-5 h-5" />
+                      Manifest Details
+                    </CardTitle>
+                    <AppConfigEditor
+                      appId={app.id}
+                      appName={app.name}
+                      appSlug={app.slug}
+                      appStatus={app.status}
+                      version={latestVersion ? {
+                        id: latestVersion.id,
+                        version: latestVersion.version,
+                        manifest: latestVersion.manifest as any
+                      } : undefined}
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3 sm:space-y-4">
                   <div>
