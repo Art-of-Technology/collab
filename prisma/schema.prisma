@@ -2043,7 +2043,7 @@ model AppOAuthAuthorizationCode {
   clientId       String
   userId         String
   workspaceId    String
-  installationId String
+  installationId String?
   redirectUri    String
   scope          String
   state          String?
@@ -2054,11 +2054,11 @@ model AppOAuthAuthorizationCode {
   usedAt         DateTime?
   expiresAt      DateTime
   createdAt      DateTime @default(now())
-  
+
   oauthClient    AppOAuthClient   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  installation   AppInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  installation   AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
   
   @@index([code])
   @@index([clientId])
