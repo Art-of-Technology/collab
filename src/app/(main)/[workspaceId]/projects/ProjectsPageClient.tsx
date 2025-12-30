@@ -12,12 +12,14 @@ import {
   Settings,
   Archive,
   CheckSquare,
+  BarChart3,
 } from 'lucide-react';
 
 import { useProjects, useArchiveProject } from '@/hooks/queries/useProjects';
 import { useViews } from '@/hooks/queries/useViews';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateProjectModal from '@/components/modals/CreateProjectModal';
+import ProjectsGanttModal from '@/components/modals/ProjectsGanttModal';
 import { ProjectArchiveConfirmationModal } from '@/components/ProjectArchiveConfirmationModal';
 import { ProjectStatusSelector, type ProjectStatusFilter } from '@/components/ProjectStatusSelector';
 import { cn } from '@/lib/utils';
@@ -30,6 +32,7 @@ export default function ProjectsPageClient() {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showGanttModal, setShowGanttModal] = useState(false);
   const [projectFilter, setProjectFilter] = useState<ProjectStatusFilter>('active');
   const [archiveModal, setArchiveModal] = useState<{
     isOpen: boolean;
@@ -356,13 +359,23 @@ export default function ProjectsPageClient() {
           </div>
         }
         actions={
-          <Button
-            onClick={handleCreateProject}
-            className={pageHeaderButtonStyles.primary}
-          >
-            <Plus className="h-3.5 w-3.5 md:mr-1.5" />
-            <span data-text className="hidden md:inline ml-1">New project</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowGanttModal(true)}
+              variant="ghost"
+              className="h-8 px-2 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              title="View Gantt Chart"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={handleCreateProject}
+              className={pageHeaderButtonStyles.primary}
+            >
+              <Plus className="h-3.5 w-3.5 md:mr-1.5" />
+              <span data-text className="hidden md:inline ml-1">New project</span>
+            </Button>
+          </div>
         }
       />
 
@@ -423,6 +436,13 @@ export default function ProjectsPageClient() {
         onConfirm={handleArchiveConfirm}
         project={archiveModal.project}
         isLoading={archiveProjectMutation.isPending}
+      />
+
+      {/* Gantt Chart Modal */}
+      <ProjectsGanttModal
+        isOpen={showGanttModal}
+        onClose={() => setShowGanttModal(false)}
+        workspaceId={currentWorkspace?.id || ""}
       />
     </div>
   );
