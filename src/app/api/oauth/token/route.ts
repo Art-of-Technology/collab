@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
-import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
+import { normalizeScopes, scopesToString, isAllowedRedirectUri } from '@/lib/oauth-scopes';
 import { createWebhooksFromManifest, WebhookCreationResult } from '@/lib/apps/webhook-auto-creation';
 import { AppManifestV1 } from '@/lib/apps/types';
 
@@ -155,8 +155,9 @@ async function handleAuthorizationCodeGrant(
     return oauthError("invalid_request", "Missing required parameters: code, redirect_uri", 400);
   }
 
-  // Validate redirect URI
-  if (!oauthClient.redirectUris.includes(redirectUri)) {
+  // Validate redirect URI using shared utility
+  // For system apps (like MCP), allows any localhost/127.0.0.1 callback URL with dynamic ports
+  if (!isAllowedRedirectUri(redirectUri, oauthClient.redirectUris, oauthClient.app.isSystemApp)) {
     return oauthError("invalid_grant", "Invalid redirect_uri", 400);
   }
 

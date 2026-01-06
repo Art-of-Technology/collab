@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import { generateAuthorizationCode } from '@/lib/apps/crypto';
-import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes } from '@/lib/oauth-scopes';
+import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes, isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -92,8 +92,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify redirect URI
-    if (!oauthClient.redirectUris.includes(redirectUri)) {
+    // Verify redirect URI using shared utility
+    // For system apps (like MCP), allows any localhost/127.0.0.1 callback URL with dynamic ports
+    if (!isAllowedRedirectUri(redirectUri, oauthClient.redirectUris, oauthClient.app.isSystemApp)) {
       return NextResponse.json(
         {
           error: 'invalid_request',
