@@ -21,6 +21,14 @@ export interface Repository {
   versioningStrategy: 'SINGLE_BRANCH' | 'MULTI_BRANCH';
   branchEnvironmentMap?: Record<string, string>;
   issueTypeMapping?: Record<string, 'MAJOR' | 'MINOR' | 'PATCH'>;
+  
+  // Aggregation counts (optional, included when stats are requested)
+  _count?: {
+    branches: number;
+    commits: number;
+    releases: number;
+    versions: number;
+  };
 }
 
 export interface Project {
@@ -141,7 +149,7 @@ export const useCreateProject = () => {
 // Archive project mutation
 export const useArchiveProject = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ projectId, isArchived }: { projectId: string; isArchived: boolean }) => {
       const { data } = await axios.patch(`/api/projects/${projectId}/archive`, { isArchived });
@@ -152,5 +160,213 @@ export const useArchiveProject = () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["views"] });
     },
+  });
+};
+
+// Project Summary types
+export interface ProjectSummaryStats {
+  totalIssues: number;
+  openIssues: number;
+  completedIssues: number;
+  overdueCount: number;
+  atRiskCount: number;
+  issuesWithoutDates: number;
+  unassignedIssues: number;
+  completionRate: number;
+}
+
+export interface StatusDistribution {
+  id: string;
+  name: string;
+  displayName: string | null;
+  color: string | null;
+  isFinal: boolean;
+  count: number;
+}
+
+export interface AtRiskIssue {
+  id: string;
+  title: string;
+  issueKey: string;
+  dueDate?: string;
+  daysOverdue?: number;
+  daysUntilDue?: number;
+  priority: string | null;
+  assignee: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+  status: {
+    id: string;
+    name: string;
+    displayName: string | null;
+    color: string | null;
+  } | null;
+  epic?: {
+    id: string;
+    title: string;
+    issueKey: string;
+  } | null;
+  blockedBy?: Array<{
+    id: string;
+    title: string;
+    issueKey: string;
+  }>;
+}
+
+export interface RecentIssue {
+  id: string;
+  title: string;
+  issueKey: string;
+  updatedAt: string;
+  priority: string | null;
+  assignee: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+  status: {
+    id: string;
+    name: string;
+    displayName: string | null;
+    color: string | null;
+  } | null;
+}
+
+export interface CompletedIssue {
+  id: string;
+  title: string;
+  issueKey: string;
+  completedAt: string;
+  assignee: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+}
+
+export interface TimelineIssue {
+  id: string;
+  title: string;
+  issueKey: string;
+  dueDate: string;
+  priority: string | null;
+  assignee: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+  status: {
+    id: string;
+    name: string;
+    displayName: string | null;
+    color: string | null;
+    isFinal?: boolean;
+  } | null;
+  parent?: {
+    id: string;
+    title: string;
+    issueKey: string;
+  } | null;
+}
+
+export interface GitHubActivity {
+  id: string;
+  type: 'commit' | 'pull_request' | 'review' | 'release' | 'branch' | 'deployment';
+  title: string;
+  description?: string;
+  timestamp: string;
+  author: {
+    name: string;
+    avatar?: string;
+    login?: string;
+  };
+  metadata?: {
+    sha?: string;
+    prNumber?: number;
+    prState?: string;
+    reviewState?: string;
+    tagName?: string;
+  };
+}
+
+export interface FeatureRequestSummary {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  voteScore: number;
+  upvotes: number;
+  downvotes: number;
+  createdAt: string;
+  author: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+  _count: {
+    comments: number;
+  };
+}
+
+export interface NoteSummary {
+  id: string;
+  title: string;
+  content: string;
+  isPublic: boolean;
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+  tags: Array<{
+    id: string;
+    name: string;
+    color: string;
+  }>;
+  comments?: { id: string }[];
+}
+
+export interface ProjectSummary {
+  project: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    color: string | null;
+  };
+  stats: ProjectSummaryStats;
+  statusDistribution: StatusDistribution[];
+  atRisk: {
+    overdue: AtRiskIssue[];
+    upcoming: AtRiskIssue[];
+  };
+  recentIssues: RecentIssue[];
+  recentlyCompleted: CompletedIssue[];
+  timeline: TimelineIssue[];
+  github: {
+    connected: boolean;
+    repositoryName: string | null;
+    activities: GitHubActivity[];
+  };
+  featureRequests: FeatureRequestSummary[];
+  notes: NoteSummary[];
+}
+
+export const useProjectSummary = (projectId: string | undefined) => {
+  return useQuery({
+    queryKey: ["projectSummary", projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('Project ID is required');
+
+      const { data } = await axios.get(`/api/projects/${projectId}/summary`);
+      return data as ProjectSummary;
+    },
+    enabled: !!projectId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
   });
 };
