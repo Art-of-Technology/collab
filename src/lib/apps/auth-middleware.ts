@@ -454,7 +454,7 @@ export function withAppAuth(
         where: {
           userId: authResult.context!.user.id,
           workspaceId: targetWorkspace.id,
-          status: 'ACTIVE'
+          status: true // status is a boolean field
         }
       });
 
