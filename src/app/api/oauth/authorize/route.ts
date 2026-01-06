@@ -282,7 +282,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(callbackUrl);
 
-  } catch (error) {
+  } catch (error: any) {
+    // Re-throw redirect errors - Next.js uses these for navigation
+    if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
     console.error('OAuth authorization error:', error);
     return NextResponse.json(
       {

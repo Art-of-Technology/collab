@@ -259,8 +259,32 @@ export function isValidLocalhostRedirect(redirectUri: string): boolean {
 }
 
 /**
+ * Check if a redirect URI uses a custom protocol scheme (e.g., cursor://, vscode://).
+ * These are used by desktop apps for OAuth callbacks.
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid custom protocol callback URL
+ */
+export function isValidCustomProtocolRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    // Allow custom protocols (not http/https) that end with /callback or /oauth/callback
+    const isCustomProtocol = !['http:', 'https:'].includes(url.protocol);
+    const hasCallbackPath = url.pathname === '/callback' ||
+                            url.pathname === '/oauth/callback' ||
+                            url.pathname.endsWith('/callback');
+
+    return isCustomProtocol && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validate redirect URI against allowed URIs, with special handling for system apps.
- * System apps (like MCP) are allowed to use any localhost callback URL with dynamic ports.
+ * System apps (like MCP) are allowed to use:
+ * - Any localhost callback URL with dynamic ports (for CLI tools like Claude Code)
+ * - Custom protocol schemes (for desktop apps like Cursor, VS Code)
  *
  * @param redirectUri - The redirect URI to validate
  * @param allowedUris - Array of allowed redirect URIs
@@ -277,9 +301,16 @@ export function isAllowedRedirectUri(
     return true;
   }
 
-  // For system apps, allow any localhost callback with dynamic ports
-  if (isSystemApp && isValidLocalhostRedirect(redirectUri)) {
-    return true;
+  // For system apps, allow flexible redirect URIs
+  if (isSystemApp) {
+    // Allow localhost callbacks with dynamic ports (Claude Code, CLI tools)
+    if (isValidLocalhostRedirect(redirectUri)) {
+      return true;
+    }
+    // Allow custom protocol schemes (Cursor, VS Code, other desktop apps)
+    if (isValidCustomProtocolRedirect(redirectUri)) {
+      return true;
+    }
   }
 
   return false;
