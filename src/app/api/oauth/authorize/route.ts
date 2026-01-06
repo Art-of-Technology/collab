@@ -93,7 +93,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify redirect URI
-    if (!oauthClient.redirectUris.includes(redirectUri)) {
+    // For system apps (like MCP), allow any localhost/127.0.0.1 callback URL
+    // This is required because MCP clients (like Claude Code) use dynamic ports
+    const isLocalhostRedirect = /^http:\/\/(localhost|127\.0\.0\.1):\d+\/callback$/.test(redirectUri);
+    const isAllowedRedirect = oauthClient.redirectUris.includes(redirectUri) ||
+                              (oauthClient.app.isSystemApp && isLocalhostRedirect);
+
+    if (!isAllowedRedirect) {
       return NextResponse.json(
         {
           error: 'invalid_request',
