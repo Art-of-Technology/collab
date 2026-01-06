@@ -26,7 +26,7 @@ export const GET = withAppAuth(
       const memberships = await prisma.workspaceMember.findMany({
         where: {
           userId: context.user.id,
-          status: 'ACTIVE'
+          status: true // status is a boolean field
         },
         include: {
           workspace: {
