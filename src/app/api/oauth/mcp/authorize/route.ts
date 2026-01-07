@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { randomBytes } from 'crypto';
+import { isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -56,19 +57,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate redirect URI is localhost (security for MCP)
-    const isLocalhost = redirectUri.startsWith('http://127.0.0.1:') ||
-                        redirectUri.startsWith('http://localhost:');
-    if (!isLocalhost) {
-      return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'MCP authorization only supports localhost redirect URIs'
-        },
-        { status: 400 }
-      );
-    }
-
     // Validate PKCE if provided
     if (codeChallenge && codeChallengeMethod !== 'S256') {
       return NextResponse.json(
@@ -114,24 +102,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate redirect URI against registered URIs
-    // For localhost URIs, we do pattern matching to support dynamic ports
-    const isRegisteredUri = oauthClient.redirectUris.some(registeredUri => {
-      // For localhost, we can be more flexible with port matching
-      if (isLocalhost) {
-        // Check if base path matches (e.g., /callback)
-        const redirectPath = new URL(redirectUri).pathname;
-        const registeredPath = new URL(registeredUri).pathname;
-        return redirectPath === registeredPath;
-      }
-      return registeredUri === redirectUri;
-    });
-
-    if (!isRegisteredUri && oauthClient.redirectUris.length > 0) {
+    // Validate redirect URI using shared utility
+    // System apps can use localhost with dynamic ports and custom protocols (cursor://, vscode://)
+    if (!isAllowedRedirectUri(redirectUri, oauthClient.redirectUris, oauthClient.app.isSystemApp)) {
       return NextResponse.json(
         {
           error: 'invalid_request',
-          error_description: 'Redirect URI not registered for this client'
+          error_description: 'Invalid redirect_uri'
         },
         { status: 400 }
       );

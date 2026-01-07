@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import { generateAuthorizationCode } from '@/lib/apps/crypto';
-import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes } from '@/lib/oauth-scopes';
+import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes, isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -59,8 +59,16 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       // Redirect to login with return URL
-      const loginUrl = new URL('/auth/signin', request.url);
-      loginUrl.searchParams.set('callbackUrl', request.url);
+      // Use the public URL from headers or environment to avoid Docker internal URLs
+      const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'https';
+      const publicBaseUrl = host ? `${protocol}://${host}` : process.env.NEXTAUTH_URL || request.url;
+
+      const currentPath = new URL(request.url).pathname + new URL(request.url).search;
+      const callbackUrl = `${publicBaseUrl}${currentPath}`;
+
+      const loginUrl = new URL('/login', publicBaseUrl);
+      loginUrl.searchParams.set('callbackUrl', callbackUrl);
       redirect(loginUrl.toString());
     }
 
@@ -74,7 +82,9 @@ export async function GET(request: NextRequest) {
             slug: true,
             name: true,
             status: true,
-            iconUrl: true
+            iconUrl: true,
+            isSystemApp: true,
+            scopes: true
           }
         }
       }
@@ -90,8 +100,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify redirect URI
-    if (!oauthClient.redirectUris.includes(redirectUri)) {
+    // Verify redirect URI using shared utility
+    // For system apps (like MCP), allows any localhost/127.0.0.1 callback URL with dynamic ports
+    if (!isAllowedRedirectUri(redirectUri, oauthClient.redirectUris, oauthClient.app.isSystemApp)) {
       return NextResponse.json(
         {
           error: 'invalid_request',
@@ -125,6 +136,24 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For system apps (like MCP), redirect to workspace selection page if no workspace specified
+    if (oauthClient.app.isSystemApp && !workspaceId) {
+      // Build the MCP auth page URL with all OAuth parameters
+      const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'https';
+      const publicBaseUrl = host ? `${protocol}://${host}` : process.env.NEXTAUTH_URL;
+
+      const mcpAuthUrl = new URL('/auth/mcp', publicBaseUrl);
+      mcpAuthUrl.searchParams.set('client_id', clientId);
+      mcpAuthUrl.searchParams.set('redirect_uri', redirectUri);
+      mcpAuthUrl.searchParams.set('scope', scope);
+      if (state) mcpAuthUrl.searchParams.set('state', state);
+      if (code_challenge) mcpAuthUrl.searchParams.set('code_challenge', code_challenge);
+      if (code_challenge_method) mcpAuthUrl.searchParams.set('code_challenge_method', code_challenge_method);
+
+      redirect(mcpAuthUrl.toString());
+    }
+
     // Verify workspace access if workspace_id is provided
     let targetWorkspaceId = workspaceId;
     if (workspaceId) {
@@ -147,7 +176,7 @@ export async function GET(request: NextRequest) {
         );
       }
     } else {
-      // If no workspace specified, use user's first workspace
+      // If no workspace specified (for non-system apps), use user's first workspace
       const userWorkspace = await prisma.workspaceMember.findFirst({
         where: { userId: session.user.id },
         include: { workspace: true }
@@ -166,40 +195,45 @@ export async function GET(request: NextRequest) {
       targetWorkspaceId = userWorkspace.workspaceId;
     }
 
-    // Check if app is installed in the workspace
-    let installation;
-    
-    if (installationId) {
-      // If installation_id is provided, use it directly (for new installations)
-      installation = await prisma.appInstallation.findFirst({
-        where: {
-          id: installationId,
-          appId: oauthClient.app.id,
-          workspaceId: targetWorkspaceId!,
-          status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE during OAuth flow
-        }
-      });
-    } else {
-      // Fallback to existing installation lookup (for existing apps)
-      installation = await prisma.appInstallation.findFirst({
-        where: {
-          appId: oauthClient.app.id,
-          workspaceId: targetWorkspaceId!,
-          status: { in: ['PENDING', 'ACTIVE'] } // Allow both statuses
-        }
-      });
-    }
+    // Check if app is a system app - system apps don't require installation
+    const isSystemApp = oauthClient.app.isSystemApp;
 
-    if (!installation) {
-      return NextResponse.json(
-        {
-          error: 'access_denied',
-          error_description: installationId 
-            ? 'Installation not found or invalid' 
-            : 'App is not installed in the specified workspace'
-        },
-        { status: 403 }
-      );
+    // Check if app is installed in the workspace (skip for system apps)
+    let installation;
+
+    if (!isSystemApp) {
+      if (installationId) {
+        // If installation_id is provided, use it directly (for new installations)
+        installation = await prisma.appInstallation.findFirst({
+          where: {
+            id: installationId,
+            appId: oauthClient.app.id,
+            workspaceId: targetWorkspaceId!,
+            status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE during OAuth flow
+          }
+        });
+      } else {
+        // Fallback to existing installation lookup (for existing apps)
+        installation = await prisma.appInstallation.findFirst({
+          where: {
+            appId: oauthClient.app.id,
+            workspaceId: targetWorkspaceId!,
+            status: { in: ['PENDING', 'ACTIVE'] } // Allow both statuses
+          }
+        });
+      }
+
+      if (!installation) {
+        return NextResponse.json(
+          {
+            error: 'access_denied',
+            error_description: installationId
+              ? 'Installation not found or invalid'
+              : 'App is not installed in the specified workspace'
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Validate and normalize scopes using utility functions
@@ -214,10 +248,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If no scope requested, grant all installation scopes; otherwise filter requested against available
+    // For system apps, use app scopes; for regular apps, use installation scopes
+    const availableScopes = isSystemApp
+      ? oauthClient.app.scopes.map((s: { scope: string }) => s.scope)
+      : installation!.scopes;
+
+    // If no scope requested, grant all available scopes; otherwise filter requested against available
     const grantedScopes = scope.trim()
-      ? filterGrantedScopes(scope, installation.scopes)
-      : normalizeScopes(installation.scopes);
+      ? filterGrantedScopes(scope, availableScopes)
+      : normalizeScopes(availableScopes);
 
     if (grantedScopes.length === 0) {
       return NextResponse.json(
@@ -240,19 +279,19 @@ export async function GET(request: NextRequest) {
         clientId,
         userId: session.user.id,
         workspaceId: targetWorkspaceId!,
-        installationId: installation.id,
+        installationId: isSystemApp ? null : installation!.id,
         redirectUri,
         scope: scopesToString(grantedScopes),
         state,
         code_challenge,
         code_challenge_method,
-        nonce,
+        nonce: isSystemApp ? 'system_app' : nonce, // Mark system app authorizations
         expiresAt
       }
     });
 
     // Log authorization for audit trail
-    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, installation=${installation.id}, scopes=${scopesToString(grantedScopes)}`);
+    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, installation=${isSystemApp ? 'system_app' : installation!.id}, scopes=${scopesToString(grantedScopes)}`);
 
     // Redirect back to app with authorization code
     const callbackUrl = new URL(redirectUri);
@@ -260,13 +299,20 @@ export async function GET(request: NextRequest) {
     if (state) {
       callbackUrl.searchParams.set('state', state);
     }
-    // Include workspace_id and installation_id in callback for third-party apps
+    // Include workspace_id in callback for third-party apps
     callbackUrl.searchParams.set('workspace_id', targetWorkspaceId!);
-    callbackUrl.searchParams.set('installation_id', installation.id);
+    // Only include installation_id for non-system apps
+    if (!isSystemApp && installation) {
+      callbackUrl.searchParams.set('installation_id', installation.id);
+    }
 
     return NextResponse.redirect(callbackUrl);
 
-  } catch (error) {
+  } catch (error: any) {
+    // Re-throw redirect errors - Next.js uses these for navigation
+    if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error;
+    }
     console.error('OAuth authorization error:', error);
     return NextResponse.json(
       {

@@ -1,5 +1,8 @@
 "use client";
 
+// Feature flag to switch between old and new planning view
+const USE_NEW_PLANNING_VIEW = true;
+
 import { useState, useMemo, useEffect } from 'react';
 import { Loader2, Users, User, Save, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,6 +24,7 @@ import {
   PlanningDayView,
 } from './components';
 import type { ViewMode, DateRange, PlanningFilters } from './types';
+import PlanningViewRendererV2 from './PlanningViewRendererV2';
 
 interface PlanningViewRendererProps {
   view: any;
@@ -29,7 +33,16 @@ interface PlanningViewRendererProps {
   currentUser: any;
 }
 
-export default function PlanningViewRenderer({
+export default function PlanningViewRenderer(props: PlanningViewRendererProps) {
+  // Use new planning view if feature flag is enabled
+  if (USE_NEW_PLANNING_VIEW) {
+    return <PlanningViewRendererV2 {...props} />;
+  }
+
+  return <PlanningViewRendererLegacy {...props} />;
+}
+
+function PlanningViewRendererLegacy({
   view,
   issues,
   workspace,

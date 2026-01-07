@@ -234,3 +234,84 @@ export function getScopeDescription(scope: string): string {
 
   return descriptions[scope] || `Access to ${scope}`;
 }
+
+/**
+ * Check if a redirect URI is a valid localhost callback URL.
+ * Used for system apps (like MCP) that use dynamic ports.
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid localhost callback URL
+ */
+export function isValidLocalhostRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    const isLocalhost = url.protocol === 'http:' &&
+                        (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    const hasValidPort = /^\d+$/.test(url.port) &&
+                         parseInt(url.port, 10) >= 1 &&
+                         parseInt(url.port, 10) <= 65535;
+    const hasCallbackPath = url.pathname === '/callback';
+
+    return isLocalhost && hasValidPort && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a redirect URI uses a custom protocol scheme (e.g., cursor://, vscode://).
+ * These are used by desktop apps for OAuth callbacks.
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid custom protocol callback URL
+ */
+export function isValidCustomProtocolRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    // Allow custom protocols (not http/https) that end with /callback or /oauth/callback
+    const isCustomProtocol = !['http:', 'https:'].includes(url.protocol);
+    const hasCallbackPath = url.pathname === '/callback' ||
+                            url.pathname === '/oauth/callback' ||
+                            url.pathname.endsWith('/callback');
+
+    return isCustomProtocol && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate redirect URI against allowed URIs, with special handling for system apps.
+ * System apps (like MCP) are allowed to use:
+ * - Any localhost callback URL with dynamic ports (for CLI tools like Claude Code)
+ * - Custom protocol schemes (for desktop apps like Cursor, VS Code)
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @param allowedUris - Array of allowed redirect URIs
+ * @param isSystemApp - Whether this is a system app
+ * @returns True if the redirect URI is allowed
+ */
+export function isAllowedRedirectUri(
+  redirectUri: string,
+  allowedUris: string[],
+  isSystemApp: boolean
+): boolean {
+  // First check exact match against registered URIs
+  if (allowedUris.includes(redirectUri)) {
+    return true;
+  }
+
+  // For system apps, allow flexible redirect URIs
+  if (isSystemApp) {
+    // Allow localhost callbacks with dynamic ports (Claude Code, CLI tools)
+    if (isValidLocalhostRedirect(redirectUri)) {
+      return true;
+    }
+    // Allow custom protocol schemes (Cursor, VS Code, other desktop apps)
+    if (isValidCustomProtocolRedirect(redirectUri)) {
+      return true;
+    }
+  }
+
+  return false;
+}

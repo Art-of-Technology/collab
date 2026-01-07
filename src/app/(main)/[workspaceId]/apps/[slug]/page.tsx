@@ -34,7 +34,7 @@ async function getAppData(slug: string, workspaceSlug: string, userId: string) {
 
     // Get the app
     const app = await prisma.app.findUnique({
-      where: { 
+      where: {
         slug,
         status: 'PUBLISHED'
       },
@@ -46,7 +46,7 @@ async function getAppData(slug: string, workspaceSlug: string, userId: string) {
         scopes: true,
         oauthClient: true,
         installations: {
-          where: { 
+          where: {
             workspaceId: workspace.id,
             status: { not: 'REMOVED' } // Exclude removed installations
           },
@@ -66,12 +66,19 @@ async function getAppData(slug: string, workspaceSlug: string, userId: string) {
     // Check if app is installed in this workspace
     const installation = app.installations[0] || null;
 
+    // Check if this is a system app (use raw query since Prisma client may not have this field)
+    const systemAppCheck = await prisma.$queryRaw<Array<{ isSystemApp: boolean }>>`
+      SELECT "isSystemApp" FROM "App" WHERE id = ${app.id}
+    `;
+    const isSystemApp = systemAppCheck[0]?.isSystemApp === true;
+
     return {
       app,
       installation,
       workspace,
       userRole: memberRecord.role,
-      isInstalled: installation?.status === 'ACTIVE'
+      isInstalled: isSystemApp || installation?.status === 'ACTIVE',
+      isSystemApp
     };
   } catch (error) {
     console.error('Error fetching app data:', error);
@@ -97,12 +104,12 @@ export default async function AppWorkspacePage({ params }: AppPageProps) {
     notFound();
   }
 
-  const { app, installation, workspace, userRole, isInstalled } = data;
+  const { app, installation, workspace, userRole, isInstalled, isSystemApp } = data;
   const latestVersion = app.versions[0];
   const manifest = latestVersion?.manifest as unknown as AppManifestV1;
 
-  // If app is installed and active, show the runtime
-  if (isInstalled && installation) {
+  // If app is installed (or is a system app), show the runtime
+  if (isInstalled) {
     if (!manifest?.entrypoint_url) {
       return (
         <div className="flex items-center justify-center min-h-[400px]">
@@ -118,6 +125,18 @@ export default async function AppWorkspacePage({ params }: AppPageProps) {
       );
     }
 
+    // For system apps without installation, create a virtual installation object
+    const effectiveInstallation = installation || (isSystemApp ? {
+      id: `system-${app.id}`,
+      scopes: app.scopes.map((s: { scope: string }) => s.scope),
+      status: 'ACTIVE' as const
+    } : null);
+
+    if (!effectiveInstallation) {
+      // This shouldn't happen, but handle it gracefully
+      return null;
+    }
+
     return (
       <div className="h-full">
         <AppHost
@@ -129,9 +148,9 @@ export default async function AppWorkspacePage({ params }: AppPageProps) {
             entrypointUrl: manifest.entrypoint_url
           }}
           installation={{
-            id: installation.id,
-            scopes: installation.scopes,
-            status: installation.status
+            id: effectiveInstallation.id,
+            scopes: effectiveInstallation.scopes,
+            status: effectiveInstallation.status
           }}
           workspace={{
             id: workspace.id,

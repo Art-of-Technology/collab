@@ -6,10 +6,9 @@ import type { ActivityFeedData, IssueActivity } from '@/utils/teamSyncAnalyzer';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
-  const _params = await params;
-  const { workspaceId } = _params;
+  const { workspaceId } = await params;
 
   try {
     const session = await getAuthSession();

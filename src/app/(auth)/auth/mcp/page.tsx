@@ -41,9 +41,10 @@ export default function MCPAuthPage() {
   const codeChallengeMethod = searchParams.get('code_challenge_method');
   const preselectedWorkspaceId = searchParams.get('workspace_id');
 
-  // Validate redirect URI is localhost (security)
+  // Validate redirect URI - allow localhost and custom protocols (cursor://, vscode://, etc.)
   const isValidRedirectUri = redirectUri?.startsWith('http://127.0.0.1:') ||
-                             redirectUri?.startsWith('http://localhost:');
+                             redirectUri?.startsWith('http://localhost:') ||
+                             (redirectUri && !redirectUri.startsWith('http://') && !redirectUri.startsWith('https://'));
 
   // Fetch user's workspaces
   useEffect(() => {

@@ -401,9 +401,78 @@ export function withAppAuth(
 ) {
   return async (request: NextRequest, routeParams?: any) => {
     const authResult = await authenticateAppRequest(request, options);
-    
+
     if (!authResult.success) {
       return createAuthErrorResponse(authResult.error!);
+    }
+
+    // Check for workspace override via query parameter (system apps only)
+    // Supports both workspace slug (preferred) and workspace ID
+    const url = new URL(request.url);
+    const workspaceSlugOverride = url.searchParams.get('workspace');
+    const workspaceIdOverride = url.searchParams.get('workspaceId');
+    const workspaceOverride = workspaceSlugOverride || workspaceIdOverride;
+
+    if (workspaceOverride) {
+      // Only allow workspace switching for system apps
+      const app = await prisma.app.findUnique({
+        where: { id: authResult.context!.app.id },
+        select: { isSystemApp: true }
+      });
+
+      if (!app?.isSystemApp) {
+        return createAuthErrorResponse({
+          code: 'workspace_switch_not_allowed',
+          message: 'Only system apps can switch workspace context',
+          statusCode: 403
+        });
+      }
+
+      // Find workspace by slug or ID
+      const targetWorkspace = await prisma.workspace.findFirst({
+        where: workspaceSlugOverride
+          ? { slug: workspaceSlugOverride }
+          : { id: workspaceIdOverride! },
+        select: { id: true, slug: true, name: true }
+      });
+
+      if (!targetWorkspace) {
+        return createAuthErrorResponse({
+          code: 'workspace_not_found',
+          message: `Workspace '${workspaceOverride}' not found`,
+          statusCode: 404
+        });
+      }
+
+      // Skip if already in the target workspace
+      if (targetWorkspace.id === authResult.context!.workspace.id) {
+        return handler(request, authResult.context!, routeParams);
+      }
+
+      // Verify user has access to the target workspace
+      const membership = await prisma.workspaceMember.findFirst({
+        where: {
+          userId: authResult.context!.user.id,
+          workspaceId: targetWorkspace.id,
+          status: true // status is a boolean field
+        }
+      });
+
+      if (!membership) {
+        return createAuthErrorResponse({
+          code: 'workspace_access_denied',
+          message: `User does not have access to workspace '${workspaceOverride}'`,
+          statusCode: 403
+        });
+      }
+
+      // Update context with the new workspace
+      authResult.context!.workspace = {
+        id: targetWorkspace.id,
+        slug: targetWorkspace.slug,
+        name: targetWorkspace.name
+      };
+      authResult.context!.installation.workspaceId = targetWorkspace.id;
     }
 
     return handler(request, authResult.context!, routeParams);
