@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       const currentPath = new URL(request.url).pathname + new URL(request.url).search;
       const callbackUrl = `${publicBaseUrl}${currentPath}`;
 
-      const loginUrl = new URL('/auth/signin', publicBaseUrl);
+      const loginUrl = new URL('/login', publicBaseUrl);
       loginUrl.searchParams.set('callbackUrl', callbackUrl);
       redirect(loginUrl.toString());
     }
@@ -136,6 +136,24 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // For system apps (like MCP), redirect to workspace selection page if no workspace specified
+    if (oauthClient.app.isSystemApp && !workspaceId) {
+      // Build the MCP auth page URL with all OAuth parameters
+      const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'https';
+      const publicBaseUrl = host ? `${protocol}://${host}` : process.env.NEXTAUTH_URL;
+
+      const mcpAuthUrl = new URL('/auth/mcp', publicBaseUrl);
+      mcpAuthUrl.searchParams.set('client_id', clientId);
+      mcpAuthUrl.searchParams.set('redirect_uri', redirectUri);
+      mcpAuthUrl.searchParams.set('scope', scope);
+      if (state) mcpAuthUrl.searchParams.set('state', state);
+      if (code_challenge) mcpAuthUrl.searchParams.set('code_challenge', code_challenge);
+      if (code_challenge_method) mcpAuthUrl.searchParams.set('code_challenge_method', code_challenge_method);
+
+      redirect(mcpAuthUrl.toString());
+    }
+
     // Verify workspace access if workspace_id is provided
     let targetWorkspaceId = workspaceId;
     if (workspaceId) {
@@ -158,7 +176,7 @@ export async function GET(request: NextRequest) {
         );
       }
     } else {
-      // If no workspace specified, use user's first workspace
+      // If no workspace specified (for non-system apps), use user's first workspace
       const userWorkspace = await prisma.workspaceMember.findFirst({
         where: { userId: session.user.id },
         include: { workspace: true }
