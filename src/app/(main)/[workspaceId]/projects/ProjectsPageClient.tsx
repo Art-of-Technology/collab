@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Search,
@@ -13,26 +12,13 @@ import {
   Settings,
   Archive,
   CheckSquare,
-  Github,
   Tag,
   GitBranch,
-  ArrowUpRight,
-  MoreHorizontal,
   Loader2,
-  Sparkles,
-  ExternalLink,
-  Clock,
-  Filter,
+  BarChart3,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
-import { useProjects, useArchiveProject } from '@/hooks/queries/useProjects';
+import { useProjects, useArchiveProject, type Project } from '@/hooks/queries/useProjects';
 import { useViews } from '@/hooks/queries/useViews';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateProjectModal from '@/components/modals/CreateProjectModal';
@@ -41,29 +27,6 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
 type ProjectStatusFilter = 'active' | 'archived' | 'all';
-
-interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  color?: string;
-  issuePrefix?: string;
-  isArchived?: boolean;
-  issueCount?: number;
-  updatedAt: string;
-  createdAt: string;
-  repository?: {
-    id: string;
-    fullName: string;
-    _count?: {
-      branches: number;
-      commits: number;
-      releases: number;
-      versions: number;
-    };
-  } | null;
-}
 
 export default function ProjectsPageClient() {
   const router = useRouter();
@@ -110,12 +73,8 @@ export default function ProjectsPageClient() {
   };
 
   const handleProjectClick = (projectSlug: string, projectId: string) => {
-    const defaultView = getDefaultViewForProject(projectId);
-    const href = defaultView
-      ? `/${currentWorkspace?.slug || currentWorkspace?.id}/views/${(defaultView as { slug?: string; id: string }).slug || (defaultView as { id: string }).id}`
-      : `/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${projectSlug}`;
-
-    router.push(href);
+    // Navigate to project dashboard
+    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${projectSlug}`);
   };
 
   const handleArchiveProject = (project: { id: string; name: string; isArchived?: boolean }) => {
@@ -174,14 +133,25 @@ export default function ProjectsPageClient() {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            size="sm"
-            className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New Project
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/timeline`)}
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              title="View Timeline"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              size="sm"
+              className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              New Project
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -222,9 +192,9 @@ export default function ProjectsPageClient() {
       <ScrollArea className="flex-1">
         <div className="p-6">
           {filteredProjects.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
+            <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">
               {filteredProjects.map((project: Project) => (
-                <ProjectCard
+                <ProjectListItem
                   key={project.id}
                   project={project}
                   workspaceSlug={currentWorkspace?.slug || currentWorkspace?.id || ''}
@@ -267,10 +237,9 @@ export default function ProjectsPageClient() {
   );
 }
 
-// Project Card Component
-function ProjectCard({
+// Project List Item Component
+function ProjectListItem({
   project,
-  workspaceSlug,
   onProjectClick,
   onArchive,
   onNavigateToGithub,
@@ -291,126 +260,80 @@ function ProjectCard({
   return (
     <div
       className={cn(
-        "group rounded-lg border bg-[#0d0d0e] overflow-hidden transition-all hover:border-[#30363d] flex flex-col h-full",
-        isArchived ? "border-[#1f1f1f] opacity-70" : "border-[#1f1f1f]"
+        "group relative flex items-center gap-4 px-5 py-4 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer",
+        isArchived && "opacity-40"
       )}
+      onClick={onProjectClick}
     >
-      {/* Card Header */}
+      {/* Color indicator */}
       <div
-        className="p-4 cursor-pointer flex-1 flex flex-col"
-        onClick={onProjectClick}
-      >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: project.color || '#6e7681' }}
-            >
-              <FolderOpen className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium text-[#e6edf3] group-hover:text-[#58a6ff] transition-colors">
-                  {project.name}
-                </h3>
-                {isArchived && (
-                  <Badge className="text-[10px] h-4 px-1.5 bg-[#1f1f1f] text-[#6e7681] border-0">
-                    Archived
-                  </Badge>
-                )}
-              </div>
-              {project.issuePrefix && (
-                <span className="text-xs text-[#6e7681] font-mono">{project.issuePrefix}</span>
-              )}
-            </div>
-          </div>
+        className="w-1 h-8 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+        style={{ backgroundColor: project.color || '#6366f1' }}
+      />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-[#6e7681] hover:text-[#e6edf3] hover:bg-[#161617] opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-[#161617] border-[#1f1f1f]">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNavigateToSettings();
-                }}
-                className="text-[#e6edf3] focus:bg-[#1f1f1f] cursor-pointer"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#1f1f1f]" />
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onArchive();
-                }}
-                className={cn(
-                  "cursor-pointer",
-                  isArchived
-                    ? "text-[#58a6ff] focus:bg-[#1f1f1f]"
-                    : "text-[#f0883e] focus:bg-[#1f1f1f]"
-                )}
-              >
-                <Archive className="h-4 w-4 mr-2" />
-                {isArchived ? 'Unarchive' : 'Archive'}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* Project Info */}
+      <div className="flex-1 min-w-0">
+        {/* Title Row */}
+        <div className="flex items-center gap-2.5">
+          <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
+            {project.name}
+          </h3>
+          {project.issuePrefix && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f23] text-[#71717a] font-mono">
+              {project.issuePrefix}
+            </span>
+          )}
+          {isArchived && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#27272a] text-[#a1a1aa] uppercase tracking-wider font-medium">
+              archived
+            </span>
+          )}
         </div>
 
+        {/* Description */}
         {project.description && (
-          <p className="text-xs text-[#6e7681] line-clamp-2 mb-3">
+          <p className="text-[12px] text-[#52525b] truncate max-w-[280px] mt-0.5">
             {project.description}
           </p>
         )}
 
-        {/* Stats - push to bottom */}
-        <div className="flex items-center gap-3 flex-wrap mt-auto">
-          <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
-            <CheckSquare className="h-3.5 w-3.5 text-[#58a6ff]" />
-            <span>{project.issueCount || 0} issues</span>
+        {/* Stats Row */}
+        <div className="flex items-center gap-3 mt-2">
+          <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+            <CheckSquare className="h-3 w-3 text-[#3b82f6]" />
+            <span className="tabular-nums">{project.issueCount || 0}</span>
           </div>
 
           {hasGitHub && project.repository?._count && (
             <>
-              <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
-                <GitBranch className="h-3.5 w-3.5 text-[#3fb950]" />
-                <span>{project.repository._count.branches}</span>
+              <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+                <GitBranch className="h-3 w-3 text-[#22c55e]" />
+                <span className="tabular-nums">{project.repository._count.branches}</span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
-                <Tag className="h-3.5 w-3.5 text-[#a371f7]" />
-                <span>{project.repository._count.releases}</span>
+              <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+                <Tag className="h-3 w-3 text-[#a855f7]" />
+                <span className="tabular-nums">{project.repository._count.releases}</span>
               </div>
             </>
           )}
 
-          <div className="flex items-center gap-1.5 text-xs text-[#6e7681] ml-auto">
-            <Clock className="h-3 w-3" />
-            <span>{formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true })}</span>
-          </div>
+          <span className="text-[10px] text-[#3f3f46]">
+            {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true })}
+          </span>
         </div>
       </div>
 
-      {/* Quick Actions Footer */}
-      <div className="flex items-center border-t border-[#1f1f1f] divide-x divide-[#1f1f1f]">
+      {/* Inline Actions */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onProjectClick();
           }}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617] transition-colors"
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
         >
           <CheckSquare className="h-3.5 w-3.5" />
-          Issues
+          <span>Issues</span>
         </button>
 
         <button
@@ -419,19 +342,14 @@ function ProjectCard({
             onNavigateToGithub();
           }}
           className={cn(
-            "flex-1 flex items-center justify-center gap-2 py-2.5 text-xs transition-colors",
+            "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors",
             hasGitHub
-              ? "text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617]"
-              : "text-[#6e7681] hover:text-[#8b949e] hover:bg-[#161617]"
+              ? "text-[#a1a1aa] hover:text-white hover:bg-[#27272a]"
+              : "text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#27272a]"
           )}
         >
-          <Github className="h-3.5 w-3.5" />
-          GitHub
-          {!hasGitHub && (
-            <span className="text-[10px] px-1 py-0.5 rounded bg-[#1f1f1f] text-[#6e7681]">
-              Connect
-            </span>
-          )}
+          <GitBranch className="h-3.5 w-3.5" />
+          <span>GitHub</span>
         </button>
 
         <button
@@ -439,15 +357,39 @@ function ProjectCard({
             e.stopPropagation();
             onNavigateToChangelog();
           }}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 py-2.5 text-xs transition-colors",
-            hasGitHub
-              ? "text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617]"
-              : "text-[#6e7681] hover:text-[#8b949e] hover:bg-[#161617]"
-          )}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
         >
-          <Sparkles className="h-3.5 w-3.5" />
-          Changelog
+          <Tag className="h-3.5 w-3.5" />
+          <span>Releases</span>
+        </button>
+
+        <div className="w-px h-5 bg-[#27272a] mx-1" />
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNavigateToSettings();
+          }}
+          className="flex items-center justify-center h-8 w-8 rounded-lg text-[#71717a] hover:text-white hover:bg-[#27272a] transition-colors"
+          title="Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive();
+          }}
+          className={cn(
+            "flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
+            isArchived
+              ? "text-[#60a5fa] hover:text-[#93c5fd] hover:bg-[#27272a]"
+              : "text-[#71717a] hover:text-[#f97316] hover:bg-[#27272a]"
+          )}
+          title={isArchived ? 'Restore' : 'Archive'}
+        >
+          <Archive className="h-4 w-4" />
         </button>
       </div>
     </div>
