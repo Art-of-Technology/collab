@@ -59,8 +59,16 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       // Redirect to login with return URL
-      const loginUrl = new URL('/auth/signin', request.url);
-      loginUrl.searchParams.set('callbackUrl', request.url);
+      // Use the public URL from headers or environment to avoid Docker internal URLs
+      const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'https';
+      const publicBaseUrl = host ? `${protocol}://${host}` : process.env.NEXTAUTH_URL || request.url;
+
+      const currentPath = new URL(request.url).pathname + new URL(request.url).search;
+      const callbackUrl = `${publicBaseUrl}${currentPath}`;
+
+      const loginUrl = new URL('/auth/signin', publicBaseUrl);
+      loginUrl.searchParams.set('callbackUrl', callbackUrl);
       redirect(loginUrl.toString());
     }
 
