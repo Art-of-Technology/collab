@@ -55,9 +55,19 @@ function StickyNoteCard({
   const colors = noteColors[colorIndex % noteColors.length];
   const timeAgo = formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true });
 
-  // Strip HTML/markdown for preview
-  const plainContent = note.content
-    .replace(/<[^>]*>/g, '')
+  // Strip HTML/markdown for preview using iterative approach to handle nested tags
+  const stripHtml = (html: string): string => {
+    let result = html;
+    let prev = '';
+    // Iterate until no more tags are found (handles nested/malformed tags)
+    while (result !== prev) {
+      prev = result;
+      result = result.replace(/<[^>]*>/g, '');
+    }
+    return result;
+  };
+
+  const plainContent = stripHtml(note.content || '')
     .replace(/[#*_~`]/g, '')
     .trim();
 
