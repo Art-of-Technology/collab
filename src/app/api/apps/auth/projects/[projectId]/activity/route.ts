@@ -60,7 +60,7 @@ export const GET = withAppAuth(
         where.action = action;
       }
 
-      const activities = await prisma.boardItemActivity.findMany({
+      const activities = await prisma.issueActivity.findMany({
         where,
         take: limit,
         orderBy: { createdAt: 'desc' },

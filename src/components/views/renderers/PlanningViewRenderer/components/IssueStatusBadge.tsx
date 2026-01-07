@@ -1,176 +1,112 @@
 "use client";
 
-import { ArrowRight } from 'lucide-react';
+import { CheckCircle2, Circle, PlayCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { StatusCategory, MovementType } from '@/utils/teamSyncAnalyzer';
 
-// ============================================================================
-// Status Configuration
-// ============================================================================
+type StatusCategory = 'done' | 'in_progress' | 'todo' | 'blocked' | 'cancelled' | 'unknown';
 
-export type PlanningStatus = 
-  | 'completed'
-  | 'in_progress'
-  | 'in_review'
-  | 'planned'
-  | 'blocked'
-  | 'carried_over'
-  | 'started';
-
-const STATUS_CONFIG: Record<string, {
-  label: string;
-  dotColor: string;
-  textColor: string;
-}> = {
-  completed: {
-    label: 'Completed',
-    dotColor: 'bg-emerald-500',
-    textColor: 'text-emerald-400',
-  },
-  in_progress: {
-    label: 'In Progress',
-    dotColor: 'bg-blue-500',
-    textColor: 'text-blue-400',
-  },
-  in_review: {
-    label: 'In Review',
-    dotColor: 'bg-purple-500',
-    textColor: 'text-purple-400',
-  },
-  planned: {
-    label: 'Planned',
-    dotColor: 'bg-slate-500',
-    textColor: 'text-slate-400',
-  },
-  blocked: {
-    label: 'Blocked',
-    dotColor: 'bg-red-500',
-    textColor: 'text-red-400',
-  },
-  carried_over: {
-    label: 'Carried Over',
-    dotColor: 'bg-orange-500',
-    textColor: 'text-orange-400',
-  },
-  started: {
-    label: 'Started',
-    dotColor: 'bg-blue-500',
-    textColor: 'text-blue-400',
-  },
-};
-
-// ============================================================================
-// StatusDot - Simple colored dot
-// ============================================================================
-
-interface StatusDotProps {
-  status: PlanningStatus | StatusCategory | string;
-  size?: 'xs' | 'sm' | 'md';
+interface StatusIconProps {
+  status: StatusCategory;
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
 }
 
-export function StatusDot({ status, size = 'sm' }: StatusDotProps) {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.planned;
-  
-  const sizeClasses = {
-    xs: 'w-1.5 h-1.5',
-    sm: 'w-2 h-2',
-    md: 'w-2.5 h-2.5',
+const sizeMap = {
+  sm: 'h-3 w-3',
+  md: 'h-4 w-4',
+  lg: 'h-5 w-5',
+};
+
+const statusConfig: Record<StatusCategory, { icon: typeof Circle; color: string }> = {
+  done: { icon: CheckCircle2, color: 'text-green-500' },
+  in_progress: { icon: PlayCircle, color: 'text-blue-500' },
+  todo: { icon: Circle, color: 'text-gray-400' },
+  blocked: { icon: AlertCircle, color: 'text-red-500' },
+  cancelled: { icon: XCircle, color: 'text-gray-500' },
+  unknown: { icon: Clock, color: 'text-gray-400' },
+};
+
+export function StatusIcon({ status, size = 'md', className }: StatusIconProps) {
+  const config = statusConfig[status] || statusConfig.unknown;
+  const Icon = config.icon;
+
+  return (
+    <Icon className={cn(sizeMap[size], config.color, className)} />
+  );
+}
+
+export function emojiToStatusCategory(emoji?: string | null): StatusCategory {
+  if (!emoji) return 'unknown';
+
+  // Map common status emojis to categories
+  const emojiMap: Record<string, StatusCategory> = {
+    '✅': 'done',
+    '🟢': 'done',
+    '☑️': 'done',
+    '🔵': 'in_progress',
+    '🏃': 'in_progress',
+    '⚡': 'in_progress',
+    '🔄': 'in_progress',
+    '⚪': 'todo',
+    '📋': 'todo',
+    '🔴': 'blocked',
+    '🚫': 'blocked',
+    '⛔': 'blocked',
+    '❌': 'cancelled',
+    '🗑️': 'cancelled',
   };
+
+  return emojiMap[emoji] || 'unknown';
+}
+
+export function getStatusConfig(status: StatusCategory) {
+  return statusConfig[status] || statusConfig.unknown;
+}
+
+interface IssueStatusBadgeProps {
+  status: string;
+  statusSymbol?: string | null;
+  className?: string;
+}
+
+export function IssueStatusBadge({ status, statusSymbol, className }: IssueStatusBadgeProps) {
+  const category = emojiToStatusCategory(statusSymbol);
+  const config = statusConfig[category];
+
+  return (
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <StatusIcon status={category} size="sm" />
+      <span className="text-xs text-gray-400">{status}</span>
+    </div>
+  );
+}
+
+export function StatusDot({ status }: { status: StatusCategory }) {
+  const config = statusConfig[status] || statusConfig.unknown;
+  return (
+    <div className={cn('h-2 w-2 rounded-full', config.color.replace('text-', 'bg-'))} />
+  );
+}
+
+export function MovementBadge({ direction }: { direction: 'forward' | 'backward' | 'none' }) {
+  if (direction === 'none') return null;
 
   return (
     <span className={cn(
-      "inline-block rounded-full flex-shrink-0",
-      config.dotColor,
-      sizeClasses[size]
-    )} />
-  );
-}
-
-// ============================================================================
-// Movement Badge - For activity feed
-// ============================================================================
-
-const MOVEMENT_CONFIG: Record<MovementType, typeof STATUS_CONFIG[string]> = {
-  completed: STATUS_CONFIG.completed,
-  started: STATUS_CONFIG.started,
-  moved_to_review: STATUS_CONFIG.in_review,
-  blocked: STATUS_CONFIG.blocked,
-  unblocked: {
-    label: 'Unblocked',
-    dotColor: 'bg-amber-500',
-    textColor: 'text-amber-400',
-  },
-  assigned: {
-    label: 'Assigned',
-    dotColor: 'bg-indigo-500',
-    textColor: 'text-indigo-400',
-  },
-  created: {
-    label: 'Created',
-    dotColor: 'bg-gray-500',
-    textColor: 'text-gray-400',
-  },
-};
-
-interface MovementBadgeProps {
-  movementType: MovementType;
-  showLabel?: boolean;
-}
-
-export function MovementBadge({ movementType, showLabel = true }: MovementBadgeProps) {
-  const config = MOVEMENT_CONFIG[movementType] || MOVEMENT_CONFIG.started;
-  
-  return (
-    <div className={cn(
-      "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full",
-      "bg-[#181818] border border-[#2d2d30]"
+      'text-[10px] px-1 py-0.5 rounded',
+      direction === 'forward' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
     )}>
-      <span className={cn("w-1.5 h-1.5 rounded-full", config.dotColor)} />
-      {showLabel && (
-        <span className={cn("text-xs font-medium", config.textColor)}>
-          {config.label}
-        </span>
-      )}
-    </div>
+      {direction === 'forward' ? '→' : '←'}
+    </span>
   );
 }
 
-// ============================================================================
-// Legacy/Helper exports
-// ============================================================================
-
-export function emojiToStatusCategory(emoji: string): StatusCategory {
-  switch (emoji) {
-    case '✅': return 'completed';
-    case '💼': return 'in_progress';
-    case '🔍': return 'in_review';
-    case '🎯': return 'planned';
-    case '🚫': 
-    case '⛔️': return 'blocked';
-    default: return 'planned';
-  }
-}
-
-export function StatusTransition({ from, to }: { from: string | null; to: string }) {
+export function StatusTransition({ from, to }: { from: StatusCategory; to: StatusCategory }) {
   return (
-    <div className="inline-flex items-center gap-1.5">
-      {from && (
-        <>
-          <span className="text-[#6e7681] text-xs truncate max-w-[80px]">{from}</span>
-          <ArrowRight className="h-3 w-3 text-[#484f58] flex-shrink-0" />
-        </>
-      )}
-      <span className="text-[#e6edf3] text-xs truncate max-w-[80px]">{to}</span>
+    <div className="flex items-center gap-1">
+      <StatusIcon status={from} size="sm" />
+      <span className="text-gray-500">→</span>
+      <StatusIcon status={to} size="sm" />
     </div>
   );
 }
-
-export function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] || STATUS_CONFIG.planned;
-}
-
-// Backward compatibility exports
-export const IssueStatusBadge = StatusDot;
-export const StatusIcon = StatusDot;
-export const StatusPill = StatusDot;
-export const StatusLegend = () => null; // Removed - not needed

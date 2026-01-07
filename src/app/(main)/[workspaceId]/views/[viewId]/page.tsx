@@ -152,14 +152,6 @@ export default async function ViewPage({ params }: ViewPageProps) {
           statusValue: true
         }
       },
-      column: {
-        select: {
-          id: true,
-          name: true,
-          color: true,
-          order: true
-        }
-      },
       projectStatus: {
         select: {
           id: true,

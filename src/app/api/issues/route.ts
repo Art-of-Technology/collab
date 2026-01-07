@@ -56,7 +56,6 @@ const LIST_INCLUDE = {
       }
     } 
   },
-  column: { select: { id: true, name: true, color: true, order: true } },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
   _count: { select: { children: true, comments: true } },
   sourceRelations: {

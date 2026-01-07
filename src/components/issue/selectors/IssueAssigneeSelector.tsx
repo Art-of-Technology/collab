@@ -29,6 +29,14 @@ export function IssueAssigneeSelector({
   const [users, setUsers] = useState<IssueUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Handle selection and close popover
+  const handleSelect = (userId: string | null) => {
+    onChange(userId as any);
+    setIsOpen(false);
+    setSearchQuery("");
+  };
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -114,7 +122,7 @@ export function IssueAssigneeSelector({
   }
 
   return (
-    <Popover modal={true}>
+    <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -174,7 +182,7 @@ export function IssueAssigneeSelector({
           <button
             type="button"
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-            onClick={() => onChange(null as any)}
+            onClick={() => handleSelect(null)}
           >
             <div className="h-5 w-5 rounded-full border-2 border-dashed border-[#555] flex items-center justify-center">
               <UserX className="h-2.5 w-2.5 text-[#6e7681]" />
@@ -194,11 +202,11 @@ export function IssueAssigneeSelector({
               key={user.id}
               type="button"
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
-                user.id === currentUserId 
-                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                user.id === currentUserId
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
                   : 'hover:bg-[#2a2a2a]'
               }`}
-              onClick={() => onChange(user.id)}
+              onClick={() => handleSelect(user.id)}
             >
               {user.useCustomAvatar ? (
                 <CustomAvatar user={user} size="sm" />

@@ -359,7 +359,7 @@ export const PATCH = withAppAuth(
 
       // Create activity records
       for (const change of changes) {
-        await prisma.boardItemActivity.create({
+        await prisma.issueActivity.create({
           data: {
             action: 'UPDATED',
             itemType: 'ISSUE',

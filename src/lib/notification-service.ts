@@ -8,13 +8,13 @@ import { format } from "date-fns";
 import { logger } from "@/lib/logger";
 import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
-export interface TaskFollowerNotificationOptions {
-  taskId: string;
+export interface IssueFollowerNotificationOptions {
+  issueId: string;
   senderId: string;
   type: NotificationType;
   content: string;
   excludeUserIds?: string[];
-  skipTaskIdReference?: boolean; // Add this to skip setting taskId for deletion notifications
+  skipIssueIdReference?: boolean; // Skip setting issueId for deletion notifications
 }
 
 export interface PostFollowerNotificationOptions {
@@ -25,14 +25,14 @@ export interface PostFollowerNotificationOptions {
   excludeUserIds?: string[];
 }
 
-export interface BoardFollowerNotificationOptions {
-  boardId: string;
-  taskId: string;
+export interface ProjectFollowerNotificationOptions {
+  projectId: string;
+  issueId: string;
   senderId: string;
   type: NotificationType;
   content: string;
   excludeUserIds?: string[];
-  skipTaskIdReference?: boolean; // Add this to skip setting taskId for deletion notifications
+  skipIssueIdReference?: boolean; // Skip setting issueId for deletion notifications
 }
 
 export interface LeaveRequestNotificationData {
@@ -611,24 +611,24 @@ export class NotificationService {
   }
 
   /**
-   * Notify all followers of a task
-   * @param options - Task follower notification options
+   * Notify all followers of an issue
+   * @param options - Issue follower notification options
    */
-  static async notifyTaskFollowers(
-    options: TaskFollowerNotificationOptions
+  static async notifyIssueFollowers(
+    options: IssueFollowerNotificationOptions
   ): Promise<void> {
     const {
-      taskId,
+      issueId,
       senderId,
       type,
       content,
       excludeUserIds = [],
-      skipTaskIdReference = false,
+      skipIssueIdReference = false,
     } = options;
 
-    const followerQuery = prisma.taskFollower.findMany({
+    const followerQuery = prisma.issueFollower.findMany({
       where: {
-        taskId: taskId,
+        issueId,
         userId: {
           notIn: [senderId, ...excludeUserIds],
         },
@@ -638,7 +638,7 @@ export class NotificationService {
       },
     });
 
-    const additionalData = skipTaskIdReference ? {} : { taskId };
+    const additionalData = skipIssueIdReference ? {} : { issueId };
 
     await this.createFollowerNotifications(
       followerQuery,
@@ -651,72 +651,68 @@ export class NotificationService {
   }
 
   /**
-   * Add a user as a follower of a task
-   * @param taskId - Task ID to follow
+   * Add a user as a follower of an issue
+   * @param issueId - Issue ID to follow
    * @param userId - User ID to add as follower
    */
-  static async addTaskFollower(taskId: string, userId: string): Promise<void> {
+  static async addIssueFollower(issueId: string, userId: string): Promise<void> {
     try {
-      await prisma.taskFollower.upsert({
+      await prisma.issueFollower.upsert({
         where: {
-          taskId_userId: {
-            taskId,
+          issueId_userId: {
+            issueId,
             userId,
           },
         },
         update: {}, // No updates needed if already exists
         create: {
-          taskId,
+          issueId,
           userId,
         },
       });
     } catch (error) {
-      logger.error("Failed to add task follower", error, { taskId, userId });
+      logger.error("Failed to add issue follower", error, { issueId, userId });
       throw error;
     }
   }
 
   /**
-   * Remove a user as a follower of a task
-   * @param taskId - Task ID to unfollow
+   * Remove a user as a follower of an issue
+   * @param issueId - Issue ID to unfollow
    * @param userId - User ID to remove as follower
    */
-  static async removeTaskFollower(
-    taskId: string,
+  static async removeIssueFollower(
+    issueId: string,
     userId: string
   ): Promise<void> {
     try {
-      await prisma.taskFollower.deleteMany({
+      await prisma.issueFollower.deleteMany({
         where: {
-          taskId,
+          issueId,
           userId,
         },
       });
     } catch (error) {
-      logger.error("Failed to remove task follower", error, { taskId, userId });
+      logger.error("Failed to remove issue follower", error, { issueId, userId });
       throw error;
     }
   }
 
   /**
-   * Removed unused: getTaskFollowers
-   */
-
-  /**
-   * Check if a user is following a task
-   * @param taskId - Task ID to check
+   * Check if a user is following an issue
+   * @param issueId - Issue ID to check
    * @param userId - User ID to check
-   * @returns true if user is following the task
+   * @returns true if user is following the issue
    */
-  static async isUserFollowingTask(
-    taskId: string,
+  static async isUserFollowingIssue(
+    issueId: string,
     userId: string
   ): Promise<boolean> {
     try {
-      const follower = await prisma.taskFollower.findUnique({
+      const follower = await prisma.issueFollower.findUnique({
         where: {
-          taskId_userId: {
-            taskId,
+          issueId_userId: {
+            issueId,
             userId,
           },
         },
@@ -724,8 +720,8 @@ export class NotificationService {
 
       return !!follower;
     } catch (error) {
-      logger.error("Failed to check if user is following task", error, {
-        taskId,
+      logger.error("Failed to check if user is following issue", error, {
+        issueId,
         userId,
       });
       return false;
@@ -733,28 +729,28 @@ export class NotificationService {
   }
 
   /**
-   * Automatically add multiple users as followers of a task
-   * @param taskId - Task ID to follow
+   * Automatically add multiple users as followers of an issue
+   * @param issueId - Issue ID to follow
    * @param userIds - Array of user IDs to add as followers
    */
-  static async autoFollowTask(
-    taskId: string,
+  static async autoFollowIssue(
+    issueId: string,
     userIds: string[]
   ): Promise<void> {
     try {
       const followData = userIds.map((userId) => ({
-        taskId,
+        issueId,
         userId,
       }));
 
       // Use createMany with skipDuplicates to avoid conflicts
-      await prisma.taskFollower.createMany({
+      await prisma.issueFollower.createMany({
         data: followData,
         skipDuplicates: true,
       });
     } catch (error) {
-      logger.error("Failed to auto-follow task", error, {
-        taskId,
+      logger.error("Failed to auto-follow issue", error, {
+        issueId,
         userCount: userIds.length,
       });
       throw error;
@@ -888,7 +884,7 @@ export class NotificationService {
    * Create mention notifications for task comments
    */
   static async createTaskCommentMentionNotifications(
-    taskId: string,
+    issueId: string,
     taskCommentId: string,
     mentionedUserIds: string[],
     senderId: string,

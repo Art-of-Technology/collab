@@ -52,9 +52,10 @@ interface GitHubRepository {
 interface GitHubOAuthConnectionProps {
   projectId: string;
   onSuccess?: () => void;
+  compact?: boolean;
 }
 
-export function GitHubOAuthConnection({ projectId, onSuccess }: GitHubOAuthConnectionProps) {
+export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }: GitHubOAuthConnectionProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [githubUser, setGithubUser] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
@@ -296,6 +297,28 @@ export function GitHubOAuthConnection({ projectId, onSuccess }: GitHubOAuthConne
   };
 
   if (!isConnected) {
+    // Compact mode - just a button
+    if (compact) {
+      return (
+        <div className="flex items-center justify-center p-6 border-2 border-dashed border-[#21262d] rounded-lg bg-[#161b22]">
+          <div className="text-center space-y-3">
+            <div className="mx-auto w-10 h-10 bg-[#21262d] rounded-full flex items-center justify-center">
+              <Github className="h-5 w-5 text-[#e6edf3]" />
+            </div>
+            <div>
+              <p className="text-sm text-[#8b949e]">
+                Connect your GitHub account to get started
+              </p>
+            </div>
+            <Button onClick={handleGitHubConnect} className="gap-2 bg-[#238636] hover:bg-[#2ea043]">
+              <Github className="h-4 w-4" />
+              Connect with GitHub
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <Card>
         <CardHeader>

@@ -3,18 +3,57 @@ import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
-import { normalizeScopes, scopesToString } from '@/lib/oauth-scopes';
+import { normalizeScopes, scopesToString, isAllowedRedirectUri } from '@/lib/oauth-scopes';
 import { createWebhooksFromManifest, WebhookCreationResult } from '@/lib/apps/webhook-auto-creation';
 import { AppManifestV1 } from '@/lib/apps/types';
 
 const prisma = new PrismaClient();
+
+// CORS headers for OAuth token endpoint
+// Allow cross-origin requests from MCP server and other authorized origins
+function getCorsHeaders(request: NextRequest) {
+  const origin = request.headers.get('origin');
+
+  // List of allowed origins (MCP server domains)
+  const allowedOrigins = [
+    'https://mcp-collab.weez.boo',
+    'https://dev-mcp-collab.weez.boo',
+    'https://uat-mcp-collab.weez.boo',
+    'http://localhost:3001',
+    'http://localhost:3002',
+  ];
+
+  // Check if request origin is allowed
+  const isAllowed = origin && allowedOrigins.some(allowed =>
+    origin === allowed || origin.startsWith(allowed)
+  );
+
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400', // 24 hours
+  };
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(request),
+  });
+}
+
 // OAuth 2.0 Token Endpoint
 // Handles authorization_code and refresh_token grant types
 export async function POST(request: NextRequest) {
+  // Get CORS headers for this request
+  const corsHeaders = getCorsHeaders(request);
+
   try {
     // Require form content-type
     if (!request.headers.get("content-type")?.includes("application/x-www-form-urlencoded")) {
-      return oauthError("invalid_request", "Use application/x-www-form-urlencoded");
+      return oauthError("invalid_request", "Use application/x-www-form-urlencoded", 400, corsHeaders);
     }
     
     const body = await request.formData();
@@ -28,7 +67,7 @@ export async function POST(request: NextRequest) {
     const clientId = headerClientId || formClientId;
     const clientSecret = basicSecret || null;
 
-    if (!clientId) return oauthError("invalid_request", "Missing client_id", 400);
+    if (!clientId) return oauthError("invalid_request", "Missing client_id", 400, corsHeaders);
 
     // Verify OAuth client
     const oauthClient = await prisma.appOAuthClient.findUnique({
@@ -39,14 +78,15 @@ export async function POST(request: NextRequest) {
             id: true,
             slug: true,
             name: true,
-            status: true
+            status: true,
+            isSystemApp: true
           }
         }
       }
     });
 
     if (!oauthClient) {
-      return oauthError("invalid_client", "Invalid client credentials: No oauth client found", 401);
+      return oauthError("invalid_client", "Invalid client credentials: No oauth client found", 401, corsHeaders);
     }
 
     // Handle client authentication based on client type and auth method
@@ -56,44 +96,44 @@ export async function POST(request: NextRequest) {
     if (oauthClient.clientType === 'public') {
       // Public clients must use 'none' authentication
       if (authMethod !== 'none') {
-        return oauthError("invalid_client", "Public clients must use 'none' authentication method", 401);
+        return oauthError("invalid_client", "Public clients must use 'none' authentication method", 401, corsHeaders);
       }
-      
+
       // Public clients should not provide client_secret or client_assertion
       if (clientSecret || client_assertion) {
-        return oauthError("invalid_request", "Public clients must not provide client credentials", 400);
+        return oauthError("invalid_request", "Public clients must not provide client credentials", 400, corsHeaders);
       }
       // PKCE verification is handled in the authorization code grant handler
-      
+
     } else if (oauthClient.clientType === 'confidential') {
       if (authMethod === 'client_secret_basic') {
         // Confidential clients with client_secret_basic require client_secret
         if (!clientSecret) {
-          return oauthError("invalid_request", "Client secret required for client_secret_basic authentication", 400);
+          return oauthError("invalid_request", "Client secret required for client_secret_basic authentication", 400, corsHeaders);
         }
 
         // Verify client secret by decrypting stored secret
         if (!oauthClient.clientSecret) {
-          return oauthError("invalid_client", "No client secret configured", 401);
+          return oauthError("invalid_client", "No client secret configured", 401, corsHeaders);
         }
 
         try {
           const storedSecret = await decryptToken(Buffer.from(oauthClient.clientSecret));
           if (storedSecret !== clientSecret) {
-            return oauthError("invalid_client", "Invalid client credentials", 401);
+            return oauthError("invalid_client", "Invalid client credentials", 401, corsHeaders);
           }
         } catch (error) {
-          return oauthError("invalid_client", "Failed to verify client credentials", 401);
+          return oauthError("invalid_client", "Failed to verify client credentials", 401, corsHeaders);
         }
-        
+
       } else if (authMethod === 'private_key_jwt') {
         // Confidential clients with private_key_jwt require client_assertion
         if (!client_assertion || client_assertion_type !== 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer') {
-          return oauthError("invalid_client", "Missing client_assertion or client_assertion_type", 401);
+          return oauthError("invalid_client", "Missing client_assertion or client_assertion_type", 401, corsHeaders);
         }
 
         if (!oauthClient.jwksUri) {
-          return oauthError("invalid_client", "No JWKS URI configured for JWT authentication", 401);
+          return oauthError("invalid_client", "No JWKS URI configured for JWT authentication", 401, corsHeaders);
         }
 
         // Validate JWT client assertion
@@ -106,36 +146,36 @@ export async function POST(request: NextRequest) {
         );
 
         if (!assertionResult.valid) {
-          return oauthError("invalid_client", `JWT assertion validation failed: ${assertionResult.error}`, 401);
+          return oauthError("invalid_client", `JWT assertion validation failed: ${assertionResult.error}`, 401, corsHeaders);
         }
 
         // Client secret should not be provided with JWT authentication
         if (clientSecret) {
-          return oauthError("invalid_request", "Client secret must not be provided with JWT authentication", 400);
+          return oauthError("invalid_request", "Client secret must not be provided with JWT authentication", 400, corsHeaders);
         }
       }
     }
 
     // Check if app is active
     if (oauthClient.app.status !== 'PUBLISHED') {
-      return oauthError("invalid_client", "App is not active", 401);
+      return oauthError("invalid_client", "App is not active", 401, corsHeaders);
     }
 
     // Handle different grant types
     switch (grant_type) {
       case 'authorization_code':
-        return await handleAuthorizationCodeGrant(body, oauthClient);
-      
+        return await handleAuthorizationCodeGrant(body, oauthClient, corsHeaders);
+
       case 'refresh_token':
-        return await handleRefreshTokenGrant(body, oauthClient);
-      
+        return await handleRefreshTokenGrant(body, oauthClient, corsHeaders);
+
       default:
-        return oauthError("unsupported_grant_type", `Grant type '${grant_type}' is not supported`, 400);
+        return oauthError("unsupported_grant_type", `Grant type '${grant_type}' is not supported`, 400, corsHeaders);
     }
 
   } catch (error) {
     console.error('OAuth token endpoint error:', error);
-    return oauthError("server_error", "Internal server error", 500);
+    return oauthError("server_error", "Internal server error", 500, corsHeaders);
   } finally {
     await prisma.$disconnect();
   }
@@ -143,27 +183,29 @@ export async function POST(request: NextRequest) {
 
 // Handle authorization_code grant type
 async function handleAuthorizationCodeGrant(
-  body: FormData, 
-  oauthClient: any
+  body: FormData,
+  oauthClient: any,
+  corsHeaders: Record<string, string>
 ): Promise<NextResponse> {
   const code = body.get('code') as string;
   const code_verifier = body.get('code_verifier') as string;
   const redirectUri = body.get('redirect_uri') as string;
 
   if (!code || !redirectUri) {
-    return oauthError("invalid_request", "Missing required parameters: code, redirect_uri", 400);
+    return oauthError("invalid_request", "Missing required parameters: code, redirect_uri", 400, corsHeaders);
   }
 
-  // Validate redirect URI
-  if (!oauthClient.redirectUris.includes(redirectUri)) {
-    return oauthError("invalid_grant", "Invalid redirect_uri", 400);
+  // Validate redirect URI using shared utility
+  // For system apps (like MCP), allows any localhost/127.0.0.1 callback URL with dynamic ports
+  if (!isAllowedRedirectUri(redirectUri, oauthClient.redirectUris, oauthClient.app.isSystemApp)) {
+    return oauthError("invalid_grant", "Invalid redirect_uri", 400, corsHeaders);
   }
 
   // Validate authorization code and PKCE challenge
   const authCodeData = await validateAuthorizationCode(code, redirectUri, code_verifier, oauthClient);
-  
+
   if (!authCodeData.valid) {
-    return oauthError("invalid_grant", authCodeData.error || "Invalid authorization code", 400);
+    return oauthError("invalid_grant", authCodeData.error || "Invalid authorization code", 400, corsHeaders);
   }
 
   // Generate tokens
@@ -172,30 +214,24 @@ async function handleAuthorizationCodeGrant(
   const expiresIn = 365 * 24 * 3600; // 1 year
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-  try {
-    // Store tokens (in a real implementation, you'd store these securely)
-    // For now, we'll store them associated with the app installation
-    const installation = await prisma.appInstallation.findFirst({
-      where: {
-        appId: oauthClient.app.id,
-        workspaceId: authCodeData.workspaceId,
-        status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE installations
-      }
-    });
+  // Check if this is a system app authorization (marked by nonce 'system_app' or 'mcp_system_app')
+  const isSystemApp = oauthClient.app.isSystemApp;
 
+  try {
     // Initialize webhook secrets array
     let webhookSecrets: WebhookCreationResult['webhookSecrets'] = [];
 
-    if (installation) {
-      // Encrypt and store tokens in the new AppToken table (supports multiple tokens)
+    if (isSystemApp) {
+      // System apps don't have installations - store token directly with null installationId
       const encryptedAccessToken = await encryptToken(accessToken);
       const encryptedRefreshToken = await encryptToken(refreshToken);
 
-      // Create a new token record instead of overwriting the installation tokens
       await prisma.appToken.create({
         data: {
-          installationId: installation.id,
-          userId: authCodeData.userId, // The user who authorized this token
+          installationId: null, // System apps don't have installations
+          appId: oauthClient.app.id,
+          workspaceId: authCodeData.workspaceId,
+          userId: authCodeData.userId,
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
           refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
           tokenExpiresAt: expiresAt,
@@ -203,60 +239,89 @@ async function handleAuthorizationCodeGrant(
         }
       });
 
-      // Update installation status to ACTIVE (no longer store tokens directly on installation)
-      await prisma.appInstallation.update({
-        where: { id: installation.id },
-        data: {
-          status: 'ACTIVE',
-          updatedAt: new Date()
+      console.log(`System app OAuth completed: app=${oauthClient.app.slug}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
+    } else {
+      // Regular apps - store tokens associated with the app installation
+      const installation = await prisma.appInstallation.findFirst({
+        where: {
+          appId: oauthClient.app.id,
+          workspaceId: authCodeData.workspaceId,
+          status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE installations
         }
       });
 
-      // Auto-create webhooks from app manifest if installation was previously PENDING
-      if (installation.status === 'PENDING') {
-        try {
-          // Get app with latest version for manifest
-          const appWithManifest = await prisma.app.findUnique({
-            where: { id: oauthClient.app.id },
-            include: {
-              versions: {
-                orderBy: { createdAt: 'desc' },
-                take: 1
+      if (installation) {
+        // Encrypt and store tokens in the new AppToken table (supports multiple tokens)
+        const encryptedAccessToken = await encryptToken(accessToken);
+        const encryptedRefreshToken = await encryptToken(refreshToken);
+
+        // Create a new token record instead of overwriting the installation tokens
+        await prisma.appToken.create({
+          data: {
+            installationId: installation.id,
+            userId: authCodeData.userId, // The user who authorized this token
+            accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+            refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
+            tokenExpiresAt: expiresAt,
+            scopes: authCodeData.scope ? authCodeData.scope.split(' ') : ['read'],
+          }
+        });
+
+        // Update installation status to ACTIVE (no longer store tokens directly on installation)
+        await prisma.appInstallation.update({
+          where: { id: installation.id },
+          data: {
+            status: 'ACTIVE',
+            updatedAt: new Date()
+          }
+        });
+
+        // Auto-create webhooks from app manifest if installation was previously PENDING
+        if (installation.status === 'PENDING') {
+          try {
+            // Get app with latest version for manifest
+            const appWithManifest = await prisma.app.findUnique({
+              where: { id: oauthClient.app.id },
+              include: {
+                versions: {
+                  orderBy: { createdAt: 'desc' },
+                  take: 1
+                }
+              }
+            });
+
+            if (appWithManifest?.versions[0]?.manifest) {
+              const manifest = appWithManifest.versions[0].manifest as unknown as AppManifestV1;
+
+              console.log(`🪝 Auto-creating webhooks for app ${oauthClient.app.slug} installation ${installation.id}`);
+
+              const webhookResult = await createWebhooksFromManifest(
+                installation.id,
+                oauthClient.app.id,
+                manifest
+              );
+
+              if (webhookResult.success && webhookResult.webhooksCreated > 0) {
+                console.log(`✅ Successfully created ${webhookResult.webhooksCreated} webhooks for ${oauthClient.app.slug}`);
+                // Store webhook secrets to include in OAuth response
+                webhookSecrets = webhookResult.webhookSecrets;
+              } else if (webhookResult.errors.length > 0) {
+                console.warn(`⚠️ Webhook creation completed with warnings for ${oauthClient.app.slug}:`, webhookResult.errors);
               }
             }
-          });
-
-          if (appWithManifest?.versions[0]?.manifest) {
-            const manifest = appWithManifest.versions[0].manifest as unknown as AppManifestV1;
-            
-            console.log(`🪝 Auto-creating webhooks for app ${oauthClient.app.slug} installation ${installation.id}`);
-            
-            const webhookResult = await createWebhooksFromManifest(
-              installation.id,
-              oauthClient.app.id,
-              manifest
-            );
-
-            if (webhookResult.success && webhookResult.webhooksCreated > 0) {
-              console.log(`✅ Successfully created ${webhookResult.webhooksCreated} webhooks for ${oauthClient.app.slug}`);
-              // Store webhook secrets to include in OAuth response
-              webhookSecrets = webhookResult.webhookSecrets;
-            } else if (webhookResult.errors.length > 0) {
-              console.warn(`⚠️ Webhook creation completed with warnings for ${oauthClient.app.slug}:`, webhookResult.errors);
-            }
+          } catch (webhookError) {
+            // Don't fail the OAuth flow if webhook creation fails
+            console.error(`❌ Failed to auto-create webhooks for ${oauthClient.app.slug}:`, webhookError);
           }
-        } catch (webhookError) {
-          // Don't fail the OAuth flow if webhook creation fails
-          console.error(`❌ Failed to auto-create webhooks for ${oauthClient.app.slug}:`, webhookError);
         }
-      }
 
-      // Log successful OAuth completion and installation activation
-      console.log(`OAuth installation completed: app=${oauthClient.app.slug}, installation=${installation.id}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
-    } else {
-      // This should not happen if the OAuth flow is working correctly
-      console.error(`Installation not found for OAuth completion: app=${oauthClient.app.slug}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
-      return oauthError("server_error", "Installation record not found", 500);
+        // Log successful OAuth completion and installation activation
+        console.log(`OAuth installation completed: app=${oauthClient.app.slug}, installation=${installation.id}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
+      } else {
+        // This should not happen if the OAuth flow is working correctly
+        console.error(`Installation not found for OAuth completion: app=${oauthClient.app.slug}, workspace=${authCodeData.workspaceId}, user=${authCodeData.userId}`);
+        return oauthError("server_error", "Installation record not found", 500, corsHeaders);
+      }
     }
 
     // Return OAuth 2.0 compliant token response with webhook secrets
@@ -274,23 +339,24 @@ async function handleAuthorizationCodeGrant(
       console.log(`🪝 Including ${webhookSecrets.length} webhook secrets in OAuth token response for ${oauthClient.app.slug}`);
     }
 
-    return NextResponse.json(tokenResponse);
+    return NextResponse.json(tokenResponse, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Token generation error:', error);
-    return oauthError("server_error", "Failed to generate tokens", 500);
+    return oauthError("server_error", "Failed to generate tokens", 500, corsHeaders);
   }
 }
 
 // Handle refresh_token grant type - Production Ready
 async function handleRefreshTokenGrant(
   body: FormData,
-  oauthClient: any
+  oauthClient: any,
+  corsHeaders: Record<string, string>
 ): Promise<NextResponse> {
   const refreshToken = body.get('refresh_token') as string;
 
   if (!refreshToken) {
-    return oauthError("invalid_request", "Missing required parameter: refresh_token", 400);
+    return oauthError("invalid_request", "Missing required parameter: refresh_token", 400, corsHeaders);
   }
 
   // TODO: Add rate limiting here for production
@@ -298,11 +364,11 @@ async function handleRefreshTokenGrant(
 
   // Validate refresh token
   const tokenData = await validateRefreshToken(refreshToken, oauthClient);
-  
+
   if (!tokenData.valid) {
     // Log security event for monitoring
     console.warn(`Failed refresh token attempt for app ${oauthClient.app.slug}: ${tokenData.error}`);
-    return oauthError("invalid_grant", tokenData.error || "Invalid refresh token", 400);
+    return oauthError("invalid_grant", tokenData.error || "Invalid refresh token", 400, corsHeaders);
   }
 
   // Generate new access token (and optionally rotate refresh token)
@@ -344,11 +410,11 @@ async function handleRefreshTokenGrant(
     //   response.refresh_token = newRefreshToken;
     // }
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Token refresh error:', error);
-    return oauthError('server_error', 'Failed to refresh token', 500);
+    return oauthError('server_error', 'Failed to refresh token', 500, corsHeaders);
   }
 }
 
@@ -471,14 +537,25 @@ async function validateRefreshToken(
     }
 
     // Find active tokens for this app from AppToken table
+    // Handle both regular app tokens (via installation) and system app tokens (direct appId)
     const tokens = await prisma.appToken.findMany({
       where: {
         refreshToken: { not: null },
         isRevoked: false,
-        installation: {
-          appId: oauthClient.app.id,
-          status: 'ACTIVE'
-        }
+        OR: [
+          // Regular app tokens via installation
+          {
+            installation: {
+              appId: oauthClient.app.id,
+              status: 'ACTIVE'
+            }
+          },
+          // System app tokens with direct appId
+          {
+            appId: oauthClient.app.id,
+            installationId: null
+          }
+        ]
       },
       select: {
         id: true,
@@ -486,7 +563,8 @@ async function validateRefreshToken(
         scopes: true,
         createdAt: true,
         updatedAt: true,
-        installationId: true
+        installationId: true,
+        appId: true
       }
     });
 
@@ -521,7 +599,7 @@ async function validateRefreshToken(
           return {
             valid: true,
             tokenId: token.id,
-            installationId: token.installationId,
+            installationId: token.installationId ?? undefined,
             scope: scopesToString(token.scopes)
           };
         }
@@ -580,6 +658,9 @@ function parseBasicAuth(header: string | null) {
   return { headerClientId: id ?? null, basicSecret: secret ?? null };
 }
 
-function oauthError(error: string, description?: string, status = 400) {
-  return NextResponse.json({ error, error_description: description }, { status });
+function oauthError(error: string, description?: string, status = 400, corsHeaders?: Record<string, string>) {
+  return NextResponse.json(
+    { error, error_description: description },
+    { status, headers: corsHeaders }
+  );
 }

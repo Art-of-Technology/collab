@@ -224,35 +224,16 @@ export async function getRecentActivities(params: {
     throw new Error('Unauthorized');
   }
   
-  // Get recent comments (from posts, epics, stories, and milestones)
+  // Get recent comments from posts
   const recentComments = await prisma.comment.findMany({
     take: limit,
     orderBy: {
       createdAt: "desc",
     },
     where: {
-      OR: [
-        {
-          post: {
-            workspaceId
-          }
-        },
-        {
-          epic: {
-            workspaceId
-          }
-        },
-        {
-          story: {
-            workspaceId
-          }
-        },
-        {
-          milestone: {
-            workspaceId
-          }
-        }
-      ]
+      post: {
+        workspaceId
+      }
     },
     include: {
       author: true,
@@ -260,27 +241,6 @@ export async function getRecentActivities(params: {
         include: {
           author: true,
         },
-      },
-      epic: {
-        select: {
-          id: true,
-          title: true,
-          issueKey: true,
-        }
-      },
-      story: {
-        select: {
-          id: true,
-          title: true,
-          issueKey: true,
-        }
-      },
-      milestone: {
-        select: {
-          id: true,
-          title: true,
-          issueKey: true,
-        }
       },
     },
   });
@@ -319,13 +279,9 @@ export async function getRecentActivities(params: {
       author: comment.author,
       message: comment.message,
       post: comment.post,
-      epic: comment.epic,
-      story: comment.story,
-      milestone: comment.milestone,
-      // Determine the target type and title for display
-      targetType: comment.post ? 'post' : comment.epic ? 'epic' : comment.story ? 'story' : comment.milestone ? 'milestone' : 'unknown',
-      targetTitle: comment.post?.message?.substring(0, 50) || comment.epic?.title || comment.story?.title || comment.milestone?.title || 'Unknown',
-      targetKey: comment.epic?.issueKey || comment.story?.issueKey || comment.milestone?.issueKey || null,
+      targetType: 'post' as const,
+      targetTitle: comment.post?.message?.substring(0, 50) || 'Unknown',
+      targetKey: null,
     })),
     ...validLikes.map((like) => ({
       type: "like" as const,
@@ -333,7 +289,7 @@ export async function getRecentActivities(params: {
       createdAt: like.createdAt,
       author: like.author,
       post: like.post,
-      targetType: 'post',
+      targetType: 'post' as const,
       targetTitle: like.post?.message?.substring(0, 50) || 'Unknown',
       targetKey: null,
     }))

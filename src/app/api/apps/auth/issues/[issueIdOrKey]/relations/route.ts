@@ -93,44 +93,18 @@ export const GET = withAppAuth(
         },
       });
 
-      // Get children directly from parent relationship
-      const children = await prisma.issue.findMany({
-        where: { parentId: issue.id },
-        select: {
-          id: true,
-          issueKey: true,
-          title: true,
-          type: true,
-          status: true,
-          priority: true,
-          projectStatus: {
-            select: {
-              name: true,
-              displayName: true,
-              color: true,
-              isFinal: true,
-            },
-          },
-        },
-      });
-
-      // Get parent directly
-      const parent = issue.parentId ? await prisma.issue.findUnique({
-        where: { id: issue.parentId },
-        select: {
-          id: true,
-          issueKey: true,
-          title: true,
-          type: true,
-          status: true,
-          priority: true,
-        },
-      }) : null;
-
       // Organize relations by type
-      const relations: Record<string, any[]> = {
-        parent: parent ? parent : null,
-        children: children,
+      const relations: {
+        parent: any;
+        children: any[];
+        blocks: any[];
+        blocked_by: any[];
+        relates_to: any[];
+        duplicates: any[];
+        duplicated_by: any[];
+      } = {
+        parent: null,
+        children: [],
         blocks: [],
         blocked_by: [],
         relates_to: [],
@@ -138,13 +112,18 @@ export const GET = withAppAuth(
         duplicated_by: [],
       };
 
-      // Process source relations
+      // Process source relations (this issue -> other issues)
       for (const rel of sourceRelations) {
         const relData = {
           relationId: rel.id,
           ...rel.targetIssue,
         };
         switch (rel.relationType) {
+          case 'PARENT':
+            // This issue has a PARENT relation pointing to targetIssue
+            // So targetIssue is the parent
+            relations.parent = relData;
+            break;
           case 'BLOCKS':
             relations.blocks.push(relData);
             break;
@@ -157,13 +136,18 @@ export const GET = withAppAuth(
         }
       }
 
-      // Process target relations (inverse)
+      // Process target relations (other issues -> this issue)
       for (const rel of targetRelations) {
         const relData = {
           relationId: rel.id,
           ...rel.sourceIssue,
         };
         switch (rel.relationType) {
+          case 'PARENT':
+            // Another issue has PARENT relation pointing to this issue
+            // So that issue is a child of this issue
+            relations.children.push(relData);
+            break;
           case 'BLOCKS':
             relations.blocked_by.push(relData);
             break;
@@ -178,12 +162,12 @@ export const GET = withAppAuth(
 
       // Calculate children progress
       let childrenProgress = null;
-      if (children.length > 0) {
-        const completed = children.filter(c => c.projectStatus?.isFinal).length;
+      if (relations.children.length > 0) {
+        const completed = relations.children.filter((c: any) => c.projectStatus?.isFinal).length;
         childrenProgress = {
-          total: children.length,
+          total: relations.children.length,
           completed,
-          percentage: Math.round((completed / children.length) * 100),
+          percentage: Math.round((completed / relations.children.length) * 100),
         };
       }
 
@@ -241,14 +225,52 @@ export const POST = withAppAuth(
         );
       }
 
-      // Handle PARENT/CHILD relations via parentId field
+      // Handle PARENT relation - create IssueRelation entry
+      // Source issue (child) has PARENT relation pointing to target issue (parent)
       if (data.relationType === 'PARENT') {
-        await prisma.issue.update({
-          where: { id: sourceIssue.id },
-          data: { parentId: targetIssue.id },
+        // Check if relation already exists
+        const existingRelation = await prisma.issueRelation.findFirst({
+          where: {
+            sourceIssueId: sourceIssue.id,
+            targetIssueId: targetIssue.id,
+            relationType: 'PARENT',
+          },
+        });
+
+        if (existingRelation) {
+          return NextResponse.json(
+            { error: 'relation_exists', error_description: 'This parent relation already exists' },
+            { status: 409 }
+          );
+        }
+
+        const relation = await prisma.issueRelation.create({
+          data: {
+            sourceIssueId: sourceIssue.id,
+            targetIssueId: targetIssue.id,
+            relationType: 'PARENT',
+            createdBy: context.user.id,
+          },
+        });
+
+        // Log activity
+        await prisma.issueActivity.create({
+          data: {
+            action: 'RELATION_CREATED',
+            itemType: 'ISSUE',
+            itemId: sourceIssue.id,
+            userId: context.user.id,
+            workspaceId: context.workspace.id,
+            details: JSON.stringify({
+              relationId: relation.id,
+              relationType: 'PARENT',
+              targetIssueId: targetIssue.id,
+            }),
+          },
         });
 
         return NextResponse.json({
+          id: relation.id,
           message: 'Parent relation created',
           relationType: 'PARENT',
           sourceIssue: {
@@ -262,13 +284,54 @@ export const POST = withAppAuth(
         }, { status: 201 });
       }
 
+      // Handle CHILD relation - create PARENT relation in reverse direction
+      // Source issue (parent) has CHILD relation to target issue (child)
+      // This is stored as: target issue has PARENT relation to source issue
       if (data.relationType === 'CHILD') {
-        await prisma.issue.update({
-          where: { id: targetIssue.id },
-          data: { parentId: sourceIssue.id },
+        // Check if relation already exists
+        const existingRelation = await prisma.issueRelation.findFirst({
+          where: {
+            sourceIssueId: targetIssue.id,
+            targetIssueId: sourceIssue.id,
+            relationType: 'PARENT',
+          },
+        });
+
+        if (existingRelation) {
+          return NextResponse.json(
+            { error: 'relation_exists', error_description: 'This child relation already exists' },
+            { status: 409 }
+          );
+        }
+
+        // Create PARENT relation from child (target) to parent (source)
+        const relation = await prisma.issueRelation.create({
+          data: {
+            sourceIssueId: targetIssue.id,
+            targetIssueId: sourceIssue.id,
+            relationType: 'PARENT',
+            createdBy: context.user.id,
+          },
+        });
+
+        // Log activity
+        await prisma.issueActivity.create({
+          data: {
+            action: 'RELATION_CREATED',
+            itemType: 'ISSUE',
+            itemId: sourceIssue.id,
+            userId: context.user.id,
+            workspaceId: context.workspace.id,
+            details: JSON.stringify({
+              relationId: relation.id,
+              relationType: 'CHILD',
+              targetIssueId: targetIssue.id,
+            }),
+          },
         });
 
         return NextResponse.json({
+          id: relation.id,
           message: 'Child relation created',
           relationType: 'CHILD',
           sourceIssue: {
@@ -325,7 +388,7 @@ export const POST = withAppAuth(
       });
 
       // Log activity
-      await prisma.boardItemActivity.create({
+      await prisma.issueActivity.create({
         data: {
           action: 'RELATION_CREATED',
           itemType: 'ISSUE',

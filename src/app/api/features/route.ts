@@ -8,6 +8,8 @@ const featureRequestSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(2000),
   html: z.string().optional(),
+  projectId: z.string().min(1, "Project is required"),
+  workspaceId: z.string().optional(),
 });
 
 const getFeatureRequestsParamsSchema = z.object({
@@ -15,6 +17,8 @@ const getFeatureRequestsParamsSchema = z.object({
   orderBy: z.enum(["latest", "oldest", "most_votes", "least_votes"]).optional(),
   page: z.coerce.number().optional(),
   limit: z.coerce.number().optional(),
+  projectId: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
 });
 
 // GET handler for fetching feature requests
@@ -25,12 +29,16 @@ export async function GET(req: NextRequest) {
     const orderBy = url.searchParams.get("orderBy");
     const pageParam = url.searchParams.get("page");
     const limitParam = url.searchParams.get("limit");
+    const projectId = url.searchParams.get("projectId");
+    const workspaceId = url.searchParams.get("workspaceId");
 
     const validated = getFeatureRequestsParamsSchema.safeParse({
       status,
       orderBy,
       page: pageParam ? parseInt(pageParam) : 1,
       limit: limitParam ? parseInt(limitParam) : 10,
+      projectId,
+      workspaceId,
     });
 
     if (!validated.success) {
@@ -41,12 +49,31 @@ export async function GET(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const { status: validatedStatus, orderBy: validatedOrderBy, page = 1, limit = 10 } = validated.data;
+    const { 
+      status: validatedStatus, 
+      orderBy: validatedOrderBy, 
+      page = 1, 
+      limit = 10,
+      projectId: validatedProjectId,
+      workspaceId: validatedWorkspaceId 
+    } = validated.data;
     
     // Build the filter
-    const where = validatedStatus && validatedStatus !== "all"
-      ? { status: validatedStatus }
-      : {};
+    const where: any = {};
+    
+    if (validatedStatus && validatedStatus !== "all") {
+      where.status = validatedStatus;
+    }
+    
+    // Filter by project if provided
+    if (validatedProjectId) {
+      where.projectId = validatedProjectId;
+    }
+    
+    // Filter by workspace if provided
+    if (validatedWorkspaceId) {
+      where.workspaceId = validatedWorkspaceId;
+    }
 
     // For ALL sorting options, we now fetch all matching records first,
     // then sort them properly, and then apply pagination
@@ -60,6 +87,14 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             image: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
           },
         },
         votes: {
@@ -172,21 +207,38 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const { title, description, html } = validated.data;
+    const { title, description, html, projectId, workspaceId } = validated.data;
+
+    // Build the data object - projectId is required
+    const data: any = {
+      title,
+      description,
+      html: html || null,
+      authorId: session.user.id,
+      projectId, // Required field
+    };
+
+    // Add workspaceId if provided
+    if (workspaceId) {
+      data.workspaceId = workspaceId;
+    }
 
     const featureRequest = await prisma.featureRequest.create({
-      data: {
-        title,
-        description,
-        html: html || null,
-        authorId: session.user.id,
-      },
+      data,
       include: {
         author: {
           select: {
             id: true,
             name: true,
             image: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
           },
         },
       },

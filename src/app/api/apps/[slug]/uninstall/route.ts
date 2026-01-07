@@ -54,6 +54,14 @@ export async function POST(
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
 
+    // Prevent uninstalling system apps
+    if (app.isSystemApp) {
+      return NextResponse.json(
+        { error: 'System apps cannot be uninstalled' },
+        { status: 403 }
+      );
+    }
+
     const installation = app.installations[0];
     if (!installation) {
       return NextResponse.json({ error: 'App not installed in this workspace' }, { status: 404 });

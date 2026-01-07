@@ -56,7 +56,7 @@ export const GET = withAppAuth(
       }
 
       const [activities, total] = await Promise.all([
-        prisma.boardItemActivity.findMany({
+        prisma.issueActivity.findMany({
           where,
           skip,
           take: limit,
@@ -72,7 +72,7 @@ export const GET = withAppAuth(
             },
           },
         }),
-        prisma.boardItemActivity.count({ where }),
+        prisma.issueActivity.count({ where }),
       ]);
 
       // Get issue details for context

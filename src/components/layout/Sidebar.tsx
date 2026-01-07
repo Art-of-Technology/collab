@@ -27,6 +27,7 @@ import {
   Calendar,
   Book,
   Grid3X3,
+  Shield,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { formatDistanceToNow } from "date-fns";
@@ -567,7 +568,7 @@ export default function Sidebar({
     <div className="flex flex-col h-full min-w-0">
       {/* Header - Logo and Actions */}
       <div className="p-3 border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href={`/${currentWorkspace?.slug || currentWorkspace?.id}/dashboard`} className="flex items-center">
             <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
@@ -1080,6 +1081,17 @@ export default function Sidebar({
                 API Documentation
               </Link>
             </DropdownMenuItem>
+            {session?.user?.role === 'SYSTEM_ADMIN' && (
+              <>
+                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                <DropdownMenuItem asChild>
+                  <Link href="/admin" className="text-[#22c55e] hover:text-[#22c55e]">
+                    <Shield className="mr-2 h-4 w-4" />
+                    Admin Dashboard
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator className="bg-[#1f1f1f]" />
             <DropdownMenuItem className="text-gray-300 hover:text-white cursor-pointer" onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />

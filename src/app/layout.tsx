@@ -12,7 +12,6 @@ import { WorkspaceLoadingWrapper } from '@/components/layout/WorkspaceLoadingWra
 import { MentionProvider } from '@/context/MentionContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { DockProvider } from '@/context/DockContext';
-import { ActivityProvider } from '@/context/ActivityContext';
 import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
@@ -72,7 +71,6 @@ export default async function RootLayout({
         >
           <SessionProvider>
             <QueryProvider>
-              <ActivityProvider>
                 <WorkspaceProvider>
                   <WorkspaceLoadingWrapper>
                     <MentionProvider>
@@ -94,7 +92,6 @@ export default async function RootLayout({
                   </MentionProvider>
                 </WorkspaceLoadingWrapper>
               </WorkspaceProvider>
-              </ActivityProvider>
             </QueryProvider>
           </SessionProvider>
         </ThemeProvider>
