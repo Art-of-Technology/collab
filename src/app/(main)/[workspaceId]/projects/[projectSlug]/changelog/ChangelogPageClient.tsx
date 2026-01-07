@@ -76,6 +76,7 @@ interface Version {
   releases: Array<{
     id: string;
     name: string;
+    description?: string;
     githubUrl?: string;
     publishedAt?: string;
   }>;
@@ -487,8 +488,20 @@ function VersionCard({ version }: { version: Version }) {
 
       {expanded && (
         <div className="px-4 pb-4 pt-2 border-t border-[#1f1f1f] space-y-4">
+          {/* Show AI Summary if available */}
           {version.aiSummary && (
             <p className="text-sm text-[#8b949e]">{version.aiSummary}</p>
+          )}
+
+          {/* Fallback: Show GitHub release description if no AI summary and no issues */}
+          {!version.aiSummary && features.length === 0 && bugs.length === 0 && version.releases?.[0]?.description && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-medium text-[#8b949e] flex items-center gap-1.5">
+                <Github className="h-3.5 w-3.5" />
+                Release Notes
+              </h4>
+              <p className="text-sm text-[#8b949e] whitespace-pre-wrap">{version.releases[0].description}</p>
+            </div>
           )}
 
           {version.parentVersion && (
@@ -553,6 +566,18 @@ function VersionCard({ version }: { version: Version }) {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Empty state when no content available */}
+          {!version.aiSummary &&
+           features.length === 0 &&
+           bugs.length === 0 &&
+           version.deployments.length === 0 &&
+           !version.parentVersion &&
+           !version.releases?.[0]?.description && (
+            <p className="text-sm text-[#6e7681] italic">
+              No changelog details available. Link issues to this version or generate an AI summary.
+            </p>
           )}
         </div>
       )}

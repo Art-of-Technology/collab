@@ -75,20 +75,26 @@ async function main() {
     `;
     console.log(`  ✓ Updated ${updated} records with projectId from Issue`);
 
-    // Step 5: Try boardId as fallback for any remaining records
-    const stillNeedsProjectId = await prisma.$queryRaw<Array<{cnt: bigint}>>`
-      SELECT COUNT(*) as cnt FROM "BoardItemActivity"
-      WHERE "projectId" IS NULL AND "boardId" IS NOT NULL
-    `;
+    // Step 5: Try boardId as fallback for any remaining records (if column exists)
+    const hasBoardId = await checkColumnExists('BoardItemActivity', 'boardId');
 
-    if (Number(stillNeedsProjectId[0]?.cnt || 0) > 0) {
-      console.log('\nStep 5: Using boardId as fallback for remaining records...');
-      const fallbackUpdated = await prisma.$executeRaw`
-        UPDATE "BoardItemActivity"
-        SET "projectId" = "boardId"
+    if (hasBoardId) {
+      const stillNeedsProjectId = await prisma.$queryRaw<Array<{cnt: bigint}>>`
+        SELECT COUNT(*) as cnt FROM "BoardItemActivity"
         WHERE "projectId" IS NULL AND "boardId" IS NOT NULL
       `;
-      console.log(`  ✓ Updated ${fallbackUpdated} records using boardId`);
+
+      if (Number(stillNeedsProjectId[0]?.cnt || 0) > 0) {
+        console.log('\nStep 5: Using boardId as fallback for remaining records...');
+        const fallbackUpdated = await prisma.$executeRaw`
+          UPDATE "BoardItemActivity"
+          SET "projectId" = "boardId"
+          WHERE "projectId" IS NULL AND "boardId" IS NOT NULL
+        `;
+        console.log(`  ✓ Updated ${fallbackUpdated} records using boardId`);
+      }
+    } else {
+      console.log('\nStep 5: boardId column does not exist, skipping fallback...');
     }
   }
 
