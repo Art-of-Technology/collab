@@ -544,12 +544,12 @@ export function ProjectDashboard({
             />
           </div>
 
-          {/* Notes Section */}
+          {/* Context Section */}
           <div className="mt-6 bg-[#0d0d0e] rounded-lg border border-[#1f1f1f] p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <StickyNote className="h-4 w-4 text-[#52525b]" />
-                <h2 className="text-xs font-medium text-[#a1a1aa] uppercase tracking-wider">Notes</h2>
+                <h2 className="text-xs font-medium text-[#a1a1aa] uppercase tracking-wider">Context</h2>
                 <span className="text-xs text-[#3f3f46]">({summary?.notes?.length || 0})</span>
               </div>
               <Link
@@ -619,9 +619,9 @@ export function ProjectDashboard({
                 <FileText className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#fafafa]">Notes</p>
+                <p className="text-sm font-medium text-[#fafafa]">Context</p>
                 <p className="text-[11px] text-[#52525b]">
-                  {summary?.notes.length || 0} notes
+                  {summary?.notes.length || 0} items
                 </p>
               </div>
             </Link>

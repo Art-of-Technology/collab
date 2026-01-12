@@ -570,7 +570,7 @@ export function CommandMenu({
             )}
           >
             <FileText className="h-4 w-4 text-gray-400" />
-            <span className="text-sm">Go to Notes</span>
+            <span className="text-sm">Go to Context</span>
           </CommandItem>
           <CommandItem
             onSelect={() => navigateTo(getWorkspacePath("/features"))}

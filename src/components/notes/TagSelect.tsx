@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Plus, Search, X, Tag as TagIcon, Tag } from "lucide-react";
+import { Plus, Search, X, Tag, Tags, Loader2, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sortTagsBySearchTerm } from "@/utils/sortUtils";
 import { NoteTag } from "@/types/models";
-import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 
 interface TagSelectProps {
   value: string[];
@@ -117,9 +116,12 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     }
   };
 
-  const handleTagAdd = (tagId: string) => {
-    onChange([...value, tagId]);
-    setSearchTerm("");
+  const handleTagToggle = (tagId: string) => {
+    if (value.includes(tagId)) {
+      onChange(value.filter(id => id !== tagId));
+    } else {
+      onChange([...value, tagId]);
+    }
   };
 
   const handleTagRemove = (tagId: string) => {
@@ -137,9 +139,6 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
     return sortTagsBySearchTerm(tags, searchTerm);
   }, [tags, searchTerm]);
 
-  // Get unselected tags for dropdown
-  const unselectedTags = filteredTags.filter(tag => !value.includes(tag.id));
-
   const selectedTags = tags.filter(tag => value.includes(tag.id));
 
   return (
@@ -150,89 +149,136 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
           key={tag.id}
           type="button"
           onClick={() => handleTagRemove(tag.id)}
-          className="group inline-flex justify-center items-center gap-1.5 px-2 py-1 rounded text-xs font-medium hover:opacity-70 transition-opacity"
+          className="group inline-flex justify-center items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium hover:opacity-70 transition-opacity border border-[#2d2d30]"
           style={{
             backgroundColor: `${tag.color}15`,
-            color: tag.color
+            color: tag.color,
+            borderColor: `${tag.color}30`,
           }}
         >
-          <Tag className="size-2.5 relative top-[1px]" />
-          <span className="truncate max-w-[120px] text-[10px]">{tag.name}</span>
-          <X className="size-2.5 opacity-60 relative top-[1px]" />
+          <span
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: tag.color }}
+          />
+          <span className="truncate max-w-[100px] text-[10px]">{tag.name}</span>
+          <X className="h-2.5 w-2.5 opacity-60" />
         </button>
       ))}
 
-      {/* Add tag dropdown - compact */}
-      <Popover open={isOpen} onOpenChange={handleOpenChange}>
+      {/* Add tag dropdown - using GlobalFilterSelector styling */}
+      <Popover modal={true} open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <Button
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            className="h-auto px-2 py-1"
+            className={cn(
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
+              "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
+              "text-[#cccccc] focus:outline-none bg-[#181818]"
+            )}
           >
-            <Plus className="h-3 w-3" />
-            <span>Add tag</span>
-          </Button>
+            <Tags className="h-3 w-3 text-[#6e7681]" />
+            <span className="text-[#6e7681] text-xs">Tags</span>
+          </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-64 p-0"
+          className="w-64 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
           align="start"
+          side="bottom"
+          sideOffset={4}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          {/* Search input */}
-          <div className="p-2 border-b border-border/30">
+          {/* Header with search */}
+          <div className="p-3 border-b border-[#2d2d30]">
+            <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+              Select tags
+            </div>
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder="Search tags..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-transparent border-0 outline-none pl-7 pr-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60"
+                className="w-full pl-9 pr-3 h-7 text-xs bg-[#0e0e0e] border border-[#2d2d30] rounded focus:border-[#464649] text-[#cccccc] placeholder:text-[#6e7681] outline-none"
               />
             </div>
           </div>
 
           {/* Tags list */}
-          <div className="max-h-48 overflow-y-auto">
-            {unselectedTags.length > 0 ? (
-              <div className="p-1">
-                {unselectedTags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => handleTagAdd(tag.id)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-accent/50 transition-colors text-left"
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <span className="flex-1 truncate">{tag.name}</span>
-                    {tag._count && (
-                      <span className="text-[10px] text-muted-foreground/60">
-                        {tag._count.notes}
-                      </span>
-                    )}
-                  </button>
-                ))}
+          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
+            {/* Clear all option */}
+            {value.length > 0 && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                onClick={() => onChange([])}
+              >
+                <Tags className="h-3.5 w-3.5 text-[#6e7681]" />
+                <span className="text-[#9ca3af] flex-1">Clear all tags</span>
+              </button>
+            )}
+
+            {/* Tags */}
+            {filteredTags.length > 0 ? (
+              <div className="space-y-0.5">
+                {filteredTags.map((tag) => {
+                  const isSelected = value.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => handleTagToggle(tag.id)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span className="text-[#cccccc] flex-1 truncate">{tag.name}</span>
+                      {tag._count && (
+                        <span className="text-[10px] text-[#6e7681]">
+                          {tag._count.notes}
+                        </span>
+                      )}
+                      {isSelected && (
+                        <Check className="h-3 w-3 text-[#6e7681]" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-            ) : searchTerm && (
-              <div className="p-4 text-xs text-muted-foreground/60 text-center">
-                No tags found
+            ) : searchTerm ? (
+              <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+                <div className="space-y-2">
+                  <p>No tags found for "{searchTerm}"</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTagName(searchTerm);
+                      setShowCreateInput(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 text-xs bg-[#0e0e0e] border border-[#2d2d30] rounded hover:bg-[#1a1a1a] text-[#cccccc]"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Create "{searchTerm}"
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+                No tags available
               </div>
             )}
           </div>
 
           {/* Create new tag section */}
-          <div className="p-2 border-t border-border/30">
+          <div className="p-2 border-t border-[#2d2d30]">
             {!showCreateInput ? (
               <button
                 type="button"
                 onClick={() => setShowCreateInput(true)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-[#6e7681] hover:text-[#cccccc] hover:bg-[#2a2a2a] transition-colors"
               >
                 <Plus className="h-3 w-3" />
                 <span>Create new tag</span>
@@ -254,7 +300,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                       setNewTagName("");
                     }
                   }}
-                  className="w-full bg-transparent border border-border/30 rounded px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary/50"
+                  className="w-full bg-[#0e0e0e] border border-[#2d2d30] rounded px-2 py-1.5 text-xs text-[#cccccc] placeholder:text-[#6e7681] outline-none focus:border-[#464649]"
                 />
                 <div className="flex items-center gap-1.5">
                   <button
@@ -263,7 +309,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                       setShowCreateInput(false);
                       setNewTagName("");
                     }}
-                    className="flex-1 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded transition-colors"
+                    className="flex-1 px-2 py-1.5 text-xs text-[#6e7681] hover:text-[#cccccc] hover:bg-[#2a2a2a] rounded transition-colors"
                   >
                     Cancel
                   </button>
@@ -271,9 +317,16 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
                     type="button"
                     onClick={createTag}
                     disabled={!newTagName.trim() || isCreatingTag}
-                    className="flex-1 px-2 py-1.5 text-xs bg-primary/90 hover:bg-primary text-primary-foreground rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-2 py-1.5 text-xs bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                   >
-                    {isCreatingTag ? "Creating..." : "Create"}
+                    {isCreatingTag ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create"
+                    )}
                   </button>
                 </div>
               </div>
@@ -283,4 +336,4 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
       </Popover>
     </div>
   );
-} 
+}

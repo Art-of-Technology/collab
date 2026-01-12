@@ -290,7 +290,7 @@ export default function Sidebar({
       current: pathname.includes("/timeline"),
     },
     {
-      name: "Notes",
+      name: "Context",
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/notes` : "#",
       icon: FileText,
       current: pathname.includes("/notes"),

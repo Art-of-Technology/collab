@@ -434,11 +434,13 @@ export async function GET(
     // Sort by vote score
     formattedFeatureRequests.sort((a, b) => b.voteScore - a.voteScore);
 
-    // Get notes for the workspace
+    // Get notes for the workspace (workspace or project scope)
     const notes = await prisma.note.findMany({
       where: {
-        workspaceId: project.workspaceId,
-        isPublic: true,
+        OR: [
+          { workspaceId: project.workspaceId, scope: 'WORKSPACE' },
+          { projectId: project.id, scope: 'PROJECT' },
+        ],
       },
       include: {
         tags: true,
@@ -457,7 +459,8 @@ export async function GET(
       id: note.id,
       title: note.title,
       content: note.content,
-      isPublic: note.isPublic,
+      scope: note.scope,
+      type: note.type,
       isFavorite: note.isFavorite,
       createdAt: note.createdAt.toISOString(),
       updatedAt: note.updatedAt.toISOString(),

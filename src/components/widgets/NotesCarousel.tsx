@@ -167,7 +167,7 @@ export function NotesCarousel({ notes, onNoteClick, isLoading }: NotesCarouselPr
       <div className="flex items-center justify-center py-8 text-center">
         <div>
           <StickyNote className="h-8 w-8 text-[#3f3f46] mx-auto mb-2" />
-          <p className="text-xs text-[#52525b]">No notes yet</p>
+          <p className="text-xs text-[#52525b]">No context yet</p>
         </div>
       </div>
     );
