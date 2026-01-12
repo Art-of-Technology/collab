@@ -42,6 +42,8 @@ model User {
   sentMessages           Message[]               @relation("SentMessages")
   notes                  Note[]
   noteTags               NoteTag[]
+  sharedNotes            NoteShare[]             @relation("SharedNotes")
+  notesSharedByUser      NoteShare[]             @relation("NotesSharedByUser")
   sentNotifications      Notification[]          @relation("NotificationSender")
   notifications          Notification[]          @relation("NotificationReceiver")
   posts                  Post[]
@@ -55,54 +57,54 @@ model User {
   conversations          Conversation[]          @relation("UserConversations")
   leaveRequest           LeaveRequest[]
   leaveBalances          LeaveBalance[]
-  
+
   // New unified Issue system relationships
-  assignedIssues         Issue[]                 @relation("AssignedIssues")
-  reportedIssues         Issue[]                 @relation("ReportedIssues")
-  ownedViews             View[]                  @relation("OwnedViews")
-  issueCommentReactions  IssueCommentReaction[]  @relation("IssueCommentReactions")
-  createdRelations       IssueRelation[]         @relation("CreatedRelations")
-  approvedIssueHelpers   IssueAssignee[]         @relation("IssueAssigneeApprover")
-  issueAssignees         IssueAssignee[]         @relation("IssueAssignee")
-  issueComments          IssueComment[]          @relation("IssueCommentAuthor")
-  issueActivities        IssueActivity[]
-  
+  assignedIssues        Issue[]                @relation("AssignedIssues")
+  reportedIssues        Issue[]                @relation("ReportedIssues")
+  ownedViews            View[]                 @relation("OwnedViews")
+  issueCommentReactions IssueCommentReaction[] @relation("IssueCommentReactions")
+  createdRelations      IssueRelation[]        @relation("CreatedRelations")
+  approvedIssueHelpers  IssueAssignee[]        @relation("IssueAssigneeApprover")
+  issueAssignees        IssueAssignee[]        @relation("IssueAssignee")
+  issueComments         IssueComment[]         @relation("IssueCommentAuthor")
+  issueActivities       IssueActivity[]
+
   // Follower relationships
-  postFollowers          PostFollower[]
-  projectFollowers       ProjectFollower[]
-  issueFollowers         IssueFollower[]
-  viewFollowers          ViewFollower[]
-  
+  postFollowers    PostFollower[]
+  projectFollowers ProjectFollower[]
+  issueFollowers   IssueFollower[]
+  viewFollowers    ViewFollower[]
+
   // Favorite relationships
-  viewFavorites          ViewFavorite[]
-  
+  viewFavorites ViewFavorite[]
+
   // Notification preferences (per-workspace)
   notificationPreferences NotificationPreferences[]
-  
+
   // OAuth authorization codes
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
-  
+
   // GitHub Integration relationships
-  githubId               String?                 // GitHub user ID
-  githubUsername         String?                 // GitHub username
-  githubAccessToken      String?                 // OAuth access token (encrypt in production)
-  createdPullRequests    PullRequest[]           @relation("PRCreatedBy")
-  mergedPullRequests     PullRequest[]           @relation("PRMergedBy")
-  deployments            Deployment[]            @relation("DeploymentUser")
-  prReviews              PRReview[]              // PR reviews by this user
-  triggeredAIReviews     AIPRReview[]            @relation("AIReviewTriggeredBy")
+  githubId            String? // GitHub user ID
+  githubUsername      String? // GitHub username
+  githubAccessToken   String? // OAuth access token (encrypt in production)
+  createdPullRequests PullRequest[] @relation("PRCreatedBy")
+  mergedPullRequests  PullRequest[] @relation("PRMergedBy")
+  deployments         Deployment[]  @relation("DeploymentUser")
+  prReviews           PRReview[] // PR reviews by this user
+  triggeredAIReviews  AIPRReview[]  @relation("AIReviewTriggeredBy")
 
   // App Store relations
-  publishedApps          App[]                   @relation("UserApps")
-  
+  publishedApps App[] @relation("UserApps")
+
   // Daily Focus relations
-  dailyFocusEntries      DailyFocusEntry[]
-  assignedDailyFocus     DailyFocusAssignment[]  @relation("AssignedDailyFocus")
-  createdDailyFocus      DailyFocusAssignment[]  @relation("CreatedDailyFocus")
-  
+  dailyFocusEntries  DailyFocusEntry[]
+  assignedDailyFocus DailyFocusAssignment[] @relation("AssignedDailyFocus")
+  createdDailyFocus  DailyFocusAssignment[] @relation("CreatedDailyFocus")
+
   // Planning relations
-  planEntries            PlanEntry[]             @relation("PlanEntries")
-  createdPlanEntries     PlanEntry[]             @relation("PlanEntryCreator")
+  planEntries        PlanEntry[] @relation("PlanEntries")
+  createdPlanEntries PlanEntry[] @relation("PlanEntryCreator")
 }
 
 model Account {
@@ -366,38 +368,39 @@ model Workspace {
   owner               User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   invitations         WorkspaceInvitation[]
   members             WorkspaceMember[]
-  
+
   // New unified Issue system relationships
-  projects            Project[]
-  views               View[]
-  issues              Issue[]
-  
+  projects Project[]
+  views    View[]
+  issues   Issue[]
+
   // App Store relationships
-  appInstallations    AppInstallation[]
+  appInstallations        AppInstallation[]
   oauthAuthorizationCodes AppOAuthAuthorizationCode[]
   notificationPreferences NotificationPreferences[]
-  systemAppTokens     AppToken[] @relation("SystemAppWorkspaceTokens")  // Tokens for system apps
-  
+  systemAppTokens         AppToken[]                  @relation("SystemAppWorkspaceTokens") // Tokens for system apps
+
   // Daily Focus relationships
-  dailyFocusEntries   DailyFocusEntry[]
+  dailyFocusEntries DailyFocusEntry[]
 }
 
 model WorkspaceMember {
-  id          String    @id @default(cuid())
-  userId      String
-  workspaceId String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  role        String    @default("MEMBER")
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  status Boolean @default(true) // Active status of the member
+  id           String    @id @default(cuid())
+  userId       String
+  workspaceId  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  role         String    @default("MEMBER")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  status       Boolean   @default(true) // Active status of the member
   // Per-workspace profile fields
   displayName  String?
   team         String?
   currentFocus String?
   expertise    String[]
   slackId      String?
+
   @@unique([userId, workspaceId])
 }
 
@@ -417,28 +420,29 @@ model WorkspaceInvitation {
 }
 
 model Project {
-  id              String       @id @default(cuid())
-  name            String
-  slug            String
-  description     String?
-  color           String?      // Project color for UI
-  workspaceId     String
-  isDefault       Boolean      @default(false)
-  isArchived      Boolean?     // Optional for backwards compatibility - null/false = active, true = archived
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  issuePrefix     String
-  nextIssueNumbers Json        @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"BUG\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
-  
+  id               String   @id @default(cuid())
+  name             String
+  slug             String
+  description      String?
+  color            String? // Project color for UI
+  workspaceId      String
+  isDefault        Boolean  @default(false)
+  isArchived       Boolean? // Optional for backwards compatibility - null/false = active, true = archived
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  issuePrefix      String
+  nextIssueNumbers Json     @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"BUG\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
+
   // Relationships
-  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issues          Issue[]
   statuses        ProjectStatus[] // New status system
   followers       ProjectFollower[]
   featureRequests FeatureRequest[] // Feature requests linked to this project
-  
+  notes           Note[] // Knowledge System: project-level notes
+
   // GitHub Integration - One-to-one relationship with Repository
-  repository      Repository?     // Connected GitHub repository
+  repository Repository? // Connected GitHub repository
 
   @@unique([name, workspaceId])
   @@unique([slug, workspaceId])
@@ -447,88 +451,88 @@ model Project {
   @@index([workspaceId, isArchived])
 }
 
-
 model Issue {
-  id            String      @id @default(cuid())
-  title         String
-  description   String?
-  type          IssueType   @default(TASK)
-  
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  type        IssueType @default(TASK)
+
   // New status system
-  statusId      String?
-  statusValue   String?     // For backward compatibility and migration
-  
-  priority      String      @default("medium")
-  storyPoints   Int?
-  
+  statusId    String?
+  statusValue String? // For backward compatibility and migration
+
+  priority    String @default("medium")
+  storyPoints Int?
+
   // Hierarchy relationships
-  parentId      String?
-  parent        Issue?      @relation("IssueHierarchy", fields: [parentId], references: [id])
-  children      Issue[]     @relation("IssueHierarchy")
-  
+  parentId String?
+  parent   Issue?  @relation("IssueHierarchy", fields: [parentId], references: [id])
+  children Issue[] @relation("IssueHierarchy")
+
   // Core relationships
-  assigneeId    String?
-  reporterId    String?
-  projectId     String
-  workspaceId   String
-  
+  assigneeId  String?
+  reporterId  String?
+  projectId   String
+  workspaceId String
+
   // Dates and tracking
-  dueDate       DateTime?
-  startDate     DateTime?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
+  dueDate   DateTime?
+  startDate DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
   // Lifecycle tracking
-  firstStartedAt DateTime?   // When first moved to In Progress
-  lastProgressAt DateTime?   // Last time had activity
-  daysInProgress Int         @default(0) // Auto-calculated
-  
+  firstStartedAt DateTime? // When first moved to In Progress
+  lastProgressAt DateTime? // Last time had activity
+  daysInProgress Int       @default(0) // Auto-calculated
+
   // Issue identification
-  issueKey      String?
-  position      Int?
-  
+  issueKey String?
+  position Int?
+
   // Type-specific fields (used conditionally)
-  progress      Int?        @default(0)
-  color         String?
-  
+  progress Int?    @default(0)
+  color    String?
+
   // Legacy fields for migration
-  postId        String?
-  status        String?     // Legacy field - will be migrated to statusId
-  
+  postId String?
+  status String? // Legacy field - will be migrated to statusId
+
   // Relationships
-  assignee      User?            @relation("AssignedIssues", fields: [assigneeId], references: [id])
-  reporter      User?            @relation("ReportedIssues", fields: [reporterId], references: [id])
-  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  
+  assignee  User?     @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  reporter  User?     @relation("ReportedIssues", fields: [reporterId], references: [id])
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   // New status relationship
-  projectStatus ProjectStatus?   @relation("IssueStatus", fields: [statusId], references: [id])
+  projectStatus ProjectStatus? @relation("IssueStatus", fields: [statusId], references: [id])
 
   // Unified relationships
   comments      IssueComment[]
-  labels        TaskLabel[]      @relation("IssueToLabel")
+  labels        TaskLabel[]         @relation("IssueToLabel")
   viewPositions ViewIssuePosition[]
   helpers       IssueAssignee[]
   followers     IssueFollower[]
-  
+
   // Issue relations
   sourceRelations IssueRelation[] @relation("SourceRelations")
   targetRelations IssueRelation[] @relation("TargetRelations")
-  
+
   // GitHub Integration relationships
-  branches        Branch[]
-  pullRequests    PullRequest[]
-  commits         Commit[]
-  versionIssues   VersionIssue[]
-  
+  branches      Branch[]
+  pullRequests  PullRequest[]
+  commits       Commit[]
+  versionIssues VersionIssue[]
+
   // Daily Focus relationships
   dailyFocusReflections DailyFocusReflection[]
-  dailyFocusPlans      DailyFocusPlan[]
+  dailyFocusPlans       DailyFocusPlan[]
   dailyFocusAssignments DailyFocusAssignment[]
-  
-  // Planning relationships
-  planEntries          PlanEntry[]             @relation("PlanEntryIssues")
 
+  // Planning relationships
+  planEntries PlanEntry[] @relation("PlanEntryIssues")
+
+  @@unique([issueKey, projectId])
   @@index([projectId])
   @@index([workspaceId])
   @@index([assigneeId])
@@ -536,101 +540,100 @@ model Issue {
   @@index([parentId])
   @@index([issueKey])
   @@index([type])
-  @@index([status])      // Legacy index
-  @@index([statusId])    // New index
+  @@index([status]) // Legacy index
+  @@index([statusId]) // New index
   @@index([postId])
   // Performance indexes for team sync/planning view
   @@index([workspaceId, assigneeId, projectId, createdAt], name: "Issue_team_planning_idx")
-  @@unique([issueKey, projectId])
 }
 
 model View {
-  id            String          @id @default(cuid())
-  name          String
-  slug          String?
-  description   String?
-  workspaceId   String
-  ownerId       String
-  
+  id          String  @id @default(cuid())
+  name        String
+  slug        String?
+  description String?
+  workspaceId String
+  ownerId     String
+
   // View Configuration
-  displayType   ViewDisplayType @default(KANBAN)
-  filters       Json?
-  sorting       Json?
-  grouping      Json?
-  fields        Json?
-  layout        Json?
-  
+  displayType ViewDisplayType @default(KANBAN)
+  filters     Json?
+  sorting     Json?
+  grouping    Json?
+  fields      Json?
+  layout      Json?
+
   // Multi-project and cross-workspace support
-  projectIds    String[]
-  workspaceIds  String[]
-  
+  projectIds   String[]
+  workspaceIds String[]
+
   // Permission and visibility
-  visibility    ViewVisibility  @default(PERSONAL)
-  isDefault     Boolean         @default(false)
-  isFavorite    Boolean         @default(false)
-  sharedWith    String[]
-  color         String?
-  
+  visibility ViewVisibility @default(PERSONAL)
+  isDefault  Boolean        @default(false)
+  isFavorite Boolean        @default(false)
+  sharedWith String[]
+  color      String?
+
   // Metadata
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   lastAccessedAt DateTime?
-  accessCount   Int             @default(0)
-  
+  accessCount    Int       @default(0)
+
   // View-specific issue positions
   issuePositions ViewIssuePosition[]
-  
+
   // Relationships
-  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  owner         User            @relation("OwnedViews", fields: [ownerId], references: [id], onDelete: Cascade)
-  followers     ViewFollower[]
-  favorites     ViewFavorite[]
-  
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     User           @relation("OwnedViews", fields: [ownerId], references: [id], onDelete: Cascade)
+  followers ViewFollower[]
+  favorites ViewFavorite[]
+
+  @@unique([slug, workspaceId])
   @@index([workspaceId])
   @@index([ownerId])
   @@index([visibility])
   @@index([isDefault])
   @@index([isFavorite])
   @@index([slug])
-  @@unique([slug, workspaceId])
 }
 
 model ViewIssuePosition {
   id       String @id @default(cuid())
   viewId   String
   issueId  String
-  columnId String  // Status/column identifier (e.g., "todo", "in_progress")
+  columnId String // Status/column identifier (e.g., "todo", "in_progress")
   position Float
-  
+
   // Relationships
-  view     View   @relation(fields: [viewId], references: [id], onDelete: Cascade)
-  issue    Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  
+  view  View  @relation(fields: [viewId], references: [id], onDelete: Cascade)
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@unique([viewId, issueId, columnId])
   @@index([viewId, columnId])
   @@index([issueId])
 }
 
 model IssueComment {
-  id            String                @id @default(cuid())
-  content       String
-  issueId       String
-  authorId      String
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  html          String?
-  parentId      String?
-  
-  author        User                  @relation("IssueCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  parent        IssueComment?         @relation("IssueCommentHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  replies       IssueComment[]        @relation("IssueCommentHierarchy")
-  issue         Issue                 @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  reactions     IssueCommentReaction[]
-  
+  id        String   @id @default(cuid())
+  content   String
+  issueId   String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  html      String?
+  parentId  String?
+
+  author    User                   @relation("IssueCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parent    IssueComment?          @relation("IssueCommentHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   IssueComment[]         @relation("IssueCommentHierarchy")
+  issue     Issue                  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  reactions IssueCommentReaction[]
+
   // Notifications relationship will be added when Notification model is updated
 
   @@index([issueId])
@@ -639,14 +642,14 @@ model IssueComment {
 }
 
 model IssueCommentReaction {
-  id            String       @id @default(cuid())
-  type          String
-  commentId     String
-  authorId      String
-  createdAt     DateTime     @default(now())
-  
-  author        User         @relation("IssueCommentReactions", fields: [authorId], references: [id])
-  comment       IssueComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  type      String
+  commentId String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  author  User         @relation("IssueCommentReactions", fields: [authorId], references: [id])
+  comment IssueComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@unique([authorId, commentId, type])
   @@index([commentId])
@@ -654,19 +657,19 @@ model IssueCommentReaction {
 }
 
 model StatusTemplate {
-  id          String         @id @default(cuid())
-  name        String         @unique // Internal name (e.g., "todo", "in_progress")
-  displayName String         // User-facing name (e.g., "To Do", "In Progress")
+  id          String   @id @default(cuid())
+  name        String   @unique // Internal name (e.g., "todo", "in_progress")
+  displayName String // User-facing name (e.g., "To Do", "In Progress")
   description String?
-  color       String         @default("#6366F1")
-  iconName    String?        // Lucide icon name
+  color       String   @default("#6366F1")
+  iconName    String? // Lucide icon name
   order       Int
-  category    String         @default("status") // status, priority, type, etc.
-  isDefault   Boolean        @default(false)
-  isActive    Boolean        @default(true)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  
+  category    String   @default("status") // status, priority, type, etc.
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   // Relationships
   projectStatuses ProjectStatus[]
 
@@ -676,32 +679,32 @@ model StatusTemplate {
 }
 
 model ProjectStatus {
-  id           String         @id @default(cuid())
-  name         String         // Internal name for API/database queries
-  displayName  String         // User-facing name for UI
-  description  String?
-  color        String         @default("#6366F1")
-  iconName     String?        // Lucide icon name
-  order        Int            @default(0)
-  isDefault    Boolean        @default(false) // Default status for new issues
-  isActive     Boolean        @default(true)  // Can be used to soft-delete statuses
-  isFinal      Boolean        @default(false) // Is this a final/completed state
-  
+  id          String  @id @default(cuid())
+  name        String // Internal name for API/database queries
+  displayName String // User-facing name for UI
+  description String?
+  color       String  @default("#6366F1")
+  iconName    String? // Lucide icon name
+  order       Int     @default(0)
+  isDefault   Boolean @default(false) // Default status for new issues
+  isActive    Boolean @default(true) // Can be used to soft-delete statuses
+  isFinal     Boolean @default(false) // Is this a final/completed state
+
   // Project relationship
-  projectId    String
-  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   // Template relationship (optional)
-  templateId   String?
-  template     StatusTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  
+  templateId String?
+  template   StatusTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
   // Timestamps
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relationships - issues that use this status
-  issues       Issue[]        @relation("IssueStatus")
-  
+  issues Issue[] @relation("IssueStatus")
+
   // Ensure unique status names per project
   @@unique([projectId, name])
   @@index([projectId])
@@ -710,14 +713,14 @@ model ProjectStatus {
 }
 
 model TaskLabel {
-  id          String      @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
-  color       String      @default("#6366F1")
+  color       String    @default("#6366F1")
   workspaceId String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  issues      Issue[]     @relation("IssueToLabel")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issues      Issue[]   @relation("IssueToLabel")
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
@@ -739,7 +742,7 @@ model IssueActivity {
   oldValue  String? // Previous value (JSON string for complex values)
   newValue  String? // New value (JSON string for complex values)
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
   @@index([userId])
@@ -750,7 +753,6 @@ model IssueActivity {
   // Performance indexes for team sync/planning view
   @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "IssueActivity_team_sync_idx")
   @@index([itemId, itemType, action, createdAt], name: "IssueActivity_item_history_idx")
-
   @@map("BoardItemActivity")
 }
 
@@ -781,24 +783,40 @@ model Notification {
 }
 
 model Note {
-  id          String     @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
   content     String
-  isPublic    Boolean    @default(false)
-  isFavorite  Boolean    @default(false)
+  isFavorite  Boolean  @default(false)
   authorId    String
   workspaceId String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
-  tags        NoteTag[]  @relation("NoteToTag")
-  comments    Comment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Knowledge System fields
+  type              NoteType  @default(GENERAL)
+  scope             NoteScope @default(PERSONAL)
+  projectId         String? // For PROJECT scope notes
+  isAiContext       Boolean   @default(false) // Should AI agents use this as context?
+  aiContextPriority Int       @default(0) // Priority order for AI context (higher = more important)
+  category          String? // Hierarchical category path (e.g., "backend/api")
+
+  // Relations
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  workspace  Workspace?  @relation(fields: [workspaceId], references: [id])
+  project    Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags       NoteTag[]   @relation("NoteToTag")
+  comments   Comment[]
+  sharedWith NoteShare[] @relation("SharedNote")
 
   @@index([authorId])
   @@index([workspaceId])
   @@index([createdAt])
   @@index([isFavorite])
+  @@index([type])
+  @@index([scope])
+  @@index([projectId])
+  @@index([isAiContext])
+  @@index([category])
 }
 
 model NoteTag {
@@ -817,21 +835,39 @@ model NoteTag {
   @@index([workspaceId])
 }
 
+// Personal note sharing - allows sharing PERSONAL scope notes with specific users
+model NoteShare {
+  id         String              @id @default(cuid())
+  noteId     String
+  userId     String // The user the note is shared with
+  permission NoteSharePermission @default(READ)
+  sharedAt   DateTime            @default(now())
+  sharedBy   String // The user who shared the note (author)
+
+  note   Note @relation("SharedNote", fields: [noteId], references: [id], onDelete: Cascade)
+  user   User @relation("SharedNotes", fields: [userId], references: [id], onDelete: Cascade)
+  sharer User @relation("NotesSharedByUser", fields: [sharedBy], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, userId])
+  @@index([noteId])
+  @@index([userId])
+  @@index([sharedBy])
+}
 
 model IssueAssignee {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   issueId         String
   userId          String
-  role            IssueAssigneeRole  @default(HELPER)
+  role            IssueAssigneeRole   @default(HELPER)
   status          IssueAssigneeStatus @default(PENDING)
-  assignedAt      DateTime           @default(now())
+  assignedAt      DateTime            @default(now())
   approvedAt      DateTime?
   approvedBy      String?
-  totalTimeWorked Int                @default(0)
+  totalTimeWorked Int                 @default(0)
   lastWorkedAt    DateTime?
-  approver        User?              @relation("IssueAssigneeApprover", fields: [approvedBy], references: [id])
-  issue           Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  user            User               @relation("IssueAssignee", fields: [userId], references: [id], onDelete: Cascade)
+  approver        User?               @relation("IssueAssigneeApprover", fields: [approvedBy], references: [id])
+  issue           Issue               @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user            User                @relation("IssueAssignee", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([issueId, userId])
   @@index([issueId])
@@ -942,18 +978,18 @@ model ViewFavorite {
 }
 
 model IssueRelation {
-  id              String              @id @default(cuid())
-  sourceIssueId   String
-  targetIssueId   String
-  relationType    IssueRelationType
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  createdBy       String?
-  
+  id            String            @id @default(cuid())
+  sourceIssueId String
+  targetIssueId String
+  relationType  IssueRelationType
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  createdBy     String?
+
   // Relationships
-  sourceIssue     Issue               @relation("SourceRelations", fields: [sourceIssueId], references: [id], onDelete: Cascade)
-  targetIssue     Issue               @relation("TargetRelations", fields: [targetIssueId], references: [id], onDelete: Cascade)
-  creator         User?               @relation("CreatedRelations", fields: [createdBy], references: [id])
+  sourceIssue Issue @relation("SourceRelations", fields: [sourceIssueId], references: [id], onDelete: Cascade)
+  targetIssue Issue @relation("TargetRelations", fields: [targetIssueId], references: [id], onDelete: Cascade)
+  creator     User? @relation("CreatedRelations", fields: [createdBy], references: [id])
 
   // Ensure unique relations
   @@unique([sourceIssueId, targetIssueId, relationType])
@@ -1064,43 +1100,43 @@ model LeaveBalance {
 
 // Repository Management  
 model Repository {
-  id              String    @id @default(cuid())
-  projectId       String    @unique
-  githubRepoId    String    @unique // GitHub's repo ID
-  owner           String    // GitHub org/user
-  name            String    // repo name
-  fullName        String    // owner/name
-  defaultBranch   String    @default("main")
-  webhookSecret   String    // for webhook verification
-  webhookId       String?   // GitHub webhook ID for management
-  accessToken     String?   // encrypted GitHub token
-  isActive        Boolean   @default(true)
-  syncedAt        DateTime? // last sync timestamp
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  id            String    @id @default(cuid())
+  projectId     String    @unique
+  githubRepoId  String    @unique // GitHub's repo ID
+  owner         String // GitHub org/user
+  name          String // repo name
+  fullName      String // owner/name
+  defaultBranch String    @default("main")
+  webhookSecret String // for webhook verification
+  webhookId     String? // GitHub webhook ID for management
+  accessToken   String? // encrypted GitHub token
+  isActive      Boolean   @default(true)
+  syncedAt      DateTime? // last sync timestamp
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
   // Branch versioning configuration
-  developmentBranch String?  // Base branch for development versioning (dev, development, etc.)
-  versioningStrategy VersioningStrategy @default(SINGLE_BRANCH)
+  developmentBranch    String? // Base branch for development versioning (dev, development, etc.)
+  versioningStrategy   VersioningStrategy @default(SINGLE_BRANCH)
   branchEnvironmentMap Json? // Map branches to environments {"dev": "development", "staging": "staging"}
-  
+
   // Issue type mapping configuration
-  issueTypeMapping Json?    // Custom mapping of issue types to version increments
+  issueTypeMapping Json? // Custom mapping of issue types to version increments
 
   // AI Review configuration
-  aiReviewEnabled     Boolean   @default(false)
-  aiReviewAutoTrigger Boolean   @default(false)  // Auto on PR create/update
+  aiReviewEnabled     Boolean @default(false)
+  aiReviewAutoTrigger Boolean @default(false) // Auto on PR create/update
 
-  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  branches        Branch[]
-  pullRequests    PullRequest[]
-  commits         Commit[]
-  releases        Release[]
-  versions        Version[]
-  deployments     Deployment[]
-  versionFiles    VersionFile[]
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branches         Branch[]
+  pullRequests     PullRequest[]
+  commits          Commit[]
+  releases         Release[]
+  versions         Version[]
+  deployments      Deployment[]
+  versionFiles     VersionFile[]
   changelogEntries ChangelogEntry[]
-  aiReviews       AIPRReview[]
+  aiReviews        AIPRReview[]
 
   @@index([projectId])
   @@index([githubRepoId])
@@ -1109,22 +1145,22 @@ model Repository {
 
 // Branch Tracking
 model Branch {
-  id            String      @id @default(cuid())
-  repositoryId  String
-  name          String
-  issueId       String?     // Linked collab issue
-  headSha       String
-  isProtected   Boolean     @default(false)
-  isDefault     Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
-  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  issue         Issue?      @relation(fields: [issueId], references: [id])
-  commits       Commit[]
-  pullRequests  PullRequest[] @relation("PRHeadBranch")
+  id           String   @id @default(cuid())
+  repositoryId String
+  name         String
+  issueId      String? // Linked collab issue
+  headSha      String
+  isProtected  Boolean  @default(false)
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  repository       Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  issue            Issue?        @relation(fields: [issueId], references: [id])
+  commits          Commit[]
+  pullRequests     PullRequest[] @relation("PRHeadBranch")
   basePullRequests PullRequest[] @relation("PRBaseBranch")
-  
+
   @@unique([repositoryId, name])
   @@index([issueId])
   @@index([repositoryId])
@@ -1132,39 +1168,39 @@ model Branch {
 
 // Pull Request Management
 model PullRequest {
-  id              String          @id @default(cuid())
+  id              String    @id @default(cuid())
   repositoryId    String
-  githubPrId      Int             // GitHub's PR number
+  githubPrId      Int // GitHub's PR number
   title           String
   description     String?
-  state           PRState         // OPEN, CLOSED, MERGED
+  state           PRState // OPEN, CLOSED, MERGED
   baseBranchId    String?
   headBranchId    String?
-  baseBranchName  String?         // Store branch name for display
-  headBranchName  String?         // Store branch name for display
-  issueId         String?         // Linked collab issue
+  baseBranchName  String? // Store branch name for display
+  headBranchName  String? // Store branch name for display
+  issueId         String? // Linked collab issue
   createdById     String?
   mergedById      String?
-  authorName      String?         // GitHub username of author
+  authorName      String? // GitHub username of author
   mergedAt        DateTime?
   closedAt        DateTime?
   githubCreatedAt DateTime?
   githubUpdatedAt DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  repository      Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  baseBranch      Branch?         @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
-  headBranch      Branch?         @relation("PRHeadBranch", fields: [headBranchId], references: [id])
-  issue           Issue?          @relation(fields: [issueId], references: [id])
-  createdBy       User?           @relation("PRCreatedBy", fields: [createdById], references: [id])
-  mergedBy        User?           @relation("PRMergedBy", fields: [mergedById], references: [id])
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  baseBranch Branch?    @relation("PRBaseBranch", fields: [baseBranchId], references: [id])
+  headBranch Branch?    @relation("PRHeadBranch", fields: [headBranchId], references: [id])
+  issue      Issue?     @relation(fields: [issueId], references: [id])
+  createdBy  User?      @relation("PRCreatedBy", fields: [createdById], references: [id])
+  mergedBy   User?      @relation("PRMergedBy", fields: [mergedById], references: [id])
 
-  checks          PRCheck[]
-  commits         Commit[]
+  checks           PRCheck[]
+  commits          Commit[]
   changelogEntries ChangelogEntry[]
-  reviews         PRReview[]
-  aiReviews       AIPRReview[]
+  reviews          PRReview[]
+  aiReviews        AIPRReview[]
 
   @@unique([repositoryId, githubPrId])
   @@index([issueId])
@@ -1176,20 +1212,20 @@ model PullRequest {
 
 // Pull Request Review Tracking
 model PRReview {
-  id              String        @id @default(cuid())
-  pullRequestId   String
-  githubReviewId  String        // GitHub's review ID
-  reviewerId      String?       // Collab user ID
-  githubReviewerId String       // GitHub user ID
-  reviewerLogin   String        // GitHub username
-  state           ReviewState   // PENDING, APPROVED, CHANGES_REQUESTED, DISMISSED
-  body            String?       // Review comment
-  submittedAt     DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               String      @id @default(cuid())
+  pullRequestId    String
+  githubReviewId   String // GitHub's review ID
+  reviewerId       String? // Collab user ID
+  githubReviewerId String // GitHub user ID
+  reviewerLogin    String // GitHub username
+  state            ReviewState // PENDING, APPROVED, CHANGES_REQUESTED, DISMISSED
+  body             String? // Review comment
+  submittedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
-  pullRequest     PullRequest   @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
-  reviewer        User?         @relation(fields: [reviewerId], references: [id])
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  reviewer    User?       @relation(fields: [reviewerId], references: [id])
 
   @@unique([pullRequestId, githubReviewId])
   @@index([pullRequestId])
@@ -1199,40 +1235,40 @@ model PRReview {
 
 // AI-Powered PR Review
 model AIPRReview {
-  id              String              @id @default(cuid())
-  pullRequestId   String
-  repositoryId    String
+  id            String @id @default(cuid())
+  pullRequestId String
+  repositoryId  String
 
   // Review content
-  summary         String              @db.Text
-  findings        Json                // Structured findings by category
-  fullReview      String              @db.Text // Complete markdown review
+  summary    String @db.Text
+  findings   Json // Structured findings by category
+  fullReview String @db.Text // Complete markdown review
 
   // Metrics
-  filesAnalyzed   Int                 @default(0)
-  linesAnalyzed   Int                 @default(0)
-  issuesFound     Int                 @default(0)
-  severity        AIPRReviewSeverity  @default(INFO)
+  filesAnalyzed Int                @default(0)
+  linesAnalyzed Int                @default(0)
+  issuesFound   Int                @default(0)
+  severity      AIPRReviewSeverity @default(INFO)
 
   // GitHub posting
   githubCommentId String?
-  postedToGitHub  Boolean             @default(false)
+  postedToGitHub  Boolean   @default(false)
   postedAt        DateTime?
 
   // Trigger info
-  triggerType     AIPRReviewTrigger   @default(MANUAL)
-  triggeredById   String?
+  triggerType   AIPRReviewTrigger @default(MANUAL)
+  triggeredById String?
 
   // Status
-  status          AIPRReviewStatus    @default(PENDING)
-  errorMessage    String?
+  status       AIPRReviewStatus @default(PENDING)
+  errorMessage String?
 
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  pullRequest     PullRequest         @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
-  repository      Repository          @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  triggeredBy     User?               @relation("AIReviewTriggeredBy", fields: [triggeredById], references: [id])
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  repository  Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  triggeredBy User?       @relation("AIReviewTriggeredBy", fields: [triggeredById], references: [id])
 
   @@index([pullRequestId])
   @@index([repositoryId])
@@ -1241,25 +1277,25 @@ model AIPRReview {
 
 // Commit Tracking
 model Commit {
-  id            String      @id @default(cuid())
+  id            String   @id @default(cuid())
   repositoryId  String
-  sha           String      @unique
+  sha           String   @unique
   message       String
   authorName    String
   authorEmail   String
   commitDate    DateTime
   branchId      String?
   pullRequestId String?
-  issueId       String?     // Extracted from commit message
-  additions     Int         @default(0)  // Lines added in this commit
-  deletions     Int         @default(0)  // Lines removed in this commit
-  createdAt     DateTime    @default(now())
-  
-  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  branch        Branch?     @relation(fields: [branchId], references: [id])
-  pullRequest   PullRequest? @relation(fields: [pullRequestId], references: [id])
-  issue         Issue?      @relation(fields: [issueId], references: [id])
-  
+  issueId       String? // Extracted from commit message
+  additions     Int      @default(0) // Lines added in this commit
+  deletions     Int      @default(0) // Lines removed in this commit
+  createdAt     DateTime @default(now())
+
+  repository  Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  pullRequest PullRequest? @relation(fields: [pullRequestId], references: [id])
+  issue       Issue?       @relation(fields: [issueId], references: [id])
+
   @@index([repositoryId])
   @@index([issueId])
   @@index([branchId])
@@ -1271,23 +1307,22 @@ model Commit {
 model PRCheck {
   id            String      @id @default(cuid())
   pullRequestId String
-  name          String      // e.g., "CodeQL", "Vercel"
+  name          String // e.g., "CodeQL", "Vercel"
   status        CheckStatus // PENDING, SUCCESS, FAILURE, ERROR
   conclusion    String?
   detailsUrl    String?
-  githubCheckId String?     // GitHub's check run ID
+  githubCheckId String? // GitHub's check run ID
   startedAt     DateTime?
   completedAt   DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-  
-  pullRequest   PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
-  
+
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
   @@unique([pullRequestId, name])
   @@index([pullRequestId])
   @@index([status])
 }
-
 
 // Version Management and Release Models
 // This file contains models for version tracking, releases, deployments, and changelog management
@@ -1296,37 +1331,37 @@ model PRCheck {
 model Version {
   id            String        @id @default(cuid())
   repositoryId  String
-  version       String        // e.g., "1.2.3"
+  version       String // e.g., "1.2.3"
   major         Int
   minor         Int
   patch         Int
-  prerelease    String?       // e.g., "alpha.1"
+  prerelease    String? // e.g., "alpha.1"
   buildMetadata String?
-  releaseType   ReleaseType   // MAJOR, MINOR, PATCH
+  releaseType   ReleaseType // MAJOR, MINOR, PATCH
   status        VersionStatus // PENDING, RELEASED, FAILED, CANCELLED
-  environment   String        // development, staging, production
-  branch        String?       // Branch this version was created from
+  environment   String // development, staging, production
+  branch        String? // Branch this version was created from
   releasedAt    DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  
+
   // Version inheritance tracking
-  parentVersionId String?     // Reference to the development version this production version inherits from
-  isProduction    Boolean     @default(false) // True if this is a production release
-  
+  parentVersionId String? // Reference to the development version this production version inherits from
+  isProduction    Boolean @default(false) // True if this is a production release
+
   // AI-generated content for better changelog
-  aiSummary     String?       // AI-generated version summary
-  aiChangelog   String?       // AI-generated changelog content
-  
-  repository    Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  parentVersion Version?      @relation("VersionInheritance", fields: [parentVersionId], references: [id])
-  childVersions Version[]     @relation("VersionInheritance")
-  issues        VersionIssue[]
-  releases      Release[]
-  deployments   Deployment[]
-  versionFiles  VersionFile[]
+  aiSummary   String? // AI-generated version summary
+  aiChangelog String? // AI-generated changelog content
+
+  repository       Repository       @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  parentVersion    Version?         @relation("VersionInheritance", fields: [parentVersionId], references: [id])
+  childVersions    Version[]        @relation("VersionInheritance")
+  issues           VersionIssue[]
+  releases         Release[]
+  deployments      Deployment[]
+  versionFiles     VersionFile[]
   changelogEntries ChangelogEntry[]
-  
+
   @@unique([repositoryId, version])
   @@index([repositoryId, status])
   @@index([repositoryId, environment])
@@ -1337,18 +1372,18 @@ model Version {
 
 // Issue-Version Mapping with AI enhancements
 model VersionIssue {
-  id          String    @id @default(cuid())
-  versionId   String
-  issueId     String
-  addedAt     DateTime  @default(now())
-  
+  id        String   @id @default(cuid())
+  versionId String
+  issueId   String
+  addedAt   DateTime @default(now())
+
   // AI-enhanced content for better changelog presentation
-  aiTitle     String?   // AI-improved title based on issue details
-  aiSummary   String?   // AI-generated summary from issue details
-  
-  version     Version   @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  
+  aiTitle   String? // AI-improved title based on issue details
+  aiSummary String? // AI-generated summary from issue details
+
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
   @@unique([versionId, issueId])
   @@index([issueId])
   @@index([versionId])
@@ -1356,25 +1391,25 @@ model VersionIssue {
 
 // Release Management
 model Release {
-  id              String      @id @default(cuid())
+  id              String    @id @default(cuid())
   repositoryId    String
   versionId       String
-  githubReleaseId String?     // GitHub release ID
+  githubReleaseId String? // GitHub release ID
   tagName         String
   name            String
   description     String?
-  isDraft         Boolean     @default(false)
-  isPrerelease    Boolean     @default(false)
+  isDraft         Boolean   @default(false)
+  isPrerelease    Boolean   @default(false)
   publishedAt     DateTime?
-  githubUrl       String?     // GitHub release URL
-  downloadCount   Int         @default(0)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
-  repository      Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  version         Version     @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  deployments     Deployment[]
-  
+  githubUrl       String? // GitHub release URL
+  downloadCount   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  repository  Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version     Version      @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  deployments Deployment[]
+
   @@unique([repositoryId, tagName])
   @@index([versionId])
   @@index([repositoryId])
@@ -1383,26 +1418,26 @@ model Release {
 
 // Deployment Tracking across environments
 model Deployment {
-  id            String            @id @default(cuid())
-  repositoryId  String
-  versionId     String
-  releaseId     String?
-  environment   String            // development, staging, production
-  status        DeploymentStatus  // PENDING, IN_PROGRESS, SUCCESS, FAILURE, CANCELLED
-  deployedAt    DateTime?
-  deployedBy    String?           // User who triggered deployment
-  commitSha     String?
-  buildUrl      String?           // CI/CD build URL
-  errorMessage  String?
-  metadata      Json?             // Additional deployment metadata
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  
-  repository    Repository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  version       Version           @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  release       Release?          @relation(fields: [releaseId], references: [id])
-  user          User?             @relation("DeploymentUser", fields: [deployedBy], references: [id])
-  
+  id           String           @id @default(cuid())
+  repositoryId String
+  versionId    String
+  releaseId    String?
+  environment  String // development, staging, production
+  status       DeploymentStatus // PENDING, IN_PROGRESS, SUCCESS, FAILURE, CANCELLED
+  deployedAt   DateTime?
+  deployedBy   String? // User who triggered deployment
+  commitSha    String?
+  buildUrl     String? // CI/CD build URL
+  errorMessage String?
+  metadata     Json? // Additional deployment metadata
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version    Version    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  release    Release?   @relation(fields: [releaseId], references: [id])
+  user       User?      @relation("DeploymentUser", fields: [deployedBy], references: [id])
+
   @@index([repositoryId])
   @@index([versionId])
   @@index([environment])
@@ -1412,19 +1447,19 @@ model Deployment {
 
 // Version File Tracking (for version.json in projects)
 model VersionFile {
-  id            String    @id @default(cuid())
-  repositoryId  String
-  versionId     String
-  environment   String
-  filePath      String    @default("public/version.json")
-  content       Json      // Version file content
-  deployedAt    DateTime?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  
-  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  version       Version    @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  
+  id           String    @id @default(cuid())
+  repositoryId String
+  versionId    String
+  environment  String
+  filePath     String    @default("public/version.json")
+  content      Json // Version file content
+  deployedAt   DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version    Version    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
   @@unique([repositoryId, environment])
   @@index([versionId])
   @@index([repositoryId])
@@ -1432,21 +1467,21 @@ model VersionFile {
 
 // Changelog Entries with AI-enhanced content
 model ChangelogEntry {
-  id            String      @id @default(cuid())
+  id            String     @id @default(cuid())
   repositoryId  String
-  versionId     String?     // Optional for manual entries
-  type          ChangeType  // FEATURE, BUGFIX, BREAKING, IMPROVEMENT
-  title         String      // AI-enhanced title
-  description   String      // AI-enhanced description
-  issueKey      String?     // Related issue key (e.g., MA-123)
-  pullRequestId String?     // Related PR
-  order         Int         @default(0)
-  createdAt     DateTime    @default(now())
-  
-  repository    Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  version       Version?     @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  pullRequest   PullRequest? @relation(fields: [pullRequestId], references: [id])
-  
+  versionId     String? // Optional for manual entries
+  type          ChangeType // FEATURE, BUGFIX, BREAKING, IMPROVEMENT
+  title         String // AI-enhanced title
+  description   String // AI-enhanced description
+  issueKey      String? // Related issue key (e.g., MA-123)
+  pullRequestId String? // Related PR
+  order         Int        @default(0)
+  createdAt     DateTime   @default(now())
+
+  repository  Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version     Version?     @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  pullRequest PullRequest? @relation(fields: [pullRequestId], references: [id])
+
   @@index([repositoryId])
   @@index([versionId])
   @@index([type])
@@ -1454,50 +1489,50 @@ model ChangelogEntry {
 
 // Version Management Enums
 enum ReleaseType {
-  MAJOR       // Breaking changes
-  MINOR       // New features (TASKs, STORYs)
-  PATCH       // Bug fixes (BUGs)
-  PRERELEASE  // Alpha, beta releases
+  MAJOR // Breaking changes
+  MINOR // New features (TASKs, STORYs)
+  PATCH // Bug fixes (BUGs)
+  PRERELEASE // Alpha, beta releases
 }
 
 enum VersionStatus {
-  PENDING     // Version created, not yet built
-  BUILDING    // Currently building
-  TESTING     // In testing phase
-  READY       // Ready for release
-  RELEASED    // Successfully released
-  FAILED      // Release failed
-  CANCELLED   // Release cancelled
+  PENDING // Version created, not yet built
+  BUILDING // Currently building
+  TESTING // In testing phase
+  READY // Ready for release
+  RELEASED // Successfully released
+  FAILED // Release failed
+  CANCELLED // Release cancelled
 }
 
 enum VersioningStrategy {
-  SINGLE_BRANCH    // Direct to main/master (simple flow)
-  MULTI_BRANCH     // Development branch -> main/master (GitFlow style)
+  SINGLE_BRANCH // Direct to main/master (simple flow)
+  MULTI_BRANCH // Development branch -> main/master (GitFlow style)
 }
 
 enum ReviewState {
-  PENDING           // Review requested but not submitted
-  APPROVED          // Review approved
+  PENDING // Review requested but not submitted
+  APPROVED // Review approved
   CHANGES_REQUESTED // Changes requested
-  DISMISSED         // Review dismissed
+  DISMISSED // Review dismissed
 }
 
 enum DeploymentStatus {
-  PENDING       // Deployment queued
-  IN_PROGRESS   // Currently deploying
-  SUCCESS       // Successfully deployed
-  FAILURE       // Deployment failed
-  CANCELLED     // Deployment cancelled
-  ROLLED_BACK   // Rolled back after deployment
+  PENDING // Deployment queued
+  IN_PROGRESS // Currently deploying
+  SUCCESS // Successfully deployed
+  FAILURE // Deployment failed
+  CANCELLED // Deployment cancelled
+  ROLLED_BACK // Rolled back after deployment
 }
 
 enum ChangeType {
-  FEATURE       // New features
-  BUGFIX        // Bug fixes
-  BREAKING      // Breaking changes
-  IMPROVEMENT   // Improvements/enhancements
-  SECURITY      // Security fixes
-  PERFORMANCE   // Performance improvements
+  FEATURE // New features
+  BUGFIX // Bug fixes
+  BREAKING // Breaking changes
+  IMPROVEMENT // Improvements/enhancements
+  SECURITY // Security fixes
+  PERFORMANCE // Performance improvements
   DOCUMENTATION // Documentation changes
 }
 
@@ -1537,8 +1572,6 @@ enum AIPRReviewStatus {
   COMPLETED
   FAILED
 }
-
-
 
 enum TrackUnit {
   HOURS
@@ -1736,6 +1769,7 @@ enum Permission {
   MANAGE_LEAVE
   MANAGE_APPS
 }
+
 enum IssueType {
   EPIC
   STORY
@@ -1772,12 +1806,12 @@ enum ViewVisibility {
   SHARED
 }
 
-enum AppStatus { 
-  DRAFT 
-  IN_REVIEW 
-  PUBLISHED 
-  SUSPENDED 
-  REJECTED 
+enum AppStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  SUSPENDED
+  REJECTED
 }
 
 enum AppVisibility {
@@ -1786,15 +1820,15 @@ enum AppVisibility {
   PRIVATE
 }
 
-enum InstallationStatus { 
+enum InstallationStatus {
   ACTIVE
-  PENDING 
-  SUSPENDED 
-  REMOVED 
+  PENDING
+  SUSPENDED
+  REMOVED
 }
 
 model NotificationPreferences {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   userId      String
   workspaceId String?
 
@@ -1835,8 +1869,8 @@ model NotificationPreferences {
   pushNotificationsEnabled Boolean @default(false)
   pushSubscription         Json? // Stores the push subscription object
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -1848,28 +1882,29 @@ model NotificationPreferences {
 // ========================================
 
 model App {
-  id              String   @id @default(cuid())
+  id              String            @id @default(cuid())
   name            String
-  slug            String   @unique
+  slug            String            @unique
   iconUrl         String?
-  manifestUrl     String?  // Optional for DRAFT apps, required when publishing
-  publisherId     String  // user/org
+  manifestUrl     String? // Optional for DRAFT apps, required when publishing
+  publisherId     String // user/org
   userId          String?
-  status          AppStatus @default(DRAFT)  // Changed default from IN_REVIEW to DRAFT
+  status          AppStatus         @default(DRAFT) // Changed default from IN_REVIEW to DRAFT
   latestVersionId String?
   versions        AppVersion[]
-  visibility      AppVisibility @default(PUBLIC)
-  isSystemApp     Boolean  @default(false)  // System apps are auto-available to all workspaces
+  visibility      AppVisibility     @default(PUBLIC)
+  isSystemApp     Boolean           @default(false) // System apps are auto-available to all workspaces
   oauthClient     AppOAuthClient?
   scopes          AppScope[]
-  permissions     Json?            // Store {org: boolean, user: boolean}
+  permissions     Json? // Store {org: boolean, user: boolean}
   installations   AppInstallation[]
   webhooks        AppWebhook[]
-  systemAppTokens AppToken[] @relation("SystemAppTokens")  // Direct tokens for system apps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  systemAppTokens AppToken[]        @relation("SystemAppTokens") // Direct tokens for system apps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  user            User?             @relation("UserApps", fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation("UserApps", fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([slug])
   @@index([status])
   @@index([publisherId])
@@ -1885,52 +1920,52 @@ model AppVersion {
   createdAt DateTime @default(now())
   app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
 
+  @@unique([appId, version])
   @@index([appId])
   @@index([version])
-  @@unique([appId, version])
 }
 
 model AppOAuthClient {
-  id                        String   @id @default(cuid())
-  appId                     String   @unique
-  clientId                  String   @unique
-  clientSecret              Bytes?   // encrypted at rest, only for client_secret_basic
-  clientType                String?  // public or confidential
-  tokenEndpointAuthMethod   String?  // none, client_secret_basic, private_key_jwt
-  jwksUri                   String?  // for private_key_jwt clients
-  jwksValidated             Boolean  @default(false) // track JWKS validation status
-  secretRevealed            Boolean  @default(false) // track if secret has been shown
-  apiKeyRevealed            Boolean  @default(false) // track if API key has been shown
-  apiKey                    String?  @unique
-  redirectUris              String[]
-  postLogoutRedirectUris    String[] // post logout redirect URIs
-  responseTypes             String[] @default(["code"]) // supported response types
-  grantTypes                String[] @default(["authorization_code", "refresh_token"]) // supported grant types
-  app                       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
-  authorizationCodes        AppOAuthAuthorizationCode[]
+  id                      String                      @id @default(cuid())
+  appId                   String                      @unique
+  clientId                String                      @unique
+  clientSecret            Bytes? // encrypted at rest, only for client_secret_basic
+  clientType              String? // public or confidential
+  tokenEndpointAuthMethod String? // none, client_secret_basic, private_key_jwt
+  jwksUri                 String? // for private_key_jwt clients
+  jwksValidated           Boolean                     @default(false) // track JWKS validation status
+  secretRevealed          Boolean                     @default(false) // track if secret has been shown
+  apiKeyRevealed          Boolean                     @default(false) // track if API key has been shown
+  apiKey                  String?                     @unique
+  redirectUris            String[]
+  postLogoutRedirectUris  String[] // post logout redirect URIs
+  responseTypes           String[]                    @default(["code"]) // supported response types
+  grantTypes              String[]                    @default(["authorization_code", "refresh_token"]) // supported grant types
+  app                     App                         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  authorizationCodes      AppOAuthAuthorizationCode[]
 
   @@index([clientId])
 }
 
 model AppInstallation {
-  id            String   @id @default(cuid())
-  appId         String
-  workspaceId   String
-  installedById String
-  status        InstallationStatus @default(ACTIVE)
-  scopes        String[] // normalized scopes granted at install time
-  accessToken   String?  // encrypted
-  refreshToken  String?  // encrypted
+  id             String             @id @default(cuid())
+  appId          String
+  workspaceId    String
+  installedById  String
+  status         InstallationStatus @default(ACTIVE)
+  scopes         String[] // normalized scopes granted at install time
+  accessToken    String? // encrypted
+  refreshToken   String? // encrypted
   tokenExpiresAt DateTime?
-  settings      Json?    // app-specific configuration
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  app           App       @relation(fields: [appId], references: [id], onDelete: Cascade)
-  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  webhooks      AppWebhook[]
+  settings       Json? // app-specific configuration
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  app                App                         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  workspace          Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  webhooks           AppWebhook[]
   authorizationCodes AppOAuthAuthorizationCode[]
-  tokens        AppToken[]
+  tokens             AppToken[]
 
   @@unique([appId, workspaceId])
   @@index([workspaceId])
@@ -1943,22 +1978,22 @@ model AppInstallation {
 // For system apps, installationId is null and appId/workspaceId are used directly
 model AppToken {
   id             String    @id @default(cuid())
-  installationId String?   // Nullable for system app tokens
-  appId          String?   // Direct app reference for system app tokens
-  workspaceId    String?   // Workspace for system app tokens
-  userId         String?   // The user who generated this token (null for legacy tokens)
+  installationId String? // Nullable for system app tokens
+  appId          String? // Direct app reference for system app tokens
+  workspaceId    String? // Workspace for system app tokens
+  userId         String? // The user who generated this token (null for legacy tokens)
   accessToken    String    @unique // encrypted, unique for fast lookup
-  refreshToken   String?   // encrypted
+  refreshToken   String? // encrypted
   tokenExpiresAt DateTime?
-  scopes         String[]  // scopes granted for this specific token
+  scopes         String[] // scopes granted for this specific token
   isRevoked      Boolean   @default(false)
   revokedAt      DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  installation   AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
-  app            App?             @relation("SystemAppTokens", fields: [appId], references: [id], onDelete: Cascade)
-  workspace      Workspace?       @relation("SystemAppWorkspaceTokens", fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  app          App?             @relation("SystemAppTokens", fields: [appId], references: [id], onDelete: Cascade)
+  workspace    Workspace?       @relation("SystemAppWorkspaceTokens", fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([installationId])
   @@index([appId])
@@ -1968,11 +2003,11 @@ model AppToken {
   @@index([tokenExpiresAt])
 }
 
-model AppScope { // catalog of app scopes (renamed from AppPermission for clarity)
-  id     String @id @default(cuid())
-  appId  String
-  scope  String
-  app    App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+model AppScope {
+  id    String @id @default(cuid())
+  appId String
+  scope String
+  app   App    @relation(fields: [appId], references: [id], onDelete: Cascade)
 
   @@unique([appId, scope])
   @@index([appId])
@@ -1984,14 +2019,14 @@ model AppWebhook {
   appId          String
   installationId String
   url            String
-  secretEnc      Bytes    // HMAC signing secret (encrypted)
+  secretEnc      Bytes // HMAC signing secret (encrypted)
   eventTypes     String[] // ["issue.created", "issue.updated", etc.]
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  
-  app          App             @relation(fields: [appId], references: [id], onDelete: Cascade)
-  installation AppInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  app          App                  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  installation AppInstallation      @relation(fields: [installationId], references: [id], onDelete: Cascade)
   deliveries   AppWebhookDelivery[]
 
   @@unique([installationId, url]) // One webhook URL per installation
@@ -2001,21 +2036,21 @@ model AppWebhook {
 }
 
 model AppWebhookDelivery {
-  id          String   @id @default(cuid())
-  webhookId   String
-  eventType   String   // "issue.created"
-  eventId     String   // unique event identifier
-  payload     Json     // event payload
-  signature   String   // HMAC signature sent
-  httpStatus  Int?     // response status code
-  responseBody String? // response from webhook URL
-  attempts    Int      @default(0)
+  id            String    @id @default(cuid())
+  webhookId     String
+  eventType     String // "issue.created"
+  eventId       String // unique event identifier
+  payload       Json // event payload
+  signature     String // HMAC signature sent
+  httpStatus    Int? // response status code
+  responseBody  String? // response from webhook URL
+  attempts      Int       @default(0)
   lastAttemptAt DateTime?
   nextAttemptAt DateTime?
-  deliveredAt DateTime? // when successfully delivered
-  failedAt    DateTime? // when permanently failed
-  createdAt   DateTime @default(now())
-  
+  deliveredAt   DateTime? // when successfully delivered
+  failedAt      DateTime? // when permanently failed
+  createdAt     DateTime  @default(now())
+
   webhook AppWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   @@unique([webhookId, eventId]) // Prevent duplicate deliveries
@@ -2038,28 +2073,28 @@ enum WebhookEventType {
 }
 
 model AppOAuthAuthorizationCode {
-  id             String   @id @default(cuid())
-  code           String   @unique
-  clientId       String
-  userId         String
-  workspaceId    String
-  installationId String?
-  redirectUri    String
-  scope          String
-  state          String?
-  code_challenge String?
+  id                    String    @id @default(cuid())
+  code                  String    @unique
+  clientId              String
+  userId                String
+  workspaceId           String
+  installationId        String?
+  redirectUri           String
+  scope                 String
+  state                 String?
+  code_challenge        String?
   code_challenge_method String?
-  nonce          String?
-  used           Boolean  @default(false)
-  usedAt         DateTime?
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
+  nonce                 String?
+  used                  Boolean   @default(false)
+  usedAt                DateTime?
+  expiresAt             DateTime
+  createdAt             DateTime  @default(now())
 
-  oauthClient    AppOAuthClient   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  installation   AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
-  
+  oauthClient  AppOAuthClient   @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
   @@index([code])
   @@index([clientId])
   @@index([userId])
@@ -2073,10 +2108,10 @@ model AppAuditLog {
   workspaceId    String
   installationId String?
   actorId        String?
-  action         String   // install, uninstall, token_rotated, sync_start, sync_end
+  action         String // install, uninstall, token_rotated, sync_start, sync_end
   details        Json?
   createdAt      DateTime @default(now())
-  
+
   @@index([workspaceId])
   @@index([installationId])
   @@index([actorId])
@@ -2089,21 +2124,21 @@ model AppAuditLog {
 // ========================================
 
 model DailyFocusEntry {
-  id            String   @id @default(cuid())
-  userId        String
-  workspaceId   String
-  date          DateTime @db.Date
-  status        DailyFocusStatus @default(DRAFT)
-  submittedAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  reflections   DailyFocusReflection[]
-  plans         DailyFocusPlan[]
-  assignments   DailyFocusAssignment[]
-  
+  id          String           @id @default(cuid())
+  userId      String
+  workspaceId String
+  date        DateTime         @db.Date
+  status      DailyFocusStatus @default(DRAFT)
+  submittedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reflections DailyFocusReflection[]
+  plans       DailyFocusPlan[]
+  assignments DailyFocusAssignment[]
+
   @@unique([userId, workspaceId, date])
   @@index([workspaceId, date])
   @@index([userId, date])
@@ -2111,52 +2146,52 @@ model DailyFocusEntry {
 }
 
 model DailyFocusReflection {
-  id              String   @id @default(cuid())
-  entryId         String
-  issueId         String
-  status          ReflectionStatus
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  entry           DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  issue           Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  
+  id        String           @id @default(cuid())
+  entryId   String
+  issueId   String
+  status    ReflectionStatus
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  entry DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  issue Issue           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
   @@unique([entryId, issueId])
   @@index([entryId])
   @@index([issueId])
 }
 
 model DailyFocusPlan {
-  id              String   @id @default(cuid())
-  entryId         String
-  issueId         String
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  entry           DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  issue           Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  
+  id        String   @id @default(cuid())
+  entryId   String
+  issueId   String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entry DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  issue Issue           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
   @@unique([entryId, issueId])
   @@index([entryId])
   @@index([issueId])
 }
 
 model DailyFocusAssignment {
-  id              String   @id @default(cuid())
-  entryId         String
-  issueId         String
-  assignedToId    String   // User assigned to start work
-  assignedById    String   // User who made the assignment
-  notes           String?
-  createdAt       DateTime @default(now())
-  
-  entry           DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  issue           Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  assignedTo      User    @relation("AssignedDailyFocus", fields: [assignedToId], references: [id])
-  assignedBy      User    @relation("CreatedDailyFocus", fields: [assignedById], references: [id])
-  
+  id           String   @id @default(cuid())
+  entryId      String
+  issueId      String
+  assignedToId String // User assigned to start work
+  assignedById String // User who made the assignment
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  entry      DailyFocusEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  issue      Issue           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  assignedTo User            @relation("AssignedDailyFocus", fields: [assignedToId], references: [id])
+  assignedBy User            @relation("CreatedDailyFocus", fields: [assignedById], references: [id])
+
   @@index([entryId])
   @@index([issueId])
   @@index([assignedToId])
@@ -2168,27 +2203,27 @@ enum DailyFocusStatus {
 }
 
 enum PlanSource {
-  AUTO_DETECTED    // Automatically detected from activities
-  MANUALLY_ADDED   // Manually added by user
-  SUGGESTED        // System suggested, awaiting confirmation
+  AUTO_DETECTED // Automatically detected from activities
+  MANUALLY_ADDED // Manually added by user
+  SUGGESTED // System suggested, awaiting confirmation
 }
 
 model PlanEntry {
-  id          String      @id @default(cuid())
-  userId      String      // Who this is planned for
-  issueId     String      // What issue
-  date        DateTime    // Which day (date only, normalized to start of day)
-  source      PlanSource  @default(AUTO_DETECTED)
-  addedBy     String?     // Who added it (if manual)
-  notes       String?     // Optional context
-  confirmed   Boolean     @default(false) // For SUGGESTED entries
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
-  user        User     @relation("PlanEntries", fields: [userId], references: [id], onDelete: Cascade)
-  issue       Issue    @relation("PlanEntryIssues", fields: [issueId], references: [id], onDelete: Cascade)
-  addedByUser User?    @relation("PlanEntryCreator", fields: [addedBy], references: [id], onDelete: SetNull)
-  
+  id        String     @id @default(cuid())
+  userId    String // Who this is planned for
+  issueId   String // What issue
+  date      DateTime // Which day (date only, normalized to start of day)
+  source    PlanSource @default(AUTO_DETECTED)
+  addedBy   String? // Who added it (if manual)
+  notes     String? // Optional context
+  confirmed Boolean    @default(false) // For SUGGESTED entries
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user        User  @relation("PlanEntries", fields: [userId], references: [id], onDelete: Cascade)
+  issue       Issue @relation("PlanEntryIssues", fields: [issueId], references: [id], onDelete: Cascade)
+  addedByUser User? @relation("PlanEntryCreator", fields: [addedBy], references: [id], onDelete: SetNull)
+
   @@unique([userId, issueId, date])
   @@index([userId, date])
   @@index([issueId])
@@ -2203,4 +2238,33 @@ enum ReflectionStatus {
   PENDING_INPUT
   UNPLANNED_WORK
   UNTOUCHED
+}
+
+// Knowledge System Enums
+enum NoteType {
+  GENERAL // General purpose notes (default)
+  SYSTEM_PROMPT // AI system prompts (workspace/project level)
+  GUIDE // How-to guides and tutorials
+  README // Project/workspace READMEs
+  TECH_STACK // Tech stack documentation
+  CODING_STYLE // Coding style guidelines
+  ARCHITECTURE // Architecture documentation
+  API_DOCS // API documentation
+  RUNBOOK // Operational runbooks
+  TROUBLESHOOT // Troubleshooting guides
+  MEETING // Meeting notes
+  DECISION // Decision records (ADRs)
+}
+
+enum NoteScope {
+  PERSONAL // Only visible to the author (can be shared)
+  SHARED // Deprecated - kept for migration, same as PERSONAL + shares
+  PROJECT // Visible to all project members
+  WORKSPACE // Visible to all workspace members
+  PUBLIC // Publicly accessible (outside workspace)
+}
+
+enum NoteSharePermission {
+  READ // Read-only access
+  EDIT // Edit access
 }

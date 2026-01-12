@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { NoteScope } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -16,20 +17,20 @@ export async function GET(request: NextRequest) {
 
     // Get all tags that are either:
     // 1. Created by the current user, OR
-    // 2. Used in public notes in the workspace (when workspace filtering is active)
+    // 2. Used in workspace/public notes in the workspace (when workspace filtering is active)
     const where: any = {};
-    
+
     if (workspaceId) {
-      // When workspace is specified, show tags from current user OR public notes in workspace
+      // When workspace is specified, show tags from current user OR workspace/public notes
       where.OR = [
         // Tags created by current user in this workspace
         { authorId: session.user.id, workspaceId },
-        // Tags used in public notes in the workspace
+        // Tags used in workspace or public scope notes in the workspace
         {
           workspaceId,
           notes: {
             some: {
-              isPublic: true
+              scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] }
             }
           }
         }

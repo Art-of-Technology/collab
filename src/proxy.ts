@@ -28,7 +28,7 @@ function boolFromEnv(name: string, fallback = false) {
   return ["1", "true", "yes", "y", "on"].includes(String(v).toLowerCase());
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const res = NextResponse.next();
 
   // Build a strong, environment-aware CSP

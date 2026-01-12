@@ -68,9 +68,9 @@ export function MobileBottomNav({ className, onOpenCommandMenu }: MobileBottomNa
       isActive: pathname.includes('/timeline'),
     },
     {
-      id: 'notes',
+      id: 'context',
       icon: <FileText className="h-4 w-4" />,
-      title: 'Notes',
+      title: 'Context',
       href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/notes` : "#",
       isActive: pathname.includes('/notes'),
     },

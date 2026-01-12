@@ -1,29 +1,70 @@
-/* eslint-disable */
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { canEditNote } from "@/utils/permissions";
 import { redirect, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Filter, Star, FileText, Tag as TagIcon, Edit, Trash2, Eye, Lock, MessageSquare } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import PageHeader from "@/components/layout/PageHeader";
-import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Search,
+  Plus,
+  Star,
+  FileText,
+  Edit,
+  Trash2,
+  Lock,
+  MessageSquare,
+  Users,
+  FolderKanban,
+  Globe,
+  Share2,
+  Bot,
+  RotateCcw,
+  BookOpen,
+  Cpu,
+  Palette,
+  Layers,
+  Server,
+  Play,
+  Bug,
+  Calendar,
+  GitBranch,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { sortNotesBySearchTerm, sortTagsBySearchTerm } from "@/utils/sortUtils";
+import { sortNotesBySearchTerm } from "@/utils/sortUtils";
 import Link from "next/link";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { NoteScope, NoteType } from "@prisma/client";
+import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
+import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilterSelector";
+import { getNoteTypeConfig } from "@/lib/note-types";
+import { useQuery } from "@tanstack/react-query";
+
 interface Note {
   id: string;
   title: string;
   content: string;
-  isPublic: boolean;
+  scope: NoteScope;
+  type: NoteType;
   isFavorite: boolean;
+  isAiContext?: boolean;
   createdAt: string;
   updatedAt: string;
+  authorId: string;
   author: {
     id: string;
     name: string;
@@ -39,8 +80,19 @@ interface Note {
     name: string;
     slug: string;
   };
+  project?: {
+    id: string;
+    name: string;
+    slug: string;
+    color?: string;
+  };
   comments?: {
     id: string;
+  }[];
+  sharedWith?: {
+    id: string;
+    userId: string;
+    permission: string;
   }[];
 }
 
@@ -53,8 +105,40 @@ interface NoteTag {
   };
 }
 
+interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  color: string | null;
+}
+
+// Note type icons mapping
+const noteTypeIcons: Record<NoteType, any> = {
+  GENERAL: FileText,
+  SYSTEM_PROMPT: Bot,
+  GUIDE: BookOpen,
+  README: FileText,
+  TECH_STACK: Cpu,
+  CODING_STYLE: Palette,
+  ARCHITECTURE: Layers,
+  API_DOCS: Server,
+  RUNBOOK: Play,
+  TROUBLESHOOT: Bug,
+  MEETING: Calendar,
+  DECISION: GitBranch,
+};
+
+// Note scope icons mapping
+const noteScopeIcons: Record<NoteScope, any> = {
+  PERSONAL: Lock,
+  SHARED: Share2,
+  PROJECT: FolderKanban,
+  WORKSPACE: Users,
+  PUBLIC: Globe,
+};
+
 // Utility function to process note content for preview
-const getNotePreview = (content: string, maxLength: number = 100) => {
+const getNotePreview = (content: string, maxLength: number = 120) => {
   const processedContent = content
     .replace(/<p[^>]*>/gi, "")
     .replace(/<\/p>/gi, " ")
@@ -69,33 +153,305 @@ const getNotePreview = (content: string, maxLength: number = 100) => {
   return { preview, truncated };
 };
 
-export default function NotesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
+// Tab configuration
+// Tabs represent note scopes
+const TABS = [
+  { id: "all", label: "All", icon: null },
+  { id: "personal", label: "Personal", icon: Lock },
+  { id: "project", label: "Project", icon: FolderKanban },
+  { id: "workspace", label: "Workspace", icon: Users },
+  { id: "public", label: "Public", icon: Globe },
+  { id: "shared", label: "Shared", icon: Share2 },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+// Note List Item Component - Compact list view like projects page
+function NoteListItem({
+  note,
+  workspaceSlug,
+  onToggleFavorite,
+  onDelete,
+  canEdit,
+}: {
+  note: Note;
+  workspaceSlug: string;
+  onToggleFavorite: (noteId: string, isFavorite: boolean) => void;
+  onDelete: (noteId: string) => void;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const { preview } = getNotePreview(note.content, 80);
+  const TypeIcon = noteTypeIcons[note.type] || FileText;
+  const typeConfig = getNoteTypeConfig(note.type);
+  const ScopeIconComponent = noteScopeIcons[note.scope] || Lock;
+
+  // Get scope color for indicator
+  const getScopeColor = () => {
+    switch (note.scope) {
+      case NoteScope.PERSONAL: return '#71717a';
+      case NoteScope.PROJECT: return '#a855f7';
+      case NoteScope.WORKSPACE: return '#22c55e';
+      case NoteScope.PUBLIC: return '#f59e0b';
+      case NoteScope.SHARED: return '#3b82f6';
+      default: return '#6366f1';
+    }
+  };
+
+  return (
+    <div
+      className="group relative flex items-center gap-4 px-5 py-3.5 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer"
+      onClick={() => router.push(`/${workspaceSlug}/notes/${note.id}`)}
+    >
+      {/* Color indicator based on scope */}
+      <div
+        className="w-1 h-10 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+        style={{ backgroundColor: getScopeColor() }}
+      />
+
+      {/* Note Info */}
+      <div className="flex-1 min-w-0">
+        {/* Title Row */}
+        <div className="flex items-center gap-2.5">
+          <TypeIcon className={cn("h-3.5 w-3.5 flex-shrink-0", typeConfig.color)} />
+          <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
+            {note.title}
+          </h3>
+          {note.isFavorite && (
+            <Star className="h-3 w-3 fill-amber-400 text-amber-400 flex-shrink-0" />
+          )}
+          {note.isAiContext && (
+            <Bot className="h-3 w-3 text-purple-400 flex-shrink-0" />
+          )}
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f23] text-[#71717a] font-medium flex-shrink-0 flex items-center gap-1">
+            <ScopeIconComponent className="h-2.5 w-2.5" />
+            {note.scope.charAt(0) + note.scope.slice(1).toLowerCase()}
+          </span>
+        </div>
+
+        {/* Description */}
+        {preview && (
+          <p className="text-[12px] text-[#52525b] truncate max-w-[400px] mt-0.5">
+            {preview}
+          </p>
+        )}
+
+        {/* Stats Row */}
+        <div className="flex items-center gap-3 mt-1.5">
+          {/* Author avatar */}
+          <div className="flex items-center gap-1.5">
+            <Avatar className="h-4 w-4">
+              <AvatarImage src={note.author.image || undefined} />
+              <AvatarFallback className="text-[8px] bg-[#27272a] text-[#71717a]">
+                {note.author.name?.charAt(0)?.toUpperCase() || "?"}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-[10px] text-[#52525b]">{note.author.name}</span>
+          </div>
+
+          {note.project && (
+            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+              <div
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: note.project.color || "#6366f1" }}
+              />
+              <span>{note.project.name}</span>
+            </div>
+          )}
+
+          {note.tags.length > 0 && (
+            <div className="flex items-center gap-1">
+              {note.tags.slice(0, 2).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="text-[10px] px-1.5 py-0 rounded"
+                  style={{ color: tag.color, backgroundColor: `${tag.color}15` }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {note.tags.length > 2 && (
+                <span className="text-[10px] text-[#52525b]">+{note.tags.length - 2}</span>
+              )}
+            </div>
+          )}
+
+          {note.sharedWith && note.sharedWith.length > 0 && (
+            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+              <Share2 className="h-3 w-3 text-[#3b82f6]" />
+              <span className="tabular-nums">{note.sharedWith.length}</span>
+            </div>
+          )}
+
+          {note.comments && note.comments.length > 0 && (
+            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+              <MessageSquare className="h-3 w-3 text-[#6e7681]" />
+              <span className="tabular-nums">{note.comments.length}</span>
+            </div>
+          )}
+
+          <span className="text-[10px] text-[#3f3f46]">
+            {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+          </span>
+        </div>
+      </div>
+
+      {/* Inline Actions */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(note.id, note.isFavorite);
+          }}
+          className={cn(
+            "flex items-center justify-center h-8 w-8 rounded-lg text-[12px] font-medium transition-colors",
+            note.isFavorite
+              ? "text-amber-400 hover:bg-[#27272a]"
+              : "text-[#52525b] hover:text-amber-400 hover:bg-[#27272a]"
+          )}
+        >
+          <Star className={cn("h-3.5 w-3.5", note.isFavorite && "fill-amber-400")} />
+        </button>
+
+        {canEdit && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/${workspaceSlug}/notes/${note.id}`);
+              }}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
+            >
+              <Edit className="h-3.5 w-3.5" />
+              <span>Edit</span>
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(note.id);
+              }}
+              className="flex items-center justify-center h-8 w-8 rounded-lg text-[12px] font-medium text-[#52525b] hover:text-red-400 hover:bg-[#27272a] transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function NotesPage({
+  params,
+}: {
+  params: Promise<{ workspaceId: string }>;
+}) {
   const { data: session, status } = useSession();
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [showFavorites, setShowFavorites] = useState(false);
-  const [activeTab, setActiveTab] = useState<"private" | "public" | "all" | "team-notes">("all");
-  const [tagSearchTerm, setTagSearchTerm] = useState("");
-  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [activeTab, setActiveTab] = useState<TabId>("all");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
-  const tagSearchInputRef = useRef<HTMLInputElement>(null);
-  const tagListRef = useRef<HTMLDivElement>(null);
-  const tagDialogContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const router = useRouter();
-  // Get workspace from context (consistent with other pages)
   const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
 
-  // Filter tags based on search term
-  const filteredTags = useMemo(() => {
-    return sortTagsBySearchTerm(tags, tagSearchTerm);
-  }, [tags, tagSearchTerm]);
+  // Filter states
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [showAiContext, setShowAiContext] = useState(false);
 
+  // Fetch projects for filter
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["projects", currentWorkspace?.id],
+    queryFn: async () => {
+      if (!currentWorkspace?.id) return [];
+      const response = await fetch(`/api/projects?workspaceId=${currentWorkspace.id}`);
+      if (!response.ok) throw new Error("Failed to fetch projects");
+      return response.json();
+    },
+    enabled: !!currentWorkspace?.id,
+  });
+
+  // Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return (
+      selectedTypes.length > 0 ||
+      selectedProjects.length > 0 ||
+      selectedTags.length > 0 ||
+      showFavorites ||
+      showAiContext ||
+      searchQuery.trim() !== ""
+    );
+  }, [selectedTypes, selectedProjects, selectedTags, showFavorites, showAiContext, searchQuery]);
+
+  // Reset all filters
+  const resetFilters = useCallback(() => {
+    setSelectedTypes([]);
+    setSelectedProjects([]);
+    setSelectedTags([]);
+    setShowFavorites(false);
+    setShowAiContext(false);
+    setSearchQuery("");
+  }, []);
+
+  // Stats computation - always computed from full notes array for accurate tab counts
+  const stats = useMemo(() => {
+    const totalNotes = notes.length;
+    const personalNotes = notes.filter(
+      (n) => n.scope === NoteScope.PERSONAL && n.authorId === session?.user?.id
+    ).length;
+    const projectNotes = notes.filter(
+      (n) => n.scope === NoteScope.PROJECT
+    ).length;
+    const workspaceNotes = notes.filter(
+      (n) => n.scope === NoteScope.WORKSPACE
+    ).length;
+    const publicNotes = notes.filter(
+      (n) => n.scope === NoteScope.PUBLIC
+    ).length;
+    const sharedNotes = notes.filter(
+      (n) => n.scope === NoteScope.SHARED || (n.sharedWith && n.sharedWith.length > 0)
+    ).length;
+    return { totalNotes, personalNotes, projectNotes, workspaceNotes, publicNotes, sharedNotes };
+  }, [notes, session?.user?.id]);
+
+  // Convert note types to FilterOption format
+  const typeOptions: FilterOption[] = useMemo(() => {
+    return Object.values(NoteType).map((type) => {
+      const config = getNoteTypeConfig(type);
+      return {
+        id: type,
+        label: config.label,
+        icon: noteTypeIcons[type] || FileText,
+        iconColor: config.color,
+      };
+    });
+  }, []);
+
+  // Convert projects to FilterOption format
+  const projectOptions: FilterOption[] = useMemo(() => {
+    return projects.map((project) => ({
+      id: project.id,
+      label: project.name,
+      color: project.color || "#6366f1",
+    }));
+  }, [projects]);
+
+  // Convert tags to FilterOption format
+  const tagOptions: FilterOption[] = useMemo(() => {
+    return tags.map((tag) => ({
+      id: tag.id,
+      label: tag.name,
+      color: tag.color,
+      suffix: `${tag._count.notes}`,
+    }));
+  }, [tags]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -108,158 +464,26 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       fetchNotes();
       fetchTags();
     }
-  }, [session?.user, currentWorkspace?.id, searchQuery, selectedTag, showFavorites, activeTab]);
-
-  // Focus search input when dialog opens
-  useEffect(() => {
-    if (isTagDropdownOpen) {
-      setTimeout(() => {
-        tagSearchInputRef.current?.focus();
-      }, 100);
-      setSelectedIndex(-1);
-    } else {
-      setTagSearchTerm("");
-      setSelectedIndex(-1);
-    }
-  }, [isTagDropdownOpen]);
-
-  // Reset selected index when search term changes
-  useEffect(() => {
-    setSelectedIndex(-1);
-  }, [tagSearchTerm]);
-
-  // Add keyboard listener when dialog is open
-  useEffect(() => {
-    if (!isTagDropdownOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle navigation keys when tag dropdown is open
-      if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) {
-        return;
-      }
-
-      const totalItems = filteredTags.length + 1;
-
-      switch (e.key) {
-        case "ArrowDown":
-          e.preventDefault();
-          e.stopPropagation();
-          setSelectedIndex((prev) => (prev < totalItems - 1 ? prev + 1 : 0));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          e.stopPropagation();
-          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : totalItems - 1));
-          break;
-        case "Enter":
-          e.preventDefault();
-          e.stopPropagation();
-          if (selectedIndex === 0) {
-            setSelectedTag(null);
-            setTagSearchTerm("");
-            setIsTagDropdownOpen(false);
-          } else if (selectedIndex > 0 && filteredTags[selectedIndex - 1]) {
-            const selectedTagItem = filteredTags[selectedIndex - 1];
-            setSelectedTag(selectedTagItem.id);
-            setTagSearchTerm("");
-            setIsTagDropdownOpen(false);
-          }
-          break;
-        case "Escape":
-          e.preventDefault();
-          e.stopPropagation();
-          setIsTagDropdownOpen(false);
-          break;
-      }
-    };
-
-    // Add global event listener with capture phase (like other working components)
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [isTagDropdownOpen, selectedIndex, filteredTags]);
-
-  // Auto-scroll to selected item
-  useEffect(() => {
-    if (selectedIndex >= 0 && tagListRef.current) {
-      const container = tagListRef.current;
-      const items = container.querySelectorAll("[data-tag-index]");
-      const selectedItem = items[selectedIndex] as HTMLElement;
-
-      if (selectedItem) {
-        const containerRect = container.getBoundingClientRect();
-        const itemRect = selectedItem.getBoundingClientRect();
-
-        // Check if item is above the visible area
-        if (itemRect.top < containerRect.top) {
-          container.scrollTop -= containerRect.top - itemRect.top + 10;
-        }
-        // Check if item is below the visible area
-        else if (itemRect.bottom > containerRect.bottom) {
-          container.scrollTop += itemRect.bottom - containerRect.bottom + 10;
-        }
-      }
-    }
-  }, [selectedIndex]);
+  }, [session?.user, currentWorkspace?.id]);
 
   const fetchNotes = async () => {
     try {
       const params = new URLSearchParams();
-      if (searchQuery) params.append("search", searchQuery);
-      if (selectedTag) params.append("tag", selectedTag);
-      if (showFavorites) params.append("favorite", "true");
-
-      // Handle tab-based filtering
-      switch (activeTab) {
-        case "private":
-          // Private: User's private notes only
-          params.append("own", "true");
-          params.append("public", "false");
-          if (currentWorkspace?.id) {
-            params.append("workspace", currentWorkspace.id);
-          }
-          break;
-        case "public":
-          // Public: User's public notes only
-          params.append("own", "true");
-          params.append("public", "true");
-          if (currentWorkspace?.id) {
-            params.append("workspace", currentWorkspace.id);
-          }
-          break;
-        case "all":
-          // All: User's all notes (both private and public)
-          params.append("own", "true");
-          if (currentWorkspace?.id) {
-            params.append("workspace", currentWorkspace.id);
-          }
-          break;
-        case "team-notes":
-          // Team Notes: Public notes from others in workspace
-          params.append("public", "true");
-          params.append("own", "false");
-          if (currentWorkspace?.id) {
-            params.append("workspace", currentWorkspace.id);
-          }
-          break;
+      if (currentWorkspace?.id) {
+        params.append("workspace", currentWorkspace.id);
       }
+      // Always fetch all notes - tab filtering is done client-side for accurate counts
 
       const response = await fetch(`/api/notes?${params}`);
       if (response.ok) {
         const data = await response.json();
-
-        // Sort notes: titles starting with search term first, then others
-        if (searchQuery.trim()) {
-          const sortedNotes = sortNotesBySearchTerm(data, searchQuery) as Note[];
-          setNotes(sortedNotes);
-        } else {
-          setNotes(data);
-        }
+        setNotes(data);
       }
     } catch (error) {
       console.error("Error fetching notes:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch notes",
+        description: "Failed to fetch context",
         variant: "destructive",
       });
     } finally {
@@ -269,8 +493,9 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   const fetchTags = async () => {
     try {
-      // Always send workspace parameter for My Notes filtering
-      const url = currentWorkspace?.id ? `/api/notes/tags?workspace=${currentWorkspace.id}` : "/api/notes/tags";
+      const url = currentWorkspace?.id
+        ? `/api/notes/tags?workspace=${currentWorkspace.id}`
+        : "/api/notes/tags";
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -280,6 +505,68 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       console.error("Error fetching tags:", error);
     }
   };
+
+  // Apply client-side filters
+  const filteredNotes = useMemo(() => {
+    let filtered = [...notes];
+
+    // Tab filter - tabs represent scopes
+    switch (activeTab) {
+      case "personal":
+        filtered = filtered.filter((note) => note.scope === NoteScope.PERSONAL && note.authorId === session?.user?.id);
+        break;
+      case "project":
+        filtered = filtered.filter((note) => note.scope === NoteScope.PROJECT);
+        break;
+      case "workspace":
+        filtered = filtered.filter((note) => note.scope === NoteScope.WORKSPACE);
+        break;
+      case "public":
+        filtered = filtered.filter((note) => note.scope === NoteScope.PUBLIC);
+        break;
+      case "shared":
+        filtered = filtered.filter((note) => note.scope === NoteScope.SHARED || (note.sharedWith && note.sharedWith.length > 0));
+        break;
+      case "all":
+      default:
+        // No filtering - show all
+        break;
+    }
+
+    // Search filter
+    if (searchQuery.trim()) {
+      filtered = sortNotesBySearchTerm(filtered, searchQuery) as Note[];
+    }
+
+    // Type filter
+    if (selectedTypes.length > 0) {
+      filtered = filtered.filter((note) => selectedTypes.includes(note.type));
+    }
+
+    // Project filter
+    if (selectedProjects.length > 0) {
+      filtered = filtered.filter((note) => note.project && selectedProjects.includes(note.project.id));
+    }
+
+    // Tag filter
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter((note) =>
+        note.tags.some((tag) => selectedTags.includes(tag.id))
+      );
+    }
+
+    // Favorites filter
+    if (showFavorites) {
+      filtered = filtered.filter((note) => note.isFavorite);
+    }
+
+    // AI Context filter
+    if (showAiContext) {
+      filtered = filtered.filter((note) => note.isAiContext);
+    }
+
+    return filtered;
+  }, [notes, activeTab, session?.user?.id, searchQuery, selectedTypes, selectedProjects, selectedTags, showFavorites, showAiContext]);
 
   const toggleFavorite = async (noteId: string, isFavorite: boolean) => {
     try {
@@ -299,7 +586,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       console.error("Error toggling favorite:", error);
       toast({
         title: "Error",
-        description: "Failed to update note",
+        description: "Failed to update context",
         variant: "destructive",
       });
     }
@@ -324,10 +611,9 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
       toast({
         title: "Success",
-        description: "Note deleted successfully",
+        description: "Context deleted successfully",
       });
 
-      // Remove the note from the list
       setNotes(notes.filter((note) => note.id !== noteToDelete));
       setDeleteConfirmOpen(false);
       setNoteToDelete(null);
@@ -335,7 +621,7 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
       console.error("Error deleting note:", error);
       toast({
         title: "Error",
-        description: "Failed to delete note. Please try again.",
+        description: "Failed to delete context. Please try again.",
         variant: "destructive",
       });
     }
@@ -343,304 +629,247 @@ export default function NotesPage({ params }: { params: Promise<{ workspaceId: s
 
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="h-full flex flex-col bg-[#09090b]">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#101011]">
+    <div className="h-full flex flex-col bg-[#09090b]">
       {/* Header */}
-      <PageHeader
-        icon={FileText}
-        title="Notes"
-        subtitle="Create and organize your notes with markdown support"
-        actions={<Button onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}><Plus className="h-4 w-4" /> New Note</Button>}
-      />
+      <div className="flex-none border-b border-[#1f1f1f]">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
+              <FileText className="h-4 w-4 text-[#3b82f6]" />
+            </div>
+            <div>
+              <h1 className="text-sm font-medium text-[#e6edf3]">Context</h1>
+              <p className="text-xs text-[#6e7681]">
+                {filteredNotes.length} context{filteredNotes.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
+              size="sm"
+              className="h-8 bg-[#3b82f6] hover:bg-[#2563eb] text-white"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              New Context
+            </Button>
+          </div>
+        </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="container mx-auto py-4 px-4 sm:px-6">
-          <div className="flex flex-col gap-4">
-            {/* Filters and Search */}
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground/60 h-4 w-4" />
-                <Input
-                  placeholder="Search notes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-9 bg-card/50 border-border/50 focus:border-primary/50 text-sm"
-                />
-              </div>
+        {/* Search and Tab Toggle - Projects Style */}
+        <div className="flex items-center gap-3 px-6 pb-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681]" />
+            <Input
+              placeholder="Search context..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3] placeholder:text-[#6e7681] focus:border-[#30363d]"
+            />
+          </div>
 
-              <div className="flex gap-2">
-                <Button
-                  variant={showFavorites ? "default" : "outline"}
-                  onClick={() => setShowFavorites(!showFavorites)}
-                  className="h-9 gap-2 text-sm px-3"
+          <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              // Count for each tab
+              const count = tab.id === 'all' ? stats.totalNotes
+                : tab.id === 'personal' ? stats.personalNotes
+                : tab.id === 'project' ? stats.projectNotes
+                : tab.id === 'workspace' ? stats.workspaceNotes
+                : tab.id === 'public' ? stats.publicNotes
+                : tab.id === 'shared' ? stats.sharedNotes
+                : 0;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                    isActive
+                      ? "bg-[#1f1f1f] text-[#e6edf3]"
+                      : "text-[#6e7681] hover:text-[#8b949e]"
+                  )}
                 >
-                  <Star className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Favorites</span>
-                </Button>
-
-                <Dialog open={isTagDropdownOpen} onOpenChange={setIsTagDropdownOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="h-9 gap-2 text-sm px-3">
-                      <Filter className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">{selectedTag ? tags.find((t) => t.id === selectedTag)?.name : "All Tags"}</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent ref={tagDialogContentRef} className="tag-dialog-content">
-                    <div className="p-3 border-b border-border/50">
-                      <DialogTitle className="text-base font-semibold mb-2">Select Tag</DialogTitle>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-muted-foreground/60 h-3.5 w-3.5" />
-                        <Input
-                          ref={tagSearchInputRef}
-                          placeholder="Search tags..."
-                          value={tagSearchTerm}
-                          onChange={(e) => setTagSearchTerm(e.target.value)}
-                          className="pl-8 text-sm h-9 bg-card/50 border-border/50"
-                        />
-                      </div>
-                    </div>
-                    <div ref={tagListRef} className="max-h-[280px] overflow-y-auto p-2">
-                      <div
-                        data-tag-index="0"
-                        className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer border text-sm transition-colors ${selectedIndex === 0
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-transparent hover:border-border/50 hover:bg-accent"
-                          }`}
-                        onClick={() => {
-                          setSelectedTag(null);
-                          setTagSearchTerm("");
-                          setIsTagDropdownOpen(false);
-                        }}
-                      >
-                        <div className="w-2 h-2 rounded-full bg-orange-500" />
-                        <span className="font-medium">All Tags</span>
-                      </div>
-                      {filteredTags.map((tag, index) => (
-                        <div
-                          key={tag.id}
-                          data-tag-index={index + 1}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-sm transition-colors ${selectedIndex === index + 1 ? "bg-primary text-primary-foreground" : "hover:bg-accent"
-                            }`}
-                          onClick={() => {
-                            setSelectedTag(tag.id);
-                            setTagSearchTerm("");
-                            setIsTagDropdownOpen(false);
-                          }}
-                        >
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
-                          <span>{tag.name}</span>
-                          <span className="text-xs text-muted-foreground ml-auto">({tag._count.notes})</span>
-                        </div>
-                      ))}
-                      {filteredTags.length === 0 && tagSearchTerm.trim() && (
-                        <div className="px-3 py-6 text-sm text-muted-foreground/60 text-center">
-                          No tags found matching "{tagSearchTerm}"
-                        </div>
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-
-            {/* Horizontal Tabs */}
-            <div className="flex gap-6 border-b border-border/50 w-full">
-              <button
-                onClick={() => setActiveTab("all")}
-                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "all" ? "text-foreground border-primary" : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
-                  }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setActiveTab("private")}
-                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "private"
-                  ? "text-foreground border-primary"
-                  : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
-                  }`}
-              >
-                Private
-              </button>
-              <button
-                onClick={() => setActiveTab("public")}
-                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "public"
-                  ? "text-foreground border-primary"
-                  : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
-                  }`}
-              >
-                Public
-              </button>
-              <div className="border-l border-border/50 h-5 self-end mb-2.5"></div>
-              <button
-                onClick={() => setActiveTab("team-notes")}
-                className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${activeTab === "team-notes"
-                  ? "text-foreground border-primary"
-                  : "text-muted-foreground/70 border-transparent hover:text-foreground/80 hover:border-border"
-                  }`}
-              >
-                Team Notes
-              </button>
-            </div>
-
-            {/* Notes Grid */}
-            {notes.length === 0 ? (
-              <div className="text-center py-16">
-                <FileText className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                <h3 className="mt-3 text-base font-medium text-foreground/80">No notes found</h3>
-                <p className="text-sm text-muted-foreground/60 mt-1">
-                  {searchQuery || selectedTag || showFavorites
-                    ? "Try adjusting your filters"
-                    : activeTab === "private" || activeTab === "public" || activeTab === "all"
-                      ? "Get started by creating your first note"
-                      : "No team notes found"}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {notes.map((note) => (
-                  <Link key={note.id} href={`/${currentWorkspace?.slug}/notes/${note.id}`} className="block">
-                    <div className="bg-card/50 border border-border/50 rounded-lg p-3 hover:border-primary/50 hover:bg-card/80 transition-all cursor-pointer h-full flex flex-col min-h-[160px]">
-                      <div className="flex items-center justify-between mb-2.5">
-                        {/* Author mention on the left */}
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground/70">@{note.author.name}</span>
-                        </div>
-
-                        {/* Action buttons on the right */}
-                        <div className="flex items-center gap-0.5 -mr-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 hover:bg-transparent group"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              toggleFavorite(note.id, note.isFavorite);
-                            }}
-                          >
-                            <Star
-                              className={`h-3.5 w-3.5 ${note.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/50 group-hover:text-yellow-400"
-                                }`}
-                            />
-                          </Button>
-                          {canEditNote(session, note) && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 hover:bg-transparent group"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  router.push(`/${currentWorkspace?.slug}/notes/${note.id}`);
-                                }}
-                              >
-                                <Edit className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-primary" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 hover:bg-transparent group"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteClick(note.id);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-red-500" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mb-2.5">
-                        <div className="flex items-center gap-1.5">
-                          {note.isPublic ? (
-                            <div title="Public note">
-                              <Eye className="h-3.5 w-3.5 text-green-500/80" />
-                            </div>
-                          ) : (
-                            <div title="Private note">
-                              <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />
-                            </div>
-                          )}
-                          <h3 className="font-semibold line-clamp-1 text-base text-foreground flex-1">{note.title}</h3>
-                        </div>
-                      </div>
-
-                      <div className="prose prose-sm max-w-none line-clamp-3 mb-2.5 flex-1">
-                        <div className="text-muted-foreground/70 text-xs leading-relaxed">
-                          {(() => {
-                            const { preview, truncated } = getNotePreview(note.content, 100);
-                            return (
-                              <>
-                                {preview}
-                                {truncated && "..."}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      {note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-2.5">
-                          {note.tags.map((tag) => (
-                            <Badge
-                              key={tag.id}
-                              variant="secondary"
-                              className="text-xs px-2 py-0.5 font-normal border-0"
-                              style={{ backgroundColor: `${tag.color}15`, color: tag.color }}
-                            >
-                              <TagIcon className="h-2.5 w-2.5 mr-1" />
-                              {tag.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="flex flex-row items-center text-xs text-muted-foreground/60 mt-auto pt-1 border-t border-border/30">
-                        Updated {new Date(note.updatedAt).toLocaleDateString()}
-                        {note.workspace && <span className="ml-1.5">• {note.workspace.name}</span>}
-
-                        <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                          {note.comments && note.comments.length > 0 && (
-                            <div title={`${note.comments.length} comment${note.comments.length === 1 ? '' : 's'}`} className="flex items-center gap-1">
-                              <MessageSquare className="h-3.5 w-3.5 text-blue-400/80" />
-                              <span className="text-xs text-muted-foreground/70">{note.comments.length}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+                  {Icon && <Icon className="h-3 w-3" />}
+                  {tab.label}
+                  <span className="text-[#6e7681]">{count}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
+      {/* Filter Bar */}
+      <div className="border-b border-[#1f1f1f] bg-[#0d0d0e] px-6 py-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <GlobalFilterSelector
+            value={selectedTypes}
+            onChange={(value) => setSelectedTypes(value as string[])}
+            options={typeOptions}
+            label="Type"
+            pluralLabel="types"
+            emptyIcon={FileText}
+            selectionMode="multi"
+            showSearch={false}
+            allowClear={true}
+            popoverWidth="w-56"
+            filterHeader="Filter by type"
+          />
+
+          <GlobalFilterSelector
+            value={selectedProjects}
+            onChange={(value) => setSelectedProjects(value as string[])}
+            options={projectOptions}
+            label="Project"
+            pluralLabel="projects"
+            emptyIcon={FolderKanban}
+            selectionMode="multi"
+            showSearch={true}
+            searchPlaceholder="Search projects..."
+            allowClear={true}
+            popoverWidth="w-64"
+            filterHeader="Filter by project"
+          />
+
+          <GlobalFilterSelector
+            value={selectedTags}
+            onChange={(value) => setSelectedTags(value as string[])}
+            options={tagOptions}
+            label="Tags"
+            pluralLabel="tags"
+            emptyIcon={FileText}
+            selectionMode="multi"
+            showSearch={true}
+            searchPlaceholder="Search tags..."
+            allowClear={true}
+            popoverWidth="w-64"
+            filterHeader="Filter by tags"
+          />
+
+          <div className="w-px h-5 bg-[#27272a] mx-1" />
+
+          {/* Favorite Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowFavorites(!showFavorites)}
+            className={cn(
+              "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+              "border focus:outline-none",
+              showFavorites
+                ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+                : "border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
+            )}
+          >
+            <Star className={cn("h-3 w-3", showFavorites && "fill-amber-400")} />
+            <span>Favorites</span>
+          </button>
+
+          {/* AI Context Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowAiContext(!showAiContext)}
+            className={cn(
+              "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+              "border focus:outline-none",
+              showAiContext
+                ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
+                : "border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
+            )}
+          >
+            <Bot className="h-3 w-3" />
+            <span>AI</span>
+          </button>
+
+          {/* Reset Filters */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-6">
+          {/* Notes Grid */}
+          {filteredNotes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-dashed border-[#27272a] bg-[#0d0d0e]/50">
+              <FileText className="h-10 w-10 text-[#3f3f46] mb-4" />
+              <h3 className="text-sm font-medium text-[#a1a1aa] mb-1">
+                No context found
+              </h3>
+              <p className="text-xs text-[#52525b] mb-4 text-center max-w-sm">
+                {hasActiveFilters
+                  ? "Try adjusting your filters"
+                  : activeTab === "personal"
+                    ? "Create personal context to get started"
+                    : activeTab === "workspace"
+                      ? "No workspace context found"
+                      : activeTab === "shared-with-me"
+                        ? "No context has been shared with you yet"
+                        : activeTab === "ai-context"
+                          ? "No AI context found"
+                          : "Get started by creating your first context"}
+              </p>
+              <Button
+                onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
+                className="h-8 bg-[#3b82f6] hover:bg-[#2563eb] text-white"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                Create Context
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">
+              {filteredNotes.map((note) => (
+                <NoteListItem
+                  key={note.id}
+                  note={note}
+                  workspaceSlug={currentWorkspace?.slug || ""}
+                  onToggleFavorite={toggleFavorite}
+                  onDelete={handleDeleteClick}
+                  canEdit={canEditNote(session, note)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-[#0d0d0e] border-[#27272a]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Note</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this note? This action cannot be undone.
+            <AlertDialogTitle className="text-[#fafafa]">Delete Context</AlertDialogTitle>
+            <AlertDialogDescription className="text-[#71717a]">
+              Are you sure you want to delete this context? This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="bg-[#18181b] border-[#27272a] text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#fafafa]">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-red-500 hover:bg-red-600 text-white"
             >
               Delete
             </AlertDialogAction>

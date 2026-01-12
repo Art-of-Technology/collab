@@ -1,15 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Circle, CheckCircle2, XCircle, Timer, Archive, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useMemo } from "react";
+import { Circle, CheckCircle2, XCircle, Timer, Archive, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getProjectStatuses } from "@/actions/status";
+import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilterSelector";
+import { cn } from "@/lib/utils";
 
 interface StatusSelectorProps {
   value: string[];
@@ -18,6 +14,14 @@ interface StatusSelectorProps {
   disabled?: boolean;
 }
 
+// Icon mapping for status icons
+const iconMap = {
+  'circle': Circle,
+  'archive': Archive,
+  'check-circle-2': CheckCircle2,
+  'timer': Timer,
+  'x-circle': XCircle,
+} as const;
 
 export function StatusSelector({
   value = [],
@@ -25,8 +29,6 @@ export function StatusSelector({
   disabled = false,
   projectIds = [],
 }: StatusSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
   const { data: statuses = [], isLoading, isError } = useQuery({
     queryKey: ['statuses', projectIds],
     queryFn: () => getProjectStatuses(projectIds),
@@ -35,147 +37,134 @@ export function StatusSelector({
   });
 
   if (isError) return null;
-  
+
   // Create unique statuses map using Name as key to ensure lookup by Name works correctly
   const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.name, s])).values());
-  
-  const selectedStatuses = value.map(v => {
-    return uniqueStatuses.find(s => s.id === v) || null
-  }).filter(Boolean) as typeof uniqueStatuses;
 
-  const toggleStatus = (statusName: string) => {
-    // Get all status IDs that match this status name across all projects
-    const matchingStatusIds = statuses
-      .filter((status: any) => status.name === statusName)
-      .map((status: any) => status.id);
+  // Convert to FilterOption format
+  const options: FilterOption[] = useMemo(() => {
+    return uniqueStatuses.map(status => ({
+      id: status.name, // Using name as ID for grouping across projects
+      label: status.displayName,
+      iconColor: status.color,
+      // Store original data for custom rendering
+      icon: iconMap[status.iconName as keyof typeof iconMap] || Circle,
+    }));
+  }, [uniqueStatuses]);
 
-    // Check if any of the matching status IDs are currently selected
-    const isCurrentlySelected = matchingStatusIds.some(id => value.includes(id));
+  // Custom toggle handler that handles multiple status IDs per name
+  const handleChange = (newValue: string | string[]) => {
+    const newNames = Array.isArray(newValue) ? newValue : newValue ? [newValue] : [];
 
-    if (isCurrentlySelected) {
-      // Remove all matching status IDs
-      const newValues = value.filter(v => !matchingStatusIds.includes(v));
-      onChange(newValues);
-    } else {
-      // Add all matching status IDs
-      const newValues = [...value, ...matchingStatusIds];
-      onChange(newValues);
-    }
+    // Get all status IDs for the selected names
+    const selectedIds: string[] = [];
+    newNames.forEach(name => {
+      const matchingIds = statuses
+        .filter(s => s.name === name)
+        .map(s => s.id);
+      selectedIds.push(...matchingIds);
+    });
+
+    onChange(selectedIds);
   };
 
-  const statusIcon = (status: any) => {
-    const iconMap = {
-      'circle': Circle,
-      'archive': Archive,
-      'check-circle-2': CheckCircle2,
-      'timer': Timer,
-      'x-circle': XCircle,
+  // Map current value (IDs) back to names for the component
+  const selectedNames = useMemo(() => {
+    const names = new Set<string>();
+    value.forEach(id => {
+      const status = statuses.find(s => s.id === id);
+      if (status) {
+        names.add(status.name);
+      }
+    });
+    return Array.from(names);
+  }, [value, statuses]);
+
+  // Get selected statuses for custom trigger rendering
+  const selectedStatuses = useMemo(() => {
+    return uniqueStatuses.filter(s => selectedNames.includes(s.name));
+  }, [uniqueStatuses, selectedNames]);
+
+  // Custom trigger content for status icons
+  const renderTriggerContent = () => {
+    if (selectedStatuses.length === 0) {
+      return (
+        <>
+          <Circle className="h-3 w-3 text-[#6e7681]" />
+          <span className="text-[#6e7681] text-xs">Status</span>
+        </>
+      );
     }
-    const Icon = iconMap[status.iconName as keyof typeof iconMap] || iconMap['circle'];
-    return <Icon className={cn("h-3.5 w-3.5")} style={{ color: status.color }} />;
-  }
+
+    if (selectedStatuses.length === 1) {
+      const status = selectedStatuses[0];
+      const Icon = iconMap[status.iconName as keyof typeof iconMap] || Circle;
+      return (
+        <>
+          <Icon className="h-3 w-3" style={{ color: status.color }} />
+          <span className="text-[#cccccc] text-xs">{status.displayName}</span>
+        </>
+      );
+    }
+
+    // Multiple statuses
+    return (
+      <>
+        <div className="flex items-center gap-0.5">
+          {selectedStatuses.slice(0, 2).map((status) => {
+            const Icon = iconMap[status.iconName as keyof typeof iconMap] || Circle;
+            return (
+              <Icon
+                key={status.name}
+                className="h-2.5 w-2.5"
+                style={{ color: status.color }}
+              />
+            );
+          })}
+          {selectedStatuses.length > 2 && (
+            <div className="h-2.5 w-2.5 rounded-full bg-[#404040] flex items-center justify-center">
+              <span className="text-[8px] text-white font-medium">+</span>
+            </div>
+          )}
+        </div>
+        <span className="text-[#cccccc] text-xs">{selectedStatuses.length} statuses</span>
+      </>
+    );
+  };
+
+  // Custom option content for status icons
+  const renderOptionContent = (option: FilterOption, isSelected: boolean) => {
+    const status = uniqueStatuses.find(s => s.name === option.id);
+    if (!status) return null;
+
+    const Icon = iconMap[status.iconName as keyof typeof iconMap] || Circle;
+
+    return (
+      <>
+        <Icon className="h-3.5 w-3.5" style={{ color: status.color }} />
+        <span className="text-[#cccccc] flex-1">{status.displayName}</span>
+        {isSelected && <Check className="h-3 w-3 text-[#6e7681]" />}
+      </>
+    );
+  };
 
   return (
-    <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
-            disabled && "opacity-50 cursor-not-allowed"
-          )}
-        >
-          {selectedStatuses.length === 0 ? (
-            <>
-              <Circle className="h-3 w-3 text-[#6e7681]" />
-              <span className="text-[#6e7681] text-xs">Status</span>
-            </>
-          ) : selectedStatuses.length === 1 ? (
-            <>
-              {(() => {
-                return statusIcon(selectedStatuses[0]);
-              })()}
-              <span className="text-[#cccccc] text-xs">{selectedStatuses[0].displayName}</span>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-0.5">
-                {selectedStatuses.slice(0, 2).map((status) => {
-                  return <span key={status.id}>{statusIcon(status)}</span>
-                })}
-                {selectedStatuses.length > 2 && (
-                  <div className="h-2.5 w-2.5 rounded-full bg-[#404040] flex items-center justify-center">
-                    <span className="text-[8px] text-white font-medium">+</span>
-                  </div>
-                )}
-              </div>
-              <span className="text-[#cccccc] text-xs">{selectedStatuses.length} statuses</span>
-            </>
-          )}
-        </button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        className="w-60 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
-        align="start"
-        side="bottom"
-        sideOffset={4}
-      >
-        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
-          Filter by status
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center w-full justify-center gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span className="text-[#6e7681] text-xs">Loading...</span>
-          </div>
-        ) : (
-          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
-            {/* Clear all option */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-              onClick={() => onChange([])}
-            >
-              <Circle className="h-3.5 w-3.5 text-[#6e7681]" />
-              <span className="text-[#9ca3af] flex-1">Clear status filter</span>
-              {value.length === 0 && (
-                <span className="text-xs text-[#6e7681]">✓</span>
-              )}
-            </button>
-
-
-            {uniqueStatuses.map((status) => {
-              // Get all status IDs that match this status name across all projects
-              const matchingStatusIds = statuses
-                .filter((s: any) => s.name === status.name)
-                .map((s: any) => s.id);
-
-              // Check if any of the matching status IDs are currently selected
-              const isSelected = matchingStatusIds.some(id => value.includes(id));
-
-              return (
-                <button
-                  key={status.name}
-                  type="button"
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
-                  onClick={() => toggleStatus(status.name)}
-                >
-                  {statusIcon(status)}
-                  <span className="text-[#cccccc] flex-1">{status.displayName}</span>
-                  {isSelected && (
-                    <span className="text-xs text-[#6e7681]">✓</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+    <GlobalFilterSelector
+      value={selectedNames}
+      onChange={handleChange}
+      options={options}
+      label="Status"
+      pluralLabel="statuses"
+      emptyIcon={Circle}
+      selectionMode="multi"
+      showSearch={false}
+      allowClear={true}
+      disabled={disabled}
+      isLoading={isLoading}
+      popoverWidth="w-60"
+      filterHeader="Filter by status"
+      renderTriggerContent={renderTriggerContent}
+      renderOptionContent={renderOptionContent}
+    />
   );
 }

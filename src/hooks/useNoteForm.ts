@@ -3,61 +3,139 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
+import { NoteType, NoteScope, NoteSharePermission } from "@prisma/client";
 
 const noteFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   content: z.string().min(1, "Content is required"),
-  isPublic: z.boolean().default(false),
   isFavorite: z.boolean().default(false),
   workspaceId: z.string().optional().nullable(),
   tagIds: z.array(z.string()).default([]),
+  // New Knowledge System fields
+  type: z.nativeEnum(NoteType).default(NoteType.GENERAL),
+  scope: z.nativeEnum(NoteScope).default(NoteScope.PERSONAL),
+  projectId: z.string().optional().nullable(),
+  isAiContext: z.boolean().default(false),
+  aiContextPriority: z.number().default(0),
+  category: z.string().optional().nullable(),
 });
 
 export type NoteFormValues = z.infer<typeof noteFormSchema>;
+
+interface NoteShareUser {
+  id: string;
+  userId: string;
+  permission: NoteSharePermission;
+  sharedAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+}
 
 interface Note {
   id: string;
   title: string;
   content: string;
-  isPublic: boolean;
   isFavorite: boolean;
+  type: NoteType;
+  scope: NoteScope;
+  projectId: string | null;
+  isAiContext: boolean;
+  aiContextPriority: number;
+  category: string | null;
+  authorId: string;
   tags: {
     id: string;
     name: string;
     color: string;
   }[];
+  sharedWith: NoteShareUser[];
+  project?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  _permissions?: {
+    isOwner: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+    canShare: boolean;
+  };
 }
 
 interface UseNoteFormOptions {
   noteId?: string;
   workspaceId: string;
+  projectId?: string;
   mode: "create" | "edit";
   onSuccess?: (noteId: string) => void;
+  defaultType?: NoteType;
+  defaultScope?: NoteScope;
 }
 
-export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFormOptions) {
+export type AutosaveStatus = "idle" | "saving" | "saved" | "error";
+
+// Helper to serialize values for comparison
+const serializeValues = (values: NoteFormValues) => {
+  return JSON.stringify({
+    title: values.title,
+    content: values.content,
+    isFavorite: values.isFavorite,
+    type: values.type,
+    scope: values.scope,
+    projectId: values.projectId,
+    isAiContext: values.isAiContext,
+    tagIds: values.tagIds,
+  });
+};
+
+export function useNoteForm({
+  noteId,
+  workspaceId,
+  projectId,
+  mode,
+  onSuccess,
+  defaultType = NoteType.GENERAL,
+  defaultScope = NoteScope.PERSONAL,
+}: UseNoteFormOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNote, setIsFetchingNote] = useState(mode === "edit" && !!noteId);
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
+  const [showSavedIndicator, setShowSavedIndicator] = useState(false);
+
+  // Track current form values as state for proper debouncing
+  const [currentFormValues, setCurrentFormValues] = useState<string>("");
+  const [lastSavedValues, setLastSavedValues] = useState<string>("");
+
   const { toast } = useToast();
-  const router = useRouter();
-  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialLoadRef = useRef(true);
+
+  // Refs for tracking
+  const latestValuesRef = useRef<NoteFormValues | null>(null);
   const createdNoteIdRef = useRef<string | null>(noteId || null);
+  const autosaveErrorToastShownRef = useRef(false);
+  const isInitializedRef = useRef(false);
 
   const form = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
     defaultValues: {
       title: "",
       content: "",
-      isPublic: false,
       isFavorite: false,
       workspaceId: workspaceId,
       tagIds: [],
+      // Knowledge System defaults
+      type: defaultType,
+      scope: projectId ? NoteScope.PROJECT : defaultScope,
+      projectId: projectId || null,
+      isAiContext: false,
+      aiContextPriority: 0,
+      category: null,
     },
   });
 
@@ -69,23 +147,39 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
 
     try {
       const response = await fetch(`/api/notes/${noteId}`);
-      
+
       if (!response.ok) {
         throw new Error(`Error: ${response.status}`);
       }
-      
+
       const data = await response.json();
       setNote(data);
 
-      // Update form with fetched note data
-      form.reset({
+      const formValues = {
         title: data.title,
         content: data.content,
-        isPublic: data.isPublic,
         isFavorite: data.isFavorite,
         workspaceId: workspaceId,
         tagIds: data.tags.map((tag: any) => tag.id),
-      });
+        // Knowledge System fields
+        type: data.type || NoteType.GENERAL,
+        scope: data.scope || NoteScope.PERSONAL,
+        projectId: data.projectId || null,
+        isAiContext: data.isAiContext || false,
+        aiContextPriority: data.aiContextPriority || 0,
+        category: data.category || null,
+      };
+
+      // Update form with fetched note data
+      form.reset(formValues);
+
+      // Set the last saved values to the fetched data
+      const serialized = serializeValues(formValues as NoteFormValues);
+      setLastSavedValues(serialized);
+      setCurrentFormValues(serialized);
+      latestValuesRef.current = formValues as NoteFormValues;
+      isInitializedRef.current = true;
+      setAutosaveStatus("idle");
     } catch (err) {
       console.error("Failed to fetch note:", err);
       setError("Failed to load note details. Please try again.");
@@ -103,12 +197,20 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
   useEffect(() => {
     if (mode === "edit" && noteId) {
       fetchNote();
+    } else if (mode === "create") {
+      isInitializedRef.current = true;
     }
   }, [mode, noteId, fetchNote]);
 
-  // Autosave function
-  const autosave = useCallback(async (values: NoteFormValues, silent = true) => {
+  // Autosave function (direct API call similar to issue detail)
+  const autosave = useCallback(async (values: NoteFormValues) => {
+    // Don't save if title or content is empty (API requires both)
+    if (!values.title?.trim() || !values.content?.trim()) {
+      return;
+    }
+
     setIsSaving(true);
+    setAutosaveStatus("saving");
 
     try {
       // If we're in create mode and haven't created a note yet, create it first
@@ -122,20 +224,23 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
         });
 
         if (!response.ok) {
-          throw new Error("Failed to create note");
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to create note");
         }
 
         const result = await response.json();
         createdNoteIdRef.current = result.id;
+        const serialized = serializeValues(values);
+        setLastSavedValues(serialized);
         setLastSaved(new Date());
-        
-        if (!silent) {
-          toast({
-            title: "Saved",
-            description: "Note created successfully",
-          });
-        }
-        
+        setAutosaveStatus("saved");
+        setShowSavedIndicator(true);
+        setTimeout(() => {
+          setShowSavedIndicator(false);
+          setAutosaveStatus("idle");
+        }, 1500);
+        autosaveErrorToastShownRef.current = false;
+
         // Notify parent component about the new note
         if (onSuccess) {
           onSuccess(result.id);
@@ -156,69 +261,116 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save note");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save note");
       }
 
+      const serialized = serializeValues(values);
+      setLastSavedValues(serialized);
       setLastSaved(new Date());
-      
-      if (!silent) {
-        toast({
-          title: "Saved",
-          description: "Note saved successfully",
-        });
-      }
-    } catch (error) {
+      setAutosaveStatus("saved");
+      setShowSavedIndicator(true);
+      setTimeout(() => {
+        setShowSavedIndicator(false);
+        setAutosaveStatus("idle");
+      }, 1500);
+      autosaveErrorToastShownRef.current = false;
+    } catch (error: any) {
       console.error("Autosave error:", error);
-      if (!silent) {
+      setAutosaveStatus("error");
+
+      if (!autosaveErrorToastShownRef.current) {
         toast({
-          title: "Error",
-          description: "Failed to save note",
+          title: "Autosave failed",
+          description: error?.message || "Could not save changes. Will retry when you continue editing.",
           variant: "destructive",
         });
+        autosaveErrorToastShownRef.current = true;
       }
     } finally {
       setIsSaving(false);
     }
   }, [mode, noteId, toast, onSuccess]);
 
-  // Watch form changes and trigger autosave with debounce
+  // Watch form changes and update state (single subscription)
   useEffect(() => {
     const subscription = form.watch((values) => {
-      // Skip autosave on initial load
-      if (isInitialLoadRef.current) {
-        isInitialLoadRef.current = false;
-        return;
-      }
+      const typedValues = values as NoteFormValues;
+      latestValuesRef.current = typedValues;
 
-      // Clear existing timeout
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
+      // Only track changes after initialization
+      if (isInitializedRef.current) {
+        const serialized = serializeValues(typedValues);
+        setCurrentFormValues(serialized);
       }
-
-      // Set new timeout for autosave (2 seconds after user stops typing)
-      autosaveTimeoutRef.current = setTimeout(() => {
-        const formValues = form.getValues();
-        // Only autosave if there's content (title or content field has value)
-        if (formValues.title?.trim() || formValues.content?.trim()) {
-          autosave(formValues as NoteFormValues);
-        }
-      }, 2000);
     });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
-    return () => {
-      subscription.unsubscribe();
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
+  // Debounced autosave - proper pattern matching issue detail modal
+  useEffect(() => {
+    // Skip if not initialized or values haven't changed
+    if (!isInitializedRef.current) return;
+    if (currentFormValues === lastSavedValues) return;
+    if (!latestValuesRef.current) return;
+
+    // Set up debounced autosave (800ms after last change)
+    const handle = setTimeout(() => {
+      if (latestValuesRef.current) {
+        autosave(latestValuesRef.current);
+      }
+    }, 800);
+
+    return () => clearTimeout(handle);
+  }, [currentFormValues, lastSavedValues, autosave]);
+
+  // Flush autosave on tab hide or before unload for reliability
+  useEffect(() => {
+    const flushIfPending = () => {
+      if (latestValuesRef.current) {
+        const serialized = serializeValues(latestValuesRef.current);
+        if (serialized !== lastSavedValues) {
+          autosave(latestValuesRef.current);
+        }
       }
     };
-  }, [form, autosave]);
 
-  // Reset isInitialLoadRef when note data is loaded
-  useEffect(() => {
-    if (note && mode === "edit") {
-      isInitialLoadRef.current = true;
-    }
-  }, [note, mode]);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        flushIfPending();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (latestValuesRef.current) {
+        const serialized = serializeValues(latestValuesRef.current);
+        if (serialized !== lastSavedValues) {
+          const currentNoteId = mode === "edit" ? noteId : createdNoteIdRef.current;
+          if (currentNoteId && latestValuesRef.current.title?.trim() && latestValuesRef.current.content?.trim()) {
+            const endpoint = `/api/notes/${currentNoteId}`;
+            const payload = JSON.stringify(latestValuesRef.current);
+            try {
+              navigator.sendBeacon(endpoint, new Blob([payload], { type: 'application/json' }));
+            } catch (e) {
+              // Fallback: synchronous XHR (not recommended but better than losing data)
+              const xhr = new XMLHttpRequest();
+              xhr.open('PATCH', endpoint, false);
+              xhr.setRequestHeader('Content-Type', 'application/json');
+              xhr.send(payload);
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [mode, noteId, lastSavedValues, autosave]);
 
   const onSubmit = async (values: NoteFormValues) => {
     setIsLoading(true);
@@ -261,6 +413,14 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
     }
   };
 
+  // Manual retry function for error state
+  const retryAutosave = useCallback(() => {
+    if (latestValuesRef.current) {
+      autosaveErrorToastShownRef.current = false;
+      autosave(latestValuesRef.current);
+    }
+  }, [autosave]);
+
   return {
     form,
     note,
@@ -271,6 +431,9 @@ export function useNoteForm({ noteId, workspaceId, mode, onSuccess }: UseNoteFor
     error,
     onSubmit,
     refetchNote: fetchNote,
+    // Autosave status fields
+    autosaveStatus,
+    showSavedIndicator,
+    retryAutosave,
   };
 }
-
