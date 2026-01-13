@@ -17,6 +17,9 @@ import {
   FolderKanban,
   Globe,
   Eye,
+  KeyRound,
+  Key,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -165,6 +168,40 @@ export const NOTE_TYPE_CONFIGS: Record<NoteType, NoteTypeConfig> = {
     supportsAiContext: true,
     suggestedCategories: ['decisions/accepted', 'decisions/proposed', 'decisions/superseded'],
   },
+  // Secrets Vault types (Phase 3)
+  [NoteType.ENV_VARS]: {
+    value: NoteType.ENV_VARS,
+    label: 'Environment Variables',
+    description: 'Encrypted .env files and environment configuration',
+    icon: KeyRound,
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-100',
+    defaultScope: NoteScope.PROJECT,
+    supportsAiContext: false,
+    suggestedCategories: ['secrets/env', 'secrets/config'],
+  },
+  [NoteType.API_KEYS]: {
+    value: NoteType.API_KEYS,
+    label: 'API Keys',
+    description: 'Encrypted API keys and access tokens',
+    icon: Key,
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-100',
+    defaultScope: NoteScope.PROJECT,
+    supportsAiContext: false,
+    suggestedCategories: ['secrets/api', 'secrets/tokens'],
+  },
+  [NoteType.CREDENTIALS]: {
+    value: NoteType.CREDENTIALS,
+    label: 'Credentials',
+    description: 'Encrypted passwords and authentication credentials',
+    icon: ShieldCheck,
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-100',
+    defaultScope: NoteScope.PERSONAL,
+    supportsAiContext: false,
+    suggestedCategories: ['secrets/passwords', 'secrets/auth'],
+  },
 };
 
 // Note Scope Configuration
@@ -295,4 +332,28 @@ export function parseCategoryPath(category: string | null): string[] {
 // Build category path from parts
 export function buildCategoryPath(parts: string[]): string {
   return parts.filter(Boolean).join('/');
+}
+
+// Secret note type helpers (Phase 3)
+export const SECRET_NOTE_TYPES = [
+  NoteType.ENV_VARS,
+  NoteType.API_KEYS,
+  NoteType.CREDENTIALS,
+] as const;
+
+// Check if a note type is a secret type (requires encryption)
+export function isSecretNoteType(type: NoteType): boolean {
+  return SECRET_NOTE_TYPES.includes(type as typeof SECRET_NOTE_TYPES[number]);
+}
+
+// Get secret note type options
+export function getSecretNoteTypeOptions(): NoteTypeConfig[] {
+  return SECRET_NOTE_TYPES.map(type => NOTE_TYPE_CONFIGS[type]);
+}
+
+// Get non-secret note type options
+export function getNonSecretNoteTypeOptions(): NoteTypeConfig[] {
+  return Object.values(NOTE_TYPE_CONFIGS).filter(
+    config => !SECRET_NOTE_TYPES.includes(config.value as typeof SECRET_NOTE_TYPES[number])
+  );
 }

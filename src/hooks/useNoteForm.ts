@@ -4,10 +4,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { NoteType, NoteScope, NoteSharePermission } from "@prisma/client";
+import { isSecretNoteType } from "@/lib/note-types";
+
+// Secret variable data structure
+interface SecretVariableFormData {
+  key: string;
+  value: string;
+  masked: boolean;
+  description?: string;
+}
 
 const noteFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  content: z.string().min(1, "Content is required"),
+  content: z.string().default(""), // Content is optional for secret types
   isFavorite: z.boolean().default(false),
   workspaceId: z.string().optional().nullable(),
   tagIds: z.array(z.string()).default([]),
@@ -18,6 +27,29 @@ const noteFormSchema = z.object({
   isAiContext: z.boolean().default(false),
   aiContextPriority: z.number().default(0),
   category: z.string().optional().nullable(),
+  // Secrets Vault fields (Phase 3)
+  variables: z.array(z.object({
+    key: z.string(),
+    value: z.string(),
+    masked: z.boolean().default(true),
+    description: z.string().optional(),
+  })).optional().default([]),
+  rawSecretContent: z.string().optional().default(""),
+  secretEditorMode: z.enum(["key-value", "raw"]).optional().default("key-value"),
+  isRestricted: z.boolean().optional().default(false),
+  expiresAt: z.string().optional().nullable(),
+}).refine((data) => {
+  // For secret types, either variables or rawSecretContent must have content
+  if (isSecretNoteType(data.type)) {
+    const hasVariables = data.variables && data.variables.some(v => v.key.trim() !== "" || v.value.trim() !== "");
+    const hasRawContent = data.rawSecretContent && data.rawSecretContent.trim() !== "";
+    return hasVariables || hasRawContent;
+  }
+  // For regular types, content is required
+  return data.content.trim() !== "";
+}, {
+  message: "Content is required",
+  path: ["content"],
 });
 
 export type NoteFormValues = z.infer<typeof noteFormSchema>;
@@ -63,6 +95,10 @@ interface Note {
     canDelete: boolean;
     canShare: boolean;
   };
+  // Secrets Vault fields
+  isEncrypted?: boolean;
+  isRestricted?: boolean;
+  expiresAt?: string | null;
 }
 
 interface UseNoteFormOptions {
@@ -88,6 +124,12 @@ const serializeValues = (values: NoteFormValues) => {
     projectId: values.projectId,
     isAiContext: values.isAiContext,
     tagIds: values.tagIds,
+    // Secrets fields
+    variables: values.variables,
+    rawSecretContent: values.rawSecretContent,
+    secretEditorMode: values.secretEditorMode,
+    isRestricted: values.isRestricted,
+    expiresAt: values.expiresAt,
   });
 };
 
@@ -136,6 +178,12 @@ export function useNoteForm({
       isAiContext: false,
       aiContextPriority: 0,
       category: null,
+      // Secrets Vault defaults
+      variables: [],
+      rawSecretContent: "",
+      secretEditorMode: "key-value",
+      isRestricted: false,
+      expiresAt: null,
     },
   });
 
@@ -168,6 +216,12 @@ export function useNoteForm({
         isAiContext: data.isAiContext || false,
         aiContextPriority: data.aiContextPriority || 0,
         category: data.category || null,
+        // Secrets Vault fields - note: actual secret values are fetched via reveal API
+        variables: [] as SecretVariableFormData[],
+        rawSecretContent: "",
+        secretEditorMode: "key-value" as const,
+        isRestricted: data.isRestricted || false,
+        expiresAt: data.expiresAt ? new Date(data.expiresAt).toISOString().split('T')[0] : null,
       };
 
       // Update form with fetched note data
@@ -204,9 +258,23 @@ export function useNoteForm({
 
   // Autosave function (direct API call similar to issue detail)
   const autosave = useCallback(async (values: NoteFormValues) => {
-    // Don't save if title or content is empty (API requires both)
-    if (!values.title?.trim() || !values.content?.trim()) {
+    // Don't save if title is empty
+    if (!values.title?.trim()) {
       return;
+    }
+
+    // For secret types, check variables/rawSecretContent instead of content
+    if (isSecretNoteType(values.type)) {
+      const hasVariables = values.variables && values.variables.some(v => v.key.trim() !== "" || v.value.trim() !== "");
+      const hasRawContent = values.rawSecretContent && values.rawSecretContent.trim() !== "";
+      if (!hasVariables && !hasRawContent) {
+        return;
+      }
+    } else {
+      // For regular types, content is required
+      if (!values.content?.trim()) {
+        return;
+      }
     }
 
     setIsSaving(true);

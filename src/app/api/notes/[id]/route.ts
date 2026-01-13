@@ -3,6 +3,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { NoteScope, NoteSharePermission } from "@prisma/client";
+import {
+  encryptVariables,
+  encryptRawContent,
+  isSecretNoteType,
+  isSecretsEnabled,
+  SecretVariable
+} from "@/lib/secrets/crypto";
+import { logNoteAccess, canAccessNote } from "@/lib/secrets/access";
 
 export async function GET(
   request: NextRequest,
@@ -128,7 +136,12 @@ export async function PATCH(
       aiContextPriority,
       category,
       // Legacy support
-      isPublic
+      isPublic,
+      // Secrets Vault Phase 3 fields
+      variables, // Array of { key, value, masked?, description? }
+      rawSecretContent, // Raw .env content
+      isRestricted, // Limit access even for PROJECT/WORKSPACE scope
+      expiresAt // Optional expiration for secrets
     } = body;
 
     // Check if note exists and user has permission to edit
@@ -200,13 +213,60 @@ export async function PATCH(
       );
     }
 
+    // Handle secrets encryption for secret note types
+    const noteType = type !== undefined ? type : existingNote.type;
+    const isSecretType = isSecretNoteType(noteType);
+    const workspaceId = existingNote.workspaceId;
+    let encryptedData: {
+      isEncrypted?: boolean;
+      encryptedContent?: string | null;
+      secretVariables?: string | null;
+    } = {};
+
+    if (isSecretType && (variables !== undefined || rawSecretContent !== undefined)) {
+      if (!workspaceId) {
+        return NextResponse.json(
+          { error: "Workspace ID is required for secret notes" },
+          { status: 400 }
+        );
+      }
+
+      if (!isSecretsEnabled()) {
+        return NextResponse.json(
+          { error: "Secrets feature is not enabled. SECRETS_MASTER_KEY is not configured." },
+          { status: 503 }
+        );
+      }
+
+      encryptedData.isEncrypted = true;
+
+      // Encrypt variables (key-value mode)
+      if (variables !== undefined) {
+        if (Array.isArray(variables) && variables.length > 0) {
+          const encrypted = encryptVariables(variables, workspaceId);
+          encryptedData.secretVariables = JSON.stringify(encrypted);
+        } else {
+          encryptedData.secretVariables = null;
+        }
+      }
+
+      // Encrypt raw content (.env mode)
+      if (rawSecretContent !== undefined) {
+        if (typeof rawSecretContent === 'string' && rawSecretContent.trim()) {
+          encryptedData.encryptedContent = encryptRawContent(rawSecretContent, workspaceId);
+        } else {
+          encryptedData.encryptedContent = null;
+        }
+      }
+    }
+
     const note = await prisma.note.update({
       where: {
         id: id
       },
       data: {
         ...(title !== undefined && { title }),
-        ...(content !== undefined && { content }),
+        ...(content !== undefined && !isSecretType && { content }),
         ...(isFavorite !== undefined && { isFavorite }),
         // Only owner can update these fields
         ...(isOwner && type !== undefined && { type }),
@@ -215,6 +275,12 @@ export async function PATCH(
         ...(isOwner && isAiContext !== undefined && { isAiContext }),
         ...(isOwner && aiContextPriority !== undefined && { aiContextPriority }),
         ...(isOwner && category !== undefined && { category }),
+        // Secrets Vault Phase 3 fields (owner only)
+        ...(isOwner && encryptedData.isEncrypted !== undefined && { isEncrypted: encryptedData.isEncrypted }),
+        ...(isOwner && encryptedData.encryptedContent !== undefined && { encryptedContent: encryptedData.encryptedContent }),
+        ...(isOwner && encryptedData.secretVariables !== undefined && { secretVariables: encryptedData.secretVariables }),
+        ...(isOwner && isRestricted !== undefined && { isRestricted }),
+        ...(isOwner && expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
         ...(tagIds && {
           tags: {
             set: tagIds.map((tagId: string) => ({ id: tagId }))
@@ -261,6 +327,21 @@ export async function PATCH(
         }
       }
     });
+
+    // Log update for encrypted notes
+    if (note.isEncrypted && (encryptedData.secretVariables !== undefined || encryptedData.encryptedContent !== undefined)) {
+      await logNoteAccess(
+        note.id,
+        session.user.id,
+        'UPDATE',
+        {
+          updatedVariables: encryptedData.secretVariables !== undefined,
+          updatedRawContent: encryptedData.encryptedContent !== undefined,
+          isRestricted: note.isRestricted
+        },
+        request
+      );
+    }
 
     return NextResponse.json(note);
   } catch (error) {
