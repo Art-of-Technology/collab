@@ -138,15 +138,15 @@ export default function ProjectsPageClient() {
               onClick={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/timeline`)}
               variant="ghost"
               size="sm"
-              className="h-8 px-2 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className="h-7 px-2 text-[#6e7681] hover:text-[#e6edf3] hover:bg-[#1f1f1f]"
               title="View Timeline"
             >
-              <BarChart3 className="h-4 w-4" />
+              <BarChart3 className="h-3.5 w-3.5" />
             </Button>
             <Button
               onClick={() => setShowCreateModal(true)}
               size="sm"
-              className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+              className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
             >
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               New Project
@@ -432,7 +432,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <Button
         onClick={onCreate}
         size="sm"
-        className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+        className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
       >
         <Plus className="h-3.5 w-3.5 mr-1.5" />
         Create your first project
