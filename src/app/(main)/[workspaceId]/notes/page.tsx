@@ -31,6 +31,7 @@ import {
   Bug,
   Calendar,
   GitBranch,
+  Pin,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -52,7 +53,8 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilterSelector";
 import { getNoteTypeConfig } from "@/lib/note-types";
-import { useQuery } from "@tanstack/react-query";
+import { PinnedNotesSection } from "@/components/notes/PinnedNotesSection";
+import { useProjects } from "@/hooks/queries/useProjects";
 
 interface Note {
   id: string;
@@ -62,6 +64,8 @@ interface Note {
   type: NoteType;
   isFavorite: boolean;
   isAiContext?: boolean;
+  isPinned?: boolean;
+  pinnedAt?: string;
   createdAt: string;
   updatedAt: string;
   authorId: string;
@@ -105,12 +109,6 @@ interface NoteTag {
   };
 }
 
-interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  color: string | null;
-}
 
 // Note type icons mapping
 const noteTypeIcons: Record<NoteType, any> = {
@@ -171,12 +169,14 @@ function NoteListItem({
   note,
   workspaceSlug,
   onToggleFavorite,
+  onTogglePin,
   onDelete,
   canEdit,
 }: {
   note: Note;
   workspaceSlug: string;
   onToggleFavorite: (noteId: string, isFavorite: boolean) => void;
+  onTogglePin: (noteId: string, isPinned: boolean) => void;
   onDelete: (noteId: string) => void;
   canEdit: boolean;
 }) {
@@ -217,6 +217,9 @@ function NoteListItem({
           <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
             {note.title}
           </h3>
+          {note.isPinned && (
+            <Pin className="h-3 w-3 text-amber-500 flex-shrink-0" />
+          )}
           {note.isFavorite && (
             <Star className="h-3 w-3 fill-amber-400 text-amber-400 flex-shrink-0" />
           )}
@@ -309,12 +312,29 @@ function NoteListItem({
               ? "text-amber-400 hover:bg-[#27272a]"
               : "text-[#52525b] hover:text-amber-400 hover:bg-[#27272a]"
           )}
+          title={note.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Star className={cn("h-3.5 w-3.5", note.isFavorite && "fill-amber-400")} />
         </button>
 
         {canEdit && (
           <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin(note.id, !!note.isPinned);
+              }}
+              className={cn(
+                "flex items-center justify-center h-8 w-8 rounded-lg text-[12px] font-medium transition-colors",
+                note.isPinned
+                  ? "text-amber-500 hover:bg-[#27272a]"
+                  : "text-[#52525b] hover:text-amber-500 hover:bg-[#27272a]"
+              )}
+              title={note.isPinned ? "Unpin" : "Pin to top"}
+            >
+              <Pin className="h-3.5 w-3.5" />
+            </button>
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -366,16 +386,9 @@ export default function NotesPage({
   const [showFavorites, setShowFavorites] = useState(false);
   const [showAiContext, setShowAiContext] = useState(false);
 
-  // Fetch projects for filter
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ["projects", currentWorkspace?.id],
-    queryFn: async () => {
-      if (!currentWorkspace?.id) return [];
-      const response = await fetch(`/api/projects?workspaceId=${currentWorkspace.id}`);
-      if (!response.ok) throw new Error("Failed to fetch projects");
-      return response.json();
-    },
-    enabled: !!currentWorkspace?.id,
+  // Fetch projects for filter using the proper hook
+  const { data: projects = [] } = useProjects({
+    workspaceId: currentWorkspace?.id,
   });
 
   // Check if any filters are active
@@ -529,7 +542,8 @@ export default function NotesPage({
         break;
       case "all":
       default:
-        // No filtering - show all
+        // On the "all" tab, exclude pinned notes since they're shown in the pinned section
+        filtered = filtered.filter((note) => !note.isPinned);
         break;
     }
 
@@ -592,6 +606,38 @@ export default function NotesPage({
     }
   };
 
+  const togglePin = async (noteId: string, isPinned: boolean) => {
+    try {
+      const response = await fetch(`/api/notes/${noteId}/pin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pin: !isPinned }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setNotes(notes.map((note) =>
+          note.id === noteId
+            ? { ...note, isPinned: result.isPinned, pinnedAt: result.isPinned ? new Date().toISOString() : undefined }
+            : note
+        ));
+        toast({
+          title: result.isPinned ? "Pinned" : "Unpinned",
+          description: result.isPinned ? "Context pinned to top" : "Context unpinned",
+        });
+      }
+    } catch (error) {
+      console.error("Error toggling pin:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update pin status",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteClick = (noteId: string) => {
     setNoteToDelete(noteId);
     setDeleteConfirmOpen(true);
@@ -629,7 +675,7 @@ export default function NotesPage({
 
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
-      <div className="h-full flex flex-col bg-[#09090b]">
+      <div className="h-full flex flex-col bg-[#0a0a0b]">
         <div className="flex-1 flex items-center justify-center">
           <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
         </div>
@@ -638,7 +684,7 @@ export default function NotesPage({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b]">
+    <div className="h-full flex flex-col bg-[#0a0a0b]">
       {/* Header */}
       <div className="flex-none border-b border-[#1f1f1f]">
         <div className="flex items-center justify-between px-6 py-4">
@@ -657,7 +703,7 @@ export default function NotesPage({
             <Button
               onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
               size="sm"
-              className="h-8 bg-[#3b82f6] hover:bg-[#2563eb] text-white"
+              className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
             >
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               New Context
@@ -808,6 +854,15 @@ export default function NotesPage({
       {/* Content */}
       <ScrollArea className="flex-1">
         <div className="p-6">
+          {/* Pinned Notes Section */}
+          {activeTab === "all" && currentWorkspace?.id && (
+            <PinnedNotesSection
+              workspaceId={currentWorkspace.id}
+              workspaceSlug={currentWorkspace.slug || ""}
+              className="mb-6"
+            />
+          )}
+
           {/* Notes Grid */}
           {filteredNotes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-dashed border-[#27272a] bg-[#0d0d0e]/50">
@@ -822,15 +877,14 @@ export default function NotesPage({
                     ? "Create personal context to get started"
                     : activeTab === "workspace"
                       ? "No workspace context found"
-                      : activeTab === "shared-with-me"
+                      : activeTab === "shared"
                         ? "No context has been shared with you yet"
-                        : activeTab === "ai-context"
-                          ? "No AI context found"
-                          : "Get started by creating your first context"}
+                        : "Get started by creating your first context"}
               </p>
               <Button
                 onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
-                className="h-8 bg-[#3b82f6] hover:bg-[#2563eb] text-white"
+                size="sm"
+                className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Create Context
@@ -844,6 +898,7 @@ export default function NotesPage({
                   note={note}
                   workspaceSlug={currentWorkspace?.slug || ""}
                   onToggleFavorite={toggleFavorite}
+                  onTogglePin={togglePin}
                   onDelete={handleDeleteClick}
                   canEdit={canEditNote(session, note)}
                 />

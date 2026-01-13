@@ -105,6 +105,9 @@ model User {
   // Planning relations
   planEntries        PlanEntry[] @relation("PlanEntries")
   createdPlanEntries PlanEntry[] @relation("PlanEntryCreator")
+
+  // Knowledge Base Phase 2 relations
+  pinnedNotes Note[] @relation("NotePinnedBy")
 }
 
 model Account {
@@ -382,6 +385,7 @@ model Workspace {
 
   // Daily Focus relationships
   dailyFocusEntries DailyFocusEntry[]
+
 }
 
 model WorkspaceMember {
@@ -798,15 +802,20 @@ model Note {
   projectId         String? // For PROJECT scope notes
   isAiContext       Boolean   @default(false) // Should AI agents use this as context?
   aiContextPriority Int       @default(0) // Priority order for AI context (higher = more important)
-  category          String? // Hierarchical category path (e.g., "backend/api")
+
+  // Knowledge Base Phase 2 fields - Pinning
+  isPinned Boolean   @default(false)
+  pinnedAt DateTime?
+  pinnedBy String?
 
   // Relations
-  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  workspace  Workspace?  @relation(fields: [workspaceId], references: [id])
-  project    Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  tags       NoteTag[]   @relation("NoteToTag")
-  comments   Comment[]
-  sharedWith NoteShare[] @relation("SharedNote")
+  author       User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  workspace    Workspace?  @relation(fields: [workspaceId], references: [id])
+  project      Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags         NoteTag[]   @relation("NoteToTag")
+  comments     Comment[]
+  sharedWith   NoteShare[] @relation("SharedNote")
+  pinnedByUser User?       @relation("NotePinnedBy", fields: [pinnedBy], references: [id])
 
   @@index([authorId])
   @@index([workspaceId])
@@ -816,7 +825,7 @@ model Note {
   @@index([scope])
   @@index([projectId])
   @@index([isAiContext])
-  @@index([category])
+  @@index([isPinned])
 }
 
 model NoteTag {
