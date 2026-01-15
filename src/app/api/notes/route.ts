@@ -289,8 +289,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // For secret types, content can be empty (we use variables/rawSecretContent instead)
-    const secretTypesList = ["ENV_VARS", "API_KEYS", "CREDENTIALS"];
-    const isSecretTypeRequest = type && secretTypesList.includes(type);
+    const isSecretTypeRequest = type && isSecretNoteType(type as NoteType);
 
     if (!title) {
       return NextResponse.json(

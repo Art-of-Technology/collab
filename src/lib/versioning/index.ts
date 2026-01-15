@@ -30,10 +30,11 @@ export interface DiffChange {
 }
 
 /**
- * Generate MD5 hash for content comparison
+ * Generate SHA-256 hash for content comparison and integrity verification
+ * Using SHA-256 instead of MD5 for better security and future-proofing
  */
 export function generateContentHash(content: string): string {
-  return crypto.createHash('md5').update(content).digest('hex');
+  return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 /**

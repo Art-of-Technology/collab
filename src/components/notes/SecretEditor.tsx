@@ -74,10 +74,7 @@ export function SecretEditor({
       value: "",
       masked: true
     };
-    // Prevent scroll jump by using requestAnimationFrame
-    requestAnimationFrame(() => {
-      onChange({ variables: [...variables, newVariable] });
-    });
+    onChange({ variables: [...variables, newVariable] });
   }, [variables, onChange]);
 
   // Update a variable at index
