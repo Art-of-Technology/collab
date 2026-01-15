@@ -111,6 +111,10 @@ model User {
 
   // Knowledge Base Phase 3 relations - Secrets Vault
   noteActivityLogs NoteActivityLog[]
+
+  // Knowledge Base Phase 4 relations - Versioning
+  noteVersions      NoteVersion[] @relation("NoteVersionAuthor")
+  lastVersionOfNote Note[]        @relation("NoteLastVersionBy")
 }
 
 model Account {
@@ -819,15 +823,23 @@ model Note {
   isRestricted      Boolean  @default(false) // Require explicit access even for PROJECT/WORKSPACE scope
   expiresAt         DateTime? // Optional expiration for secrets
 
+  // Knowledge Base Phase 4 fields - Versioning
+  version           Int       @default(1) // Current version number
+  versioningEnabled Boolean   @default(true) // Whether to track versions for this note
+  lastVersionAt     DateTime? // When the last version was created
+  lastVersionBy     String? // Who created the last version
+
   // Relations
-  author       User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  workspace    Workspace?        @relation(fields: [workspaceId], references: [id])
-  project      Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  tags         NoteTag[]         @relation("NoteToTag")
-  comments     Comment[]
-  sharedWith   NoteShare[]       @relation("SharedNote")
-  pinnedByUser User?             @relation("NotePinnedBy", fields: [pinnedBy], references: [id])
-  activityLogs NoteActivityLog[]
+  author            User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  workspace         Workspace?        @relation(fields: [workspaceId], references: [id])
+  project           Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags              NoteTag[]         @relation("NoteToTag")
+  comments          Comment[]
+  sharedWith        NoteShare[]       @relation("SharedNote")
+  pinnedByUser      User?             @relation("NotePinnedBy", fields: [pinnedBy], references: [id])
+  activityLogs      NoteActivityLog[]
+  versions          NoteVersion[]     @relation("NoteVersions")
+  lastVersionByUser User?             @relation("NoteLastVersionBy", fields: [lastVersionBy], references: [id])
 
   @@index([authorId])
   @@index([workspaceId])
@@ -840,6 +852,7 @@ model Note {
   @@index([isPinned])
   @@index([isEncrypted])
   @@index([isRestricted])
+  @@index([version])
 }
 
 model NoteTag {
@@ -877,6 +890,30 @@ model NoteActivityLog {
   @@index([action])
   @@index([createdAt])
   @@index([noteId, createdAt])
+}
+
+// Note Version - Version history for notes (Phase 4)
+model NoteVersion {
+  id          String                @id @default(cuid())
+  noteId      String
+  version     Int // Version number (1, 2, 3, ...)
+  title       String // Title at this version
+  content     String                @db.Text // Content at this version
+  authorId    String // Who created this version
+  comment     String? // Optional comment describing what changed
+  changeType  NoteVersionChangeType @default(EDIT) // Type of change
+  contentHash String? // MD5 hash of content for quick comparison
+  createdAt   DateTime              @default(now())
+
+  note   Note @relation("NoteVersions", fields: [noteId], references: [id], onDelete: Cascade)
+  author User @relation("NoteVersionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, version])
+  @@index([noteId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([noteId, createdAt])
+  @@index([changeType])
 }
 
 // Personal note sharing - allows sharing PERSONAL scope notes with specific users
@@ -2332,4 +2369,13 @@ enum NoteActivityAction {
   PIN // Note was pinned
   UNPIN // Note was unpinned
   ACCESS_DENIED // Failed access attempt (for restricted notes)
+}
+
+// Note Version Change Types (Phase 4)
+enum NoteVersionChangeType {
+  CREATED // Initial version when note was created
+  EDIT // Content or title was edited
+  TITLE // Only title was changed
+  RESTORE // Content was restored from a previous version
+  MERGE // Content was merged from another version
 }

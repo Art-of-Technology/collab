@@ -11,6 +11,7 @@ import {
   SecretVariable
 } from "@/lib/secrets/crypto";
 import { logNoteAccess, canAccessNote } from "@/lib/secrets/access";
+import { createVersion, hasSignificantChange, detectChangeType } from "@/lib/versioning";
 
 export async function GET(
   request: NextRequest,
@@ -167,6 +168,18 @@ export async function PATCH(
           where: { userId: session.user.id },
           select: { permission: true }
         }
+      },
+      // Include versioning-related fields
+    });
+
+    // Also get the full note content for versioning
+    const noteForVersioning = await prisma.note.findUnique({
+      where: { id },
+      select: {
+        title: true,
+        content: true,
+        version: true,
+        versioningEnabled: true,
       }
     });
 
@@ -256,6 +269,43 @@ export async function PATCH(
           encryptedData.encryptedContent = encryptRawContent(rawSecretContent, workspaceId);
         } else {
           encryptedData.encryptedContent = null;
+        }
+      }
+    }
+
+    // Create a version before updating (if versioning is enabled and content changed)
+    const shouldCreateVersion =
+      noteForVersioning?.versioningEnabled &&
+      !isSecretType && // Don't version secret notes (they have separate audit logging)
+      (title !== undefined || content !== undefined);
+
+    if (shouldCreateVersion && noteForVersioning) {
+      const newTitle = title !== undefined ? title : noteForVersioning.title;
+      const newContent = content !== undefined ? content : noteForVersioning.content;
+
+      // Only create version if there's a significant change
+      if (hasSignificantChange(
+        noteForVersioning.content,
+        newContent,
+        noteForVersioning.title,
+        newTitle
+      )) {
+        try {
+          await createVersion({
+            noteId: id,
+            title: newTitle,
+            content: newContent,
+            authorId: session.user.id,
+            changeType: detectChangeType(
+              noteForVersioning.title,
+              newTitle,
+              noteForVersioning.content,
+              newContent
+            ),
+          });
+        } catch (versionError) {
+          // Log but don't fail the update if versioning fails
+          console.error("Error creating version:", versionError);
         }
       }
     }

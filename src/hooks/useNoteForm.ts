@@ -109,6 +109,9 @@ interface Note {
   isEncrypted?: boolean;
   isRestricted?: boolean;
   expiresAt?: string | null;
+  // Versioning fields
+  version?: number;
+  versioningEnabled?: boolean;
 }
 
 interface UseNoteFormOptions {

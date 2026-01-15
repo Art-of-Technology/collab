@@ -11,6 +11,7 @@ import {
   isSecretsEnabled
 } from "@/lib/secrets/crypto";
 import { logNoteAccess } from "@/lib/secrets/access";
+import { createInitialVersion } from "@/lib/versioning";
 
 export async function GET(request: NextRequest) {
   try {
@@ -455,6 +456,21 @@ export async function POST(request: NextRequest) {
         },
         request
       );
+    }
+
+    // Create initial version for non-secret notes (secrets have separate audit logging)
+    if (!isSecretType) {
+      try {
+        await createInitialVersion({
+          noteId: note.id,
+          title,
+          content,
+          authorId: session.user.id,
+        });
+      } catch (versionError) {
+        // Log but don't fail the creation if versioning fails
+        console.error("Error creating initial version:", versionError);
+      }
     }
 
     return NextResponse.json(note, { status: 201 });

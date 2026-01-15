@@ -46,6 +46,7 @@ import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilter
 import { useProjects } from "@/hooks/queries/useProjects";
 import { SecretEditor } from "@/components/notes/SecretEditor";
 import { SecretVariableData } from "@/components/notes/SecretVariableRow";
+import { VersionHistoryPanel } from "@/components/notes/VersionHistoryPanel";
 
 interface NoteFormEditorProps {
     noteId?: string;
@@ -491,6 +492,18 @@ export function NoteFormEditor({
                                         <span>Share</span>
                                     </button>
                                 }
+                            />
+                        </>
+                    )}
+
+                    {/* Version History - only for non-secret notes in edit mode */}
+                    {mode === "edit" && noteId && !isSecretType && (
+                        <>
+                            <div className="h-5 w-px bg-[#27272a]" />
+                            <VersionHistoryPanel
+                                noteId={noteId}
+                                currentVersion={note?.version}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
                             />
                         </>
                     )}
