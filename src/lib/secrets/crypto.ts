@@ -12,7 +12,6 @@ import crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96 bits for GCM
 const SALT_LENGTH = 16;
-const TAG_LENGTH = 16;
 const KEY_LENGTH = 32; // 256 bits
 const PBKDF2_ITERATIONS = 100000;
 
@@ -271,9 +270,13 @@ export function isSecretNoteType(noteType: string): boolean {
  * Mask a secret value for display
  * @param value - The value to mask
  * @param showLength - Number of characters to show at start (default 0)
- * @returns Masked value (e.g., "••••••••")
+ * @returns Masked value (e.g., "••••••••"). Returns empty string for truly empty values.
  */
 export function maskValue(value: string, showLength: number = 0): string {
+  // For truly empty values, return empty to avoid suggesting hidden content exists
+  if (value === '') return '';
+
+  // For null/undefined, return masked placeholder
   if (!value) return '••••••••';
 
   if (showLength > 0 && value.length > showLength) {

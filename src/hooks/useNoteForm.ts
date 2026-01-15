@@ -38,18 +38,28 @@ const noteFormSchema = z.object({
   secretEditorMode: z.enum(["key-value", "raw"]).optional().default("key-value"),
   isRestricted: z.boolean().optional().default(false),
   expiresAt: z.string().optional().nullable(),
-}).refine((data) => {
+}).superRefine((data, ctx) => {
   // For secret types, either variables or rawSecretContent must have content
   if (isSecretNoteType(data.type)) {
     const hasVariables = data.variables && data.variables.some(v => v.key.trim() !== "" || v.value.trim() !== "");
     const hasRawContent = data.rawSecretContent && data.rawSecretContent.trim() !== "";
-    return hasVariables || hasRawContent;
+    if (!hasVariables && !hasRawContent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one secret variable or raw content is required",
+        path: data.secretEditorMode === "raw" ? ["rawSecretContent"] : ["variables"],
+      });
+    }
+    return;
   }
   // For regular types, content is required
-  return data.content.trim() !== "";
-}, {
-  message: "Content is required",
-  path: ["content"],
+  if (data.content.trim() === "") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Content is required",
+      path: ["content"],
+    });
+  }
 });
 
 export type NoteFormValues = z.infer<typeof noteFormSchema>;

@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { NoteScope, NoteSharePermission } from '@prisma/client';
+import { NoteScope, NoteSharePermission, NoteActivityAction } from '@prisma/client';
 
 interface NoteWithAccess {
   id: string;
@@ -331,6 +331,13 @@ export async function getNoteAccessList(noteId: string) {
  * @param options - Pagination and filtering options
  * @returns Activity logs with user info
  */
+// Valid action values for filtering
+const VALID_ACTIONS = Object.values(NoteActivityAction);
+
+function isValidAction(action: string): action is NoteActivityAction {
+  return VALID_ACTIONS.includes(action as NoteActivityAction);
+}
+
 export async function getNoteAuditLog(
   noteId: string,
   options: {
@@ -341,11 +348,14 @@ export async function getNoteAuditLog(
 ) {
   const { limit = 50, offset = 0, action } = options;
 
+  // Validate action if provided
+  const validatedAction = action && isValidAction(action) ? action : undefined;
+
   const [logs, total] = await Promise.all([
     prisma.noteActivityLog.findMany({
       where: {
         noteId,
-        ...(action && { action: action as any })
+        ...(validatedAction && { action: validatedAction })
       },
       include: {
         user: {
@@ -363,7 +373,7 @@ export async function getNoteAuditLog(
     prisma.noteActivityLog.count({
       where: {
         noteId,
-        ...(action && { action: action as any })
+        ...(validatedAction && { action: validatedAction })
       }
     })
   ]);

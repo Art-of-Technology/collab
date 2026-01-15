@@ -334,7 +334,7 @@ export function SecretEditor({
         <Textarea
           value={rawContent}
           onChange={(e) => handleRawContentChange(e.target.value)}
-          placeholder="# Environment Variables&#10;DATABASE_URL=postgres://...&#10;API_KEY=sk-..."
+          placeholder={"# Environment Variables\nDATABASE_URL=postgres://...\nAPI_KEY=sk-..."}
           disabled={disabled}
           className={cn(
             "min-h-[300px] font-mono text-sm",
