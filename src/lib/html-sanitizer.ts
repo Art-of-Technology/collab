@@ -1,21 +1,47 @@
 /**
- * Safely strip all HTML tags from a string using iterative approach.
+ * Safely strip all HTML tags from a string using a linear-time character parser.
+ * This approach avoids regex-based vulnerabilities (ReDoS) by processing
+ * the string character by character in O(n) time.
+ *
  * Handles nested/malformed tags that could bypass single-pass regex
  * (e.g., <scr<script>ipt> which would become <script> after one pass)
- *
- * Includes protection against ReDoS by limiting iterations
  */
 export function stripHtmlTags(html: string, decodeEntities: boolean = true): string {
-  let result = html;
-  let previous = "";
-  let iterations = 0;
-  const MAX_ITERATIONS = 100; // Prevent potential infinite loops from malicious input
+  let result = "";
+  let inTag = false;
+  let tagDepth = 0;
 
-  // Keep stripping tags until no more changes occur (with iteration limit for safety)
-  while (result !== previous && iterations < MAX_ITERATIONS) {
-    previous = result;
-    result = result.replace(/<[^>]*>/g, "");
-    iterations++;
+  // First pass: Remove all HTML tags using a state machine approach (O(n))
+  for (let i = 0; i < html.length; i++) {
+    const char = html[i];
+
+    if (char === "<") {
+      inTag = true;
+      tagDepth++;
+    } else if (char === ">" && inTag) {
+      inTag = false;
+      tagDepth = Math.max(0, tagDepth - 1);
+    } else if (!inTag && tagDepth === 0) {
+      result += char;
+    }
+  }
+
+  // Second pass: Handle any remaining unclosed tags by stripping again
+  // This catches nested patterns like <scr<script>ipt> that become <script> after first pass
+  if (result.includes("<")) {
+    let cleaned = "";
+    inTag = false;
+    for (let i = 0; i < result.length; i++) {
+      const char = result[i];
+      if (char === "<") {
+        inTag = true;
+      } else if (char === ">" && inTag) {
+        inTag = false;
+      } else if (!inTag) {
+        cleaned += char;
+      }
+    }
+    result = cleaned;
   }
 
   // Optionally decode common HTML entities
