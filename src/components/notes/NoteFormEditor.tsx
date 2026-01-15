@@ -509,20 +509,17 @@ export function NoteFormEditor({
                         </>
                     )}
 
-                    {/* Version History - only for non-secret notes in edit mode */}
-                    {mode === "edit" && noteId && !isSecretType && (
-                        <>
-                            <div className="h-5 w-px bg-[#27272a]" />
-                            <VersionHistoryPanel
-                                noteId={noteId}
-                                currentVersion={note?.version}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
-                            />
-                        </>
-                    )}
-
                     {/* Spacer */}
                     <div className="flex-1" />
+
+                    {/* Version History - only for non-secret notes in edit mode */}
+                    {mode === "edit" && noteId && !isSecretType && (
+                        <VersionHistoryPanel
+                            noteId={noteId}
+                            currentVersion={note?.version}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent h-auto"
+                        />
+                    )}
 
                     {/* Save button for secret types OR Autosave status for regular notes */}
                     {isSecretType ? (

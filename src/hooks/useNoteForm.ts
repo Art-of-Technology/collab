@@ -175,6 +175,9 @@ export function useNoteForm({
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
   const isInitializedRef = useRef(false);
+  // Track the version when the edit session started - this is used to consolidate
+  // multiple autosaves into a single version instead of creating many versions
+  const sessionVersionRef = useRef<number | null>(null);
 
   const form = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
@@ -272,6 +275,10 @@ export function useNoteForm({
       latestValuesRef.current = formValues as NoteFormValues;
       isInitializedRef.current = true;
       setAutosaveStatus("idle");
+
+      // Store the version when the edit session started
+      // This allows us to consolidate multiple autosaves into a single version
+      sessionVersionRef.current = data.version || null;
     } catch (err) {
       console.error("Failed to fetch note:", err);
       setError("Failed to load note details. Please try again.");
@@ -363,7 +370,12 @@ export function useNoteForm({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          // Pass the session version to consolidate multiple autosaves into a single version
+          // This prevents creating many versions during a single editing session
+          sessionVersion: sessionVersionRef.current,
+        }),
       });
 
       if (!response.ok) {

@@ -175,7 +175,9 @@ export async function PATCH(
       variables, // Array of { key, value, masked?, description? }
       rawSecretContent, // Raw .env content
       isRestricted, // Limit access even for PROJECT/WORKSPACE scope
-      expiresAt // Optional expiration for secrets
+      expiresAt, // Optional expiration for secrets
+      // Versioning session tracking
+      sessionVersion, // Version when editing session started - used to update existing version instead of creating new
     } = body;
 
     // Check if note exists and user has permission to edit
@@ -335,6 +337,10 @@ export async function PATCH(
               noteForVersioning.content,
               newContent
             ),
+            // Pass sessionVersion to enable same-session version updates
+            // If sessionVersion is provided and a version was already created in this session,
+            // the existing version will be updated instead of creating a new one
+            sessionVersion: typeof sessionVersion === 'number' ? sessionVersion : undefined,
           });
         } catch (versionError) {
           // Log but don't fail the update if versioning fails

@@ -78,12 +78,17 @@ export function hasSignificantChange(
 
 /**
  * Create a new version of a note
+ *
+ * @param options.sessionVersion - If provided, indicates the version when the edit session started.
+ *                                  If a version was already created in this session (current version > sessionVersion),
+ *                                  update the existing version instead of creating a new one.
  */
-export async function createVersion(options: CreateVersionOptions): Promise<{
+export async function createVersion(options: CreateVersionOptions & { sessionVersion?: number }): Promise<{
   id: string;
   version: number;
+  updated?: boolean;
 }> {
-  const { noteId, title, content, authorId, comment, changeType = 'EDIT' } = options;
+  const { noteId, title, content, authorId, comment, changeType = 'EDIT', sessionVersion } = options;
 
   // Get the current note to check versioning settings
   const note = await prisma.note.findUnique({
@@ -115,11 +120,63 @@ export async function createVersion(options: CreateVersionOptions): Promise<{
     }
   }
 
-  const nextVersion = note.version + 1;
   const contentHash = generateContentHash(content);
   const detectedChangeType = changeType === 'EDIT'
     ? detectChangeType(note.title, title, note.content, content)
     : changeType;
+
+  // Check if we should update the existing version instead of creating a new one
+  // This happens when:
+  // 1. sessionVersion is provided (we're tracking the editing session)
+  // 2. Current version is greater than sessionVersion (a version was already created in this session)
+  // 3. The change type is EDIT or TITLE (not a restore or other special operation)
+  const shouldUpdateExistingVersion =
+    sessionVersion !== undefined &&
+    note.version > sessionVersion &&
+    (changeType === 'EDIT' || detectedChangeType === 'EDIT' || detectedChangeType === 'TITLE');
+
+  if (shouldUpdateExistingVersion) {
+    // Update the existing version instead of creating a new one
+    const existingVersion = await prisma.noteVersion.findUnique({
+      where: {
+        noteId_version: {
+          noteId,
+          version: note.version,
+        },
+      },
+    });
+
+    if (existingVersion && existingVersion.authorId === authorId) {
+      // Update the existing version
+      await prisma.$transaction(async (tx) => {
+        await tx.noteVersion.update({
+          where: { id: existingVersion.id },
+          data: {
+            title,
+            content,
+            contentHash,
+            changeType: detectedChangeType,
+          },
+        });
+
+        await tx.note.update({
+          where: { id: noteId },
+          data: {
+            lastVersionAt: new Date(),
+          },
+        });
+      });
+
+      return {
+        id: existingVersion.id,
+        version: note.version,
+        updated: true,
+      };
+    }
+  }
+
+  // Create a new version
+  const nextVersion = note.version + 1;
 
   // Create the version and update note in a transaction
   const result = await prisma.$transaction(async (tx) => {
