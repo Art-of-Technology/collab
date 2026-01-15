@@ -194,7 +194,7 @@ export function decryptRawContent(encryptedContent: string, workspaceId: string)
 
 /**
  * Parse .env content into key-value pairs
- * Handles comments, empty lines, and quoted values
+ * Handles comments, empty lines, and quoted values with escaped characters
  * @param content - Raw .env file content
  * @returns Array of key-value pairs
  */
@@ -219,9 +219,14 @@ export function parseEnvContent(content: string): { key: string; value: string }
     const key = trimmed.substring(0, equalIndex).trim();
     let value = trimmed.substring(equalIndex + 1).trim();
 
-    // Remove surrounding quotes if present
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    // Remove surrounding quotes if present and unescape content
+    if (value.startsWith('"') && value.endsWith('"')) {
+      // Double-quoted: unescape \" and \\
+      value = value.slice(1, -1)
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    } else if (value.startsWith("'") && value.endsWith("'")) {
+      // Single-quoted: take as-is (no escape processing in single quotes)
       value = value.slice(1, -1);
     }
 
@@ -242,9 +247,12 @@ export function toEnvContent(variables: { key: string; value: string }[]): strin
   return variables
     .map(v => {
       // Quote values that contain spaces or special characters
-      const needsQuotes = /[\s#=]/.test(v.value) || v.value.includes('\n');
-      const quotedValue = needsQuotes ? `"${v.value.replace(/"/g, '\\"')}"` : v.value;
-      return `${v.key}=${quotedValue}`;
+      const needsQuotes = /[\s#=]/.test(v.value) || v.value.includes('\n') || v.value.includes('\\') || v.value.includes('"');
+      // Escape backslashes first, then double quotes (order matters)
+      const escapedValue = needsQuotes
+        ? `"${v.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+        : v.value;
+      return `${v.key}=${escapedValue}`;
     })
     .join('\n');
 }
