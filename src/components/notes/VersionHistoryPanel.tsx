@@ -26,6 +26,7 @@ import { VersionDiff } from "@/components/notes/VersionDiff";
 import { RestoreVersionDialog } from "@/components/notes/RestoreVersionDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { stripHtmlTags } from "@/lib/html-sanitizer";
 import { NoteVersionChangeType } from "@prisma/client";
 
 interface VersionAuthor {
@@ -64,12 +65,15 @@ interface VersionHistoryPanelProps {
 }
 
 // Utility function to process content for preview
+// Uses stripHtmlTags from html-sanitizer for safe HTML stripping
 const getContentPreview = (content: string, maxLength: number = 100) => {
-  const processedContent = content
-    .replace(/<p[^>]*>/gi, "")
+  // First handle block elements to preserve spacing
+  let processedContent = content
     .replace(/<\/p>/gi, " ")
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]*>/g, "")
+    .replace(/<br\s*\/?>/gi, " ");
+
+  // Then safely strip all remaining HTML tags
+  processedContent = stripHtmlTags(processedContent)
     .replace(/\s+/g, " ")
     .trim();
 
