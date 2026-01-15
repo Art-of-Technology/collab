@@ -41,7 +41,7 @@ import {
 import { useNoteForm } from "@/hooks/useNoteForm";
 import { cn } from "@/lib/utils";
 import { NoteType, NoteScope } from "@prisma/client";
-import { supportsAiContext, getNoteTypeConfig, getNoteScopeConfig, isSecretNoteType } from "@/lib/note-types";
+import { supportsAiContext, getNoteTypeConfig, getNoteScopeConfig, isSecretNoteType, getCompatibleTypes } from "@/lib/note-types";
 import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilterSelector";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { SecretEditor } from "@/components/notes/SecretEditor";
@@ -58,6 +58,7 @@ interface NoteFormEditorProps {
     showCancelButton?: boolean;
     defaultType?: NoteType;
     defaultScope?: NoteScope;
+    lockedType?: boolean; // Prevent type changes (used after wizard selection)
 }
 
 // Note type icons mapping
@@ -99,6 +100,7 @@ export function NoteFormEditor({
     showCancelButton = true,
     defaultType = NoteType.GENERAL,
     defaultScope = NoteScope.PERSONAL,
+    lockedType = false,
 }: NoteFormEditorProps) {
     // Fetch projects using the proper hook
     const { data: projects = [], isLoading: isLoadingProjects } = useProjects({ workspaceId });
@@ -128,9 +130,19 @@ export function NoteFormEditor({
     // Check if current type is a secret type
     const isSecretType = isSecretNoteType(watchType);
 
+    // Determine if type selector should be disabled
+    // - Locked in create mode after wizard selection
+    // - In edit mode, only allow switching between compatible types
+    const isTypeDisabled = lockedType || !isOwner;
+
     // Convert note types to FilterOption format
+    // In edit mode, only show compatible types (same category)
     const typeOptions: FilterOption[] = useMemo(() => {
-        return Object.values(NoteType).map((type) => {
+        const compatibleTypes = mode === "edit" && note?.type
+            ? getCompatibleTypes(note.type as NoteType)
+            : Object.values(NoteType);
+
+        return compatibleTypes.map((type) => {
             const config = getNoteTypeConfig(type);
             return {
                 id: type,
@@ -139,7 +151,7 @@ export function NoteFormEditor({
                 iconColor: config.color,
             };
         });
-    }, []);
+    }, [mode, note?.type]);
 
     // Convert note scopes to FilterOption format (exclude SHARED)
     const scopeOptions: FilterOption[] = useMemo(() => {
@@ -330,9 +342,9 @@ export function NoteFormEditor({
                                         selectionMode="single"
                                         showSearch={false}
                                         allowClear={false}
-                                        disabled={!isOwner}
+                                        disabled={isTypeDisabled}
                                         popoverWidth="w-56"
-                                        filterHeader="Select type"
+                                        filterHeader={lockedType ? "Type is locked" : "Select type"}
                                         renderTriggerContent={renderTypeTrigger}
                                     />
                                 </FormControl>

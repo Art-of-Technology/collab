@@ -74,7 +74,10 @@ export function SecretEditor({
       value: "",
       masked: true
     };
-    onChange({ variables: [...variables, newVariable] });
+    // Prevent scroll jump by using requestAnimationFrame
+    requestAnimationFrame(() => {
+      onChange({ variables: [...variables, newVariable] });
+    });
   }, [variables, onChange]);
 
   // Update a variable at index
@@ -306,17 +309,19 @@ export function SecretEditor({
       {/* Editor Content */}
       {localMode === "key-value" ? (
         <div className="space-y-2">
-          {variables.map((variable, index) => (
-            <SecretVariableRow
-              key={index}
-              variable={variable}
-              index={index}
-              onUpdate={handleUpdateVariable}
-              onDelete={handleDeleteVariable}
-              onCopy={handleCopy}
-              disabled={disabled}
-            />
-          ))}
+          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+            {variables.map((variable, index) => (
+              <SecretVariableRow
+                key={index}
+                variable={variable}
+                index={index}
+                onUpdate={handleUpdateVariable}
+                onDelete={handleDeleteVariable}
+                onCopy={handleCopy}
+                disabled={disabled}
+              />
+            ))}
+          </div>
 
           <Button
             type="button"

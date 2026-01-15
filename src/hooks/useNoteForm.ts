@@ -395,6 +395,11 @@ export function useNoteForm({
     if (currentFormValues === lastSavedValues) return;
     if (!latestValuesRef.current) return;
 
+    // Skip autosave for secret note types - require explicit save for security
+    if (isSecretNoteType(latestValuesRef.current.type)) {
+      return;
+    }
+
     // Set up debounced autosave (800ms after last change)
     const handle = setTimeout(() => {
       if (latestValuesRef.current) {
@@ -409,6 +414,10 @@ export function useNoteForm({
   useEffect(() => {
     const flushIfPending = () => {
       if (latestValuesRef.current) {
+        // Skip flush for secret note types - require explicit save
+        if (isSecretNoteType(latestValuesRef.current.type)) {
+          return;
+        }
         const serialized = serializeValues(latestValuesRef.current);
         if (serialized !== lastSavedValues) {
           autosave(latestValuesRef.current);
