@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { List, Kanban, Calendar, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,8 +54,8 @@ export function ViewTypeSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -63,13 +64,13 @@ export function ViewTypeSelector({
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
-          <Icon 
-            className="h-3 w-3" 
+          <Icon
+            className="h-3 w-3"
             style={{ color: selectedConfig.color }}
           />
           <span className="text-[#cccccc] text-xs">{selectedConfig.label}</span>
           <ChevronDown className="h-3 w-3 text-[#6e7681]" />
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -88,17 +89,17 @@ export function ViewTypeSelector({
             const TypeIcon = config.icon;
             
             return (
-              <button
+              <Button
                 key={type}
-                type="button"
-                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                variant="ghost"
+                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
                 onClick={() => {
                   onChange(type);
                   setIsOpen(false);
                 }}
               >
-                <TypeIcon 
-                  className="h-4 w-4 flex-shrink-0" 
+                <TypeIcon
+                  className="h-4 w-4 flex-shrink-0"
                   style={{ color: config.color }}
                 />
                 <div className="flex-1 min-w-0">
@@ -108,7 +109,7 @@ export function ViewTypeSelector({
                 {value === type && (
                   <span className="text-xs text-[#6e7681]">✓</span>
                 )}
-              </button>
+              </Button>
             );
           })}
         </div>

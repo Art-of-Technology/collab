@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface ParentIssueBadgeProps {
@@ -68,14 +69,15 @@ export function ParentIssueBadge({
 
   if (asButton) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={handleClick}
         className={commonClassName}
         title={`Parent: ${parent.title}`}
       >
         {badgeContent}
-      </button>
+      </Button>
     );
   }
 
@@ -145,14 +147,15 @@ export function ParentIssueBadgeMinimal({
 
   if (asButton) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={handleClick}
         className={commonClassName}
         title={`Parent: ${parent.title}`}
       >
         {badgeContent}
-      </button>
+      </Button>
     );
   }
 

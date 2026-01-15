@@ -461,21 +461,22 @@ export default function NewIssueModal({
 
         {/* Actions - Fixed at bottom */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-[#1a1a1a] flex-shrink-0 bg-[#0e0e0e]">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={() => setCreateMore(!createMore)}
-            className="flex items-center gap-2 text-[#6e7681] hover:text-white transition-colors"
+            className="h-auto p-0 gap-2 text-[#6e7681] hover:text-white hover:bg-transparent"
           >
             <div className={cn(
               "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-              createMore 
-                ? "bg-blue-500 border-blue-500" 
+              createMore
+                ? "bg-blue-500 border-blue-500"
                 : "border-[#333] hover:border-[#555]"
             )}>
               {createMore && <Plus className="h-2.5 w-2.5 text-white" />}
             </div>
             <span className="text-sm">Create more</span>
-          </button>
+          </Button>
           
           <div className="flex items-center gap-2">
             <Button 

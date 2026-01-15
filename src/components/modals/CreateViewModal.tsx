@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -133,7 +133,7 @@ export default function CreateViewModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: 'Error',
@@ -165,15 +165,15 @@ export default function CreateViewModal({
         workspaceId: formData.targetWorkspaceId,
         viewData
       });
-      
+
       toast({
         title: 'Success',
         description: 'View created successfully'
       });
-      
+
       onViewCreated?.(result.view);
       onClose();
-      
+
     } catch (error) {
       console.error('Error creating view:', error);
       toast({
@@ -223,19 +223,19 @@ export default function CreateViewModal({
           <div className="flex items-center gap-2">
             <span className="text-xs text-[#6e7681]">Save to</span>
             <Select
-              value={formData.visibility === 'PERSONAL' ? 'PERSONAL' : formData.targetWorkspaceId} 
+              value={formData.visibility === 'PERSONAL' ? 'PERSONAL' : formData.targetWorkspaceId}
               onValueChange={(value) => {
                 if (value === 'PERSONAL') {
-                  setFormData(prev => ({ 
-                    ...prev, 
+                  setFormData(prev => ({
+                    ...prev,
                     visibility: 'PERSONAL',
-                    targetWorkspaceId: workspaceId 
+                    targetWorkspaceId: workspaceId
                   }));
                 } else {
-                  setFormData(prev => ({ 
-                    ...prev, 
+                  setFormData(prev => ({
+                    ...prev,
                     visibility: 'WORKSPACE',
-                    targetWorkspaceId: value 
+                    targetWorkspaceId: value
                   }));
                 }
               }}
@@ -254,7 +254,7 @@ export default function CreateViewModal({
                   <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-[#1a1a1a] text-xs">
                     <div className="flex items-center gap-1.5">
                       {workspace.logoUrl ? (
-                        <Image src={workspace.logoUrl} alt={`${workspace.name} logo`} className="h-3 w-3 rounded" width={16} height={16}/>
+                        <Image src={workspace.logoUrl} alt={`${workspace.name} logo`} className="h-3 w-3 rounded" width={16} height={16} />
                       ) : (
                         <Globe className="h-3 w-3" />
                       )}
@@ -264,12 +264,14 @@ export default function CreateViewModal({
                 ))}
               </SelectContent>
             </Select>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onClose}
-              className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
+              className="text-[#6e7681] hover:text-white transition-colors rounded-md hover:bg-[#1a1a1a] h-6 w-6"
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -314,7 +316,7 @@ export default function CreateViewModal({
               onChange={(projectIds) => setFormData(prev => ({ ...prev, projectIds }))}
               projects={projects}
             />
-            
+
             {/* Assignee selector for all views */}
             <AssigneeSelector
               value={formData.filters.assignee}
@@ -323,7 +325,7 @@ export default function CreateViewModal({
               }}
               assignees={workspaceMembers}
             />
-            
+
             {/* Show these only for non-PLANNING views */}
             {formData.displayType !== 'PLANNING' && (
               <>
@@ -389,8 +391,8 @@ export default function CreateViewModal({
               <span>to create</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={onClose}
                 className="text-[#6e7681] hover:text-white"
               >
@@ -399,7 +401,6 @@ export default function CreateViewModal({
               <Button
                 onClick={handleSubmit}
                 disabled={createViewMutation.isPending || !formData.name.trim()}
-                className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium disabled:opacity-50"
               >
                 {createViewMutation.isPending ? (
                   <>

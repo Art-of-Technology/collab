@@ -13,6 +13,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
   Plus,
@@ -191,21 +192,21 @@ export function CommandMenu({
               )}
             />
             {/* Close button - Mobile only */}
-            <button
+            <Button
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               className={cn(
                 "absolute right-3 top-1/2 -translate-y-1/2",
                 "md:hidden", // Only show on mobile
-                "h-8 w-8 rounded-full",
-                "flex items-center justify-center",
+                "h-8 w-8 p-0 rounded-full",
                 "text-gray-400 hover:text-white",
-                "hover:bg-white/10 transition-all duration-200",
+                "hover:bg-white/10",
                 "touch-manipulation" // Better touch interaction
               )}
               aria-label="Close command menu"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           
           <CommandList 

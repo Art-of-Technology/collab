@@ -34,19 +34,20 @@ export default function ViewTypeSelector({
           const isSelected = selectedType === type.id;
           
           return (
-            <button
+            <Button
               key={type.id}
+              variant="ghost"
               onClick={() => onTypeChange(type.id)}
               className={cn(
                 "flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors flex-1",
-                isSelected 
-                  ? "border-[#0969da] bg-[#0969da]/10" 
+                isSelected
+                  ? "border-[#0969da] bg-[#0969da]/10"
                   : "border-[#2a2a2a] hover:border-[#444]"
               )}
             >
               <Icon className="h-5 w-5 text-[#999]" />
               <span className="text-sm text-white">{type.name}</span>
-            </button>
+            </Button>
           );
         })}
       </div>

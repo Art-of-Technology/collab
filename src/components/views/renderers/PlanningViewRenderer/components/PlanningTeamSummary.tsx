@@ -1,16 +1,17 @@
 "use client";
 
 import { useMemo } from 'react';
-import { 
-  CheckCircle2, 
-  PlayCircle, 
-  Clock, 
-  Eye, 
+import {
+  CheckCircle2,
+  PlayCircle,
+  Clock,
+  Eye,
   ListTodo,
   Activity,
   TrendingUp,
   Calendar
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TeamRangeSummary } from '../types';
 import { format } from 'date-fns';
@@ -71,9 +72,10 @@ export function PlanningTeamSummary({
 
   if (isCollapsed) {
     return (
-      <button
+      <Button
+        variant="ghost"
         onClick={onToggleCollapse}
-        className="w-full px-6 py-2 flex items-center justify-between text-xs text-gray-400 hover:text-gray-300 hover:bg-[#151515] transition-colors border-b border-[#1a1a1a]"
+        className="w-full px-6 py-2 flex items-center justify-between text-xs text-gray-400 hover:text-gray-300 hover:bg-[#151515] transition-colors border-b border-[#1a1a1a] h-auto rounded-none"
       >
         <span className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5" />
@@ -94,7 +96,7 @@ export function PlanningTeamSummary({
           </span>
           <span className="text-gray-500">Click to expand</span>
         </div>
-      </button>
+      </Button>
     );
   }
 
@@ -115,12 +117,13 @@ export function PlanningTeamSummary({
           )}
         </div>
         {onToggleCollapse && (
-          <button
+          <Button
+            variant="ghost"
             onClick={onToggleCollapse}
-            className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
+            className="text-xs text-gray-500 hover:text-gray-400 transition-colors h-auto px-2 py-1"
           >
             Collapse
-          </button>
+          </Button>
         )}
       </div>
 

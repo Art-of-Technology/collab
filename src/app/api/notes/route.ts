@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
     const scope = searchParams.get("scope") as NoteScope | null;
     const type = searchParams.get("type") as NoteType | null;
     const isAiContext = searchParams.get("aiContext") === "true";
-    const category = searchParams.get("category");
     const sharedWithMe = searchParams.get("sharedWithMe") === "true";
 
     // Legacy support
@@ -49,7 +48,6 @@ export async function GET(request: NextRequest) {
       ...(tagId && { tags: { some: { id: tagId } } }),
       ...(type && { type }),
       ...(isAiContext && { isAiContext: true }),
-      ...(category && { category: { startsWith: category } }),
     };
 
     // Handle shared with me filter
@@ -281,7 +279,6 @@ export async function POST(request: NextRequest) {
       projectId,
       isAiContext,
       aiContextPriority,
-      category,
       // Legacy support
       isPublic,
       // Secrets Vault Phase 3 fields
@@ -291,9 +288,20 @@ export async function POST(request: NextRequest) {
       expiresAt // Optional expiration for secrets
     } = body;
 
-    if (!title || !content) {
+    // For secret types, content can be empty (we use variables/rawSecretContent instead)
+    const secretTypesList = ["ENV_VARS", "API_KEYS", "CREDENTIALS"];
+    const isSecretTypeRequest = type && secretTypesList.includes(type);
+
+    if (!title) {
       return NextResponse.json(
-        { error: "Title and content are required" },
+        { error: "Title is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!isSecretTypeRequest && !content) {
+      return NextResponse.json(
+        { error: "Content is required" },
         { status: 400 }
       );
     }
@@ -383,7 +391,6 @@ export async function POST(request: NextRequest) {
         projectId: projectId || null,
         isAiContext: isAiContext || false,
         aiContextPriority: aiContextPriority || 0,
-        category: category || null,
         // Secrets Vault Phase 3 fields
         isEncrypted: encryptedData.isEncrypted,
         encryptedContent: encryptedData.encryptedContent,

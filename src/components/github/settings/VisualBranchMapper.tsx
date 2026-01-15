@@ -239,13 +239,14 @@ export function VisualBranchMapper({
                       </span>
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {ENVIRONMENTS.map(env => (
-                          <button
+                          <Button
                             key={env.id}
+                            variant="ghost"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleQuickMap(branch, env.id);
                             }}
-                            className="w-2.5 h-2.5 rounded-full transition-transform hover:scale-125"
+                            className="w-2.5 h-2.5 rounded-full transition-transform hover:scale-125 p-0"
                             style={{ backgroundColor: env.color }}
                             title={`Map to ${env.name}`}
                           />
@@ -320,12 +321,13 @@ export function VisualBranchMapper({
                       <span className="text-xs text-[#e6edf3] flex-1 truncate font-mono">
                         {branch}
                       </span>
-                      <button
+                      <Button
+                        variant="ghost"
                         onClick={() => handleRemoveMapping(branch)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/20 rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/20 rounded transition-opacity h-auto"
                       >
                         <X className="h-3 w-3 text-red-400" />
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>

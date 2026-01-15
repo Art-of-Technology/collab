@@ -1,9 +1,10 @@
 "use client";
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  MessageSquare, 
+import {
+  MessageSquare,
   ArrowRight,
   Calendar,
   User,
@@ -128,62 +129,69 @@ export default function TableViewRenderer({
             {/* Table Header */}
             <div className="bg-[#161b22] border-b border-[#21262d]">
               <div className="grid grid-cols-12 gap-4 p-4 text-sm font-medium text-gray-400">
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('key')}
                 >
                   Key
                   <SortIcon field="key" />
-                </button>
-                
-                <button 
-                  className="col-span-3 flex items-center gap-2 hover:text-white transition-colors text-left"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-3 flex items-center gap-2 hover:text-white transition-colors text-left h-auto p-0 justify-start"
                   onClick={() => handleSort('title')}
                 >
                   Title
                   <SortIcon field="title" />
-                </button>
-                
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('status')}
                 >
                   Status
                   <SortIcon field="status" />
-                </button>
-                
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('priority')}
                 >
                   Priority
                   <SortIcon field="priority" />
-                </button>
-                
-                <button 
-                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('assignee')}
                 >
                   Assignee
                   <SortIcon field="assignee" />
-                </button>
-                
-                <button 
-                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('project')}
                 >
                   Project
                   <SortIcon field="project" />
-                </button>
-                
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('dueDate')}
                 >
                   Due Date
                   <SortIcon field="dueDate" />
-                </button>
-                
+                </Button>
+
                 <div className="col-span-1 text-center">
                   Actions
                 </div>

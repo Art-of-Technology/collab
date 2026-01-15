@@ -60,8 +60,9 @@ export function IssueProjectSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -74,7 +75,7 @@ export function IssueProjectSelector({
           <span className="text-[#cccccc] text-xs truncate max-w-[100px]">
             {selectedProject ? selectedProject.name : "Project"}
           </span>
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -88,9 +89,10 @@ export function IssueProjectSelector({
         </div>
         
         <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent">
-          <button
+          <Button
             type="button"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+            variant="ghost"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
             onClick={() => {
               onChange(undefined);
               setIsOpen(false);
@@ -103,19 +105,20 @@ export function IssueProjectSelector({
             {!value && (
               <span className="ml-auto text-xs text-[#6e7681]">✓</span>
             )}
-          </button>
-          
+          </Button>
+
           {projects.map((project) => (
-            <button
+            <Button
               key={project.id}
               type="button"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+              variant="ghost"
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
               onClick={() => {
                 onChange(project.id);
                 setIsOpen(false);
               }}
             >
-              <div 
+              <div
                 className="w-4 h-4 rounded flex items-center justify-center"
                 style={{ backgroundColor: project.color || "#6366f1" }}
               >
@@ -125,7 +128,7 @@ export function IssueProjectSelector({
               {value === project.id && (
                 <span className="ml-auto text-xs text-[#6e7681]">✓</span>
               )}
-            </button>
+            </Button>
           ))}
           
           {isLoading && (

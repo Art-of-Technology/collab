@@ -292,9 +292,10 @@ export function GitHubSettingsClient({
         {/* Tab Navigation */}
         <div className="flex items-center gap-1 px-6">
           {tabs.map((tab) => (
-            <button
+            <Button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              variant="ghost"
               className={cn(
                 "flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-t-md transition-colors relative",
                 activeTab === tab.id
@@ -307,7 +308,7 @@ export function GitHubSettingsClient({
               {activeTab === tab.id && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#58a6ff]" />
               )}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

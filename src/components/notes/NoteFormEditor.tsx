@@ -24,7 +24,6 @@ import {
     FolderKanban,
     FileText,
     BookOpen,
-    Code,
     Cpu,
     Palette,
     Layers,
@@ -97,7 +96,6 @@ export function NoteFormEditor({
     mode,
     onSuccess,
     onCancel,
-    showCancelButton = true,
     defaultType = NoteType.GENERAL,
     defaultScope = NoteScope.PERSONAL,
     lockedType = false,
@@ -416,11 +414,12 @@ export function NoteFormEditor({
                         render={({ field }) => (
                             <FormItem className="space-y-0">
                                 <FormControl>
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="ghost"
                                         onClick={() => field.onChange(!field.value)}
                                         className={cn(
-                                            "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                                            "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto",
                                             "border focus:outline-none",
                                             field.value
                                                 ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
@@ -430,7 +429,7 @@ export function NoteFormEditor({
                                     >
                                         <Star className={cn("h-3 w-3", field.value && "fill-amber-400")} />
                                         <span>Favorite</span>
-                                    </button>
+                                    </Button>
                                 </FormControl>
                             </FormItem>
                         )}
@@ -444,12 +443,13 @@ export function NoteFormEditor({
                             render={({ field }) => (
                                 <FormItem className="space-y-0">
                                     <FormControl>
-                                        <button
+                                        <Button
                                             type="button"
+                                            variant="ghost"
                                             onClick={() => isOwner && field.onChange(!field.value)}
                                             disabled={!isOwner}
                                             className={cn(
-                                                "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                                                "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto",
                                                 "border focus:outline-none",
                                                 field.value
                                                     ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
@@ -460,7 +460,7 @@ export function NoteFormEditor({
                                         >
                                             <Bot className="h-3 w-3" />
                                             <span>AI</span>
-                                        </button>
+                                        </Button>
                                     </FormControl>
                                 </FormItem>
                             )}
@@ -496,13 +496,14 @@ export function NoteFormEditor({
                                 noteTitle={form.getValues("title") || "Untitled"}
                                 isOwner={isOwner}
                                 trigger={
-                                    <button
+                                    <Button
                                         type="button"
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
+                                        variant="ghost"
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
                                     >
                                         <Share2 className="h-3 w-3" />
                                         <span>Share</span>
-                                    </button>
+                                    </Button>
                                 }
                             />
                         </>
@@ -523,43 +524,64 @@ export function NoteFormEditor({
                     {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Autosave status - matching issue detail modal */}
-                    <div className="flex items-center gap-2 text-xs text-[#8b949e]">
-                        {autosaveStatus === "idle" && (
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-[#6e7681]">Autosave</span>
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                            </div>
-                        )}
+                    {/* Save button for secret types OR Autosave status for regular notes */}
+                    {isSecretType ? (
+                        <Button
+                            type="submit"
+                            disabled={isSaving}
+                            size="sm"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="h-3 w-3" />
+                                    Save
+                                </>
+                            )}
+                        </Button>
+                    ) : (
+                        <div className="flex items-center gap-2 text-xs text-[#8b949e]">
+                            {autosaveStatus === "idle" && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-[#6e7681]">Autosave</span>
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                </div>
+                            )}
 
-                        {autosaveStatus === "saving" && (
-                            <div className="flex items-center gap-1.5 text-blue-400">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                <span className="text-[10px]">Saving...</span>
-                            </div>
-                        )}
+                            {autosaveStatus === "saving" && (
+                                <div className="flex items-center gap-1.5 text-blue-400">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span className="text-[10px]">Saving...</span>
+                                </div>
+                            )}
 
-                        {autosaveStatus === "saved" && showSavedIndicator && (
-                            <div className="flex items-center gap-1.5 text-green-500">
-                                <Check className="h-3 w-3" />
-                                <span className="text-[10px]">Saved</span>
-                            </div>
-                        )}
+                            {autosaveStatus === "saved" && showSavedIndicator && (
+                                <div className="flex items-center gap-1.5 text-green-500">
+                                    <Check className="h-3 w-3" />
+                                    <span className="text-[10px]">Saved</span>
+                                </div>
+                            )}
 
-                        {autosaveStatus === "error" && (
-                            <div className="flex items-center gap-1.5">
-                                <X className="h-3 w-3 text-red-400" />
-                                <span className="text-[10px] text-red-400">Failed</span>
-                                <button
-                                    type="button"
-                                    onClick={retryAutosave}
-                                    className="text-[10px] text-red-400 hover:text-red-300 underline"
-                                >
-                                    Retry
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                            {autosaveStatus === "error" && (
+                                <div className="flex items-center gap-1.5">
+                                    <X className="h-3 w-3 text-red-400" />
+                                    <span className="text-[10px] text-red-400">Failed</span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={retryAutosave}
+                                        className="text-[10px] text-red-400 hover:text-red-300 underline h-auto p-0"
+                                    >
+                                        Retry
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Editor Area - Centered like Notion/Slack */}

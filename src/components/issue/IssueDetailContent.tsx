@@ -910,9 +910,10 @@ export function IssueDetailContent({
         disableBlur={mode === "modal"}
         sticky={mode === "modal"}
         title={
-          <button
+          <Button
+            variant="ghost"
             onClick={handleBackNavigation}
-            className="flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] transition-colors text-sm"
+            className="h-auto p-0 gap-2 text-[#7d8590] hover:text-[#e6edf3] text-sm hover:bg-transparent"
           >
             <ArrowLeft className="h-3 w-3" />
             <span>
@@ -920,7 +921,7 @@ export function IssueDetailContent({
                 ? `Back to ${parentIssueInfo.key}`
                 : `Back to ${viewName || (issue?.project?.name ? `${issue.project.name}: Default` : 'Views')}`}
             </span>
-          </button>
+          </Button>
         }
         actions={
           <div className="flex items-center gap-2">
@@ -1067,8 +1068,9 @@ export function IssueDetailContent({
                   </div>
                 </div>
               ) : (
-                <div
-                  className="group cursor-pointer flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
+                <Button
+                  variant="ghost"
+                  className="h-auto w-full justify-start p-0 hover:bg-transparent group flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
                   onClick={() => setEditingTitle(true)}
                 >
                   {/* Issue Key Badge */}
@@ -1081,13 +1083,13 @@ export function IssueDetailContent({
                   >
                     {issue.issueKey}
                   </Badge>
-                  <div className="flex flex-row items-center gap-2 min-h-[2rem] sm:h-8">
-                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1 min-w-0 break-words" data-issue-title>
+                  <div className="flex flex-row items-center gap-2 min-h-[2rem] sm:h-8 w-full">
+                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1 min-w-0 break-words text-left" data-issue-title>
                       {issue.title}
                     </h1>
                     <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
                   </div>
-                </div>
+                </Button>
               )}
 
               {/* Properties Row - Using New Selectors */}

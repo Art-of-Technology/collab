@@ -301,60 +301,67 @@ function NoteListItem({
 
       {/* Inline Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();
             onToggleFavorite(note.id, note.isFavorite);
           }}
           className={cn(
-            "flex items-center justify-center h-8 w-8 rounded-lg text-[12px] font-medium transition-colors",
+            "h-8 w-8",
             note.isFavorite
-              ? "text-amber-400 hover:bg-[#27272a]"
-              : "text-[#52525b] hover:text-amber-400 hover:bg-[#27272a]"
+              ? "text-amber-400"
+              : "text-[#52525b] hover:text-amber-400"
           )}
           title={note.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Star className={cn("h-3.5 w-3.5", note.isFavorite && "fill-amber-400")} />
-        </button>
+        </Button>
 
         {canEdit && (
           <>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onTogglePin(note.id, !!note.isPinned);
               }}
               className={cn(
-                "flex items-center justify-center h-8 w-8 rounded-lg text-[12px] font-medium transition-colors",
+                "h-8 w-8",
                 note.isPinned
-                  ? "text-amber-500 hover:bg-[#27272a]"
-                  : "text-[#52525b] hover:text-amber-500 hover:bg-[#27272a]"
+                  ? "text-amber-500"
+                  : "text-[#52525b] hover:text-amber-500"
               )}
               title={note.isPinned ? "Unpin" : "Pin to top"}
             >
               <Pin className="h-3.5 w-3.5" />
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="ghost"
+              size="md"
               onClick={(e) => {
                 e.stopPropagation();
                 router.push(`/${workspaceSlug}/notes/${note.id}`);
               }}
-              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
             >
               <Edit className="h-3.5 w-3.5" />
               <span>Edit</span>
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(note.id);
               }}
-              className="flex items-center justify-center h-8 w-8 rounded-lg text-[12px] font-medium text-[#52525b] hover:text-red-400 hover:bg-[#27272a] transition-colors"
+              className="h-8 w-8 text-[#52525b] hover:text-red-400"
             >
               <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -736,20 +743,22 @@ export default function NotesPage({
                 : tab.id === 'shared' ? stats.sharedNotes
                 : 0;
               return (
-                <button
+                <Button
                   key={tab.id}
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                    "h-7 gap-1.5",
                     isActive
                       ? "bg-[#1f1f1f] text-[#e6edf3]"
-                      : "text-[#6e7681] hover:text-[#8b949e]"
+                      : "text-[#6e7681] hover:text-[#8b949e] hover:bg-transparent"
                   )}
                 >
                   {Icon && <Icon className="h-3 w-3" />}
                   {tab.label}
                   <span className="text-[#6e7681]">{count}</span>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -806,47 +815,46 @@ export default function NotesPage({
           <div className="w-px h-5 bg-[#27272a] mx-1" />
 
           {/* Favorite Toggle */}
-          <button
-            type="button"
+          <Button
+            variant={showFavorites ? "warning" : "outline"}
+            size="sm"
             onClick={() => setShowFavorites(!showFavorites)}
             className={cn(
-              "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
-              "border focus:outline-none",
-              showFavorites
-                ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
-                : "border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
+              "h-6",
+              !showFavorites && "text-[#6e7681]"
             )}
           >
             <Star className={cn("h-3 w-3", showFavorites && "fill-amber-400")} />
             <span>Favorites</span>
-          </button>
+          </Button>
 
           {/* AI Context Toggle */}
-          <button
-            type="button"
+          <Button
+            variant={showAiContext ? "default" : "outline"}
+            size="sm"
             onClick={() => setShowAiContext(!showAiContext)}
             className={cn(
-              "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
-              "border focus:outline-none",
+              "h-6",
               showAiContext
-                ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
-                : "border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
+                ? "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20 hover:border-purple-500/30"
+                : "text-[#6e7681]"
             )}
           >
             <Bot className="h-3 w-3" />
             <span>AI</span>
-          </button>
+          </Button>
 
           {/* Reset Filters */}
           {hasActiveFilters && (
-            <button
-              type="button"
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={resetFilters}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+              className="h-6"
             >
               <RotateCcw className="h-3 w-3" />
               <span>Reset</span>
-            </button>
+            </Button>
           )}
         </div>
       </div>

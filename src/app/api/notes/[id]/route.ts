@@ -6,6 +6,8 @@ import { NoteScope, NoteSharePermission } from "@prisma/client";
 import {
   encryptVariables,
   encryptRawContent,
+  decryptVariables,
+  decryptRawContent,
   isSecretNoteType,
   isSecretsEnabled,
   SecretVariable
@@ -93,8 +95,39 @@ export async function GET(
     const shareRecord = note.sharedWith.find(s => s.userId === session.user.id);
     const canEdit = isOwner || shareRecord?.permission === NoteSharePermission.EDIT;
 
+    // Decrypt secrets if this is a secret note type
+    let decryptedVariables = null;
+    let decryptedRawContent = null;
+
+    if (isSecretNoteType(note.type) && note.isEncrypted && note.workspaceId) {
+      try {
+        // Decrypt variables (key-value mode)
+        if (note.secretVariables) {
+          const encryptedVars = JSON.parse(note.secretVariables) as SecretVariable[];
+          const decrypted = decryptVariables(encryptedVars, note.workspaceId);
+          // Convert to format expected by frontend
+          decryptedVariables = decrypted.map(v => ({
+            key: v.key,
+            value: v.value,
+            masked: v.masked
+          }));
+        }
+
+        // Decrypt raw content (.env mode)
+        if (note.encryptedContent) {
+          decryptedRawContent = decryptRawContent(note.encryptedContent, note.workspaceId);
+        }
+      } catch (decryptError) {
+        console.error("Error decrypting secrets:", decryptError);
+        // Don't fail the request, just don't return decrypted data
+      }
+    }
+
     return NextResponse.json({
       ...note,
+      // Include decrypted data for the frontend
+      decryptedVariables,
+      decryptedRawContent,
       _permissions: {
         isOwner,
         canEdit,
@@ -321,10 +354,11 @@ export async function PATCH(
         // Only owner can update these fields
         ...(isOwner && type !== undefined && { type }),
         ...(isOwner && finalScope !== undefined && { scope: finalScope }),
-        ...(isOwner && projectId !== undefined && { projectId }),
+        ...(isOwner && projectId !== undefined && {
+          project: projectId ? { connect: { id: projectId } } : { disconnect: true }
+        }),
         ...(isOwner && isAiContext !== undefined && { isAiContext }),
         ...(isOwner && aiContextPriority !== undefined && { aiContextPriority }),
-        ...(isOwner && category !== undefined && { category }),
         // Secrets Vault Phase 3 fields (owner only)
         ...(isOwner && encryptedData.isEncrypted !== undefined && { isEncrypted: encryptedData.isEncrypted }),
         ...(isOwner && encryptedData.encryptedContent !== undefined && { encryptedContent: encryptedData.encryptedContent }),

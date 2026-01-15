@@ -348,13 +348,15 @@ export function IssueRelationsManager({
                   )}
                 </div>
                 
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleRemoveRelation(relation.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#2a2a2a] rounded text-[#6e7681] hover:text-red-400"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 hover:bg-[#2a2a2a] text-[#6e7681] hover:text-red-400"
                 >
                   <Trash2 className="h-3 w-3" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -437,27 +439,29 @@ export function IssueRelationsManager({
               ) : searchResults.length === 0 ? (
                 <div className="p-3 space-y-2">
                   <p className="text-[#8b949e] text-sm">No existing issues found</p>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       handleCreateNew();
                     }}
-                    className="w-full flex items-center gap-2 p-2 text-sm rounded hover:bg-[#2a2a2a] transition-colors text-left text-[#e1e7ef]"
+                    className="w-full flex items-center gap-2 p-2 text-sm rounded hover:bg-[#2a2a2a] transition-colors justify-start text-[#e1e7ef] h-auto"
                   >
                     <Plus className="h-3.5 w-3.5 text-[#22c55e]" />
                     Create new issue: "{inputValue}"
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-0">
                   {searchResults.map((item: RelationItem, index: number) => (
-                    <button
+                    <Button
                       key={item.id}
                       type="button"
+                      variant="ghost"
                       className={cn(
-                        "w-full flex items-center gap-2 p-2 text-sm hover:bg-[#2a2a2a] transition-colors text-left",
+                        "w-full flex items-center gap-2 p-2 text-sm hover:bg-[#2a2a2a] transition-colors justify-start h-auto",
                         index === selectedIndex && "bg-[#2a2a2a]"
                       )}
                       onClick={(e) => {
@@ -493,22 +497,23 @@ export function IssueRelationsManager({
                           </div>
                         )}
                       </div>
-                    </button>
+                    </Button>
                   ))}
-                  
+
                   <div className="border-t border-[#2d2d30]">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         handleCreateNew();
                       }}
-                      className="w-full flex items-center gap-2 p-2 text-sm hover:bg-[#2a2a2a] transition-colors text-left text-[#e1e7ef]"
+                      className="w-full flex items-center gap-2 p-2 text-sm hover:bg-[#2a2a2a] transition-colors justify-start text-[#e1e7ef] h-auto"
                     >
                       <Plus className="h-3.5 w-3.5 text-[#22c55e]" />
                       Create new: "{inputValue}"
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

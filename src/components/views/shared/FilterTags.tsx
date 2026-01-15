@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 
@@ -72,12 +73,13 @@ export default function FilterTags({
               {FILTER_LABELS[filterId as keyof typeof FILTER_LABELS] || filterId}:
             </span>
             <span>{renderFilterValue(filterId, value)}</span>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => onRemove(filterId, value)}
-              className="text-[#666] hover:text-white transition-colors"
+              className="text-[#666] hover:text-white transition-colors p-0 h-auto"
             >
               <X className="h-3 w-3" />
-            </button>
+            </Button>
           </Badge>
         ))
       )}

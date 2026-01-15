@@ -5,6 +5,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge, PRIORITY_CONFIG } from "@/utils/issueHelpers";
@@ -56,8 +57,9 @@ export function IssuePrioritySelector({
   return (
     <Popover modal={true}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled || readonly}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -76,7 +78,7 @@ export function IssuePrioritySelector({
               </>
             );
           })()}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -93,11 +95,12 @@ export function IssuePrioritySelector({
           {PRIORITY_OPTIONS.map((priority) => {
             const badge = getIssuePriorityBadge(priority);
             const Icon = badge.icon;
-            
+
             return (
-              <button
+              <Button
                 key={priority}
                 type="button"
+                variant="ghost"
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                 onClick={() => onChange(priority)}
               >
@@ -112,7 +115,7 @@ export function IssuePrioritySelector({
                 {value === priority && (
                   <span className="text-xs text-[#6e7681]">✓</span>
                 )}
-              </button>
+              </Button>
             );
           })}
         </div>

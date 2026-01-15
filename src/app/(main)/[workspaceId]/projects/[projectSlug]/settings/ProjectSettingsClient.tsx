@@ -481,11 +481,12 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
                     {/* Color picker for status */}
                     <div className="flex items-center gap-2">
                       {statusColors.map((color) => (
-                        <button
+                        <Button
                           key={color}
                           onClick={() => handleStatusColorChange(status.id, color)}
+                          variant="ghost"
                           className={cn(
-                            "w-6 h-6 rounded-full border-2 transition-all",
+                            "w-6 h-6 p-0 rounded-full border-2 transition-all",
                             status.color === color ? "border-white scale-110" : "border-transparent"
                           )}
                           style={{ backgroundColor: color }}

@@ -221,13 +221,13 @@ function CollapsibleSection({
 
   return (
     <div className="mb-6">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
-          'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-all',
-          'hover:bg-[#141416] active:bg-[#1a1a1c]',
+          'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg h-auto justify-start',
           'border border-transparent hover:border-[#27272a]',
-          'group cursor-pointer'
+          'group'
         )}
       >
         {/* Chevron indicator */}
@@ -273,7 +273,7 @@ function CollapsibleSection({
         <span className="text-[11px] text-[#52525b] group-hover:text-[#71717a] transition-colors">
           {isExpanded ? 'Collapse' : 'Expand'}
         </span>
-      </button>
+      </Button>
 
       {/* Content */}
       {isExpanded && (
@@ -318,11 +318,12 @@ function ExpandableIssueList({
         />
       ))}
       {remainingCount > 0 && (
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
-            'w-full text-center py-3 rounded-xl border border-dashed transition-all',
-            'border-[#27272a] hover:border-[#3f3f46] hover:bg-[#141416]',
+            'w-full text-center py-3 rounded-xl border border-dashed h-auto',
+            'border-[#27272a] hover:border-[#3f3f46]',
             'text-sm font-medium text-[#71717a] hover:text-[#a1a1aa]'
           )}
         >
@@ -337,7 +338,7 @@ function ExpandableIssueList({
               Show {remainingCount} more
             </span>
           )}
-        </button>
+        </Button>
       )}
     </>
   );
@@ -617,11 +618,12 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
         {/* Member Navigation Pills */}
         <div className="flex items-center gap-2">
           {activeMembers.map((member, idx) => (
-            <button
+            <Button
               key={member.user.id}
+              variant="ghost"
               onClick={() => setCurrentIndex(idx)}
               className={cn(
-                'relative transition-all',
+                'relative transition-all h-auto p-0',
                 idx === currentIndex ? 'scale-110' : 'opacity-60 hover:opacity-100'
               )}
             >
@@ -634,7 +636,7 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
               {member.hasBlockers && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#09090b]" />
               )}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -651,12 +653,13 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
       {/* Main Content */}
       <div className="flex-1 flex items-stretch min-h-0">
         {/* Previous Button */}
-        <button
+        <Button
+          variant="ghost"
           onClick={goToPrevious}
-          className="w-16 flex items-center justify-center text-[#52525b] hover:text-[#fafafa] hover:bg-[#141416] transition-colors"
+          className="w-16 flex items-center justify-center text-[#52525b] hover:text-[#fafafa] rounded-none h-auto"
         >
           <ChevronLeft className="h-8 w-8" />
-        </button>
+        </Button>
 
         {/* Member Content */}
         <div className="flex-1 p-8 min-h-0">
@@ -666,12 +669,13 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
         </div>
 
         {/* Next Button */}
-        <button
+        <Button
+          variant="ghost"
           onClick={goToNext}
-          className="w-16 flex items-center justify-center text-[#52525b] hover:text-[#fafafa] hover:bg-[#141416] transition-colors"
+          className="w-16 flex items-center justify-center text-[#52525b] hover:text-[#fafafa] rounded-none h-auto"
         >
           <ChevronRight className="h-8 w-8" />
-        </button>
+        </Button>
       </div>
 
       {/* Footer Navigation */}
@@ -686,12 +690,13 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
         </Button>
         <div className="flex items-center gap-1.5">
           {activeMembers.map((_, idx) => (
-            <button
+            <Button
               key={idx}
+              variant="ghost"
               onClick={() => setCurrentIndex(idx)}
               className={cn(
-                'w-2 h-2 rounded-full transition-all',
-                idx === currentIndex ? 'bg-blue-500 w-4' : 'bg-[#27272a] hover:bg-[#3f3f46]'
+                'h-2 rounded-full transition-all p-0 hover:bg-[#3f3f46]',
+                idx === currentIndex ? 'bg-blue-500 w-4' : 'bg-[#27272a] w-2'
               )}
             />
           ))}

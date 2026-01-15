@@ -133,10 +133,11 @@ function IssueCard({ issue, status, onClick, compact }: IssueCardProps) {
   const daysActive = issue.daysActive ?? 0;
 
   return (
-    <button
+    <Button
+      variant="ghost"
       onClick={onClick}
       className={cn(
-        'w-full text-left rounded-lg border border-[#1f1f23] transition-all',
+        'w-full text-left rounded-lg border border-[#1f1f23] h-auto justify-start',
         style.bg,
         compact ? 'p-2.5' : 'p-3'
       )}
@@ -201,7 +202,7 @@ function IssueCard({ issue, status, onClick, compact }: IssueCardProps) {
           )}
         </div>
       </div>
-    </button>
+    </Button>
   );
 }
 
@@ -232,13 +233,13 @@ function CollapsibleSection({
 
   return (
     <div className="mb-3">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
-          'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg transition-all',
-          'hover:bg-[#18181b] active:bg-[#1f1f23]',
+          'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg h-auto justify-start',
           'border border-transparent hover:border-[#27272a]',
-          'group cursor-pointer'
+          'group'
         )}
       >
         {/* Chevron indicator - more prominent */}
@@ -284,7 +285,7 @@ function CollapsibleSection({
         <span className="text-[10px] text-[#52525b] group-hover:text-[#71717a] transition-colors">
           {isExpanded ? 'Collapse' : 'Expand'}
         </span>
-      </button>
+      </Button>
 
       {/* Content */}
       {isExpanded && (
@@ -330,11 +331,12 @@ function ExpandableIssueList({
         />
       ))}
       {remainingCount > 0 && (
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
-            'w-full text-center py-2 rounded-lg border border-dashed transition-all',
-            'border-[#27272a] hover:border-[#3f3f46] hover:bg-[#18181b]',
+            'w-full text-center py-2 rounded-lg border border-dashed h-auto',
+            'border-[#27272a] hover:border-[#3f3f46]',
             'text-xs font-medium text-[#71717a] hover:text-[#a1a1aa]'
           )}
         >
@@ -349,7 +351,7 @@ function ExpandableIssueList({
               +{remainingCount} more
             </span>
           )}
-        </button>
+        </Button>
       )}
     </>
   );
@@ -371,13 +373,14 @@ function MemberSelector({ members, selectedId, onSelect }: MemberSelectorProps) 
       {members.map((member) => {
         const isSelected = selectedId === member.user.id;
         return (
-          <button
+          <Button
             key={member.user.id}
+            variant="ghost"
             onClick={() => onSelect(member.user.id)}
             className={cn(
-              'relative flex items-center gap-2 px-2 py-1.5 rounded-full transition-all flex-shrink-0',
+              'relative flex items-center gap-2 px-2 py-1.5 rounded-full h-auto flex-shrink-0',
               isSelected
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white hover:bg-blue-600 hover:text-white'
                 : 'bg-[#18181b] text-[#a1a1aa] hover:bg-[#1f1f23] hover:text-white'
             )}
           >
@@ -396,7 +399,7 @@ function MemberSelector({ members, selectedId, onSelect }: MemberSelectorProps) 
             <span className="text-xs font-medium">
               {member.user.name.split(' ')[0]}
             </span>
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -430,17 +433,18 @@ function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps) {
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button
+          <Button
+            variant="ghost"
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium h-auto',
               viewingToday
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white hover:bg-blue-600 hover:text-white'
                 : 'text-[#fafafa] hover:bg-[#27272a]'
             )}
           >
             <Calendar className="h-3.5 w-3.5" />
             {viewingToday ? 'Today' : format(selectedDate, 'MMM d, yyyy')}
-          </button>
+          </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 bg-[#0f0f10] border-[#27272a]" align="center">
           <CalendarPicker

@@ -153,12 +153,13 @@ export function SubIssueItem({
                 autoFocus
               />
             ) : (
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setIsEditing(true)}
-                className="text-left w-full text-sm text-[#e6edf3] hover:text-[#58a6ff] font-medium truncate transition-colors"
+                className="text-left w-full text-sm text-[#e6edf3] hover:text-[#58a6ff] font-medium truncate transition-colors h-auto p-0 justify-start"
               >
                 {subIssue.title}
-              </button>
+              </Button>
             )}
           </div>
         </div>

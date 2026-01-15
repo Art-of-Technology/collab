@@ -239,11 +239,12 @@ export function SecretEditor({
       {/* Mode Toggle and Actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 bg-[#0d0d0e] border border-[#1f1f1f] rounded-lg p-0.5">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => handleModeChange("key-value")}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors h-auto",
               localMode === "key-value"
                 ? "bg-[#1f1f1f] text-[#e6edf3]"
                 : "text-[#6e7681] hover:text-[#8b949e]"
@@ -251,12 +252,13 @@ export function SecretEditor({
           >
             <List className="h-3 w-3" />
             Key-Value
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => handleModeChange("raw")}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors h-auto",
               localMode === "raw"
                 ? "bg-[#1f1f1f] text-[#e6edf3]"
                 : "text-[#6e7681] hover:text-[#8b949e]"
@@ -264,7 +266,7 @@ export function SecretEditor({
           >
             <FileCode className="h-3 w-3" />
             Raw .env
-          </button>
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">

@@ -81,8 +81,9 @@ export function IssueDateSelector({
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange} modal={true}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -97,7 +98,7 @@ export function IssueDateSelector({
           ) : (
             <span className="text-[#6e7681] text-xs">Due date</span>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent 
         className="w-72 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl" 
@@ -113,34 +114,37 @@ export function IssueDateSelector({
             </div>
             
             {presetDates.map((preset) => (
-              <button
+              <Button
                 key={preset.label}
+                variant="ghost"
                 onClick={() => handlePresetSelect(preset.date)}
                 className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-[#cccccc] hover:bg-[#2a2a2a] rounded transition-colors"
               >
                 <span>{preset.label}</span>
                 <span className="text-[#8b949e]">{preset.description}</span>
-              </button>
+              </Button>
             ))}
-            
-            <button
+
+            <Button
+              variant="ghost"
               onClick={handleCustomClick}
               className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-[#cccccc] hover:bg-[#2a2a2a] rounded transition-colors"
             >
               <span>Custom...</span>
-            </button>
+            </Button>
           </div>
         ) : (
           // Calendar view
           <div className="bg-[#1c1c1e]">
             {/* Header with back button */}
             <div className="flex items-center gap-2 p-3 border-b border-[#2d2d30]">
-              <button
+              <Button
+                variant="ghost"
                 onClick={handleBackToPresets}
                 className="p-1 hover:bg-[#2a2a2a] rounded transition-colors"
               >
                 <ChevronLeft className="h-4 w-4 text-[#8b949e]" />
-              </button>
+              </Button>
               <span className="text-sm font-medium text-[#cccccc]">Choose a date</span>
             </div>
             

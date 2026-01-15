@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, isToday, isFuture, startOfDay } from 'date-fns';
@@ -48,9 +49,10 @@ export function WeekViewMemberRow({
     <tr className="border-b border-[#27272a]">
       {/* Member cell - sticky left */}
       <td className="min-w-[224px] w-[224px] sticky left-0 z-10 bg-[#09090b] border-r border-[#27272a] align-top">
-        <button
+        <Button
+          variant="ghost"
           onClick={onToggle}
-          className="w-full px-3 py-3 flex items-center gap-3 hover:bg-[#18181b] transition-colors text-left"
+          className="w-full px-3 py-3 flex items-center gap-3 hover:bg-[#18181b] transition-colors text-left h-auto justify-start rounded-none"
         >
           <Avatar className="h-8 w-8 flex-shrink-0">
             <AvatarImage src={member.userImage} />
@@ -80,7 +82,7 @@ export function WeekViewMemberRow({
             "h-4 w-4 text-[#52525b] transition-transform flex-shrink-0",
             isExpanded && "rotate-90"
           )} />
-        </button>
+        </Button>
       </td>
 
       {/* Day cells */}

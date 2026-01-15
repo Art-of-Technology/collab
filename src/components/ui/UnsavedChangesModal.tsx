@@ -64,12 +64,13 @@ export function UnsavedChangesModal({
             </div>
             <span className="text-[#9ca3af] text-sm">{title}</span>
           </div>
-          <button
+          <Button
+            variant="ghost"
             onClick={onClose}
-            className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
+            className="h-auto w-auto p-1 text-[#6e7681] hover:text-white hover:bg-[#1a1a1a]"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}

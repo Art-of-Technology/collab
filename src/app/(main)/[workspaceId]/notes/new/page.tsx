@@ -16,7 +16,7 @@ interface WizardConfig {
     projectId: string | null;
 }
 
-export default function NewNotePage({ params }: { params: { workspaceId: string } }) {
+export default function NewNotePage() {
     const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
     const router = useRouter();
     const searchParams = useSearchParams();

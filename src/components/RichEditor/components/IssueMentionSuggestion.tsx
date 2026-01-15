@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  User, 
-  Circle, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  ArrowUp 
+import {
+  User,
+  Circle,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ArrowUp
 } from 'lucide-react';
-
+import { Button } from '@/components/ui/button';
 import { Issue } from '@/types/issue';
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge } from "@/utils/issueHelpers";
@@ -181,10 +181,11 @@ export function IssueMentionSuggestion({
     >
       {issues.map((issue, index) => {
         return (
-          <button
+          <Button
             key={issue.id}
+            variant="ghost"
             className={cn(
-              "w-full flex items-center px-2 py-1 text-left transition-all duration-150 rounded-sm",
+              "w-full justify-start h-auto px-2 py-1",
               "hover:bg-[#1f1f1f]",
               selectedIndex === index ? 'bg-[#1f1f1f] text-accent-foreground' : ''
             )}
@@ -241,7 +242,7 @@ export function IssueMentionSuggestion({
                 </div>
               )}
             </div>
-          </button>
+          </Button>
         );
       })}
     </div>

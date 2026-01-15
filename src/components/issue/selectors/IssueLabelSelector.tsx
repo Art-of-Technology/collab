@@ -141,8 +141,9 @@ export function IssueLabelSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -158,7 +159,7 @@ export function IssueLabelSelector({
             </>
           ) : selectedLabels.length === 1 ? (
             <>
-              <div 
+              <div
                 className="h-2.5 w-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: selectedLabels[0].color }}
               />
@@ -168,10 +169,10 @@ export function IssueLabelSelector({
             <>
               <div className="flex items-center -space-x-1">
                 {selectedLabels.slice(0, 3).map((label, index) => (
-                  <div 
+                  <div
                     key={label.id}
                     className="h-2.5 w-2.5 rounded-full border border-[#181818] flex-shrink-0"
-                    style={{ 
+                    style={{
                       backgroundColor: label.color,
                       zIndex: 3 - index
                     }}
@@ -186,7 +187,7 @@ export function IssueLabelSelector({
               <span className="text-[#cccccc] text-xs">{selectedLabels.length} labels</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent 
         className="w-80 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl" 

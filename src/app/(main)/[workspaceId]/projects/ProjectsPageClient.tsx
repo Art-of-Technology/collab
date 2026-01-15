@@ -168,21 +168,23 @@ export default function ProjectsPageClient() {
 
           <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
             {(['active', 'archived', 'all'] as const).map((filter) => (
-              <button
+              <Button
                 key={filter}
+                variant="ghost"
+                size="sm"
                 onClick={() => setProjectFilter(filter)}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                  "h-7",
                   projectFilter === filter
                     ? "bg-[#1f1f1f] text-[#e6edf3]"
-                    : "text-[#6e7681] hover:text-[#8b949e]"
+                    : "text-[#6e7681] hover:text-[#8b949e] hover:bg-transparent"
                 )}
               >
                 {filter.charAt(0).toUpperCase() + filter.slice(1)}
                 <span className="ml-1.5 text-[#6e7681]">
                   {projectCounts[filter]}
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -325,72 +327,77 @@ function ProjectListItem({
 
       {/* Inline Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-        <button
+        <Button
+          variant="ghost"
+          size="md"
           onClick={(e) => {
             e.stopPropagation();
             onProjectClick();
           }}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
         >
           <CheckSquare className="h-3.5 w-3.5" />
           <span>Issues</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
+          size="md"
           onClick={(e) => {
             e.stopPropagation();
             onNavigateToGithub();
           }}
           className={cn(
-            "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors",
-            hasGitHub
-              ? "text-[#a1a1aa] hover:text-white hover:bg-[#27272a]"
-              : "text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#27272a]"
+            !hasGitHub && "text-[#52525b] hover:text-[#a1a1aa]"
           )}
         >
           <GitBranch className="h-3.5 w-3.5" />
           <span>GitHub</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
+          size="md"
           onClick={(e) => {
             e.stopPropagation();
             onNavigateToChangelog();
           }}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
         >
           <Tag className="h-3.5 w-3.5" />
           <span>Releases</span>
-        </button>
+        </Button>
 
         <div className="w-px h-5 bg-[#27272a] mx-1" />
 
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();
             onNavigateToSettings();
           }}
-          className="flex items-center justify-center h-8 w-8 rounded-lg text-[#71717a] hover:text-white hover:bg-[#27272a] transition-colors"
+          className="h-8 w-8 text-[#71717a] hover:text-white"
           title="Settings"
         >
           <Settings className="h-4 w-4" />
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();
             onArchive();
           }}
           className={cn(
-            "flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
+            "h-8 w-8",
             isArchived
-              ? "text-[#60a5fa] hover:text-[#93c5fd] hover:bg-[#27272a]"
-              : "text-[#71717a] hover:text-[#f97316] hover:bg-[#27272a]"
+              ? "text-[#60a5fa] hover:text-[#93c5fd]"
+              : "text-[#71717a] hover:text-[#f97316]"
           )}
           title={isArchived ? 'Restore' : 'Archive'}
         >
           <Archive className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

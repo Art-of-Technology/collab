@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Circle, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -221,8 +222,9 @@ export function IssueStatusSelector({
   return (
     <Popover modal={true}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled || readonly}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -246,7 +248,7 @@ export function IssueStatusSelector({
               <span className="text-[#6e7681] text-xs">Status</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -269,9 +271,10 @@ export function IssueStatusSelector({
                 const statusName = s.displayName || s.name;
                 
                 return (
-                  <button
+                  <Button
                     key={s.id}
                     type="button"
+                    variant="ghost"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                     onClick={() => onChange(s.name)}
                   >
@@ -280,7 +283,7 @@ export function IssueStatusSelector({
                     {(value === s.name || value === s.id || value === statusName || displayStatus.name === s.name) && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
-                  </button>
+                  </Button>
                 );
               })
           ) : (
@@ -295,9 +298,10 @@ export function IssueStatusSelector({
                 const colorClass = getStatusColor(status.displayName);
                 
                 return (
-                  <button
+                  <Button
                     key={status.name}
                     type="button"
+                    variant="ghost"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                     onClick={() => onChange(status.name)}
                   >
@@ -306,7 +310,7 @@ export function IssueStatusSelector({
                     {(value === status.name || value === status.displayName) && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
-                  </button>
+                  </Button>
                 );
               })}
             </>

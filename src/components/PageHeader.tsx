@@ -113,11 +113,12 @@ export function PageHeaderTabs({ tabs, activeTab, onTabChange }: PageHeaderTabsP
     <div className="flex items-center gap-1 px-6 pb-3">
       <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
         {tabs.map((tab) => (
-          <button
+          <Button
             key={tab.id}
+            variant="ghost"
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "h-auto px-3 py-1.5 text-xs font-medium rounded-md",
               activeTab === tab.id
                 ? "bg-[#1f1f1f] text-[#e6edf3]"
                 : "text-[#6e7681] hover:text-[#8b949e]"
@@ -127,7 +128,7 @@ export function PageHeaderTabs({ tabs, activeTab, onTabChange }: PageHeaderTabsP
             {tab.count !== undefined && (
               <span className="ml-1.5 text-[#6e7681]">{tab.count}</span>
             )}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Filter, ChevronDown, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -95,8 +96,8 @@ export function ViewFiltersSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -112,7 +113,7 @@ export function ViewFiltersSelector({
           )} />
           <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
           <ChevronDown className="h-3 w-3 text-[#6e7681]" />
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -124,13 +125,13 @@ export function ViewFiltersSelector({
         <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#333] mb-1">
           <span className="text-xs text-[#9ca3af]">Filters</span>
           {activeFilterCount > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={clearAllFilters}
-              className="text-xs text-[#6e7681] hover:text-[#e6edf3]"
+              className="text-xs text-[#6e7681] hover:text-[#e6edf3] h-auto py-0 px-1"
             >
               Clear all
-            </button>
+            </Button>
           )}
         </div>
 
@@ -147,13 +148,13 @@ export function ViewFiltersSelector({
                   >
                     <span className="text-[#f59e0b]">{filterKey}:</span>
                     <span className="text-[#e6edf3]">{filterValue}</span>
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
                       onClick={() => removeFilter(filterKey, filterValue)}
-                      className="text-[#6e7681] hover:text-[#f85149]"
+                      className="text-[#6e7681] hover:text-[#f85149] h-auto p-0 w-auto"
                     >
                       <X className="h-2.5 w-2.5" />
-                    </button>
+                    </Button>
                   </div>
                 ))
               ))}
@@ -172,17 +173,17 @@ export function ViewFiltersSelector({
                   const isSelected = value[filter.key]?.includes(option) || false;
                   
                   return (
-                    <button
+                    <Button
                       key={option}
-                      type="button"
-                      className="w-full flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                      variant="ghost"
+                      className="w-full flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
                       onClick={() => toggleFilter(filter.key, option)}
                     >
                       <div className="w-4 h-4 flex items-center justify-center">
                         {isSelected && <Check className="h-3 w-3 text-[#22c55e]" />}
                       </div>
                       <span className="text-[#e6edf3] text-xs">{option}</span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

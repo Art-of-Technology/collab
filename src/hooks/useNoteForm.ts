@@ -216,6 +216,31 @@ export function useNoteForm({
       const data = await response.json();
       setNote(data);
 
+      // Populate secrets from decrypted data if available
+      let secretVariables: SecretVariableFormData[] = [];
+      let rawSecretContent = "";
+      let secretEditorMode: "key-value" | "raw" = "key-value";
+
+      if (isSecretNoteType(data.type) && data.isEncrypted) {
+        // Use decrypted variables if available
+        if (data.decryptedVariables && Array.isArray(data.decryptedVariables) && data.decryptedVariables.length > 0) {
+          secretVariables = data.decryptedVariables.map((v: any) => ({
+            key: v.key || "",
+            value: v.value || "",
+            masked: v.masked !== false, // Default to true
+            description: v.description || "",
+          }));
+        }
+        // Use decrypted raw content if available
+        if (data.decryptedRawContent && typeof data.decryptedRawContent === "string") {
+          rawSecretContent = data.decryptedRawContent;
+          // If we have raw content but no variables, default to raw mode
+          if (secretVariables.length === 0 && rawSecretContent.trim()) {
+            secretEditorMode = "raw";
+          }
+        }
+      }
+
       const formValues = {
         title: data.title,
         content: data.content,
@@ -229,10 +254,10 @@ export function useNoteForm({
         isAiContext: data.isAiContext || false,
         aiContextPriority: data.aiContextPriority || 0,
         category: data.category || null,
-        // Secrets Vault fields - note: actual secret values are fetched via reveal API
-        variables: [] as SecretVariableFormData[],
-        rawSecretContent: "",
-        secretEditorMode: "key-value" as const,
+        // Secrets Vault fields - populated from decrypted data
+        variables: secretVariables,
+        rawSecretContent: rawSecretContent,
+        secretEditorMode: secretEditorMode,
         isRestricted: data.isRestricted || false,
         expiresAt: data.expiresAt ? new Date(data.expiresAt).toISOString().split('T')[0] : null,
       };

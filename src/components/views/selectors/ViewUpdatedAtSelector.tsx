@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -209,8 +210,9 @@ export function ViewUpdatedAtSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -242,7 +244,7 @@ export function ViewUpdatedAtSelector({
               <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -257,8 +259,9 @@ export function ViewUpdatedAtSelector({
 
         <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
           {/* Clear all option */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
             onClick={() => onChange([])}
           >
@@ -267,15 +270,16 @@ export function ViewUpdatedAtSelector({
             {activeFilters.length === 0 && (
               <span className="text-xs text-[#6e7681]">✓</span>
             )}
-          </button>
+          </Button>
           {/* Preset options */}
           {PRESET_OPTIONS.map((option) => {
             const isSelected = value.includes(option.value!);
             
             return (
-              <button
+              <Button
                 key={option.id}
                 type="button"
+                variant="ghost"
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                 onClick={() => toggleFilter(option)}
               >
@@ -284,7 +288,7 @@ export function ViewUpdatedAtSelector({
                 {isSelected && (
                   <span className="text-xs text-[#6e7681]">✓</span>
                 )}
-              </button>
+              </Button>
             );
           })}
 
@@ -295,9 +299,10 @@ export function ViewUpdatedAtSelector({
               {activeFilters
                 .filter(filter => filter.type === 'range')
                 .map((customFilter) => (
-                  <button
+                  <Button
                     key={customFilter.id}
                     type="button"
+                    variant="ghost"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                     onClick={() => {
                       // Remove the custom range when clicked
@@ -307,7 +312,7 @@ export function ViewUpdatedAtSelector({
                     <Calendar className="h-3.5 w-3.5 text-blue-500" />
                     <span className="text-[#cccccc] flex-1">{customFilter.label}</span>
                     <span className="text-xs text-[#6e7681]">✓</span>
-                  </button>
+                  </Button>
                 ))}
             </>
           )}
@@ -319,14 +324,15 @@ export function ViewUpdatedAtSelector({
                 activeFilters.filter(filter => filter.type === 'range').length > 0) && (
                 <div className="border-t border-[#2d2d30] my-1"></div>
               )}
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setShowCustomRange(true)}
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
               >
                 <Plus className="h-3.5 w-3.5 text-[#6e7681]" />
                 <span className="text-[#9ca3af] flex-1">Add custom date range</span>
-              </button>
+              </Button>
             </>
           ) : (
             <div className="px-2 py-2 space-y-2 border-t border-[#2d2d30]">
@@ -352,16 +358,18 @@ export function ViewUpdatedAtSelector({
                 />
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={addCustomRange}
                   disabled={!customStartDate || !customEndDate}
                   className="px-2 py-1 text-xs bg-[#22c55e] text-white rounded hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => {
                     setShowCustomRange(false);
                     setCustomStartDate("");
@@ -370,7 +378,7 @@ export function ViewUpdatedAtSelector({
                   className="px-2 py-1 text-xs text-[#6e7681] hover:text-[#cccccc]"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}
