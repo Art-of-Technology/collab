@@ -34,13 +34,18 @@ import {
     Calendar,
     GitBranch,
     X,
+    KeyRound,
+    Key,
+    ShieldCheck,
 } from "lucide-react";
 import { useNoteForm } from "@/hooks/useNoteForm";
 import { cn } from "@/lib/utils";
 import { NoteType, NoteScope } from "@prisma/client";
-import { supportsAiContext, getNoteTypeConfig, getNoteScopeConfig } from "@/lib/note-types";
+import { supportsAiContext, getNoteTypeConfig, getNoteScopeConfig, isSecretNoteType } from "@/lib/note-types";
 import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilterSelector";
 import { useProjects } from "@/hooks/queries/useProjects";
+import { SecretEditor } from "@/components/notes/SecretEditor";
+import { SecretVariableData } from "@/components/notes/SecretVariableRow";
 
 interface NoteFormEditorProps {
     noteId?: string;
@@ -68,6 +73,10 @@ const noteTypeIcons: Record<NoteType, any> = {
     TROUBLESHOOT: Bug,
     MEETING: Calendar,
     DECISION: GitBranch,
+    // Secrets Vault types
+    ENV_VARS: KeyRound,
+    API_KEYS: Key,
+    CREDENTIALS: ShieldCheck,
 };
 
 // Note scope icons mapping
@@ -108,7 +117,15 @@ export function NoteFormEditor({
     const watchProjectId = form.watch("projectId");
     const watchIsFavorite = form.watch("isFavorite");
     const watchIsAiContext = form.watch("isAiContext");
+    const watchVariables = form.watch("variables");
+    const watchRawSecretContent = form.watch("rawSecretContent");
+    const watchSecretEditorMode = form.watch("secretEditorMode");
+    const watchIsRestricted = form.watch("isRestricted");
+    const watchExpiresAt = form.watch("expiresAt");
     const isOwner = !note || note._permissions?.isOwner !== false;
+
+    // Check if current type is a secret type
+    const isSecretType = isSecretNoteType(watchType);
 
     // Convert note types to FilterOption format
     const typeOptions: FilterOption[] = useMemo(() => {
@@ -169,6 +186,31 @@ export function NoteFormEditor({
             form.setValue("scope", NoteScope.PROJECT);
         } else if (!projectId && watchScope === NoteScope.PROJECT) {
             form.setValue("scope", NoteScope.PERSONAL);
+        }
+    };
+
+    // Handle secret editor changes
+    const handleSecretEditorChange = (data: {
+        variables?: SecretVariableData[];
+        rawContent?: string;
+        mode?: "key-value" | "raw";
+        isRestricted?: boolean;
+        expiresAt?: string | null;
+    }) => {
+        if (data.variables !== undefined) {
+            form.setValue("variables", data.variables);
+        }
+        if (data.rawContent !== undefined) {
+            form.setValue("rawSecretContent", data.rawContent);
+        }
+        if (data.mode !== undefined) {
+            form.setValue("secretEditorMode", data.mode);
+        }
+        if (data.isRestricted !== undefined) {
+            form.setValue("isRestricted", data.isRestricted);
+        }
+        if (data.expiresAt !== undefined) {
+            form.setValue("expiresAt", data.expiresAt);
         }
     };
 
@@ -520,78 +562,94 @@ export function NoteFormEditor({
                             />
                         </div>
 
-                        {/* Content Editor - Clean Notion Style */}
+                        {/* Content Editor - Conditional based on note type */}
                         <div className="py-4 pb-24 min-h-[400px]">
-                            <FormField
-                                control={form.control}
-                                name="content"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormControl>
-                                            <IssueRichEditor
-                                                value={field.value}
-                                                onChange={field.onChange}
-                                                placeholder="Start writing, or press '/' for commands..."
-                                                className={cn(
-                                                    "[&_.ProseMirror]:border-0",
-                                                    "[&_.ProseMirror]:outline-none",
-                                                    "[&_.ProseMirror]:shadow-none",
-                                                    "[&_.ProseMirror]:p-0",
-                                                    "[&_.ProseMirror]:focus:ring-0",
-                                                    "[&_.ProseMirror]:text-[#e4e4e7]",
-                                                    "[&_.ProseMirror]:text-base",
-                                                    "[&_.ProseMirror]:leading-relaxed",
-                                                    "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#3f3f46]",
-                                                    "[&_.ProseMirror_p]:my-3",
-                                                    "[&_.ProseMirror_h1]:text-2xl",
-                                                    "[&_.ProseMirror_h1]:font-bold",
-                                                    "[&_.ProseMirror_h1]:text-[#fafafa]",
-                                                    "[&_.ProseMirror_h1]:mt-6",
-                                                    "[&_.ProseMirror_h1]:mb-3",
-                                                    "[&_.ProseMirror_h2]:text-xl",
-                                                    "[&_.ProseMirror_h2]:font-semibold",
-                                                    "[&_.ProseMirror_h2]:text-[#fafafa]",
-                                                    "[&_.ProseMirror_h2]:mt-5",
-                                                    "[&_.ProseMirror_h2]:mb-2",
-                                                    "[&_.ProseMirror_h3]:text-lg",
-                                                    "[&_.ProseMirror_h3]:font-medium",
-                                                    "[&_.ProseMirror_h3]:text-[#e4e4e7]",
-                                                    "[&_.ProseMirror_h3]:mt-4",
-                                                    "[&_.ProseMirror_h3]:mb-2",
-                                                    "[&_.ProseMirror_ul]:my-3",
-                                                    "[&_.ProseMirror_ol]:my-3",
-                                                    "[&_.ProseMirror_li]:text-[#d4d4d8]",
-                                                    "[&_.ProseMirror_code]:bg-[#27272a]",
-                                                    "[&_.ProseMirror_code]:text-[#f472b6]",
-                                                    "[&_.ProseMirror_code]:px-1.5",
-                                                    "[&_.ProseMirror_code]:py-0.5",
-                                                    "[&_.ProseMirror_code]:rounded",
-                                                    "[&_.ProseMirror_code]:text-sm",
-                                                    "[&_.ProseMirror_pre]:bg-[#18181b]",
-                                                    "[&_.ProseMirror_pre]:border",
-                                                    "[&_.ProseMirror_pre]:border-[#27272a]",
-                                                    "[&_.ProseMirror_pre]:rounded-lg",
-                                                    "[&_.ProseMirror_pre]:p-4",
-                                                    "[&_.ProseMirror_pre]:my-4",
-                                                    "[&_.ProseMirror_blockquote]:border-l-2",
-                                                    "[&_.ProseMirror_blockquote]:border-[#3f3f46]",
-                                                    "[&_.ProseMirror_blockquote]:pl-4",
-                                                    "[&_.ProseMirror_blockquote]:text-[#a1a1aa]",
-                                                    "[&_.ProseMirror_blockquote]:italic",
-                                                    "[&_.ProseMirror_a]:text-blue-400",
-                                                    "[&_.ProseMirror_a]:underline",
-                                                )}
-                                                minHeight="350px"
-                                                maxHeight="none"
-                                                enableSlashCommands={true}
-                                                enableFloatingMenu={true}
-                                                enableSubIssueCreation={false}
-                                            />
-                                        </FormControl>
-                                        <FormMessage className="text-xs mt-2 text-red-400" />
-                                    </FormItem>
-                                )}
-                            />
+                            {isSecretType ? (
+                                /* Secret Editor for ENV_VARS, API_KEYS, CREDENTIALS */
+                                <SecretEditor
+                                    variables={watchVariables || []}
+                                    rawContent={watchRawSecretContent || ""}
+                                    mode={watchSecretEditorMode || "key-value"}
+                                    isRestricted={watchIsRestricted || false}
+                                    expiresAt={watchExpiresAt || null}
+                                    onChange={handleSecretEditorChange}
+                                    disabled={!isOwner}
+                                    noteId={noteId}
+                                    workspaceSlug={undefined}
+                                />
+                            ) : (
+                                /* Rich Editor for all other note types */
+                                <FormField
+                                    control={form.control}
+                                    name="content"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormControl>
+                                                <IssueRichEditor
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                    placeholder="Start writing, or press '/' for commands..."
+                                                    className={cn(
+                                                        "[&_.ProseMirror]:border-0",
+                                                        "[&_.ProseMirror]:outline-none",
+                                                        "[&_.ProseMirror]:shadow-none",
+                                                        "[&_.ProseMirror]:p-0",
+                                                        "[&_.ProseMirror]:focus:ring-0",
+                                                        "[&_.ProseMirror]:text-[#e4e4e7]",
+                                                        "[&_.ProseMirror]:text-base",
+                                                        "[&_.ProseMirror]:leading-relaxed",
+                                                        "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#3f3f46]",
+                                                        "[&_.ProseMirror_p]:my-3",
+                                                        "[&_.ProseMirror_h1]:text-2xl",
+                                                        "[&_.ProseMirror_h1]:font-bold",
+                                                        "[&_.ProseMirror_h1]:text-[#fafafa]",
+                                                        "[&_.ProseMirror_h1]:mt-6",
+                                                        "[&_.ProseMirror_h1]:mb-3",
+                                                        "[&_.ProseMirror_h2]:text-xl",
+                                                        "[&_.ProseMirror_h2]:font-semibold",
+                                                        "[&_.ProseMirror_h2]:text-[#fafafa]",
+                                                        "[&_.ProseMirror_h2]:mt-5",
+                                                        "[&_.ProseMirror_h2]:mb-2",
+                                                        "[&_.ProseMirror_h3]:text-lg",
+                                                        "[&_.ProseMirror_h3]:font-medium",
+                                                        "[&_.ProseMirror_h3]:text-[#e4e4e7]",
+                                                        "[&_.ProseMirror_h3]:mt-4",
+                                                        "[&_.ProseMirror_h3]:mb-2",
+                                                        "[&_.ProseMirror_ul]:my-3",
+                                                        "[&_.ProseMirror_ol]:my-3",
+                                                        "[&_.ProseMirror_li]:text-[#d4d4d8]",
+                                                        "[&_.ProseMirror_code]:bg-[#27272a]",
+                                                        "[&_.ProseMirror_code]:text-[#f472b6]",
+                                                        "[&_.ProseMirror_code]:px-1.5",
+                                                        "[&_.ProseMirror_code]:py-0.5",
+                                                        "[&_.ProseMirror_code]:rounded",
+                                                        "[&_.ProseMirror_code]:text-sm",
+                                                        "[&_.ProseMirror_pre]:bg-[#18181b]",
+                                                        "[&_.ProseMirror_pre]:border",
+                                                        "[&_.ProseMirror_pre]:border-[#27272a]",
+                                                        "[&_.ProseMirror_pre]:rounded-lg",
+                                                        "[&_.ProseMirror_pre]:p-4",
+                                                        "[&_.ProseMirror_pre]:my-4",
+                                                        "[&_.ProseMirror_blockquote]:border-l-2",
+                                                        "[&_.ProseMirror_blockquote]:border-[#3f3f46]",
+                                                        "[&_.ProseMirror_blockquote]:pl-4",
+                                                        "[&_.ProseMirror_blockquote]:text-[#a1a1aa]",
+                                                        "[&_.ProseMirror_blockquote]:italic",
+                                                        "[&_.ProseMirror_a]:text-blue-400",
+                                                        "[&_.ProseMirror_a]:underline",
+                                                    )}
+                                                    minHeight="350px"
+                                                    maxHeight="none"
+                                                    enableSlashCommands={true}
+                                                    enableFloatingMenu={true}
+                                                    enableSubIssueCreation={false}
+                                                />
+                                            </FormControl>
+                                            <FormMessage className="text-xs mt-2 text-red-400" />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>

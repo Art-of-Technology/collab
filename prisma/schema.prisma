@@ -108,6 +108,9 @@ model User {
 
   // Knowledge Base Phase 2 relations
   pinnedNotes Note[] @relation("NotePinnedBy")
+
+  // Knowledge Base Phase 3 relations - Secrets Vault
+  noteActivityLogs NoteActivityLog[]
 }
 
 model Account {
@@ -808,14 +811,23 @@ model Note {
   pinnedAt DateTime?
   pinnedBy String?
 
+  // Knowledge Base Phase 3 fields - Secrets Vault
+  isEncrypted       Boolean  @default(false) // Whether content is encrypted
+  encryptedContent  String?  @db.Text // Encrypted JSON or .env content
+  secretVariables   String?  @db.Text // Encrypted JSON array of key-value pairs
+  encryptionVersion Int      @default(1) // For key rotation support
+  isRestricted      Boolean  @default(false) // Require explicit access even for PROJECT/WORKSPACE scope
+  expiresAt         DateTime? // Optional expiration for secrets
+
   // Relations
-  author       User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  workspace    Workspace?  @relation(fields: [workspaceId], references: [id])
-  project      Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  tags         NoteTag[]   @relation("NoteToTag")
+  author       User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  workspace    Workspace?        @relation(fields: [workspaceId], references: [id])
+  project      Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags         NoteTag[]         @relation("NoteToTag")
   comments     Comment[]
-  sharedWith   NoteShare[] @relation("SharedNote")
-  pinnedByUser User?       @relation("NotePinnedBy", fields: [pinnedBy], references: [id])
+  sharedWith   NoteShare[]       @relation("SharedNote")
+  pinnedByUser User?             @relation("NotePinnedBy", fields: [pinnedBy], references: [id])
+  activityLogs NoteActivityLog[]
 
   @@index([authorId])
   @@index([workspaceId])
@@ -826,6 +838,8 @@ model Note {
   @@index([projectId])
   @@index([isAiContext])
   @@index([isPinned])
+  @@index([isEncrypted])
+  @@index([isRestricted])
 }
 
 model NoteTag {
@@ -842,6 +856,27 @@ model NoteTag {
   @@unique([name, authorId, workspaceId])
   @@index([authorId])
   @@index([workspaceId])
+}
+
+// Note Activity Log - Audit trail for note actions (especially secrets)
+model NoteActivityLog {
+  id        String             @id @default(cuid())
+  noteId    String
+  userId    String
+  action    NoteActivityAction
+  details   String? // JSON with additional context (which key was copied, old/new values for edits)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime           @default(now())
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([noteId, createdAt])
 }
 
 // Personal note sharing - allows sharing PERSONAL scope notes with specific users
@@ -2263,6 +2298,10 @@ enum NoteType {
   TROUBLESHOOT // Troubleshooting guides
   MEETING // Meeting notes
   DECISION // Decision records (ADRs)
+  // Secrets Vault types (Phase 3)
+  ENV_VARS // Environment variables (.env files)
+  API_KEYS // API keys and tokens
+  CREDENTIALS // Passwords and credentials
 }
 
 enum NoteScope {
@@ -2276,4 +2315,21 @@ enum NoteScope {
 enum NoteSharePermission {
   READ // Read-only access
   EDIT // Edit access
+}
+
+// Note Activity Actions for audit logging
+enum NoteActivityAction {
+  VIEW // User viewed the note
+  CREATE // Note was created
+  UPDATE // Note content was updated
+  DELETE // Note was deleted
+  REVEAL // User revealed encrypted secret value(s)
+  COPY // User copied a secret value
+  COPY_ALL // User copied all secret values
+  EXPORT // User exported secrets as file
+  SHARE // User shared the note with someone
+  UNSHARE // User removed someone's access
+  PIN // Note was pinned
+  UNPIN // Note was unpinned
+  ACCESS_DENIED // Failed access attempt (for restricted notes)
 }

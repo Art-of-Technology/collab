@@ -4,6 +4,13 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { NoteIncludeExtension } from '@/types/prisma-extensions';
 import { NoteScope, NoteType } from "@prisma/client";
+import {
+  encryptVariables,
+  encryptRawContent,
+  isSecretNoteType,
+  isSecretsEnabled
+} from "@/lib/secrets/crypto";
+import { logNoteAccess } from "@/lib/secrets/access";
 
 export async function GET(request: NextRequest) {
   try {
@@ -275,7 +282,12 @@ export async function POST(request: NextRequest) {
       aiContextPriority,
       category,
       // Legacy support
-      isPublic
+      isPublic,
+      // Secrets Vault Phase 3 fields
+      variables, // Array of { key, value, masked?, description? }
+      rawSecretContent, // Raw .env content
+      isRestricted, // Limit access even for PROJECT/WORKSPACE scope
+      expiresAt // Optional expiration for secrets
     } = body;
 
     if (!title || !content) {
@@ -315,20 +327,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Handle secrets encryption for secret note types
+    const noteType = type || NoteType.GENERAL;
+    const isSecretType = isSecretNoteType(noteType);
+    let encryptedData: {
+      isEncrypted: boolean;
+      encryptedContent: string | null;
+      secretVariables: string | null;
+    } = {
+      isEncrypted: false,
+      encryptedContent: null,
+      secretVariables: null
+    };
+
+    if (isSecretType && (variables || rawSecretContent)) {
+      if (!workspaceId) {
+        return NextResponse.json(
+          { error: "Workspace ID is required for secret notes" },
+          { status: 400 }
+        );
+      }
+
+      if (!isSecretsEnabled()) {
+        return NextResponse.json(
+          { error: "Secrets feature is not enabled. SECRETS_MASTER_KEY is not configured." },
+          { status: 503 }
+        );
+      }
+
+      encryptedData.isEncrypted = true;
+
+      // Encrypt variables (key-value mode)
+      if (variables && Array.isArray(variables) && variables.length > 0) {
+        const encrypted = encryptVariables(variables, workspaceId);
+        encryptedData.secretVariables = JSON.stringify(encrypted);
+      }
+
+      // Encrypt raw content (.env mode)
+      if (rawSecretContent && typeof rawSecretContent === 'string') {
+        encryptedData.encryptedContent = encryptRawContent(rawSecretContent, workspaceId);
+      }
+    }
+
     const note = await prisma.note.create({
       data: {
         title,
-        content,
+        content: isSecretType ? "" : content, // Don't store plaintext for secrets
         isFavorite: isFavorite || false,
         authorId: session.user.id,
         workspaceId: workspaceId || null,
         // Knowledge System fields
-        type: type || NoteType.GENERAL,
+        type: noteType,
         scope: finalScope,
         projectId: projectId || null,
         isAiContext: isAiContext || false,
         aiContextPriority: aiContextPriority || 0,
         category: category || null,
+        // Secrets Vault Phase 3 fields
+        isEncrypted: encryptedData.isEncrypted,
+        encryptedContent: encryptedData.encryptedContent,
+        secretVariables: encryptedData.secretVariables,
+        isRestricted: isRestricted || false,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
         ...(tagIds && tagIds.length > 0 && {
           tags: {
             connect: tagIds.map((id: string) => ({ id }))
@@ -380,6 +440,22 @@ export async function POST(request: NextRequest) {
         }
       } as NoteIncludeExtension
     });
+
+    // Log creation for encrypted notes
+    if (encryptedData.isEncrypted) {
+      await logNoteAccess(
+        note.id,
+        session.user.id,
+        'CREATE',
+        {
+          type: noteType,
+          hasVariables: !!encryptedData.secretVariables,
+          hasRawContent: !!encryptedData.encryptedContent,
+          isRestricted: isRestricted || false
+        },
+        request
+      );
+    }
 
     return NextResponse.json(note, { status: 201 });
   } catch (error) {
