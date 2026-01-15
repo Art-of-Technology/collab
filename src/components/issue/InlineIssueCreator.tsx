@@ -345,21 +345,25 @@ export function InlineIssueCreator({
         {/* Mode Toggle - Compact */}
         {onLinkExisting && (
           <div className="flex items-center gap-1 pb-2 border-b border-[#1a1a1a]">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setMode('create')}
               className={cn(
-                "px-2 py-0.5 text-[10px] rounded transition-colors",
+                "px-2 h-6 text-[10px] rounded transition-colors",
                 mode === 'create'
                   ? "bg-[#1a1a1a] text-[#e1e7ef]"
                   : "text-[#7d8590] hover:text-[#c9d1d9]"
               )}
             >
               Create
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setMode('link')}
               className={cn(
-                "px-2 py-0.5 text-[10px] rounded transition-colors flex items-center gap-1",
+                "px-2 h-6 text-[10px] rounded transition-colors flex items-center gap-1",
                 mode === 'link'
                   ? "bg-[#1a1a1a] text-[#e1e7ef]"
                   : "text-[#7d8590] hover:text-[#c9d1d9]"
@@ -367,7 +371,7 @@ export function InlineIssueCreator({
             >
               <LinkIcon className="h-2.5 w-2.5" />
               Link
-            </button>
+            </Button>
           </div>
         )}
 
@@ -506,12 +510,14 @@ export function InlineIssueCreator({
                 <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7d8590] animate-spin pointer-events-none" />
               )}
               {searchQuery.length > 0 && !isSearching && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center text-[#6e7681] hover:text-[#8b949e] transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681] hover:text-[#8b949e] transition-colors p-0"
                 >
                   <X className="h-3 w-3" />
-                </button>
+                </Button>
               )}
             </div>
 
@@ -535,12 +541,14 @@ export function InlineIssueCreator({
                   >
                     <span className="text-[#7d8590] mr-1">{issue.issueKey}</span>
                     {issue.title.substring(0, 30)}{issue.title.length > 30 ? '...' : ''}
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={() => toggleIssueSelection(issue)}
-                      className="ml-1 hover:text-red-400"
+                      className="ml-1 hover:text-red-400 h-4 w-4 p-0"
                     >
                       <X className="h-3 w-3" />
-                    </button>
+                    </Button>
                   </Badge>
                 ))}
               </div>
@@ -573,15 +581,16 @@ export function InlineIssueCreator({
                 {searchResults.map(issue => {
                   const isSelected = selectedIssues.some(i => i.id === issue.id);
                   return (
-                    <button
+                    <Button
                       key={issue.id}
+                      variant="ghost"
                       onClick={() => toggleIssueSelection(issue)}
                       className={cn(
-                        "w-full px-3 py-2 text-left text-xs hover:bg-[#1a1a1a] border-b border-[#1a1a1a] last:border-b-0 transition-colors",
+                        "w-full px-3 py-2 text-left text-xs hover:bg-[#1a1a1a] border-b border-[#1a1a1a] last:border-b-0 transition-colors h-auto justify-start",
                         isSelected && "bg-[#1a1a1a]"
                       )}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 w-full">
                         <div className={cn(
                           "w-3 h-3 rounded border flex items-center justify-center flex-shrink-0",
                           isSelected ? "bg-[#238636] border-[#238636]" : "border-[#7d8590]"
@@ -596,7 +605,7 @@ export function InlineIssueCreator({
                           </Badge>
                         )}
                       </div>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

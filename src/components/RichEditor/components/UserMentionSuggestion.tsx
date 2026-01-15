@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { User } from "../types";
+import { cn } from "@/lib/utils";
 
 interface UserMentionSuggestionProps {
   query: string;
@@ -124,11 +126,13 @@ export function UserMentionSuggestion({ query, onSelect, onEscape, workspaceId }
   return (
     <div ref={containerRef} className="bg-popover border rounded-md shadow-md p-1 min-w-[200px] max-h-[200px] overflow-y-auto">
       {users.map((user, index) => (
-        <button
+        <Button
           key={user.id}
-          className={`w-full flex items-center gap-2 p-1 text-left rounded-sm hover:bg-[#1f1f1f] hover:text-accent-foreground transition-colors ${
+          variant="ghost"
+          className={cn(
+            "w-full justify-start h-auto gap-2 p-1 hover:bg-[#1f1f1f] hover:text-accent-foreground",
             selectedIndex === index ? "bg-[#1f1f1f] text-accent-foreground" : ""
-          }`}
+          )}
           onClick={() => {
             if (user && user.id) {
               onSelect(user);
@@ -153,7 +157,7 @@ export function UserMentionSuggestion({ query, onSelect, onEscape, workspaceId }
             <div className="font-medium text-xs truncate">{user.name || user.email}</div>
             {user.name && <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>}
           </div>
-        </button>
+        </Button>
       ))}
     </div>
   );

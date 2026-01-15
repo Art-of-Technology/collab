@@ -259,9 +259,10 @@ export function AIReviewsPanel({
             className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden"
           >
             {/* Review Header */}
-            <button
+            <Button
+              variant="ghost"
               onClick={() => toggleExpanded(review.id)}
-              className="w-full px-4 py-3 flex items-start justify-between hover:bg-[#161617] transition-colors"
+              className="w-full px-4 py-3 flex items-start justify-between hover:bg-[#161617] transition-colors h-auto"
             >
               <div className="flex items-start gap-3">
                 {getSeverityIcon(review.severity)}
@@ -324,7 +325,7 @@ export function AIReviewsPanel({
                   <ChevronRight className="h-4 w-4 text-[#8b949e]" />
                 )}
               </div>
-            </button>
+            </Button>
 
             {/* Expanded Content */}
             {expandedReviews.has(review.id) && review.status === 'COMPLETED' && (

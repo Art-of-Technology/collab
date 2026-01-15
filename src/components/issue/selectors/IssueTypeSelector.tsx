@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ISSUE_TYPE_CONFIG, ISSUE_TYPE_OPTIONS, type IssueType } from "@/constants/issue-types";
 
@@ -50,8 +51,9 @@ export function IssueTypeSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled || readonly}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -60,12 +62,12 @@ export function IssueTypeSelector({
             (disabled || readonly) && "opacity-50 cursor-not-allowed"
           )}
         >
-          <Icon 
-            className="h-3 w-3" 
+          <Icon
+            className="h-3 w-3"
             style={{ color: selectedConfig.color }}
           />
           <span className="text-[#cccccc] text-xs">{selectedConfig.label}</span>
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -84,17 +86,18 @@ export function IssueTypeSelector({
             const TypeIcon = config.icon;
             
             return (
-              <button
+              <Button
                 key={type}
                 type="button"
+                variant="ghost"
                 className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
                 onClick={() => {
                   onChange(type);
                   setIsOpen(false);
                 }}
               >
-                <TypeIcon 
-                  className="h-4 w-4 flex-shrink-0" 
+                <TypeIcon
+                  className="h-4 w-4 flex-shrink-0"
                   style={{ color: config.color }}
                 />
                 <div className="flex-1 min-w-0">
@@ -104,7 +107,7 @@ export function IssueTypeSelector({
                 {value === type && (
                   <span className="text-xs text-[#6e7681]">✓</span>
                 )}
-              </button>
+              </Button>
             );
           })}
         </div>

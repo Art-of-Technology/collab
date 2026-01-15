@@ -1,6 +1,7 @@
 "use client";
 
 import { Heart, Reply, MoreHorizontal, Trash2, Edit, ChevronDown, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,28 +39,34 @@ export function CommentActions({
 
   return (
     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={onLike}
-        className={`flex items-center gap-1 text-[10px] hover:text-red-400 transition-colors ${
+        className={`flex items-center gap-1 text-[10px] hover:text-red-400 transition-colors h-auto p-1 ${
           hasLiked ? "text-red-400" : "text-[#7d8590]"
         }`}
       >
         <Heart className={`h-2.5 w-2.5 ${hasLiked ? "fill-current" : ""}`} />
         {likeCount}
-      </button>
+      </Button>
 
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={onReply}
-        className="flex items-center gap-1 text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-colors"
+        className="flex items-center gap-1 text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-colors h-auto p-1"
       >
         <Reply className="h-2.5 w-2.5" />
         Reply
-      </button>
+      </Button>
 
       {hasReplies && onToggleReplies && (
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onToggleReplies}
-          className="flex items-center gap-1 text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-colors"
+          className="flex items-center gap-1 text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-colors h-auto p-1"
         >
           {repliesCollapsed ? (
             <ChevronRight className="h-2.5 w-2.5" />
@@ -67,15 +74,15 @@ export function CommentActions({
             <ChevronDown className="h-2.5 w-2.5" />
           )}
           {comment.replies?.length}
-        </button>
+        </Button>
       )}
 
       {isAuthor && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-all">
+            <Button variant="ghost" size="sm" className="text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-all h-auto p-1">
               <MoreHorizontal className="h-2.5 w-2.5" />
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="bg-[#1f1f1f] border-[#333]">
             {onEdit && (

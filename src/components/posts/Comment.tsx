@@ -258,12 +258,13 @@ export function Comment({
                     {likesCount} {likesCount === 1 ? 'like' : 'likes'}
                   </span>
                 )}
-                <button
-                  className="text-xs text-muted-foreground hover:text-primary"
+                <Button
+                  variant="ghost"
+                  className="text-xs text-muted-foreground hover:text-primary h-auto p-0"
                   onClick={() => setIsReplying(!isReplying)}
                 >
                   Reply
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -284,26 +285,29 @@ export function Comment({
 
         {isAuthor && !isEditing && (
           <div className="flex gap-1">
-            <button
+            <Button
+              variant="ghost"
               onClick={() => setIsEditing(true)}
-              className="p-1 rounded text-muted-foreground hover:text-primary"
+              className="p-1 rounded text-muted-foreground hover:text-primary h-auto"
               title="Edit comment"
             >
               <PencilIcon className="h-3.5 w-3.5" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => setShowDeleteDialog(true)}
-              className="p-1 rounded text-muted-foreground hover:text-red-500"
+              className="p-1 rounded text-muted-foreground hover:text-red-500 h-auto"
               title="Delete comment"
             >
               <TrashIcon className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         )}
 
         {!isAuthor && (
-          <button
-            className={`flex ml-auto items-center hover:text-red-500 ${hasReacted ? 'text-red-500 ' : 'text-muted-foreground'}`}
+          <Button
+            variant="ghost"
+            className={`flex ml-auto items-center hover:text-red-500 h-auto p-1 ${hasReacted ? 'text-red-500 ' : 'text-muted-foreground'}`}
             onClick={handleLike}
             disabled={addReactionMutation.isPending || removeReactionMutation.isPending}
           >
@@ -312,19 +316,20 @@ export function Comment({
             ) : (
               <HeartIconOutline className="h-3.5 w-3.5" />
             )}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Replies section */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="ml-8 mt-1">
-          <button
+          <Button
+            variant="ghost"
             onClick={toggleReplies}
-            className="text-xs text-muted-foreground hover:text-primary mb-1"
+            className="text-xs text-muted-foreground hover:text-primary mb-1 h-auto p-0"
           >
             {showReplies ? "Hide replies" : `Show ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`}
-          </button>
+          </Button>
 
           {showReplies && (
             <div className="space-y-2 mt-1">

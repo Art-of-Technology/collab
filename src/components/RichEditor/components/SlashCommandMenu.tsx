@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { SlashCommand } from '../extensions/slash-commands-extension';
 
 interface SlashCommandMenuProps {
@@ -62,14 +63,15 @@ export function SlashCommandMenu({
             const Icon = command.icon;
             const isSelected = index === selectedIndex;
             return (
-              <button
+              <Button
                 key={command.id}
                 ref={isSelected ? selectedItemRef : null}
                 type="button"
+                variant="ghost"
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
-                  isSelected 
-                    ? "bg-[#2a2a2a]" 
+                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors h-auto justify-start",
+                  isSelected
+                    ? "bg-[#2a2a2a]"
                     : "hover:bg-[#1a1a1a]"
                 )}
                 onClick={() => onCommandSelect(command)}
@@ -85,7 +87,7 @@ export function SlashCommandMenu({
                     {command.description}
                   </div>
                 </div>
-              </button>
+              </Button>
             );
           })
         ) : (

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -83,54 +84,57 @@ export function ApiDocsSidebar({
               Documentation
             </h3>
             <div className="space-y-1">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => onSelectSection('endpoints')}
                 className={cn(
-                  'w-full text-left px-2 py-1.5 rounded text-sm transition-colors relative',
+                  'w-full justify-start px-2 py-1.5 h-auto text-sm transition-colors',
                   selectedSection === 'endpoints'
                     ? 'bg-[#1f1f1f] text-white'
                     : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white'
                 )}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full">
                   <span className="truncate">API Endpoints</span>
                   {searchQuery && searchResults?.endpoints && (
                     <Badge variant="outline" className="ml-auto text-xs h-4 px-1">Match</Badge>
                   )}
                 </div>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => onSelectSection('oauth')}
                 className={cn(
-                  'w-full text-left px-2 py-1.5 rounded text-sm transition-colors relative',
+                  'w-full justify-start px-2 py-1.5 h-auto text-sm transition-colors',
                   selectedSection === 'oauth'
                     ? 'bg-[#1f1f1f] text-white'
                     : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white'
                 )}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full">
                   <span className="truncate">OAuth 2.0</span>
                   {searchQuery && searchResults?.oauth && (
                     <Badge variant="outline" className="ml-auto text-xs h-4 px-1">Match</Badge>
                   )}
                 </div>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => onSelectSection('third-party')}
                 className={cn(
-                  'w-full text-left px-2 py-1.5 rounded text-sm transition-colors relative',
+                  'w-full justify-start px-2 py-1.5 h-auto text-sm transition-colors',
                   selectedSection === 'third-party'
                     ? 'bg-[#1f1f1f] text-white'
                     : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white'
                 )}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full">
                   <span className="truncate">Third-Party API</span>
                   {searchQuery && searchResults?.thirdParty && (
                     <Badge variant="outline" className="ml-auto text-xs h-4 px-1">Match</Badge>
                   )}
                 </div>
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -157,16 +161,17 @@ export function ApiDocsSidebar({
                     <TooltipProvider key={endpointKey}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button
+                          <Button
+                            variant="ghost"
                             onClick={() => onSelectEndpoint(endpoint.url, endpoint.method)}
                             className={cn(
-                              'w-full text-left px-2 py-2 rounded text-sm transition-colors',
+                              'w-full justify-start px-2 py-2 h-auto text-sm transition-colors',
                               isSelected
                                 ? 'bg-[#1f1f1f] text-white'
                                 : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white'
                             )}
                           >
-                            <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex flex-col gap-1 min-w-0 w-full">
                               <div className="flex items-center gap-2">
                                 <Badge className={cn('font-mono text-xs h-4 px-1.5 flex-shrink-0', methodColor)}>
                                   {endpoint.method}
@@ -182,7 +187,7 @@ export function ApiDocsSidebar({
                                 {endpoint.title}
                               </span>
                             </div>
-                          </button>
+                          </Button>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="max-w-xs bg-[#1f1f1f] border border-[#2a2a2a] text-white">
                           <div className="space-y-1">

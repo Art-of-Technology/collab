@@ -353,8 +353,9 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
           <h3 className="text-lg font-semibold mb-3">Select Role</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {Object.values(WorkspaceRole).map((role) => (
-              <button
+              <Button
                 key={role}
+                variant="ghost"
                 onClick={() => setSelectedRole(role)}
                 className={`p-4 rounded-lg border text-left transition-all duration-200 hover:shadow-md ${selectedRole === role
                     ? 'bg-primary text-primary-foreground border-primary shadow-lg'
@@ -368,7 +369,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
                     {permissionsByRole[role]?.length || 0} permissions
                   </span>
                 </div>
-              </button>
+              </Button>
             ))}
           </div>
         </div>

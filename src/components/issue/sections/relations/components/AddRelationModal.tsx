@@ -142,12 +142,14 @@ export function AddRelationModal({
             </div>
             <span className="text-[#9ca3af] text-sm">Add {config.label}</span>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleClose}
-            className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
+            className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a] h-auto"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -172,8 +174,9 @@ export function AddRelationModal({
             {/* Type Filter with All Types Option */}
             <Popover modal={true}>
               <PopoverTrigger asChild>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px] border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a] text-[#cccccc] focus:outline-none bg-[#181818]"
                 >
                   {typeFilter === "all" ? (
@@ -212,7 +215,7 @@ export function AddRelationModal({
                       <span className="text-[#cccccc] text-xs">All types</span>
                     </>
                   )}
-                </button>
+                </Button>
               </PopoverTrigger>
               
               <PopoverContent 
@@ -226,9 +229,10 @@ export function AddRelationModal({
                 </div>
                 
                 <div className="space-y-0.5">
-                  <button
+                  <Button
                     type="button"
-                    className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                    variant="ghost"
+                    className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors justify-start h-auto"
                     onClick={() => setTypeFilter("all")}
                   >
                     <div className="h-4 w-4 rounded-sm bg-gradient-to-r from-blue-500 to-purple-500 flex-shrink-0"></div>
@@ -238,8 +242,8 @@ export function AddRelationModal({
                     {typeFilter === "all" && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
-                  </button>
-                  
+                  </Button>
+
                   {[
                     { value: "issue", label: "Issue", icon: CheckSquare, color: "#6366f1" },
                     { value: "story", label: "Story", icon: Circle, color: "#22c55e" },
@@ -249,14 +253,15 @@ export function AddRelationModal({
                   ].map((type) => {
                     const Icon = type.icon;
                     return (
-                      <button
+                      <Button
                         key={type.value}
                         type="button"
-                        className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                        variant="ghost"
+                        className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors justify-start h-auto"
                         onClick={() => setTypeFilter(type.value as RelatedItemType)}
                       >
-                        <Icon 
-                          className="h-4 w-4 flex-shrink-0" 
+                        <Icon
+                          className="h-4 w-4 flex-shrink-0"
                           style={{ color: type.color }}
                         />
                         <div className="flex-1 min-w-0">
@@ -265,7 +270,7 @@ export function AddRelationModal({
                         {typeFilter === type.value && (
                           <span className="text-xs text-[#6e7681]">✓</span>
                         )}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

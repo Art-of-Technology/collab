@@ -274,10 +274,11 @@ function PlanningViewRendererLegacy({
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
             {/* Team/Personal Toggle */}
             <div className="flex items-center gap-1 bg-[#1a1a1a] border border-[#2d2d30] rounded-md p-0.5">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setPersonalMode(false)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors",
+                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
                   !personalMode
                     ? "bg-[#2563eb] text-white"
                     : "text-gray-400 hover:text-white hover:bg-[#252525]"
@@ -285,11 +286,12 @@ function PlanningViewRendererLegacy({
               >
                 <Users className="h-3 w-3" />
                 Team
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setPersonalMode(true)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors",
+                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
                   personalMode
                     ? "bg-[#10b981] text-white"
                     : "text-gray-400 hover:text-white hover:bg-[#252525]"
@@ -297,7 +299,7 @@ function PlanningViewRendererLegacy({
               >
                 <User className="h-3 w-3" />
                 My Plan
-              </button>
+              </Button>
             </div>
 
             {/* View Mode & Date Range */}

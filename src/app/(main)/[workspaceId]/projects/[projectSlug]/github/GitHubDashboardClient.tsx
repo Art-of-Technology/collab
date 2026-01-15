@@ -566,10 +566,11 @@ function StatCard({
   onClick?: () => void;
 }) {
   return (
-    <button
+    <Button
       onClick={onClick}
+      variant="ghost"
       className={cn(
-        "rounded-lg border p-4 text-left transition-all",
+        "rounded-lg border p-4 text-left transition-all h-auto",
         active
           ? "border-[#58a6ff] bg-[#58a6ff]/10"
           : "border-[#1f1f1f] bg-[#0d0d0e] hover:border-[#30363d] hover:bg-[#161617]"
@@ -583,7 +584,7 @@ function StatCard({
       {subValue && (
         <div className="text-xs text-[#6e7681] mt-1">{subValue}</div>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -874,10 +875,10 @@ function QuickActionButton({
   }
 
   return (
-    <button onClick={onClick} className={className}>
+    <Button onClick={onClick} variant="ghost" className={className}>
       <Icon className="h-4 w-4 text-[#8b949e]" />
       {label}
-    </button>
+    </Button>
   );
 }
 

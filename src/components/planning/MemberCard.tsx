@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ChevronRight, AlertTriangle, CheckCircle2, Clock, Eye, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -83,9 +84,10 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
       )}
     >
       {/* Header - Always visible */}
-      <button
+      <Button
+        variant="ghost"
         onClick={onClick || onToggle}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#141416] transition-colors"
+        className="w-full px-4 py-3 flex items-center gap-3 h-auto justify-start rounded-none"
       >
         {/* Avatar */}
         <Avatar className="h-9 w-9 flex-shrink-0">
@@ -146,7 +148,7 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
             isExpanded && 'rotate-90'
           )}
         />
-      </button>
+      </Button>
 
       {/* Today highlight - subtle */}
       {todayHighlight && (

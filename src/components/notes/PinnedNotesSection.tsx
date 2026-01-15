@@ -8,6 +8,7 @@ import { NOTE_TYPE_CONFIGS } from "@/lib/note-types";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 interface PinnedNote {
   id: string;
@@ -109,9 +110,11 @@ export function PinnedNotesSection({
 
   return (
     <div className={cn("", className)}>
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-xs font-medium text-[#6e7681] hover:text-[#8b949e] mb-2 w-full"
+        className="flex items-center gap-2 text-xs font-medium text-[#6e7681] hover:text-[#8b949e] mb-2 w-full h-7 px-0 justify-start"
       >
         <Pin className="h-3.5 w-3.5 text-amber-500" />
         <span>Pinned</span>
@@ -124,7 +127,7 @@ export function PinnedNotesSection({
             isExpanded && "rotate-90"
           )}
         />
-      </button>
+      </Button>
 
       {isExpanded && (
         <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">

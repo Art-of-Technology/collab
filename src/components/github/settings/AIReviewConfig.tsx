@@ -131,10 +131,11 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                 When enabled, AI will analyze your pull requests and provide code review feedback
               </p>
             </div>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => handleToggleEnabled(!aiReviewEnabled)}
               className={cn(
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors p-0',
                 aiReviewEnabled ? 'bg-[#a371f7]' : 'bg-[#30363d]'
               )}
             >
@@ -144,7 +145,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                   aiReviewEnabled ? 'translate-x-6' : 'translate-x-1'
                 )}
               />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -156,10 +157,11 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
             </label>
             <div className="grid grid-cols-2 gap-3">
               {/* Manual Mode */}
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => handleToggleAutoTrigger(false)}
                 className={cn(
-                  'p-4 rounded-lg border text-left transition-all',
+                  'p-4 rounded-lg border text-left transition-all h-auto',
                   !aiReviewAutoTrigger
                     ? 'border-[#a371f7] bg-[#a371f7]/10'
                     : 'border-[#30363d] bg-[#161617] hover:border-[#484f58]'
@@ -175,13 +177,14 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                 <p className="text-xs text-[#8b949e]">
                   Trigger AI reviews manually using the "Request Review" button in PRs
                 </p>
-              </button>
+              </Button>
 
               {/* Automatic Mode */}
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => handleToggleAutoTrigger(true)}
                 className={cn(
-                  'p-4 rounded-lg border text-left transition-all',
+                  'p-4 rounded-lg border text-left transition-all h-auto',
                   aiReviewAutoTrigger
                     ? 'border-[#a371f7] bg-[#a371f7]/10'
                     : 'border-[#30363d] bg-[#161617] hover:border-[#484f58]'
@@ -197,7 +200,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                 <p className="text-xs text-[#8b949e]">
                   Automatically review PRs when opened or updated (excludes drafts)
                 </p>
-              </button>
+              </Button>
             </div>
           </div>
         )}

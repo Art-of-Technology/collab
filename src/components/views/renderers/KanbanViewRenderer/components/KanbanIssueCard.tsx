@@ -2,6 +2,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   MessageSquare,
@@ -278,9 +279,10 @@ const KanbanIssueCard = React.memo(({
           {hasRelations && (
             <>
               <hr className="border-[#1f1f1f] my-0 mt-0 mb-1.5" />
-              <button
+              <Button
                 type="button"
-                className="group flex w-fit items-center justify-between rounded-md bg-transparent pl-0 pr-4 py-0 text-[11px] text-[#8b949e] transition-colors"
+                variant="ghost"
+                className="group flex w-fit items-center justify-between rounded-md bg-transparent pl-0 pr-4 py-0 text-[11px] text-[#8b949e] transition-colors h-auto hover:bg-transparent"
                 onClick={handleToggleRelations}
                 onPointerDown={handleRelationsPointerDown}
               >
@@ -294,7 +296,7 @@ const KanbanIssueCard = React.memo(({
                     <span>{relationCount} Relation{relationCount === 1 ? '' : 's'}</span>
                   </span>
                 </span>
-              </button>
+              </Button>
 
               {!areRelationsCollapsed && (
                 <div className="mt-1 flex flex-col gap-1">

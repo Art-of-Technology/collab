@@ -110,11 +110,12 @@ export function VersioningConfig({
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {VERSION_STRATEGIES.map(strategy => (
-              <button
+              <Button
                 key={strategy.id}
+                variant="ghost"
                 onClick={() => setConfig(prev => ({ ...prev, versioningStrategy: strategy.id as typeof prev.versioningStrategy }))}
                 className={cn(
-                  "p-4 rounded-lg border-2 text-left transition-all",
+                  "p-4 rounded-lg border-2 text-left transition-all h-auto",
                   config.versioningStrategy === strategy.id
                     ? "border-[#58a6ff] bg-[#58a6ff]/5"
                     : "border-[#1f1f1f] bg-[#161617] hover:border-[#30363d]"
@@ -136,7 +137,7 @@ export function VersioningConfig({
                 <code className="text-[10px] text-[#6e7681] bg-[#0d0d0e] px-2 py-1 rounded">
                   {strategy.example}
                 </code>
-              </button>
+              </Button>
             ))}
           </div>
         </div>

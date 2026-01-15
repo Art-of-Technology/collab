@@ -6,11 +6,14 @@ import { NoteScope, NoteSharePermission } from "@prisma/client";
 import {
   encryptVariables,
   encryptRawContent,
+  decryptVariables,
+  decryptRawContent,
   isSecretNoteType,
   isSecretsEnabled,
   SecretVariable
 } from "@/lib/secrets/crypto";
 import { logNoteAccess, canAccessNote } from "@/lib/secrets/access";
+import { createVersion, hasSignificantChange, detectChangeType } from "@/lib/versioning";
 
 export async function GET(
   request: NextRequest,
@@ -92,8 +95,39 @@ export async function GET(
     const shareRecord = note.sharedWith.find(s => s.userId === session.user.id);
     const canEdit = isOwner || shareRecord?.permission === NoteSharePermission.EDIT;
 
+    // Decrypt secrets if this is a secret note type
+    let decryptedVariables = null;
+    let decryptedRawContent = null;
+
+    if (isSecretNoteType(note.type) && note.isEncrypted && note.workspaceId) {
+      try {
+        // Decrypt variables (key-value mode)
+        if (note.secretVariables) {
+          const encryptedVars = JSON.parse(note.secretVariables) as SecretVariable[];
+          const decrypted = decryptVariables(encryptedVars, note.workspaceId);
+          // Convert to format expected by frontend
+          decryptedVariables = decrypted.map(v => ({
+            key: v.key,
+            value: v.value,
+            masked: v.masked
+          }));
+        }
+
+        // Decrypt raw content (.env mode)
+        if (note.encryptedContent) {
+          decryptedRawContent = decryptRawContent(note.encryptedContent, note.workspaceId);
+        }
+      } catch (decryptError) {
+        console.error("Error decrypting secrets:", decryptError);
+        // Don't fail the request, just don't return decrypted data
+      }
+    }
+
     return NextResponse.json({
       ...note,
+      // Include decrypted data for the frontend
+      decryptedVariables,
+      decryptedRawContent,
       _permissions: {
         isOwner,
         canEdit,
@@ -141,7 +175,9 @@ export async function PATCH(
       variables, // Array of { key, value, masked?, description? }
       rawSecretContent, // Raw .env content
       isRestricted, // Limit access even for PROJECT/WORKSPACE scope
-      expiresAt // Optional expiration for secrets
+      expiresAt, // Optional expiration for secrets
+      // Versioning session tracking
+      sessionVersion, // Version when editing session started - used to update existing version instead of creating new
     } = body;
 
     // Check if note exists and user has permission to edit
@@ -167,6 +203,18 @@ export async function PATCH(
           where: { userId: session.user.id },
           select: { permission: true }
         }
+      },
+      // Include versioning-related fields
+    });
+
+    // Also get the full note content for versioning
+    const noteForVersioning = await prisma.note.findUnique({
+      where: { id },
+      select: {
+        title: true,
+        content: true,
+        version: true,
+        versioningEnabled: true,
       }
     });
 
@@ -260,6 +308,47 @@ export async function PATCH(
       }
     }
 
+    // Create a version before updating (if versioning is enabled and content changed)
+    const shouldCreateVersion =
+      noteForVersioning?.versioningEnabled &&
+      !isSecretType && // Don't version secret notes (they have separate audit logging)
+      (title !== undefined || content !== undefined);
+
+    if (shouldCreateVersion && noteForVersioning) {
+      const newTitle = title !== undefined ? title : noteForVersioning.title;
+      const newContent = content !== undefined ? content : noteForVersioning.content;
+
+      // Only create version if there's a significant change
+      if (hasSignificantChange(
+        noteForVersioning.content,
+        newContent,
+        noteForVersioning.title,
+        newTitle
+      )) {
+        try {
+          await createVersion({
+            noteId: id,
+            title: newTitle,
+            content: newContent,
+            authorId: session.user.id,
+            changeType: detectChangeType(
+              noteForVersioning.title,
+              newTitle,
+              noteForVersioning.content,
+              newContent
+            ),
+            // Pass sessionVersion to enable same-session version updates
+            // If sessionVersion is provided and a version was already created in this session,
+            // the existing version will be updated instead of creating a new one
+            sessionVersion: typeof sessionVersion === 'number' ? sessionVersion : undefined,
+          });
+        } catch (versionError) {
+          // Log but don't fail the update if versioning fails
+          console.error("Error creating version:", versionError);
+        }
+      }
+    }
+
     const note = await prisma.note.update({
       where: {
         id: id
@@ -271,10 +360,11 @@ export async function PATCH(
         // Only owner can update these fields
         ...(isOwner && type !== undefined && { type }),
         ...(isOwner && finalScope !== undefined && { scope: finalScope }),
-        ...(isOwner && projectId !== undefined && { projectId }),
+        ...(isOwner && projectId !== undefined && {
+          project: projectId ? { connect: { id: projectId } } : { disconnect: true }
+        }),
         ...(isOwner && isAiContext !== undefined && { isAiContext }),
         ...(isOwner && aiContextPriority !== undefined && { aiContextPriority }),
-        ...(isOwner && category !== undefined && { category }),
         // Secrets Vault Phase 3 fields (owner only)
         ...(isOwner && encryptedData.isEncrypted !== undefined && { isEncrypted: encryptedData.isEncrypted }),
         ...(isOwner && encryptedData.encryptedContent !== undefined && { encryptedContent: encryptedData.encryptedContent }),

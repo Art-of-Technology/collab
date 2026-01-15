@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Building2, ChevronDown, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,8 +63,8 @@ export function ViewProjectSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -75,7 +76,7 @@ export function ViewProjectSelector({
           <Building2 className="h-3 w-3 text-[#6366f1]" />
           <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
           <ChevronDown className="h-3 w-3 text-[#6e7681]" />
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -91,39 +92,39 @@ export function ViewProjectSelector({
         <div className="space-y-0.5 max-h-64 overflow-y-auto">
           {/* Quick actions */}
           <div className="flex gap-1 p-1 border-b border-[#333] mb-1">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={selectAllExplicit}
-              className="text-xs px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#6e7681] hover:text-[#e6edf3]"
+              className="text-xs px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#6e7681] hover:text-[#e6edf3] h-auto"
               aria-label="Select all projects"
             >
               All
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
               onClick={clearAll}
-              className="text-xs px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#6e7681] hover:text-[#e6edf3]"
+              className="text-xs px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#6e7681] hover:text-[#e6edf3] h-auto"
               aria-label="Clear project selection"
             >
               Clear
-            </button>
+            </Button>
           </div>
           {/* Individual projects */}
           {projects.map((project) => {
             const isSelected = value.includes(project.id);
             
             return (
-              <button
+              <Button
                 key={project.id}
-                type="button"
-                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                variant="ghost"
+                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
                 onClick={() => toggleProject(project.id)}
                 aria-pressed={isSelected}
               >
                 <div className="w-4 h-4 flex items-center justify-center">
                   {isSelected && <Check className="h-3 w-3 text-[#22c55e]" />}
                 </div>
-                <div 
+                <div
                   className="w-3 h-3 rounded flex-shrink-0"
                   style={{ backgroundColor: project.color || '#6b7280' }}
                   aria-hidden="true"
@@ -131,7 +132,7 @@ export function ViewProjectSelector({
                 <div className="flex-1 min-w-0">
                   <div className="text-[#e6edf3] font-medium truncate">{project.name}</div>
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>

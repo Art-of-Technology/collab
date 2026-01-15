@@ -120,8 +120,9 @@ export default function QuickIssueCreate({
         {hasMultipleProjects && (
           <Popover>
             <PopoverTrigger asChild>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 className={cn(
                   "inline-flex h-6 items-center gap-1 rounded-md border border-[#2d2d30] bg-[#0e0e0e] px-2 text-xs",
                   "hover:bg-[#2a2a2a] focus:border-[#464649] focus:outline-none focus:ring-1 focus:ring-[#464649]",
@@ -130,22 +131,23 @@ export default function QuickIssueCreate({
               >
                 <FolderOpen className="h-3 w-3" />
                 <span className="truncate max-w-20">
-                  {selectedProjectId 
+                  {selectedProjectId
                     ? projects.find(p => p.id === selectedProjectId)?.name || "Select project..."
                     : "Select project..."
                   }
                 </span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
-              </button>
+              </Button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-0 bg-[#1c1c1c] border-[#2d2d30]" align="start">
               <div className="p-1">
                 {projects.map((project) => (
-                  <button
+                  <Button
                     key={project.id}
                     type="button"
+                    variant="ghost"
                     className={cn(
-                      "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-sm text-left",
+                      "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-sm text-left h-auto justify-start",
                       "hover:bg-[#2a2a2a] transition-colors",
                       selectedProjectId === project.id
                         ? "bg-[#2a2a2a] text-[#cccccc]"
@@ -153,12 +155,12 @@ export default function QuickIssueCreate({
                     )}
                     onClick={() => setSelectedProjectId(project.id)}
                   >
-                    <div 
+                    <div
                       className="w-3 h-3 rounded-sm flex-shrink-0"
                       style={{ backgroundColor: project.color || '#6b7280' }}
                     />
                     <span className="truncate">{project.name}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </PopoverContent>

@@ -222,10 +222,11 @@ export function EditorHistoryModal({
                   <div className="p-3 text-sm text-muted-foreground">No history entries</div>
                 ) : (
                   activities.map((a) => (
-                    <button
+                    <Button
                       key={a.id}
+                      variant="ghost"
                       className={cn(
-                        "w-full text-left p-3 hover:bg-[#0d0d0d]",
+                        "w-full text-left p-3 hover:bg-[#0d0d0d] h-auto justify-start",
                         selectedEntryId === a.id ? "bg-muted/60" : ""
                       )}
                       onClick={() => {
@@ -257,7 +258,7 @@ export function EditorHistoryModal({
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         </div>
                       </div>
-                    </button>
+                    </Button>
                   ))
                 )}
               </div>

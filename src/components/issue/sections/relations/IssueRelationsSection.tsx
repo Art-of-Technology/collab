@@ -125,9 +125,10 @@ export function IssueRelationsSection({
       {/* Sub-issues Section - Most Prominent */}
       <div className="space-y-3" data-sub-issues-section>
         <div className="flex items-center justify-between">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => toggleGroupExpansion('child')}
-            className="flex items-center gap-2 group flex-1"
+            className="flex items-center gap-2 group flex-1 h-auto p-0 justify-start hover:bg-transparent"
           >
             {expandedGroups.has('child') ? (
               <ChevronDown className="h-4 w-4 text-[#7d8590] group-hover:text-[#c9d1d9] transition-colors" />
@@ -142,7 +143,7 @@ export function IssueRelationsSection({
                 </span>
               )}
             </h3>
-          </button>
+          </Button>
 
           {/* Compact Progress Indicator */}
           {hasSubIssues && subIssueProgress && subIssueProgress.total > 0 && (
@@ -228,9 +229,10 @@ export function IssueRelationsSection({
       {/* Other Relations */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setIsRelationsSectionExpanded(!isRelationsSectionExpanded)}
-            className="flex items-center gap-2 group flex-1"
+            className="flex items-center gap-2 group flex-1 h-auto p-0 justify-start hover:bg-transparent"
           >
             {isRelationsSectionExpanded ? (
               <ChevronDown className="h-4 w-4 text-[#7d8590] group-hover:text-[#c9d1d9] transition-colors" />
@@ -245,11 +247,11 @@ export function IssueRelationsSection({
                 </span>
               )}
             </h3>
-          </button>
+          </Button>
         </div>
 
         {isRelationsSectionExpanded && (
-          <div className="pl-2">
+          <div className="pl-2 space-y-2">
             {RELATION_ORDER.filter(type => type !== 'child').map((relationType) => {
               const relationItems = relationType === 'parent'
                 ? (relations?.parent ? [relations.parent] : [])

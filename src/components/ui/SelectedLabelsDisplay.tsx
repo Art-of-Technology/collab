@@ -1,5 +1,6 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import type { TaskLabel } from "./label-selector";
 
@@ -25,13 +26,14 @@ export const SelectedLabelsDisplay: React.FC<SelectedLabelsDisplayProps> = ({ se
           />
           {label.name}
           {onRemove && (
-            <button
+            <Button
+              variant="ghost"
               onClick={(e) => onRemove(label.id, e)}
-              className="ml-1 hover:bg-gray-200 rounded-full p-0.5"
+              className="ml-1 h-auto w-auto p-0.5 hover:bg-gray-200 rounded-full"
               type="button"
             >
               <X className="h-3 w-3" />
-            </button>
+            </Button>
           )}
         </Badge>
       ))}

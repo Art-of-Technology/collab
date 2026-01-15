@@ -1,19 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { 
-  History, 
-  FileText, 
-  CircleCheck, 
-  Flag, 
-  UserCheck, 
-  Target, 
-  Calendar, 
+import {
+  History,
+  FileText,
+  CircleCheck,
+  Flag,
+  UserCheck,
+  Target,
+  Calendar,
   Tags,
   Move,
   Play,
@@ -225,8 +226,9 @@ export function ActionFiltersSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -266,7 +268,7 @@ export function ActionFiltersSelector({
               <span className="text-[#cccccc] text-xs">{value.length} actions</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -281,8 +283,9 @@ export function ActionFiltersSelector({
         
         <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
           {/* Clear all option */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
             onClick={() => onChange([])}
           >
@@ -291,7 +294,7 @@ export function ActionFiltersSelector({
             {value.length === 0 && (
               <span className="text-xs text-[#6e7681]">✓</span>
             )}
-          </button>
+          </Button>
           
           {ACTION_OPTIONS.map((action) => {
             const Icon = action.icon;
@@ -303,8 +306,9 @@ export function ActionFiltersSelector({
             return (
               <div key={action.value} className="space-y-0.5">
                 {/* Main action button */}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                   onClick={() => {
                     if (!action.hasSubConditions) {
@@ -327,7 +331,7 @@ export function ActionFiltersSelector({
                   {isSelected && (!action.hasSubConditions || (selectedFilter?.subConditions?.values.length || 0) > 0) && (
                     <span className="text-xs text-[#6e7681]">✓</span>
                   )}
-                </button>
+                </Button>
 
                 {/* Sub-conditions */}
                 {action.hasSubConditions && isExpanded && (
@@ -347,9 +351,10 @@ export function ActionFiltersSelector({
                           uniqueStatuses.map((status) => {
                             const isSubSelected = selectedFilter?.subConditions?.values.includes(status.id) || false;
                             return (
-                              <button
+                              <Button
                                 key={status.id}
                                 type="button"
+                                variant="ghost"
                                 className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                                 onClick={() => {
                                   const currentValues = selectedFilter?.subConditions?.values || [];
@@ -364,7 +369,7 @@ export function ActionFiltersSelector({
                                 {isSubSelected && (
                                   <span className="text-xs text-[#6e7681]">✓</span>
                                 )}
-                              </button>
+                              </Button>
                             );
                           })
                         ) : (
@@ -381,9 +386,10 @@ export function ActionFiltersSelector({
                           const isSubSelected = selectedFilter?.subConditions?.values.includes(priority.value) || false;
                           const Icon = priority.icon;
                           return (
-                            <button
+                            <Button
                               key={priority.value}
                               type="button"
+                              variant="ghost"
                               className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                               onClick={() => {
                                 const currentValues = selectedFilter?.subConditions?.values || [];
@@ -398,7 +404,7 @@ export function ActionFiltersSelector({
                               {isSubSelected && (
                                 <span className="text-xs text-[#6e7681]">✓</span>
                               )}
-                            </button>
+                            </Button>
                           );
                         })}
                       </div>
@@ -410,9 +416,10 @@ export function ActionFiltersSelector({
                           workspaceMembers.map((member) => {
                             const isSubSelected = selectedFilter?.subConditions?.values.includes(member.id) || false;
                             return (
-                              <button
+                              <Button
                                 key={member.id}
                                 type="button"
+                                variant="ghost"
                                 className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                                 onClick={() => {
                                   const currentValues = selectedFilter?.subConditions?.values || [];
@@ -431,7 +438,7 @@ export function ActionFiltersSelector({
                                 {isSubSelected && (
                                   <span className="text-xs text-[#6e7681]">✓</span>
                                 )}
-                              </button>
+                              </Button>
                             );
                           })
                         ) : (

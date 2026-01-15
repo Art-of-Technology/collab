@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -71,12 +72,13 @@ export default function NewMessageUI({ initialUsers }: NewMessageUIProps) {
           </div>
         ) : (
           filteredUsers.map((user) => (
-            <button
+            <Button
               key={user.id}
+              variant="ghost"
               onClick={() => handleUserClick(user.id)}
-              className="w-full text-left"
+              className="w-full text-left h-auto justify-start p-0"
             >
-              <div className="flex items-center gap-3 p-4 hover:bg-muted transition-colors">
+              <div className="flex items-center gap-3 p-4 hover:bg-muted transition-colors w-full">
                 <Avatar>
                   <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
                   <AvatarFallback>
@@ -91,7 +93,7 @@ export default function NewMessageUI({ initialUsers }: NewMessageUIProps) {
                   </p>
                 </div>
               </div>
-            </button>
+            </Button>
           ))
         )}
       </CardContent>

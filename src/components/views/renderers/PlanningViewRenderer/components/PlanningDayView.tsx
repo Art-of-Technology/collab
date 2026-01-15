@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  ChevronDown, 
+import { Button } from '@/components/ui/button';
+import {
+  ChevronDown,
   ChevronRight,
   AlertCircle,
   Circle,
@@ -484,9 +485,10 @@ function MemberCard({
   return (
     <div className="bg-[#09090b] rounded-lg border border-[#27272a] overflow-hidden">
       {/* Header */}
-      <button
+      <Button
+        variant="ghost"
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#18181b] transition-colors"
+        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#18181b] transition-colors h-auto rounded-none"
       >
         <Avatar className="h-8 w-8 flex-shrink-0">
           <AvatarImage src={member.userImage} />
@@ -523,7 +525,7 @@ function MemberCard({
           "h-4 w-4 text-[#52525b] transition-transform flex-shrink-0",
           isExpanded && "rotate-90"
         )} />
-      </button>
+      </Button>
 
       {/* Expanded Content */}
       {isExpanded && (

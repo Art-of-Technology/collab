@@ -109,6 +109,9 @@ interface Note {
   isEncrypted?: boolean;
   isRestricted?: boolean;
   expiresAt?: string | null;
+  // Versioning fields
+  version?: number;
+  versioningEnabled?: boolean;
 }
 
 interface UseNoteFormOptions {
@@ -172,6 +175,9 @@ export function useNoteForm({
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
   const isInitializedRef = useRef(false);
+  // Track the version when the edit session started - this is used to consolidate
+  // multiple autosaves into a single version instead of creating many versions
+  const sessionVersionRef = useRef<number | null>(null);
 
   const form = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
@@ -213,6 +219,31 @@ export function useNoteForm({
       const data = await response.json();
       setNote(data);
 
+      // Populate secrets from decrypted data if available
+      let secretVariables: SecretVariableFormData[] = [];
+      let rawSecretContent = "";
+      let secretEditorMode: "key-value" | "raw" = "key-value";
+
+      if (isSecretNoteType(data.type) && data.isEncrypted) {
+        // Use decrypted variables if available
+        if (data.decryptedVariables && Array.isArray(data.decryptedVariables) && data.decryptedVariables.length > 0) {
+          secretVariables = data.decryptedVariables.map((v: any) => ({
+            key: v.key || "",
+            value: v.value || "",
+            masked: v.masked !== false, // Default to true
+            description: v.description || "",
+          }));
+        }
+        // Use decrypted raw content if available
+        if (data.decryptedRawContent && typeof data.decryptedRawContent === "string") {
+          rawSecretContent = data.decryptedRawContent;
+          // If we have raw content but no variables, default to raw mode
+          if (secretVariables.length === 0 && rawSecretContent.trim()) {
+            secretEditorMode = "raw";
+          }
+        }
+      }
+
       const formValues = {
         title: data.title,
         content: data.content,
@@ -226,10 +257,10 @@ export function useNoteForm({
         isAiContext: data.isAiContext || false,
         aiContextPriority: data.aiContextPriority || 0,
         category: data.category || null,
-        // Secrets Vault fields - note: actual secret values are fetched via reveal API
-        variables: [] as SecretVariableFormData[],
-        rawSecretContent: "",
-        secretEditorMode: "key-value" as const,
+        // Secrets Vault fields - populated from decrypted data
+        variables: secretVariables,
+        rawSecretContent: rawSecretContent,
+        secretEditorMode: secretEditorMode,
         isRestricted: data.isRestricted || false,
         expiresAt: data.expiresAt ? new Date(data.expiresAt).toISOString().split('T')[0] : null,
       };
@@ -244,6 +275,10 @@ export function useNoteForm({
       latestValuesRef.current = formValues as NoteFormValues;
       isInitializedRef.current = true;
       setAutosaveStatus("idle");
+
+      // Store the version when the edit session started
+      // This allows us to consolidate multiple autosaves into a single version
+      sessionVersionRef.current = data.version || null;
     } catch (err) {
       console.error("Failed to fetch note:", err);
       setError("Failed to load note details. Please try again.");
@@ -335,7 +370,12 @@ export function useNoteForm({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          // Pass the session version to consolidate multiple autosaves into a single version
+          // This prevents creating many versions during a single editing session
+          sessionVersion: sessionVersionRef.current,
+        }),
       });
 
       if (!response.ok) {
@@ -392,6 +432,11 @@ export function useNoteForm({
     if (currentFormValues === lastSavedValues) return;
     if (!latestValuesRef.current) return;
 
+    // Skip autosave for secret note types - require explicit save for security
+    if (isSecretNoteType(latestValuesRef.current.type)) {
+      return;
+    }
+
     // Set up debounced autosave (800ms after last change)
     const handle = setTimeout(() => {
       if (latestValuesRef.current) {
@@ -406,6 +451,10 @@ export function useNoteForm({
   useEffect(() => {
     const flushIfPending = () => {
       if (latestValuesRef.current) {
+        // Skip flush for secret note types - require explicit save
+        if (isSecretNoteType(latestValuesRef.current.type)) {
+          return;
+        }
         const serialized = serializeValues(latestValuesRef.current);
         if (serialized !== lastSavedValues) {
           autosave(latestValuesRef.current);

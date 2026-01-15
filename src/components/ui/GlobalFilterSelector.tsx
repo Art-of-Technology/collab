@@ -296,8 +296,9 @@ export function GlobalFilterSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -310,7 +311,7 @@ export function GlobalFilterSelector({
             ? renderTriggerContent(selectedOptions)
             : defaultRenderTriggerContent()
           }
-        </button>
+        </Button>
       </PopoverTrigger>
 
       <PopoverContent
@@ -351,9 +352,10 @@ export function GlobalFilterSelector({
           <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
             {/* Clear option */}
             {allowClear && (
-              <button
+              <Button
                 type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                variant="ghost"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto"
                 onClick={handleClear}
               >
                 <EmptyIcon className="h-3.5 w-3.5 text-[#6e7681]" />
@@ -361,7 +363,7 @@ export function GlobalFilterSelector({
                 {selectedIds.length === 0 && (
                   <Check className="h-3 w-3 text-[#6e7681]" />
                 )}
-              </button>
+              </Button>
             )}
 
             {/* Section header */}
@@ -377,12 +379,13 @@ export function GlobalFilterSelector({
                 {filteredOptions.map((option) => {
                   const isSelected = selectedIds.includes(option.id);
                   return (
-                    <button
+                    <Button
                       key={option.id}
                       type="button"
+                      variant="ghost"
                       disabled={option.disabled}
                       className={cn(
-                        "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left",
+                        "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left h-auto",
                         option.isPrioritized
                           ? "bg-blue-950/20 hover:bg-blue-950/30"
                           : "hover:bg-[#2a2a2a]",
@@ -394,7 +397,7 @@ export function GlobalFilterSelector({
                         ? renderOptionContent(option, isSelected)
                         : defaultRenderOptionContent(option, isSelected)
                       }
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

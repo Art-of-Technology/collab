@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Group, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,8 +54,8 @@ export function ViewGroupingSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -66,7 +67,7 @@ export function ViewGroupingSelector({
           <Group className="h-3 w-3 text-[#8b5cf6]" />
           <span className="text-[#cccccc] text-xs">{selectedOption.label}</span>
           <ChevronDown className="h-3 w-3 text-[#6e7681]" />
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -84,10 +85,10 @@ export function ViewGroupingSelector({
             const option = GROUPING_OPTIONS[key];
             
             return (
-              <button
+              <Button
                 key={key}
-                type="button"
-                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                variant="ghost"
+                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
                 onClick={() => {
                   onChange(key);
                   setIsOpen(false);
@@ -101,7 +102,7 @@ export function ViewGroupingSelector({
                 {value === key && (
                   <span className="text-xs text-[#6e7681]">✓</span>
                 )}
-              </button>
+              </Button>
             );
           })}
         </div>

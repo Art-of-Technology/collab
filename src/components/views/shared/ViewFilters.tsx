@@ -346,27 +346,30 @@ export default function ViewFilters({
                   className="h-5 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc] px-2 w-24"
                   autoFocus
                 />
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   data-name-action="save"
                   onClick={handleNameSave}
                   disabled={!editedName.trim() || editedName === view?.name}
                   className="h-5 w-5 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/10 disabled:opacity-30 rounded flex items-center justify-center transition-colors"
                 >
                   <Check className="h-3 w-3" />
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   data-name-action="discard"
                   onClick={handleNameDiscard}
                   className="h-5 w-5 p-0 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded flex items-center justify-center transition-colors"
                 >
                   <XIcon className="h-3 w-3" />
-                </button>
+                </Button>
               </div>
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setIsEditingName(true)}
                 className={cn(
                   "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -375,7 +378,7 @@ export default function ViewFilters({
                 )}
               >
                 <span className="text-[#cccccc] text-xs truncate max-w-[120px]">{view?.name || 'Unnamed View'}</span>
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -387,8 +390,9 @@ export default function ViewFilters({
             <div className="text-xs text-[#9ca3af]">Visibility</div>
             <Popover modal={true}>
               <PopoverTrigger asChild>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   className={cn(
                     "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
                     "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
@@ -406,7 +410,7 @@ export default function ViewFilters({
                       <span className="text-[#cccccc] text-xs">Personal</span>
                     </>
                   )}
-                </button>
+                </Button>
               </PopoverTrigger>
               <PopoverContent 
                 className="w-56 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
@@ -421,8 +425,9 @@ export default function ViewFilters({
                 </div>
                 
                 <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                     onClick={() => onVisibilityChange?.('WORKSPACE')}
                   >
@@ -431,9 +436,10 @@ export default function ViewFilters({
                     {view?.visibility === 'WORKSPACE' && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
                     onClick={() => onVisibilityChange?.('PERSONAL')}
                   >
@@ -442,7 +448,7 @@ export default function ViewFilters({
                     {view?.visibility === 'PERSONAL' && (
                       <span className="text-xs text-[#6e7681]">✓</span>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -472,8 +478,9 @@ export default function ViewFilters({
             { id: 'priority', label: 'Priority' },
             { id: 'projects', label: 'Projects' }
           ].map((tab) => (
-            <button
+            <Button
               key={tab.id}
+              variant="ghost"
               onClick={() => setActiveFilterTab(tab.id as FilterTab)}
               className={cn(
                 "flex-1 px-2 py-1.5 text-xs font-medium border-b-2 transition-colors",
@@ -483,7 +490,7 @@ export default function ViewFilters({
               )}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -697,8 +704,9 @@ function OwnerSelector({
   return (
     <Popover modal={true}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
             "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
@@ -721,7 +729,7 @@ function OwnerSelector({
               <span className="text-[#6e7681] text-xs">Owner</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -757,12 +765,13 @@ function OwnerSelector({
               )}
               
               {prioritizedUsers.map((member) => (
-            <button
+            <Button
               key={member.id}
               type="button"
+              variant="ghost"
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
-                member.id === currentUserId 
-                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+                member.id === currentUserId
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
                   : 'hover:bg-[#2a2a2a]'
               }`}
               onClick={() => onChange?.(member.id)}
@@ -779,7 +788,7 @@ function OwnerSelector({
               {value === member.id && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
-            </button>
+            </Button>
               ))}
               
               {!prioritizedUsers.length && workspaceMembers.length > 0 && (

@@ -45,22 +45,22 @@ export default function CreateProjectModal({
   workspaceId,
   onProjectCreated
 }: CreateProjectModalProps) {
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     color: DEFAULT_COLORS[0],
     issuePrefix: '',
   });
-  
+
   const [prefixError, setPrefixError] = useState<string | null>(null);
-  
+
   const { toast } = useToast();
   const createProjectMutation = useCreateProject();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: 'Error',
@@ -93,15 +93,15 @@ export default function CreateProjectModal({
         workspaceId,
         projectData
       });
-      
+
       toast({
         title: 'Success',
         description: 'Project created successfully'
       });
-      
+
       onProjectCreated?.(result.project);
       onClose();
-      
+
       // Reset form
       setFormData({
         name: '',
@@ -110,7 +110,7 @@ export default function CreateProjectModal({
         issuePrefix: '',
       });
       setPrefixError(null);
-      
+
     } catch (error) {
       console.error('Error creating project:', error);
       toast({
@@ -126,7 +126,7 @@ export default function CreateProjectModal({
       ...prev,
       [field]: value
     }));
-    
+
     // Clear prefix error when user starts typing
     if (field === 'issuePrefix') {
       setPrefixError(null);
@@ -136,9 +136,9 @@ export default function CreateProjectModal({
   // Generate preview of what the prefix would be (no spaces allowed)
   const generatePreviewPrefix = (projectName: string): string => {
     if (!projectName.trim()) return '';
-    
+
     const baseName = projectName.trim().toUpperCase();
-    
+
     // Try different strategies (remove spaces and special characters)
     const strategies = [
       // Remove spaces and take first 3-4 characters
@@ -148,16 +148,16 @@ export default function CreateProjectModal({
       baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join('').substring(0, 4),
       baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join(''),
     ];
-    
+
     // Return first valid strategy (letters/numbers only, starts with letter)
-    return strategies.find(prefix => 
-      prefix.length >= 2 && 
+    return strategies.find(prefix =>
+      prefix.length >= 2 &&
       /^[A-Z][A-Z0-9]*$/.test(prefix)
     ) || baseName.replace(/[\s-_]+/g, '').substring(0, 3);
   };
 
-  const previewPrefix = !formData.issuePrefix && formData.name 
-    ? generatePreviewPrefix(formData.name) 
+  const previewPrefix = !formData.issuePrefix && formData.name
+    ? generatePreviewPrefix(formData.name)
     : formData.issuePrefix;
 
   const handleClose = () => {
@@ -178,11 +178,11 @@ export default function CreateProjectModal({
         <DialogHeader className="sr-only">
           <DialogTitle>Create project</DialogTitle>
         </DialogHeader>
-        
+
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
           <div className="flex items-center gap-2">
-            <div 
+            <div
               className="w-4 h-4 rounded-sm flex items-center justify-center"
               style={{ backgroundColor: formData.color }}
             >
@@ -261,7 +261,7 @@ export default function CreateProjectModal({
                 </p>
               ) : (
                 <p className="text-xs text-[#8b949e] mt-1">
-                  {previewPrefix && !formData.issuePrefix 
+                  {previewPrefix && !formData.issuePrefix
                     ? `Will auto-generate as "${previewPrefix}" (e.g. ${previewPrefix}-1)`
                     : "Used to prefix issue keys (e.g. PROJ-1, TEAM-5). No spaces allowed. Leave empty for automatic generation."
                   }
@@ -279,14 +279,16 @@ export default function CreateProjectModal({
             </label>
             <div className="flex gap-2">
               {DEFAULT_COLORS.map((color) => (
-                <button
+                <Button
                   key={color}
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => handleInputChange('color', color)}
                   className={cn(
-                    "w-8 h-8 rounded-md border-2 transition-all duration-200",
-                    formData.color === color 
-                      ? "border-[#0969da] scale-110" 
+                    "w-8 h-8 rounded-md border-2 transition-all duration-200 p-0",
+                    formData.color === color
+                      ? "border-[#0969da] scale-110"
                       : "border-[#1a1a1a] hover:border-[#333] hover:scale-105"
                   )}
                   style={{ backgroundColor: color }}
@@ -301,16 +303,16 @@ export default function CreateProjectModal({
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
+              size={"sm"}
               variant="ghost"
               onClick={handleClose}
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
             >
               Cancel
             </Button>
             <Button
               type="submit"
+              size={"sm"}
               disabled={!formData.name.trim() || createProjectMutation.isPending}
-              className="h-8 px-3 bg-[#0969da] hover:bg-[#0860ca] text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createProjectMutation.isPending ? (
                 <>

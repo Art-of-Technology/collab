@@ -7,6 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Loader2, UserX, Search } from "lucide-react";
@@ -124,8 +125,9 @@ export function IssueAssigneeSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -154,7 +156,7 @@ export function IssueAssigneeSelector({
               <span className="text-[#6e7681] text-xs">Assignee</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -179,8 +181,9 @@ export function IssueAssigneeSelector({
         </div>
         
         <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
             onClick={() => handleSelect(null)}
           >
@@ -191,16 +194,17 @@ export function IssueAssigneeSelector({
             {!value && (
               <span className="text-xs text-[#6e7681]">✓</span>
             )}
-          </button>
+          </Button>
           
           {prioritizedUsers.length > 0 && (
             <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
           )}
           
           {prioritizedUsers.map((user) => (
-            <button
+            <Button
               key={user.id}
               type="button"
+              variant="ghost"
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
                 user.id === currentUserId
                   ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
@@ -224,7 +228,7 @@ export function IssueAssigneeSelector({
               {value === user.id && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
-            </button>
+            </Button>
           ))}
           
           {isLoading && (

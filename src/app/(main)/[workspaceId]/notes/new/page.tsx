@@ -1,17 +1,37 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, FileText, Plus } from "lucide-react";
+import { ChevronLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { NoteFormEditor } from "@/components/notes/NoteFormEditor";
+import { NoteCreationWizard } from "@/components/notes/NoteCreationWizard";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useRouter, useSearchParams } from "next/navigation";
+import { NoteType, NoteScope } from "@prisma/client";
 
-export default function NewNotePage({ params }: { params: { workspaceId: string } }) {
+interface WizardConfig {
+    type: NoteType;
+    scope: NoteScope;
+    projectId: string | null;
+}
+
+export default function NewNotePage() {
     const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const projectId = searchParams.get("projectId") || undefined;
+
+    // Check if coming from a project page with pre-set project
+    const presetProjectId = searchParams.get("projectId") || undefined;
+
+    // Wizard state
+    const [wizardComplete, setWizardComplete] = useState(false);
+    const [wizardConfig, setWizardConfig] = useState<WizardConfig | null>(null);
+
+    const handleWizardComplete = (config: WizardConfig) => {
+        setWizardConfig(config);
+        setWizardComplete(true);
+    };
 
     const handleSuccess = (noteId: string) => {
         // Navigate to the newly created note's edit page
@@ -21,7 +41,13 @@ export default function NewNotePage({ params }: { params: { workspaceId: string 
     };
 
     const handleCancel = () => {
-        // Navigate back to notes list
+        // If in editor, go back to wizard
+        if (wizardComplete) {
+            setWizardComplete(false);
+            setWizardConfig(null);
+            return;
+        }
+        // Otherwise, navigate back to notes list
         if (currentWorkspace?.slug) {
             router.push(`/${currentWorkspace.slug}/notes`);
         }
@@ -58,23 +84,36 @@ export default function NewNotePage({ params }: { params: { workspaceId: string 
                         <div>
                             <h1 className="text-sm font-medium text-[#e6edf3]">New Context</h1>
                             <p className="text-xs text-[#6e7681]">
-                                Create knowledge for your workspace
+                                {wizardComplete
+                                    ? "Create your content"
+                                    : "Choose type and visibility"}
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Seamless Editor - no container background */}
+            {/* Content area */}
             <div className="flex-1 overflow-auto">
                 {currentWorkspace?.id ? (
-                    <NoteFormEditor
-                        mode="create"
-                        workspaceId={currentWorkspace.id}
-                        projectId={projectId}
-                        onSuccess={handleSuccess}
-                        onCancel={handleCancel}
-                    />
+                    wizardComplete && wizardConfig ? (
+                        <NoteFormEditor
+                            mode="create"
+                            workspaceId={currentWorkspace.id}
+                            projectId={wizardConfig.projectId || undefined}
+                            defaultType={wizardConfig.type}
+                            defaultScope={wizardConfig.scope}
+                            onSuccess={handleSuccess}
+                            onCancel={handleCancel}
+                            lockedType={true}
+                        />
+                    ) : (
+                        <NoteCreationWizard
+                            workspaceId={currentWorkspace.id}
+                            onComplete={handleWizardComplete}
+                            onCancel={handleCancel}
+                        />
+                    )
                 ) : (
                     <div className="flex justify-center items-center py-12">
                         <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />

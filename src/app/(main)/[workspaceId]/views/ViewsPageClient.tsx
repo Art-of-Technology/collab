@@ -229,21 +229,23 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
 
           <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
             {(['all', 'workspace', 'personal', 'shared'] as const).map((filter) => (
-              <button
+              <Button
                 key={filter}
+                variant="ghost"
+                size="sm"
                 onClick={() => setVisibilityFilter(filter)}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                  "h-7",
                   visibilityFilter === filter
                     ? "bg-[#1f1f1f] text-[#e6edf3]"
-                    : "text-[#6e7681] hover:text-[#8b949e]"
+                    : "text-[#6e7681] hover:text-[#8b949e] hover:bg-transparent"
                 )}
               >
                 {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
                 <span className="ml-1.5 text-[#6e7681]">
                   {viewCounts[filter]}
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -389,60 +391,67 @@ function ViewListItem({
 
       {/* Inline Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={(e) => {
             e.stopPropagation();
             onToggleFavorite(e);
           }}
           disabled={isFavoriteLoading}
           className={cn(
-            "flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
+            "h-8 w-8",
             view.isFavorite
-              ? "text-yellow-400 hover:text-yellow-300 hover:bg-[#27272a]"
-              : "text-[#71717a] hover:text-yellow-400 hover:bg-[#27272a]"
+              ? "text-yellow-400 hover:text-yellow-300"
+              : "text-[#71717a] hover:text-yellow-400"
           )}
           title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Star className={cn("h-4 w-4", view.isFavorite && "fill-current")} />
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
+          size="md"
           onClick={(e) => {
             e.stopPropagation();
             onViewClick();
           }}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
         >
           <Eye className="h-3.5 w-3.5" />
           <span>Open</span>
-        </button>
+        </Button>
 
         <div className="w-px h-5 bg-[#27272a] mx-1" />
 
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onSettings}
-          className="flex items-center justify-center h-8 w-8 rounded-lg text-[#71717a] hover:text-white hover:bg-[#27272a] transition-colors"
+          className="h-8 w-8 text-[#71717a] hover:text-white"
           title="Settings"
         >
           <Settings className="h-4 w-4" />
-        </button>
+        </Button>
 
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={onDelete}
                 disabled={view.isDefault}
                 className={cn(
-                  "flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
+                  "h-8 w-8",
                   view.isDefault
                     ? "text-[#3f3f46] cursor-not-allowed"
-                    : "text-[#71717a] hover:text-[#ef4444] hover:bg-[#27272a]"
+                    : "text-[#71717a] hover:text-[#ef4444]"
                 )}
                 title={view.isDefault ? "Default views cannot be deleted" : "Delete"}
               >
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </Button>
             </TooltipTrigger>
             {view.isDefault && (
               <TooltipContent className="bg-[#1f1f1f] border-[#27272a] text-[#e6edf3] text-xs">

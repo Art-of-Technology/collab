@@ -86,8 +86,9 @@ export function IssueReporterSelector({
   return (
     <Popover modal={true}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
@@ -116,7 +117,7 @@ export function IssueReporterSelector({
               <span className="text-[#6e7681] text-xs">Reporter</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
@@ -141,9 +142,10 @@ export function IssueReporterSelector({
         </div>
         
         <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
-          <button
+          <Button
             type="button"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+            variant="ghost"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
             onClick={() => onChange(undefined as any)}
           >
             <div className="h-5 w-5 rounded-full border-2 border-dashed border-[#555] flex items-center justify-center">
@@ -153,21 +155,23 @@ export function IssueReporterSelector({
             {!value && (
               <span className="text-xs text-[#6e7681]">✓</span>
             )}
-          </button>
-          
+          </Button>
+
           {prioritizedUsers.length > 0 && (
             <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
           )}
-          
+
           {prioritizedUsers.map((user) => (
-            <button
+            <Button
               key={user.id}
               type="button"
-              className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
-                user.id === currentUserId 
-                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30' 
+              variant="ghost"
+              className={cn(
+                "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left h-auto justify-start",
+                user.id === currentUserId
+                  ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
                   : 'hover:bg-[#2a2a2a]'
-              }`}
+              )}
               onClick={() => onChange(user.id)}
             >
               {user.useCustomAvatar ? (
@@ -180,13 +184,13 @@ export function IssueReporterSelector({
                   </AvatarFallback>
                 </Avatar>
               )}
-              <span className={`text-[#cccccc] flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
+              <span className={cn("text-[#cccccc] flex-1", user.id === currentUserId && 'font-medium')}>
                 {user.name}{user.id === currentUserId ? " (You)" : ""}
               </span>
               {value === user.id && (
                 <span className="text-xs text-[#6e7681]">✓</span>
               )}
-            </button>
+            </Button>
           ))}
           
           {isLoading && (

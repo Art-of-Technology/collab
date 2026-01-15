@@ -1,16 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  User, 
-  Circle, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  ArrowUp 
+import { useState, useEffect, useRef } from 'react';
+import {
+  User,
+  Circle,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
 } from 'lucide-react';
-
+import { Button } from '@/components/ui/button';
 import { Issue } from '@/types/issue';
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge } from "@/utils/issueHelpers";
@@ -26,17 +25,17 @@ interface IssueMentionSuggestionProps {
 const getPriorityIcon = (priority: string) => {
   const badge = getIssuePriorityBadge(priority);
   const Icon = badge.icon;
-  
+
   // Extract color from the badge configuration
   const colorMap = {
     'URGENT': 'text-red-500',
-    'HIGH': 'text-amber-500', 
+    'HIGH': 'text-amber-500',
     'MEDIUM': 'text-blue-500',
     'LOW': 'text-slate-500'
   };
-  
+
   const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-gray-500';
-  
+
   return <Icon className={cn("h-3.5 w-3.5", colorClass)} />;
 };
 
@@ -44,7 +43,7 @@ const getPriorityIcon = (priority: string) => {
 const getStatusIcon = (status: string) => {
   const normalizedStatus = status?.toLowerCase().replace(/[_\s]/g, ' ');
   const iconClass = "h-3.5 w-3.5";
-  
+
   switch (normalizedStatus) {
     case 'todo':
     case 'backlog':
@@ -69,10 +68,10 @@ const getStatusIcon = (status: string) => {
   }
 };
 
-export function IssueMentionSuggestion({ 
-  query, 
-  onSelect, 
-  onEscape, 
+export function IssueMentionSuggestion({
+  query,
+  onSelect,
+  onEscape,
   workspaceId
 }: IssueMentionSuggestionProps) {
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -175,16 +174,17 @@ export function IssueMentionSuggestion({
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="bg-popover border rounded-md shadow-md p-1 min-w-[400px] max-h-[250px] overflow-y-auto"
     >
       {issues.map((issue, index) => {
         return (
-          <button
+          <Button
             key={issue.id}
+            variant="ghost"
             className={cn(
-              "w-full flex items-center px-2 py-1 text-left transition-all duration-150 rounded-sm",
+              "w-full justify-start h-auto px-2 py-1",
               "hover:bg-[#1f1f1f]",
               selectedIndex === index ? 'bg-[#1f1f1f] text-accent-foreground' : ''
             )}
@@ -225,13 +225,13 @@ export function IssueMentionSuggestion({
                     {getPriorityIcon(issue.priority)}
                   </div>
                 )}
-                
+
                 {/* Title */}
                 <span className="text-[#e6edf3] text-xs font-medium truncate group-hover:text-[#58a6ff] transition-colors">
                   {issue.title}
                 </span>
               </div>
-              
+
               {/* Workspace name - only show if it exists and is different from current context */}
               {issue.workspace && (
                 <div className="flex items-center gap-1 mt-0.5">
@@ -241,7 +241,7 @@ export function IssueMentionSuggestion({
                 </div>
               )}
             </div>
-          </button>
+          </Button>
         );
       })}
     </div>

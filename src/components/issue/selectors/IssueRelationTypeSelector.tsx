@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -79,7 +80,8 @@ export function IssueRelationTypeSelector({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px] border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a] text-[#cccccc] focus:outline-none bg-[#181818]",
@@ -89,7 +91,7 @@ export function IssueRelationTypeSelector({
           <div className={cn("w-2 h-2 rounded-full flex-shrink-0", selectedOption?.color)} />
           <span className="font-medium">{selectedOption?.label}</span>
           <ChevronDown className="h-3 w-3 text-[#7d8590] ml-0.5" />
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         className="w-64 p-1 bg-[#1a1a1a] border-[#2d2d30]"
@@ -100,11 +102,12 @@ export function IssueRelationTypeSelector({
             const isSelected = option.value === value;
 
             return (
-              <button
+              <Button
                 key={option.value}
+                variant="ghost"
                 onClick={() => onChange(option.value)}
                 className={cn(
-                  "w-full flex items-start gap-2 px-2 py-2 rounded text-left",
+                  "w-full flex items-start gap-2 px-2 py-2 rounded text-left h-auto justify-start",
                   "hover:bg-[#2a2a2a] transition-colors",
                   isSelected && "bg-[#2a2a2a]"
                 )}
@@ -126,7 +129,7 @@ export function IssueRelationTypeSelector({
                     {option.description}
                   </p>
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>

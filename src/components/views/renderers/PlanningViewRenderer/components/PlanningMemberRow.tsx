@@ -3,10 +3,11 @@
 import { useState, useMemo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { 
-  ChevronDown, 
-  ChevronRight, 
+import {
+  ChevronDown,
+  ChevronRight,
   AlertCircle,
   CheckCircle2,
   PlayCircle,
@@ -198,9 +199,10 @@ export function PlanningMemberRow({
   return (
     <div className="bg-[#141414] rounded-lg border border-[#252525] overflow-hidden hover:border-[#333] transition-colors">
       {/* Member Header */}
-      <button
+      <Button
+        variant="ghost"
         onClick={onToggleExpand}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#1a1a1a] transition-colors"
+        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#1a1a1a] transition-colors h-auto rounded-none"
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <Avatar className="h-9 w-9 flex-shrink-0">
@@ -258,7 +260,7 @@ export function PlanningMemberRow({
         ) : (
           <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
         )}
-      </button>
+      </Button>
 
       {/* Expanded Content */}
       {isExpanded && (

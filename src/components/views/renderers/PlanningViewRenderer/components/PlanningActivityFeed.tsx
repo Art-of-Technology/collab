@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 import type { IssueMovement, MovementType } from '../types';
 import { format, isToday, isYesterday, differenceInMinutes } from 'date-fns';
@@ -280,12 +281,13 @@ interface FilterPillProps {
 function FilterPill({ type, count, isActive, onClick }: FilterPillProps) {
   const config = ACTIVITY_CONFIG[type];
   if (count === 0) return null;
-  
+
   return (
-    <button
+    <Button
+      variant="ghost"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all border",
+        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all border h-auto",
         isActive
           ? `${config.bgColor} text-white border-transparent shadow-lg`
           : "bg-[#0f0f10] text-[#71717a] border-[#27272a] hover:border-[#3f3f46] hover:text-[#a1a1aa]"
@@ -293,7 +295,7 @@ function FilterPill({ type, count, isActive, onClick }: FilterPillProps) {
     >
       <config.icon className="h-3 w-3" />
       <span>{count}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -423,13 +425,14 @@ export function PlanningActivityFeed({
             </div>
             
             {activeFilter && (
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setActiveFilter(null)}
-                className="flex items-center gap-1.5 text-[11px] text-[#71717a] hover:text-[#a1a1aa] px-2 py-1 rounded-md hover:bg-[#18181b] transition-colors"
+                className="flex items-center gap-1.5 text-[11px] text-[#71717a] hover:text-[#a1a1aa] px-2 py-1 rounded-md hover:bg-[#18181b] transition-colors h-auto"
               >
                 <Filter className="h-3 w-3" />
                 Clear filter
-              </button>
+              </Button>
             )}
           </div>
           

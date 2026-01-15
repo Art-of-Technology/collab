@@ -85,10 +85,11 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
           </CardHeader>
           <CardContent className="p-0 divide-y divide-border/30">
             {users.map((user) => (
-              <button
+              <Button
                 key={user.id}
+                variant="ghost"
                 onClick={() => setSelectedUser(user)}
-                className="w-full text-left p-4 hover:bg-muted/50 transition-colors flex items-center gap-3"
+                className="w-full text-left p-4 hover:bg-muted/50 transition-colors flex items-center gap-3 h-auto justify-start"
               >
                 <Avatar className="border-2 border-primary/10">
                   <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
@@ -103,7 +104,7 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
                     <p className="text-xs text-muted-foreground">Team: {user.team}</p>
                   )}
                 </div>
-              </button>
+              </Button>
             ))}
           </CardContent>
         </Card>

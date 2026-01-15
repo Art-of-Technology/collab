@@ -336,9 +336,10 @@ export default function CustomRolesManager({ workspaceId }: CustomRolesManagerPr
                                         <Label>Color</Label>
                                         <div className="flex gap-2">
                                             {DEFAULT_COLORS.map((color) => (
-                                                <button
+                                                <Button
                                                     key={color}
-                                                    className={`h-8 w-8 rounded-full transition-all ${formData.color === color ? 'ring-2 ring-offset-2 ring-primary' : ''
+                                                    variant="ghost"
+                                                    className={`h-8 w-8 rounded-full transition-all p-0 ${formData.color === color ? 'ring-2 ring-offset-2 ring-primary' : ''
                                                         }`}
                                                     style={{ backgroundColor: color }}
                                                     onClick={() => setFormData(prev => ({ ...prev, color }))}

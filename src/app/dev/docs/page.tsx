@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Book } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -246,39 +247,42 @@ export default function ApiDocsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <button
+              <Button
                 onClick={() => setSelectedSection('endpoints')}
+                variant="ghost"
                 className={cn(
-                  'w-full text-left px-3 py-2 rounded text-sm transition-colors border',
+                  'w-full text-left px-3 py-2 rounded text-sm transition-colors border justify-start',
                   selectedSection === 'endpoints'
                     ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
                     : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
                 )}
               >
                 API Endpoints
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setSelectedSection('oauth')}
+                variant="ghost"
                 className={cn(
-                  'w-full text-left px-3 py-2 rounded text-sm transition-colors border',
+                  'w-full text-left px-3 py-2 rounded text-sm transition-colors border justify-start',
                   selectedSection === 'oauth'
                     ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
                     : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
                 )}
               >
                 OAuth 2.0
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setSelectedSection('third-party')}
+                variant="ghost"
                 className={cn(
-                  'w-full text-left px-3 py-2 rounded text-sm transition-colors border',
+                  'w-full text-left px-3 py-2 rounded text-sm transition-colors border justify-start',
                   selectedSection === 'third-party'
                     ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
                     : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
                 )}
               >
                 Third-Party API
-              </button>
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -294,14 +298,15 @@ export default function ApiDocsPage() {
                   {filteredEndpoints.map((endpoint) => {
                     const endpointKey = `${endpoint.method}:${endpoint.url}:${endpoint.file}`;
                     return (
-                      <button
+                      <Button
                         key={endpointKey}
                         onClick={() => {
                           setSelectedEndpoint(endpoint.url);
                           setSelectedMethod(endpoint.method);
                         }}
+                        variant="ghost"
                         className={cn(
-                          'w-full text-left px-3 py-2 rounded text-sm transition-colors border',
+                          'w-full text-left px-3 py-2 rounded text-sm transition-colors border h-auto justify-start',
                           selectedEndpoint === endpoint.url && selectedMethod === endpoint.method
                             ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
                             : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
@@ -314,7 +319,7 @@ export default function ApiDocsPage() {
                           <span className="font-medium truncate">{endpoint.title}</span>
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{endpoint.url}</p>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

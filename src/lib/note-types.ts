@@ -357,3 +357,75 @@ export function getNonSecretNoteTypeOptions(): NoteTypeConfig[] {
     config => !SECRET_NOTE_TYPES.includes(config.value as typeof SECRET_NOTE_TYPES[number])
   );
 }
+
+// Note Type Categories for wizard
+export type NoteTypeCategory = 'general' | 'documentation' | 'operational' | 'team' | 'secrets';
+
+export interface NoteTypeCategoryConfig {
+  id: NoteTypeCategory;
+  label: string;
+  description: string;
+  types: NoteType[];
+}
+
+export const NOTE_TYPE_CATEGORIES: NoteTypeCategoryConfig[] = [
+  {
+    id: 'general',
+    label: 'General',
+    description: 'Everyday notes and personal content',
+    types: [NoteType.GENERAL],
+  },
+  {
+    id: 'documentation',
+    label: 'Documentation',
+    description: 'Technical docs, guides, and references',
+    types: [
+      NoteType.README,
+      NoteType.GUIDE,
+      NoteType.TECH_STACK,
+      NoteType.ARCHITECTURE,
+      NoteType.API_DOCS,
+      NoteType.CODING_STYLE,
+    ],
+  },
+  {
+    id: 'operational',
+    label: 'Operational',
+    description: 'Runbooks and troubleshooting guides',
+    types: [NoteType.RUNBOOK, NoteType.TROUBLESHOOT],
+  },
+  {
+    id: 'team',
+    label: 'Team',
+    description: 'Meetings, decisions, and AI prompts',
+    types: [NoteType.MEETING, NoteType.DECISION, NoteType.SYSTEM_PROMPT],
+  },
+  {
+    id: 'secrets',
+    label: 'Secrets Vault',
+    description: 'Encrypted sensitive data',
+    types: [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS],
+  },
+];
+
+// Get category for a note type
+export function getNoteTypeCategory(type: NoteType): NoteTypeCategory {
+  for (const category of NOTE_TYPE_CATEGORIES) {
+    if (category.types.includes(type)) {
+      return category.id;
+    }
+  }
+  return 'general';
+}
+
+// Check if two types are in the same category (for type change restrictions)
+export function areTypesCompatible(type1: NoteType, type2: NoteType): boolean {
+  return getNoteTypeCategory(type1) === getNoteTypeCategory(type2);
+}
+
+// Get compatible types that a note can be changed to
+export function getCompatibleTypes(currentType: NoteType): NoteType[] {
+  const category = getNoteTypeCategory(currentType);
+  const categoryConfig = NOTE_TYPE_CATEGORIES.find(c => c.id === category);
+  return categoryConfig?.types || [currentType];
+}
