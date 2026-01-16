@@ -6,14 +6,25 @@ import { ChevronLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { NoteFormEditor } from "@/components/notes/NoteFormEditor";
 import { NoteCreationWizard } from "@/components/notes/NoteCreationWizard";
+import { TemplatePickerDialog } from "@/components/notes/TemplatePickerDialog";
+import { TemplateData } from "@/components/notes/TemplateCard";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { NoteType, NoteScope } from "@prisma/client";
+import { toast } from "sonner";
 
 interface WizardConfig {
     type: NoteType;
     scope: NoteScope;
     projectId: string | null;
+}
+
+interface TemplateConfig {
+    title: string;
+    content: string;
+    defaultTags: string[];
+    templateId: string | null;
+    templateName: string;
 }
 
 export default function NewNotePage() {
@@ -28,8 +39,54 @@ export default function NewNotePage() {
     const [wizardComplete, setWizardComplete] = useState(false);
     const [wizardConfig, setWizardConfig] = useState<WizardConfig | null>(null);
 
+    // Template picker state
+    const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+    const [templateConfig, setTemplateConfig] = useState<TemplateConfig | null>(null);
+
     const handleWizardComplete = (config: WizardConfig) => {
         setWizardConfig(config);
+        // Show template picker after type/scope selection
+        setShowTemplatePicker(true);
+    };
+
+    const handleSelectTemplate = async (template: TemplateData, customTitle?: string) => {
+        if (!currentWorkspace?.id || !wizardConfig) return;
+
+        try {
+            const res = await fetch(`/api/notes/templates/${template.id}/use`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    workspaceId: currentWorkspace.id,
+                    projectId: wizardConfig.projectId,
+                    title: customTitle,
+                }),
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "Failed to apply template");
+            }
+
+            const data = await res.json();
+            setTemplateConfig({
+                title: data.title,
+                content: data.content,
+                defaultTags: data.defaultTags,
+                templateId: data.templateId,
+                templateName: data.templateName,
+            });
+            setShowTemplatePicker(false);
+            setWizardComplete(true);
+        } catch (error) {
+            console.error("Error applying template:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to apply template");
+        }
+    };
+
+    const handleStartBlank = () => {
+        setTemplateConfig(null);
+        setShowTemplatePicker(false);
         setWizardComplete(true);
     };
 
@@ -41,9 +98,16 @@ export default function NewNotePage() {
     };
 
     const handleCancel = () => {
-        // If in editor, go back to wizard
+        // If in editor, go back to template picker
         if (wizardComplete) {
             setWizardComplete(false);
+            setTemplateConfig(null);
+            setShowTemplatePicker(true);
+            return;
+        }
+        // If in template picker, go back to wizard
+        if (showTemplatePicker) {
+            setShowTemplatePicker(false);
             setWizardConfig(null);
             return;
         }
@@ -106,13 +170,33 @@ export default function NewNotePage() {
                             onSuccess={handleSuccess}
                             onCancel={handleCancel}
                             lockedType={true}
+                            initialTitle={templateConfig?.title}
+                            initialContent={templateConfig?.content}
+                            initialTags={templateConfig?.defaultTags}
+                            templateId={templateConfig?.templateId || undefined}
                         />
                     ) : (
-                        <NoteCreationWizard
-                            workspaceId={currentWorkspace.id}
-                            onComplete={handleWizardComplete}
-                            onCancel={handleCancel}
-                        />
+                        <>
+                            <NoteCreationWizard
+                                workspaceId={currentWorkspace.id}
+                                onComplete={handleWizardComplete}
+                                onCancel={handleCancel}
+                            />
+                            {/* Template Picker Dialog */}
+                            <TemplatePickerDialog
+                                open={showTemplatePicker}
+                                onOpenChange={(open) => {
+                                    if (!open) {
+                                        setShowTemplatePicker(false);
+                                        setWizardConfig(null);
+                                    }
+                                }}
+                                workspaceId={currentWorkspace.id}
+                                projectId={wizardConfig?.projectId}
+                                onSelectTemplate={handleSelectTemplate}
+                                onStartBlank={handleStartBlank}
+                            />
+                        </>
                     )
                 ) : (
                     <div className="flex justify-center items-center py-12">

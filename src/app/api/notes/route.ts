@@ -285,7 +285,9 @@ export async function POST(request: NextRequest) {
       variables, // Array of { key, value, masked?, description? }
       rawSecretContent, // Raw .env content
       isRestricted, // Limit access even for PROJECT/WORKSPACE scope
-      expiresAt // Optional expiration for secrets
+      expiresAt, // Optional expiration for secrets
+      // Template fields (Phase 5)
+      templateId, // Template used to create this note
     } = body;
 
     // For secret types, content can be empty (we use variables/rawSecretContent instead)
@@ -396,6 +398,8 @@ export async function POST(request: NextRequest) {
         secretVariables: encryptedData.secretVariables,
         isRestricted: isRestricted || false,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+        // Template field (Phase 5)
+        templateId: templateId || null,
         ...(tagIds && tagIds.length > 0 && {
           tags: {
             connect: tagIds.map((id: string) => ({ id }))

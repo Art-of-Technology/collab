@@ -115,6 +115,9 @@ model User {
   // Knowledge Base Phase 4 relations - Versioning
   noteVersions      NoteVersion[] @relation("NoteVersionAuthor")
   lastVersionOfNote Note[]        @relation("NoteLastVersionBy")
+
+  // Knowledge Base Phase 5 relations - Templates
+  noteTemplates NoteTemplate[] @relation("NoteTemplateAuthor")
 }
 
 model Account {
@@ -393,6 +396,8 @@ model Workspace {
   // Daily Focus relationships
   dailyFocusEntries DailyFocusEntry[]
 
+  // Knowledge Base Phase 5 relationships - Templates
+  noteTemplates NoteTemplate[]
 }
 
 model WorkspaceMember {
@@ -816,11 +821,11 @@ model Note {
   pinnedBy String?
 
   // Knowledge Base Phase 3 fields - Secrets Vault
-  isEncrypted       Boolean  @default(false) // Whether content is encrypted
-  encryptedContent  String?  @db.Text // Encrypted JSON or .env content
-  secretVariables   String?  @db.Text // Encrypted JSON array of key-value pairs
-  encryptionVersion Int      @default(1) // For key rotation support
-  isRestricted      Boolean  @default(false) // Require explicit access even for PROJECT/WORKSPACE scope
+  isEncrypted       Boolean   @default(false) // Whether content is encrypted
+  encryptedContent  String?   @db.Text // Encrypted JSON or .env content
+  secretVariables   String?   @db.Text // Encrypted JSON array of key-value pairs
+  encryptionVersion Int       @default(1) // For key rotation support
+  isRestricted      Boolean   @default(false) // Require explicit access even for PROJECT/WORKSPACE scope
   expiresAt         DateTime? // Optional expiration for secrets
 
   // Knowledge Base Phase 4 fields - Versioning
@@ -828,6 +833,9 @@ model Note {
   versioningEnabled Boolean   @default(true) // Whether to track versions for this note
   lastVersionAt     DateTime? // When the last version was created
   lastVersionBy     String? // Who created the last version
+
+  // Knowledge Base Phase 5 fields - Templates
+  templateId String? // Template this note was created from
 
   // Relations
   author            User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -840,6 +848,7 @@ model Note {
   activityLogs      NoteActivityLog[]
   versions          NoteVersion[]     @relation("NoteVersions")
   lastVersionByUser User?             @relation("NoteLastVersionBy", fields: [lastVersionBy], references: [id])
+  template          NoteTemplate?     @relation("NoteFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([authorId])
   @@index([workspaceId])
@@ -853,6 +862,7 @@ model Note {
   @@index([isEncrypted])
   @@index([isRestricted])
   @@index([version])
+  @@index([templateId])
 }
 
 model NoteTag {
@@ -2378,4 +2388,36 @@ enum NoteVersionChangeType {
   TITLE // Only title was changed
   RESTORE // Content was restored from a previous version
   MERGE // Content was merged from another version
+}
+
+// Note Template (Phase 5)
+model NoteTemplate {
+  id              String    @id @default(cuid())
+  name            String // Template name (e.g., "System Prompt", "ADR")
+  description     String? // Brief description of what this template is for
+  icon            String? // Lucide icon name (e.g., "Bot", "Scale")
+  titleTemplate   String // Template for title with placeholders (e.g., "ADR-{{number}}: {{title}}")
+  contentTemplate String    @db.Text // Template for content with placeholders
+  defaultType     NoteType  @default(GENERAL) // Default note type when using this template
+  defaultScope    NoteScope @default(PERSONAL) // Default scope when using this template
+  defaultTags     String[] // Default tag names to apply
+  isBuiltIn       Boolean   @default(false) // Built-in templates cannot be deleted
+  workspaceId     String? // Null for built-in templates
+  authorId        String? // Null for built-in templates
+  usageCount      Int       @default(0) // Track how often this template is used
+  order           Int       @default(0) // Display order (lower = first)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    User?      @relation("NoteTemplateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  notes     Note[]     @relation("NoteFromTemplate")
+
+  @@unique([name, workspaceId]) // Template names unique per workspace (null workspace = global built-in)
+  @@index([workspaceId])
+  @@index([authorId])
+  @@index([isBuiltIn])
+  @@index([defaultType])
+  @@index([order])
 }
