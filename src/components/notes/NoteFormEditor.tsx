@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Form,
@@ -12,6 +12,7 @@ import {
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { TagSelect } from "@/components/notes/TagSelect";
 import { ShareNoteDialog } from "@/components/notes/ShareNoteDialog";
+import { SaveAsTemplateDialog } from "@/components/notes/SaveAsTemplateDialog";
 import {
     Loader2,
     Bot,
@@ -36,6 +37,7 @@ import {
     KeyRound,
     Key,
     ShieldCheck,
+    Sparkles,
 } from "lucide-react";
 import { useNoteForm } from "@/hooks/useNoteForm";
 import { cn } from "@/lib/utils";
@@ -58,6 +60,11 @@ interface NoteFormEditorProps {
     defaultType?: NoteType;
     defaultScope?: NoteScope;
     lockedType?: boolean; // Prevent type changes (used after wizard selection)
+    // Template-related props
+    initialTitle?: string;
+    initialContent?: string;
+    initialTags?: string[];
+    templateId?: string;
 }
 
 // Note type icons mapping
@@ -99,6 +106,10 @@ export function NoteFormEditor({
     defaultType = NoteType.GENERAL,
     defaultScope = NoteScope.PERSONAL,
     lockedType = false,
+    initialTitle,
+    initialContent,
+    initialTags,
+    templateId,
 }: NoteFormEditorProps) {
     // Fetch projects using the proper hook
     const { data: projects = [], isLoading: isLoadingProjects } = useProjects({ workspaceId });
@@ -111,6 +122,10 @@ export function NoteFormEditor({
         onSuccess,
         defaultType,
         defaultScope,
+        initialTitle,
+        initialContent,
+        initialTags,
+        templateId,
     });
 
     const watchType = form.watch("type");
@@ -124,6 +139,9 @@ export function NoteFormEditor({
     const watchIsRestricted = form.watch("isRestricted");
     const watchExpiresAt = form.watch("expiresAt");
     const isOwner = !note || note._permissions?.isOwner !== false;
+
+    // Save as template dialog state
+    const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
 
     // Check if current type is a secret type
     const isSecretType = isSecretNoteType(watchType);
@@ -509,6 +527,22 @@ export function NoteFormEditor({
                         </>
                     )}
 
+                    {/* Save as Template button - only for non-secret notes in edit mode */}
+                    {mode === "edit" && noteId && !isSecretType && (
+                        <>
+                            <div className="h-5 w-px bg-[#27272a]" />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setShowSaveAsTemplate(true)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
+                            >
+                                <Sparkles className="h-3 w-3" />
+                                <span>Save as Template</span>
+                            </Button>
+                        </>
+                    )}
+
                     {/* Spacer */}
                     <div className="flex-1" />
 
@@ -698,6 +732,17 @@ export function NoteFormEditor({
                     </div>
                 </div>
             </form>
+
+            {/* Save as Template Dialog */}
+            {noteId && (
+                <SaveAsTemplateDialog
+                    open={showSaveAsTemplate}
+                    onOpenChange={setShowSaveAsTemplate}
+                    noteId={noteId}
+                    noteTitle={form.getValues("title") || "Untitled"}
+                    workspaceId={workspaceId}
+                />
+            )}
         </Form>
     );
 }

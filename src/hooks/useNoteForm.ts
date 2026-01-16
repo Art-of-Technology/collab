@@ -122,6 +122,11 @@ interface UseNoteFormOptions {
   onSuccess?: (noteId: string) => void;
   defaultType?: NoteType;
   defaultScope?: NoteScope;
+  // Template-related props
+  initialTitle?: string;
+  initialContent?: string;
+  initialTags?: string[];
+  templateId?: string;
 }
 
 export type AutosaveStatus = "idle" | "saving" | "saved" | "error";
@@ -154,6 +159,10 @@ export function useNoteForm({
   onSuccess,
   defaultType = NoteType.GENERAL,
   defaultScope = NoteScope.PERSONAL,
+  initialTitle,
+  initialContent,
+  initialTags,
+  templateId,
 }: UseNoteFormOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNote, setIsFetchingNote] = useState(mode === "edit" && !!noteId);
@@ -182,11 +191,11 @@ export function useNoteForm({
   const form = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
     defaultValues: {
-      title: "",
-      content: "",
+      title: initialTitle || "",
+      content: initialContent || "",
       isFavorite: false,
       workspaceId: workspaceId,
-      tagIds: [],
+      tagIds: [], // Note: initialTags are tag names, will be resolved to IDs separately
       // Knowledge System defaults
       type: defaultType,
       scope: projectId ? NoteScope.PROJECT : defaultScope,
