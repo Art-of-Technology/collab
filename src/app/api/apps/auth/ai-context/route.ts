@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
+import { stripHtmlTags } from '@/lib/html-sanitizer';
 
 // Note types that are considered AI context
 const AI_CONTEXT_TYPES = [
@@ -22,18 +23,10 @@ const AI_CONTEXT_TYPES = [
 
 /**
  * Strip HTML tags from content for plain text output
+ * Uses the shared linear-time parser to avoid security issues
  */
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
+  return stripHtmlTags(html, true).replace(/\s+/g, ' ').trim();
 }
 
 /**

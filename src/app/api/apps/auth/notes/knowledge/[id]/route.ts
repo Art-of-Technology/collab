@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
+import { stripHtmlTags } from '@/lib/html-sanitizer';
 
 // Note types that are considered knowledge base articles
 const KNOWLEDGE_TYPES = [
@@ -22,18 +23,10 @@ const KNOWLEDGE_TYPES = [
 
 /**
  * Strip HTML tags from content for plain text output
+ * Uses the shared linear-time parser to avoid security issues
  */
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  return stripHtmlTags(html, true).replace(/\s+/g, ' ').trim();
 }
 
 /**

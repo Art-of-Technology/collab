@@ -13,21 +13,14 @@ import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { NoteType, NoteScope } from '@prisma/client';
+import { stripHtmlTags } from '@/lib/html-sanitizer';
 
 /**
  * Strip HTML tags from content for plain text output
+ * Uses the shared linear-time parser to avoid security issues
  */
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  return stripHtmlTags(html, true).replace(/\s+/g, ' ').trim();
 }
 
 // Schema for creating notes
