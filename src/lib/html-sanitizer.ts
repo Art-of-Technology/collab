@@ -60,6 +60,14 @@ export function stripHtmlTags(html: string, decodeEntities: boolean = true): str
   return result;
 }
 
+/**
+ * Strip HTML tags and normalize whitespace for plain text output.
+ * Simpler version without mention/issue token handling - ideal for MCP API responses.
+ */
+export function stripHtmlToPlainText(html: string): string {
+  return stripHtmlTags(html, true).replace(/\s+/g, ' ').trim();
+}
+
 export function sanitizeHtmlToPlainText(input: unknown): string {
   if (typeof input !== 'string') return '';
   let sanitized = input;

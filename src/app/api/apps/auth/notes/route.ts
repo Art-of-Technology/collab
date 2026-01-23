@@ -13,15 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { NoteType, NoteScope } from '@prisma/client';
-import { stripHtmlTags } from '@/lib/html-sanitizer';
-
-/**
- * Strip HTML tags from content for plain text output
- * Uses the shared linear-time parser to avoid security issues
- */
-function stripHtml(html: string): string {
-  return stripHtmlTags(html, true).replace(/\s+/g, ' ').trim();
-}
+import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
 
 // Schema for creating notes
 // Note: Default scope is WORKSPACE (not PERSONAL) because PERSONAL notes
