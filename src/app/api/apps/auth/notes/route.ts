@@ -87,9 +87,23 @@ export const GET = withAppAuth(
         });
       }
 
-      // Exclude secret note types unless the user has secrets:read scope
+      // Exclude secret note types (use secrets endpoint instead)
       const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
-      where.type = { notIn: secretTypes, ...(type && { equals: type }) };
+
+      // Handle type filter: if specific type requested, validate and use it
+      // Otherwise, exclude secret types from results
+      if (type) {
+        // Check if requested type is a secret type
+        if (secretTypes.includes(type)) {
+          return NextResponse.json(
+            { error: 'invalid_type', error_description: 'Use /api/apps/auth/secrets endpoint for secret notes' },
+            { status: 400 }
+          );
+        }
+        where.type = type;
+      } else {
+        where.type = { notIn: secretTypes };
+      }
 
       const [notes, total] = await Promise.all([
         prisma.note.findMany({

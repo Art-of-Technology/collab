@@ -159,12 +159,18 @@ export const GET = withAppAuth(
       // 5. Optionally include relevant knowledge base articles
       let knowledge: Array<{ id: string; title: string; type: string; excerpt: string }> = [];
 
+      // Build knowledge scopes array explicitly for better readability
+      const knowledgeScopes: NoteScope[] = [NoteScope.WORKSPACE, NoteScope.PUBLIC];
+      if (projectId) {
+        knowledgeScopes.push(NoteScope.PROJECT);
+      }
+
       if (includeKnowledge) {
         const knowledgeNotes = await prisma.note.findMany({
           where: {
             workspaceId: context.workspace.id,
             type: { in: [NoteType.GUIDE, NoteType.README, NoteType.ARCHITECTURE] },
-            scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, ...(projectId ? [NoteScope.PROJECT] : [])] },
+            scope: { in: knowledgeScopes },
             ...(projectId && { projectId }),
           },
           take: 10,

@@ -52,12 +52,27 @@ export const POST = withAppAuth(
         );
       }
 
-      // Parse request body
+      // Parse request body - empty body reveals all keys
       let body: { keys?: string[] } = {};
-      try {
-        body = RevealRequestSchema.parse(await request.json());
-      } catch {
-        // Empty body is OK - reveals all keys
+      const rawBody = await request.text();
+      if (rawBody.trim().length > 0) {
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(rawBody);
+        } catch {
+          return NextResponse.json(
+            { error: 'invalid_request', error_description: 'Malformed JSON in request body' },
+            { status: 400 }
+          );
+        }
+        const parseResult = RevealRequestSchema.safeParse(parsedJson);
+        if (!parseResult.success) {
+          return NextResponse.json(
+            { error: 'invalid_request', error_description: 'Invalid request body: ' + parseResult.error.message },
+            { status: 400 }
+          );
+        }
+        body = parseResult.data;
       }
 
       // Find the secret note
@@ -67,7 +82,8 @@ export const POST = withAppAuth(
           workspaceId: context.workspace.id,
           type: { in: SECRET_TYPES },
           isEncrypted: true,
-          // Only allow access to non-personal secrets via MCP
+          // Allow access to workspace, public, and project-scoped secrets via MCP
+          // PERSONAL secrets are excluded for privacy
           scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
         },
         select: {

@@ -55,7 +55,8 @@ export const GET = withAppAuth(
         workspaceId: context.workspace.id,
         type: { in: SECRET_TYPES },
         isEncrypted: true,
-        // Only allow access to non-personal secrets via MCP
+        // Allow access to workspace, public, and project-scoped secrets via MCP
+        // PERSONAL secrets are excluded for privacy
         scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
       };
 
