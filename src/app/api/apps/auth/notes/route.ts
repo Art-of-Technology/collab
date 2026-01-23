@@ -24,11 +24,14 @@ function stripHtml(html: string): string {
 }
 
 // Schema for creating notes
+// Note: Default scope is WORKSPACE (not PERSONAL) because PERSONAL notes
+// are not accessible via MCP API endpoints - this prevents confusion where
+// created notes cannot be retrieved via the same API
 const CreateNoteSchema = z.object({
   title: z.string().min(1).max(500),
   content: z.string(),
   type: z.nativeEnum(NoteType).optional().default(NoteType.GENERAL),
-  scope: z.nativeEnum(NoteScope).optional().default(NoteScope.PERSONAL),
+  scope: z.nativeEnum(NoteScope).optional().default(NoteScope.WORKSPACE),
   projectId: z.string().cuid().optional(),
   isAiContext: z.boolean().optional().default(false),
   aiContextPriority: z.number().int().min(0).max(100).optional().default(0),

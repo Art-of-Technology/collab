@@ -34,9 +34,11 @@ function stripHtml(html: string): string {
  * Get full knowledge base article by ID
  */
 export const GET = withAppAuth(
-  async (request: NextRequest, context: AppAuthContext, params: { params: Promise<{ id: string }> }) => {
+  // Note: In Next.js 15, withAppAuth injects context as 2nd arg, so route params come as 3rd arg
+  // with structure { params: Promise<{ id: string }> } due to async params in App Router
+  async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
-      const { id } = await params.params;
+      const { id } = await routeParams.params;
 
       const article = await prisma.note.findFirst({
         where: {

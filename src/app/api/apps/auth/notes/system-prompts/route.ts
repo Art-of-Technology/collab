@@ -40,32 +40,43 @@ export const GET = withAppAuth(
       const scopeFilter = searchParams.get('scope'); // 'workspace' | 'project' | 'all'
       const typeFilter = searchParams.get('type') as NoteType | null;
 
-      // Build where clause
-      const where: any = {
+      // Build base where clause (common filters)
+      const baseWhere: any = {
         workspaceId: context.workspace.id,
         isAiContext: true,
-        type: { in: PROMPT_TYPES },
-        scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
+        type: typeFilter && PROMPT_TYPES.includes(typeFilter) ? typeFilter : { in: PROMPT_TYPES },
       };
 
-      // Filter by specific type if provided
-      if (typeFilter && PROMPT_TYPES.includes(typeFilter)) {
-        where.type = typeFilter;
-      }
-
-      // Filter by scope
+      // Build complete where clause based on scope/project filters
+      let where: any;
       if (scopeFilter === 'workspace') {
-        where.projectId = null;
-        where.scope = { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] };
+        // Only workspace-level and public prompts (no project association)
+        where = {
+          ...baseWhere,
+          projectId: null,
+          scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] },
+        };
       } else if (scopeFilter === 'project' && projectId) {
-        where.projectId = projectId;
+        // Only prompts for a specific project
+        where = {
+          ...baseWhere,
+          projectId,
+        };
       } else if (projectId) {
-        // 'all' - include both workspace and project prompts
-        where.OR = [
-          { projectId: null, scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
-          { projectId },
-        ];
-        delete where.scope;
+        // 'all' - include both workspace/public prompts and project-specific prompts
+        where = {
+          ...baseWhere,
+          OR: [
+            { projectId: null, scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
+            { projectId },
+          ],
+        };
+      } else {
+        // No projectId filter - include all scopes for the workspace
+        where = {
+          ...baseWhere,
+          scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
+        };
       }
 
       // Verify project exists if projectId provided

@@ -38,9 +38,11 @@ const RevealRequestSchema = z.object({
  * Reveal secret values
  */
 export const POST = withAppAuth(
-  async (request: NextRequest, context: AppAuthContext, params: { params: Promise<{ id: string }> }) => {
+  // Note: In Next.js 15, withAppAuth injects context as 2nd arg, so route params come as 3rd arg
+  // with structure { params: Promise<{ id: string }> } due to async params in App Router
+  async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
-      const { id } = await params.params;
+      const { id } = await routeParams.params;
 
       // Check if secrets feature is enabled
       if (!isSecretsEnabled()) {

@@ -9,15 +9,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
+import { stripHtmlTags } from '@/lib/html-sanitizer';
+
+/**
+ * Strip HTML tags from content for plain text output
+ * Uses the shared linear-time parser to avoid security issues
+ */
+function stripHtml(html: string): string {
+  return stripHtmlTags(html, true).replace(/\s+/g, ' ').trim();
+}
 
 /**
  * GET /api/apps/auth/notes/[id]
  * Get a single note by ID
  */
 export const GET = withAppAuth(
-  async (request: NextRequest, context: AppAuthContext, params: { params: Promise<{ id: string }> }) => {
+  // Note: In Next.js 15, withAppAuth injects context as 2nd arg, so route params come as 3rd arg
+  // with structure { params: Promise<{ id: string }> } due to async params in App Router
+  async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
-      const { id } = await params.params;
+      const { id } = await routeParams.params;
 
       // Find the note
       const note = await prisma.note.findFirst({
@@ -77,19 +88,31 @@ export const GET = withAppAuth(
         // Check if user has secrets:read scope
         const hasSecretsScope = context.token.scopes.includes('secrets:read');
         if (!hasSecretsScope) {
-          return NextResponse.json(
-            {
-              ...note,
-              content: '[REDACTED - secrets:read scope required]',
-            }
-          );
+          // Return explicit fields to avoid exposing sensitive metadata
+          return NextResponse.json({
+            id: note.id,
+            title: note.title,
+            content: '[REDACTED - secrets:read scope required]',
+            type: note.type,
+            scope: note.scope,
+            isAiContext: note.isAiContext,
+            aiContextPriority: note.aiContextPriority,
+            isPinned: note.isPinned,
+            version: note.version,
+            projectId: note.projectId,
+            projectName: note.project?.name || null,
+            author: note.author,
+            tags: note.tags,
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt,
+          });
         }
       }
 
       return NextResponse.json({
         id: note.id,
         title: note.title,
-        content: note.content,
+        content: stripHtml(note.content),
         type: note.type,
         scope: note.scope,
         isAiContext: note.isAiContext,
