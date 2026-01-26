@@ -1,0 +1,267 @@
+// ============================================================================
+// AI-Native Schema Additions
+// ============================================================================
+// Add these models to your main schema.prisma file
+
+// ============================================================================
+// AI Agent Models
+// ============================================================================
+
+model AIAgent {
+  id           String   @id @default(cuid())
+  name         String
+  avatar       String?
+  role         String   @default("assistant") // assistant, analyst, reviewer, planner, writer, custom
+  description  String
+  systemPrompt String   @db.Text
+  capabilities String[] @default([])
+  isDefault    Boolean  @default(false)
+  isEnabled    Boolean  @default(true)
+  workspaceId  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  workspace     Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  configs       AIAgentConfig[]
+  conversations AIConversation[]
+  messages      AIMessage[]
+  tasks         AITask[]
+  automations   AIAutomationRule[]
+
+  @@index([workspaceId])
+  @@index([role])
+  @@index([isDefault])
+}
+
+model AIAgentConfig {
+  id                 String   @id @default(cuid())
+  agentId            String
+  workspaceId        String
+  isEnabled          Boolean  @default(true)
+  customSystemPrompt String?  @db.Text
+  settings           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  agent     AIAgent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, workspaceId])
+  @@index([workspaceId])
+}
+
+// ============================================================================
+// AI Conversation Models
+// ============================================================================
+
+model AIConversation {
+  id            String    @id @default(cuid())
+  title         String?
+  userId        String
+  workspaceId   String
+  agentId       String?
+  projectId     String?
+  issueId       String?
+  context       Json?
+  isActive      Boolean   @default(true)
+  lastMessageAt DateTime?
+  messageCount  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent     AIAgent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  project   Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  issue     Issue?      @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  messages  AIMessage[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([agentId])
+  @@index([projectId])
+  @@index([issueId])
+  @@index([lastMessageAt])
+  @@index([isActive])
+}
+
+model AIMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String // system, user, assistant, tool
+  content        String   @db.Text
+  agentId        String?
+  toolCalls      Json?
+  toolResults    Json?
+  metadata       Json?
+  inputTokens    Int?
+  outputTokens   Int?
+  model          String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent        AIAgent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId])
+  @@index([role])
+  @@index([createdAt])
+  @@index([agentId])
+}
+
+// ============================================================================
+// AI Task Models (Background Processing)
+// ============================================================================
+
+model AITask {
+  id          String    @id @default(cuid())
+  type        String // daily_summary, sprint_analysis, issue_triage, duplicate_detection, etc.
+  status      String    @default("pending") // pending, scheduled, running, completed, failed, cancelled
+  priority    Int       @default(0)
+  workspaceId String
+  projectId   String?
+  agentId     String?
+  triggeredBy String?
+  input       Json
+  output      Json?
+  error       String?   @db.Text
+  progress    Int?
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  agent       AIAgent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation(fields: [triggeredBy], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([type])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@index([status, priority(sort: Desc), scheduledAt(sort: Asc)])
+}
+
+// ============================================================================
+// Vector Embedding Models
+// ============================================================================
+
+model IssueEmbedding {
+  id             String   @id @default(cuid())
+  issueId        String   @unique
+  embedding      Float[]
+  embeddingModel String   @default("text-embedding-3-small")
+  dimensions     Int      @default(1536)
+  contentHash    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([contentHash])
+}
+
+model NoteEmbedding {
+  id             String   @id @default(cuid())
+  noteId         String   @unique
+  embedding      Float[]
+  embeddingModel String   @default("text-embedding-3-small")
+  dimensions     Int      @default(1536)
+  contentHash    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([contentHash])
+}
+
+// ============================================================================
+// AI Automation Rules
+// ============================================================================
+
+model AIAutomationRule {
+  id                String    @id @default(cuid())
+  name              String
+  description       String?
+  workspaceId       String
+  projectId         String?
+  agentId           String?
+  triggerType       String // issue.created, issue.updated, pr.opened, schedule, etc.
+  triggerConditions Json
+  actionType        String // auto_label, auto_assign, summarize, notify, etc.
+  actionConfig      Json
+  isEnabled         Boolean   @default(true)
+  runCount          Int       @default(0)
+  lastRunAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  agent     AIAgent?           @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  runs      AIAutomationRun[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([triggerType])
+  @@index([isEnabled])
+}
+
+model AIAutomationRun {
+  id             String   @id @default(cuid())
+  ruleId         String
+  status         String   @default("running") // running, completed, failed
+  triggerPayload Json?
+  result         Json?
+  error          String?  @db.Text
+  durationMs     Int?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  rule AIAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// Relations to add to existing models
+// ============================================================================
+
+// Add to User model:
+// aiConversations    AIConversation[]
+// triggeredAITasks   AITask[]         @relation("AITaskTriggeredBy")
+
+// Add to Workspace model:
+// aiAgents           AIAgent[]
+// aiAgentConfigs     AIAgentConfig[]
+// aiConversations    AIConversation[]
+// aiTasks            AITask[]
+// aiAutomationRules  AIAutomationRule[]
+
+// Add to Project model:
+// aiConversations    AIConversation[]
+// aiTasks            AITask[]
+// aiAutomationRules  AIAutomationRule[]
+
+// Add to Issue model:
+// aiConversations    AIConversation[]
+// embedding          IssueEmbedding?
+
+// Add to Note model:
+// embedding          NoteEmbedding?

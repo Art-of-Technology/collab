@@ -29,6 +29,11 @@ import {
   Copy,
   Settings,
   X,
+  Sparkles,
+  Bot,
+  Wand2,
+  BarChart3,
+  MessageSquare,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useToast } from "@/hooks/use-toast";
@@ -74,6 +79,7 @@ export function CommandMenu({
   const [isNewIssueFullscreenOpen, setIsNewIssueFullscreenOpen] = useState(false);
   const [isCreateViewOpen, setIsCreateViewOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
 
   const runCommand = useCallback((command: () => void) => {
     onOpenChange(false);
@@ -601,9 +607,76 @@ export function CommandMenu({
           </CommandItem>
         </CommandGroup>
 
+        {/* AI Assistant Group */}
+        <CommandGroup
+          heading="AI Assistant"
+          className={cn(
+            "text-gray-400 font-medium px-3 py-1",
+            "text-xs"
+          )}
+        >
+          <CommandItem
+            onSelect={() => {
+              onOpenChange(false);
+              // Trigger AI chat sidebar - dispatch custom event
+              window.dispatchEvent(new CustomEvent('open-ai-chat'));
+            }}
+            className={cn(
+              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
+              "hover:bg-white/10 hover:text-white",
+              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
+              "px-3 py-1.5",
+              "mx-1"
+            )}
+          >
+            <Sparkles className="h-4 w-4 text-purple-400" />
+            <span className="text-sm">Ask AI Assistant...</span>
+            <CommandShortcut className="ml-auto text-xs text-gray-500">⌘J</CommandShortcut>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => navigateTo(getWorkspacePath("/ai/standup"))}
+            className={cn(
+              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
+              "hover:bg-white/10 hover:text-white",
+              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
+              "px-3 py-1.5",
+              "mx-1"
+            )}
+          >
+            <MessageSquare className="h-4 w-4 text-purple-400" />
+            <span className="text-sm">Generate Daily Standup</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => navigateTo(getWorkspacePath("/ai/sprint-health"))}
+            className={cn(
+              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
+              "hover:bg-white/10 hover:text-white",
+              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
+              "px-3 py-1.5",
+              "mx-1"
+            )}
+          >
+            <BarChart3 className="h-4 w-4 text-purple-400" />
+            <span className="text-sm">Sprint Health Report</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => navigateTo(getWorkspacePath("/ai/release-notes"))}
+            className={cn(
+              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
+              "hover:bg-white/10 hover:text-white",
+              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
+              "px-3 py-1.5",
+              "mx-1"
+            )}
+          >
+            <Wand2 className="h-4 w-4 text-purple-400" />
+            <span className="text-sm">Generate Release Notes</span>
+          </CommandItem>
+        </CommandGroup>
+
         {/* Utilities Group */}
-        <CommandGroup 
-          heading="Utilities" 
+        <CommandGroup
+          heading="Utilities"
           className={cn(
             "text-gray-400 font-medium px-3 py-1",
             "text-xs"

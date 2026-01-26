@@ -118,6 +118,9 @@ model User {
 
   // Knowledge Base Phase 5 relations - Templates
   noteTemplates NoteTemplate[] @relation("NoteTemplateAuthor")
+
+  // AI Native relations
+  aiConversations AIConversation[] @relation("UserAIConversations")
 }
 
 model Account {
@@ -398,6 +401,14 @@ model Workspace {
 
   // Knowledge Base Phase 5 relationships - Templates
   noteTemplates NoteTemplate[]
+
+  // AI Native relationships
+  aiAgents           AIAgent[]            @relation("WorkspaceAIAgents")
+  aiAgentConfigs     AIAgentConfig[]      @relation("WorkspaceAIAgentConfigs")
+  aiConversations    AIConversation[]     @relation("WorkspaceAIConversations")
+  aiTasks            AITask[]             @relation("WorkspaceAITasks")
+  aiAutomationRules  AIAutomationRule[]   @relation("WorkspaceAutomationRules")
+  aiGeneratedContent AIGeneratedContent[] @relation("WorkspaceGeneratedContent")
 }
 
 model WorkspaceMember {
@@ -459,6 +470,11 @@ model Project {
 
   // GitHub Integration - One-to-one relationship with Repository
   repository Repository? // Connected GitHub repository
+
+  // AI Native relationships
+  aiConversations   AIConversation[]   @relation("ProjectAIConversations")
+  aiTasks           AITask[]           @relation("ProjectAITasks")
+  aiAutomationRules AIAutomationRule[] @relation("ProjectAutomationRules")
 
   @@unique([name, workspaceId])
   @@unique([slug, workspaceId])
@@ -547,6 +563,10 @@ model Issue {
 
   // Planning relationships
   planEntries PlanEntry[] @relation("PlanEntryIssues")
+
+  // AI Native relationships
+  aiConversations AIConversation[] @relation("IssueAIConversations")
+  embedding       IssueEmbedding?
 
   @@unique([issueKey, projectId])
   @@index([projectId])
@@ -849,6 +869,9 @@ model Note {
   versions          NoteVersion[]     @relation("NoteVersions")
   lastVersionByUser User?             @relation("NoteLastVersionBy", fields: [lastVersionBy], references: [id])
   template          NoteTemplate?     @relation("NoteFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+
+  // AI Native relationships
+  embedding NoteEmbedding?
 
   @@index([authorId])
   @@index([workspaceId])
@@ -2420,4 +2443,246 @@ model NoteTemplate {
   @@index([isBuiltIn])
   @@index([defaultType])
   @@index([order])
+}
+
+// ============================================================================
+// AI Native Models
+// ============================================================================
+
+// AI Agent definitions (both default and custom)
+model AIAgent {
+  id          String   @id @default(cuid())
+  name        String
+  avatar      String // Emoji or image URL
+  role        String // assistant, analyst, reviewer, planner, writer
+  description String
+  systemPrompt String  @db.Text
+  capabilities String[] // List of capabilities: chat, analyze, review, etc.
+  modelId     String   @default("claude-sonnet-4") // Default model for this agent
+  temperature Float    @default(0.7)
+  isDefault   Boolean  @default(false) // Built-in agents
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspaceId String?
+  workspace   Workspace? @relation("WorkspaceAIAgents", fields: [workspaceId], references: [id], onDelete: Cascade)
+  configs     AIAgentConfig[]
+  conversations AIConversation[]
+  tasks       AITask[]
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+  @@index([isDefault])
+  @@index([role])
+}
+
+// Workspace-specific agent configuration overrides
+model AIAgentConfig {
+  id          String   @id @default(cuid())
+  agentId     String
+  workspaceId String
+  enabled     Boolean  @default(true)
+  customName  String?
+  customAvatar String?
+  customPrompt String? @db.Text
+  settings    Json?    // Additional settings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  agent     AIAgent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation("WorkspaceAIAgentConfigs", fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, workspaceId])
+  @@index([workspaceId])
+}
+
+// AI Conversation sessions
+model AIConversation {
+  id          String   @id @default(cuid())
+  title       String?
+  agentId     String
+  userId      String
+  workspaceId String
+  projectId   String?
+  issueId     String?
+  context     Json?    // Additional context data
+  status      String   @default("active") // active, archived, deleted
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  agent     AIAgent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user      User           @relation("UserAIConversations", fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation("WorkspaceAIConversations", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?       @relation("ProjectAIConversations", fields: [projectId], references: [id], onDelete: SetNull)
+  issue     Issue?         @relation("IssueAIConversations", fields: [issueId], references: [id], onDelete: SetNull)
+  messages  AIConversationMessage[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([agentId])
+  @@index([status])
+}
+
+// Messages within AI conversations
+model AIConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // user, assistant, system, tool
+  content        String   @db.Text
+  toolCalls      Json?    // Tool calls if any
+  toolCallId     String?  // If this is a tool response
+  tokenCount     Int?
+  modelId        String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([role])
+}
+
+// AI Task execution tracking
+model AITask {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  taskType    String   // daily_standup, sprint_health, etc.
+  agentId     String
+  workspaceId String
+  projectId   String?
+  status      String   @default("pending") // pending, running, completed, failed, cancelled
+  priority    String   @default("medium") // low, medium, high, critical
+  input       Json?    // Task input parameters
+  result      Json?    // Task result
+  error       String?  @db.Text
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  retryCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  agent     AIAgent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation("WorkspaceAITasks", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?  @relation("ProjectAITasks", fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([agentId])
+  @@index([status])
+  @@index([taskType])
+  @@index([scheduledAt])
+}
+
+// Cached embeddings for issues (for duplicate detection, semantic search)
+model IssueEmbedding {
+  id          String   @id @default(cuid())
+  issueId     String   @unique
+  embedding   Float[]  // Vector embedding
+  contentHash String   // Hash of title+description for cache invalidation
+  modelId     String   @default("text-embedding-3-small")
+  dimensions  Int      @default(1536)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([contentHash])
+}
+
+// Cached embeddings for notes
+model NoteEmbedding {
+  id          String   @id @default(cuid())
+  noteId      String   @unique
+  embedding   Float[]
+  contentHash String
+  modelId     String   @default("text-embedding-3-small")
+  dimensions  Int      @default(1536)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([contentHash])
+}
+
+// Automation rules for AI-powered workflows
+model AIAutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String
+  projectId   String?
+  trigger     String   // issue.created, issue.updated, sprint.started, etc.
+  conditions  Json     // Conditions to match
+  actions     Json     // Actions to perform
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspace Workspace          @relation("WorkspaceAutomationRules", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?           @relation("ProjectAutomationRules", fields: [projectId], references: [id], onDelete: SetNull)
+  runs      AIAutomationRun[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([trigger])
+  @@index([enabled])
+}
+
+// Automation execution logs
+model AIAutomationRun {
+  id          String   @id @default(cuid())
+  ruleId      String
+  triggerId   String?  // ID of the entity that triggered this (issue ID, etc.)
+  triggerType String   // issue, sprint, pr, etc.
+  status      String   @default("pending") // pending, running, completed, failed
+  input       Json?    // Input data
+  output      Json?    // Output/result data
+  error       String?  @db.Text
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  // Relations
+  rule AIAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([triggerId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// AI-generated content cache (for release notes, specs, etc.)
+model AIGeneratedContent {
+  id          String   @id @default(cuid())
+  contentType String   // release_notes, spec, test_cases, standup, etc.
+  entityType  String   // issue, sprint, release, etc.
+  entityId    String
+  workspaceId String
+  version     Int      @default(1)
+  content     Json     // The generated content
+  metadata    Json?    // Additional metadata
+  generatedBy String   // Agent name
+  modelId     String
+  tokenCount  Int?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  workspace Workspace @relation("WorkspaceGeneratedContent", fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([contentType, entityType, entityId, version])
+  @@index([workspaceId])
+  @@index([contentType])
+  @@index([entityType, entityId])
 }

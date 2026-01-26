@@ -9,6 +9,8 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { useCommandMenu, CommandMenu } from "@/components/ui/command-menu";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { AICommandBar } from "@/components/ai/AICommandBar";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -28,6 +30,7 @@ export default function LayoutWithSidebar({
     isCollapsed,
   } = useSidebar();
   const { open: commandMenuOpen, setOpen: setCommandMenuOpen } = useCommandMenu();
+  const { currentWorkspace } = useWorkspace();
 
   const sidebarLeft = useMemo(() => {
     if (isMdUp) return "calc(var(--sidebar-width))";
@@ -113,6 +116,16 @@ export default function LayoutWithSidebar({
         open={commandMenuOpen}
         onOpenChange={setCommandMenuOpen}
       />
+
+      {/* AI Command Bar - always accessible floating chat */}
+      {currentWorkspace && (
+        <AICommandBar
+          workspaceId={currentWorkspace.id}
+          context={{
+            workspaceName: currentWorkspace.name,
+          }}
+        />
+      )}
     </ViewFiltersProvider>
   );
 }
