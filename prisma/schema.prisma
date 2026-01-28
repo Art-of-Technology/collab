@@ -103,6 +103,9 @@ model User {
   // Planning relations
   planEntries            PlanEntry[]             @relation("PlanEntries")
   createdPlanEntries     PlanEntry[]             @relation("PlanEntryCreator")
+
+  // Time Tracking relations
+  workLogs               WorkLog[]               @relation("UserWorkLogs")
 }
 
 model Account {
@@ -380,6 +383,9 @@ model Workspace {
   
   // Daily Focus relationships
   dailyFocusEntries   DailyFocusEntry[]
+
+  // Time Tracking relationships
+  workLogs            WorkLog[]
 }
 
 model WorkspaceMember {
@@ -528,6 +534,11 @@ model Issue {
   
   // Planning relationships
   planEntries          PlanEntry[]             @relation("PlanEntryIssues")
+
+  // Time Tracking
+  timeEstimateMinutes  Int?                    // Estimated time to complete (in minutes)
+  timeSpentMinutes     Int                     @default(0) // Total time spent (aggregated from work logs)
+  workLogs             WorkLog[]
 
   @@index([projectId])
   @@index([workspaceId])
@@ -2203,4 +2214,34 @@ enum ReflectionStatus {
   PENDING_INPUT
   UNPLANNED_WORK
   UNTOUCHED
+}
+
+// ========================================
+// Time Tracking Models
+// ========================================
+
+model WorkLog {
+  id            String    @id @default(cuid())
+  issueId       String
+  userId        String
+  workspaceId   String
+  timeSpent     Int       // Time spent in minutes
+  description   String?   // Optional work description
+  loggedAt      DateTime  @default(now()) // When the work was done (can be backdated)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relationships
+  issue         Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user          User      @relation("UserWorkLogs", fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([loggedAt])
+  @@index([createdAt])
+  @@index([workspaceId, loggedAt])
+  @@index([userId, loggedAt])
+  @@index([workspaceId, userId, loggedAt])
 }
