@@ -20,7 +20,6 @@ src/components/issue/
 ├── IssueDetailModal.tsx         # Modal wrapper
 ├── IssueHeader.tsx              # Issue title and metadata
 ├── IssueDescription.tsx         # Description with inline editing
-├── IssueSidebar.tsx             # Properties sidebar
 └── selectors/
     ├── IssueStatusSelector.tsx      # Status dropdown
     ├── IssuePrioritySelector.tsx    # Priority selector
