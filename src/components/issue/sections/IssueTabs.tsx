@@ -1,9 +1,10 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { History, Link as LinkIcon, Code } from "lucide-react";
+import { History, Link as LinkIcon, Code, Clock } from "lucide-react";
 import { IssueActivity } from "./IssueActivity";
 import { IssueRelationsSection } from "./IssueRelationsSection";
+import { IssueTimeTrackingSection } from "./IssueTimeTrackingSection";
 import { GitHubIssueIntegration } from "@/components/github/GitHubIssueIntegration";
 import type { IssueComment } from "@/types/issue";
 
@@ -27,15 +28,18 @@ export function IssueTabs({
   // Determine which tabs to show based on issue type and settings
   const showRelations = true;
   const showGitHub = true;
+  const showTimeTracking = true;
 
   // Calculate grid columns dynamically
   const tabCount = (showRelations ? 1 : 0) +
+    (showTimeTracking ? 1 : 0) +
     (showGitHub ? 1 : 0) +
     1; // activity (always shown)
   const gridCols = `grid-cols-${Math.min(tabCount, 6)}`;
 
   // Default tab based on what's available
   const defaultTab = showRelations ? "relations" :
+    showTimeTracking ? "time" :
     showGitHub ? "github" : "activity";
 
   return (
@@ -51,6 +55,16 @@ export function IssueTabs({
               >
                 <LinkIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">Relations</span>
+              </TabsTrigger>
+            )}
+
+            {showTimeTracking && (
+              <TabsTrigger
+                value="time"
+                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-[#e1e7ef] text-[#7d8590] hover:text-[#c9d1d9] transition-colors data-[state=active]:bg-transparent border-0"
+              >
+                <Clock className="h-4 w-4" />
+                <span className="hidden sm:inline">Work Log</span>
               </TabsTrigger>
             )}
 
@@ -81,6 +95,16 @@ export function IssueTabs({
                 issue={issue}
                 workspaceId={workspaceId}
                 mode={mode}
+              />
+            </TabsContent>
+          )}
+
+          {showTimeTracking && (
+            <TabsContent value="time" className="mt-0">
+              <IssueTimeTrackingSection
+                issue={issue}
+                workspaceId={workspaceId}
+                onRefresh={onRefresh}
               />
             </TabsContent>
           )}

@@ -25,6 +25,7 @@ const UpdateIssueSchema = z.object({
   progress: z.number().int().min(0).max(100).optional(),
   color: z.string().nullable().optional(),
   labels: z.array(z.string()).optional(),
+  timeEstimateMinutes: z.number().int().positive().nullable().optional(),
 });
 
 async function findIssue(issueIdOrKey: string, workspaceId: string) {
@@ -141,6 +142,11 @@ export const GET = withAppAuth(
         );
       }
 
+      // Calculate time remaining
+      const timeRemaining = issue.timeEstimateMinutes
+        ? Math.max(0, issue.timeEstimateMinutes - issue.timeSpentMinutes)
+        : null;
+
       return NextResponse.json({
         id: issue.id,
         issueKey: issue.issueKey,
@@ -162,6 +168,10 @@ export const GET = withAppAuth(
         firstStartedAt: issue.firstStartedAt,
         lastProgressAt: issue.lastProgressAt,
         daysInProgress: issue.daysInProgress,
+        // Time tracking fields
+        timeEstimateMinutes: issue.timeEstimateMinutes,
+        timeSpentMinutes: issue.timeSpentMinutes,
+        timeRemaining,
         project: issue.project,
         assignee: issue.assignee,
         reporter: issue.reporter,
@@ -216,6 +226,7 @@ export const PATCH = withAppAuth(
       if (updateData.progress !== undefined) update.progress = updateData.progress;
       if (updateData.color !== undefined) update.color = updateData.color;
       if (updateData.parentId !== undefined) update.parentId = updateData.parentId;
+      if (updateData.timeEstimateMinutes !== undefined) update.timeEstimateMinutes = updateData.timeEstimateMinutes;
       if (updateData.dueDate !== undefined) {
         update.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
       }

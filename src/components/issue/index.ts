@@ -3,7 +3,6 @@ export { IssueDetailContent } from "./IssueDetailContent";
 export { IssueDetailModal } from "./IssueDetailModal";
 export { IssueHeader } from "./IssueHeader";
 export { IssueTitleInput } from "./IssueTitleInput";
-export { IssueSidebar } from "./IssueSidebar";
 export { default as NewIssueModal } from "./NewIssueModal";
 
 // Selector components
