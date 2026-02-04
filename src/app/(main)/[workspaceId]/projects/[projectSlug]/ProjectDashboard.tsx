@@ -243,7 +243,7 @@ export function ProjectDashboard({
   }, [projectViews]);
 
   const handleIssueClick = (issueKey: string) => {
-    router.push(`/${workspaceSlug}/issue/${issueKey}`);
+    router.push(`/${workspaceSlug}/issues/${issueKey}`);
   };
 
   const handleFeatureClick = (featureId: string) => {

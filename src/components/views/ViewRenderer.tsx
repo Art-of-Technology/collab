@@ -49,13 +49,14 @@ import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import React, { useEffect } from 'react';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, Sparkles } from 'lucide-react';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
 
 import { useViewFilters } from '@/context/ViewFiltersContext';
 import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/utils';
+import { AIFilterBar, convertToViewFilters, type ParsedFilter } from '@/components/ai';
 
 interface ViewRendererProps {
   view: {
@@ -406,6 +407,45 @@ export default function ViewRenderer({
 
   // Issue type filtering state
   const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
+
+  // AI Filter state
+  const [aiFilters, setAiFilters] = useState<ParsedFilter[]>([]);
+  const [showAIFilter, setShowAIFilter] = useState(false);
+
+  // Handle AI filter changes
+  const handleAIFiltersChange = useCallback((filters: ParsedFilter[]) => {
+    setAiFilters(filters);
+
+    // Convert AI filters to view filter format and apply
+    const viewFilters = convertToViewFilters(filters);
+
+    // Apply each filter type
+    if (viewFilters.status) {
+      setTempFilters(prev => ({ ...prev, status: viewFilters.status }));
+    }
+    if (viewFilters.priority) {
+      setTempFilters(prev => ({ ...prev, priority: viewFilters.priority }));
+    }
+    if (viewFilters.assigneeId) {
+      const assigneeValue = viewFilters.assigneeId === 'currentUser'
+        ? [currentUser.id]
+        : viewFilters.assigneeId === null
+          ? ['unassigned']
+          : [viewFilters.assigneeId];
+      setTempFilters(prev => ({ ...prev, assignee: assigneeValue }));
+    }
+    if (viewFilters.labels) {
+      setTempFilters(prev => ({ ...prev, labels: viewFilters.labels }));
+    }
+    if (viewFilters.search) {
+      setSearchQuery(viewFilters.search);
+    }
+
+    // Trigger data refetch
+    queryClient.invalidateQueries({
+      queryKey: [...issueKeys.byWorkspace(workspace.id)]
+    });
+  }, [currentUser.id, queryClient, workspace.id]);
 
   // Check if current state differs from last saved state
   const hasChanges = useMemo(() => {
@@ -1208,6 +1248,21 @@ export default function ViewRenderer({
         }
         actions={
           <>
+            {/* AI Filter Toggle - Hidden for Planning view */}
+            {view.displayType !== 'PLANNING' && (
+              <Button
+                variant={showAIFilter ? "ai" : "ghost"}
+                size="sm"
+                onClick={() => setShowAIFilter(!showAIFilter)}
+                className={cn(
+                  pageHeaderButtonStyles.ghost,
+                  showAIFilter && "bg-[#8b5cf6]/10 text-[#8b5cf6] border-[#8b5cf6]/30"
+                )}
+              >
+                <Sparkles className="h-3 w-3 md:mr-1" />
+                <span className="hidden md:inline ml-1">AI Filter</span>
+              </Button>
+            )}
             {/* Follow Project Toggle - Hidden for Planning view */}
             {view.displayType !== 'PLANNING' && (
               <Button
@@ -1311,9 +1366,21 @@ export default function ViewRenderer({
         "border-b bg-[#101011] transition-colors",
         // Mobile: Glassmorphism styling
         "border-white/10 bg-black/60 backdrop-blur-xl px-4 py-3",
-        // Desktop: Original styling  
+        // Desktop: Original styling
         "md:border-[#1a1a1a] md:bg-[#101011] md:backdrop-blur-none md:px-6 md:py-2"
       )}>
+        {/* AI Filter Bar */}
+        {showAIFilter && (
+          <div className="mb-3">
+            <AIFilterBar
+              onFiltersChange={handleAIFiltersChange}
+              currentFilters={aiFilters}
+              workspaceId={workspace.id}
+              placeholder="Describe what you're looking for (e.g., 'urgent bugs assigned to me')"
+            />
+          </div>
+        )}
+
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2">
           {/* Issue Type Filter Buttons - Full width on mobile */}
           <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 md:mr-4">

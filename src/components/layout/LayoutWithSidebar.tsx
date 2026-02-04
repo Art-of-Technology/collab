@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useMemo } from "react";
-import Sidebar from "@/components/layout/Sidebar";
+import SimplifiedSidebar from "@/components/layout/SimplifiedSidebar";
 import RightSidebar from "@/components/layout/RightSidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { ViewFiltersProvider } from "@/context/ViewFiltersContext";
+import { AIProvider } from "@/context/AIContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { useCommandMenu, CommandMenu } from "@/components/ui/command-menu";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { AIAssistantWidget } from "@/components/ai";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -36,14 +38,15 @@ export default function LayoutWithSidebar({
   }, [isMdUp, isMobileOpen]);
 
   return (
-    <ViewFiltersProvider>
-      <div className="app-layout">
+    <AIProvider>
+      <ViewFiltersProvider>
+        <div className="app-layout">
         <div
           className="app-sidebar hidden md:block"
           data-collapsed={isCollapsedDesktop}
         >
           <div className="app-sidebar__content overflow-y-auto">
-            <Sidebar
+            <SimplifiedSidebar
               pathname={pathname}
               isCollapsed={isCollapsedDesktop}
             />
@@ -71,7 +74,7 @@ export default function LayoutWithSidebar({
           role="dialog"
         >
           <div className="h-full relative overflow-y-auto">
-            <Sidebar
+            <SimplifiedSidebar
               pathname={pathname}
               isCollapsed={false}
             />
@@ -113,6 +116,10 @@ export default function LayoutWithSidebar({
         open={commandMenuOpen}
         onOpenChange={setCommandMenuOpen}
       />
-    </ViewFiltersProvider>
+
+      {/* AI Assistant Widget */}
+      <AIAssistantWidget />
+      </ViewFiltersProvider>
+    </AIProvider>
   );
 }
