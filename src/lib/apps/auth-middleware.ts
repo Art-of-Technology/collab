@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { decryptToken } from '@/lib/apps/crypto';
-import { hasScope, hasAllScopes, normalizeScopes } from '@/lib/oauth-scopes';
+import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -46,6 +46,12 @@ export interface AppAuthContext {
 
 export interface AuthMiddlewareOptions {
   requiredScopes?: string | string[];
+  /**
+   * How to evaluate required scopes:
+   * - 'all' (default): Token must have ALL listed scopes
+   * - 'any': Token must have at least ONE of the listed scopes
+   */
+  scopeMode?: 'all' | 'any';
   allowExpired?: boolean;
 }
 
@@ -66,7 +72,7 @@ export async function authenticateAppRequest(
   request: NextRequest,
   options: AuthMiddlewareOptions = {}
 ): Promise<AuthMiddlewareResult> {
-  const { requiredScopes = [], allowExpired = false } = options;
+  const { requiredScopes = [], scopeMode = 'all', allowExpired = false } = options;
 
   try {
     // Extract Bearer token from Authorization header
@@ -150,13 +156,16 @@ export async function authenticateAppRequest(
     // Validate required scopes
     const normalizedRequired = normalizeScopes(requiredScopes);
     if (normalizedRequired.length > 0) {
-      const hasRequiredScopes = hasAllScopes(normalizedRequired, installation.scopes);
+      const hasRequiredScopes = scopeMode === 'any'
+        ? hasAnyScope(normalizedRequired, installation.scopes)
+        : hasAllScopes(normalizedRequired, installation.scopes);
       if (!hasRequiredScopes) {
+        const modeLabel = scopeMode === 'any' ? 'one of' : 'all of';
         return {
           success: false,
           error: {
             code: 'insufficient_scope',
-            message: `Insufficient scope. Required: ${normalizedRequired.join(', ')}`,
+            message: `Insufficient scope. Required ${modeLabel}: ${normalizedRequired.join(', ')}`,
             statusCode: 403
           }
         };

@@ -181,8 +181,27 @@ export function hasAllScopes(
 }
 
 /**
+ * Check if at least one of the required scopes is present in the provided scope set
+ *
+ * @param requiredScopes - Scopes where at least one must be present
+ * @param providedScopes - Scopes that are provided
+ * @returns True if at least one required scope is present
+ */
+export function hasAnyScope(
+  requiredScopes: string | string[],
+  providedScopes: string | string[] | null | undefined
+): boolean {
+  const normalizedRequired = normalizeScopes(requiredScopes);
+  const normalizedProvided = normalizeScopes(providedScopes);
+
+  return normalizedRequired.some(scope =>
+    normalizedProvided.includes(scope)
+  );
+}
+
+/**
  * Get default scopes for new app installations
- * 
+ *
  * @returns Array of default scope strings
  */
 export function getDefaultScopes(): string[] {

@@ -129,7 +129,7 @@ export const GET = withAppAuth(
       await prisma.$disconnect();
     }
   },
-  { requiredScopes: ['user:read', 'profile:read'] } // Either scope is sufficient
+  { requiredScopes: ['user:read', 'profile:read'], scopeMode: 'any' }
 );
 
 /**
@@ -192,5 +192,5 @@ export const PATCH = withAppAuth(
       await prisma.$disconnect();
     }
   },
-  { requiredScopes: ['user:write', 'profile:write'] } // Either scope is sufficient
+  { requiredScopes: ['user:write', 'profile:write'], scopeMode: 'any' }
 );
