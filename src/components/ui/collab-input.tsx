@@ -576,10 +576,10 @@ export function CollabInput({
         contentEditable={disabled || loading || isImproving ? "false" : "true"}
         suppressContentEditableWarning
         className={cn(
-          "min-h-[80px] p-3 rounded-md pr-20 text-sm",
-          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-border",
-          "border border-border/50 focus:border-primary/40 transition-colors duration-200",
-          "whitespace-pre-wrap text-foreground !outline-none",
+          "min-h-[80px] p-4 rounded-xl pr-20 text-sm",
+          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-[#27272b]",
+          "border border-[#1f1f22] focus:border-[#27272b] transition-colors duration-200",
+          "whitespace-pre-wrap text-[#fafafa] !outline-none bg-[#101011]",
           isOverLimit ? "border-red-400/70" : "",
           disabled && "opacity-70 cursor-not-allowed",
         )}
@@ -621,13 +621,13 @@ export function CollabInput({
         <div
           className={cn(
             "absolute text-xs transition-opacity duration-200",
-            "right-1 top-1 px-1.5 py-0.5 rounded-sm",
+            "right-2 top-2 px-2 py-1 rounded-lg",
             isFocused || rawContent.length > 0 ? "opacity-100" : "opacity-0",
             isOverLimit
-              ? "bg-red-100 text-red-600"
+              ? "bg-red-500/10 text-red-400"
               : isNearLimit
-                ? "bg-amber-50 text-amber-600"
-                : "bg-muted/70 text-muted-foreground",
+                ? "bg-amber-500/10 text-amber-400"
+                : "bg-[#27272b] text-[#75757a]",
           )}
         >
           {charCount}/{maxLength}
@@ -635,7 +635,7 @@ export function CollabInput({
       )}
 
       {/* Action buttons */}
-      <div className="absolute bottom-2 right-3 flex items-center space-x-2 z-10">
+      <div className="absolute bottom-3 right-3 flex items-center space-x-2 z-10">
         {/* AI Improve button */}
         {showAiButton && onAiImprove && (
           <Popover open={showImprovePopover} onOpenChange={setShowImprovePopover}>
@@ -645,26 +645,25 @@ export function CollabInput({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "h-8 px-3 gap-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center",
-                  "border-border/60 bg-background/80 backdrop-blur-sm",
-                  "hover:bg-primary/10 hover:text-primary hover:border-primary/30 hover:shadow-sm",
-                  "focus:ring-1 focus:ring-primary/20 focus:border-primary/40 active:scale-[0.98]",
-                  !rawContent.trim() && "opacity-70",
+                  "h-9 px-3 gap-1.5 text-xs font-medium rounded-xl transition-all flex items-center justify-center",
+                  "bg-[#27272b] hover:bg-[#3f3f46]",
+                  "focus:ring-1 focus:ring-purple-500/20 active:scale-[0.98]",
+                  !rawContent.trim() && "opacity-50",
                 )}
                 onClick={handleAiImprove}
                 disabled={isImproving || disabled || !rawContent.trim() || loading}
               >
                 {isImproving ? (
-                  <Loader2 className="h-4 w-4 text-purple-500 animate-spin" />
+                  <Loader2 className="h-4 w-4 text-purple-400 animate-spin" />
                 ) : (
-                  <WandSparkles className="h-4 w-4 text-purple-500 transition-transform group-hover:rotate-12" />
+                  <WandSparkles className="h-4 w-4 text-purple-400 transition-transform group-hover:rotate-12" />
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-72 p-0" align="end">
-              <div className="p-3 border-b">
-                <h4 className="text-sm font-semibold">AI Improved Text</h4>
-                <p className="text-xs text-muted-foreground mt-1">
+            <PopoverContent className="w-72 p-0 bg-[#171719] border-[#1f1f22] rounded-xl" align="end">
+              <div className="p-4 border-b border-[#1f1f22]">
+                <h4 className="text-sm font-semibold text-[#fafafa]">AI Improved Text</h4>
+                <p className="text-xs text-[#75757a] mt-1">
                   {isImproving
                     ? "Analyzing your text..."
                     : errorMessage
@@ -675,27 +674,28 @@ export function CollabInput({
 
               {isImproving ? (
                 <div className="p-8 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="h-6 w-6 text-purple-500 animate-spin" />
-                  <p className="text-xs text-muted-foreground">Processing...</p>
+                  <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
+                  <p className="text-xs text-[#75757a]">Processing...</p>
                 </div>
               ) : errorMessage ? (
                 <div className="p-4">
-                  <div className="text-red-500 text-sm">
+                  <div className="text-red-400 text-sm">
                     {errorMessage}
                   </div>
                 </div>
               ) : improvedText ? (
-                <div className="p-3 max-h-48 overflow-y-auto text-sm">
+                <div className="p-4 max-h-48 overflow-y-auto text-sm text-[#9c9ca1]">
                   <CollabText content={improvedText} />
                 </div>
               ) : null}
 
               {/* Show buttons only if not improving */}
               {!isImproving && (
-                <div className="border-t p-2 flex justify-end gap-2 bg-muted/20">
+                <div className="border-t border-[#1f1f22] p-3 flex justify-end gap-2 bg-[#101011]/50">
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="text-[#9c9ca1] hover:text-[#fafafa] hover:bg-[#27272b] rounded-lg"
                     onClick={() => {
                       setShowImprovePopover(false);
                       setErrorMessage('');
@@ -706,6 +706,7 @@ export function CollabInput({
                   </Button>
                   <Button
                     size="sm"
+                    className="bg-purple-500 hover:bg-purple-600 text-white rounded-lg"
                     onClick={applyImprovedText}
                     disabled={!improvedText || !!errorMessage}
                   >
@@ -722,26 +723,20 @@ export function CollabInput({
           <Button
             type="button"
             variant="ghost"
+            size="icon"
             className={cn(
-              "h-8 px-3 gap-1.5 text-xs font-medium rounded-md transition-all",
-              "border-border/60 bg-background/80 backdrop-blur-sm",
-              "hover:bg-primary/10 hover:text-primary hover:border-primary/30 hover:shadow-sm",
-              "focus:ring-1 focus:ring-primary/20 focus:border-primary/40 active:scale-[0.98]",
-              !rawContent.trim() && "opacity-70",
+              "h-9 w-9 rounded-xl transition-all flex items-center justify-center",
+              "bg-[#27272b] hover:bg-[#3f3f46] text-[#9c9ca1] hover:text-[#fafafa]",
+              "focus:ring-1 focus:ring-[#27272b] active:scale-[0.98]",
+              !rawContent.trim() && "opacity-50",
             )}
             disabled={Boolean(disabled || loading || !rawContent.trim() || isOverLimit)}
             onClick={handleSubmit}
           >
             {loading ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {submitLabel && <span>Sending...</span>}
-              </>
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <>
-                <Send className="h-3.5 w-3.5" />
-                {submitLabel && <span>{submitLabel}</span>}
-              </>
+              <Send className="h-4 w-4" />
             )}
           </Button>
         )}

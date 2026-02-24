@@ -174,8 +174,8 @@ export function GlobalFilterSelector({
     if (selectedOptions.length === 0) {
       return (
         <>
-          <EmptyIcon className="h-3 w-3 text-[#6e7681]" />
-          <span className="text-[#6e7681] text-xs">{label}</span>
+          <EmptyIcon className="h-3.5 w-3.5 text-[#75757a]" />
+          <span className="text-[#75757a] text-xs">{label}</span>
         </>
       );
     }
@@ -184,8 +184,8 @@ export function GlobalFilterSelector({
       const opt = selectedOptions[0];
       return (
         <>
-          {renderOptionIcon(opt, "h-3 w-3")}
-          <span className="text-[#cccccc] text-xs truncate max-w-[80px]">
+          {renderOptionIcon(opt, "h-3.5 w-3.5")}
+          <span className="text-[#fafafa] text-xs truncate max-w-[80px]">
             {opt.label}
             {opt.isPrioritized && opt.priorityLabel ? ` ${opt.priorityLabel}` : ""}
           </span>
@@ -203,16 +203,16 @@ export function GlobalFilterSelector({
               className="relative flex-shrink-0"
               style={{ zIndex: 3 - index }}
             >
-              {renderOptionIcon(opt, "h-2.5 w-2.5", true)}
+              {renderOptionIcon(opt, "h-3 w-3", true)}
             </div>
           ))}
           {selectedOptions.length > 3 && (
-            <div className="h-2.5 w-2.5 rounded-full bg-[#404040] border border-[#181818] flex items-center justify-center">
-              <span className="text-[8px] text-white font-medium">+</span>
+            <div className="h-3 w-3 rounded-full bg-[#27272b] border border-[#1f1f22] flex items-center justify-center">
+              <span className="text-[8px] text-[#9c9ca1] font-medium">+</span>
             </div>
           )}
         </div>
-        <span className="text-[#cccccc] text-xs">
+        <span className="text-[#fafafa] text-xs">
           {selectedOptions.length} {computedPluralLabel}
         </span>
       </>
@@ -228,7 +228,7 @@ export function GlobalFilterSelector({
           className={cn(
             "rounded-full flex-shrink-0",
             sizeClass,
-            withBorder && "border border-[#181818]"
+            withBorder && "border border-[#1f1f22]"
           )}
           style={{ backgroundColor: option.color }}
         />
@@ -253,9 +253,9 @@ export function GlobalFilterSelector({
       return (
         <div
           className={cn(
-            "rounded-full bg-[#2a2a2a] flex-shrink-0 flex items-center justify-center text-[8px] font-medium text-white",
+            "rounded-full bg-[#101011] flex-shrink-0 flex items-center justify-center text-[8px] font-medium text-[#9c9ca1]",
             sizeClass,
-            withBorder && "border border-[#181818]"
+            withBorder && "border border-[#1f1f22]"
           )}
         >
           {option.label?.charAt(0) || "U"}
@@ -263,7 +263,7 @@ export function GlobalFilterSelector({
       );
     }
 
-    return <EmptyIcon className={cn(sizeClass, "text-[#6e7681]")} />;
+    return <EmptyIcon className={cn(sizeClass, "text-[#75757a]")} />;
   };
 
   // Default option content renderer
@@ -273,8 +273,9 @@ export function GlobalFilterSelector({
         {renderOptionIcon(option, "h-3.5 w-3.5")}
         <div className="flex flex-col flex-1 min-w-0">
           <span className={cn(
-            "text-[#cccccc]",
-            option.isPrioritized && "font-medium"
+            "text-[#9c9ca1]",
+            option.isPrioritized && "font-medium",
+            isSelected && "text-[#fafafa]"
           )}>
             {option.label}
             {option.isPrioritized && option.priorityLabel ? ` ${option.priorityLabel}` : ""}
@@ -284,10 +285,10 @@ export function GlobalFilterSelector({
           )}
         </div>
         {option.suffix && (
-          <span className="text-xs text-[#6e7681]">{option.suffix}</span>
+          <span className="text-xs text-[#75757a]">{option.suffix}</span>
         )}
         {isSelected && (
-          <Check className="h-3 w-3 text-[#6e7681]" />
+          <Check className="h-3.5 w-3.5 text-blue-400" />
         )}
       </>
     );
@@ -296,79 +297,80 @@ export function GlobalFilterSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={disabled}
+        <div
+          role="button"
+          tabIndex={disabled ? -1 : 0}
           className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
-            disabled && "opacity-50 cursor-not-allowed"
+            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all duration-200 h-8 cursor-pointer select-none",
+            "border border-[#27272b] hover:border-[#3f3f46] hover:bg-[#27272b]",
+            "text-[#9c9ca1] bg-[#101011]",
+            "outline-none",
+            selectedOptions.length > 0 && "border-[#3f3f46] bg-[#1f1f22]",
+            disabled && "opacity-50 cursor-not-allowed pointer-events-none"
           )}
         >
           {renderTriggerContent
             ? renderTriggerContent(selectedOptions)
             : defaultRenderTriggerContent()
           }
-        </Button>
+        </div>
       </PopoverTrigger>
 
       <PopoverContent
-        className={cn("p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl", popoverWidth)}
+        className={cn("p-0 bg-[#171719] border-[#1f1f22] shadow-xl rounded-xl", popoverWidth)}
         align={popoverAlign}
         side="bottom"
         sideOffset={4}
       >
         {/* Header with optional search */}
         {showSearch ? (
-          <div className="p-3 border-b border-[#2d2d30]">
-            <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+          <div className="p-3 border-b border-[#1f1f22]">
+            <div className="text-xs text-[#75757a] mb-2 font-medium">
               {computedFilterHeader}
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#75757a]" />
               <Input
                 placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
+                className="pl-9 h-8 text-xs bg-[#101011] border-[#1f1f22] focus:border-[#27272b] text-[#fafafa] placeholder:text-[#75757a] rounded-lg"
               />
             </div>
           </div>
         ) : (
-          <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] font-medium">
+          <div className="text-xs text-[#75757a] px-3 py-2.5 border-b border-[#1f1f22] font-medium">
             {computedFilterHeader}
           </div>
         )}
 
         {/* Loading state */}
         {isLoading ? (
-          <div className="flex items-center justify-center gap-1.5 py-4">
-            <Loader2 className="h-3 w-3 animate-spin text-[#6e7681]" />
-            <span className="text-[#6e7681] text-xs">Loading...</span>
+          <div className="flex items-center justify-center gap-2 py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-[#75757a]" />
+            <span className="text-[#75757a] text-xs">Loading...</span>
           </div>
         ) : (
-          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
+          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#27272b] scrollbar-track-transparent p-1.5">
             {/* Clear option */}
             {allowClear && (
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-lg hover:bg-[#1f1f22] transition-colors text-left h-auto"
                 onClick={handleClear}
               >
-                <EmptyIcon className="h-3.5 w-3.5 text-[#6e7681]" />
-                <span className="text-[#9ca3af] flex-1">{computedClearLabel}</span>
+                <EmptyIcon className="h-3.5 w-3.5 text-[#75757a]" />
+                <span className="text-[#75757a] flex-1">{computedClearLabel}</span>
                 {selectedIds.length === 0 && (
-                  <Check className="h-3 w-3 text-[#6e7681]" />
+                  <Check className="h-3.5 w-3.5 text-blue-400" />
                 )}
               </Button>
             )}
 
             {/* Section header */}
             {sectionHeader && filteredOptions.length > 0 && (
-              <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">
+              <div className="px-2.5 pt-2 pb-1 text-xs text-[#52525b] font-medium">
                 {sectionHeader}
               </div>
             )}
@@ -385,10 +387,11 @@ export function GlobalFilterSelector({
                       variant="ghost"
                       disabled={option.disabled}
                       className={cn(
-                        "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left h-auto",
-                        option.isPrioritized
-                          ? "bg-blue-950/20 hover:bg-blue-950/30"
-                          : "hover:bg-[#2a2a2a]",
+                        "w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-lg transition-colors text-left h-auto",
+                        isSelected
+                          ? "bg-[#1f1f22]"
+                          : "hover:bg-[#1f1f22]",
+                        option.isPrioritized && !isSelected && "bg-blue-500/5 hover:bg-blue-500/10",
                         option.disabled && "opacity-50 cursor-not-allowed"
                       )}
                       onClick={() => handleToggle(option.id)}
@@ -406,21 +409,21 @@ export function GlobalFilterSelector({
               renderNoResults ? (
                 renderNoResults(searchQuery)
               ) : (
-                <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
-                  <div className="space-y-2">
+                <div className="px-2.5 py-6 text-center text-[#75757a] text-xs">
+                  <div className="space-y-3">
                     <p>No results for "{searchQuery}"</p>
                     {showCreateButton && onCreateClick && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
+                        className="gap-2 h-8 text-xs bg-[#101011] border-[#1f1f22] hover:bg-[#1f1f22] hover:border-[#27272b] text-[#9c9ca1] rounded-lg"
                         onClick={() => onCreateClick(searchQuery)}
                         disabled={isCreating}
                       >
                         {isCreating ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-3.5 w-3.5" />
                         )}
                         {isCreating ? "Creating..." : `${createLabel} "${searchQuery}"`}
                       </Button>
@@ -433,21 +436,21 @@ export function GlobalFilterSelector({
               renderEmptyState ? (
                 renderEmptyState()
               ) : (
-                <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
-                  <div className="space-y-2">
+                <div className="px-2.5 py-6 text-center text-[#75757a] text-xs">
+                  <div className="space-y-3">
                     <p>No {computedPluralLabel} available</p>
                     {showCreateButton && onCreateClick && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
+                        className="gap-2 h-8 text-xs bg-[#101011] border-[#1f1f22] hover:bg-[#1f1f22] hover:border-[#27272b] text-[#9c9ca1] rounded-lg"
                         onClick={() => onCreateClick("")}
                         disabled={isCreating}
                       >
                         {isCreating ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-3.5 w-3.5" />
                         )}
                         {isCreating ? "Creating..." : createLabel}
                       </Button>
@@ -461,14 +464,14 @@ export function GlobalFilterSelector({
 
         {/* Clear all footer (when multiple selected) */}
         {selectionMode === "multi" && selectedIds.length > 1 && (
-          <div className="border-t border-[#2d2d30] p-2">
+          <div className="border-t border-[#1f1f22] p-2">
             <Button
               variant="ghost"
               size="sm"
-              className="w-full text-[#6e7681] hover:text-[#cccccc] hover:bg-[#2a2a2a] h-7 text-xs"
+              className="w-full text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] h-8 text-xs rounded-lg"
               onClick={handleClear}
             >
-              <X className="h-3 w-3 mr-2" />
+              <X className="h-3.5 w-3.5 mr-2" />
               Clear all {computedPluralLabel}
             </Button>
           </div>
