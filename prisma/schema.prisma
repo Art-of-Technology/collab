@@ -121,6 +121,12 @@ model User {
 
   // Time Tracking relations
   workLogs               WorkLog[]               @relation("UserWorkLogs")
+
+  // AI System relations
+  aiConversations  AIConversation[]
+  aiMessages       AIMessage[]        @relation("AIMessageUser")
+  dashboardLayouts DashboardLayout[]
+  aiPreferences    AIUserPreference[]
 }
 
 model Account {
@@ -404,6 +410,11 @@ model Workspace {
 
   // Time Tracking relationships
   workLogs            WorkLog[]
+
+  // AI System relationships
+  aiConversations  AIConversation[]
+  dashboardLayouts DashboardLayout[]
+  aiPreferences    AIUserPreference[]
 }
 
 model WorkspaceMember {
@@ -2461,4 +2472,118 @@ model WorkLog {
   @@index([workspaceId, loggedAt])
   @@index([userId, loggedAt])
   @@index([workspaceId, userId, loggedAt])
+}
+
+// ========================================
+// AI Agent System Models
+// ========================================
+
+model AIAgent {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  avatar       String? // URL or emoji
+  color        String   @default("#8b5cf6")
+  systemPrompt String   @db.Text
+  capabilities String[] // Array of capability strings
+  personality  String?
+  description  String?
+  isDefault    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  conversations AIConversation[]
+  messages      AIMessage[]
+
+  @@index([slug])
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model AIConversation {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  agentId     String?
+  title       String?
+  isArchived  Boolean  @default(false)
+  metadata    Json? // Additional context
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent     AIAgent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  messages  AIMessage[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([agentId])
+  @@index([isArchived])
+  @@index([userId, workspaceId])
+  @@index([createdAt])
+}
+
+model AIMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String?
+  agentId        String?
+  role           String // 'user' | 'assistant' | 'system'
+  content        String   @db.Text
+  metadata       Json? // Cards, actions, suggestions
+  tokenCount     Int?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent        AIAgent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  user         User?          @relation("AIMessageUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId])
+  @@index([agentId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model DashboardLayout {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  widgets     Json // Array of widget configs: [{widgetId, visible, order, size}]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+}
+
+model AIUserPreference {
+  id             String  @id @default(cuid())
+  userId         String
+  workspaceId    String
+  defaultAgentId String?
+  aiEnabled      Boolean @default(true)
+  contextSharing Boolean @default(true)
+  preferences    Json? // Additional preferences
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
 }

@@ -2,7 +2,9 @@
 // Provides AI-powered assistance for the Collab platform
 
 export {
+  AgentAssistant,
   AIAssistant,
+  createAssistant,
   getAIAssistant,
   resetAIAssistant,
   type AIMessage,
@@ -14,6 +16,7 @@ export {
 
 export {
   buildAIContext,
+  buildEnrichedContext,
   getPageContextFromPath,
   getContextualPrompt,
   getSuggestedActions,
@@ -28,7 +31,33 @@ export {
   executeNavigate,
   executeSummarize,
   executeAnalyze,
+  executeAssign,
+  executeSprintReport,
+  executeWorkloadBalance,
+  getAgentActions,
+  canAgentExecute,
   validateActionParams,
   type ActionResult,
   type ActionExecutor,
 } from './actions';
+
+export {
+  createStreamingResponse,
+  createSSEHeaders,
+} from './streaming';
+
+export {
+  AI_TOOLS,
+  executeTool,
+} from './tools';
+
+// Re-export agent system
+export {
+  getAllAgents,
+  getAgent,
+  getDefaultAgent,
+  type AgentDefinition,
+  type AgentCapability,
+  type AgentChatRequest,
+  type AgentChatResponse,
+} from './agents';

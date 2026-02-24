@@ -4,4 +4,8 @@ export {
   useAIChat,
   useAISuggestions,
   useAIWidget,
+  useAIAgents,
+  useAIConversation,
 } from '@/context/AIContext';
+
+export type { ClientAgent } from '@/context/AIContext';

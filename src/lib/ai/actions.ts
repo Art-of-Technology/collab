@@ -1,4 +1,5 @@
 import type { AIAction, AIContext } from './assistant';
+import type { AgentCapability } from './agents/types';
 
 /**
  * Action executor for AI assistant actions
@@ -14,6 +15,40 @@ export interface ActionExecutor {
   execute(action: AIAction, context: AIContext): Promise<ActionResult>;
 }
 
+// Agent capability to action type mapping
+const AGENT_ACTION_MAP: Record<string, AgentCapability[]> = {
+  create_issue: ['create_issue'],
+  update_issue: ['update_issue'],
+  search: ['search'],
+  navigate: ['navigate'],
+  summarize: ['summarize'],
+  analyze: ['analyze'],
+  assign: ['assign'],
+  sprint_report: ['sprint_report'],
+  workload_balance: ['workload_balance'],
+  triage: ['triage'],
+};
+
+/**
+ * Get allowed action types for a given agent slug.
+ */
+export function getAgentActions(agentSlug: string): string[] {
+  const AGENT_CAPABILITIES: Record<string, string[]> = {
+    alex: ['search', 'navigate', 'summarize', 'analyze'],
+    nova: ['create_issue', 'update_issue', 'search', 'assign', 'sprint_report', 'workload_balance', 'triage'],
+  };
+
+  return AGENT_CAPABILITIES[agentSlug] || ['search', 'navigate'];
+}
+
+/**
+ * Check if an agent can execute a specific action type.
+ */
+export function canAgentExecute(agentSlug: string, actionType: string): boolean {
+  const allowedActions = getAgentActions(agentSlug);
+  return allowedActions.includes(actionType);
+}
+
 /**
  * Create issue action handler
  */
@@ -24,9 +59,7 @@ export async function executeCreateIssue(
   try {
     const response = await fetch('/api/issues', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspaceId: context.workspace.id,
         title: params.title as string,
@@ -41,10 +74,7 @@ export async function executeCreateIssue(
 
     if (!response.ok) {
       const error = await response.text();
-      return {
-        success: false,
-        message: `Failed to create issue: ${error}`,
-      };
+      return { success: false, message: `Failed to create issue: ${error}` };
     }
 
     const issue = await response.json();
@@ -56,10 +86,7 @@ export async function executeCreateIssue(
     };
   } catch (error) {
     console.error('Error creating issue:', error);
-    return {
-      success: false,
-      message: 'Failed to create issue. Please try again.',
-    };
+    return { success: false, message: 'Failed to create issue. Please try again.' };
   }
 }
 
@@ -73,10 +100,7 @@ export async function executeUpdateIssue(
   try {
     const issueId = params.issueId || params.issueKey;
     if (!issueId) {
-      return {
-        success: false,
-        message: 'Issue ID or key is required for update',
-      };
+      return { success: false, message: 'Issue ID or key is required for update' };
     }
 
     const updateData: Record<string, unknown> = {};
@@ -89,32 +113,20 @@ export async function executeUpdateIssue(
 
     const response = await fetch(`/api/issues/${issueId}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      return {
-        success: false,
-        message: `Failed to update issue: ${error}`,
-      };
+      return { success: false, message: `Failed to update issue: ${error}` };
     }
 
     const issue = await response.json();
-    return {
-      success: true,
-      message: `Updated issue ${issue.issueKey}`,
-      data: issue,
-    };
+    return { success: true, message: `Updated issue ${issue.issueKey}`, data: issue };
   } catch (error) {
     console.error('Error updating issue:', error);
-    return {
-      success: false,
-      message: 'Failed to update issue. Please try again.',
-    };
+    return { success: false, message: 'Failed to update issue. Please try again.' };
   }
 }
 
@@ -141,10 +153,7 @@ export async function executeSearch(
 
     if (!response.ok) {
       const error = await response.text();
-      return {
-        success: false,
-        message: `Search failed: ${error}`,
-      };
+      return { success: false, message: `Search failed: ${error}` };
     }
 
     const results = await response.json();
@@ -155,10 +164,7 @@ export async function executeSearch(
     };
   } catch (error) {
     console.error('Error searching:', error);
-    return {
-      success: false,
-      message: 'Search failed. Please try again.',
-    };
+    return { success: false, message: 'Search failed. Please try again.' };
   }
 }
 
@@ -204,18 +210,11 @@ export function executeNavigate(
       } else if (typeof params.path === 'string') {
         navigateTo = params.path.startsWith('/') ? params.path : `${workspaceBase}/${params.path}`;
       } else {
-        return {
-          success: false,
-          message: 'Invalid navigation destination',
-        };
+        return { success: false, message: 'Invalid navigation destination' };
       }
   }
 
-  return {
-    success: true,
-    message: 'Navigating...',
-    navigateTo,
-  };
+  return { success: true, message: 'Navigating...', navigateTo };
 }
 
 /**
@@ -228,9 +227,7 @@ export async function executeSummarize(
   try {
     const response = await fetch('/api/ai/summarize', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspaceId: context.workspace.id,
         type: params.type || 'general',
@@ -241,24 +238,14 @@ export async function executeSummarize(
     });
 
     if (!response.ok) {
-      return {
-        success: false,
-        message: 'Failed to generate summary',
-      };
+      return { success: false, message: 'Failed to generate summary' };
     }
 
     const result = await response.json();
-    return {
-      success: true,
-      message: result.summary,
-      data: result,
-    };
+    return { success: true, message: result.summary, data: result };
   } catch (error) {
     console.error('Error generating summary:', error);
-    return {
-      success: false,
-      message: 'Failed to generate summary. Please try again.',
-    };
+    return { success: false, message: 'Failed to generate summary. Please try again.' };
   }
 }
 
@@ -272,9 +259,7 @@ export async function executeAnalyze(
   try {
     const response = await fetch('/api/ai/analyze', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspaceId: context.workspace.id,
         type: params.type || 'general',
@@ -285,34 +270,129 @@ export async function executeAnalyze(
     });
 
     if (!response.ok) {
-      return {
-        success: false,
-        message: 'Failed to generate analysis',
-      };
+      return { success: false, message: 'Failed to generate analysis' };
     }
 
     const result = await response.json();
-    return {
-      success: true,
-      message: result.analysis,
-      data: result,
-    };
+    return { success: true, message: result.analysis, data: result };
   } catch (error) {
     console.error('Error generating analysis:', error);
-    return {
-      success: false,
-      message: 'Failed to generate analysis. Please try again.',
-    };
+    return { success: false, message: 'Failed to generate analysis. Please try again.' };
   }
 }
 
 /**
- * Main action executor
+ * Assign issue action handler (Nova-specific)
+ */
+export async function executeAssign(
+  params: Record<string, unknown>,
+  context: AIContext
+): Promise<ActionResult> {
+  try {
+    const issueId = params.issueId;
+    const assigneeId = params.assigneeId;
+    if (!issueId || !assigneeId) {
+      return { success: false, message: 'Issue ID and assignee ID are required' };
+    }
+
+    const response = await fetch(`/api/issues/${issueId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assigneeId }),
+    });
+
+    if (!response.ok) {
+      return { success: false, message: 'Failed to assign issue' };
+    }
+
+    const issue = await response.json();
+    return {
+      success: true,
+      message: `Assigned ${issue.issueKey} to team member`,
+      data: issue,
+    };
+  } catch (error) {
+    console.error('Error assigning issue:', error);
+    return { success: false, message: 'Failed to assign issue. Please try again.' };
+  }
+}
+
+/**
+ * Sprint report action handler (Nova-specific)
+ */
+export async function executeSprintReport(
+  params: Record<string, unknown>,
+  context: AIContext
+): Promise<ActionResult> {
+  try {
+    const response = await fetch('/api/ai/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: context.workspace.id,
+        type: 'sprint',
+        projectId: params.projectId,
+      }),
+    });
+
+    if (!response.ok) {
+      return { success: false, message: 'Failed to generate sprint report' };
+    }
+
+    const result = await response.json();
+    return { success: true, message: result.summary, data: result };
+  } catch (error) {
+    console.error('Error generating sprint report:', error);
+    return { success: false, message: 'Failed to generate sprint report. Please try again.' };
+  }
+}
+
+/**
+ * Workload balance action handler (Nova-specific)
+ */
+export async function executeWorkloadBalance(
+  params: Record<string, unknown>,
+  context: AIContext
+): Promise<ActionResult> {
+  try {
+    const response = await fetch('/api/ai/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: context.workspace.id,
+        type: 'workload',
+        projectId: params.projectId,
+      }),
+    });
+
+    if (!response.ok) {
+      return { success: false, message: 'Failed to analyze workload' };
+    }
+
+    const result = await response.json();
+    return { success: true, message: result.analysis, data: result };
+  } catch (error) {
+    console.error('Error analyzing workload:', error);
+    return { success: false, message: 'Failed to analyze workload. Please try again.' };
+  }
+}
+
+/**
+ * Main action executor with agent capability checking.
  */
 export async function executeAction(
   action: AIAction,
-  context: AIContext
+  context: AIContext,
+  agentSlug?: string
 ): Promise<ActionResult> {
+  // Validate agent can execute this action
+  if (agentSlug && !canAgentExecute(agentSlug, action.type)) {
+    return {
+      success: false,
+      message: `This agent doesn't have permission to perform ${action.type} actions.`,
+    };
+  }
+
   switch (action.type) {
     case 'create_issue':
       return executeCreateIssue(action.params, context);
@@ -326,11 +406,14 @@ export async function executeAction(
       return executeSummarize(action.params, context);
     case 'analyze':
       return executeAnalyze(action.params, context);
+    case 'assign':
+      return executeAssign(action.params, context);
+    case 'sprint_report':
+      return executeSprintReport(action.params, context);
+    case 'workload_balance':
+      return executeWorkloadBalance(action.params, context);
     default:
-      return {
-        success: false,
-        message: `Unknown action type: ${action.type}`,
-      };
+      return { success: false, message: `Unknown action type: ${action.type}` };
   }
 }
 
@@ -348,10 +431,14 @@ export function validateActionParams(
     navigate: ['path'],
     summarize: [],
     analyze: [],
+    assign: ['issueId', 'assigneeId'],
+    sprint_report: [],
+    workload_balance: [],
+    triage: [],
   };
 
   const required = requiredFields[actionType] || [];
-  const missing = required.filter(field => !params[field]);
+  const missing = required.filter((field) => !params[field]);
 
   return {
     valid: missing.length === 0,

@@ -49,6 +49,170 @@ export function buildAIContext(params: {
 }
 
 /**
+ * Build enriched context for a specific agent.
+ * Now simplified - AI uses tools for data queries instead of pre-fetched context.
+ */
+export async function buildEnrichedContext(
+  baseContext: AIContext,
+  agentSlug: string,
+  prisma: any
+): Promise<AIContext> {
+  const enriched = { ...baseContext };
+
+  if (!enriched.currentPage) {
+    enriched.currentPage = { type: 'other' };
+  }
+
+  // Only fetch minimal context - AI will use tools for detailed queries
+  try {
+    const overview = await getWorkspaceOverview(baseContext.workspace.id, prisma);
+    enriched.currentPage = {
+      ...enriched.currentPage,
+      data: { overview },
+    };
+  } catch (error) {
+    console.error('Error enriching context:', error);
+  }
+
+  return enriched;
+}
+
+// --- Enrichment data fetchers ---
+
+async function getSprintContext(workspaceId: string, prisma: any) {
+  try {
+    // Get issues by status for sprint overview
+    const statusCounts = await prisma.issue.groupBy({
+      by: ['statusId'],
+      where: { workspaceId },
+      _count: true,
+    });
+
+    const overdueCount = await prisma.issue.count({
+      where: {
+        workspaceId,
+        dueDate: { lt: new Date() },
+        projectStatus: { isFinal: false },
+      },
+    });
+
+    return { statusCounts, overdueCount };
+  } catch {
+    return null;
+  }
+}
+
+async function getWorkloadContext(workspaceId: string, prisma: any) {
+  try {
+    // Get issue counts per assignee
+    const assigneeCounts = await prisma.issue.groupBy({
+      by: ['assigneeId'],
+      where: {
+        workspaceId,
+        assigneeId: { not: null },
+        projectStatus: { isFinal: false },
+      },
+      _count: true,
+    });
+
+    return { assigneeCounts };
+  } catch {
+    return null;
+  }
+}
+
+async function getRecentChangesContext(workspaceId: string, prisma: any) {
+  try {
+    const recentActivities = await prisma.issueActivity.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        action: true,
+        fieldName: true,
+        oldValue: true,
+        newValue: true,
+        itemId: true,
+        createdAt: true,
+      },
+    });
+
+    return recentActivities;
+  } catch {
+    return [];
+  }
+}
+
+async function getNavigationContext(workspaceId: string, prisma: any) {
+  try {
+    const [projects, views, recentIssues] = await Promise.all([
+      prisma.project.findMany({
+        where: {
+          workspaceId,
+          isArchived: { not: true },
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          issuePrefix: true,
+          color: true,
+          _count: { select: { issues: true } }
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      }),
+      prisma.view.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          color: true,
+          description: true,
+        },
+        take: 20,
+        orderBy: { accessCount: 'desc' },
+      }),
+      prisma.issue.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          issueKey: true,
+          title: true,
+          type: true,
+          priority: true,
+          project: { select: { name: true, issuePrefix: true } },
+          projectStatus: { select: { name: true } },
+          assignee: { select: { name: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 15,
+      }),
+    ]);
+
+    return { projects, views, recentIssues };
+  } catch (e) {
+    console.error('Error fetching navigation context:', e);
+    return null;
+  }
+}
+
+async function getWorkspaceOverview(workspaceId: string, prisma: any) {
+  try {
+    const [issueCount, projectCount, memberCount] = await Promise.all([
+      prisma.issue.count({ where: { workspaceId } }),
+      prisma.project.count({ where: { workspaceId, isArchived: { not: true } } }),
+      prisma.workspaceMember.count({ where: { workspaceId, status: true } }),
+    ]);
+
+    return { issueCount, projectCount, memberCount };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Extract page context from pathname
  */
 export function getPageContextFromPath(pathname: string): {
