@@ -1,26 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { 
-  Github, 
-  Search, 
-  ExternalLink, 
-  Check, 
-  Loader2, 
-  Star, 
-  GitBranch, 
-  Lock, 
+import {
+  Github,
+  Search,
+  ExternalLink,
+  Check,
+  Loader2,
+  Star,
+  GitBranch,
+  Lock,
   Globe,
   AlertCircle,
   RefreshCw,
-  Zap
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface GitHubRepository {
   id: number;
@@ -297,207 +295,215 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   };
 
   if (!isConnected) {
-    // Compact mode - just a button
+    // Compact mode - just a button (used inside ProjectSettingsClient)
     if (compact) {
       return (
-        <div className="flex items-center justify-center p-6 border-2 border-dashed border-[#21262d] rounded-lg bg-[#161b22]">
-          <div className="text-center space-y-3">
-            <div className="mx-auto w-10 h-10 bg-[#21262d] rounded-full flex items-center justify-center">
-              <Github className="h-5 w-5 text-[#e6edf3]" />
+        <Button
+          onClick={handleGitHubConnect}
+          className="h-10 px-5 bg-[#1f1f22] hover:bg-[#27272b] text-[#fafafa] border border-[#27272b] hover:border-[#3f3f46] transition-colors"
+        >
+          <Github className="h-4 w-4 mr-2" />
+          Connect GitHub Account
+        </Button>
+      );
+    }
+
+    // Full card mode - shown when GitHub account is not connected
+    return (
+      <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-[#1f1f22]">
+          <div className="flex items-center gap-2">
+            <Github className="h-4 w-4 text-[#fafafa]" />
+            <h2 className="text-sm font-medium text-[#fafafa]">Connect Repository</h2>
+          </div>
+          <p className="text-xs text-[#52525b] mt-0.5">
+            Link a GitHub repository to enable powerful integrations
+          </p>
+        </div>
+        <div className="p-6 sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            {/* Icon */}
+            <div className="relative w-16 h-16 mb-5">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#27272b] to-[#1f1f22] flex items-center justify-center">
+                <Github className="h-8 w-8 text-[#75757a]" />
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-[#8b949e]">
-                Connect your GitHub account to get started
-              </p>
-            </div>
-            <Button onClick={handleGitHubConnect} className="gap-2 bg-[#238636] hover:bg-[#2ea043]">
-              <Github className="h-4 w-4" />
+
+            <h3 className="text-base font-medium text-[#fafafa] mb-2">
+              Connect your GitHub account
+            </h3>
+            <p className="text-sm text-[#75757a] mb-6 max-w-sm">
+              Connect your GitHub account to browse repositories and enable automatic syncing.
+            </p>
+
+            <Button
+              onClick={handleGitHubConnect}
+              className="h-10 px-6 bg-[#1f1f22] hover:bg-[#27272b] text-[#fafafa] border border-[#27272b] hover:border-[#3f3f46] transition-colors"
+            >
+              <Github className="h-4 w-4 mr-2" />
               Connect with GitHub
             </Button>
           </div>
         </div>
-      );
-    }
-
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Github className="h-5 w-5" />
-            Connect with GitHub
-          </CardTitle>
-          <CardDescription>
-            Connect your GitHub account to access your repositories and enable seamless integration.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-center p-8 border-2 border-dashed border-muted rounded-lg">
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
-                <Github className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="font-medium">No GitHub account connected</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Connect your GitHub account to browse and select repositories
-                </p>
-              </div>
-              <Button onClick={handleGitHubConnect} className="gap-2">
-                <Github className="h-4 w-4" />
-                Connect with GitHub
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-green-500" />
-              <span>One-click repository connection</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-green-500" />
-              <span>Automatic webhook configuration</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-green-500" />
-              <span>No manual setup required</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+    <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+      {/* Header */}
+      <div className="px-4 sm:px-6 py-4 border-b border-[#1f1f22]">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Github className="h-5 w-5" />
-            Select Repository
+            <Github className="h-4 w-4 text-[#fafafa]" />
+            <h2 className="text-sm font-medium text-[#fafafa]">Select Repository</h2>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <img 
-                src={`https://github.com/${githubUser}.png`} 
-                alt={githubUser || ''} 
-                className="w-6 h-6 rounded-full"
+            <div className="flex items-center gap-2">
+              <img
+                src={`https://github.com/${githubUser}.png`}
+                alt={githubUser || ''}
+                className="w-5 h-5 rounded-full ring-1 ring-[#27272b]"
               />
-              <span>@{githubUser}</span>
+              <span className="text-xs text-[#9c9ca1]">@{githubUser}</span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={handleDisconnectGitHub}
-              className="text-muted-foreground hover:text-destructive"
+              className="text-xs text-[#52525b] hover:text-red-400 transition-colors"
             >
               Disconnect
-            </Button>
+            </button>
           </div>
-        </CardTitle>
-        <CardDescription>
+        </div>
+        <p className="text-xs text-[#52525b] mt-2">
           Choose a repository to connect to this project. Webhooks will be configured automatically.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </p>
+      </div>
+
+      <div className="p-4 sm:p-5 space-y-3">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#52525b]" />
           <Input
             placeholder="Search repositories..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="h-10 pl-10 bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0"
           />
         </div>
 
         {/* Repository List */}
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-2">
           {loading && repositories.length === 0 ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-5 w-5 animate-spin text-[#52525b]" />
             </div>
           ) : filteredRepos.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-16 text-sm text-[#52525b]">
               {searchTerm ? 'No repositories match your search' : 'No repositories found'}
             </div>
           ) : (
             filteredRepos.map((repo) => (
               <div
                 key={repo.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                className={cn(
+                  "group p-4 rounded-xl bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] transition-colors",
+                  repo.isConnected && "border-emerald-500/30 bg-emerald-500/5"
+                )}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-medium truncate">{repo.name}</h4>
-                    <div className="flex items-center gap-1">
+                {/* Top section - always horizontal */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {/* Repo Icon */}
+                    <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1f1f22] flex items-center justify-center">
                       {repo.private ? (
-                        <Lock className="h-3 w-3 text-muted-foreground" />
+                        <Lock className="h-4 w-4 text-[#75757a]" />
                       ) : (
-                        <Globe className="h-3 w-3 text-muted-foreground" />
-                      )}
-                      {repo.language && (
-                        <Badge variant="outline" className="text-xs">
-                          {repo.language}
-                        </Badge>
-                      )}
-                      {repo.stargazers_count > 0 && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Star className="h-3 w-3" />
-                          {repo.stargazers_count}
-                        </div>
+                        <Github className="h-4 w-4 text-[#75757a]" />
                       )}
                     </div>
+
+                    {/* Name and badges */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-medium text-[#fafafa]">{repo.name}</h4>
+                        {repo.private && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#27272b] text-[#75757a] flex-shrink-0">
+                            Private
+                          </span>
+                        )}
+                        {repo.language && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f22] text-[#9c9ca1] flex-shrink-0">
+                            {repo.language}
+                          </span>
+                        )}
+                      </div>
+                      {/* Description */}
+                      <p className="text-xs text-[#75757a] mt-1 line-clamp-1">
+                        {repo.description || 'No description'}
+                      </p>
+                    </div>
                   </div>
-                  
-                  <p className="text-sm text-muted-foreground truncate">
-                    {repo.description || 'No description'}
-                  </p>
-                  
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                    <span>{repo.owner.login}</span>
-                    <div className="flex items-center gap-1">
+
+                  {/* External link - always visible */}
+                  <a
+                    href={`https://github.com/${repo.full_name}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 p-1.5 rounded-md text-[#52525b] hover:text-[#9c9ca1] hover:bg-[#1f1f22] transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+
+                {/* Bottom section - meta and actions */}
+                <div className="flex items-center justify-between gap-4 pl-12">
+                  {/* Meta Row */}
+                  <div className="flex items-center gap-3 text-[11px] text-[#52525b] flex-wrap">
+                    <span className="flex-shrink-0">{repo.owner.login}</span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       <GitBranch className="h-3 w-3" />
                       {repo.default_branch}
                     </div>
-                    <span>Updated {new Date(repo.updated_at).toLocaleDateString()}</span>
+                    <span className="flex-shrink-0 hidden sm:inline">
+                      Updated {new Date(repo.updated_at).toLocaleDateString()}
+                    </span>
+                    {repo.stargazers_count > 0 && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Star className="h-3 w-3" />
+                        {repo.stargazers_count}
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 ml-4">
-                  {repo.isConnected ? (
-                    <div className="flex items-center gap-2 text-green-600">
-                      <Check className="h-4 w-4" />
-                      <span className="text-sm">Connected</span>
-                    </div>
-                  ) : !repo.permissions.admin ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">No admin access</span>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={() => handleRepositoryConnect(repo)}
-                      disabled={connecting === repo.id.toString()}
-                      size="sm"
-                    >
-                      {connecting === repo.id.toString() ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        'Connect'
-                      )}
-                    </Button>
-                  )}
-                  
-                  <Button variant="ghost" size="sm" asChild>
-                    <a 
-                      href={`https://github.com/${repo.full_name}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </Button>
+                  {/* Actions */}
+                  <div className="flex-shrink-0">
+                    {repo.isConnected ? (
+                      <span className="flex items-center gap-1.5 text-xs text-emerald-400 px-2 py-1 rounded-md bg-emerald-500/10">
+                        <Check className="h-3.5 w-3.5" />
+                        Connected
+                      </span>
+                    ) : !repo.permissions.admin ? (
+                      <span className="flex items-center gap-1.5 text-xs text-amber-400 px-2 py-1 rounded-md bg-amber-500/10">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">No admin access</span>
+                        <span className="sm:hidden">No access</span>
+                      </span>
+                    ) : (
+                      <Button
+                        onClick={() => handleRepositoryConnect(repo)}
+                        disabled={connecting === repo.id.toString()}
+                        size="sm"
+                        className="h-7 px-3 text-xs bg-blue-500 hover:bg-blue-400 text-white border-0"
+                      >
+                        {connecting === repo.id.toString() ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          'Connect'
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -506,23 +512,22 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
 
         {/* Load More */}
         {hasMore && !searchTerm && (
-          <div className="text-center">
-            <Button
-              variant="outline"
+          <div className="pt-3 flex justify-center">
+            <button
               onClick={loadMore}
               disabled={loading}
-              className="gap-2"
+              className="flex items-center gap-2 h-9 px-4 text-xs text-[#75757a] hover:text-[#fafafa] bg-[#101011] hover:bg-[#1f1f22] border border-[#1f1f22] hover:border-[#27272b] rounded-lg transition-colors disabled:opacity-50"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <ChevronDown className="h-3.5 w-3.5" />
               )}
-              Load More
-            </Button>
+              Load More Repositories
+            </button>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

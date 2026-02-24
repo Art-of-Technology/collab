@@ -81,9 +81,12 @@ interface ViewRendererProps {
       color?: string;
       statuses?: any[];
     }>;
+    projectIds?: string[]; // For dynamic views
     isDefault: boolean;
     isFavorite: boolean;
+    isDynamic?: boolean; // Flag for AI-generated dynamic views
     createdBy: string;
+    ownerId?: string;
     sharedWith: string[];
     createdAt: Date;
     updatedAt: Date;
@@ -199,13 +202,17 @@ export default function ViewRenderer({
   const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
   const [tempOrdering, setTempOrdering] = useState('manual');
   const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
-  const [tempProjectIds, setTempProjectIds] = useState(view.projects.map(p => p.id));
+  // For dynamic views, use projectIds from URL params; otherwise use projects array
+  const [tempProjectIds, setTempProjectIds] = useState(
+    view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id)
+  );
   const [recentIssueCreated, setRecentIssueCreated] = useState(false);
 
   // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
+  // Skip for dynamic views since they don't have saved positions
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
     view.id,
-    view.displayType === 'KANBAN' || tempOrdering === 'manual',
+    !view.isDynamic && (view.displayType === 'KANBAN' || tempOrdering === 'manual'),
   );
   // Load project follow status (for the primary project of this view)
   const primaryProjectId = useMemo(() => (tempProjectIds?.[0] || view.projects?.[0]?.id || ''), [tempProjectIds, view.projects]);
@@ -383,12 +390,15 @@ export default function ViewRenderer({
       filters: view.filters || {}
     });
     // Reset temp project IDs when view changes
-    setTempProjectIds(view.projects.map(p => p.id));
+    // For dynamic views, prefer projectIds (from URL) if specified; otherwise use projects array
+    setTempProjectIds(
+      view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id)
+    );
     // Sync temp display properties with view on view change
     setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
     // Reset temp filters when view changes
     setTempFilters({});
-  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects]);
+  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects, view.projectIds]);
 
   // Update ViewFilters context with current data and reset context filters on view change
   useEffect(() => {
@@ -451,15 +461,17 @@ export default function ViewRenderer({
   const hasChanges = useMemo(() => {
     const sortedTemp = [...tempDisplayProperties].sort();
     const sortedSaved = [...(lastSavedState.displayProperties || [])].sort();
+    // For dynamic views, compare against projectIds; otherwise use projects array
+    const originalProjIds = view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id);
     return (
       Object.keys(tempFilters).length > 0 ||
       tempDisplayType !== lastSavedState.displayType ||
       tempGrouping !== lastSavedState.grouping ||
       tempOrdering !== lastSavedState.ordering ||
       JSON.stringify(sortedTemp) !== JSON.stringify(sortedSaved) ||
-      JSON.stringify(tempProjectIds.sort()) !== JSON.stringify(view.projects.map(p => p.id).sort())
+      JSON.stringify([...tempProjectIds].sort()) !== JSON.stringify([...originalProjIds].sort())
     );
-  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects]);
+  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects, view.projectIds]);
 
   // Reset to view defaults
   const resetToDefaults = () => {
@@ -468,7 +480,10 @@ export default function ViewRenderer({
     setTempGrouping(lastSavedState.grouping);
     setTempOrdering(lastSavedState.ordering);
     setTempDisplayProperties(lastSavedState.displayProperties);
-    setTempProjectIds(view.projects.map(p => p.id));
+    // For dynamic views, prefer projectIds if specified
+    setTempProjectIds(
+      view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id)
+    );
     setTempShowSubIssues(true);
   };
 
@@ -1201,37 +1216,58 @@ export default function ViewRenderer({
         title={view.name}
         subtitle={`${filteredIssues.length} ${filteredIssues.length === 1 ? 'issue' : 'issues'}`}
         leftContent={
-          hasChanges && (
-            <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetToDefaults}
-                className={pageHeaderButtonStyles.reset}
-              >
-                <RotateCcw className="h-3 w-3 lg:mr-1" />
-                <span className="hidden lg:inline">Reset</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleUpdateView}
-                className={pageHeaderButtonStyles.update}
-              >
-                <Save className="h-3 w-3 lg:mr-1" />
-                <span className="hidden lg:inline">Update</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSaveDialog(true)}
-                className={pageHeaderButtonStyles.danger}
-              >
-                <Save className="h-3 w-3 lg:mr-1" />
-                <span className="hidden lg:inline">Save as new</span>
-              </Button>
-            </div>
-          )
+          <>
+            {/* Dynamic view indicator and save button */}
+            {view.isDynamic && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-violet-400 bg-violet-500/10 px-2 py-1 rounded-md border border-violet-500/20 flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3" />
+                  <span className="hidden sm:inline">AI View</span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSaveDialog(true)}
+                  className="h-7 px-2.5 text-xs bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 border border-violet-500/20"
+                >
+                  <Save className="h-3 w-3 mr-1.5" />
+                  Save View
+                </Button>
+              </div>
+            )}
+            {/* Regular view change buttons */}
+            {!view.isDynamic && hasChanges && (
+              <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetToDefaults}
+                  className={pageHeaderButtonStyles.reset}
+                >
+                  <RotateCcw className="h-3 w-3 lg:mr-1" />
+                  <span className="hidden lg:inline">Reset</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleUpdateView}
+                  className={pageHeaderButtonStyles.update}
+                >
+                  <Save className="h-3 w-3 lg:mr-1" />
+                  <span className="hidden lg:inline">Update</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSaveDialog(true)}
+                  className={pageHeaderButtonStyles.danger}
+                >
+                  <Save className="h-3 w-3 lg:mr-1" />
+                  <span className="hidden lg:inline">Save as new</span>
+                </Button>
+              </div>
+            )}
+          </>
         }
         search={
           view.displayType !== 'PLANNING' ? (

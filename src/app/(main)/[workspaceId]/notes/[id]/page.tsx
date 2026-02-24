@@ -55,26 +55,23 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b]">
-      {/* Header - matching notes list page */}
-      <div className="flex-none border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
+    <div className="h-full w-full overflow-y-auto">
+      <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
+        {/* Header - matching dashboard/timeline style */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <Link href={`/${resolvedParams.workspaceId}/notes`}>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-[#6e7681] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                className="h-9 w-9 p-0 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] rounded-xl"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5" />
               </Button>
             </Link>
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <FileText className="h-4 w-4 text-[#3b82f6]" />
-            </div>
             <div>
-              <h1 className="text-sm font-medium text-[#e6edf3]">Edit Context</h1>
-              <p className="text-xs text-[#6e7681]">
+              <h1 className="text-2xl font-medium text-white mb-1">Edit Context</h1>
+              <p className="text-sm text-[#75757a]">
                 Changes are saved automatically
               </p>
             </div>
@@ -86,26 +83,26 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-3 text-[#6e7681] hover:text-red-400 hover:bg-red-500/10"
+                className="h-9 px-4 gap-2 rounded-xl text-[#75757a] hover:text-red-400 hover:bg-red-500/10"
               >
-                <Trash2 className="h-4 w-4 mr-1.5" />
+                <Trash2 className="h-4 w-4" />
                 Delete
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-[#0d0d0e] border-[#27272a]">
+            <AlertDialogContent className="bg-[#171719] border-[#1f1f22] rounded-2xl">
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-[#fafafa]">Delete Context</AlertDialogTitle>
-                <AlertDialogDescription className="text-[#71717a]">
+                <AlertDialogDescription className="text-[#75757a]">
                   Are you sure you want to delete this context? This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="bg-[#18181b] border-[#27272a] text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#fafafa]">
+                <AlertDialogCancel className="bg-[#101011] border-[#1f1f22] text-[#9c9ca1] hover:bg-[#1f1f22] hover:text-[#fafafa] rounded-xl">
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
-                  className="bg-red-500 hover:bg-red-600 text-white"
+                  className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
                 >
                   Delete
                 </AlertDialogAction>
@@ -113,10 +110,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
             </AlertDialogContent>
           </AlertDialog>
         </div>
-      </div>
 
-      {/* Seamless Editor - no container background */}
-      <div className="flex-1 overflow-auto">
+        {/* Note Editor */}
         {currentWorkspace?.id && resolvedParams.id ? (
           <NoteFormEditor
             mode="edit"
@@ -125,8 +120,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
             showCancelButton={false}
           />
         ) : (
-          <div className="flex justify-center items-center py-16">
-            <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
+          <div className="flex justify-center items-center py-20">
+            <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
           </div>
         )}
       </div>

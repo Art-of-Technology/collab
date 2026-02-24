@@ -4,23 +4,33 @@ import { useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2, Filter, ArrowUpDown, FolderKanban } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  FolderKanban,
+  ChevronDown,
+  Lightbulb,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useFeatureRequests } from "@/hooks/queries/useFeature";
-import { MarkdownContent } from "@/components/ui/markdown-content";
 import { useWorkspace } from "@/context/WorkspaceContext";
-
+import { cn } from "@/lib/utils";
 
 interface FeatureRequestsListProps {
   currentUserId: string;
@@ -28,10 +38,83 @@ interface FeatureRequestsListProps {
   showProjectBadge?: boolean;
 }
 
-export default function FeatureRequestsList({ 
-  currentUserId, 
+// Status configuration
+const statusConfig: Record<string, { label: string; icon: React.ReactNode; bg: string; text: string }> = {
+  pending: {
+    label: "Pending",
+    icon: <Clock className="h-3 w-3" />,
+    bg: "bg-[#3f3f46]/20",
+    text: "text-[#9c9ca1]",
+  },
+  PENDING: {
+    label: "Pending",
+    icon: <Clock className="h-3 w-3" />,
+    bg: "bg-[#3f3f46]/20",
+    text: "text-[#9c9ca1]",
+  },
+  accepted: {
+    label: "Accepted",
+    icon: <CheckCircle2 className="h-3 w-3" />,
+    bg: "bg-emerald-500/10",
+    text: "text-emerald-400",
+  },
+  PLANNED: {
+    label: "Planned",
+    icon: <Sparkles className="h-3 w-3" />,
+    bg: "bg-purple-500/10",
+    text: "text-purple-400",
+  },
+  rejected: {
+    label: "Rejected",
+    icon: <XCircle className="h-3 w-3" />,
+    bg: "bg-red-500/10",
+    text: "text-red-400",
+  },
+  DECLINED: {
+    label: "Declined",
+    icon: <XCircle className="h-3 w-3" />,
+    bg: "bg-red-500/10",
+    text: "text-red-400",
+  },
+  completed: {
+    label: "Completed",
+    icon: <CheckCircle2 className="h-3 w-3" />,
+    bg: "bg-blue-500/10",
+    text: "text-blue-400",
+  },
+  COMPLETED: {
+    label: "Completed",
+    icon: <CheckCircle2 className="h-3 w-3" />,
+    bg: "bg-blue-500/10",
+    text: "text-blue-400",
+  },
+  IN_PROGRESS: {
+    label: "In Progress",
+    icon: <Loader2 className="h-3 w-3" />,
+    bg: "bg-amber-500/10",
+    text: "text-amber-400",
+  },
+};
+
+const statusOptions = [
+  { value: "all", label: "All Statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "accepted", label: "Accepted" },
+  { value: "rejected", label: "Rejected" },
+  { value: "completed", label: "Completed" },
+];
+
+const orderOptions = [
+  { value: "most_votes", label: "Most Votes" },
+  { value: "least_votes", label: "Least Votes" },
+  { value: "latest", label: "Latest" },
+  { value: "oldest", label: "Oldest" },
+];
+
+export default function FeatureRequestsList({
+  currentUserId,
   projectId,
-  showProjectBadge = true 
+  showProjectBadge = true,
 }: FeatureRequestsListProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -39,36 +122,17 @@ export default function FeatureRequestsList({
   const { toast } = useToast();
   const { currentWorkspace } = useWorkspace();
 
-  // Get query params
   const status = searchParams.get("status") || "all";
   const orderBy = searchParams.get("orderBy") || "most_votes";
   const page = parseInt(searchParams.get("page") || "1");
 
-  // Status options for filter
-  const statusOptions = [
-    { value: "all", label: "All Statuses" },
-    { value: "pending", label: "Pending" },
-    { value: "accepted", label: "Accepted" },
-    { value: "rejected", label: "Rejected" },
-    { value: "completed", label: "Completed" },
-  ];
-
-  // Order options for sorting
-  const orderOptions = [
-    { value: "latest", label: "Latest" },
-    { value: "oldest", label: "Oldest" },
-    { value: "most_votes", label: "Most Votes" },
-    { value: "least_votes", label: "Least Votes" },
-  ];
-
-  // Fetch data using TanStack Query
   const { data, isLoading, error } = useFeatureRequests({
     page,
     limit: 10,
     status,
     orderBy,
     projectId,
-    workspaceId: currentWorkspace?.id
+    workspaceId: currentWorkspace?.id,
   });
 
   const featureRequests = data?.featureRequests || [];
@@ -76,43 +140,27 @@ export default function FeatureRequestsList({
     page: 1,
     limit: 10,
     totalPages: 1,
-    totalCount: 0
+    totalCount: 0,
   };
 
-  // Helper function to update URL parameters
   const updateQueryParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
-
     if (value && value !== "all") {
       params.set(key, value);
     } else {
       params.delete(key);
     }
-
-    // Reset to page 1 when changing filters
     if (key !== "page") {
       params.set("page", "1");
     }
-
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // Handle filter and order changes
-  const handleStatusChange = (value: string) => {
-    updateQueryParams("status", value);
-  };
-
-  const handleOrderChange = (value: string) => {
-    updateQueryParams("orderBy", value);
-  };
-
-  // Handle pagination
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > pagination.totalPages) return;
     updateQueryParams("page", newPage.toString());
   };
 
-  // Display error message if query fails
   useEffect(() => {
     if (error) {
       toast({
@@ -123,209 +171,263 @@ export default function FeatureRequestsList({
     }
   }, [error, toast]);
 
-  // Get a badge variant based on status
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-      case "PENDING":
-        return <Badge variant="secondary" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 transition-colors text-sm">Pending</Badge>;
-      case "accepted":
-      case "PLANNED":
-        return <Badge variant="secondary" className="bg-green-500/10 hover:bg-green-500/20 text-green-600 transition-colors text-sm">Accepted</Badge>;
-      case "rejected":
-      case "DECLINED":
-        return <Badge variant="secondary" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors text-sm">Rejected</Badge>;
-      case "completed":
-      case "COMPLETED":
-      case "IN_PROGRESS":
-        return <Badge variant="secondary" className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 transition-colors text-sm">Completed</Badge>;
-      default:
-        return null;
-    }
+  const getStatusConfig = (status: string) => {
+    return statusConfig[status] || statusConfig.pending;
   };
 
-  // Truncate description for preview
   const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + "...";
+    if (!text) return "";
+    const plainText = text.replace(/<[^>]*>/g, "");
+    if (plainText.length <= maxLength) return plainText;
+    return plainText.slice(0, maxLength) + "...";
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between px-6 pt-4">
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-center justify-start">
-          <div className="flex gap-2 w-full justify-between">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Filter className="h-4 w-4" />
-              <span>Filter:</span>
-            </div>
-            <Select value={status} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                {statusOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="flex flex-col gap-4">
+      {/* Filters Row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Status Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 h-9 px-3 rounded-lg bg-[#171719] border border-[#1f1f22] text-sm text-[#9c9ca1] hover:bg-[#1f1f22] hover:border-[#3f3f46] transition-colors">
+                <span>{statusOptions.find((o) => o.value === status)?.label || "All Statuses"}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-[#52525b]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="bg-[#171719] border-[#1f1f22] min-w-[140px]"
+            >
+              {statusOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => updateQueryParams("status", option.value)}
+                  className={cn(
+                    "text-[#9c9ca1] hover:text-[#fafafa] hover:bg-[#1f1f22] cursor-pointer",
+                    status === option.value && "text-[#fafafa] bg-[#1f1f22]"
+                  )}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          <div className="flex gap-2 w-full justify-between">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <ArrowUpDown className="h-4 w-4" />
-              <span>Sort:</span>
-            </div>
-            <Select value={orderBy} onValueChange={handleOrderChange}>
-              <SelectTrigger className="w-[180px] bg-background border-border/60 focus:border-primary focus:ring-primary">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                {orderOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Sort Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 h-9 px-3 rounded-lg bg-[#171719] border border-[#1f1f22] text-sm text-[#9c9ca1] hover:bg-[#1f1f22] hover:border-[#3f3f46] transition-colors">
+                <span>{orderOptions.find((o) => o.value === orderBy)?.label || "Most Votes"}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-[#52525b]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="bg-[#171719] border-[#1f1f22] min-w-[140px]"
+            >
+              {orderOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => updateQueryParams("orderBy", option.value)}
+                  className={cn(
+                    "text-[#9c9ca1] hover:text-[#fafafa] hover:bg-[#1f1f22] cursor-pointer",
+                    orderBy === option.value && "text-[#fafafa] bg-[#1f1f22]"
+                  )}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <div className="text-sm py-1 text-secondary-foreground text-left tracking-tight sm:tracking-normal">
-          {pagination.totalCount} feature request{pagination.totalCount !== 1 ? "s" : ""}
-        </div>
+        <span className="text-xs text-[#52525b]">
+          {pagination.totalCount} request{pagination.totalCount !== 1 ? "s" : ""}
+        </span>
       </div>
 
+      {/* Loading State */}
       {isLoading ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-[#52525b]" />
         </div>
       ) : featureRequests.length === 0 ? (
-        <Card className="text-center py-12 bg-card/95 backdrop-blur-sm border-border/40 shadow-lg">
-          <p className="text-muted-foreground">No feature requests found</p>
-        </Card>
+        /* Empty State */
+        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] py-16 text-center">
+          <div className="flex flex-col items-center">
+            <div className="p-4 rounded-2xl bg-[#101011] mb-4">
+              <Lightbulb className="h-8 w-8 text-[#3f3f46]" />
+            </div>
+            <h3 className="text-sm font-medium text-[#9c9ca1] mb-1">No feature requests found</h3>
+            <p className="text-xs text-[#52525b]">Be the first to submit an idea!</p>
+          </div>
+        </div>
       ) : (
-        <div className="space-y-4">
+        /* Feature Requests List */
+        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden divide-y divide-[#1f1f22]">
           {featureRequests.map((request) => {
-            // Build the correct link based on current context
-            const featureLink = currentWorkspace 
-              ? `${pathname.replace(/\?.*$/, '')}/${request.id}`.replace(/\/+/g, '/')
-              : '#';
-            
+            const featureLink = currentWorkspace
+              ? `${pathname.replace(/\?.*$/, "")}/${request.id}`.replace(/\/+/g, "/")
+              : "#";
+            const statusCfg = getStatusConfig(request.status);
+
             return (
-            <Link href={featureLink} key={request.id} className="block group">
-              <Card className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-border/40 bg-card/95 backdrop-blur-sm">
-                <div className="p-6">
-                  <div className="flex justify-between">
-                    <div className="space-y-2 text-left">
-                      <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors tracking-tight sm:tracking-normal">{request.title}</h3>
-                      <div className="hidden sm:flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                        <span>
-                          {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
-                        </span>
-                        {getStatusBadge(request.status)}
-                      </div>
-
-                      {/* Mobile-only meta info */}
-                      <div className="sm:hidden text-left space-y-2">
-                        <div className="text-sm text-muted-foreground">
-                          {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
-                        </div>
-                        <div className="flex items-center justify-start gap-3">
-                          {getStatusBadge(request.status)}
-                          <span className="text-muted-foreground">•</span>
-                          <span className={`text-sm ${request.voteScore > 0
-                            ? 'text-green-600'
-                            : request.voteScore < 0
-                              ? 'text-red-600'
-                              : ''
-                            }`}>
-                            {request.voteScore} {Math.abs(request.voteScore) === 1 ? 'vote' : 'votes'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="hidden sm:flex flex-col items-center justify-center min-w-[70px] text-center">
-                      <span className={`text-2xl font-bold transition-colors ${request.voteScore > 0
-                        ? 'text-green-600'
+              <Link
+                href={featureLink}
+                key={request.id}
+                className="group flex items-start gap-4 p-5 hover:bg-[#1f1f22] transition-colors"
+              >
+                {/* Vote Score */}
+                <div className="flex flex-col items-center gap-0.5 w-12 flex-shrink-0 pt-0.5">
+                  <div
+                    className={cn(
+                      "flex items-center justify-center",
+                      request.voteScore > 0
+                        ? "text-emerald-400"
                         : request.voteScore < 0
-                          ? 'text-red-600'
-                          : ''
-                        }`}>
-                        {request.voteScore}
-                      </span>
-                      <span className="text-xs text-muted-foreground">votes</span>
-                    </div>
+                        ? "text-red-400"
+                        : "text-[#52525b]"
+                    )}
+                  >
+                    {request.voteScore >= 0 ? (
+                      <ThumbsUp className="h-5 w-5" />
+                    ) : (
+                      <ThumbsDown className="h-5 w-5" />
+                    )}
+                  </div>
+                  <span
+                    className={cn(
+                      "text-lg font-semibold",
+                      request.voteScore > 0
+                        ? "text-emerald-400"
+                        : request.voteScore < 0
+                        ? "text-red-400"
+                        : "text-[#75757a]"
+                    )}
+                  >
+                    {request.voteScore > 0 ? "+" : ""}
+                    {request.voteScore}
+                  </span>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  {/* Title Row */}
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <h3 className="text-[15px] font-medium text-[#fafafa] group-hover:text-white transition-colors line-clamp-1">
+                      {request.title}
+                    </h3>
+                    <span
+                      className={cn(
+                        "flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md flex-shrink-0",
+                        statusCfg.bg,
+                        statusCfg.text
+                      )}
+                    >
+                      {statusCfg.icon}
+                      {statusCfg.label}
+                    </span>
                   </div>
 
-                  <div className="mt-4 line-clamp-2 group-hover:text-foreground/90 transition-colors text-left">
-                    <MarkdownContent
-                      content={truncateText(request.description, 200)}
-                      htmlContent={request.description}
-                      className="prose-sm text-muted-foreground text-left"
-                    />
-                  </div>
+                  {/* Description */}
+                  <p className="text-sm text-[#75757a] line-clamp-2 mb-3">
+                    {truncateText(request.description, 180)}
+                  </p>
 
-                  <div className="mt-4 flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6 border border-border/40">
-                        <AvatarImage src={request.author.image || undefined} alt={request.author.name || "User"} />
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {request.author.name?.charAt(0) || "U"}
+                  {/* Meta Row */}
+                  <div className="flex items-center gap-4 text-xs text-[#52525b]">
+                    {/* Author */}
+                    <div className="flex items-center gap-1.5">
+                      <Avatar className="h-4 w-4">
+                        <AvatarImage src={request.author.image || undefined} />
+                        <AvatarFallback className="text-[8px] bg-[#27272b] text-[#75757a]">
+                          {request.author.name?.charAt(0)?.toUpperCase() || "?"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">
+                      <span className="text-[#75757a]">
                         {request.author.id === currentUserId ? "You" : request.author.name}
                       </span>
-                      {showProjectBadge && !projectId && request.project && (
-                        <Badge 
-                          variant="outline" 
-                          className="ml-2 text-xs"
-                          style={{ borderColor: request.project.color || undefined }}
-                        >
-                          <FolderKanban className="h-3 w-3 mr-1" />
-                          {request.project.name}
-                        </Badge>
-                      )}
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {request._count.comments} comment{request._count.comments !== 1 ? "s" : ""}
+
+                    {/* Project Badge */}
+                    {showProjectBadge && !projectId && request.project && (
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: request.project.color || "#6366f1" }}
+                        />
+                        <span>{request.project.name}</span>
+                      </div>
+                    )}
+
+                    {/* Comments */}
+                    <div className="flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3" />
+                      <span>{request._count.comments}</span>
                     </div>
+
+                    {/* Time */}
+                    <span className="ml-auto">
+                      {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
+                    </span>
                   </div>
                 </div>
-              </Card>
-            </Link>
-          );
+              </Link>
+            );
           })}
         </div>
       )}
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-8">
+        <div className="flex items-center justify-center gap-2 pt-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => handlePageChange(pagination.page - 1)}
             disabled={pagination.page === 1 || isLoading}
-            className="bg-background border-border/60 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
+            className="h-8 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] disabled:opacity-30"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             Previous
           </Button>
 
-          <div className="text-sm bg-secondary/30 py-1 px-3 rounded-md">
-            Page {pagination.page} of {pagination.totalPages}
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+              let pageNum;
+              if (pagination.totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (pagination.page <= 3) {
+                pageNum = i + 1;
+              } else if (pagination.page >= pagination.totalPages - 2) {
+                pageNum = pagination.totalPages - 4 + i;
+              } else {
+                pageNum = pagination.page - 2 + i;
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageChange(pageNum)}
+                  className={cn(
+                    "h-8 w-8 rounded-lg text-sm transition-colors",
+                    pagination.page === pageNum
+                      ? "bg-[#1f1f22] text-[#fafafa]"
+                      : "text-[#75757a] hover:bg-[#171719] hover:text-[#9c9ca1]"
+                  )}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
           </div>
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => handlePageChange(pagination.page + 1)}
             disabled={pagination.page === pagination.totalPages || isLoading}
-            className="bg-background border-border/60 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
+            className="h-8 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] disabled:opacity-30"
           >
             Next
             <ChevronRight className="h-4 w-4 ml-1" />
@@ -334,4 +436,4 @@ export default function FeatureRequestsList({
       )}
     </div>
   );
-} 
+}

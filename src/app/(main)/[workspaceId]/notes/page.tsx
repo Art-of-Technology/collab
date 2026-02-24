@@ -6,7 +6,6 @@ import { canEditNote } from "@/utils/permissions";
 import { redirect, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Search,
   Plus,
@@ -181,7 +180,7 @@ function NoteListItem({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const { preview } = getNotePreview(note.content, 80);
+  const { preview } = getNotePreview(note.content, 100);
   const TypeIcon = noteTypeIcons[note.type] || FileText;
   const typeConfig = getNoteTypeConfig(note.type);
   const ScopeIconComponent = noteScopeIcons[note.scope] || Lock;
@@ -200,12 +199,12 @@ function NoteListItem({
 
   return (
     <div
-      className="group relative flex items-center gap-4 px-5 py-3.5 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer"
+      className="group relative flex items-center gap-4 px-5 py-4 hover:bg-[#1f1f22] transition-all duration-200 cursor-pointer"
       onClick={() => router.push(`/${workspaceSlug}/notes/${note.id}`)}
     >
       {/* Color indicator based on scope */}
       <div
-        className="w-1 h-10 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+        className="w-1 h-12 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
         style={{ backgroundColor: getScopeColor() }}
       />
 
@@ -213,47 +212,47 @@ function NoteListItem({
       <div className="flex-1 min-w-0">
         {/* Title Row */}
         <div className="flex items-center gap-2.5">
-          <TypeIcon className={cn("h-3.5 w-3.5 flex-shrink-0", typeConfig.color)} />
-          <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
+          <TypeIcon className={cn("h-4 w-4 flex-shrink-0", typeConfig.color)} />
+          <h3 className="text-sm font-medium text-[#fafafa] group-hover:text-white truncate">
             {note.title}
           </h3>
           {note.isPinned && (
-            <Pin className="h-3 w-3 text-amber-500 flex-shrink-0" />
+            <Pin className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
           )}
           {note.isFavorite && (
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400 flex-shrink-0" />
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 flex-shrink-0" />
           )}
           {note.isAiContext && (
-            <Bot className="h-3 w-3 text-purple-400 flex-shrink-0" />
+            <Bot className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
           )}
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f23] text-[#71717a] font-medium flex-shrink-0 flex items-center gap-1">
-            <ScopeIconComponent className="h-2.5 w-2.5" />
+          <span className="text-xs px-2 py-0.5 rounded-lg bg-[#27272b] text-[#75757a] font-medium flex-shrink-0 flex items-center gap-1">
+            <ScopeIconComponent className="h-3 w-3" />
             {note.scope.charAt(0) + note.scope.slice(1).toLowerCase()}
           </span>
         </div>
 
         {/* Description */}
         {preview && (
-          <p className="text-[12px] text-[#52525b] truncate max-w-[400px] mt-0.5">
+          <p className="text-sm text-[#75757a] truncate max-w-[500px] mt-1">
             {preview}
           </p>
         )}
 
         {/* Stats Row */}
-        <div className="flex items-center gap-3 mt-1.5">
+        <div className="flex items-center gap-3 mt-2">
           {/* Author avatar */}
           <div className="flex items-center gap-1.5">
-            <Avatar className="h-4 w-4">
+            <Avatar className="h-5 w-5 ring-1 ring-[#1f1f22]">
               <AvatarImage src={note.author.image || undefined} />
-              <AvatarFallback className="text-[8px] bg-[#27272a] text-[#71717a]">
+              <AvatarFallback className="text-[9px] bg-[#101011] text-[#75757a]">
                 {note.author.name?.charAt(0)?.toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
-            <span className="text-[10px] text-[#52525b]">{note.author.name}</span>
+            <span className="text-xs text-[#75757a]">{note.author.name}</span>
           </div>
 
           {note.project && (
-            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+            <div className="flex items-center gap-1.5 text-xs text-[#75757a]">
               <div
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: note.project.color || "#6366f1" }}
@@ -267,33 +266,33 @@ function NoteListItem({
               {note.tags.slice(0, 2).map((tag) => (
                 <span
                   key={tag.id}
-                  className="text-[10px] px-1.5 py-0 rounded"
+                  className="text-xs px-2 py-0.5 rounded-lg"
                   style={{ color: tag.color, backgroundColor: `${tag.color}15` }}
                 >
                   {tag.name}
                 </span>
               ))}
               {note.tags.length > 2 && (
-                <span className="text-[10px] text-[#52525b]">+{note.tags.length - 2}</span>
+                <span className="text-xs text-[#75757a]">+{note.tags.length - 2}</span>
               )}
             </div>
           )}
 
           {note.sharedWith && note.sharedWith.length > 0 && (
-            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
-              <Share2 className="h-3 w-3 text-[#3b82f6]" />
+            <div className="flex items-center gap-1 text-xs text-[#75757a]">
+              <Share2 className="h-3.5 w-3.5 text-blue-400" />
               <span className="tabular-nums">{note.sharedWith.length}</span>
             </div>
           )}
 
           {note.comments && note.comments.length > 0 && (
-            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
-              <MessageSquare className="h-3 w-3 text-[#6e7681]" />
+            <div className="flex items-center gap-1 text-xs text-[#75757a]">
+              <MessageSquare className="h-3.5 w-3.5" />
               <span className="tabular-nums">{note.comments.length}</span>
             </div>
           )}
 
-          <span className="text-[10px] text-[#3f3f46]">
+          <span className="text-xs text-[#52525b]">
             {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
           </span>
         </div>
@@ -303,64 +302,65 @@ function NoteListItem({
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           onClick={(e) => {
             e.stopPropagation();
             onToggleFavorite(note.id, note.isFavorite);
           }}
           className={cn(
-            "h-8 w-8",
+            "h-8 w-8 rounded-lg",
             note.isFavorite
-              ? "text-amber-400"
-              : "text-[#52525b] hover:text-amber-400"
+              ? "text-amber-400 hover:bg-amber-500/10"
+              : "text-[#75757a] hover:text-amber-400 hover:bg-[#27272b]"
           )}
           title={note.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
-          <Star className={cn("h-3.5 w-3.5", note.isFavorite && "fill-amber-400")} />
+          <Star className={cn("h-4 w-4", note.isFavorite && "fill-amber-400")} />
         </Button>
 
         {canEdit && (
           <>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={(e) => {
                 e.stopPropagation();
                 onTogglePin(note.id, !!note.isPinned);
               }}
               className={cn(
-                "h-8 w-8",
+                "h-8 w-8 rounded-lg",
                 note.isPinned
-                  ? "text-amber-500"
-                  : "text-[#52525b] hover:text-amber-500"
+                  ? "text-amber-500 hover:bg-amber-500/10"
+                  : "text-[#75757a] hover:text-amber-500 hover:bg-[#27272b]"
               )}
               title={note.isPinned ? "Unpin" : "Pin to top"}
             >
-              <Pin className="h-3.5 w-3.5" />
+              <Pin className="h-4 w-4" />
             </Button>
 
             <Button
               variant="ghost"
-              size="md"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 router.push(`/${workspaceSlug}/notes/${note.id}`);
               }}
+              className="h-8 px-3 gap-1.5 rounded-lg text-[#75757a] hover:text-[#fafafa] hover:bg-[#27272b]"
             >
-              <Edit className="h-3.5 w-3.5" />
+              <Edit className="h-4 w-4" />
               <span>Edit</span>
             </Button>
 
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(note.id);
               }}
-              className="h-8 w-8 text-[#52525b] hover:text-red-400"
+              className="h-8 w-8 rounded-lg text-[#75757a] hover:text-red-400 hover:bg-red-500/10"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
             </Button>
           </>
         )}
@@ -682,55 +682,50 @@ export default function NotesPage({
 
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
-      <div className="h-full flex flex-col bg-[#0a0a0b]">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
+      <div className="h-full w-full overflow-y-auto">
+        <div className="flex flex-col gap-8 p-8 max-w-[1400px] mx-auto">
+          <div className="flex items-center justify-center py-20">
+            <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
-      {/* Header */}
-      <div className="flex-none border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <FileText className="h-4 w-4 text-[#3b82f6]" />
-            </div>
-            <div>
-              <h1 className="text-sm font-medium text-[#e6edf3]">Context</h1>
-              <p className="text-xs text-[#6e7681]">
-                {filteredNotes.length} context{filteredNotes.length !== 1 ? 's' : ''}
-              </p>
-            </div>
+    <div className="h-full w-full overflow-y-auto">
+      <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
+        {/* Header - matching dashboard style */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-medium text-white mb-1">Context</h1>
+            <p className="text-sm text-[#75757a]">
+              {filteredNotes.length} context{filteredNotes.length !== 1 ? 's' : ''} in your workspace
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
-              size="sm"
-              className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              New Context
-            </Button>
-          </div>
+          <Button
+            onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
+            size="sm"
+            className="h-9 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Context
+          </Button>
         </div>
 
-        {/* Search and Tab Toggle - Projects Style */}
-        <div className="flex items-center gap-3 px-6 pb-3">
+        {/* Search and Tab Toggle */}
+        <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#75757a]" />
             <Input
               placeholder="Search context..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3] placeholder:text-[#6e7681] focus:border-[#30363d]"
+              className="pl-9 h-10 bg-[#171719] border-[#1f1f22] text-[#fafafa] placeholder:text-[#75757a] focus:border-[#27272b] rounded-xl"
             />
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
+          <div className="flex items-center gap-1 rounded-xl border border-[#1f1f22] p-1 bg-[#171719]">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -749,25 +744,23 @@ export default function NotesPage({
                   size="sm"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "h-7 gap-1.5",
+                    "h-8 px-3 gap-1.5 rounded-lg",
                     isActive
-                      ? "bg-[#1f1f1f] text-[#e6edf3]"
-                      : "text-[#6e7681] hover:text-[#8b949e] hover:bg-transparent"
+                      ? "bg-[#27272b] text-[#fafafa]"
+                      : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-transparent"
                   )}
                 >
                   {Icon && <Icon className="h-3 w-3" />}
                   {tab.label}
-                  <span className="text-[#6e7681]">{count}</span>
+                  <span className={cn(isActive ? "text-[#9c9ca1]" : "text-[#52525b]")}>{count}</span>
                 </Button>
               );
             })}
           </div>
         </div>
-      </div>
 
-      {/* Filter Bar */}
-      <div className="border-b border-[#1f1f1f] bg-[#0d0d0e] px-6 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+        {/* Filter Bar */}
+        <div className="flex flex-wrap items-center gap-2 p-4 rounded-2xl bg-[#171719] border border-[#1f1f22]">
           <GlobalFilterSelector
             value={selectedTypes}
             onChange={(value) => setSelectedTypes(value as string[])}
@@ -812,133 +805,132 @@ export default function NotesPage({
             filterHeader="Filter by tags"
           />
 
-          <div className="w-px h-5 bg-[#27272a] mx-1" />
+          <div className="w-px h-5 bg-[#27272b] mx-1" />
 
           {/* Favorite Toggle */}
           <Button
-            variant={showFavorites ? "warning" : "outline"}
+            variant="ghost"
             size="sm"
             onClick={() => setShowFavorites(!showFavorites)}
             className={cn(
-              "h-6",
-              !showFavorites && "text-[#6e7681]"
+              "h-8 px-3 gap-1.5 rounded-lg",
+              showFavorites
+                ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-[#27272b]"
             )}
           >
-            <Star className={cn("h-3 w-3", showFavorites && "fill-amber-400")} />
+            <Star className={cn("h-3.5 w-3.5", showFavorites && "fill-amber-400")} />
             <span>Favorites</span>
           </Button>
 
           {/* AI Context Toggle */}
           <Button
-            variant={showAiContext ? "default" : "outline"}
+            variant="ghost"
             size="sm"
             onClick={() => setShowAiContext(!showAiContext)}
             className={cn(
-              "h-6",
+              "h-8 px-3 gap-1.5 rounded-lg",
               showAiContext
-                ? "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20 hover:border-purple-500/30"
-                : "text-[#6e7681]"
+                ? "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
+                : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-[#27272b]"
             )}
           >
-            <Bot className="h-3 w-3" />
+            <Bot className="h-3.5 w-3.5" />
             <span>AI</span>
           </Button>
 
           {/* Reset Filters */}
           {hasActiveFilters && (
             <Button
-              variant="destructive"
+              variant="ghost"
               size="sm"
               onClick={resetFilters}
-              className="h-6"
+              className="h-8 px-3 gap-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-3.5 w-3.5" />
               <span>Reset</span>
             </Button>
           )}
         </div>
-      </div>
 
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6">
-          {/* Pinned Notes Section */}
-          {activeTab === "all" && currentWorkspace?.id && (
-            <PinnedNotesSection
-              workspaceId={currentWorkspace.id}
-              workspaceSlug={currentWorkspace.slug || ""}
-              className="mb-6"
-            />
-          )}
+        {/* Pinned Notes Section */}
+        {activeTab === "all" && currentWorkspace?.id && (
+          <PinnedNotesSection
+            workspaceId={currentWorkspace.id}
+            workspaceSlug={currentWorkspace.slug || ""}
+            className="mb-6"
+          />
+        )}
 
-          {/* Notes Grid */}
-          {filteredNotes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-dashed border-[#27272a] bg-[#0d0d0e]/50">
-              <FileText className="h-10 w-10 text-[#3f3f46] mb-4" />
-              <h3 className="text-sm font-medium text-[#a1a1aa] mb-1">
-                No context found
-              </h3>
-              <p className="text-xs text-[#52525b] mb-4 text-center max-w-sm">
-                {hasActiveFilters
-                  ? "Try adjusting your filters"
-                  : activeTab === "personal"
-                    ? "Create personal context to get started"
-                    : activeTab === "workspace"
-                      ? "No workspace context found"
-                      : activeTab === "shared"
-                        ? "No context has been shared with you yet"
-                        : "Get started by creating your first context"}
-              </p>
-              <Button
-                onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
-                size="sm"
-                className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Create Context
-              </Button>
+        {/* Notes List */}
+        {filteredNotes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-[#1f1f22] bg-[#171719]">
+            <div className="p-4 rounded-2xl bg-[#101011] mb-4">
+              <FileText className="h-8 w-8 text-[#52525b]" />
             </div>
-          ) : (
-            <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">
-              {filteredNotes.map((note) => (
-                <NoteListItem
-                  key={note.id}
-                  note={note}
-                  workspaceSlug={currentWorkspace?.slug || ""}
-                  onToggleFavorite={toggleFavorite}
-                  onTogglePin={togglePin}
-                  onDelete={handleDeleteClick}
-                  canEdit={canEditNote(session, note)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent className="bg-[#0d0d0e] border-[#27272a]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#fafafa]">Delete Context</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#71717a]">
-              Are you sure you want to delete this context? This action cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-[#18181b] border-[#27272a] text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#fafafa]">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-red-500 hover:bg-red-600 text-white"
+            <h3 className="text-sm font-medium text-[#9c9ca1] mb-1">
+              No context found
+            </h3>
+            <p className="text-xs text-[#75757a] mb-4 text-center max-w-sm">
+              {hasActiveFilters
+                ? "Try adjusting your filters"
+                : activeTab === "personal"
+                  ? "Create personal context to get started"
+                  : activeTab === "workspace"
+                    ? "No workspace context found"
+                    : activeTab === "shared"
+                      ? "No context has been shared with you yet"
+                      : "Get started by creating your first context"}
+            </p>
+            <Button
+              onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
+              size="sm"
+              className="h-9 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
             >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Context
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-[#1f1f22] bg-[#171719] overflow-hidden divide-y divide-[#1f1f22]">
+            {filteredNotes.map((note) => (
+              <NoteListItem
+                key={note.id}
+                note={note}
+                workspaceSlug={currentWorkspace?.slug || ""}
+                onToggleFavorite={toggleFavorite}
+                onTogglePin={togglePin}
+                onDelete={handleDeleteClick}
+                canEdit={canEditNote(session, note)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent className="bg-[#171719] border-[#1f1f22] rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-[#fafafa]">Delete Context</AlertDialogTitle>
+              <AlertDialogDescription className="text-[#75757a]">
+                Are you sure you want to delete this context? This action cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-[#101011] border-[#1f1f22] text-[#9c9ca1] hover:bg-[#27272b] hover:text-[#fafafa] rounded-xl">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

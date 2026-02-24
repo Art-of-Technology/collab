@@ -152,13 +152,9 @@ export function NoteFormEditor({
     const isTypeDisabled = lockedType || !isOwner;
 
     // Convert note types to FilterOption format
-    // In edit mode, only show compatible types (same category)
+    // Show all types - users can change type freely
     const typeOptions: FilterOption[] = useMemo(() => {
-        const compatibleTypes = mode === "edit" && note?.type
-            ? getCompatibleTypes(note.type as NoteType)
-            : Object.values(NoteType);
-
-        return compatibleTypes.map((type) => {
+        return Object.values(NoteType).map((type) => {
             const config = getNoteTypeConfig(type);
             return {
                 id: type,
@@ -167,7 +163,7 @@ export function NoteFormEditor({
                 iconColor: config.color,
             };
         });
-    }, [mode, note?.type]);
+    }, []);
 
     // Convert note scopes to FilterOption format (exclude SHARED)
     const scopeOptions: FilterOption[] = useMemo(() => {
@@ -249,8 +245,8 @@ export function NoteFormEditor({
         if (!selected) {
             return (
                 <>
-                    <FileText className="h-3 w-3 text-[#6e7681]" />
-                    <span className="text-[#6e7681] text-xs">Type</span>
+                    <FileText className="h-3.5 w-3.5 text-[#75757a]" />
+                    <span className="text-[#75757a] text-xs">Type</span>
                 </>
             );
         }
@@ -258,8 +254,8 @@ export function NoteFormEditor({
         const config = getNoteTypeConfig(selected.id as NoteType);
         return (
             <>
-                <Icon className={cn("h-3 w-3", config.color)} />
-                <span className="text-[#cccccc] text-xs">{selected.label}</span>
+                <Icon className={cn("h-3.5 w-3.5", config.color)} />
+                <span className="text-[#fafafa] text-xs">{selected.label}</span>
             </>
         );
     };
@@ -270,8 +266,8 @@ export function NoteFormEditor({
         if (!selected) {
             return (
                 <>
-                    <Lock className="h-3 w-3 text-[#6e7681]" />
-                    <span className="text-[#6e7681] text-xs">Scope</span>
+                    <Lock className="h-3.5 w-3.5 text-[#75757a]" />
+                    <span className="text-[#75757a] text-xs">Scope</span>
                 </>
             );
         }
@@ -279,8 +275,8 @@ export function NoteFormEditor({
         const config = getNoteScopeConfig(selected.id as NoteScope);
         return (
             <>
-                <Icon className={cn("h-3 w-3", config.color)} />
-                <span className="text-[#cccccc] text-xs">{selected.label}</span>
+                <Icon className={cn("h-3.5 w-3.5", config.color)} />
+                <span className="text-[#fafafa] text-xs">{selected.label}</span>
             </>
         );
     };
@@ -291,28 +287,28 @@ export function NoteFormEditor({
         if (!selected || !selected.id) {
             return (
                 <>
-                    <FolderKanban className="h-3 w-3 text-[#6e7681]" />
-                    <span className="text-[#6e7681] text-xs">No Project</span>
+                    <FolderKanban className="h-3.5 w-3.5 text-[#75757a]" />
+                    <span className="text-[#75757a] text-xs">No Project</span>
                 </>
             );
         }
         return (
             <>
                 <div
-                    className="h-2.5 w-2.5 rounded-full"
+                    className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: selected.color || "#6366f1" }}
                 />
-                <span className="text-[#cccccc] text-xs">{selected.label}</span>
+                <span className="text-[#fafafa] text-xs">{selected.label}</span>
             </>
         );
     };
 
     if (isFetchingNote) {
         return (
-            <div className="flex justify-center items-center py-24">
-                <div className="flex flex-col items-center gap-3">
-                    <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
-                    <p className="text-xs text-[#52525b]">Loading context...</p>
+            <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] p-12">
+                <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
+                    <p className="text-sm text-[#75757a]">Loading context...</p>
                 </div>
             </div>
         );
@@ -320,14 +316,14 @@ export function NoteFormEditor({
 
     if (error) {
         return (
-            <div className="flex justify-center items-center py-24">
-                <div className="text-center">
-                    <p className="text-sm text-red-400 mb-4">{error}</p>
+            <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] p-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                    <p className="text-sm text-red-400">{error}</p>
                     {onCancel && (
                         <Button
                             variant="outline"
                             onClick={onCancel}
-                            className="bg-[#18181b] border-[#27272a] text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#fafafa]"
+                            className="bg-[#101011] border-[#1f1f22] text-[#9c9ca1] hover:bg-[#1f1f22] hover:text-[#fafafa] rounded-xl"
                         >
                             Go Back
                         </Button>
@@ -337,398 +333,418 @@ export function NoteFormEditor({
         );
     }
 
+    // Shared button style for consistency
+    const toolbarButtonClass = cn(
+        "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all",
+        "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22]",
+        "text-[#9c9ca1] hover:text-[#fafafa]",
+        "focus:outline-none !ring-0 !ring-offset-0"
+    );
+
+    const toolbarButtonActiveClass = (isActive: boolean, activeColor: string) => cn(
+        "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all",
+        "focus:outline-none !ring-0 !ring-offset-0",
+        isActive
+            ? `bg-${activeColor}-500/10 border border-${activeColor}-500/30 text-${activeColor}-400 hover:bg-${activeColor}-500/20`
+            : "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] text-[#9c9ca1] hover:text-[#fafafa]"
+    );
+
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-                {/* Filter Bar - matching notes list page */}
-                <div className="flex flex-wrap items-center gap-1.5 px-6 py-2 border-b border-[#1f1f1f] bg-[#0d0d0e]">
-                    {/* Type Selector */}
-                    <FormField
-                        control={form.control}
-                        name="type"
-                        render={({ field }) => (
-                            <FormItem className="space-y-0">
-                                <FormControl>
-                                    <GlobalFilterSelector
-                                        value={field.value}
-                                        onChange={(value) => field.onChange(value as string)}
-                                        options={typeOptions}
-                                        label="Type"
-                                        emptyIcon={FileText}
-                                        selectionMode="single"
-                                        showSearch={false}
-                                        allowClear={false}
-                                        disabled={isTypeDisabled}
-                                        popoverWidth="w-56"
-                                        filterHeader={lockedType ? "Type is locked" : "Select type"}
-                                        renderTriggerContent={renderTypeTrigger}
-                                    />
-                                </FormControl>
-                            </FormItem>
-                        )}
-                    />
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+                {/* Toolbar - organized in logical groups */}
+                <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+                    {/* Main toolbar row */}
+                    <div className="flex items-center gap-3 p-4">
+                        {/* Left: Metadata selectors */}
+                        <div className="flex items-center gap-2">
+                            {/* Type Selector */}
+                            <FormField
+                                control={form.control}
+                                name="type"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-0">
+                                        <FormControl>
+                                            <GlobalFilterSelector
+                                                value={field.value}
+                                                onChange={(value) => field.onChange(value as string)}
+                                                options={typeOptions}
+                                                label="Type"
+                                                emptyIcon={FileText}
+                                                selectionMode="single"
+                                                showSearch={false}
+                                                allowClear={false}
+                                                disabled={isTypeDisabled}
+                                                popoverWidth="w-56"
+                                                filterHeader={lockedType ? "Type is locked" : "Select type"}
+                                                renderTriggerContent={renderTypeTrigger}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
 
-                    {/* Scope Selector */}
-                    <FormField
-                        control={form.control}
-                        name="scope"
-                        render={({ field }) => (
-                            <FormItem className="space-y-0">
-                                <FormControl>
-                                    <GlobalFilterSelector
-                                        value={field.value}
-                                        onChange={(value) => field.onChange(value as string)}
-                                        options={scopeOptions}
-                                        label="Scope"
-                                        emptyIcon={Lock}
-                                        selectionMode="single"
-                                        showSearch={false}
-                                        allowClear={false}
-                                        disabled={!isOwner}
-                                        popoverWidth="w-56"
-                                        filterHeader="Select visibility"
-                                        renderTriggerContent={renderScopeTrigger}
-                                    />
-                                </FormControl>
-                            </FormItem>
-                        )}
-                    />
+                            {/* Scope Selector */}
+                            <FormField
+                                control={form.control}
+                                name="scope"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-0">
+                                        <FormControl>
+                                            <GlobalFilterSelector
+                                                value={field.value}
+                                                onChange={(value) => field.onChange(value as string)}
+                                                options={scopeOptions}
+                                                label="Scope"
+                                                emptyIcon={Lock}
+                                                selectionMode="single"
+                                                showSearch={false}
+                                                allowClear={false}
+                                                disabled={!isOwner}
+                                                popoverWidth="w-56"
+                                                filterHeader="Select visibility"
+                                                renderTriggerContent={renderScopeTrigger}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
 
-                    {/* Project Selector */}
-                    <FormField
-                        control={form.control}
-                        name="projectId"
-                        render={({ field }) => (
-                            <FormItem className="space-y-0">
-                                <FormControl>
-                                    <GlobalFilterSelector
-                                        value={field.value || ""}
-                                        onChange={handleProjectChange}
-                                        options={projectOptions}
-                                        label="Project"
-                                        emptyIcon={FolderKanban}
-                                        selectionMode="single"
-                                        showSearch={true}
-                                        searchPlaceholder="Search projects..."
-                                        allowClear={false}
-                                        disabled={!isOwner || isLoadingProjects}
-                                        isLoading={isLoadingProjects}
-                                        popoverWidth="w-64"
-                                        filterHeader="Select project"
-                                        renderTriggerContent={renderProjectTrigger}
-                                    />
-                                </FormControl>
-                            </FormItem>
-                        )}
-                    />
+                            {/* Project Selector */}
+                            <FormField
+                                control={form.control}
+                                name="projectId"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-0">
+                                        <FormControl>
+                                            <GlobalFilterSelector
+                                                value={field.value || ""}
+                                                onChange={handleProjectChange}
+                                                options={projectOptions}
+                                                label="Project"
+                                                emptyIcon={FolderKanban}
+                                                selectionMode="single"
+                                                showSearch={true}
+                                                searchPlaceholder="Search projects..."
+                                                allowClear={false}
+                                                disabled={!isOwner || isLoadingProjects}
+                                                isLoading={isLoadingProjects}
+                                                popoverWidth="w-64"
+                                                filterHeader="Select project"
+                                                renderTriggerContent={renderProjectTrigger}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
 
-                    {/* Divider */}
-                    <div className="h-5 w-px bg-[#27272a]" />
+                            {/* Tags */}
+                            <FormField
+                                control={form.control}
+                                name="tagIds"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-0">
+                                        <FormControl>
+                                            <TagSelect
+                                                value={field.value || []}
+                                                onChange={field.onChange}
+                                                workspaceId={workspaceId}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
 
-                    {/* Favorite Toggle */}
-                    <FormField
-                        control={form.control}
-                        name="isFavorite"
-                        render={({ field }) => (
-                            <FormItem className="space-y-0">
-                                <FormControl>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => field.onChange(!field.value)}
-                                        className={cn(
-                                            "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto",
-                                            "border focus:outline-none",
-                                            field.value
-                                                ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
-                                                : "border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
-                                        )}
-                                        title="Favorite"
-                                    >
-                                        <Star className={cn("h-3 w-3", field.value && "fill-amber-400")} />
-                                        <span>Favorite</span>
-                                    </Button>
-                                </FormControl>
-                            </FormItem>
-                        )}
-                    />
+                        {/* Divider */}
+                        <div className="h-6 w-px bg-[#1f1f22]" />
 
-                    {/* AI Context Toggle */}
-                    {supportsAiContext(watchType) && (
-                        <FormField
-                            control={form.control}
-                            name="isAiContext"
-                            render={({ field }) => (
-                                <FormItem className="space-y-0">
-                                    <FormControl>
+                        {/* Middle: Toggle buttons */}
+                        <div className="flex items-center gap-2">
+                            {/* Favorite Toggle */}
+                            <FormField
+                                control={form.control}
+                                name="isFavorite"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-0">
+                                        <FormControl>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => field.onChange(!field.value)}
+                                                className={cn(
+                                                    "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all",
+                                                    "focus:outline-none !ring-0 !ring-offset-0",
+                                                    field.value
+                                                        ? "bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                                                        : "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] text-[#9c9ca1] hover:text-[#fafafa]"
+                                                )}
+                                                title="Add to favorites"
+                                            >
+                                                <Star className={cn("h-3.5 w-3.5", field.value && "fill-amber-400")} />
+                                                <span>Favorite</span>
+                                            </Button>
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+
+                            {/* AI Context Toggle */}
+                            {supportsAiContext(watchType) && (
+                                <FormField
+                                    control={form.control}
+                                    name="isAiContext"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-0">
+                                            <FormControl>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    onClick={() => isOwner && field.onChange(!field.value)}
+                                                    disabled={!isOwner}
+                                                    className={cn(
+                                                        "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all",
+                                                        "focus:outline-none !ring-0 !ring-offset-0",
+                                                        field.value
+                                                            ? "bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+                                                            : "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] text-[#9c9ca1] hover:text-[#fafafa]",
+                                                        !isOwner && "opacity-50 cursor-not-allowed"
+                                                    )}
+                                                    title="Include in AI context"
+                                                >
+                                                    <Bot className="h-3.5 w-3.5" />
+                                                    <span>AI Context</span>
+                                                </Button>
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
+                        </div>
+
+                        {/* Spacer */}
+                        <div className="flex-1" />
+
+                        {/* Right: Actions */}
+                        <div className="flex items-center gap-2">
+                            {/* Share button */}
+                            {mode === "edit" && noteId && isOwner && watchScope === NoteScope.PERSONAL && (
+                                <ShareNoteDialog
+                                    noteId={noteId}
+                                    noteTitle={form.getValues("title") || "Untitled"}
+                                    isOwner={isOwner}
+                                    trigger={
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            onClick={() => isOwner && field.onChange(!field.value)}
-                                            disabled={!isOwner}
-                                            className={cn(
-                                                "inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto",
-                                                "border focus:outline-none",
-                                                field.value
-                                                    ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
-                                                    : "border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent",
-                                                !isOwner && "opacity-50 cursor-not-allowed"
-                                            )}
-                                            title="AI Context"
+                                            className={toolbarButtonClass}
                                         >
-                                            <Bot className="h-3 w-3" />
-                                            <span>AI</span>
+                                            <Share2 className="h-3.5 w-3.5" />
+                                            <span>Share</span>
                                         </Button>
-                                    </FormControl>
-                                </FormItem>
+                                    }
+                                />
                             )}
-                        />
-                    )}
 
-                    {/* Divider */}
-                    <div className="h-5 w-px bg-[#27272a]" />
+                            {/* Save as Template button */}
+                            {mode === "edit" && noteId && !isSecretType && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => setShowSaveAsTemplate(true)}
+                                    className={toolbarButtonClass}
+                                >
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    <span>Template</span>
+                                </Button>
+                            )}
 
-                    {/* Tags */}
-                    <FormField
-                        control={form.control}
-                        name="tagIds"
-                        render={({ field }) => (
-                            <FormItem className="flex-1 min-w-[120px]">
-                                <FormControl>
-                                    <TagSelect
-                                        value={field.value || []}
-                                        onChange={field.onChange}
-                                        workspaceId={workspaceId}
-                                    />
-                                </FormControl>
-                            </FormItem>
-                        )}
-                    />
+                            {/* Version History */}
+                            {mode === "edit" && noteId && !isSecretType && (
+                                <VersionHistoryPanel
+                                    noteId={noteId}
+                                    currentVersion={note?.version}
+                                    className={toolbarButtonClass}
+                                />
+                            )}
 
-                    {/* Share button - only for personal notes owned by user in edit mode */}
-                    {mode === "edit" && noteId && isOwner && watchScope === NoteScope.PERSONAL && (
-                        <>
-                            <div className="h-5 w-px bg-[#27272a]" />
-                            <ShareNoteDialog
-                                noteId={noteId}
-                                noteTitle={form.getValues("title") || "Untitled"}
-                                isOwner={isOwner}
-                                trigger={
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
-                                    >
-                                        <Share2 className="h-3 w-3" />
-                                        <span>Share</span>
-                                    </Button>
-                                }
-                            />
-                        </>
-                    )}
+                            {/* Divider before status */}
+                            <div className="h-6 w-px bg-[#1f1f22]" />
 
-                    {/* Save as Template button - only for non-secret notes in edit mode */}
-                    {mode === "edit" && noteId && !isSecretType && (
-                        <>
-                            <div className="h-5 w-px bg-[#27272a]" />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => setShowSaveAsTemplate(true)}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors h-auto border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent"
-                            >
-                                <Sparkles className="h-3 w-3" />
-                                <span>Save as Template</span>
-                            </Button>
-                        </>
-                    )}
-
-                    {/* Spacer */}
-                    <div className="flex-1" />
-
-                    {/* Version History - only for non-secret notes in edit mode */}
-                    {mode === "edit" && noteId && !isSecretType && (
-                        <VersionHistoryPanel
-                            noteId={noteId}
-                            currentVersion={note?.version}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors border border-[#1f1f1f] hover:border-[#30363d] hover:bg-[#161617] text-[#6e7681] bg-transparent h-auto"
-                        />
-                    )}
-
-                    {/* Save button for secret types OR Autosave status for regular notes */}
-                    {isSecretType ? (
-                        <Button
-                            type="submit"
-                            disabled={isSaving}
-                            size="sm"
-                        >
-                            {isSaving ? (
-                                <>
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    Saving...
-                                </>
+                            {/* Save button for secret types OR Autosave status */}
+                            {isSecretType ? (
+                                <Button
+                                    type="submit"
+                                    disabled={isSaving}
+                                    size="sm"
+                                    className="h-8 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-xs"
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Check className="h-3.5 w-3.5" />
+                                            Save
+                                        </>
+                                    )}
+                                </Button>
                             ) : (
-                                <>
-                                    <Check className="h-3 w-3" />
-                                    Save
-                                </>
-                            )}
-                        </Button>
-                    ) : (
-                        <div className="flex items-center gap-2 text-xs text-[#8b949e]">
-                            {autosaveStatus === "idle" && (
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] text-[#6e7681]">Autosave</span>
-                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                                </div>
-                            )}
+                                <div className="flex items-center gap-2 px-3 h-8 rounded-lg bg-[#101011] border border-[#1f1f22]">
+                                    {autosaveStatus === "idle" && (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                            <span className="text-xs text-[#52525b]">Autosave on</span>
+                                        </div>
+                                    )}
 
-                            {autosaveStatus === "saving" && (
-                                <div className="flex items-center gap-1.5 text-blue-400">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    <span className="text-[10px]">Saving...</span>
-                                </div>
-                            )}
+                                    {autosaveStatus === "saving" && (
+                                        <div className="flex items-center gap-2 text-blue-400">
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            <span className="text-xs">Saving...</span>
+                                        </div>
+                                    )}
 
-                            {autosaveStatus === "saved" && showSavedIndicator && (
-                                <div className="flex items-center gap-1.5 text-green-500">
-                                    <Check className="h-3 w-3" />
-                                    <span className="text-[10px]">Saved</span>
-                                </div>
-                            )}
+                                    {autosaveStatus === "saved" && showSavedIndicator && (
+                                        <div className="flex items-center gap-2 text-green-500">
+                                            <Check className="h-3.5 w-3.5" />
+                                            <span className="text-xs">Saved</span>
+                                        </div>
+                                    )}
 
-                            {autosaveStatus === "error" && (
-                                <div className="flex items-center gap-1.5">
-                                    <X className="h-3 w-3 text-red-400" />
-                                    <span className="text-[10px] text-red-400">Failed</span>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={retryAutosave}
-                                        className="text-[10px] text-red-400 hover:text-red-300 underline h-auto p-0"
-                                    >
-                                        Retry
-                                    </Button>
+                                    {autosaveStatus === "error" && (
+                                        <div className="flex items-center gap-2">
+                                            <X className="h-3.5 w-3.5 text-red-400" />
+                                            <span className="text-xs text-red-400">Failed</span>
+                                            <button
+                                                type="button"
+                                                onClick={retryAutosave}
+                                                className="text-xs text-red-400 hover:text-red-300 underline"
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    )}
+                    </div>
                 </div>
 
-                {/* Editor Area - Centered like Notion/Slack */}
-                <div className="flex-1 overflow-auto">
-                    <div className="max-w-6xl mx-auto px-6 lg:px-12">
-                        {/* Title Input - Notion Style */}
-                        <div className="pt-8 pb-2">
+                {/* Editor Area - in a card */}
+                <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+                    {/* Title Input */}
+                    <div className="px-6 pt-6 pb-4 border-b border-[#1f1f22]">
+                        <FormField
+                            control={form.control}
+                            name="title"
+                            render={({ field }) => (
+                                <FormItem className="mb-0">
+                                    <FormControl>
+                                        <input
+                                            {...field}
+                                            type="text"
+                                            placeholder="Untitled"
+                                            className="w-full bg-transparent border-0 outline-none text-2xl font-semibold text-[#fafafa] placeholder:text-[#3f3f46] px-0 py-1 focus:outline-none"
+                                            style={{ caretColor: '#3b82f6' }}
+                                        />
+                                    </FormControl>
+                                    <FormMessage className="text-xs mt-2 text-red-400" />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+
+                    {/* Content Editor - Conditional based on note type */}
+                    <div className="p-6 min-h-[400px]">
+                        {isSecretType ? (
+                            /* Secret Editor for ENV_VARS, API_KEYS, CREDENTIALS */
+                            <SecretEditor
+                                variables={watchVariables || []}
+                                rawContent={watchRawSecretContent || ""}
+                                mode={watchSecretEditorMode || "key-value"}
+                                isRestricted={watchIsRestricted || false}
+                                expiresAt={watchExpiresAt || null}
+                                onChange={handleSecretEditorChange}
+                                disabled={!isOwner}
+                                noteId={noteId}
+                                workspaceSlug={undefined}
+                            />
+                        ) : (
+                            /* Rich Editor for all other note types */
                             <FormField
                                 control={form.control}
-                                name="title"
+                                name="content"
                                 render={({ field }) => (
-                                    <FormItem className="mb-0">
+                                    <FormItem>
                                         <FormControl>
-                                            <input
-                                                {...field}
-                                                type="text"
-                                                placeholder="Untitled"
-                                                className="w-full bg-transparent border-0 outline-none text-3xl sm:text-4xl font-bold text-[#fafafa] placeholder:text-[#27272a] px-0 py-2 focus:outline-none tracking-tight"
-                                                style={{ caretColor: '#3b82f6' }}
+                                            <IssueRichEditor
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                placeholder="Start writing, or press '/' for commands..."
+                                                className={cn(
+                                                    "[&_.ProseMirror]:border-0",
+                                                    "[&_.ProseMirror]:outline-none",
+                                                    "[&_.ProseMirror]:shadow-none",
+                                                    "[&_.ProseMirror]:p-0",
+                                                    "[&_.ProseMirror]:focus:ring-0",
+                                                    "[&_.ProseMirror]:text-[#9c9ca1]",
+                                                    "[&_.ProseMirror]:text-sm",
+                                                    "[&_.ProseMirror]:leading-relaxed",
+                                                    "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#52525b]",
+                                                    "[&_.ProseMirror_p]:my-3",
+                                                    "[&_.ProseMirror_h1]:text-xl",
+                                                    "[&_.ProseMirror_h1]:font-semibold",
+                                                    "[&_.ProseMirror_h1]:text-[#fafafa]",
+                                                    "[&_.ProseMirror_h1]:mt-6",
+                                                    "[&_.ProseMirror_h1]:mb-3",
+                                                    "[&_.ProseMirror_h2]:text-lg",
+                                                    "[&_.ProseMirror_h2]:font-medium",
+                                                    "[&_.ProseMirror_h2]:text-[#fafafa]",
+                                                    "[&_.ProseMirror_h2]:mt-5",
+                                                    "[&_.ProseMirror_h2]:mb-2",
+                                                    "[&_.ProseMirror_h3]:text-base",
+                                                    "[&_.ProseMirror_h3]:font-medium",
+                                                    "[&_.ProseMirror_h3]:text-[#e4e4e7]",
+                                                    "[&_.ProseMirror_h3]:mt-4",
+                                                    "[&_.ProseMirror_h3]:mb-2",
+                                                    "[&_.ProseMirror_ul]:my-3",
+                                                    "[&_.ProseMirror_ol]:my-3",
+                                                    "[&_.ProseMirror_li]:text-[#9c9ca1]",
+                                                    "[&_.ProseMirror_code]:bg-[#1f1f22]",
+                                                    "[&_.ProseMirror_code]:text-[#f472b6]",
+                                                    "[&_.ProseMirror_code]:px-1.5",
+                                                    "[&_.ProseMirror_code]:py-0.5",
+                                                    "[&_.ProseMirror_code]:rounded-lg",
+                                                    "[&_.ProseMirror_code]:text-xs",
+                                                    "[&_.ProseMirror_pre]:bg-[#101011]",
+                                                    "[&_.ProseMirror_pre]:border",
+                                                    "[&_.ProseMirror_pre]:border-[#1f1f22]",
+                                                    "[&_.ProseMirror_pre]:rounded-xl",
+                                                    "[&_.ProseMirror_pre]:p-4",
+                                                    "[&_.ProseMirror_pre]:my-4",
+                                                    "[&_.ProseMirror_blockquote]:border-l-2",
+                                                    "[&_.ProseMirror_blockquote]:border-[#27272b]",
+                                                    "[&_.ProseMirror_blockquote]:pl-4",
+                                                    "[&_.ProseMirror_blockquote]:text-[#75757a]",
+                                                    "[&_.ProseMirror_blockquote]:italic",
+                                                    "[&_.ProseMirror_a]:text-blue-400",
+                                                    "[&_.ProseMirror_a]:underline",
+                                                )}
+                                                minHeight="350px"
+                                                maxHeight="none"
+                                                enableSlashCommands={true}
+                                                enableFloatingMenu={true}
+                                                enableSubIssueCreation={false}
                                             />
                                         </FormControl>
                                         <FormMessage className="text-xs mt-2 text-red-400" />
                                     </FormItem>
                                 )}
                             />
-                        </div>
-
-                        {/* Content Editor - Conditional based on note type */}
-                        <div className="py-4 pb-24 min-h-[400px]">
-                            {isSecretType ? (
-                                /* Secret Editor for ENV_VARS, API_KEYS, CREDENTIALS */
-                                <SecretEditor
-                                    variables={watchVariables || []}
-                                    rawContent={watchRawSecretContent || ""}
-                                    mode={watchSecretEditorMode || "key-value"}
-                                    isRestricted={watchIsRestricted || false}
-                                    expiresAt={watchExpiresAt || null}
-                                    onChange={handleSecretEditorChange}
-                                    disabled={!isOwner}
-                                    noteId={noteId}
-                                    workspaceSlug={undefined}
-                                />
-                            ) : (
-                                /* Rich Editor for all other note types */
-                                <FormField
-                                    control={form.control}
-                                    name="content"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormControl>
-                                                <IssueRichEditor
-                                                    value={field.value}
-                                                    onChange={field.onChange}
-                                                    placeholder="Start writing, or press '/' for commands..."
-                                                    className={cn(
-                                                        "[&_.ProseMirror]:border-0",
-                                                        "[&_.ProseMirror]:outline-none",
-                                                        "[&_.ProseMirror]:shadow-none",
-                                                        "[&_.ProseMirror]:p-0",
-                                                        "[&_.ProseMirror]:focus:ring-0",
-                                                        "[&_.ProseMirror]:text-[#e4e4e7]",
-                                                        "[&_.ProseMirror]:text-base",
-                                                        "[&_.ProseMirror]:leading-relaxed",
-                                                        "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#3f3f46]",
-                                                        "[&_.ProseMirror_p]:my-3",
-                                                        "[&_.ProseMirror_h1]:text-2xl",
-                                                        "[&_.ProseMirror_h1]:font-bold",
-                                                        "[&_.ProseMirror_h1]:text-[#fafafa]",
-                                                        "[&_.ProseMirror_h1]:mt-6",
-                                                        "[&_.ProseMirror_h1]:mb-3",
-                                                        "[&_.ProseMirror_h2]:text-xl",
-                                                        "[&_.ProseMirror_h2]:font-semibold",
-                                                        "[&_.ProseMirror_h2]:text-[#fafafa]",
-                                                        "[&_.ProseMirror_h2]:mt-5",
-                                                        "[&_.ProseMirror_h2]:mb-2",
-                                                        "[&_.ProseMirror_h3]:text-lg",
-                                                        "[&_.ProseMirror_h3]:font-medium",
-                                                        "[&_.ProseMirror_h3]:text-[#e4e4e7]",
-                                                        "[&_.ProseMirror_h3]:mt-4",
-                                                        "[&_.ProseMirror_h3]:mb-2",
-                                                        "[&_.ProseMirror_ul]:my-3",
-                                                        "[&_.ProseMirror_ol]:my-3",
-                                                        "[&_.ProseMirror_li]:text-[#d4d4d8]",
-                                                        "[&_.ProseMirror_code]:bg-[#27272a]",
-                                                        "[&_.ProseMirror_code]:text-[#f472b6]",
-                                                        "[&_.ProseMirror_code]:px-1.5",
-                                                        "[&_.ProseMirror_code]:py-0.5",
-                                                        "[&_.ProseMirror_code]:rounded",
-                                                        "[&_.ProseMirror_code]:text-sm",
-                                                        "[&_.ProseMirror_pre]:bg-[#18181b]",
-                                                        "[&_.ProseMirror_pre]:border",
-                                                        "[&_.ProseMirror_pre]:border-[#27272a]",
-                                                        "[&_.ProseMirror_pre]:rounded-lg",
-                                                        "[&_.ProseMirror_pre]:p-4",
-                                                        "[&_.ProseMirror_pre]:my-4",
-                                                        "[&_.ProseMirror_blockquote]:border-l-2",
-                                                        "[&_.ProseMirror_blockquote]:border-[#3f3f46]",
-                                                        "[&_.ProseMirror_blockquote]:pl-4",
-                                                        "[&_.ProseMirror_blockquote]:text-[#a1a1aa]",
-                                                        "[&_.ProseMirror_blockquote]:italic",
-                                                        "[&_.ProseMirror_a]:text-blue-400",
-                                                        "[&_.ProseMirror_a]:underline",
-                                                    )}
-                                                    minHeight="350px"
-                                                    maxHeight="none"
-                                                    enableSlashCommands={true}
-                                                    enableFloatingMenu={true}
-                                                    enableSubIssueCreation={false}
-                                                />
-                                            </FormControl>
-                                            <FormMessage className="text-xs mt-2 text-red-400" />
-                                        </FormItem>
-                                    )}
-                                />
-                            )}
-                        </div>
+                        )}
                     </div>
                 </div>
             </form>

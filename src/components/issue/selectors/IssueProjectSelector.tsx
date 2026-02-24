@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Home, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
