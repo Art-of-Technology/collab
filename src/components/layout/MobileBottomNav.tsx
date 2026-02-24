@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { useSidebar } from '@/components/providers/SidebarProvider';
+import { useAI } from '@/context/AIContext';
 import { useRouter, usePathname } from 'next/navigation';
 
 export interface MobileNavItem {
@@ -28,12 +29,12 @@ export interface MobileNavItem {
 
 interface MobileBottomNavProps {
   className?: string;
-  onOpenCommandMenu?: () => void;
 }
 
-export function MobileBottomNav({ className, onOpenCommandMenu }: MobileBottomNavProps) {
+export function MobileBottomNav({ className }: MobileBottomNavProps) {
   const { currentWorkspace } = useWorkspace();
   const { toggleMobile } = useSidebar();
+  const { focusInput } = useAI();
   const router = useRouter();
   const pathname = usePathname();
   const [isHovered, setIsHovered] = useState(false);
@@ -78,7 +79,7 @@ export function MobileBottomNav({ className, onOpenCommandMenu }: MobileBottomNa
       id: 'search',
       icon: <Search className="h-4 w-4" />,
       title: 'Search',
-      onClick: onOpenCommandMenu,
+      onClick: focusInput,
     },
   ];
 
@@ -101,10 +102,10 @@ export function MobileBottomNav({ className, onOpenCommandMenu }: MobileBottomNa
         }}
         className={cn(
           "fixed bottom-4 left-0 right-0 mx-auto z-50 w-max md:hidden",
-          "bg-black/40 backdrop-blur-xl border border-white/10",
-          "rounded-2xl shadow-2xl",
+          "glass-panel gradient-border",
+          "rounded-2xl shadow-glass-lg",
           "transition-all duration-300 ease-out",
-          isHovered && "bg-black/60 border-white/20 shadow-3xl",
+          isHovered && "bg-white/[0.08] border-white/[0.12]",
           className
         )}
         style={{
@@ -146,8 +147,8 @@ function MobileNavItemComponent({ item, index, onClick }: MobileNavItemComponent
           className={cn(
             "relative flex items-center justify-center rounded-lg w-7 h-7",
             "transition-all duration-200 ease-out",
-            "hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20",
-            item.isActive && "bg-white/20 shadow-lg ring-2 ring-white/30"
+            "hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/[0.15]",
+            item.isActive && "bg-white/[0.12] shadow-glass ring-1 ring-white/[0.15]"
           )}
           onClick={onClick}
           whileTap={{ scale: 0.95 }}
@@ -181,7 +182,7 @@ function MobileNavItemComponent({ item, index, onClick }: MobileNavItemComponent
       
       <TooltipContent 
         side="top" 
-        className="bg-black/90 text-white border-white/20 backdrop-blur-sm"
+        className="glass-panel text-white border-white/[0.08]"
         sideOffset={8}
       >
         <div className="flex items-center gap-2">

@@ -6,29 +6,25 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
-  ChevronDown,
-  ChevronRight,
   Home,
-  CheckSquare,
-  Users,
-  FolderOpen,
   Eye,
   Plus,
   FileText,
-  Bookmark,
-  Tag,
-  Bell,
   Settings,
   LogOut,
-  MoreHorizontal,
   Star,
   Sparkles,
+  Lightbulb,
+  Grid3X3,
+  MessageSquare,
+  FolderKanban,
+  ChevronDown,
+  HelpCircle,
+  ExternalLink,
 } from "lucide-react";
-import { useSession, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,13 +37,27 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
-import { useAIWidget } from "@/hooks/useAI";
+import { useInstalledApps } from "@/hooks/queries/useInstalledApps";
+import { useAIWidget, useAIAgents } from "@/hooks/useAI";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useMention } from "@/context/MentionContext";
 import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
+import NotificationPopover from "@/components/layout/sidebar/NotificationPopover";
+
+// Collab Design System Colors
+const colors = {
+  bg950: "#070708",    // Sidebar background
+  bg900: "#101011",    // Page content / nested
+  bg800: "#171719",    // Cards, hover states
+  bg700: "#1f1f22",    // Borders
+  bg600: "#27272b",    // Strong hover
+  text500: "#75757a",  // Muted text
+  text400: "#9c9ca1",  // Secondary text
+  text50: "#fafafa",   // Primary text
+  blue600: "#2563eb",  // Primary accent
+};
 
 interface SimplifiedSidebarProps {
   pathname?: string;
@@ -58,17 +68,14 @@ export default function SimplifiedSidebar({
   pathname = "",
   isCollapsed = false,
 }: SimplifiedSidebarProps) {
-  const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const { currentWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
-  const { openWidget } = useAIWidget();
+  const { focusInput } = useAIWidget();
+  const { currentAgent } = useAIAgents();
   const workspaceBase = currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}` : "";
 
-  const { unreadCount } = useMention();
-
-  // Fetch projects and views
   const { data: projects = [] } = useProjects({
     workspaceId: currentWorkspace?.id,
     includeStats: true,
@@ -79,28 +86,18 @@ export default function SimplifiedSidebar({
     includeStats: true,
   });
 
-  // State
+  const { data: installedApps = [] } = useInstalledApps(currentWorkspace?.id);
+
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    projects: false,
-    views: false,
-    more: true, // More section collapsed by default
-  });
 
-  // Filter active projects
-  const activeProjects = useMemo(() => {
-    return projects.filter(p => !p.isArchived).slice(0, 10);
+  const starredProjects = useMemo(() => {
+    return projects.filter((p: any) => p.isFavorite && !p.isArchived).slice(0, 6);
   }, [projects]);
 
-  // Filter favorite views
-  const favoriteViews = useMemo(() => {
-    return views.filter(v => v.isFavorite).slice(0, 8);
+  const starredViews = useMemo(() => {
+    return views.filter((v: any) => v.isFavorite).slice(0, 6);
   }, [views]);
-
-  const toggleSection = (section: string) => {
-    setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });
@@ -108,116 +105,95 @@ export default function SimplifiedSidebar({
     router.push("/");
   };
 
-  // Main navigation items
+  const agentColor = currentAgent?.color || colors.blue600;
+
   const mainNav = [
-    {
-      name: "Home",
-      href: `${workspaceBase}/dashboard`,
-      icon: Home,
-      current: pathname.includes("/dashboard"),
-    },
-    {
-      name: "My Work",
-      href: `${workspaceBase}/views/my-issues`,
-      icon: CheckSquare,
-      current: pathname.includes("/my-issues"),
-    },
-    {
-      name: "Team",
-      href: `${workspaceBase}/timeline`,
-      icon: Users,
-      current: pathname.includes("/timeline"),
-    },
+    { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: pathname.includes("/dashboard") },
+    { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline") },
+    { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes") },
+    { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: pathname.includes("/features") },
   ];
 
-  // More section items (collapsed by default)
-  const moreItems = [
-    {
-      name: "Context",
-      href: `${workspaceBase}/notes`,
-      icon: FileText,
-      current: pathname.includes("/notes"),
-    },
-    {
-      name: "Saved",
-      href: `${workspaceBase}/bookmarks`,
-      icon: Bookmark,
-      current: pathname.includes("/bookmarks"),
-    },
-    {
-      name: "Tags",
-      href: `${workspaceBase}/tags`,
-      icon: Tag,
-      current: pathname.includes("/tags"),
-    },
-  ];
-
-  // Collapsed sidebar render
+  // ── Collapsed State ──
   if (isCollapsed) {
     return (
-      <div className="flex flex-col h-full py-2">
+      <div className="flex flex-col h-full py-3">
         {/* Logo */}
-        <div className="px-2 mb-4">
-          <Link href={`${workspaceBase}/dashboard`} className="flex justify-center">
-            <Image src="/logo-icon.svg" width={28} height={28} alt="Collab" />
+        <div className="px-2 mb-4 flex justify-center">
+          <Link href={`${workspaceBase}/dashboard`}>
+            <div className={`p-2 rounded-lg hover:bg-[${colors.bg800}] transition-colors`}>
+              <Image src="/logo-icon.svg" width={24} height={24} alt="Collab" />
+            </div>
           </Link>
         </div>
 
-        {/* Main nav icons */}
+        {/* Main Nav Icons */}
         <div className="px-2 space-y-1">
           {mainNav.map((item) => (
             <Link
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center justify-center h-9 w-full rounded-lg transition-colors",
+                "flex items-center justify-center h-9 w-full rounded-lg transition-all duration-150",
                 item.current
-                  ? "bg-[#1f1f1f] text-white"
-                  : "text-[#71717a] hover:text-white hover:bg-[#1f1f1f]"
+                  ? `bg-[${colors.bg800}] text-white`
+                  : `text-[${colors.text500}] hover:text-white hover:bg-[${colors.bg800}]`
               )}
               title={item.name}
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon className="h-[18px] w-[18px]" />
             </Link>
           ))}
         </div>
 
-        {/* Spacer */}
         <div className="flex-1" />
 
         {/* AI Button */}
-        <div className="px-2 mb-2">
+        <div className="px-2 mb-2 flex justify-center">
           <button
-            onClick={openWidget}
-            className="flex items-center justify-center h-9 w-full rounded-lg bg-[#8b5cf6]/10 text-[#8b5cf6] hover:bg-[#8b5cf6]/20 transition-colors"
-            title="AI Assistant"
+            onClick={focusInput}
+            className={`flex items-center justify-center h-9 w-9 rounded-lg bg-[${colors.bg950}] border border-[${colors.bg700}] hover:bg-[${colors.bg800}] transition-all duration-150`}
+            title={currentAgent ? `Ask ${currentAgent.name}` : "AI Assistant"}
           >
-            <Sparkles className="h-5 w-5" />
+            {currentAgent ? (
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                style={{ backgroundColor: agentColor }}
+              >
+                {currentAgent.name[0]}
+              </div>
+            ) : (
+              <Sparkles className="h-4 w-4 text-blue-500" />
+            )}
           </button>
         </div>
 
-        {/* User */}
-        <div className="px-2">
+        {/* User Avatar */}
+        <div className="px-2 flex justify-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center w-full">
-                <Avatar className="h-8 w-8">
+              <button className={`p-1 rounded-lg hover:bg-[${colors.bg800}] transition-colors`}>
+                <Avatar className={`h-8 w-8 ring-1 ring-[${colors.bg700}]`}>
                   <AvatarImage src={userData?.image || undefined} />
-                  <AvatarFallback className="text-xs bg-[#1f1f1f]">
+                  <AvatarFallback className={`text-xs bg-[${colors.bg800}] text-[${colors.text400}]`}>
                     {userData?.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => router.push(`${workspaceBase}/settings`)}>
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
+            <DropdownMenuContent align="end" className={`w-48 bg-[${colors.bg900}] border-[${colors.bg700}]`}>
+              <DropdownMenuItem
+                onClick={() => router.push(`${workspaceBase}/settings`)}
+                className={`text-[${colors.text400}] hover:text-white focus:bg-[${colors.bg800}]`}
+              >
+                <Settings className="mr-2 h-4 w-4" /> Settings
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out
+              <DropdownMenuSeparator className={`bg-[${colors.bg700}]`} />
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="text-red-400 hover:text-red-300 focus:bg-red-500/10"
+              >
+                <LogOut className="mr-2 h-4 w-4" /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -226,106 +202,89 @@ export default function SimplifiedSidebar({
     );
   }
 
-  // Expanded sidebar render
+  // ── Expanded State ──
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between">
-          <Link href={`${workspaceBase}/dashboard`} className="flex items-center">
-            <Image src="/logo-text.svg" width={100} height={28} alt="Collab" />
-          </Link>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => {
-                const event = new KeyboardEvent("keydown", { key: "k", metaKey: true });
-                document.dispatchEvent(event);
-              }}
-              className="text-[#71717a] hover:text-white"
-              title="Search (⌘K)"
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="relative text-[#71717a] hover:text-white"
-              title="Notifications"
-            >
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[9px] bg-red-500">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </Badge>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Workspace Selector */}
-        <div className="mt-3">
-          <WorkspaceSelector />
+      <div className="flex items-center justify-between pt-3.5 px-2">
+        <Link href={`${workspaceBase}/dashboard`} className="flex items-center">
+          <Image src="/logo-text.svg" width={100} height={28} alt="Collab" />
+        </Link>
+        <div className="flex items-center gap-1">
+          <NotificationPopover />
         </div>
       </div>
 
-      {/* Navigation */}
-      <ScrollArea className="flex-1 py-2">
+      {/* Content */}
+      <div className="flex-1 flex flex-col gap-4 px-2 py-4 overflow-y-auto">
+        {/* Search Box */}
+        <button
+          onClick={() => {
+            const event = new KeyboardEvent("keydown", { key: "k", metaKey: true });
+            document.dispatchEvent(event);
+          }}
+          className="flex items-center gap-4 rounded-lg border px-2 py-2 text-sm bg-[#070708] border-[#1f1f22] hover:bg-[#171719] transition-colors"
+        >
+          <Search className="h-4 w-4 text-[#75757a]" />
+          <span className="flex-1 text-left text-[#75757a]">Search...</span>
+          <kbd className="text-xs px-1.5 py-0.5 rounded bg-[#171719] text-[#9c9ca1]">⌘K</kbd>
+        </button>
+
+        {/* Workspace Selector */}
+        <WorkspaceSelector />
+
         {/* Main Navigation */}
-        <div className="px-2 space-y-0.5">
+        <nav className="space-y-0.5">
           {mainNav.map((item) => (
             <Link
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+                "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150",
                 item.current
-                  ? "bg-[#1f1f1f] text-white"
-                  : "text-[#a1a1aa] hover:text-white hover:bg-[#1f1f1f]"
+                  ? "bg-[#171719] text-white"
+                  : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className={cn("h-4 w-4", item.current ? "text-white" : "text-[#75757a]")} />
               <span>{item.name}</span>
             </Link>
           ))}
-        </div>
-
-        {/* Divider */}
-        <div className="my-3 mx-3 border-t border-[#1f1f1f]" />
+        </nav>
 
         {/* Projects Section */}
-        <div className="px-2">
-          <Collapsible open={!collapsedSections.projects} onOpenChange={() => toggleSection("projects")}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-medium text-[#52525b] uppercase tracking-wider hover:text-[#71717a]">
-              <span>Projects</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowCreateProjectModal(true);
-                  }}
-                  className="p-0.5 hover:bg-[#1f1f1f] rounded"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-                {collapsedSections.projects ? (
-                  <ChevronRight className="h-3 w-3" />
-                ) : (
-                  <ChevronDown className="h-3 w-3" />
-                )}
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-0.5 mt-1">
-              {activeProjects.map((project) => (
+        <div>
+          <Link
+            href={`${workspaceBase}/projects`}
+            className={cn(
+              "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150 group",
+              pathname.startsWith(`${workspaceBase}/projects`)
+                ? "bg-[#171719] text-white"
+                : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
+            )}
+          >
+            <FolderKanban className={cn("h-4 w-4", pathname.startsWith(`${workspaceBase}/projects`) ? "text-white" : "text-[#75757a]")} />
+            <span>Projects</span>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCreateProjectModal(true); }}
+              className="ml-auto p-1 hover:bg-[#1f1f22] rounded transition-colors opacity-0 group-hover:opacity-100"
+            >
+              <Plus className="h-3.5 w-3.5 text-[#75757a]" />
+            </button>
+          </Link>
+
+          {/* Starred Projects */}
+          {starredProjects.length > 0 && (
+            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-[#1f1f22]">
+              {starredProjects.map((project: any) => (
                 <Link
                   key={project.id}
                   href={`${workspaceBase}/projects/${project.slug}`}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
+                    "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
                     pathname.includes(`/projects/${project.slug}`)
-                      ? "bg-[#1f1f1f] text-white"
-                      : "text-[#a1a1aa] hover:text-white hover:bg-[#1f1f1f]"
+                      ? "text-white bg-[#171719]"
+                      : "text-[#9c9ca1] hover:text-white hover:bg-[#101011]"
                   )}
                 >
                   <div
@@ -333,149 +292,141 @@ export default function SimplifiedSidebar({
                     style={{ backgroundColor: project.color || "#6366f1" }}
                   />
                   <span className="truncate">{project.name}</span>
-                  {project._count?.issues !== undefined && (
-                    <span className="ml-auto text-[10px] text-[#52525b]">
-                      {project._count.issues}
-                    </span>
-                  )}
                 </Link>
               ))}
-              {activeProjects.length === 0 && (
-                <div className="px-3 py-2 text-xs text-[#52525b]">No projects yet</div>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
+            </div>
+          )}
         </div>
 
-        {/* Divider */}
-        <div className="my-2 mx-3 border-t border-[#1f1f1f]" />
-
         {/* Views Section */}
-        <div className="px-2">
-          <Collapsible open={!collapsedSections.views} onOpenChange={() => toggleSection("views")}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-medium text-[#52525b] uppercase tracking-wider hover:text-[#71717a]">
-              <span>Views</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowCreateViewModal(true);
-                  }}
-                  className="p-0.5 hover:bg-[#1f1f1f] rounded"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-                {collapsedSections.views ? (
-                  <ChevronRight className="h-3 w-3" />
-                ) : (
-                  <ChevronDown className="h-3 w-3" />
-                )}
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-0.5 mt-1">
-              {favoriteViews.map((view) => (
+        <div>
+          <Link
+            href={`${workspaceBase}/views`}
+            className={cn(
+              "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150 group",
+              pathname === `${workspaceBase}/views`
+                ? "bg-[#171719] text-white"
+                : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
+            )}
+          >
+            <Eye className={cn("h-4 w-4", pathname === `${workspaceBase}/views` ? "text-white" : "text-[#75757a]")} />
+            <span>Views</span>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCreateViewModal(true); }}
+              className="ml-auto p-1 hover:bg-[#1f1f22] rounded transition-colors opacity-0 group-hover:opacity-100"
+            >
+              <Plus className="h-3.5 w-3.5 text-[#75757a]" />
+            </button>
+          </Link>
+
+          {/* Starred Views */}
+          {starredViews.length > 0 && (
+            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-[#1f1f22]">
+              {starredViews.map((view: any) => (
                 <Link
                   key={view.id}
                   href={`${workspaceBase}/views/${view.slug || view.id}`}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
+                    "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
                     pathname.includes(`/views/${view.slug || view.id}`)
-                      ? "bg-[#1f1f1f] text-white"
-                      : "text-[#a1a1aa] hover:text-white hover:bg-[#1f1f1f]"
+                      ? "text-white bg-[#171719]"
+                      : "text-[#9c9ca1] hover:text-white hover:bg-[#101011]"
                   )}
                 >
-                  {view.isFavorite && <Star className="h-3 w-3 text-amber-400 fill-amber-400" />}
-                  <Eye className="h-3.5 w-3.5 text-[#52525b]" />
+                  <Star className="h-3 w-3 text-amber-400 fill-amber-400 flex-shrink-0" />
                   <span className="truncate">{view.name}</span>
                 </Link>
               ))}
-              {favoriteViews.length === 0 && (
-                <div className="px-3 py-2 text-xs text-[#52525b]">Star views to pin them here</div>
-              )}
-              <Link
-                href={`${workspaceBase}/views`}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#52525b] hover:text-[#71717a]"
-              >
-                View all views →
-              </Link>
-            </CollapsibleContent>
-          </Collapsible>
+            </div>
+          )}
         </div>
 
-        {/* Divider */}
-        <div className="my-2 mx-3 border-t border-[#1f1f1f]" />
-
-        {/* More Section */}
-        <div className="px-2">
-          <Collapsible open={!collapsedSections.more} onOpenChange={() => toggleSection("more")}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-medium text-[#52525b] uppercase tracking-wider hover:text-[#71717a]">
-              <span>More</span>
-              {collapsedSections.more ? (
-                <ChevronRight className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-0.5 mt-1">
-              {moreItems.map((item) => (
+        {/* Apps Section */}
+        {installedApps.length > 0 && (
+          <div>
+            <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#75757a]">
+              Apps
+            </div>
+            <div className="space-y-0.5">
+              {installedApps.map((installation: any) => (
                 <Link
-                  key={item.name}
-                  href={item.href}
+                  key={installation.id}
+                  href={`${workspaceBase}/apps/${installation.app.slug}`}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
-                    item.current
-                      ? "bg-[#1f1f1f] text-white"
-                      : "text-[#a1a1aa] hover:text-white hover:bg-[#1f1f1f]"
+                    "flex items-center gap-4 rounded-lg px-2 py-2 text-sm transition-all duration-150",
+                    pathname.includes(`/apps/${installation.app.slug}`)
+                      ? "bg-[#171719] text-white"
+                      : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.name}</span>
+                  {installation.app.iconUrl ? (
+                    <Image
+                      src={installation.app.iconUrl}
+                      alt={installation.app.name}
+                      width={16}
+                      height={16}
+                      className="rounded flex-shrink-0"
+                    />
+                  ) : (
+                    <Grid3X3 className="h-4 w-4 text-[#75757a] flex-shrink-0" />
+                  )}
+                  <span className="truncate">{installation.app.name}</span>
                 </Link>
               ))}
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-      </ScrollArea>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-[#1f1f1f]">
-        {/* AI Assistant Button */}
-        <Button
-          variant="ai"
-          className="w-full mb-3 justify-start"
-          onClick={openWidget}
+      <div className="mt-auto px-2 pb-4 space-y-1">
+        {/* Support Link */}
+        <Link
+          href="/support"
+          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-[#9c9ca1] hover:text-white hover:bg-[#171719] transition-colors"
         >
-          <Sparkles className="h-4 w-4 mr-2" />
-          AI Assistant
-          <span className="ml-auto text-[10px] opacity-60">⌘J</span>
-        </Button>
+          <HelpCircle className="h-4 w-4 text-[#75757a]" />
+          <span>Support</span>
+        </Link>
+
+        {/* Documentation Link */}
+        <Link
+          href="/docs"
+          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-[#9c9ca1] hover:text-white hover:bg-[#171719] transition-colors"
+        >
+          <ExternalLink className="h-4 w-4 text-[#75757a]" />
+          <span>Documentation</span>
+        </Link>
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 w-full p-2 rounded-lg hover:bg-[#1f1f1f] transition-colors">
-              <Avatar className="h-8 w-8">
+            <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-[#171719] transition-colors group">
+              <Avatar className="h-8 w-8 ring-1 ring-[#1f1f22]">
                 <AvatarImage src={userData?.image || undefined} />
-                <AvatarFallback className="text-xs bg-[#27272a]">
+                <AvatarFallback className="text-xs bg-[#171719] text-[#9c9ca1]">
                   {userData?.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 text-left">
+              <div className="flex-1 text-left min-w-0">
                 <p className="text-sm text-white truncate">{userData?.name || "User"}</p>
-                <p className="text-[10px] text-[#52525b] truncate">{userData?.email}</p>
               </div>
-              <MoreHorizontal className="h-4 w-4 text-[#52525b]" />
+              <ChevronDown className="h-4 w-4 text-[#75757a] group-hover:text-[#9c9ca1] transition-colors flex-shrink-0" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => router.push(`${workspaceBase}/settings`)}>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
+          <DropdownMenuContent align="end" className="w-56 bg-[#101011] border-[#1f1f22]">
+            <DropdownMenuItem
+              onClick={() => router.push(`${workspaceBase}/settings`)}
+              className="text-[#9c9ca1] hover:text-white focus:bg-[#171719]"
+            >
+              <Settings className="mr-2 h-4 w-4" /> Settings
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="text-red-400">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+            <DropdownMenuSeparator className="bg-[#1f1f22]" />
+            <DropdownMenuItem
+              onClick={handleSignOut}
+              className="text-red-400 hover:text-red-300 focus:bg-red-500/10"
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -483,13 +434,14 @@ export default function SimplifiedSidebar({
 
       {/* Modals */}
       <CreateViewModal
-        open={showCreateViewModal}
+        isOpen={showCreateViewModal}
         onClose={() => setShowCreateViewModal(false)}
         workspaceId={currentWorkspace?.id || ""}
       />
       <CreateProjectModal
-        open={showCreateProjectModal}
+        isOpen={showCreateProjectModal}
         onClose={() => setShowCreateProjectModal(false)}
+        workspaceId={currentWorkspace?.id || ""}
       />
     </div>
   );
