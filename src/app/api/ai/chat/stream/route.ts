@@ -269,10 +269,13 @@ function createAnthropicStream(
           if (!response.ok) {
             const errorText = await response.text();
             console.error('Anthropic API error:', response.status, errorText);
-            sendEvent(controller, {
-              type: 'error',
-              message: `AI service error (${response.status}). Please try again.`,
-            });
+            // Include actual error details so we can debug
+            let detail = `AI service error (${response.status}).`;
+            try {
+              const parsed = JSON.parse(errorText);
+              detail = `AI error: ${parsed?.error?.message || errorText.slice(0, 200)}`;
+            } catch { /* not JSON */ }
+            sendEvent(controller, { type: 'error', message: detail });
             break;
           }
 

@@ -42,7 +42,19 @@ export function proxy(req: NextRequest) {
   const connectExtra = (process.env.CSP_CONNECT_SRC ?? "").trim();
   const frameAncestorsExtra = (process.env.CSP_FRAME_ANCESTORS ?? "").trim();
   const frameSrcExtra = (process.env.CSP_FRAME_SRC ?? "").trim();
-  
+
+  // Auto-derive allowed frame origins from known app URLs (MCP server, etc.)
+  // This ensures app iframes work across all environments without manual CSP config
+  const autoFrameOrigins: string[] = [];
+  const mcpServerUrl = process.env.MCP_SERVER_URL ?? "https://mcp-collab.weez.boo";
+  try { autoFrameOrigins.push(new URL(mcpServerUrl).origin); } catch { /* skip invalid */ }
+  // Also allow the UAT variant if prod is configured, and vice versa
+  if (mcpServerUrl.includes("uat-")) {
+    try { autoFrameOrigins.push(new URL(mcpServerUrl.replace("uat-", "")).origin); } catch { /* skip */ }
+  } else if (mcpServerUrl.includes("://mcp-")) {
+    try { autoFrameOrigins.push(new URL(mcpServerUrl.replace("://mcp-", "://uat-mcp-")).origin); } catch { /* skip */ }
+  }
+
   // Allow unsafe-eval in production if needed by dependencies (some UI libraries require it)
   const allowUnsafeEval = boolFromEnv("CSP_ALLOW_UNSAFE_EVAL", false);
 
@@ -86,8 +98,8 @@ export function proxy(req: NextRequest) {
     // XHR/fetch/websocket endpoints
     ["connect-src 'self' https: wss:", connectExtra].filter(Boolean).join(" "),
 
-    // Frames: only self by default; extend via env for app iframes if needed
-    ["frame-src 'self'", frameSrcExtra].filter(Boolean).join(" "),
+    // Frames: self + auto-derived app origins + manual env override
+    ["frame-src 'self'", ...autoFrameOrigins, frameSrcExtra].filter(Boolean).join(" "),
     ["frame-ancestors 'self'", frameAncestorsExtra].filter(Boolean).join(" "),
 
     // Lock down the rest

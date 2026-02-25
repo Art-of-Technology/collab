@@ -16,49 +16,16 @@ function isCacheValid(): boolean {
 }
 
 /**
- * Get all available agents. Merges DB data with code-defined system prompts.
- * Code-defined systemPrompts take precedence to ensure latest action formats are used.
+ * Get all available agents.
+ * Currently returns only code-defined agents (Cleo).
+ * DB agent support is preserved but not active yet — will be enabled later.
  */
-export async function getAllAgents(prisma?: any): Promise<AgentDefinition[]> {
+export async function getAllAgents(_prisma?: any): Promise<AgentDefinition[]> {
   if (isCacheValid() && agentCache) {
     return Array.from(agentCache.values());
   }
 
-  if (prisma) {
-    try {
-      const dbAgents = await prisma.aIAgent.findMany({
-        where: { isActive: true },
-        orderBy: { isDefault: 'desc' },
-      });
-
-      if (dbAgents.length > 0) {
-        agentCache = new Map();
-        for (const agent of dbAgents) {
-          // Use code-defined systemPrompt if available (has latest action formats)
-          const codeAgent = CODE_AGENTS[agent.slug];
-          const def: AgentDefinition = {
-            slug: agent.slug,
-            name: agent.name,
-            avatar: agent.avatar ?? undefined,
-            color: agent.color,
-            // Prefer code-defined systemPrompt for latest action instructions
-            systemPrompt: codeAgent?.systemPrompt || agent.systemPrompt,
-            capabilities: (codeAgent?.capabilities || agent.capabilities) as AgentDefinition['capabilities'],
-            personality: agent.personality ?? '',
-            description: agent.description ?? '',
-            isDefault: agent.isDefault,
-          };
-          agentCache.set(agent.slug, def);
-        }
-        cacheTimestamp = Date.now();
-        return Array.from(agentCache.values());
-      }
-    } catch {
-      // DB not available or table doesn't exist yet - fall through to code agents
-    }
-  }
-
-  // Fallback to code-defined agents
+  // Code-defined agents only for now
   agentCache = new Map(Object.entries(CODE_AGENTS));
   cacheTimestamp = Date.now();
   return Object.values(CODE_AGENTS);
