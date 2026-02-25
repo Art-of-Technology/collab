@@ -263,41 +263,43 @@ function PlanningViewRendererLegacy({
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#101011]">
+    <div className="h-full flex flex-col bg-collab-900">
       {/* Filter Bar */}
       <div className={cn(
         "border-b transition-colors",
-        "border-[#1a1a1a] bg-[#0c0c0c] px-4 py-2"
+        "border-collab-700 bg-collab-950 px-4 py-2"
       )}>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           {/* Left side - View mode toggle and personal toggle */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
             {/* Team/Personal Toggle */}
-            <div className="flex items-center gap-1 bg-[#1a1a1a] border border-[#2d2d30] rounded-md p-0.5">
-              <button
+            <div className="flex items-center gap-1 bg-collab-800 border border-collab-600 rounded-md p-0.5">
+              <Button
+                variant="ghost"
                 onClick={() => setPersonalMode(false)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors",
+                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
                   !personalMode
-                    ? "bg-[#2563eb] text-white"
-                    : "text-gray-400 hover:text-white hover:bg-[#252525]"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-400 hover:text-white hover:bg-collab-700"
                 )}
               >
                 <Users className="h-3 w-3" />
                 Team
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setPersonalMode(true)}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors",
+                  "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
                   personalMode
-                    ? "bg-[#10b981] text-white"
-                    : "text-gray-400 hover:text-white hover:bg-[#252525]"
+                    ? "bg-emerald-500 text-white"
+                    : "text-gray-400 hover:text-white hover:bg-collab-700"
                 )}
               >
                 <User className="h-3 w-3" />
                 My Plan
-              </button>
+              </Button>
             </div>
 
             {/* View Mode & Date Range */}

@@ -5,63 +5,90 @@
 @tailwind utilities;
 
 :root {
-  --sidebar-open: 16rem;
-  --sidebar-closed: 4.5rem;
+  --sidebar-open: 14rem;
+  --sidebar-closed: 3rem;
   --sidebar-width: var(--sidebar-open);
+
+  /* Collab Design System Colors */
+  --collab-950: #070708;  /* Sidebar background - darkest */
+  --collab-900: #101011;  /* Page content area */
+  --collab-800: #171719;  /* Cards, sections - lighter than page */
+  --collab-700: #1f1f22;  /* Borders */
+  --collab-600: #27272b;  /* Hover states */
+  --collab-500: #75757a;  /* Muted text */
+  --collab-400: #9c9ca1;  /* Secondary text */
+  --collab-50: #fafafa;   /* Primary text */
 }
 
-/* Desktop: grid with fixed first column driven by CSS var */
+/* Desktop: flex layout with padding like Polar */
 .app-layout {
   display: flex;
+  flex-direction: row;
   width: 100%;
   height: 100dvh;
+  background: transparent;
+  padding: 8px;
 }
 
 .app-sidebar {
   position: fixed;
   width: var(--sidebar-width);
+  height: calc(100dvh - 16px);
   overflow: hidden;
-  background: #090909;
+  background: var(--collab-950);
   z-index: 50;
   transition: width 200ms ease;
-  top: 0;
-  left: 0;
+  top: 8px;
+  left: 8px;
 }
 
 .main-content {
   display: flex;
-  margin-left: var(--sidebar-width);
-  width: calc(100dvw - var(--sidebar-width));
-  height: 100vh;
-  background: #090909;
+  flex-direction: column;
+  margin-left: calc(var(--sidebar-width) + 16px);
+  width: calc(100dvw - var(--sidebar-width) - 32px);
+  height: calc(100dvh - 16px);
+  background: var(--collab-900);
+  border: 1px solid var(--collab-700);
+  border-radius: 16px;
   overflow: hidden;
-  transition: margin-left 200ms ease;
+  transition: margin-left 200ms ease, width 200ms ease;
+  position: relative;
 }
 
 .sidebar-toggle {
   transition: left 200ms ease, transform 200ms ease, background 150ms ease;
 }
 
-/* Mobile: overlay drawer (no reflow) */
+/* Mobile: overlay drawer */
 @media (max-width: 767.98px) {
   .app-layout {
-    grid-template-columns: 1fr;
+    padding: 0;
+    flex-direction: column;
   }
- 
+
   .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
-    width: 16rem;
+    width: 18rem;
+    height: 100dvh;
     transform: translateX(-100%);
     transition: transform 200ms ease-in-out;
     will-change: transform;
     z-index: 45;
-    background: #090909;
+    background: var(--collab-950);
+    top: 0;
+    left: 0;
   }
+
   .main-content {
     margin-left: 0;
     width: 100dvw;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
   }
+
   .app-sidebar[data-open="true"] {
     transform: translateX(0);
   }
@@ -81,52 +108,6 @@
   transform: translateX(-4px);
 }
 
-/* Dark theme variables */
-.dark-theme {
-  --background: #101011;
-  --foreground: #ededed;
-  --primary: #22c55e;
-  --card-bg: #101011;
-  --card-border: #333333;
-  --navbar-bg: #090909;
-  --sidebar-bg: #090909;
-  --hover-bg: #1a1a1a;
-  --text-primary: #ffffff;
-  --text-secondary: #a0aec0;
-  --text-muted: #718096;
-  --button-primary-bg: #22c55e;
-  --button-primary-text: #ffffff;
-  --button-secondary-bg: #2d3748;
-  --button-secondary-text: #ffffff;
-  --input-bg: #2d3748;
-  --input-border: #4a5568;
-  --input-text: #ededed;
-}
-
-/* Component-specific styles */
-.dark-card {
-  @apply bg-gray-800 border border-gray-700 rounded-lg;
-}
-
-.dark-navbar {
-  @apply bg-[#1c1c1c] border-b border-gray-700;
-}
-
-.dark-sidebar {
-  @apply bg-gray-900 border-r border-gray-700;
-}
-
-.dark-input {
-  @apply bg-gray-700 border border-gray-600 text-white rounded-md;
-}
-
-.dark-button-primary {
-  @apply bg-green-500 text-white;
-}
-
-.dark-button-secondary {
-  @apply bg-gray-700 text-white;
-}
 
 @layer base {
   :root {
@@ -158,39 +139,44 @@
   }
   
   .dark {
-    --background: 0 0% 6.3%;  /* #101011 - Linear page background */
-    --foreground: 0 0% 95%;  /* #f2f2f2 */
-    
-    --card: 0 0% 6.3%;  /* #101011 */
-    --card-foreground: 0 0% 95%;  /* #f2f2f2 */
-    
-    --popover: 0 0% 3.5%;  /* #090909 */
-    --popover-foreground: 0 0% 95%;  /* #f2f2f2 */
-    
-    --primary: 142 71% 45%;  /* #22c55e (green) */
+    --background: 233 5% 6.5%;  /* #101011 - collab-900 page background */
+    --foreground: 0 0% 98%;  /* #fafafa - collab-50 */
+
+    --card: 233 5% 9.5%;  /* #171719 - collab-800 */
+    --card-foreground: 0 0% 98%;  /* #fafafa */
+
+    --popover: 233 5% 6.5%;  /* #101011 - collab-900 */
+    --popover-foreground: 0 0% 98%;  /* #fafafa */
+
+    --primary: 217 91% 60%;  /* #2563eb (blue-600) */
     --primary-foreground: 0 0% 100%;  /* #ffffff */
-    
-    --secondary: 0 0% 3.5%;  /* #090909 */
-    --secondary-foreground: 0 0% 90%;  /* #e6e6e6 */
-    
-    --muted: 0 0% 3.5%;  /* #090909 */
-    --muted-foreground: 0 0% 65%;  /* #a6a6a6 */
-    
-    --accent: 142 71% 45%;  /* #22c55e with 10% opacity */
-    --accent-foreground: 0 0% 100%;  /* #ffffff */
-    
-    --destructive: 0 84% 60%;  /* #f04444 */
+
+    --secondary: 233 5% 9.5%;  /* #171719 - collab-800 */
+    --secondary-foreground: 0 0% 98%;  /* #fafafa */
+
+    --muted: 233 5% 9.5%;  /* #171719 - collab-800 */
+    --muted-foreground: 233 5% 46%;  /* #75757a - collab-500 */
+
+    --accent: 233 5% 12%;  /* #1f1f22 - collab-700 */
+    --accent-foreground: 0 0% 98%;  /* #fafafa */
+
+    --destructive: 0 84% 60%;  /* #ef4444 */
     --destructive-foreground: 0 0% 100%;  /* #ffffff */
-    
-    --border: 0 0% 12%;  /* #1f1f1f - lighter border for Linear style */
-    --input: 0 0% 12%;  /* #1f1f1f */
-    --ring: 142 71% 45%;  /* #22c55e (green) */
-    
-    --chart-1: 142 71% 45%;  /* #22c55e */
-    --chart-2: 210 100% 60%;  /* #47a3f3 */
+
+    --border: 233 5% 12%;  /* #1f1f22 - collab-700 */
+    --input: 233 5% 12%;  /* #1f1f22 - collab-700 */
+    --ring: 217 91% 60%;  /* #2563eb (blue-600) */
+
+    --chart-1: 217 91% 60%;  /* #2563eb */
+    --chart-2: 142 71% 45%;  /* #22c55e */
     --chart-3: 40 100% 60%;  /* #ffcc33 */
     --chart-4: 330 100% 60%;  /* #f83f93 */
     --chart-5: 270 100% 60%;  /* #9966ff */
+
+    /* Sidebar specific */
+    --sidebar-background: 233 5% 3%;  /* #070708 - collab-950 */
+    --sidebar-foreground: 0 0% 98%;  /* #fafafa */
+    --sidebar-border: 233 5% 12%;  /* #1f1f22 - collab-700 */
   }
 }
 
@@ -198,79 +184,53 @@
   * {
     @apply border-border;
   }
-  
+
   html,
   body {
     height: 100%;
   }
-  
+
   body {
-    @apply bg-background text-foreground;
     overflow-x: hidden;
+  }
+
+  /* Remove focus rings globally - Collab design uses hover states instead */
+  button,
+  [role="button"],
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  [data-state] {
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    outline: none !important;
+  }
+
+  button:focus,
+  button:focus-visible,
+  button:focus-within,
+  [role="button"]:focus,
+  [role="button"]:focus-visible,
+  [data-state]:focus,
+  [data-state]:focus-visible {
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Remove Radix UI focus styles */
+  [data-radix-popper-content-wrapper] *:focus,
+  [data-radix-popper-content-wrapper] *:focus-visible,
+  [data-radix-collection-item]:focus,
+  [data-radix-collection-item]:focus-visible {
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    outline: none !important;
+    box-shadow: none !important;
   }
 }
 
-/* Enhanced Dark Theme Styles */
-.dark {
-  /* Add subtle box-shadows for depth */
-  .card, 
-  .dropdown-content,
-  .dialog-content {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
-  }
-  
-  /* Make cards stand out slightly from background */
-  .card {
-    background-color: #101011;
-    border-color: #1f1f1f;
-  }
-  
-  /* Add subtle hover effects */
-  .hover-effect {
-    transition: all 0.2s ease;
-  }
-  
-  .hover-effect:hover {
-    background-color: #1a1a1a;
-    transform: translateY(-1px);
-  }
-  
-  /* Better button styling */
-  .btn-primary {
-    background-color: #22c55e;
-    color: white;
-    box-shadow: 0 2px 4px rgba(34, 197, 94, 0.3);
-  }
-  
-  .btn-primary:hover {
-    background-color: #16a34a;
-    box-shadow: 0 3px 6px rgba(34, 197, 94, 0.4);
-  }
-  
-  /* Enhance focus states for accessibility */
-  *:focus-visible {
-    outline: 2px solid #22c55e;
-    outline-offset: 2px;
-  }
-  
-  /* Add subtle gradient to backgrounds for more visual interest */
-  .gradient-subtle {
-    background-image: linear-gradient(to bottom, #101011, #0a0a0a);
-  }
-  
-  /* Add border glow effect for selected items */
-  .selected-item {
-    border-color: #22c55e;
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
-  }
-  
-  /* Improve navbar with subtle border */
-  nav {
-    border-bottom: 1px solid #1f1f1f;
-    background-color: #090909;
-    backdrop-filter: blur(10px);
-  }
-}
 
 /* Hide scrollbars but keep functionality */
 * {

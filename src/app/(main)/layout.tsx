@@ -5,9 +5,8 @@ export default async function MainLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
   return (
-    <div className="min-h-screen bg-[#191919]">
+    <div className="h-full">
       {children}
     </div>
   );

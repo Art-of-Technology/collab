@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { SlashCommand } from '../extensions/slash-commands-extension';
 
 interface SlashCommandMenuProps {
@@ -46,13 +47,13 @@ export function SlashCommandMenu({
 
   return (
     <div
-      className="absolute z-[9997] w-72 bg-[#1c1c1e] border border-[#333] rounded-md shadow-lg overflow-hidden"
+      className="absolute z-[9997] w-72 bg-collab-800 border border-collab-600 rounded-md shadow-lg overflow-hidden"
       style={{
         top: position.top,
         left: position.left,
       }}
     >
-      <div className="text-xs text-[#9ca3af] px-3 py-2 border-b border-[#333] bg-[#0e0e0e]">
+      <div className="text-xs text-gray-400 px-3 py-2 border-b border-collab-600 bg-collab-900">
         Blocks
       </div>
       
@@ -62,34 +63,35 @@ export function SlashCommandMenu({
             const Icon = command.icon;
             const isSelected = index === selectedIndex;
             return (
-              <button
+              <Button
                 key={command.id}
                 ref={isSelected ? selectedItemRef : null}
                 type="button"
+                variant="ghost"
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
-                  isSelected 
-                    ? "bg-[#2a2a2a]" 
-                    : "hover:bg-[#1a1a1a]"
+                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors h-auto justify-start",
+                  isSelected
+                    ? "bg-collab-600"
+                    : "hover:bg-collab-800"
                 )}
                 onClick={() => onCommandSelect(command)}
               >
-                <div className="flex-shrink-0 w-8 h-8 rounded-md bg-[#333] flex items-center justify-center">
-                  <Icon className="h-4 w-4 text-[#9ca3af]" />
+                <div className="flex-shrink-0 w-8 h-8 rounded-md bg-collab-600 flex items-center justify-center">
+                  <Icon className="h-4 w-4 text-gray-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#e6edf3]">
+                  <div className="text-sm font-medium text-collab-50">
                     {command.label}
                   </div>
-                  <div className="text-xs text-[#6e7681] truncate">
+                  <div className="text-xs text-collab-500 truncate">
                     {command.description}
                   </div>
                 </div>
-              </button>
+              </Button>
             );
           })
         ) : (
-          <div className="px-3 py-6 text-center text-[#6e7681] text-sm">
+          <div className="px-3 py-6 text-center text-collab-500 text-sm">
             No matching blocks
           </div>
         )}

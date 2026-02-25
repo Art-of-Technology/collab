@@ -144,10 +144,10 @@ export function EditorHistoryModal({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-col">
-                    <span className="text-xs text-[#c9d1d9] leading-tight tracking-tight">
+                    <span className="text-xs text-collab-400 leading-tight tracking-tight">
                       {historyPreview.meta?.actor} made changes
                     </span>
-                    <span className="text-[10px] text-[#7d8590] leading-tight tracking-tight">
+                    <span className="text-[10px] text-collab-500 leading-tight tracking-tight">
                       {formatDistanceToNow(new Date(historyPreview.meta?.ts || Date.now()), { addSuffix: true })}
                     </span>
                   </div>
@@ -222,10 +222,11 @@ export function EditorHistoryModal({
                   <div className="p-3 text-sm text-muted-foreground">No history entries</div>
                 ) : (
                   activities.map((a) => (
-                    <button
+                    <Button
                       key={a.id}
+                      variant="ghost"
                       className={cn(
-                        "w-full text-left p-3 hover:bg-[#0d0d0d]",
+                        "w-full text-left p-3 hover:bg-collab-950 h-auto justify-start",
                         selectedEntryId === a.id ? "bg-muted/60" : ""
                       )}
                       onClick={() => {
@@ -245,10 +246,10 @@ export function EditorHistoryModal({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-xs text-[#c9d1d9]">
+                            <span className="text-xs text-collab-400">
                               {a.user.name} made changes
                             </span>
-                            <span className="text-[10px] text-[#7d8590]">
+                            <span className="text-[10px] text-collab-500">
                               {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
                             </span>
                           </div>
@@ -257,7 +258,7 @@ export function EditorHistoryModal({
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         </div>
                       </div>
-                    </button>
+                    </Button>
                   ))
                 )}
               </div>

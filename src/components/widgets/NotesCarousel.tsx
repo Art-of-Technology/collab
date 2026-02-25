@@ -87,7 +87,7 @@ function StickyNoteCard({
       <div className="p-3 h-[calc(100%-4px)] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h4 className="text-[13px] font-medium text-[#fafafa] line-clamp-2 leading-tight flex-1">
+          <h4 className="text-[13px] font-medium text-collab-50 line-clamp-2 leading-tight flex-1">
             {note.title}
           </h4>
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -97,13 +97,13 @@ function StickyNoteCard({
             {note.isPublic ? (
               <Globe className="h-3 w-3 text-emerald-400" />
             ) : (
-              <Lock className="h-3 w-3 text-[#52525b]" />
+              <Lock className="h-3 w-3 text-collab-500/60" />
             )}
           </div>
         </div>
 
         {/* Content preview */}
-        <p className="text-[11px] text-[#71717a] line-clamp-4 flex-1 leading-relaxed">
+        <p className="text-[11px] text-collab-500 line-clamp-4 flex-1 leading-relaxed">
           {plainContent.substring(0, 120)}
           {plainContent.length > 120 && '...'}
         </p>
@@ -127,7 +127,7 @@ function StickyNoteCard({
           </div>
 
           {/* Time */}
-          <span className="text-[10px] text-[#52525b] flex-shrink-0">
+          <span className="text-[10px] text-collab-500/60 flex-shrink-0">
             {timeAgo}
           </span>
         </div>
@@ -155,7 +155,7 @@ export function NotesCarousel({ notes, onNoteClick, isLoading }: NotesCarouselPr
         {[1, 2, 3].map(i => (
           <div
             key={i}
-            className="flex-shrink-0 w-[200px] h-[180px] rounded-lg bg-[#18181b] animate-pulse"
+            className="flex-shrink-0 w-[200px] h-[180px] rounded-lg bg-collab-800 animate-pulse"
           />
         ))}
       </div>
@@ -166,8 +166,8 @@ export function NotesCarousel({ notes, onNoteClick, isLoading }: NotesCarouselPr
     return (
       <div className="flex items-center justify-center py-8 text-center">
         <div>
-          <StickyNote className="h-8 w-8 text-[#3f3f46] mx-auto mb-2" />
-          <p className="text-xs text-[#52525b]">No notes yet</p>
+          <StickyNote className="h-8 w-8 text-collab-500/50 mx-auto mb-2" />
+          <p className="text-xs text-collab-500/60">No context yet</p>
         </div>
       </div>
     );
@@ -182,7 +182,7 @@ export function NotesCarousel({ notes, onNoteClick, isLoading }: NotesCarouselPr
             variant="ghost"
             size="sm"
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 p-0 bg-[#0d0d0e]/90 border border-[#1f1f1f] rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 p-0 bg-collab-900/90 border border-collab-700 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -190,7 +190,7 @@ export function NotesCarousel({ notes, onNoteClick, isLoading }: NotesCarouselPr
             variant="ghost"
             size="sm"
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 p-0 bg-[#0d0d0e]/90 border border-[#1f1f1f] rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 p-0 bg-collab-900/90 border border-collab-700 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

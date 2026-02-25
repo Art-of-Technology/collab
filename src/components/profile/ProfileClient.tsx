@@ -6,7 +6,7 @@ import ProfileForm from "@/components/profile/ProfileForm";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PostList from "@/components/posts/PostList";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import NotificationSettings from "@/components/profile/NotificationSettings";
@@ -65,12 +65,7 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
             {user.useCustomAvatar ? (
               <CustomAvatar user={user} size="lg" className="border-2 border-primary/20 shadow-md" />
             ) : (
-              <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
-                <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-                <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                  {user.name?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={user} size="lg" className="h-16 w-16 border-2 border-primary/20 shadow-md" />
             )}
             <div>
               <h1 className="text-2xl font-bold">{user.name}</h1>

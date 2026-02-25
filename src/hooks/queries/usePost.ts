@@ -81,9 +81,10 @@ export const useCreatePost = () => {
   return useMutation({
     mutationFn: createPost,
     onSuccess: () => {
-      // Invalidate posts lists and stats
+      // Invalidate posts lists, stats, and unified timeline
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
       queryClient.invalidateQueries({ queryKey: ['posts', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['unified-timeline'] });
     },
   });
 };

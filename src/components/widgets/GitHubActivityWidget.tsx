@@ -61,37 +61,37 @@ function ActivityRow({ activity }: { activity: ActivityItem }) {
   const timeAgo = formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true });
 
   return (
-    <div className="flex items-start gap-3 py-2 px-2 rounded hover:bg-[#161616] transition-colors">
+    <div className="flex items-start gap-3 py-2 px-2 rounded hover:bg-collab-900 transition-colors">
       {/* Icon */}
-      <div className={cn("flex-shrink-0 mt-0.5", activityColors[activity.type] || 'text-[#666]')}>
+      <div className={cn("flex-shrink-0 mt-0.5", activityColors[activity.type] || 'text-collab-500')}>
         {activityIcons[activity.type] || <Github className="h-3.5 w-3.5" />}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#e6edf3]">{activity.author.name}</span>
-          <span className="text-xs text-[#666]">{activity.title}</span>
+          <span className="text-xs text-collab-50">{activity.author.name}</span>
+          <span className="text-xs text-collab-500">{activity.title}</span>
         </div>
         {activity.description && (
-          <p className="text-xs text-[#8b949e] truncate mt-0.5">
+          <p className="text-xs text-collab-400 truncate mt-0.5">
             {activity.description}
           </p>
         )}
         {activity.metadata?.prNumber && (
-          <span className="text-[10px] text-[#666]">
+          <span className="text-[10px] text-collab-500">
             #{activity.metadata.prNumber}
           </span>
         )}
         {activity.metadata?.sha && (
-          <span className="text-[10px] text-[#666] font-mono">
+          <span className="text-[10px] text-collab-500 font-mono">
             {activity.metadata.sha.substring(0, 7)}
           </span>
         )}
       </div>
 
       {/* Timestamp */}
-      <span className="text-[10px] text-[#666] flex-shrink-0">
+      <span className="text-[10px] text-collab-500 flex-shrink-0">
         {timeAgo}
       </span>
     </div>
@@ -101,9 +101,9 @@ function ActivityRow({ activity }: { activity: ActivityItem }) {
 function NoRepositoryState({ workspaceId, projectSlug }: { workspaceId: string; projectSlug: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-6 text-center">
-      <Github className="h-10 w-10 text-[#333] mb-3" />
-      <p className="text-sm text-[#666] mb-1">No repository connected</p>
-      <p className="text-xs text-[#555] mb-3">
+      <Github className="h-10 w-10 text-collab-600 mb-3" />
+      <p className="text-sm text-collab-500 mb-1">No repository connected</p>
+      <p className="text-xs text-collab-500 mb-3">
         Connect a GitHub repository to see activity
       </p>
       <a

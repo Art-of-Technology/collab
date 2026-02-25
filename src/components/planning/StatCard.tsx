@@ -80,7 +80,7 @@ export function StatCard({ type, value, subValue, subLabel, className }: StatCar
       <div className={cn('text-2xl font-semibold', config.valueClass)}>
         {value}
       </div>
-      <div className="text-xs text-[#71717a]">
+      <div className="text-xs text-collab-500">
         {config.label}
       </div>
     </div>

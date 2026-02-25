@@ -157,7 +157,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
 
   if (loading) {
     return (
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -170,11 +170,11 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Configuration Panel */}
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-500" />
-            <CardTitle className="text-lg text-[#e6edf3]">AI Changelog Generator</CardTitle>
+            <CardTitle className="text-lg text-collab-50">AI Changelog Generator</CardTitle>
           </div>
           <CardDescription>
             Generate beautiful changelogs from your GitHub releases, commits, and PRs
@@ -183,18 +183,18 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
         <CardContent className="space-y-6">
           {/* Release Selection */}
           <div className="space-y-2">
-            <Label className="text-[#e6edf3]">Select Release</Label>
+            <Label className="text-collab-50">Select Release</Label>
             <Select value={selectedRelease} onValueChange={setSelectedRelease}>
-              <SelectTrigger className="bg-[#161b22] border-[#30363d]">
+              <SelectTrigger className="bg-collab-800 border-collab-600">
                 <SelectValue placeholder="Select a release" />
               </SelectTrigger>
-              <SelectContent className="bg-[#161b22] border-[#30363d]">
+              <SelectContent className="bg-collab-800 border-collab-600">
                 {releases.map((release) => (
                   <SelectItem key={release.id} value={release.id}>
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4" />
                       <span>{release.tagName}</span>
-                      <span className="text-xs text-[#8b949e]">
+                      <span className="text-xs text-collab-400">
                         {formatDate(release.publishedAt)}
                       </span>
                     </div>
@@ -206,7 +206,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
 
           {/* Include Options */}
           <div className="space-y-3">
-            <Label className="text-[#e6edf3]">Include in Changelog</Label>
+            <Label className="text-collab-50">Include in Changelog</Label>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -216,7 +216,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
                 />
                 <label
                   htmlFor="commits"
-                  className="text-sm text-[#8b949e] flex items-center gap-2 cursor-pointer"
+                  className="text-sm text-collab-400 flex items-center gap-2 cursor-pointer"
                 >
                   <GitCommit className="h-4 w-4" />
                   Commit messages
@@ -230,7 +230,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
                 />
                 <label
                   htmlFor="prs"
-                  className="text-sm text-[#8b949e] flex items-center gap-2 cursor-pointer"
+                  className="text-sm text-collab-400 flex items-center gap-2 cursor-pointer"
                 >
                   <GitPullRequest className="h-4 w-4" />
                   Pull request descriptions
@@ -244,7 +244,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
                 />
                 <label
                   htmlFor="releaseNotes"
-                  className="text-sm text-[#8b949e] flex items-center gap-2 cursor-pointer"
+                  className="text-sm text-collab-400 flex items-center gap-2 cursor-pointer"
                 >
                   <FileText className="h-4 w-4" />
                   GitHub release notes
@@ -255,12 +255,12 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
 
           {/* Format Selection */}
           <div className="space-y-2">
-            <Label className="text-[#e6edf3]">Output Format</Label>
+            <Label className="text-collab-50">Output Format</Label>
             <Select value={format} onValueChange={setFormat}>
-              <SelectTrigger className="bg-[#161b22] border-[#30363d]">
+              <SelectTrigger className="bg-collab-800 border-collab-600">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#161b22] border-[#30363d]">
+              <SelectContent className="bg-collab-800 border-collab-600">
                 <SelectItem value="markdown">Markdown</SelectItem>
                 <SelectItem value="html">HTML</SelectItem>
                 <SelectItem value="plain">Plain Text</SelectItem>
@@ -283,8 +283,8 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
           </Button>
 
           {/* Info */}
-          <div className="text-xs text-[#8b949e] p-3 bg-[#161b22] rounded-lg border border-[#21262d]">
-            <p className="font-medium text-[#e6edf3] mb-1">How it works</p>
+          <div className="text-xs text-collab-400 p-3 bg-collab-800 rounded-lg border border-collab-700">
+            <p className="font-medium text-collab-50 mb-1">How it works</p>
             <p>
               AI analyzes your selected data sources (commits, PRs, release notes)
               and generates a well-structured, user-friendly changelog that highlights
@@ -295,12 +295,12 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
       </Card>
 
       {/* Preview Panel */}
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-500" />
-              <CardTitle className="text-lg text-[#e6edf3]">Preview</CardTitle>
+              <CardTitle className="text-lg text-collab-50">Preview</CardTitle>
             </div>
             {changelog && (
               <div className="flex items-center gap-2">
@@ -349,21 +349,21 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
               <Textarea
                 value={changelog}
                 onChange={(e) => setChangelog(e.target.value)}
-                className="min-h-[500px] font-mono text-sm bg-[#161b22] border-[#30363d] text-[#e6edf3]"
+                className="min-h-[500px] font-mono text-sm bg-collab-800 border-collab-600 text-collab-50"
               />
             ) : (
               <ScrollArea className="h-[500px]">
                 <div className="prose prose-invert prose-sm max-w-none">
                   <div
-                    className="text-[#e6edf3] whitespace-pre-wrap font-mono text-sm p-4 bg-[#161b22] rounded-lg border border-[#21262d]"
+                    className="text-collab-50 whitespace-pre-wrap font-mono text-sm p-4 bg-collab-800 rounded-lg border border-collab-700"
                     dangerouslySetInnerHTML={{
                       __html: escapeHtml(changelog)
-                        .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold text-[#e6edf3] mb-4">$1</h1>')
-                        .replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold text-[#e6edf3] mt-6 mb-3">$1</h2>')
-                        .replace(/^### (.+)$/gm, '<h3 class="text-base font-medium text-[#e6edf3] mt-4 mb-2">$1</h3>')
-                        .replace(/^- (.+)$/gm, '<li class="text-[#8b949e] ml-4">$1</li>')
-                        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-[#e6edf3]">$1</strong>')
-                        .replace(/`(.+?)`/g, '<code class="bg-[#21262d] px-1 rounded text-[#58a6ff]">$1</code>')
+                        .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold text-collab-50 mb-4">$1</h1>')
+                        .replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold text-collab-50 mt-6 mb-3">$1</h2>')
+                        .replace(/^### (.+)$/gm, '<h3 class="text-base font-medium text-collab-50 mt-4 mb-2">$1</h3>')
+                        .replace(/^- (.+)$/gm, '<li class="text-collab-400 ml-4">$1</li>')
+                        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-collab-50">$1</strong>')
+                        .replace(/`(.+?)`/g, '<code class="bg-collab-700 px-1 rounded text-blue-400">$1</code>')
                         .replace(/\n/g, '<br/>')
                     }}
                   />
@@ -373,7 +373,7 @@ export function ChangelogGenerator({ repositoryId, projectName }: ChangelogGener
           ) : (
             <div className="flex flex-col items-center justify-center h-[500px] text-center">
               <Sparkles className="h-16 w-16 mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-medium text-[#e6edf3] mb-2">No Changelog Generated</h3>
+              <h3 className="text-lg font-medium text-collab-50 mb-2">No Changelog Generated</h3>
               <p className="text-sm text-muted-foreground max-w-md">
                 Select a release and configure your options, then click "Generate Changelog"
                 to create an AI-powered changelog from your GitHub data.

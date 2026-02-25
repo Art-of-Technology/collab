@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useUpdateUserProfile } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -100,12 +100,7 @@ export default function ProfileForm({ user }: ProfileFormProps) {
             {user.useCustomAvatar ? (
               <CustomAvatar user={user} size="xl" className="border-4 border-primary/20 shadow-lg" />
             ) : (
-              <Avatar className="h-24 w-24 border-4 border-primary/20 shadow-lg">
-                <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-                <AvatarFallback className="text-2xl bg-primary/10 text-primary">
-                  {user.name?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={user} size="lg" className="h-24 w-24 border-4 border-primary/20 shadow-lg" />
             )}
           </div>
           <div className="text-center sm:text-left">

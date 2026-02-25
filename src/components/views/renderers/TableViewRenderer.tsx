@@ -1,9 +1,10 @@
 "use client";
 
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  MessageSquare, 
+import { Button } from "@/components/ui/button";
+import { UserAvatar } from '@/components/ui/user-avatar';
+import {
+  MessageSquare,
   ArrowRight,
   Calendar,
   User,
@@ -111,7 +112,7 @@ export default function TableViewRenderer({
   };
 
   return (
-    <div className="h-full bg-[#0D1117]">
+    <div className="h-full bg-collab-900">
       <div className="p-6">
         {issues.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-gray-500">
@@ -124,66 +125,73 @@ export default function TableViewRenderer({
             </div>
           </div>
         ) : (
-          <div className="border border-[#21262d] rounded-lg overflow-hidden">
+          <div className="border border-collab-700 rounded-lg overflow-hidden">
             {/* Table Header */}
-            <div className="bg-[#161b22] border-b border-[#21262d]">
+            <div className="bg-collab-800 border-b border-collab-700">
               <div className="grid grid-cols-12 gap-4 p-4 text-sm font-medium text-gray-400">
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('key')}
                 >
                   Key
                   <SortIcon field="key" />
-                </button>
-                
-                <button 
-                  className="col-span-3 flex items-center gap-2 hover:text-white transition-colors text-left"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-3 flex items-center gap-2 hover:text-white transition-colors text-left h-auto p-0 justify-start"
                   onClick={() => handleSort('title')}
                 >
                   Title
                   <SortIcon field="title" />
-                </button>
-                
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('status')}
                 >
                   Status
                   <SortIcon field="status" />
-                </button>
-                
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('priority')}
                 >
                   Priority
                   <SortIcon field="priority" />
-                </button>
-                
-                <button 
-                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('assignee')}
                 >
                   Assignee
                   <SortIcon field="assignee" />
-                </button>
-                
-                <button 
-                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('project')}
                 >
                   Project
                   <SortIcon field="project" />
-                </button>
-                
-                <button 
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors"
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
                   onClick={() => handleSort('dueDate')}
                 >
                   Due Date
                   <SortIcon field="dueDate" />
-                </button>
-                
+                </Button>
+
                 <div className="col-span-1 text-center">
                   Actions
                 </div>
@@ -191,11 +199,11 @@ export default function TableViewRenderer({
             </div>
 
             {/* Table Body */}
-            <div className="divide-y divide-[#21262d]">
+            <div className="divide-y divide-collab-700">
               {sortedIssues.map((issue) => (
                 <div
                   key={issue.id}
-                  className="grid grid-cols-12 gap-4 p-4 hover:bg-[#161b22] transition-colors cursor-pointer group"
+                  className="grid grid-cols-12 gap-4 p-4 hover:bg-collab-800 transition-colors cursor-pointer group"
                 >
                   {/* Key */}
                   <div className="col-span-1">
@@ -270,12 +278,7 @@ export default function TableViewRenderer({
                   <div className="col-span-2">
                     {issue.assignee ? (
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={issue.assignee.image} />
-                          <AvatarFallback className="text-xs">
-                            {issue.assignee.name?.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={issue.assignee} size="md" />
                         <span className="text-sm text-white truncate">
                           {issue.assignee.name}
                         </span>

@@ -236,7 +236,7 @@ export function IssueTimeTrackingSection({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-4 w-4 animate-spin text-[#52525b]" />
+        <Loader2 className="h-4 w-4 animate-spin text-collab-500/60" />
       </div>
     );
   }
@@ -244,31 +244,31 @@ export function IssueTimeTrackingSection({
   return (
     <div className="space-y-4">
       {/* Compact Stats Row */}
-      <div className="flex items-center justify-between gap-6 px-3 py-2.5 bg-[#0d0d0e] rounded-lg border border-[#1f1f1f]">
+      <div className="flex items-center justify-between gap-6 px-3 py-2.5 bg-collab-900 rounded-lg border border-collab-700">
         <div className="flex items-center gap-6">
           {/* Logged */}
           <div className="flex items-center gap-2">
-            <Timer className="h-3.5 w-3.5 text-[#52525b]" />
-            <span className="text-[11px] text-[#71717a] uppercase tracking-wider">Logged</span>
-            <span className="text-[13px] font-medium text-[#fafafa] tabular-nums">
+            <Timer className="h-3.5 w-3.5 text-collab-500/60" />
+            <span className="text-[11px] text-collab-500 uppercase tracking-wider">Logged</span>
+            <span className="text-[13px] font-medium text-collab-50 tabular-nums">
               {timeSpent > 0 ? formatMinutes(timeSpent) : "0m"}
             </span>
           </div>
 
           {/* Estimate */}
           <div className="flex items-center gap-2">
-            <Target className="h-3.5 w-3.5 text-[#52525b]" />
-            <span className="text-[11px] text-[#71717a] uppercase tracking-wider">Estimate</span>
+            <Target className="h-3.5 w-3.5 text-collab-500/60" />
+            <span className="text-[11px] text-collab-500 uppercase tracking-wider">Estimate</span>
             <Dialog open={showEstimateDialog} onOpenChange={setShowEstimateDialog}>
               <DialogTrigger asChild>
-                <button className="text-[13px] font-medium text-[#a1a1aa] hover:text-[#3b82f6] transition-colors tabular-nums">
+                <button className="text-[13px] font-medium text-collab-400 hover:text-blue-500 transition-colors tabular-nums">
                   {timeEstimate ? formatMinutes(timeEstimate) : "Set"}
                 </button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-sm bg-[#0d0d0e] border-[#27272a]">
+              <DialogContent className="sm:max-w-sm bg-collab-900 border-collab-600">
                 <DialogHeader>
-                  <DialogTitle className="text-[#fafafa] text-sm">Set Estimate</DialogTitle>
-                  <DialogDescription className="text-[#71717a] text-xs">
+                  <DialogTitle className="text-collab-50 text-sm">Set Estimate</DialogTitle>
+                  <DialogDescription className="text-collab-500 text-xs">
                     Estimated time to complete this issue.
                   </DialogDescription>
                 </DialogHeader>
@@ -277,10 +277,10 @@ export function IssueTimeTrackingSection({
                     placeholder="e.g., 4h, 2d, 30m"
                     value={estimateInput}
                     onChange={(e) => setEstimateInput(e.target.value)}
-                    className="bg-[#09090b] border-[#27272a] text-[#fafafa] text-sm h-8"
+                    className="bg-collab-950 border-collab-600 text-collab-50 text-sm h-8"
                     autoFocus
                   />
-                  <p className="text-[10px] text-[#52525b] mt-1.5">
+                  <p className="text-[10px] text-collab-500/60 mt-1.5">
                     Formats: 2h 30m, 90m, 1.5h, 1d (8h)
                   </p>
                 </div>
@@ -289,7 +289,7 @@ export function IssueTimeTrackingSection({
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowEstimateDialog(false)}
-                    className="text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#27272a] h-7 text-xs"
+                    className="text-collab-400 hover:text-collab-50 hover:bg-collab-600 h-7 text-xs"
                   >
                     Cancel
                   </Button>
@@ -297,7 +297,7 @@ export function IssueTimeTrackingSection({
                     size="sm"
                     onClick={handleSetEstimate}
                     disabled={isSubmitting}
-                    className="bg-[#3b82f6] hover:bg-[#2563eb] text-white h-7 text-xs"
+                    className="bg-blue-500 hover:bg-blue-600 text-white h-7 text-xs"
                   >
                     {isSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                   </Button>
@@ -309,11 +309,11 @@ export function IssueTimeTrackingSection({
           {/* Remaining (only if estimate exists) */}
           {timeEstimate && (
             <div className="flex items-center gap-2">
-              <Clock className="h-3.5 w-3.5 text-[#52525b]" />
-              <span className="text-[11px] text-[#71717a] uppercase tracking-wider">Left</span>
+              <Clock className="h-3.5 w-3.5 text-collab-500/60" />
+              <span className="text-[11px] text-collab-500 uppercase tracking-wider">Left</span>
               <span className={cn(
                 "text-[13px] font-medium tabular-nums",
-                isOverEstimate ? "text-red-400" : "text-[#fafafa]"
+                isOverEstimate ? "text-red-400" : "text-collab-50"
               )}>
                 {isOverEstimate ? `+${formatMinutes(timeSpent - timeEstimate)}` : formatMinutes(timeRemaining || 0)}
               </span>
@@ -324,19 +324,19 @@ export function IssueTimeTrackingSection({
         {/* Progress indicator */}
         {timeEstimate && (
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-3.5 w-3.5 text-[#52525b]" />
-            <div className="w-24 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+            <TrendingUp className="h-3.5 w-3.5 text-collab-500/60" />
+            <div className="w-24 h-1.5 bg-collab-600 rounded-full overflow-hidden">
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-300",
-                  isOverEstimate ? "bg-red-500" : "bg-[#3b82f6]"
+                  isOverEstimate ? "bg-red-500" : "bg-blue-500"
                 )}
                 style={{ width: `${Math.min(progressPercent, 100)}%` }}
               />
             </div>
             <span className={cn(
               "text-[11px] font-medium tabular-nums",
-              isOverEstimate ? "text-red-400" : "text-[#71717a]"
+              isOverEstimate ? "text-red-400" : "text-collab-500"
             )}>
               {progressPercent}%
             </span>
@@ -349,10 +349,10 @@ export function IssueTimeTrackingSection({
         {/* Section Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-[#71717a] uppercase tracking-wider">
+            <span className="text-[11px] font-medium text-collab-500 uppercase tracking-wider">
               Entries
             </span>
-            <span className="text-[10px] text-[#3f3f46]">
+            <span className="text-[10px] text-collab-500/50">
               {summary?.logCount || 0}
             </span>
           </div>
@@ -361,38 +361,38 @@ export function IssueTimeTrackingSection({
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 px-2 text-[11px] text-[#71717a] hover:text-[#fafafa] hover:bg-[#27272a] gap-1"
+                className="h-6 px-2 text-[11px] text-collab-500 hover:text-collab-50 hover:bg-collab-600 gap-1"
               >
                 <Plus className="h-3 w-3" />
                 Log Time
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-sm bg-[#0d0d0e] border-[#27272a]">
+            <DialogContent className="sm:max-w-sm bg-collab-900 border-collab-600">
               <DialogHeader>
-                <DialogTitle className="text-[#fafafa] text-sm">Log Time</DialogTitle>
-                <DialogDescription className="text-[#71717a] text-xs">
+                <DialogTitle className="text-collab-50 text-sm">Log Time</DialogTitle>
+                <DialogDescription className="text-collab-500 text-xs">
                   Record time spent on this issue.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[#a1a1aa] text-xs">Time *</Label>
+                  <Label className="text-collab-400 text-xs">Time *</Label>
                   <Input
                     placeholder="e.g., 2h 30m, 90m"
                     value={timeInput}
                     onChange={(e) => setTimeInput(e.target.value)}
-                    className="bg-[#09090b] border-[#27272a] text-[#fafafa] text-sm h-8"
+                    className="bg-collab-950 border-collab-600 text-collab-50 text-sm h-8"
                     autoFocus
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[#a1a1aa] text-xs">Description</Label>
+                  <Label className="text-collab-400 text-xs">Description</Label>
                   <Textarea
                     placeholder="What did you work on?"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={2}
-                    className="bg-[#09090b] border-[#27272a] text-[#fafafa] text-sm resize-none"
+                    className="bg-collab-950 border-collab-600 text-collab-50 text-sm resize-none"
                   />
                 </div>
               </div>
@@ -401,7 +401,7 @@ export function IssueTimeTrackingSection({
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowLogTimeDialog(false)}
-                  className="text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#27272a] h-7 text-xs"
+                  className="text-collab-400 hover:text-collab-50 hover:bg-collab-600 h-7 text-xs"
                 >
                   Cancel
                 </Button>
@@ -409,7 +409,7 @@ export function IssueTimeTrackingSection({
                   size="sm"
                   onClick={handleLogTime}
                   disabled={isSubmitting || !timeInput.trim()}
-                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white h-7 text-xs"
+                  className="bg-blue-500 hover:bg-blue-600 text-white h-7 text-xs"
                 >
                   {isSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Log"}
                 </Button>
@@ -421,36 +421,36 @@ export function IssueTimeTrackingSection({
         {/* Entries List */}
         {workLogs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 text-center">
-            <Clock className="h-5 w-5 text-[#3f3f46] mb-2" />
-            <p className="text-[11px] text-[#52525b]">No time logged yet</p>
+            <Clock className="h-5 w-5 text-collab-500/50 mb-2" />
+            <p className="text-[11px] text-collab-500/60">No time logged yet</p>
           </div>
         ) : (
           <div className="space-y-1">
             {workLogs.map((log) => (
               <div
                 key={log.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#18181b] group transition-colors"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-collab-800 group transition-colors"
               >
-                <div className="w-1 h-1 rounded-full bg-[#3b82f6] flex-shrink-0" />
+                <div className="w-1 h-1 rounded-full bg-blue-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0 flex items-center gap-3">
-                  <span className="text-[13px] font-medium text-[#fafafa] tabular-nums w-14 flex-shrink-0">
+                  <span className="text-[13px] font-medium text-collab-50 tabular-nums w-14 flex-shrink-0">
                     {formatMinutes(log.timeSpent)}
                   </span>
-                  <span className="text-[11px] text-[#52525b] truncate flex-1">
-                    {log.description || <span className="text-[#3f3f46] italic">No description</span>}
+                  <span className="text-[11px] text-collab-500/60 truncate flex-1">
+                    {log.description || <span className="text-collab-500/50 italic">No description</span>}
                   </span>
-                  <span className="text-[10px] text-[#3f3f46] flex-shrink-0">
+                  <span className="text-[10px] text-collab-500/50 flex-shrink-0">
                     {log.user?.name?.split(' ')[0] || "—"}
                   </span>
-                  <span className="text-[10px] text-[#3f3f46] flex-shrink-0 w-16 text-right">
+                  <span className="text-[10px] text-collab-500/50 flex-shrink-0 w-16 text-right">
                     {formatDistanceToNow(new Date(log.loggedAt), { addSuffix: false })}
                   </span>
                 </div>
                 <button
                   onClick={() => handleDeleteWorkLog(log.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[#27272a] transition-all"
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-collab-600 transition-all"
                 >
-                  <Trash2 className="h-3 w-3 text-[#52525b] hover:text-red-400" />
+                  <Trash2 className="h-3 w-3 text-collab-500/60 hover:text-red-400" />
                 </button>
               </div>
             ))}

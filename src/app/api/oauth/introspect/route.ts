@@ -133,22 +133,15 @@ async function findTokenInInstallations(
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
 
     // Build where clause for AppToken query - include both regular and system app tokens
+    // Note: Null-safety checks for token fields, appId, workspaceId are handled in code
+    // after query (lines 201-202 and 240) to avoid Prisma 6.x null-filter issues.
     const whereClause: any = {
-      [tokenField]: { not: null },
       isRevoked: false,
       OR: [
-        // Regular app tokens (linked to installation)
-        {
-          installation: {
-            status: 'ACTIVE'
-          }
-        },
-        // System app tokens (no installation, linked directly to app and workspace)
-        {
-          installationId: null,
-          appId: { not: null },
-          workspaceId: { not: null }
-        }
+        // Regular app tokens (linked to active installation)
+        { installation: { status: 'ACTIVE' } },
+        // System app tokens (no installation — code validates app/workspace after query)
+        { installationId: null }
       ]
     };
 

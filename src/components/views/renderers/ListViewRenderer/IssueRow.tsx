@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import Link from 'next/link';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, ArrowRight, User } from 'lucide-react';
+import { MessageSquare, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ParentIssueBadge, ParentIssueBadgeMinimal } from '@/components/issue/ParentIssueBadge';
@@ -42,8 +42,8 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                 "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
                 "border border-white/10 hover:border-white/20",
                 // Desktop: More compact list style
-                "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-[#1f1f1f]",
-                "md:bg-transparent md:hover:bg-[#0f1011] md:backdrop-blur-none md:hover:border-[#333]"
+                "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-collab-700",
+                "md:bg-transparent md:hover:bg-collab-900 md:backdrop-blur-none md:hover:border-collab-600"
             )}
             onClick={(e) => handleIssueClick(issue.issueKey || issue.id, e)}
         >
@@ -75,18 +75,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         {/* Assignee Avatar */}
                         {displaySettings.displayProperties.includes('Assignee') && (
                             <div className="flex items-center shrink-0 ml-auto">
-                                {issue.assignee ? (
-                                    <Avatar className="h-5 w-5">
-                                        <AvatarImage src={issue.assignee.image} />
-                                        <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
-                                            {issue.assignee.name?.charAt(0)?.toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                ) : (
-                                    <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                                        <User className="h-2.5 w-2.5 text-[#666]" />
-                                    </div>
-                                )}
+                                <UserAvatar user={issue.assignee} size="sm" />
                             </div>
                         )}
                     </div>
@@ -162,18 +151,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         {/* Reporter */}
                         {displaySettings.displayProperties.includes('Reporter') && (
                             <div className="flex items-center">
-                                {issue.reporter ? (
-                                    <Avatar className="h-5 w-5">
-                                        <AvatarImage src={issue.reporter.image} />
-                                        <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
-                                            {issue.reporter.name?.charAt(0)?.toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                ) : (
-                                    <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                                        <User className="h-2.5 w-2.5 text-[#666]" />
-                                    </div>
-                                )}
+                                <UserAvatar user={issue.reporter} size="sm" />
                             </div>
                         )}
 
@@ -225,7 +203,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                 {/* Issue Key */}
                 {displaySettings.displayProperties.includes('ID') && (
                     <div className="flex items-center">
-                        <span className="text-[#8b949e] text-xs font-mono font-medium truncate">
+                        <span className="text-collab-400 text-xs font-mono font-medium truncate">
                             {issue.issueKey}
                         </span>
                     </div>
@@ -233,7 +211,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
 
                 {/* Title */}
                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+                    <span className="text-collab-50 text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
                         {issue.title}
                     </span>
                     {issue.parent && (
@@ -261,18 +239,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         case 'Assignee':
                             return (
                                 <div key={prop} className="flex items-center">
-                                    {issue.assignee ? (
-                                        <Avatar className="h-5 w-5">
-                                            <AvatarImage src={issue.assignee.image} />
-                                            <AvatarFallback className="text-[10px] bg-[#2a2a2a] text-white border-none">
-                                                {issue.assignee.name?.charAt(0)?.toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                    ) : (
-                                        <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                                            <User className="h-2.5 w-2.5 text-[#666]" />
-                                        </div>
-                                    )}
+                                    <UserAvatar user={issue.assignee} size="sm" />
                                 </div>
                             );
 
@@ -294,7 +261,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                                                 </Badge>
                                             ))}
                                             {issue.labels.length > 2 && (
-                                                <span className="text-[10px] text-[#6e7681] px-1">+{issue.labels.length - 2}</span>
+                                                <span className="text-[10px] text-collab-500 px-1">+{issue.labels.length - 2}</span>
                                             )}
                                         </>
                                     )}
@@ -323,7 +290,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                             return (
                                 <div key={prop} className="flex items-center">
                                     {issue.dueDate && (
-                                        <span className="text-[#8b949e] text-xs">
+                                        <span className="text-collab-400 text-xs">
                                             {format(new Date(issue.dueDate), 'MMM d')}
                                         </span>
                                     )}
@@ -333,25 +300,14 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         case 'Reporter':
                             return (
                                 <div key={prop} className="flex items-center">
-                                    {issue.reporter ? (
-                                        <Avatar className="h-5 w-5">
-                                            <AvatarImage src={issue.reporter.image} />
-                                            <AvatarFallback className="text-[10px] bg-[#2a2a2a] text-white border-none">
-                                                {issue.reporter.name?.charAt(0)?.toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                    ) : (
-                                        <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                                            <User className="h-2.5 w-2.5 text-[#666]" />
-                                        </div>
-                                    )}
+                                    <UserAvatar user={issue.reporter} size="sm" />
                                 </div>
                             );
 
                         case 'Created':
                             return (
                                 <div key={prop} className="flex items-center">
-                                    <span className="text-[#6e7681] text-xs">
+                                    <span className="text-collab-500 text-xs">
                                         {format(new Date(issue.createdAt), 'MMM d')}
                                     </span>
                                 </div>
@@ -360,7 +316,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         case 'Updated':
                             return (
                                 <div key={prop} className="flex items-center">
-                                    <span className="text-[#6e7681] text-xs">
+                                    <span className="text-collab-500 text-xs">
                                         {format(new Date(issue.updatedAt), 'MMM d')}
                                     </span>
                                 </div>
@@ -370,7 +326,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                             return (
                                 <div key={prop} className="flex items-center">
                                     {issue._count?.comments ? (
-                                        <div className="flex items-center gap-1 text-[#8b949e]">
+                                        <div className="flex items-center gap-1 text-collab-400">
                                             <MessageSquare className="h-3 w-3" />
                                             <span className="text-xs">{issue._count.comments}</span>
                                         </div>
@@ -382,7 +338,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                             return (
                                 <div key={prop} className="flex items-center">
                                     {issue._count?.children ? (
-                                        <div className="flex items-center gap-1 text-[#8b949e]">
+                                        <div className="flex items-center gap-1 text-collab-400">
                                             <ArrowRight className="h-3 w-3" />
                                             <span className="text-xs">{issue._count.children}</span>
                                         </div>

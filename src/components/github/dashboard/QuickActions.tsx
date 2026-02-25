@@ -71,11 +71,11 @@ export function QuickActions({ repository, projectSlug, workspaceSlug }: QuickAc
   ];
 
   return (
-    <Card className="bg-[#0d1117] border-[#21262d]">
+    <Card className="bg-collab-900 border-collab-700">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <Zap className="h-5 w-5 text-yellow-500" />
-          <CardTitle className="text-lg text-[#e6edf3]">Quick Actions</CardTitle>
+          <CardTitle className="text-lg text-collab-50">Quick Actions</CardTitle>
         </div>
       </CardHeader>
       <CardContent>
@@ -87,8 +87,8 @@ export function QuickActions({ repository, projectSlug, workspaceSlug }: QuickAc
               size="sm"
               className={`justify-start h-auto py-2 px-3 ${
                 action.variant === 'outline'
-                  ? 'border-[#30363d] bg-transparent hover:bg-[#21262d]'
-                  : 'bg-[#21262d] hover:bg-[#30363d]'
+                  ? 'border-collab-600 bg-transparent hover:bg-collab-700'
+                  : 'bg-collab-700 hover:bg-collab-700'
               }`}
               onClick={action.onClick}
               asChild={action.external}

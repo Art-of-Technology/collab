@@ -146,7 +146,7 @@ export function ReleasesPanel({
 
   if (loading) {
     return (
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-32">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -157,12 +157,12 @@ export function ReleasesPanel({
   }
 
   return (
-    <Card className="bg-[#0d1117] border-[#21262d]">
+    <Card className="bg-collab-900 border-collab-700">
       <CardHeader className={compact ? 'pb-2' : ''}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Tag className="h-5 w-5 text-green-500" />
-            <CardTitle className="text-lg text-[#e6edf3]">Releases</CardTitle>
+            <CardTitle className="text-lg text-collab-50">Releases</CardTitle>
             <Badge variant="secondary" className="ml-2">
               {releases.length}
             </Badge>
@@ -173,7 +173,7 @@ export function ReleasesPanel({
               variant="outline"
               size="sm"
               disabled={syncing}
-              className="border-[#30363d] bg-transparent hover:bg-[#21262d]"
+              className="border-collab-600 bg-transparent hover:bg-collab-700"
             >
               {syncing ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -221,8 +221,8 @@ export function ReleasesPanel({
               {releases.map((release, index) => (
                 <div key={release.id}>
                   <div
-                    className={`p-4 rounded-lg bg-[#161b22] border border-[#21262d] transition-all ${
-                      expandedRelease === release.id ? 'ring-1 ring-[#58a6ff]' : ''
+                    className={`p-4 rounded-lg bg-collab-800 border border-collab-700 transition-all ${
+                      expandedRelease === release.id ? 'ring-1 ring-blue-400' : ''
                     }`}
                   >
                     {/* Release Header */}
@@ -233,7 +233,7 @@ export function ReleasesPanel({
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-[#e6edf3]">
+                            <span className="font-semibold text-collab-50">
                               {release.tagName}
                             </span>
                             {release.isDraft && (
@@ -252,8 +252,8 @@ export function ReleasesPanel({
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-[#8b949e] mt-1">{release.name}</p>
-                          <div className="flex items-center gap-4 mt-2 text-xs text-[#8b949e]">
+                          <p className="text-sm text-collab-400 mt-1">{release.name}</p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-collab-400">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               {formatDate(release.publishedAt)}
@@ -305,17 +305,17 @@ export function ReleasesPanel({
 
                     {/* Expanded Content */}
                     {expandedRelease === release.id && (
-                      <div className="mt-4 pt-4 border-t border-[#21262d]">
+                      <div className="mt-4 pt-4 border-t border-collab-700">
                         {/* AI Summary */}
                         {release.version?.aiSummary && (
-                          <div className="mb-4 p-3 rounded-lg bg-[#0d1117] border border-[#21262d]">
+                          <div className="mb-4 p-3 rounded-lg bg-collab-900 border border-collab-700">
                             <div className="flex items-center gap-2 mb-2">
                               <Sparkles className="h-4 w-4 text-purple-400" />
                               <span className="text-xs font-medium text-purple-400">
                                 AI Summary
                               </span>
                             </div>
-                            <p className="text-sm text-[#8b949e]">
+                            <p className="text-sm text-collab-400">
                               {release.version.aiSummary}
                             </p>
                           </div>
@@ -324,10 +324,10 @@ export function ReleasesPanel({
                         {/* Release Description */}
                         {release.description && (
                           <div className="mb-4">
-                            <h4 className="text-xs font-medium text-[#8b949e] mb-2">
+                            <h4 className="text-xs font-medium text-collab-400 mb-2">
                               Release Notes
                             </h4>
-                            <div className="prose prose-sm prose-invert max-w-none text-[#8b949e]">
+                            <div className="prose prose-sm prose-invert max-w-none text-collab-400">
                               <p className="whitespace-pre-wrap">{release.description}</p>
                             </div>
                           </div>
@@ -336,7 +336,7 @@ export function ReleasesPanel({
                         {/* Related Issues */}
                         {release.version?.issues && release.version.issues.length > 0 && (
                           <div className="mb-4">
-                            <h4 className="text-xs font-medium text-[#8b949e] mb-2">
+                            <h4 className="text-xs font-medium text-collab-400 mb-2">
                               Included Changes ({release.version.issues.length})
                             </h4>
                             <div className="space-y-2">
@@ -351,13 +351,13 @@ export function ReleasesPanel({
                                   >
                                     {vi.issue.issueKey}
                                   </Badge>
-                                  <span className="text-[#8b949e] truncate">
+                                  <span className="text-collab-400 truncate">
                                     {vi.issue.title}
                                   </span>
                                 </div>
                               ))}
                               {release.version.issues.length > 5 && (
-                                <p className="text-xs text-[#8b949e]">
+                                <p className="text-xs text-collab-400">
                                   +{release.version.issues.length - 5} more changes
                                 </p>
                               )}
@@ -372,7 +372,7 @@ export function ReleasesPanel({
                               variant="outline"
                               size="sm"
                               onClick={() => handleGenerateChangelog(release.id)}
-                              className="border-[#30363d]"
+                              className="border-collab-600"
                             >
                               <Sparkles className="h-4 w-4 mr-2" />
                               Generate AI Changelog
@@ -384,7 +384,7 @@ export function ReleasesPanel({
                   </div>
                   {index < releases.length - 1 && !compact && (
                     <div className="flex items-center justify-center my-2">
-                      <div className="w-px h-4 bg-[#21262d]" />
+                      <div className="w-px h-4 bg-collab-700" />
                     </div>
                   )}
                 </div>

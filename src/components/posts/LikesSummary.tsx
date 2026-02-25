@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePostReactions } from "@/hooks/queries/useReaction";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { Button } from "@/components/ui/button";
 
 type ReactionWithAuthor = {
   id: string;
@@ -72,15 +73,16 @@ export default function LikesSummary({ likesCount, likesWithAuthor: initialLikes
             {likesWithAuthor[0].author.name}
           </Link>{" "}
           and{" "}
-          <button
+          <Button
+            variant="ghost"
             onClick={(e) => {
               e.stopPropagation();
               onShowAllLikes();
             }}
-            className="font-semibold hover:underline"
+            className="font-semibold hover:underline h-auto p-0 inline"
           >
             {likesWithAuthor.length - 1} others
-          </button>
+          </Button>
         </span>
       );
     }

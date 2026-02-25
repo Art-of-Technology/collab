@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -79,20 +80,21 @@ export function IssueRelationTypeSelector({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
           disabled={disabled}
           className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px] border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a] text-[#cccccc] focus:outline-none bg-[#181818]",
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px] border border-collab-600 hover:border-collab-600 hover:bg-collab-800 text-collab-400 focus:outline-none bg-collab-800",
             className
           )}
         >
           <div className={cn("w-2 h-2 rounded-full flex-shrink-0", selectedOption?.color)} />
           <span className="font-medium">{selectedOption?.label}</span>
-          <ChevronDown className="h-3 w-3 text-[#7d8590] ml-0.5" />
-        </button>
+          <ChevronDown className="h-3 w-3 text-collab-500 ml-0.5" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-64 p-1 bg-[#1a1a1a] border-[#2d2d30]"
+        className="w-64 p-1 bg-collab-800 border-collab-600"
         align="start"
       >
         <div className="space-y-0.5">
@@ -100,13 +102,14 @@ export function IssueRelationTypeSelector({
             const isSelected = option.value === value;
 
             return (
-              <button
+              <Button
                 key={option.value}
+                variant="ghost"
                 onClick={() => onChange(option.value)}
                 className={cn(
-                  "w-full flex items-start gap-2 px-2 py-2 rounded text-left",
-                  "hover:bg-[#2a2a2a] transition-colors",
-                  isSelected && "bg-[#2a2a2a]"
+                  "w-full flex items-start gap-2 px-2 py-2 rounded text-left h-auto justify-start",
+                  "hover:bg-collab-600 transition-colors",
+                  isSelected && "bg-collab-600"
                 )}
               >
                 <div className={cn("w-2 h-2 rounded-full mt-1 flex-shrink-0", option.color)} />
@@ -114,7 +117,7 @@ export function IssueRelationTypeSelector({
                   <div className="flex items-center gap-2">
                     <span className={cn(
                       "text-xs font-medium",
-                      isSelected ? "text-[#e1e7ef]" : "text-[#c9d1d9]"
+                      isSelected ? "text-collab-50" : "text-collab-400"
                     )}>
                       {option.label}
                     </span>
@@ -122,11 +125,11 @@ export function IssueRelationTypeSelector({
                       <Check className="h-3 w-3 text-green-500 ml-auto flex-shrink-0" />
                     )}
                   </div>
-                  <p className="text-[10px] text-[#7d8590] mt-0.5 leading-snug">
+                  <p className="text-[10px] text-collab-500 mt-0.5 leading-snug">
                     {option.description}
                   </p>
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>

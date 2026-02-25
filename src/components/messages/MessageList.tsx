@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -81,12 +81,7 @@ export default function MessageList({ messages, currentUserId }: MessageListProp
                   )}
                 >
                   {!isCurrentUser && (
-                    <Avatar className="h-8 w-8 border-2 border-primary/10">
-                      <AvatarImage src={message.sender.image || undefined} alt={message.sender.name || ""} />
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {message.sender.name?.[0]?.toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={message.sender} size="lg" className="border-2 border-primary/10" />
                   )}
                   <div>
                     <div

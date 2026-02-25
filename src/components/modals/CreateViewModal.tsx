@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -133,7 +133,7 @@ export default function CreateViewModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: 'Error',
@@ -165,15 +165,15 @@ export default function CreateViewModal({
         workspaceId: formData.targetWorkspaceId,
         viewData
       });
-      
+
       toast({
         title: 'Success',
         description: 'View created successfully'
       });
-      
+
       onViewCreated?.(result.view);
       onClose();
-      
+
     } catch (error) {
       console.error('Error creating view:', error);
       toast({
@@ -208,53 +208,53 @@ export default function CreateViewModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
+      <DialogContent className="max-w-3xl p-0 bg-collab-900 border-collab-700 overflow-hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>Create view</DialogTitle>
         </DialogHeader>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-sm bg-purple-500 flex items-center justify-center">
               <Eye className="h-2.5 w-2.5 text-white" />
             </div>
-            <span className="text-[#9ca3af] text-sm">Create view</span>
+            <span className="text-collab-400 text-sm">Create view</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6e7681]">Save to</span>
+            <span className="text-xs text-collab-500">Save to</span>
             <Select
-              value={formData.visibility === 'PERSONAL' ? 'PERSONAL' : formData.targetWorkspaceId} 
+              value={formData.visibility === 'PERSONAL' ? 'PERSONAL' : formData.targetWorkspaceId}
               onValueChange={(value) => {
                 if (value === 'PERSONAL') {
-                  setFormData(prev => ({ 
-                    ...prev, 
+                  setFormData(prev => ({
+                    ...prev,
                     visibility: 'PERSONAL',
-                    targetWorkspaceId: workspaceId 
+                    targetWorkspaceId: workspaceId
                   }));
                 } else {
-                  setFormData(prev => ({ 
-                    ...prev, 
+                  setFormData(prev => ({
+                    ...prev,
                     visibility: 'WORKSPACE',
-                    targetWorkspaceId: value 
+                    targetWorkspaceId: value
                   }));
                 }
               }}
             >
-              <SelectTrigger className="h-6 w-auto min-w-[80px] bg-[#238636] border-[#238636] text-white text-xs">
+              <SelectTrigger className="h-6 w-auto min-w-[80px] bg-green-600 border-green-600 text-white text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#0e0e0e] border-[#1a1a1a]">
-                <SelectItem value="PERSONAL" className="text-white focus:bg-[#1a1a1a] text-xs">
+              <SelectContent className="bg-collab-900 border-collab-700">
+                <SelectItem value="PERSONAL" className="text-white focus:bg-collab-700 text-xs">
                   <div className="flex items-center gap-1.5">
                     <User className="h-3 w-3" />
                     Personal
                   </div>
                 </SelectItem>
                 {workspaces.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-[#1a1a1a] text-xs">
+                  <SelectItem key={workspace.id} value={workspace.id} className="text-white focus:bg-collab-700 text-xs">
                     <div className="flex items-center gap-1.5">
                       {workspace.logoUrl ? (
-                        <Image src={workspace.logoUrl} alt={`${workspace.name} logo`} className="h-3 w-3 rounded" width={16} height={16}/>
+                        <Image src={workspace.logoUrl} alt={`${workspace.name} logo`} className="h-3 w-3 rounded" width={16} height={16} />
                       ) : (
                         <Globe className="h-3 w-3" />
                       )}
@@ -264,12 +264,14 @@ export default function CreateViewModal({
                 ))}
               </SelectContent>
             </Select>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onClose}
-              className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
+              className="text-collab-500 hover:text-white transition-colors rounded-md hover:bg-collab-700 h-6 w-6"
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -280,7 +282,7 @@ export default function CreateViewModal({
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="View name"
-            className="w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder-[#6e7681] focus:ring-0 focus:border-none focus:outline-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 mb-3"
+            className="w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder-collab-500 focus:ring-0 focus:border-none focus:outline-none resize-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 mb-3"
             disabled={createViewMutation.isPending}
             autoFocus
             onKeyDown={(e) => {
@@ -297,7 +299,7 @@ export default function CreateViewModal({
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Add description..."
-              className="w-full min-h-[80px] text-[#e6edf3] bg-transparent border-none outline-none resize-none leading-relaxed focus:ring-0 focus-visible:outline-none placeholder-[#6e7681]"
+              className="w-full min-h-[80px] text-collab-50 bg-transparent border-none outline-none resize-none leading-relaxed focus:ring-0 focus-visible:outline-none placeholder-collab-500"
               disabled={createViewMutation.isPending}
               rows={3}
             />
@@ -314,7 +316,7 @@ export default function CreateViewModal({
               onChange={(projectIds) => setFormData(prev => ({ ...prev, projectIds }))}
               projects={projects}
             />
-            
+
             {/* Assignee selector for all views */}
             <AssigneeSelector
               value={formData.filters.assignee}
@@ -323,7 +325,7 @@ export default function CreateViewModal({
               }}
               assignees={workspaceMembers}
             />
-            
+
             {/* Show these only for non-PLANNING views */}
             {formData.displayType !== 'PLANNING' && (
               <>
@@ -382,24 +384,23 @@ export default function CreateViewModal({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-between pt-2 border-t border-[#1a1a1a]">
-            <div className="flex items-center gap-3 text-xs text-[#6e7681]">
-              <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#30363d] rounded">⌘</kbd>
-              <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#30363d] rounded">↵</kbd>
+          <div className="flex items-center justify-between pt-2 border-t border-collab-700">
+            <div className="flex items-center gap-3 text-xs text-collab-500">
+              <kbd className="px-1.5 py-0.5 bg-collab-700 border border-collab-600 rounded">⌘</kbd>
+              <kbd className="px-1.5 py-0.5 bg-collab-700 border border-collab-600 rounded">↵</kbd>
               <span>to create</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={onClose}
-                className="text-[#6e7681] hover:text-white"
+                className="text-collab-500 hover:text-white"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
                 disabled={createViewMutation.isPending || !formData.name.trim()}
-                className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium disabled:opacity-50"
               >
                 {createViewMutation.isPending ? (
                   <>

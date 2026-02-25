@@ -3,7 +3,7 @@
 
 import { useUserProfile } from "@/hooks/queries/useUser";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import PostList from "@/components/posts/PostList";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -62,12 +62,7 @@ export default function UserProfileClient({
               {user.useCustomAvatar ? (
                 <CustomAvatar user={user} size="lg" className="border-2 border-primary/20 shadow-md" />
               ) : (
-                <Avatar className="h-16 w-16 border-2 border-primary/20 shadow-md">
-                  <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-                  <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                    {user.name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} size="lg" className="h-16 w-16 border-2 border-primary/20 shadow-md" />
               )}
               <div>
                 <h2 className="text-2xl font-bold">{user.name}</h2>

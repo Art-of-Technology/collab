@@ -11,10 +11,10 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
   // Special handling for assignment activities
   if ((action === 'ASSIGNED' || action === 'UNASSIGNED') && details) {
     return (
-      <div className="mt-1 text-[10px] text-[#666] flex items-center gap-1.5">
-        <span className="text-[#ef4444]">{details.oldAssignee?.name || 'Unassigned'}</span>
+      <div className="mt-1 text-[10px] text-collab-500 flex items-center gap-1.5">
+        <span className="text-red-500">{details.oldAssignee?.name || 'Unassigned'}</span>
         <ArrowRight className="h-2.5 w-2.5" />
-        <span className="text-[#22c55e]">{details.newAssignee?.name || 'Unassigned'}</span>
+        <span className="text-green-500">{details.newAssignee?.name || 'Unassigned'}</span>
       </div>
     );
   }
@@ -22,10 +22,10 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
   // Special handling for reporter changes
   if (action === 'REPORTER_CHANGED' && details) {
     return (
-      <div className="mt-1 text-[10px] text-[#666] flex items-center gap-1.5">
-        <span className="text-[#ef4444]">{details.oldReporter?.name || 'None'}</span>
+      <div className="mt-1 text-[10px] text-collab-500 flex items-center gap-1.5">
+        <span className="text-red-500">{details.oldReporter?.name || 'None'}</span>
         <ArrowRight className="h-2.5 w-2.5" />
-        <span className="text-[#22c55e]">{details.newReporter?.name || 'None'}</span>
+        <span className="text-green-500">{details.newReporter?.name || 'None'}</span>
       </div>
     );
   }
@@ -33,20 +33,20 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
   // Special handling for column/movement changes
   if (action === 'MOVED' && details?.fromColumn && details?.toColumn) {
     return (
-      <div className="mt-1 text-[10px] text-[#666] flex items-center gap-1.5">
-        <span className="text-[#ef4444]">{details.fromColumn.name}</span>
+      <div className="mt-1 text-[10px] text-collab-500 flex items-center gap-1.5">
+        <span className="text-red-500">{details.fromColumn.name}</span>
         <ArrowRight className="h-2.5 w-2.5" />
-        <span className="text-[#22c55e]">{details.toColumn.name}</span>
+        <span className="text-green-500">{details.toColumn.name}</span>
       </div>
     );
   }
 
   if (action === 'COLUMN_CHANGED' && details?.fromColumn && details?.toColumn) {
     return (
-      <div className="mt-1 text-[10px] text-[#666] flex items-center gap-1.5">
-        <span className="text-[#ef4444]">{details.fromColumn.name}</span>
+      <div className="mt-1 text-[10px] text-collab-500 flex items-center gap-1.5">
+        <span className="text-red-500">{details.fromColumn.name}</span>
         <ArrowRight className="h-2.5 w-2.5" />
-        <span className="text-[#22c55e]">{details.toColumn.name}</span>
+        <span className="text-green-500">{details.toColumn.name}</span>
       </div>
     );
   }
@@ -54,14 +54,14 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
   // Special handling for time adjustments
   if (action === 'TIME_ADJUSTED' && details) {
     return (
-      <div className="mt-1 text-[10px] text-[#666]">
+      <div className="mt-1 text-[10px] text-collab-500">
         <div className="flex items-center gap-1.5">
-          <span className="text-[#ef4444]">{details.originalFormatted || details.original}</span>
+          <span className="text-red-500">{details.originalFormatted || details.original}</span>
           <ArrowRight className="h-2.5 w-2.5" />
-          <span className="text-[#22c55e]">{details.newFormatted || details.new}</span>
+          <span className="text-green-500">{details.newFormatted || details.new}</span>
         </div>
         {details.reason && (
-          <div className="mt-0.5 text-[#888] italic">"{details.reason}"</div>
+          <div className="mt-0.5 text-collab-400 italic">"{details.reason}"</div>
         )}
       </div>
     );
@@ -75,17 +75,17 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
       const changes = details.changes;
       
       return (
-        <div className="mt-1 text-[10px] text-[#666]">
+        <div className="mt-1 text-[10px] text-collab-500">
           <div className="flex items-center gap-1.5">
-            <span className="text-[#ef4444]">{oldData.duration}</span>
+            <span className="text-red-500">{oldData.duration}</span>
             <ArrowRight className="h-2.5 w-2.5" />
-            <span className="text-[#22c55e]">{newData.duration}</span>
+            <span className="text-green-500">{newData.duration}</span>
             {changes?.durationChange && (
-              <span className="text-[#888]">({changes.durationChange.formatted})</span>
+              <span className="text-collab-400">({changes.durationChange.formatted})</span>
             )}
           </div>
           {details.reason && (
-            <div className="mt-0.5 text-[#888] italic">"{details.reason}"</div>
+            <div className="mt-0.5 text-collab-400 italic">"{details.reason}"</div>
           )}
         </div>
       );
@@ -129,9 +129,9 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
   // Generic handling for other changes
   if (oldValue !== undefined || newValue !== undefined) {
     return (
-      <div className="mt-1 text-[10px] text-[#666] flex items-center gap-1.5">
+      <div className="mt-1 text-[10px] text-collab-500 flex items-center gap-1.5">
         {oldValue !== undefined && (
-          <span className="text-[#ef4444]">
+          <span className="text-red-500">
             {action === 'COLUMN_CHANGED' && details?.fromColumn?.name 
               ? details.fromColumn.name 
               : formatValue(oldValue, activity)}
@@ -141,7 +141,7 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
           <ArrowRight className="h-2.5 w-2.5" />
         )}
         {newValue !== undefined && (
-          <span className="text-[#22c55e]">
+          <span className="text-green-500">
             {action === 'COLUMN_CHANGED' && details?.toColumn?.name 
               ? details.toColumn.name 
               : formatValue(newValue, activity)}

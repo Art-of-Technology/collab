@@ -3,7 +3,13 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(npx tsc:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "mcp__collab__get_issue",
+      "Bash(npm run lint:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

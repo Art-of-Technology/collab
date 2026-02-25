@@ -36,18 +36,18 @@ export function IssueRow({ issue, onClick, showDaysActive = true, className }: I
   return (
     <div
       className={cn(
-        'group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#1a1a1c] cursor-pointer transition-colors',
+        'group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-collab-800 cursor-pointer transition-colors',
         className
       )}
       onClick={onClick}
     >
       <PriorityDot priority={issue.priority} />
 
-      <span className="text-[#71717a] text-xs font-mono flex-shrink-0 w-[72px]">
+      <span className="text-collab-500 text-xs font-mono flex-shrink-0 w-[72px]">
         {issue.key}
       </span>
 
-      <span className="flex-1 text-[#e4e4e7] text-[13px] truncate">
+      <span className="flex-1 text-collab-50 text-[13px] truncate">
         {issue.title}
       </span>
 
@@ -55,7 +55,7 @@ export function IssueRow({ issue, onClick, showDaysActive = true, className }: I
         <span
           className={cn(
             'flex items-center gap-1 text-[10px] flex-shrink-0',
-            hasWarning ? 'text-amber-400' : 'text-[#52525b]'
+            hasWarning ? 'text-amber-400' : 'text-collab-500/60'
           )}
         >
           <Clock className="h-3 w-3" />
@@ -85,18 +85,18 @@ export function CompletedIssueRow({ issue, onClick, className }: CompletedIssueR
   return (
     <div
       className={cn(
-        'group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#1a1a1c] cursor-pointer transition-colors',
+        'group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-collab-800 cursor-pointer transition-colors',
         className
       )}
       onClick={onClick}
     >
       <div className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-500" />
 
-      <span className="text-[#71717a] text-xs font-mono flex-shrink-0 w-[72px]">
+      <span className="text-collab-500 text-xs font-mono flex-shrink-0 w-[72px]">
         {issue.key}
       </span>
 
-      <span className="flex-1 text-[#a1a1aa] text-[13px] truncate line-through decoration-[#52525b]">
+      <span className="flex-1 text-collab-400 text-[13px] truncate line-through decoration-collab-500/60">
         {issue.title}
       </span>
 
@@ -128,11 +128,11 @@ export function BlockedIssueRow({ issue, onClick, className }: BlockedIssueRowPr
     >
       <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
 
-      <span className="text-[#71717a] text-xs font-mono flex-shrink-0 w-[72px]">
+      <span className="text-collab-500 text-xs font-mono flex-shrink-0 w-[72px]">
         {issue.key}
       </span>
 
-      <span className="flex-1 text-[#e4e4e7] text-[13px] truncate">
+      <span className="flex-1 text-collab-50 text-[13px] truncate">
         {issue.title}
       </span>
 

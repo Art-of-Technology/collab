@@ -5,6 +5,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getIssuePriorityBadge, PRIORITY_CONFIG } from "@/utils/issueHelpers";
@@ -43,12 +44,12 @@ export function IssuePrioritySelector({
       <div
         className={cn(
           "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
-          "border border-[#2d2d30] bg-[#181818]",
-          "text-[#cccccc]"
+          "border border-collab-600 bg-collab-800",
+          "text-collab-400"
         )}
       >
         <Icon className={cn("h-3 w-3", badge.iconClassName)} />
-        <span className="text-[#cccccc] text-xs">{badge.label}</span>
+        <span className="text-collab-400 text-xs">{badge.label}</span>
       </div>
     );
   }
@@ -56,13 +57,14 @@ export function IssuePrioritySelector({
   return (
     <Popover modal={true}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled || readonly}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             (disabled || readonly) && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -72,20 +74,20 @@ export function IssuePrioritySelector({
             return (
               <>
                 <Icon className={cn("h-3 w-3", badge.iconClassName)} />
-                <span className="text-[#cccccc] text-xs">{badge.label}</span>
+                <span className="text-collab-400 text-xs">{badge.label}</span>
               </>
             );
           })()}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-56 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-56 p-1 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
+        <div className="text-xs text-gray-400 px-2 py-1.5 border-b border-collab-600 mb-1 font-medium">
           Set priority
         </div>
         
@@ -93,26 +95,27 @@ export function IssuePrioritySelector({
           {PRIORITY_OPTIONS.map((priority) => {
             const badge = getIssuePriorityBadge(priority);
             const Icon = badge.icon;
-            
+
             return (
-              <button
+              <Button
                 key={priority}
                 type="button"
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                variant="ghost"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                 onClick={() => onChange(priority)}
               >
                 <Icon className={cn("h-3.5 w-3.5", badge.iconClassName)} />
-                <span className="text-[#cccccc] flex-1">{badge.label}</span>
-                <span className="text-xs text-[#6e7681]">
+                <span className="text-collab-400 flex-1">{badge.label}</span>
+                <span className="text-xs text-collab-500">
                   {priority === 'LOW' && 'P4'}
                   {priority === 'MEDIUM' && 'P3'}
                   {priority === 'HIGH' && 'P2'}
                   {priority === 'URGENT' && 'P1'}
                 </span>
                 {value === priority && (
-                  <span className="text-xs text-[#6e7681]">✓</span>
+                  <span className="text-xs text-collab-500">✓</span>
                 )}
-              </button>
+              </Button>
             );
           })}
         </div>

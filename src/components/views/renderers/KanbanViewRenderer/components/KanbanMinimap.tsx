@@ -124,9 +124,9 @@ export function KanbanMinimap({ scrollContainerRef, columns }: KanbanMinimapProp
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Minimap container */}
-      <div className="bg-[#18181b] border border-[#3f3f46] rounded-lg shadow-xl p-2 min-w-[180px]">
+      <div className="bg-collab-800 border border-collab-600 rounded-lg shadow-xl p-2 min-w-[180px]">
         {/* Header */}
-        <div className="text-[9px] text-[#71717a] uppercase tracking-wider mb-1.5 px-1">
+        <div className="text-[9px] text-collab-500 uppercase tracking-wider mb-1.5 px-1">
           ← Scroll →
         </div>
         
@@ -134,7 +134,7 @@ export function KanbanMinimap({ scrollContainerRef, columns }: KanbanMinimapProp
         <div 
           ref={trackRef}
           onClick={handleTrackClick}
-          className="h-10 bg-[#09090b] rounded relative cursor-pointer overflow-hidden border border-[#27272a]"
+          className="h-10 bg-collab-950 rounded relative cursor-pointer overflow-hidden border border-collab-600"
         >
           {/* Mini column indicators with issue bars */}
           <div className="absolute inset-0 flex">
@@ -144,11 +144,11 @@ export function KanbanMinimap({ scrollContainerRef, columns }: KanbanMinimapProp
               return (
                 <div 
                   key={column.id}
-                  className="flex-1 border-r border-[#27272a] last:border-r-0 flex flex-col items-center justify-end pb-1"
+                  className="flex-1 border-r border-collab-600 last:border-r-0 flex flex-col items-center justify-end pb-1"
                 >
                   {/* Issue count bar */}
                   <div 
-                    className="w-2 bg-[#3f3f46] rounded-sm transition-all"
+                    className="w-2 bg-collab-600 rounded-sm transition-all"
                     style={{ height: `${barHeight}px` }}
                   />
                 </div>
@@ -176,7 +176,7 @@ export function KanbanMinimap({ scrollContainerRef, columns }: KanbanMinimapProp
         <div className="flex mt-1 px-0.5 gap-0.5">
           {columns.map((column) => (
             <div key={column.id} className="flex-1 text-center min-w-0">
-              <span className="text-[7px] text-[#52525b] truncate block" title={column.name}>
+              <span className="text-[7px] text-collab-500/60 truncate block" title={column.name}>
                 {column.name.slice(0, 3)}
               </span>
             </div>
@@ -187,7 +187,7 @@ export function KanbanMinimap({ scrollContainerRef, columns }: KanbanMinimapProp
         <div className="flex px-0.5 gap-0.5">
           {columns.map((column) => (
             <div key={column.id} className="flex-1 text-center min-w-0">
-              <span className="text-[8px] text-[#71717a] font-medium">
+              <span className="text-[8px] text-collab-500 font-medium">
                 {column.issues.length}
               </span>
             </div>

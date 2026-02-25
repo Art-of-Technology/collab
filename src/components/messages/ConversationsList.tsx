@@ -4,7 +4,7 @@ import { useConversations } from "@/hooks/queries/useMessage";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from "@/components/ui/button";
 
 interface ConversationWithDetails {
@@ -79,12 +79,7 @@ export default function ConversationsList({
               className="block p-4 hover:bg-muted/50 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <Avatar className="border-2 border-primary/10">
-                  <AvatarImage src={otherParticipant?.image || undefined} alt={otherParticipant?.name || "User"} />
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {otherParticipant?.name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={otherParticipant} size="lg" className="border-2 border-primary/10" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="font-medium truncate">{otherParticipant?.name}</p>

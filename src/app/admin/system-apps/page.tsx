@@ -64,8 +64,8 @@ async function SystemAppsContent() {
         </p>
       </div>
 
-      <Alert className="bg-[#22c55e]/5 border-[#22c55e]/20">
-        <Info className="h-4 w-4 text-[#22c55e]" />
+      <Alert className="bg-green-500/5 border-green-500/20">
+        <Info className="h-4 w-4 text-green-500" />
         <AlertTitle className="text-white">About System Apps</AlertTitle>
         <AlertDescription className="text-gray-400">
           System apps are automatically available to all workspaces. They don&apos;t appear in the app store
@@ -75,10 +75,10 @@ async function SystemAppsContent() {
       </Alert>
 
       {/* Current System Apps */}
-      <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+      <Card className="bg-collab-950 border-collab-700">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
-            <Puzzle className="h-5 w-5 text-[#22c55e]" />
+            <Puzzle className="h-5 w-5 text-green-500" />
             Current System Apps ({systemApps.length})
           </CardTitle>
           <CardDescription className="text-gray-500">
@@ -103,7 +103,7 @@ async function SystemAppsContent() {
       </Card>
 
       {/* Available Apps */}
-      <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+      <Card className="bg-collab-950 border-collab-700">
         <CardHeader>
           <CardTitle className="text-white">Available Published Apps ({regularApps.length})</CardTitle>
           <CardDescription className="text-gray-500">
@@ -134,7 +134,7 @@ function AppRow({ app }: { app: any }) {
   const entrypointUrl = manifest?.entrypoint_url;
 
   return (
-    <div className="p-4 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 transition-colors space-y-3">
+    <div className="p-4 rounded-lg border border-collab-700 hover:bg-collab-700/50 transition-colors space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {app.iconUrl ? (
@@ -146,7 +146,7 @@ function AppRow({ app }: { app: any }) {
               className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
             />
           ) : (
-            <div className="w-10 h-10 bg-[#1f1f1f] rounded-lg flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 bg-collab-700 rounded-lg flex items-center justify-center flex-shrink-0">
               <Puzzle className="w-5 h-5 text-gray-500" />
             </div>
           )}
@@ -154,7 +154,7 @@ function AppRow({ app }: { app: any }) {
             <div className="flex items-center gap-2">
               <span className="font-medium text-white truncate">{app.name}</span>
               {app.isSystemApp && (
-                <Badge className="bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20 text-xs">
+                <Badge className="bg-green-500/10 text-green-500 border-green-500/20 text-xs">
                   System
                 </Badge>
               )}
@@ -182,13 +182,13 @@ function AppRow({ app }: { app: any }) {
 
       {/* Show entrypoint and config options for system apps */}
       {app.isSystemApp && (
-        <div className="pt-2 border-t border-[#1f1f1f]">
+        <div className="pt-2 border-t border-collab-700">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="text-xs text-gray-500 mb-1">Entrypoint URL</div>
               {entrypointUrl ? (
                 <div className="flex items-center gap-2">
-                  <code className="text-xs text-gray-300 bg-[#1f1f1f] px-2 py-1 rounded truncate flex-1">
+                  <code className="text-xs text-gray-300 bg-collab-700 px-2 py-1 rounded truncate flex-1">
                     {entrypointUrl}
                   </code>
                   <Link href={entrypointUrl} target="_blank">
@@ -219,25 +219,25 @@ function SystemAppsSkeleton() {
   return (
     <div className="space-y-6">
       <div>
-        <Skeleton className="h-8 w-48 mb-2 bg-[#1f1f1f]" />
-        <Skeleton className="h-4 w-96 bg-[#1f1f1f]" />
+        <Skeleton className="h-8 w-48 mb-2 bg-collab-700" />
+        <Skeleton className="h-4 w-96 bg-collab-700" />
       </div>
-      <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+      <Card className="bg-collab-950 border-collab-700">
         <CardHeader>
-          <Skeleton className="h-6 w-48 bg-[#1f1f1f]" />
-          <Skeleton className="h-4 w-64 bg-[#1f1f1f]" />
+          <Skeleton className="h-6 w-48 bg-collab-700" />
+          <Skeleton className="h-4 w-64 bg-collab-700" />
         </CardHeader>
         <CardContent className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="flex items-center justify-between p-4 border border-[#1f1f1f] rounded-lg">
+            <div key={i} className="flex items-center justify-between p-4 border border-collab-700 rounded-lg">
               <div className="flex items-center gap-3">
-                <Skeleton className="w-10 h-10 rounded-lg bg-[#1f1f1f]" />
+                <Skeleton className="w-10 h-10 rounded-lg bg-collab-700" />
                 <div>
-                  <Skeleton className="h-5 w-32 mb-1 bg-[#1f1f1f]" />
-                  <Skeleton className="h-4 w-24 bg-[#1f1f1f]" />
+                  <Skeleton className="h-5 w-32 mb-1 bg-collab-700" />
+                  <Skeleton className="h-4 w-24 bg-collab-700" />
                 </div>
               </div>
-              <Skeleton className="h-6 w-12 bg-[#1f1f1f]" />
+              <Skeleton className="h-6 w-12 bg-collab-700" />
             </div>
           ))}
         </CardContent>

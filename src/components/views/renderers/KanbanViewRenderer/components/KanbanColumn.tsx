@@ -76,11 +76,11 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
               )}
             >
               <div className="flex items-center gap-3">
-                <GripVertical className="h-4 w-4 text-[#666]" />
+                <GripVertical className="h-4 w-4 text-collab-500" />
                 <h3 className="font-medium text-white">
                   {column.name}
                 </h3>
-                <Badge variant="secondary" className="text-xs bg-[#1f1f1f] text-[#999] border-0">
+                <Badge variant="secondary" className="text-xs bg-collab-700 text-collab-400 border-0">
                   {column.issues.length}
                 </Badge>
                 {shouldShowDisabledState && (
@@ -92,7 +92,7 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-[#666] hover:text-white"
+                className="h-6 w-6 text-collab-500 hover:text-white"
                 onClick={handleStartCreatingIssue}
               >
                 <Plus className="h-4 w-4" />
@@ -107,8 +107,8 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   {...provided.droppableProps}
                   className={cn(
                     "relative flex-1 min-h-0 space-y-2 rounded-lg transition-all duration-200 overflow-y-auto",
-                    isDraggingOver && draggedIssue && !shouldShowDisabledState && "bg-[#1a1a1a] border border-[#0969da]",
-                    isDraggingOver && draggedIssue && shouldShowDisabledState && "bg-[#1a1a1a] border border-red-500",
+                    isDraggingOver && draggedIssue && !shouldShowDisabledState && "bg-collab-800 border border-blue-600",
+                    isDraggingOver && draggedIssue && shouldShowDisabledState && "bg-collab-800 border border-red-500",
                   )}
                 >
                   {isDraggingOver && draggedIssue && shouldShowDisabledState && (
@@ -149,14 +149,14 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   {column.issues.length === 0 && !isCreatingIssue && !isDraggingOver && (
                     <div
                       className={cn(
-                        "flex items-center justify-center h-32 text-[#666] border-2 border-dashed border-[#2a2a2a] rounded-lg transition-colors cursor-pointer",
+                        "flex items-center justify-center h-32 text-collab-500 border-2 border-dashed border-collab-600 rounded-lg transition-colors cursor-pointer",
                         isDraggingOver && draggedIssue && "pointer-events-none",
-                        !isDraggingOver && draggedIssue && "hover:border-[#0969da]"
+                        !isDraggingOver && draggedIssue && "hover:border-blue-600"
                       )}
                       onClick={handleStartCreatingIssue}
                     >
                       <div className="text-center">
-                        <Plus className="h-6 w-6 mx-auto mb-2 text-[#666]" />
+                        <Plus className="h-6 w-6 mx-auto mb-2 text-collab-500" />
                         <p className="text-sm">Add first issue</p>
                       </div>
                     </div>

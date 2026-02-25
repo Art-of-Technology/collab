@@ -65,7 +65,7 @@ const healthConfig: Record<HealthStatus, { label: string; color: string; bgColor
   at_risk: { label: 'At Risk', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: AlertTriangle },
   overdue: { label: 'Overdue', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: AlertCircle },
   completed: { label: 'Completed', color: 'text-blue-400', bgColor: 'bg-blue-500/20', icon: CheckCircle2 },
-  no_data: { label: 'No Timeline', color: 'text-[#666]', bgColor: 'bg-[#333]/50', icon: Clock },
+  no_data: { label: 'No Timeline', color: 'text-collab-500', bgColor: 'bg-collab-600/50', icon: Clock },
 };
 
 // Zoom levels configuration
@@ -336,27 +336,27 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
   const zoomPercentage = Math.round((zoomIndex / MAX_ZOOM) * 100);
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b] overflow-hidden">
+    <div className="h-full flex flex-col bg-collab-950 overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-[#1a1a1a] bg-[#0a0a0b]">
+      <div className="flex-shrink-0 border-b border-collab-700 bg-collab-950">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => router.push(`/${currentWorkspace?.slug || workspaceId}/projects`)}
-              className="h-8 px-2 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className="h-8 px-2 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Projects
             </Button>
-            <div className="h-4 w-px bg-[#1a1a1a]" />
+            <div className="h-4 w-px bg-collab-800" />
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-md flex items-center justify-center bg-blue-500/20">
                 <BarChart3 className="h-3.5 w-3.5 text-blue-400" />
               </div>
               <div>
-                <h1 className="text-sm font-medium text-[#e6edf3]">Projects Timeline</h1>
+                <h1 className="text-sm font-medium text-collab-50">Projects Timeline</h1>
               </div>
             </div>
           </div>
@@ -414,7 +414,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
             )}
 
             {/* Zoom Controls */}
-            <div className="flex items-center gap-1 border border-[#1a1a1a] rounded-md bg-[#0d0d0e] p-0.5">
+            <div className="flex items-center gap-1 border border-collab-700 rounded-md bg-collab-900 p-0.5">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -423,7 +423,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                       size="sm"
                       onClick={zoomOut}
                       disabled={zoomIndex === MIN_ZOOM}
-                      className="h-6 w-6 p-0 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a] disabled:opacity-30"
+                      className="h-6 w-6 p-0 text-collab-400 hover:text-collab-50 hover:bg-collab-800 disabled:opacity-30"
                     >
                       <Minus className="h-3 w-3" />
                     </Button>
@@ -439,7 +439,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                       variant="ghost"
                       size="sm"
                       onClick={resetZoom}
-                      className="h-6 px-2 text-[10px] text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a] font-mono min-w-[40px]"
+                      className="h-6 px-2 text-[10px] text-collab-400 hover:text-collab-50 hover:bg-collab-800 font-mono min-w-[40px]"
                     >
                       {zoomPercentage}%
                     </Button>
@@ -456,7 +456,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                       size="sm"
                       onClick={zoomIn}
                       disabled={zoomIndex === MAX_ZOOM}
-                      className="h-6 w-6 p-0 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a] disabled:opacity-30"
+                      className="h-6 w-6 p-0 text-collab-400 hover:text-collab-50 hover:bg-collab-800 disabled:opacity-30"
                     >
                       <Plus className="h-3 w-3" />
                     </Button>
@@ -471,7 +471,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
               variant="ghost"
               size="sm"
               onClick={goToToday}
-              className="h-7 px-2 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className="h-7 px-2 text-xs text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <RotateCcw className="h-3 w-3 mr-1" />
               Today
@@ -484,15 +484,15 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                   variant="ghost"
                   size="sm"
                   className={cn(
-                    "h-7 w-7 p-0 hover:bg-[#1a1a1a]",
-                    healthFilter.length > 0 || !showNoData ? "text-blue-400" : "text-[#8b949e] hover:text-[#e6edf3]"
+                    "h-7 w-7 p-0 hover:bg-collab-800",
+                    healthFilter.length > 0 || !showNoData ? "text-blue-400" : "text-collab-400 hover:text-collab-50"
                   )}
                 >
                   <Filter className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 bg-[#161617] border-[#1f1f1f]">
-                <div className="px-2 py-1.5 text-xs text-[#666]">Filter by status</div>
+              <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
+                <div className="px-2 py-1.5 text-xs text-collab-500">Filter by status</div>
                 {(['on_track', 'at_risk', 'overdue', 'completed'] as HealthStatus[]).map(health => {
                   const config = healthConfig[health];
                   return (
@@ -500,26 +500,26 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                       key={health}
                       checked={healthFilter.includes(health)}
                       onCheckedChange={() => toggleHealthFilter(health)}
-                      className="text-[#e6edf3] focus:bg-[#1f1f1f] cursor-pointer"
+                      className="text-collab-50 focus:bg-collab-700 cursor-pointer"
                     >
                       <span className={config.color}>{config.label}</span>
                     </DropdownMenuCheckboxItem>
                   );
                 })}
-                <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                <DropdownMenuSeparator className="bg-collab-700" />
                 <DropdownMenuCheckboxItem
                   checked={showNoData}
                   onCheckedChange={setShowNoData}
-                  className="text-[#e6edf3] focus:bg-[#1f1f1f] cursor-pointer"
+                  className="text-collab-50 focus:bg-collab-700 cursor-pointer"
                 >
                   Show projects without dates
                 </DropdownMenuCheckboxItem>
                 {(healthFilter.length > 0 || !showNoData) && (
                   <>
-                    <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                    <DropdownMenuSeparator className="bg-collab-700" />
                     <DropdownMenuItem
                       onClick={() => { setHealthFilter([]); setShowNoData(true); }}
-                      className="text-[#8b949e] focus:bg-[#1f1f1f] cursor-pointer"
+                      className="text-collab-400 focus:bg-collab-700 cursor-pointer"
                     >
                       Clear filters
                     </DropdownMenuItem>
@@ -531,7 +531,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
         </div>
 
         {/* Keyboard shortcuts hint */}
-        <div className="px-4 pb-2 flex items-center gap-4 text-[10px] text-[#555]">
+        <div className="px-4 pb-2 flex items-center gap-4 text-[10px] text-collab-500">
           <span>Ctrl/Cmd + Scroll to zoom</span>
           <span>Drag to pan</span>
         </div>
@@ -541,14 +541,14 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
       <div className="flex-1 flex overflow-hidden">
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#8b949e]" />
+            <Loader2 className="h-8 w-8 animate-spin text-collab-400" />
           </div>
         ) : !ganttData || ganttData.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-[#8b949e]">
+          <div className="flex-1 flex items-center justify-center text-collab-400">
             <div className="text-center">
-              <BarChart3 className="h-12 w-12 mx-auto mb-4 text-[#666]" />
+              <BarChart3 className="h-12 w-12 mx-auto mb-4 text-collab-500" />
               <p className="text-base">No projects found</p>
-              <p className="text-sm text-[#666] mt-1">Create a project to see it on the timeline</p>
+              <p className="text-sm text-collab-500 mt-1">Create a project to see it on the timeline</p>
               <Button
                 variant="ghost"
                 size="sm"
@@ -560,9 +560,9 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
             </div>
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-[#8b949e]">
+          <div className="flex-1 flex items-center justify-center text-collab-400">
             <div className="text-center">
-              <Filter className="h-12 w-12 mx-auto mb-4 text-[#666]" />
+              <Filter className="h-12 w-12 mx-auto mb-4 text-collab-500" />
               <p className="text-base">No projects match your filters</p>
               <Button
                 variant="ghost"
@@ -577,10 +577,10 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
         ) : (
           <div className="flex flex-1 overflow-hidden">
             {/* Project Names Column */}
-            <div className="w-72 flex-shrink-0 border-r border-[#1a1a1a] bg-[#0a0a0b] flex flex-col">
+            <div className="w-72 flex-shrink-0 border-r border-collab-700 bg-collab-950 flex flex-col">
               {/* Header */}
-              <div className="h-[52px] border-b border-[#1a1a1a] flex items-end px-3 pb-2 flex-shrink-0">
-                <span className="text-xs font-medium text-[#8b949e]">
+              <div className="h-[52px] border-b border-collab-700 flex items-end px-3 pb-2 flex-shrink-0">
+                <span className="text-xs font-medium text-collab-400">
                   {filteredProjects.length} Project{filteredProjects.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -600,7 +600,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                     <div
                       key={project.id}
                       className={cn(
-                        "h-14 flex items-center px-3 border-b border-[#1a1a1a] hover:bg-[#161616] transition-colors cursor-pointer",
+                        "h-14 flex items-center px-3 border-b border-collab-700 hover:bg-collab-900 transition-colors cursor-pointer",
                         !project.hasRealDates && "opacity-60"
                       )}
                       onClick={() => router.push(`/${currentWorkspace?.slug || workspaceId}/projects/${project.slug}`)}
@@ -611,7 +611,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-[#e6edf3] truncate">{project.name}</span>
+                          <span className="text-sm text-collab-50 truncate">{project.name}</span>
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger>
@@ -620,18 +620,18 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                               <TooltipContent side="right">
                                 <p className="font-medium">{health.label}</p>
                                 {project.hasRealDates ? (
-                                  <p className="text-xs text-[#8b949e]">
+                                  <p className="text-xs text-collab-400">
                                     {project.progress}% complete ({project.completedIssues}/{project.issueCount})
                                   </p>
                                 ) : (
-                                  <p className="text-xs text-[#8b949e]">No issues with dates assigned</p>
+                                  <p className="text-xs text-collab-400">No issues with dates assigned</p>
                                 )}
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-[#666]">
+                          <span className="text-xs text-collab-500">
                             {project.completedIssues}/{project.issueCount} issues
                           </span>
                           {project.overdueIssues > 0 && (
@@ -650,19 +650,19 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
               {/* Fixed timeline headers - synced with horizontal scroll */}
               <div
                 ref={headerRef}
-                className="flex-shrink-0 bg-[#0a0a0b] z-10 overflow-hidden"
+                className="flex-shrink-0 bg-collab-950 z-10 overflow-hidden"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {/* Month headers */}
-                <div className="h-6 flex border-b border-[#1a1a1a]">
+                <div className="h-6 flex border-b border-collab-700">
                   <div style={{ width: totalWidth, display: 'flex' }}>
                     {monthGroups.map((group, idx) => (
                       <div
                         key={idx}
-                        className="flex-shrink-0 border-r border-[#1a1a1a] flex items-center justify-center"
+                        className="flex-shrink-0 border-r border-collab-700 flex items-center justify-center"
                         style={{ width: group.days.length * dayWidth }}
                       >
-                        <span className="text-[10px] font-medium text-[#8b949e] truncate px-1">
+                        <span className="text-[10px] font-medium text-collab-400 truncate px-1">
                           {format(group.month, dayWidth >= 24 ? 'MMMM yyyy' : 'MMM yy')}
                         </span>
                       </div>
@@ -671,7 +671,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                 </div>
 
                 {/* Day headers */}
-                <div className="h-6 flex border-b border-[#1a1a1a]">
+                <div className="h-6 flex border-b border-collab-700">
                   <div style={{ width: totalWidth, display: 'flex' }}>
                     {visibleDates.map((day, idx) => {
                       const isCurrentDay = isToday(day);
@@ -681,16 +681,16 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                         <div
                           key={idx}
                           className={cn(
-                            "flex-shrink-0 flex items-center justify-center border-r border-[#1a1a1a]/50",
+                            "flex-shrink-0 flex items-center justify-center border-r border-collab-700/50",
                             isCurrentDay && "bg-blue-500/20",
-                            weekend && !isCurrentDay && "bg-[#1a1a1a]/30"
+                            weekend && !isCurrentDay && "bg-collab-800/30"
                           )}
                           style={{ width: dayWidth }}
                         >
                           {dayWidth >= 16 && (
                             <span className={cn(
                               "text-[9px]",
-                              isCurrentDay ? "text-blue-400 font-bold" : weekend ? "text-[#444]" : "text-[#555]"
+                              isCurrentDay ? "text-blue-400 font-bold" : weekend ? "text-collab-600" : "text-collab-500"
                             )}>
                               {format(day, 'd')}
                             </span>
@@ -740,9 +740,9 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                           <div
                             key={idx}
                             className={cn(
-                              "flex-shrink-0 border-r border-[#1a1a1a]/20",
+                              "flex-shrink-0 border-r border-collab-700/20",
                               isCurrentDay && "bg-blue-500/5",
-                              weekend && !isCurrentDay && "bg-[#1a1a1a]/10"
+                              weekend && !isCurrentDay && "bg-collab-800/10"
                             )}
                             style={{ width: dayWidth, height: '100%' }}
                           />
@@ -770,7 +770,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                                   data-bar
                                   className={cn(
                                     "absolute h-8 rounded-md cursor-pointer transition-all hover:brightness-110 hover:scale-y-105 overflow-hidden select-none",
-                                    !project.hasRealDates && "opacity-50 border border-dashed border-[#666]"
+                                    !project.hasRealDates && "opacity-50 border border-dashed border-collab-500"
                                   )}
                                   style={{
                                     left: barStyle.left,
@@ -810,7 +810,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                                   )}
                                 </div>
                               </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-xs bg-[#1a1a1a] border-[#333] p-3">
+                              <TooltipContent side="top" className="max-w-xs bg-collab-800 border-collab-600 p-3">
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2">
                                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: project.color }} />
@@ -823,18 +823,18 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                                         <span className={cn("text-xs px-1.5 py-0.5 rounded", health.bgColor, health.color)}>
                                           {health.label}
                                         </span>
-                                        <span className="text-xs text-[#8b949e]">{project.progress}% complete</span>
+                                        <span className="text-xs text-collab-400">{project.progress}% complete</span>
                                       </div>
-                                      <div className="text-xs text-[#8b949e] space-y-1">
+                                      <div className="text-xs text-collab-400 space-y-1">
                                         <div className="flex justify-between">
                                           <span>Timeline:</span>
-                                          <span className="text-[#e6edf3]">
+                                          <span className="text-collab-50">
                                             {format(new Date(project.startDate), 'MMM d')} - {format(new Date(project.dueDate), 'MMM d, yyyy')}
                                           </span>
                                         </div>
                                         <div className="flex justify-between">
                                           <span>Issues:</span>
-                                          <span className="text-[#e6edf3]">{project.completedIssues} of {project.issueCount} completed</span>
+                                          <span className="text-collab-50">{project.completedIssues} of {project.issueCount} completed</span>
                                         </div>
                                         {project.overdueIssues > 0 && (
                                           <div className="flex justify-between text-red-400">
@@ -845,12 +845,12 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                                       </div>
                                     </>
                                   ) : (
-                                    <div className="text-xs text-[#666]">
+                                    <div className="text-xs text-collab-500">
                                       <div className="flex items-center gap-1.5">
                                         <Info className="h-3 w-3" />
                                         <span>No timeline data</span>
                                       </div>
-                                      <p className="text-[#555] mt-1">Add dates to issues to see timeline</p>
+                                      <p className="text-collab-500 mt-1">Add dates to issues to see timeline</p>
                                     </div>
                                   )}
                                 </div>
@@ -869,26 +869,26 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
       </div>
 
       {/* Footer */}
-      <div className="flex-shrink-0 px-4 py-2 border-t border-[#1a1a1a] flex items-center justify-between text-xs bg-[#0a0a0b]">
+      <div className="flex-shrink-0 px-4 py-2 border-t border-collab-700 flex items-center justify-between text-xs bg-collab-950">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 text-[#666]">
+          <div className="flex items-center gap-1.5 text-collab-500">
             <div className="w-3 h-0.5 bg-blue-500" />
             <span>Today</span>
           </div>
-          <div className="flex items-center gap-3 border-l border-[#1a1a1a] pl-4">
+          <div className="flex items-center gap-3 border-l border-collab-700 pl-4">
             {(['on_track', 'at_risk', 'overdue', 'completed'] as HealthStatus[]).map(status => {
               const config = healthConfig[status];
               const Icon = config.icon;
               return (
                 <div key={status} className="flex items-center gap-1">
                   <Icon className={cn("h-3 w-3", config.color)} />
-                  <span className="text-[#666]">{config.label}</span>
+                  <span className="text-collab-500">{config.label}</span>
                 </div>
               );
             })}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[#666]">
+        <div className="flex items-center gap-2 text-collab-500">
           <Info className="h-3 w-3" />
           <span>Timeline derived from issue dates</span>
         </div>

@@ -60,7 +60,7 @@ export default async function RootLayout({
       </head>
 
       <body
-        className={cn("bg-background font-sans antialiased", fontSans.variable, inter.className)}
+        className={cn("font-sans antialiased dark:bg-collab-950 dark:text-white", fontSans.variable, inter.className)}
         style={{ "--sidebar-width": width } as React.CSSProperties}
       >
         <ThemeProvider
@@ -77,9 +77,9 @@ export default async function RootLayout({
                       <UiProvider>
                         <CustomThemeProvider>
                           <DockProvider>
-                            <main className="h-screen flex flex-col">
+                            <div className="h-full">
                               {children}
-                            </main>
+                            </div>
                             <Toaster />
                           <Script
                             src="https://api.chatproject.io/chat-widget.js"

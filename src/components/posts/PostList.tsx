@@ -29,8 +29,8 @@ export default function PostList({
 
   if (posts.length === 0) {
     return (
-      <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-8 text-center">
-        <p className="text-[#8b949e]">No posts found. Be the first to share an update!</p>
+      <div className="bg-collab-900 border border-collab-700 rounded-lg p-8 text-center">
+        <p className="text-collab-400">No posts found. Be the first to share an update!</p>
       </div>
     );
   }
@@ -55,7 +55,7 @@ export default function PostList({
             variant="outline"
             onClick={onLoadMore}
             disabled={isFetchingNextPage}
-            className="bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] hover:bg-[#131313] hover:border-[#333] transition-all duration-200"
+            className="bg-collab-900 border-collab-700 text-collab-50 hover:bg-collab-900 hover:border-collab-600 transition-all duration-200"
           >
             {isFetchingNextPage ? (
               <>

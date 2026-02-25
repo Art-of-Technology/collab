@@ -3,14 +3,13 @@
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { 
   Calendar,
   Clock,
   Plus,
   MoreHorizontal,
   Flag,
-  User,
   Filter,
   Settings,
   Eye,
@@ -203,11 +202,11 @@ export default function TimelineViewRenderer({
   };
 
   return (
-    <div className="h-full bg-[#101011] flex">
+    <div className="h-full bg-collab-900 flex">
       {/* Main Timeline Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-[#101011] border-b border-[#1f1f1f] px-6 py-3">
+        <div className="sticky top-0 z-10 bg-collab-900 border-b border-collab-700 px-6 py-3">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-semibold text-white">
               Timeline • {filteredIssues.length} Issues
@@ -228,11 +227,11 @@ export default function TimelineViewRenderer({
         </div>
 
         {filteredIssues.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-[#999]">
+          <div className="flex-1 flex items-center justify-center text-collab-400">
             <div className="text-center">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-[#666]" />
+              <Calendar className="h-12 w-12 mx-auto mb-4 text-collab-500" />
               <p className="text-base">No issues found in this timeline</p>
-              <p className="text-sm text-[#666] mt-1">
+              <p className="text-sm text-collab-500 mt-1">
                 Create a new issue or adjust your filters
               </p>
             </div>
@@ -243,7 +242,7 @@ export default function TimelineViewRenderer({
           <div className="mb-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Timeline View</h2>
-              <div className="flex items-center gap-2 text-sm text-[#999]">
+              <div className="flex items-center gap-2 text-sm text-collab-400">
                 <Clock className="h-4 w-4" />
                 <span>Showing {issues.length} issues</span>
               </div>
@@ -262,7 +261,7 @@ export default function TimelineViewRenderer({
                       style={{ backgroundColor: group.color }}
                     />
                     <h3 className="text-base font-medium text-white">{group.name}</h3>
-                    <Badge variant="secondary" className="text-xs bg-[#1f1f1f] text-[#999] border-0">
+                    <Badge variant="secondary" className="text-xs bg-collab-700 text-collab-400 border-0">
                       {group.issues.length}
                     </Badge>
                   </div>
@@ -276,7 +275,7 @@ export default function TimelineViewRenderer({
                     return (
                       <div
                         key={issue.id}
-                        className="group relative flex items-center gap-4 p-4 bg-[#090909] border border-[#1f1f1f] rounded-lg hover:border-[#2a2a2a] transition-all duration-200 cursor-pointer"
+                        className="group relative flex items-center gap-4 p-4 bg-collab-950 border border-collab-700 rounded-lg hover:border-collab-600 transition-all duration-200 cursor-pointer"
                         onClick={() => handleIssueClick(issue.id)}
                       >
                         {/* Issue Info */}
@@ -284,7 +283,7 @@ export default function TimelineViewRenderer({
                           <div className="flex items-center gap-2 mb-2">
                             <Badge 
                               variant="outline" 
-                              className="text-xs font-mono border-[#2a2a2a] text-[#999]"
+                              className="text-xs font-mono border-collab-600 text-collab-400"
                             >
                               {issue.issueKey}
                             </Badge>
@@ -315,11 +314,11 @@ export default function TimelineViewRenderer({
                             />
                           </div>
                           
-                          <h4 className="text-white font-medium text-sm mb-1 line-clamp-1 group-hover:text-[#0969da] transition-colors">
+                          <h4 className="text-white font-medium text-sm mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">
                             {issue.title}
                           </h4>
                           
-                          <div className="flex items-center gap-3 text-xs text-[#666]">
+                          <div className="flex items-center gap-3 text-xs text-collab-500">
                             <span>{formatDate(timeline.startDate)}</span>
                             <span>→</span>
                             <span>{formatDate(timeline.endDate)}</span>
@@ -330,7 +329,7 @@ export default function TimelineViewRenderer({
                         {/* Timeline Bar */}
                         <div className="flex-shrink-0 relative">
                           <div 
-                            className="h-6 bg-[#0969da]/20 border border-[#0969da]/40 rounded flex items-center justify-between px-2"
+                            className="h-6 bg-blue-600/20 border border-blue-600/40 rounded flex items-center justify-between px-2"
                             style={{ width: `${timeline.width}px` }}
                           >
                             <div className="text-xs text-white font-medium truncate">
@@ -338,7 +337,7 @@ export default function TimelineViewRenderer({
                             </div>
                             {issue.progress && (
                               <div 
-                                className="absolute left-0 top-0 h-full bg-[#0969da]/60 rounded"
+                                className="absolute left-0 top-0 h-full bg-blue-600/60 rounded"
                                 style={{ width: `${issue.progress}%` }}
                               />
                             )}
@@ -347,25 +346,14 @@ export default function TimelineViewRenderer({
 
                         {/* Assignee */}
                         <div className="flex items-center gap-2">
-                          {issue.assignee ? (
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={issue.assignee.image} />
-                              <AvatarFallback className="text-xs bg-[#1f1f1f] text-[#999]">
-                                {issue.assignee.name?.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                          ) : (
-                            <div className="h-6 w-6 rounded-full bg-[#1f1f1f] flex items-center justify-center">
-                              <User className="h-3 w-3 text-[#666]" />
-                            </div>
-                          )}
+                        <UserAvatar user={issue.assignee} size="md" />
                         </div>
 
                         {/* Actions */}
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 text-[#666] hover:text-white transition-opacity"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 text-collab-500 hover:text-white transition-opacity"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -378,7 +366,7 @@ export default function TimelineViewRenderer({
                 {groupedIssues.length > 1 && (
                   <Button
                     variant="ghost"
-                    className="w-full h-12 border-2 border-dashed border-[#2a2a2a] text-[#666] hover:text-white hover:border-[#0969da] transition-colors"
+                    className="w-full h-12 border-2 border-dashed border-collab-600 text-collab-500 hover:text-white hover:border-blue-600 transition-colors"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add issue to {group.name}
@@ -389,8 +377,8 @@ export default function TimelineViewRenderer({
           </div>
 
           {/* Timeline Footer */}
-          <div className="mt-8 pt-4 border-t border-[#1f1f1f]">
-            <div className="flex items-center justify-between text-sm text-[#666]">
+          <div className="mt-8 pt-4 border-t border-collab-700">
+            <div className="flex items-center justify-between text-sm text-collab-500">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-red-500 rounded-full" />
@@ -409,7 +397,7 @@ export default function TimelineViewRenderer({
                   <span>Low</span>
                 </div>
               </div>
-              <div className="text-[#666]">
+              <div className="text-collab-500">
                 Timeline spans {Math.ceil(issues.length * 1.5)} days
               </div>
             </div>

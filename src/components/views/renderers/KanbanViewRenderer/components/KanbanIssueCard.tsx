@@ -2,11 +2,11 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from "@/components/ui/button";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   MessageSquare,
   ArrowRight,
-  User,
   ArrowDown,
   Minus,
   ArrowUp,
@@ -109,12 +109,12 @@ const KanbanIssueCard = React.memo(({
           onClick={handleLinkClick}
           data-issue-id={issue.id}
           className={cn(
-            "group block p-3 bg-[#0a0a0a] border border-[#1f1f1f] rounded-lg transition-colors duration-150 no-underline",
+            "group block p-3 bg-collab-950 border border-collab-700 rounded-lg transition-colors duration-150 no-underline",
             hasRelations ? 'pb-1.5' : 'pb-3',
             isIssueBeingProcessed
               ? "opacity-60 cursor-not-allowed"
-              : "hover:border-[#333] cursor-pointer",
-            snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-[#0f0f0f] scale-[1.02]"
+              : "hover:border-collab-600 cursor-pointer",
+            snapshot.isDragging && "shadow-xl ring-2 ring-blue-500/30 bg-collab-900 scale-[1.02]"
           )}
         >
           <div
@@ -140,7 +140,7 @@ const KanbanIssueCard = React.memo(({
                   </>
                 )}
                 {/* Issue Key - More readable */}
-                <span className="text-xs font-mono text-[#8b949e] font-medium">
+                <span className="text-xs font-mono text-collab-400 font-medium">
                   {issue.issueKey}
                 </span>
               </div>
@@ -148,24 +148,13 @@ const KanbanIssueCard = React.memo(({
               {/* Assignee Avatar - Only show if enabled */}
               {showAssignee && (
                 <div className="flex-shrink-0">
-                  {issue.assignee ? (
-                    <Avatar className="h-5 w-5">
-                      <AvatarImage src={issue.assignee.image} />
-                      <AvatarFallback className="text-[10px] bg-[#1f1f1f] text-[#8b949e] font-medium">
-                        {issue.assignee.name?.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <div className="h-5 w-5 rounded-full bg-[#1f1f1f] flex items-center justify-center">
-                      <User className="h-2.5 w-2.5 text-[#6e7681]" />
-                    </div>
-                  )}
+                  <UserAvatar user={issue.assignee} size="sm" />
                 </div>
               )}
             </div>
 
             {/* Issue Title */}
-            <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-[#58a6ff] transition-colors">
+            <h4 className="text-white text-sm font-medium leading-5 line-clamp-2 group-hover:text-blue-400 transition-colors">
               {issue.title}
             </h4>
 
@@ -202,7 +191,7 @@ const KanbanIssueCard = React.memo(({
                       </Badge>
                     ))}
                     {issue.labels.length > 3 && (
-                      <span className="text-[10px] text-[#6e7681] px-1">+{issue.labels.length - 3}</span>
+                      <span className="text-[10px] text-collab-500 px-1">+{issue.labels.length - 3}</span>
                     )}
                   </>
                 )}
@@ -277,24 +266,25 @@ const KanbanIssueCard = React.memo(({
 
           {hasRelations && (
             <>
-              <hr className="border-[#1f1f1f] my-0 mt-0 mb-1.5" />
-              <button
+              <hr className="border-collab-700 my-0 mt-0 mb-1.5" />
+              <Button
                 type="button"
-                className="group flex w-fit items-center justify-between rounded-md bg-transparent pl-0 pr-4 py-0 text-[11px] text-[#8b949e] transition-colors"
+                variant="ghost"
+                className="group flex w-fit items-center justify-between rounded-md bg-transparent pl-0 pr-4 py-0 text-[11px] text-collab-400 transition-colors h-auto hover:bg-transparent"
                 onClick={handleToggleRelations}
                 onPointerDown={handleRelationsPointerDown}
               >
                 <span className="flex items-center justify-center">
                   {areRelationsCollapsed ? (
-                    <ChevronRight className="h-3 w-3 relative -top-[0.5px] -left-1 text-[#6e7681]" />
+                    <ChevronRight className="h-3 w-3 relative -top-[0.5px] -left-1 text-collab-500" />
                   ) : (
-                    <ChevronDown className="h-3 w-3 relative -left-0.5 text-[#6e7681]" />
+                    <ChevronDown className="h-3 w-3 relative -left-0.5 text-collab-500" />
                   )}
-                  <span className="uppercase tracking-wide text-[10px] text-[#6e7681] group-hover:text-white transition-colors flex items-center gap-2">
+                  <span className="uppercase tracking-wide text-[10px] text-collab-500 group-hover:text-white transition-colors flex items-center gap-2">
                     <span>{relationCount} Relation{relationCount === 1 ? '' : 's'}</span>
                   </span>
                 </span>
-              </button>
+              </Button>
 
               {!areRelationsCollapsed && (
                 <div className="mt-1 flex flex-col gap-1">
@@ -329,7 +319,7 @@ const KanbanIssueCard = React.memo(({
                             }
                           }
                         }}
-                        className="flex items-center transition-colors duration-150 justify-between gap-2 rounded-md border border-[#1a1a1a] bg-[#0f0f0f] px-2 py-1 cursor-pointer hover:bg-[#1a1a1a]"
+                        className="flex items-center transition-colors duration-150 justify-between gap-2 rounded-md border border-collab-700 bg-collab-900 px-2 py-1 cursor-pointer hover:bg-collab-800"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <RelationTypeIcon
@@ -338,7 +328,7 @@ const KanbanIssueCard = React.memo(({
                           />
                           <div className="min-w-0">
                             {relation.issueKey && (
-                              <div className="text-[10px] font-mono text-[#8b949e] leading-3">
+                              <div className="text-[10px] font-mono text-collab-400 leading-3">
                                 {relation.issueKey}
                               </div>
                             )}
@@ -348,7 +338,7 @@ const KanbanIssueCard = React.memo(({
                           </div>
 
                         </div>
-                        <Badge className={cn("h-5 px-1.5 text-[10px] font-medium leading-none border border-[#1f1f1f] bg-[#151515] text-[#d0d7de] hover:bg-[#1a1a1a]",
+                        <Badge className={cn("h-5 px-1.5 text-[10px] font-medium leading-none border border-collab-700 bg-collab-800 text-collab-400 hover:bg-collab-800",
                           (relation.relationType === 'blocked_by' || relation.relationType === 'blocks') && "border-red-500/10 bg-red-500/5 text-red-400 hover:bg-red-500/10")}
                         >
                           {relationLabel}

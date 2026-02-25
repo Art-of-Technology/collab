@@ -71,7 +71,7 @@ export function StaticToolbar({
   };
 
   return (
-    <div className="border-b border-[#333] bg-[#1a1a1a] p-2">
+    <div className="border-b border-collab-600 bg-collab-800 p-2">
       <TooltipProvider delayDuration={200}>
         <div className="flex items-center gap-1 flex-wrap">
           {/* Text Formatting Group */}
@@ -84,7 +84,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('bold') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('bold') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleBold().run()}
                 >
@@ -102,7 +102,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('italic') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('italic') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleItalic().run()}
                 >
@@ -120,7 +120,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('underline') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('underline') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleUnderline().run()}
                 >
@@ -138,7 +138,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('strike') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('strike') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleStrike().run()}
                 >
@@ -156,7 +156,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('code') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('code') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleCode().run()}
                 >
@@ -168,7 +168,7 @@ export function StaticToolbar({
           </div>
 
           {/* Separator */}
-          <div className="w-px h-6 bg-[#444] mx-1" />
+          <div className="w-px h-6 bg-collab-600 mx-1" />
 
           {/* Headings Group */}
           <div className="flex items-center gap-0.5">
@@ -180,7 +180,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('heading', { level: 1 }) ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
                 >
@@ -198,7 +198,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('heading', { level: 2 }) ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
                 >
@@ -216,7 +216,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('heading', { level: 3 }) ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
                 >
@@ -228,7 +228,7 @@ export function StaticToolbar({
           </div>
 
           {/* Separator */}
-          <div className="w-px h-6 bg-[#444] mx-1" />
+          <div className="w-px h-6 bg-collab-600 mx-1" />
 
           {/* Lists and Quote Group */}
           <div className="flex items-center gap-0.5">
@@ -240,7 +240,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('bulletList') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('bulletList') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleBulletList().run()}
                 >
@@ -258,7 +258,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('orderedList') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('orderedList') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleOrderedList().run()}
                 >
@@ -276,7 +276,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('blockquote') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('blockquote') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={() => editor.chain().focus().toggleBlockquote().run()}
                 >
@@ -292,7 +292,7 @@ export function StaticToolbar({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 hover:bg-[#2a2a2a] transition-colors"
+                  className="h-8 w-8 hover:bg-collab-600 transition-colors"
                   onClick={() => editor.chain().focus().setHorizontalRule().run()}
                 >
                   <Minus className="h-4 w-4" />
@@ -303,7 +303,7 @@ export function StaticToolbar({
           </div>
 
           {/* Separator */}
-          <div className="w-px h-6 bg-[#444] mx-1" />
+          <div className="w-px h-6 bg-collab-600 mx-1" />
 
           {/* Links and Media Group */}
           <div className="flex items-center gap-0.5">
@@ -315,7 +315,7 @@ export function StaticToolbar({
                   size="sm"
                   className={cn(
                     "h-8 w-8 transition-colors",
-                    editor.isActive('link') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                    editor.isActive('link') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                   )}
                   onClick={insertLink}
                 >
@@ -331,7 +331,7 @@ export function StaticToolbar({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 hover:bg-[#2a2a2a] transition-colors"
+                  className="h-8 w-8 hover:bg-collab-600 transition-colors"
                   onClick={insertImage}
                 >
                   <ImageIcon className="h-4 w-4" />
@@ -342,7 +342,7 @@ export function StaticToolbar({
           </div>
 
           {/* Separator */}
-          <div className="w-px h-6 bg-[#444] mx-1" />
+          <div className="w-px h-6 bg-collab-600 mx-1" />
 
           {/* Mentions Group */}
           <div className="flex items-center gap-0.5">
@@ -381,7 +381,7 @@ export function StaticToolbar({
           {showAiImprove && onAiImprove && (
             <>
               {/* Separator */}
-              <div className="w-px h-6 bg-[#444] mx-1" />
+              <div className="w-px h-6 bg-collab-600 mx-1" />
 
               <Tooltip>
                 <TooltipTrigger asChild>

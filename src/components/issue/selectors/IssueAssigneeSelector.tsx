@@ -7,7 +7,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Input } from "@/components/ui/input";
 import { Loader2, UserX, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -97,12 +98,7 @@ export function IssueAssigneeSelector({
         {user.useCustomAvatar ? (
           <CustomAvatar user={user} size="sm" />
         ) : (
-          <Avatar className="h-6 w-6">
-            {user.image && <AvatarImage src={user.image} alt={user.name} />}
-            <AvatarFallback className="text-xs font-medium">
-              {user.name?.charAt(0) || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={user} size="md" />
         )}
         <span className="text-sm font-medium">{user.name}</span>
       </div>
@@ -113,10 +109,10 @@ export function IssueAssigneeSelector({
     return (
       <div className={cn(
         "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
-        "border border-[#2d2d30] bg-[#181818]"
+        "border border-collab-600 bg-collab-800"
       )}>
-        <Loader2 className="h-3 w-3 animate-spin text-[#6e7681]" />
-        <span className="text-[#6e7681] text-xs">Loading...</span>
+        <Loader2 className="h-3 w-3 animate-spin text-collab-500" />
+        <span className="text-collab-500 text-xs">Loading...</span>
       </div>
     );
   }
@@ -124,13 +120,14 @@ export function IssueAssigneeSelector({
   return (
     <Popover modal={true} open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -139,108 +136,100 @@ export function IssueAssigneeSelector({
               {selectedUser.useCustomAvatar ? (
                 <CustomAvatar user={selectedUser} size="sm" />
               ) : (
-                <Avatar className="h-3.5 w-3.5">
-                  {selectedUser.image && <AvatarImage src={selectedUser.image} alt={selectedUser.name} />}
-                  <AvatarFallback className="text-xs font-medium">
-                    {selectedUser.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={selectedUser} size="xs" />
               )}
-              <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{selectedUser.name}</span>
+              <span className="text-collab-400 text-xs truncate max-w-[80px]">{selectedUser.name}</span>
             </>
           ) : (
             <>
-              <UserX className="h-3 w-3 text-[#6e7681]" />
-              <span className="text-[#6e7681] text-xs">Assignee</span>
+              <UserX className="h-3 w-3 text-collab-500" />
+              <span className="text-collab-500 text-xs">Assignee</span>
             </>
           )}
-        </button>
+        </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-72 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-72 p-0 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="p-3 border-b border-[#2d2d30]">
-          <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+        <div className="p-3 border-b border-collab-600">
+          <div className="text-xs text-gray-400 mb-2 font-medium">
             Assign to
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-collab-500" />
             <Input
               placeholder="Search people..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
+              className="pl-9 h-7 text-xs bg-collab-900 border-collab-600 focus:border-collab-600 text-collab-400"
             />
           </div>
         </div>
         
-        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
-          <button
+        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent p-1">
+          <Button
             type="button"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+            variant="ghost"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
             onClick={() => handleSelect(null)}
           >
-            <div className="h-5 w-5 rounded-full border-2 border-dashed border-[#555] flex items-center justify-center">
-              <UserX className="h-2.5 w-2.5 text-[#6e7681]" />
+            <div className="h-5 w-5 rounded-full border-2 border-dashed border-collab-600 flex items-center justify-center">
+              <UserX className="h-2.5 w-2.5 text-collab-500" />
             </div>
-            <span className="text-[#9ca3af] flex-1">No assignee</span>
+            <span className="text-gray-400 flex-1">No assignee</span>
             {!value && (
-              <span className="text-xs text-[#6e7681]">✓</span>
+              <span className="text-xs text-collab-500">✓</span>
             )}
-          </button>
+          </Button>
           
           {prioritizedUsers.length > 0 && (
-            <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
+            <div className="px-2 pt-2 pb-1 text-xs text-collab-500">Team members</div>
           )}
           
           {prioritizedUsers.map((user) => (
-            <button
+            <Button
               key={user.id}
               type="button"
+              variant="ghost"
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
                 user.id === currentUserId
                   ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
-                  : 'hover:bg-[#2a2a2a]'
+                  : 'hover:bg-collab-600'
               }`}
               onClick={() => handleSelect(user.id)}
             >
               {user.useCustomAvatar ? (
                 <CustomAvatar user={user} size="sm" />
               ) : (
-                <Avatar className="h-5 w-5">
-                  {user.image && <AvatarImage src={user.image} alt={user.name} />}
-                  <AvatarFallback className="text-xs font-medium">
-                    {user.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} size="sm" />
               )}
-              <span className={`text-[#cccccc] flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
+              <span className={`text-collab-400 flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
                 {user.name}{user.id === currentUserId ? " (You)" : ""}
               </span>
               {value === user.id && (
-                <span className="text-xs text-[#6e7681]">✓</span>
+                <span className="text-xs text-collab-500">✓</span>
               )}
-            </button>
+            </Button>
           ))}
           
           {isLoading && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-sm">
+            <div className="px-2 py-4 text-center text-collab-500 text-sm">
               Loading members...
             </div>
           )}
           
           {!isLoading && prioritizedUsers.length === 0 && users.length > 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+            <div className="px-2 py-4 text-center text-collab-500 text-xs">
               No people match your search
             </div>
           )}
           
           {!isLoading && users.length === 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+            <div className="px-2 py-4 text-center text-collab-500 text-xs">
               No members found
             </div>
           )}

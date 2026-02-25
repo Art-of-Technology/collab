@@ -234,7 +234,7 @@ export async function POST(
     }
 
     // Import the seed function
-    const { seedDefaultPermissions } = await import('@/../../prisma/scripts/seed-default-permissions');
+    const { seedDefaultPermissions } = await import('@prisma/scripts/seed-default-permissions');
 
     // Delete existing permissions for the role
     await (prisma as any).rolePermission.deleteMany({

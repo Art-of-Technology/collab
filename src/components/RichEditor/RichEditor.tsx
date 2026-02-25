@@ -149,10 +149,10 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       attributes: {
         class: cn(
           "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
-          "text-[#e6edf3] prose-headings:text-white prose-strong:text-white",
-          "prose-blockquote:border-l-[#444] prose-blockquote:text-[#9ca3af]",
-          "prose-hr:border-[#333]",
-          "prose-ul:text-[#e6edf3] prose-ol:text-[#e6edf3] prose-li:text-[#e6edf3]",
+          "text-collab-50 prose-headings:text-white prose-strong:text-white",
+          "prose-blockquote:border-l-collab-600 prose-blockquote:text-gray-400",
+          "prose-hr:border-collab-600",
+          "prose-ul:text-collab-50 prose-ol:text-collab-50 prose-li:text-collab-50",
           "prose-a:text-blue-400 prose-a:no-underline hover:prose-a:text-blue-300"
         ),
       },
@@ -978,7 +978,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   return (
     <div className={cn(
       "relative flex flex-col",
-      showToolbar && toolbarMode === 'static' ? "rounded-md border border-[#333] bg-[#0e0e0e]" : "",
+      showToolbar && toolbarMode === 'static' ? "rounded-md border border-collab-600 bg-collab-900" : "",
       className
     )}>
       {/* Static Toolbar */}
@@ -1012,7 +1012,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         {/* Custom Placeholder Overlay */}
         {isEmpty && !readOnly && (
           <div
-            className="absolute pointer-events-none text-[#6e7681] text-sm z-0"
+            className="absolute pointer-events-none text-collab-500 text-sm z-0"
             style={{
               // In static mode, offset by the container's p-2 padding (8px)
               top: toolbarMode === 'static' ? '8px' : '0',
@@ -1028,7 +1028,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         <EditorContent
           editor={editor}
           className={cn(
-            "w-full text-[#e6edf3] bg-transparent border-none outline-none resize-none leading-relaxed focus:ring-0 relative z-10",
+            "w-full text-collab-50 bg-transparent border-none outline-none resize-none leading-relaxed focus:ring-0 relative z-10",
             "focus-within:outline-none"
           )}
           style={{
@@ -1390,7 +1390,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         {/* Floating Selection Menu (only in floating mode) */}
         {toolbarMode === 'floating' && showFloatingMenu && (
           <div
-            className="absolute z-[9998] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
+            className="absolute z-[9998] bg-collab-800 border border-collab-600 rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm"
             style={{
               top: floatingMenuPosition.top,
               left: floatingMenuPosition.left,
@@ -1406,7 +1406,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('bold') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('bold') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleBold().run()}
                   >
@@ -1424,7 +1424,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('italic') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('italic') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleItalic().run()}
                   >
@@ -1442,7 +1442,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('underline') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('underline') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleUnderline().run()}
                   >
@@ -1460,7 +1460,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('strike') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('strike') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleStrike().run()}
                   >
@@ -1478,7 +1478,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('code') ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('code') ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleCode().run()}
                   >
@@ -1489,7 +1489,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
               </Tooltip>
 
               {/* Separator */}
-              <div className="w-px h-6 bg-[#444] mx-1" />
+              <div className="w-px h-6 bg-collab-600 mx-1" />
 
               {/* Headings */}
               <Tooltip>
@@ -1500,7 +1500,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('heading', { level: 1 }) ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
                   >
@@ -1518,7 +1518,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('heading', { level: 2 }) ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
                   >
@@ -1536,7 +1536,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
                     size="icon"
                     className={cn(
                       "h-8 w-8 transition-colors",
-                      editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "hover:bg-[#2a2a2a]"
+                      editor.isActive('heading', { level: 3 }) ? "bg-collab-600 text-white" : "hover:bg-collab-600"
                     )}
                     onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
                   >
@@ -1547,7 +1547,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
               </Tooltip>
 
               {/* Separator */}
-              <div className="w-px h-6 bg-[#444] mx-1" />
+              <div className="w-px h-6 bg-collab-600 mx-1" />
 
               {/* Mention Triggers */}
               <Tooltip>
@@ -1587,7 +1587,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
               </Tooltip>
 
               {/* Separator */}
-              <div className="w-px h-6 bg-[#444] mx-1" />
+              <div className="w-px h-6 bg-collab-600 mx-1" />
 
               {/* AI Improve */}
               {showAiImprove && (

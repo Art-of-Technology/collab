@@ -25,7 +25,7 @@ interface GroupHeaderProps {
 
 function GroupHeader({ title, count, color, icon }: GroupHeaderProps) {
   return (
-    <div className={cn("flex items-center gap-1.5 px-2 py-1.5 mt-3 first:mt-1 border-t border-[#1f1f23]", color)}>
+    <div className={cn("flex items-center gap-1.5 px-2 py-1.5 mt-3 first:mt-1 border-t border-collab-700", color)}>
       {icon}
       <span className="text-[11px] font-medium uppercase tracking-wide">{title}</span>
       <span className="text-[11px] opacity-60">{count}</span>
@@ -44,7 +44,7 @@ interface WeekViewDayCellProps {
 
 export function WeekViewDayCell({ dayActivity, onOpenModal }: WeekViewDayCellProps) {
   if (!dayActivity) {
-    return <div className="text-[12px] text-[#3f3f46] px-3 py-3">—</div>;
+    return <div className="text-[12px] text-collab-500/50 px-3 py-3">—</div>;
   }
 
   const completed = dayActivity.completed || [];
@@ -73,7 +73,7 @@ export function WeekViewDayCell({ dayActivity, onOpenModal }: WeekViewDayCellPro
     uniqueStarted.length + uniqueInProgress.length + uniqueInReview.length + uniqueBlocked.length;
 
   if (totalItems === 0) {
-    return <div className="text-[12px] text-[#3f3f46] px-3 py-3">—</div>;
+    return <div className="text-[12px] text-collab-500/50 px-3 py-3">—</div>;
   }
 
   return (

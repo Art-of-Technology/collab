@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useMemo } from "react";
-import Sidebar from "@/components/layout/Sidebar";
+import SimplifiedSidebar from "@/components/layout/SimplifiedSidebar";
 import RightSidebar from "@/components/layout/RightSidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { ViewFiltersProvider } from "@/context/ViewFiltersContext";
+import { AIProvider } from "@/context/AIContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
-import { useCommandMenu, CommandMenu } from "@/components/ui/command-menu";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { ChatBar } from "@/components/ai/ChatBar";
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
@@ -27,36 +28,33 @@ export default function LayoutWithSidebar({
     isMdUp,
     isCollapsed,
   } = useSidebar();
-  const { open: commandMenuOpen, setOpen: setCommandMenuOpen } = useCommandMenu();
-
   const sidebarLeft = useMemo(() => {
-    if (isMdUp) return "calc(var(--sidebar-width))";
+    if (isMdUp) return "calc(var(--sidebar-width) + 24px)";
     if (isMobileOpen) return "calc(var(--sidebar-open))";
     return "0px";
   }, [isMdUp, isMobileOpen]);
 
   return (
-    <ViewFiltersProvider>
-      <div className="app-layout">
+    <AIProvider>
+      <ViewFiltersProvider>
+        <div className="app-layout">
+        {/* Desktop Sidebar */}
         <div
           className="app-sidebar hidden md:block"
           data-collapsed={isCollapsedDesktop}
         >
           <div className="app-sidebar__content overflow-y-auto">
-            <Sidebar
+            <SimplifiedSidebar
               pathname={pathname}
               isCollapsed={isCollapsedDesktop}
             />
           </div>
         </div>
 
-        {/* Main content + right sidebar */}
+        {/* Main content area */}
         <main className="main-content">
-          {/* Page wrapper */}
-          <div className="p-4 pl-0 h-full w-full">
-            <div className="h-full border border-[#1f1f1f] rounded-lg bg-background overflow-auto">
-              {children}
-            </div>
+          <div className="h-full w-full overflow-auto pb-14">
+            {children}
           </div>
         </main>
 
@@ -71,7 +69,7 @@ export default function LayoutWithSidebar({
           role="dialog"
         >
           <div className="h-full relative overflow-y-auto">
-            <Sidebar
+            <SimplifiedSidebar
               pathname={pathname}
               isCollapsed={false}
             />
@@ -92,8 +90,8 @@ export default function LayoutWithSidebar({
           size="icon"
           onClick={isMdUp ? toggleDesktop : toggleMobile}
           className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px] hidden md:flex
-                        bg-[#090909] border border-[#1f1f1f] hover:bg-[#1a1a1a]
-                        text-gray-400 hover:text-white rounded-r-md rounded-l-none border-l-0 shadow-md transition-all duration-200"
+                        bg-collab-950 border border-collab-700 hover:bg-collab-900
+                        text-collab-500 hover:text-collab-50 rounded-r-md rounded-l-none border-l-0 transition-all duration-200"
           style={{ left: sidebarLeft }}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -106,13 +104,11 @@ export default function LayoutWithSidebar({
       </div>
 
       {/* Mobile Navigation */}
-      <MobileBottomNav onOpenCommandMenu={() => setCommandMenuOpen(true)} />
-      
-      {/* Global Command Menu */}
-      <CommandMenu
-        open={commandMenuOpen}
-        onOpenChange={setCommandMenuOpen}
-      />
-    </ViewFiltersProvider>
+      <MobileBottomNav />
+
+      {/* Persistent AI Chat Bar (unified search + AI) */}
+      <ChatBar />
+      </ViewFiltersProvider>
+    </AIProvider>
   );
 }

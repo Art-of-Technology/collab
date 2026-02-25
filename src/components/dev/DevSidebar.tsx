@@ -86,9 +86,9 @@ export default function DevSidebar({
 
   if (isCollapsed) {
     return (
-      <div className="flex flex-col h-full bg-[#090909]">
+      <div className="flex flex-col h-full bg-collab-950">
         {/* Header - Logo (collapsed) */}
-        <div className="p-2 border-b border-[#1f1f1f]">
+        <div className="p-2 border-b border-collab-700">
           <div className="flex justify-center">
             <Link href="/dev" className="flex items-center">
               <Image src="/logo-icon.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
@@ -104,8 +104,8 @@ export default function DevSidebar({
               variant="ghost"
               size="icon"
               className={cn(
-                "w-full h-10 hover:bg-[#1f1f1f] hover:text-white",
-                item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400"
+                "w-full h-10 hover:bg-collab-700 hover:text-white",
+                item.current ? "bg-collab-700 text-white" : "text-gray-400"
               )}
               asChild
             >
@@ -124,15 +124,15 @@ export default function DevSidebar({
           {/* Admin items */}
           {isSystemAdmin && (
             <>
-              <div className="border-t border-[#1f1f1f] my-2" />
+              <div className="border-t border-collab-700 my-2" />
               {adminItems.map((item) => (
                 <Button
                   key={item.name}
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "w-full h-10 hover:bg-[#1f1f1f] hover:text-white",
-                    item.current ? "bg-[#1f1f1f] text-white" : "text-gray-400"
+                    "w-full h-10 hover:bg-collab-700 hover:text-white",
+                    item.current ? "bg-collab-700 text-white" : "text-gray-400"
                   )}
                   asChild
                 >
@@ -146,11 +146,11 @@ export default function DevSidebar({
         </div>
 
         {/* Footer - Back to Collab */}
-        <div className="p-2 border-t border-[#1f1f1f]">
+        <div className="p-2 border-t border-collab-700">
           <Button
             variant="ghost"
             size="icon"
-            className="w-full h-10 text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+            className="w-full h-10 text-gray-400 hover:text-white hover:bg-collab-700"
             asChild
           >
             <Link href="/" title="Back to Collab">
@@ -163,9 +163,9 @@ export default function DevSidebar({
   }
 
   return (
-    <div className="flex flex-col h-full min-w-0 bg-[#090909]">
+    <div className="flex flex-col h-full min-w-0 bg-collab-950">
       {/* Header - Collab Logo with Developer Console subtitle */}
-      <div className="p-3 border-b border-[#1f1f1f]">
+      <div className="p-3 border-b border-collab-700">
         <Link href="/dev" className="flex flex-col items-start gap-1">
           <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
           <span className="text-xs text-gray-500 font-medium">Developer Console</span>
@@ -177,7 +177,7 @@ export default function DevSidebar({
         <div className="px-2 py-3 space-y-2">
           {/* App Switcher - only show on app detail pages */}
           {pathname.startsWith("/dev/apps/") && pathname !== "/dev/apps" && pathname !== "/dev/apps/new" && (
-            <div className="pb-2 border-b border-[#1f1f1f]">
+            <div className="pb-2 border-b border-collab-700">
               <AppSwitcher />
             </div>
           )}
@@ -191,8 +191,8 @@ export default function DevSidebar({
                 className={cn(
                   "w-full justify-start h-8 px-2 text-sm transition-colors",
                   item.current
-                    ? "bg-[#1f1f1f] text-white"
-                    : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                    ? "bg-collab-700 text-white"
+                    : "text-gray-400 hover:text-white hover:bg-collab-700"
                 )}
                 asChild
               >
@@ -214,7 +214,7 @@ export default function DevSidebar({
           {/* Admin Section - only for SYSTEM_ADMIN */}
           {isSystemAdmin && (
             <>
-              <div className="my-4 border-t border-[#1f1f1f]" />
+              <div className="my-4 border-t border-collab-700" />
               <div className="space-y-0.5">
                 <p className="px-2 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                   Admin
@@ -226,8 +226,8 @@ export default function DevSidebar({
                     className={cn(
                       "w-full justify-start h-8 px-2 text-sm transition-colors",
                       item.current
-                        ? "bg-[#1f1f1f] text-white"
-                        : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                        ? "bg-collab-700 text-white"
+                        : "text-gray-400 hover:text-white hover:bg-collab-700"
                     )}
                     asChild
                   >
@@ -244,7 +244,7 @@ export default function DevSidebar({
           {/* Related Links - only show if there are any */}
           {relatedLinks.length > 0 && (
             <>
-              <div className="my-4 border-t border-[#1f1f1f]" />
+              <div className="my-4 border-t border-collab-700" />
               <div className="space-y-0.5">
                 <p className="px-2 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                   Related
@@ -253,7 +253,7 @@ export default function DevSidebar({
                   <Button
                     key={item.href}
                     variant="ghost"
-                    className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                    className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-collab-700"
                     asChild
                   >
                     <Link href={item.href}>
@@ -269,10 +269,10 @@ export default function DevSidebar({
       </ScrollArea>
 
       {/* Footer - Back to Collab */}
-      <div className="p-2 border-t border-[#1f1f1f]">
+      <div className="p-2 border-t border-collab-700">
         <Button
           variant="ghost"
-          className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+          className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-collab-700"
           asChild
         >
           <Link href="/">

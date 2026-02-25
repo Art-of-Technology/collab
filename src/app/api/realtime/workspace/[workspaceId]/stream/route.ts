@@ -38,19 +38,24 @@ export async function GET(
     const channel = `workspace:${workspaceId}:events`;
     const encoder = new TextEncoder();
 
+    // Track stream state outside the ReadableStream to handle async callbacks
+    let isClosed = false;
+    let pingInterval: NodeJS.Timeout | null = null;
+    let subscriber: any = null;
+    let isRedisConnected = false;
+
     const stream = new ReadableStream<Uint8Array>({
       start: async (controller) => {
         const sendEvent = (data: Record<string, unknown>) => {
+          // Check closed flag first (most reliable)
+          if (isClosed) return;
+
           try {
-            // Ensure controller is still active before sending
-            if (controller.desiredSize === null) {
-              return; // Stream is closed
-            }
             const payload = `data: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(encoder.encode(payload));
           } catch (error) {
-            console.error('Error sending SSE event:', error);
-            // Don't re-throw - just log and continue
+            // Stream is closed, mark it and stop trying
+            isClosed = true;
           }
         };
 
@@ -58,30 +63,36 @@ export async function GET(
         sendEvent({ type: 'connected', channel, timestamp: Date.now() });
 
         // Set up ping interval immediately to keep connection alive
-        const pingInterval = setInterval(() => {
+        pingInterval = setInterval(() => {
+          if (isClosed) {
+            if (pingInterval) clearInterval(pingInterval);
+            return;
+          }
           try {
-            if (controller.desiredSize !== null) {
-              controller.enqueue(encoder.encode(`: ping\n\n`));
-            }
+            controller.enqueue(encoder.encode(`: ping\n\n`));
           } catch {
-            // ignore - connection likely closed
+            isClosed = true;
+            if (pingInterval) clearInterval(pingInterval);
           }
         }, 25000);
 
-        let subscriber: any = null;
-        let isRedisConnected = false;
-
         // Set up Redis subscriber asynchronously to avoid blocking initial response
         const setupRedisSubscriber = async () => {
+          if (isClosed) return;
+
           try {
             // Add timeout for Redis connection (5 seconds max)
             const redisTimeout = setTimeout(() => {
-              console.warn('Redis subscriber setup timed out after 5 seconds');
-              sendEvent({ type: 'realtime.degraded', reason: 'redis_timeout' });
+              if (!isClosed) {
+                console.warn('Redis subscriber setup timed out after 5 seconds');
+                sendEvent({ type: 'realtime.degraded', reason: 'redis_timeout' });
+              }
             }, 5000);
 
             subscriber = await getRedisSubscriber();
             clearTimeout(redisTimeout);
+
+            if (isClosed) return; // Check again after async operation
 
             if (!subscriber) {
               console.warn('Redis subscriber not available, running in degraded mode');
@@ -91,61 +102,80 @@ export async function GET(
 
             // Subscribe to Redis channel
             await subscriber.subscribe(channel, (message: string) => {
+              // Always check if closed before processing
+              if (isClosed) return;
+
               try {
-                // Ensure message is defined and not null
                 if (message && typeof message === 'string') {
                   const parsed = JSON.parse(message);
                   sendEvent(parsed);
                 }
               } catch (parseError) {
-                // Handle parsing errors gracefully
-                if (message) {
+                if (message && !isClosed) {
                   sendEvent({ type: 'message', message: String(message) });
                 }
               }
             });
 
+            if (isClosed) return; // Check again after subscribe
+
             isRedisConnected = true;
             sendEvent({ type: 'realtime.ready', channel });
             console.log(`SSE Redis subscriber connected for workspace ${workspaceId}`);
           } catch (error) {
-            console.error('Error setting up Redis subscriber:', error);
-            sendEvent({ type: 'realtime.error', error: 'Failed to connect to Redis' });
+            if (!isClosed) {
+              console.error('Error setting up Redis subscriber:', error);
+              sendEvent({ type: 'realtime.error', error: 'Failed to connect to Redis' });
+            }
           }
         };
 
         // Start Redis setup asynchronously (don't await)
         setupRedisSubscriber();
 
-        const onClose = async () => {
-          clearInterval(pingInterval);
+        const cleanup = async () => {
+          // Mark as closed immediately to stop all async operations
+          isClosed = true;
+
+          if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+          }
+
           if (subscriber && isRedisConnected) {
             try {
               await subscriber.unsubscribe(channel);
               await subscriber.quit();
               console.log(`SSE Redis subscriber disconnected for workspace ${workspaceId}`);
             } catch (error) {
-              console.error('Error closing Redis subscriber:', error);
+              // Ignore cleanup errors
             }
+            subscriber = null;
+            isRedisConnected = false;
           }
+
           try {
-            if (controller.desiredSize !== null) {
-              controller.close();
-            }
-          } catch {}
+            controller.close();
+          } catch {
+            // Already closed
+          }
         };
 
         // Handle client disconnect
         const signal = request.signal as AbortSignal | undefined;
         if (signal) {
-          signal.addEventListener('abort', onClose);
+          signal.addEventListener('abort', cleanup);
         }
-
-        // Note: ReadableStreamDefaultController doesn't have a settable error property
-        // Error handling is done through try/catch blocks and the cancel callback
       },
       cancel: async () => {
-        // Additional cleanup if needed
+        isClosed = true;
+        if (pingInterval) clearInterval(pingInterval);
+        if (subscriber && isRedisConnected) {
+          try {
+            await subscriber.unsubscribe(channel);
+            await subscriber.quit();
+          } catch {}
+        }
         console.log(`SSE stream cancelled for workspace ${workspaceId}`);
       }
     });

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useAddFeatureComment } from "@/hooks/queries/useFeature";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
@@ -121,15 +121,7 @@ export default function FeatureRequestComments({
               className="p-4 border border-border/50 rounded-lg bg-card/80"
             >
               <div className="flex items-center gap-3 mb-2">
-                <Avatar className="h-8 w-8 border border-border/50">
-                  <AvatarImage
-                    src={comment.author.image || undefined}
-                    alt={comment.author.name || ""}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {comment.author.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={comment.author} size="lg" className="border border-border/50" />
                 <div>
                   <div className="font-medium text-xs sm:text-sm tracking-tight sm:tracking-normal">
                     {comment.author.id === currentUserId ? "You" : comment.author.name}

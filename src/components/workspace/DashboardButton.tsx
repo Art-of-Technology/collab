@@ -33,7 +33,7 @@ export default function DashboardButton({ workspaceId, workspaceSlug }: Dashboar
       variant="outline" 
       size="sm" 
       onClick={handleClick}
-      className="border-[#30363d] text-[#8b949e] hover:bg-[#1a1a1a] hover:text-[#e6edf3]"
+      className="border-collab-600 text-collab-400 hover:bg-collab-800 hover:text-collab-50"
     >
       <Gauge className="mr-1.5 h-3 w-3" />
       View Dashboard

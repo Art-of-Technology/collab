@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface CodeBlockProps {
   code: string;
@@ -37,14 +38,15 @@ export function CodeBlock({ code }: CodeBlockProps) {
   return (
     <div className="relative group">
       <div className="absolute top-2 right-2 z-10">
-        <button
+        <Button
+          variant="ghost"
           onClick={handleCopy}
-          className="text-xs px-2 py-1 bg-[#1f1f1f] text-gray-300 hover:text-white rounded border border-[#2a2a2a] transition-colors"
+          className="text-xs h-auto px-2 py-1 bg-collab-700 text-gray-300 hover:text-white rounded border border-collab-600 hover:bg-collab-600"
         >
           {copied ? 'Copied!' : 'Copy'}
-        </button>
+        </Button>
       </div>
-      <pre className="bg-[#090909] border border-[#1f1f1f] rounded-lg p-4 overflow-x-auto text-sm whitespace-pre-wrap break-words">
+      <pre className="bg-collab-950 border border-collab-700 rounded-lg p-4 overflow-x-auto text-sm whitespace-pre-wrap break-words">
         <code className="text-gray-300">{code}</code>
       </pre>
     </div>

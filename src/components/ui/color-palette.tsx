@@ -116,9 +116,10 @@ export function ColorPalette({ value = "#3b82f6", onChange, disabled = false }: 
             </Label>
             <div className="grid grid-cols-6 gap-2">
               {PRESET_COLORS.map((color) => (
-                <button
+                <Button
                   key={color.value}
-                  className="w-8 h-8 rounded border-2 transition-all hover:scale-110"
+                  variant="ghost"
+                  className="w-8 h-8 p-0 rounded border-2 transition-all hover:scale-110"
                   style={{
                     backgroundColor: color.value,
                     borderColor: customColor === color.rgba ? '#3b82f6' : '#e5e7eb'

@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Search,
   Plus,
@@ -14,7 +12,6 @@ import {
   CheckSquare,
   Tag,
   GitBranch,
-  Loader2,
   BarChart3,
 } from 'lucide-react';
 
@@ -25,6 +22,12 @@ import CreateProjectModal from '@/components/modals/CreateProjectModal';
 import { ProjectArchiveConfirmationModal } from '@/components/ProjectArchiveConfirmationModal';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { PageLayout } from '@/components/ui/page-layout';
+import { PageHeader } from '@/components/ui/page-header';
+import { SearchBar } from '@/components/ui/search-bar';
+import { FilterToggle } from '@/components/ui/filter-toggle';
+import { ShadowListGroup } from '@/components/ui/shadow-list-group';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type ProjectStatusFilter = 'active' | 'archived' | 'all';
 
@@ -73,7 +76,6 @@ export default function ProjectsPageClient() {
   };
 
   const handleProjectClick = (projectSlug: string, projectId: string) => {
-    // Navigate to project dashboard
     router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${projectSlug}`);
   };
 
@@ -102,43 +104,38 @@ export default function ProjectsPageClient() {
     }
   };
 
-  // Calculate project counts
   const projectCounts = {
     active: projects.filter((p: Project) => !p.isArchived).length,
     archived: projects.filter((p: Project) => p.isArchived === true).length,
     all: projects.length
   };
 
+  const filterOptions = [
+    { id: 'active', label: 'Active', count: projectCounts.active, icon: <CheckSquare className="h-3 w-3" /> },
+    { id: 'archived', label: 'Archived', count: projectCounts.archived, icon: <Archive className="h-3 w-3" /> },
+    { id: 'all', label: 'All', count: projectCounts.all, icon: <FolderOpen className="h-3 w-3" /> },
+  ];
+
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#0a0a0b]">
-        <Loader2 className="h-6 w-6 animate-spin text-[#6e7681]" />
+      <div className="h-full w-full flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-collab-700 border-t-collab-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
-      {/* Header */}
-      <div className="flex-none border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <FolderOpen className="h-4 w-4 text-[#a371f7]" />
-            </div>
-            <div>
-              <h1 className="text-sm font-medium text-[#e6edf3]">Projects</h1>
-              <p className="text-xs text-[#6e7681]">
-                {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
+    <PageLayout>
+      <PageHeader
+        title="Projects"
+        subtitle={`${filteredProjects.length} project${filteredProjects.length !== 1 ? 's' : ''}`}
+        actions={
           <div className="flex items-center gap-2">
             <Button
               onClick={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/timeline`)}
               variant="ghost"
               size="sm"
-              className="h-8 px-2 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className="h-9 w-9 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-xl"
               title="View Timeline"
             >
               <BarChart3 className="h-4 w-4" />
@@ -146,75 +143,78 @@ export default function ProjectsPageClient() {
             <Button
               onClick={() => setShowCreateModal(true)}
               size="sm"
-              className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+              className="h-9 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
             >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              <Plus className="h-4 w-4 mr-2" />
               New Project
             </Button>
           </div>
+        }
+      >
+        <div className="flex items-center gap-3">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search projects..."
+          />
+          <FilterToggle
+            options={filterOptions}
+            value={projectFilter}
+            onChange={(id) => setProjectFilter(id as ProjectStatusFilter)}
+          />
         </div>
+      </PageHeader>
 
-        {/* Filters */}
-        <div className="flex items-center gap-3 px-6 pb-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681]" />
-            <Input
-              placeholder="Search projects..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3] placeholder:text-[#6e7681] focus:border-[#30363d]"
-            />
-          </div>
+      {filteredProjects.length > 0 ? (
+        <ShadowListGroup>
+          {filteredProjects.map((project: Project) => (
+            <ShadowListGroup.Item key={project.id} className="!p-0">
+              <ProjectListItem
+                project={project}
+                workspaceSlug={currentWorkspace?.slug || currentWorkspace?.id || ''}
+                onProjectClick={() => handleProjectClick(project.slug, project.id)}
+                onArchive={() => handleArchiveProject(project)}
+                onNavigateToGithub={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/github`)}
+                onNavigateToChangelog={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/changelog`)}
+                onNavigateToSettings={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`)}
+              />
+            </ShadowListGroup.Item>
+          ))}
+        </ShadowListGroup>
+      ) : searchQuery ? (
+        <EmptyState
+          icon={<Search className="h-8 w-8 text-collab-500/60" />}
+          title="No projects found"
+          description="Try different keywords"
+          action={
+            <Button
+              onClick={() => setSearchQuery('')}
+              variant="ghost"
+              size="sm"
+              className="text-collab-400 hover:text-collab-50 hover:bg-collab-700"
+            >
+              Clear search
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          icon={<FolderOpen className="h-8 w-8 text-collab-500/60" />}
+          title="No projects yet"
+          description="Projects help you organize your work into focused areas. Connect GitHub repositories to track releases and generate changelogs."
+          action={
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              size="sm"
+              className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create your first project
+            </Button>
+          }
+        />
+      )}
 
-          <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
-            {(['active', 'archived', 'all'] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setProjectFilter(filter)}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                  projectFilter === filter
-                    ? "bg-[#1f1f1f] text-[#e6edf3]"
-                    : "text-[#6e7681] hover:text-[#8b949e]"
-                )}
-              >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                <span className="ml-1.5 text-[#6e7681]">
-                  {projectCounts[filter]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6">
-          {filteredProjects.length > 0 ? (
-            <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">
-              {filteredProjects.map((project: Project) => (
-                <ProjectListItem
-                  key={project.id}
-                  project={project}
-                  workspaceSlug={currentWorkspace?.slug || currentWorkspace?.id || ''}
-                  onProjectClick={() => handleProjectClick(project.slug, project.id)}
-                  onArchive={() => handleArchiveProject(project)}
-                  onNavigateToGithub={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/github`)}
-                  onNavigateToChangelog={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/changelog`)}
-                  onNavigateToSettings={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`)}
-                />
-              ))}
-            </div>
-          ) : searchQuery ? (
-            <EmptySearch onClear={() => setSearchQuery('')} />
-          ) : (
-            <EmptyState onCreate={() => setShowCreateModal(true)} />
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Modals */}
       {showCreateModal && (
         <CreateProjectModal
           isOpen={showCreateModal}
@@ -233,11 +233,10 @@ export default function ProjectsPageClient() {
         project={archiveModal.project}
         isLoading={archiveProjectMutation.isPending}
       />
-    </div>
+    </PageLayout>
   );
 }
 
-// Project List Item Component
 function ProjectListItem({
   project,
   onProjectClick,
@@ -256,187 +255,141 @@ function ProjectListItem({
 }) {
   const isArchived = project.isArchived === true;
   const hasGitHub = !!project.repository;
+  const projectColor = project.color || '#6366f1';
 
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-4 px-5 py-4 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer",
-        isArchived && "opacity-40"
+        "group relative flex items-center gap-4 px-5 py-4 hover:bg-collab-700/50 transition-all duration-200 cursor-pointer",
+        isArchived && "opacity-50"
       )}
       onClick={onProjectClick}
     >
-      {/* Color indicator */}
       <div
-        className="w-1 h-8 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
-        style={{ backgroundColor: project.color || '#6366f1' }}
+        className="w-1 h-12 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+        style={{ backgroundColor: projectColor }}
       />
 
-      {/* Project Info */}
       <div className="flex-1 min-w-0">
-        {/* Title Row */}
         <div className="flex items-center gap-2.5">
-          <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
+          <h3 className="text-sm font-medium text-collab-50 group-hover:text-white truncate">
             {project.name}
           </h3>
           {project.issuePrefix && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f23] text-[#71717a] font-mono">
+            <span className="text-xs px-2 py-0.5 rounded-lg bg-collab-600 text-collab-500 font-mono flex-shrink-0">
               {project.issuePrefix}
             </span>
           )}
           {isArchived && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#27272a] text-[#a1a1aa] uppercase tracking-wider font-medium">
-              archived
+            <span className="text-xs px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 flex-shrink-0">
+              Archived
+            </span>
+          )}
+          {hasGitHub && (
+            <span className="text-xs px-2 py-0.5 rounded-lg bg-green-500/10 text-green-500 flex-shrink-0 flex items-center gap-1">
+              <GitBranch className="h-3 w-3" />
+              Connected
             </span>
           )}
         </div>
 
-        {/* Description */}
         {project.description && (
-          <p className="text-[12px] text-[#52525b] truncate max-w-[280px] mt-0.5">
+          <p className="text-sm text-collab-500 truncate max-w-[500px] mt-1">
             {project.description}
           </p>
         )}
 
-        {/* Stats Row */}
         <div className="flex items-center gap-3 mt-2">
-          <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
-            <CheckSquare className="h-3 w-3 text-[#3b82f6]" />
+          <div className="flex items-center gap-1.5 text-xs text-collab-500">
+            <CheckSquare className="h-3.5 w-3.5 text-blue-500" />
             <span className="tabular-nums">{project.issueCount || 0}</span>
+            <span className="text-collab-500/60">issues</span>
           </div>
 
           {hasGitHub && project.repository?._count && (
             <>
-              <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
-                <GitBranch className="h-3 w-3 text-[#22c55e]" />
+              <div className="flex items-center gap-1.5 text-xs text-collab-500">
+                <GitBranch className="h-3.5 w-3.5 text-green-500" />
                 <span className="tabular-nums">{project.repository._count.branches}</span>
+                <span className="text-collab-500/60">branches</span>
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
-                <Tag className="h-3 w-3 text-[#a855f7]" />
+              <div className="flex items-center gap-1.5 text-xs text-collab-500">
+                <Tag className="h-3.5 w-3.5 text-violet-500" />
                 <span className="tabular-nums">{project.repository._count.releases}</span>
+                <span className="text-collab-500/60">releases</span>
               </div>
             </>
           )}
 
-          <span className="text-[10px] text-[#3f3f46]">
+          <span className="text-xs text-collab-500/60">
             {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true })}
           </span>
         </div>
       </div>
 
-      {/* Inline Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onProjectClick();
-          }}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
-        >
-          <CheckSquare className="h-3.5 w-3.5" />
-          <span>Issues</span>
-        </button>
-
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation();
             onNavigateToGithub();
           }}
           className={cn(
-            "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium transition-colors",
+            "h-8 px-3 gap-1.5 rounded-lg",
             hasGitHub
-              ? "text-[#a1a1aa] hover:text-white hover:bg-[#27272a]"
-              : "text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#27272a]"
+              ? "text-collab-500 hover:text-collab-50 hover:bg-collab-600"
+              : "text-collab-500/60 hover:text-collab-500 hover:bg-collab-600"
           )}
         >
-          <GitBranch className="h-3.5 w-3.5" />
+          <GitBranch className="h-4 w-4" />
           <span>GitHub</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation();
             onNavigateToChangelog();
           }}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
+          className="h-8 px-3 gap-1.5 rounded-lg text-collab-500 hover:text-collab-50 hover:bg-collab-600"
         >
-          <Tag className="h-3.5 w-3.5" />
+          <Tag className="h-4 w-4" />
           <span>Releases</span>
-        </button>
+        </Button>
 
-        <div className="w-px h-5 bg-[#27272a] mx-1" />
-
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={(e) => {
             e.stopPropagation();
             onNavigateToSettings();
           }}
-          className="flex items-center justify-center h-8 w-8 rounded-lg text-[#71717a] hover:text-white hover:bg-[#27272a] transition-colors"
+          className="h-8 w-8 rounded-lg text-collab-500 hover:text-collab-50 hover:bg-collab-600"
           title="Settings"
         >
           <Settings className="h-4 w-4" />
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={(e) => {
             e.stopPropagation();
             onArchive();
           }}
           className={cn(
-            "flex items-center justify-center h-8 w-8 rounded-lg transition-colors",
+            "h-8 w-8 rounded-lg",
             isArchived
-              ? "text-[#60a5fa] hover:text-[#93c5fd] hover:bg-[#27272a]"
-              : "text-[#71717a] hover:text-[#f97316] hover:bg-[#27272a]"
+              ? "text-green-500 hover:text-green-400 hover:bg-green-500/10"
+              : "text-collab-500 hover:text-orange-500 hover:bg-orange-500/10"
           )}
           title={isArchived ? 'Restore' : 'Archive'}
         >
           <Archive className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
-    </div>
-  );
-}
-
-// Empty Search State
-function EmptySearch({ onClear }: { onClear: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="w-12 h-12 rounded-full bg-[#161617] flex items-center justify-center mb-4">
-        <Search className="h-6 w-6 text-[#6e7681]" />
-      </div>
-      <h3 className="text-sm font-medium text-[#e6edf3] mb-1">No projects found</h3>
-      <p className="text-xs text-[#6e7681] mb-4">Try different keywords</p>
-      <Button
-        onClick={onClear}
-        variant="ghost"
-        size="sm"
-        className="h-8 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617]"
-      >
-        Clear search
-      </Button>
-    </div>
-  );
-}
-
-// Empty State
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="w-16 h-16 rounded-full bg-[#161617] flex items-center justify-center mb-4">
-        <FolderOpen className="h-8 w-8 text-[#6e7681]" />
-      </div>
-      <h3 className="text-sm font-medium text-[#e6edf3] mb-1">No projects yet</h3>
-      <p className="text-xs text-[#6e7681] mb-4 text-center max-w-sm">
-        Projects help you organize your work into focused areas.
-        Connect GitHub repositories to track releases and generate changelogs.
-      </p>
-      <Button
-        onClick={onCreate}
-        size="sm"
-        className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
-      >
-        <Plus className="h-3.5 w-3.5 mr-1.5" />
-        Create your first project
-      </Button>
     </div>
   );
 }

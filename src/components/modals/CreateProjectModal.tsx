@@ -45,22 +45,22 @@ export default function CreateProjectModal({
   workspaceId,
   onProjectCreated
 }: CreateProjectModalProps) {
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     color: DEFAULT_COLORS[0],
     issuePrefix: '',
   });
-  
+
   const [prefixError, setPrefixError] = useState<string | null>(null);
-  
+
   const { toast } = useToast();
   const createProjectMutation = useCreateProject();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: 'Error',
@@ -93,15 +93,15 @@ export default function CreateProjectModal({
         workspaceId,
         projectData
       });
-      
+
       toast({
         title: 'Success',
         description: 'Project created successfully'
       });
-      
+
       onProjectCreated?.(result.project);
       onClose();
-      
+
       // Reset form
       setFormData({
         name: '',
@@ -110,7 +110,7 @@ export default function CreateProjectModal({
         issuePrefix: '',
       });
       setPrefixError(null);
-      
+
     } catch (error) {
       console.error('Error creating project:', error);
       toast({
@@ -126,7 +126,7 @@ export default function CreateProjectModal({
       ...prev,
       [field]: value
     }));
-    
+
     // Clear prefix error when user starts typing
     if (field === 'issuePrefix') {
       setPrefixError(null);
@@ -136,9 +136,9 @@ export default function CreateProjectModal({
   // Generate preview of what the prefix would be (no spaces allowed)
   const generatePreviewPrefix = (projectName: string): string => {
     if (!projectName.trim()) return '';
-    
+
     const baseName = projectName.trim().toUpperCase();
-    
+
     // Try different strategies (remove spaces and special characters)
     const strategies = [
       // Remove spaces and take first 3-4 characters
@@ -148,16 +148,16 @@ export default function CreateProjectModal({
       baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join('').substring(0, 4),
       baseName.split(/[\s-_]+/).map(word => word.charAt(0)).join(''),
     ];
-    
+
     // Return first valid strategy (letters/numbers only, starts with letter)
-    return strategies.find(prefix => 
-      prefix.length >= 2 && 
+    return strategies.find(prefix =>
+      prefix.length >= 2 &&
       /^[A-Z][A-Z0-9]*$/.test(prefix)
     ) || baseName.replace(/[\s-_]+/g, '').substring(0, 3);
   };
 
-  const previewPrefix = !formData.issuePrefix && formData.name 
-    ? generatePreviewPrefix(formData.name) 
+  const previewPrefix = !formData.issuePrefix && formData.name
+    ? generatePreviewPrefix(formData.name)
     : formData.issuePrefix;
 
   const handleClose = () => {
@@ -174,27 +174,27 @@ export default function CreateProjectModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
+      <DialogContent className="max-w-2xl p-0 bg-collab-900 border-collab-700 overflow-hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>Create project</DialogTitle>
         </DialogHeader>
-        
+
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
           <div className="flex items-center gap-2">
-            <div 
+            <div
               className="w-4 h-4 rounded-sm flex items-center justify-center"
               style={{ backgroundColor: formData.color }}
             >
               <FolderOpen className="h-2.5 w-2.5 text-white" />
             </div>
-            <h2 className="text-sm font-medium text-[#e6edf3]">Create project</h2>
+            <h2 className="text-sm font-medium text-collab-50">Create project</h2>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={handleClose}
-            className="h-6 w-6 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+            className="h-6 w-6 text-collab-400 hover:text-collab-50 hover:bg-collab-700"
           >
             <X className="h-3.5 w-3.5" />
           </Button>
@@ -205,33 +205,33 @@ export default function CreateProjectModal({
           {/* Basic Information */}
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-[#e6edf3] mb-1.5">
+              <label className="block text-xs font-medium text-collab-50 mb-1.5">
                 Project name *
               </label>
               <Input
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
                 placeholder="Enter project name..."
-                className="bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] placeholder:text-[#8b949e] focus:border-[#0969da] focus:ring-[#0969da]"
+                className="bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500 focus:border-blue-500 focus:ring-blue-500"
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#e6edf3] mb-1.5">
+              <label className="block text-xs font-medium text-collab-50 mb-1.5">
                 Description (optional)
               </label>
               <Textarea
                 value={formData.description}
                 onChange={(e) => handleInputChange('description', e.target.value)}
                 placeholder="What is this project about?"
-                className="bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] placeholder:text-[#8b949e] focus:border-[#0969da] focus:ring-[#0969da] resize-none"
+                className="bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500 focus:border-blue-500 focus:ring-blue-500 resize-none"
                 rows={3}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#e6edf3] mb-1.5">
+              <label className="block text-xs font-medium text-collab-50 mb-1.5">
                 Issue prefix (optional)
               </label>
               <div className="relative">
@@ -244,13 +244,13 @@ export default function CreateProjectModal({
                   }}
                   placeholder={previewPrefix || "Auto-generated from project name"}
                   className={cn(
-                    "bg-[#0e0e0e] border-[#1a1a1a] text-[#e6edf3] placeholder:text-[#8b949e] focus:border-[#0969da] focus:ring-[#0969da]",
+                    "bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500 focus:border-blue-500 focus:ring-blue-500",
                     prefixError && "border-red-500 focus:border-red-500 focus:ring-red-500"
                   )}
                   maxLength={10}
                 />
                 {previewPrefix && !formData.issuePrefix && !prefixError && (
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-[#666] pointer-events-none">
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-collab-500 pointer-events-none">
                     Preview: {previewPrefix}
                   </div>
                 )}
@@ -260,8 +260,8 @@ export default function CreateProjectModal({
                   {prefixError}
                 </p>
               ) : (
-                <p className="text-xs text-[#8b949e] mt-1">
-                  {previewPrefix && !formData.issuePrefix 
+                <p className="text-xs text-collab-400 mt-1">
+                  {previewPrefix && !formData.issuePrefix
                     ? `Will auto-generate as "${previewPrefix}" (e.g. ${previewPrefix}-1)`
                     : "Used to prefix issue keys (e.g. PROJ-1, TEAM-5). No spaces allowed. Leave empty for automatic generation."
                   }
@@ -270,24 +270,26 @@ export default function CreateProjectModal({
             </div>
           </div>
 
-          <Separator className="bg-[#1a1a1a]" />
+          <Separator className="bg-collab-700" />
 
           {/* Color Selection */}
           <div>
-            <label className="block text-xs font-medium text-[#e6edf3] mb-2">
+            <label className="block text-xs font-medium text-collab-50 mb-2">
               Project color
             </label>
             <div className="flex gap-2">
               {DEFAULT_COLORS.map((color) => (
-                <button
+                <Button
                   key={color}
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => handleInputChange('color', color)}
                   className={cn(
-                    "w-8 h-8 rounded-md border-2 transition-all duration-200",
-                    formData.color === color 
-                      ? "border-[#0969da] scale-110" 
-                      : "border-[#1a1a1a] hover:border-[#333] hover:scale-105"
+                    "w-8 h-8 rounded-md border-2 transition-all duration-200 p-0",
+                    formData.color === color
+                      ? "border-blue-500 scale-110"
+                      : "border-collab-700 hover:border-collab-600 hover:scale-105"
                   )}
                   style={{ backgroundColor: color }}
                 />
@@ -295,22 +297,22 @@ export default function CreateProjectModal({
             </div>
           </div>
 
-          <Separator className="bg-[#1a1a1a]" />
+          <Separator className="bg-collab-700" />
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
+              size={"sm"}
               variant="ghost"
               onClick={handleClose}
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
             >
               Cancel
             </Button>
             <Button
               type="submit"
+              size={"sm"}
               disabled={!formData.name.trim() || createProjectMutation.isPending}
-              className="h-8 px-3 bg-[#0969da] hover:bg-[#0860ca] text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createProjectMutation.isPending ? (
                 <>

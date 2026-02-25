@@ -45,7 +45,7 @@ export default function AdminDashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Total Users</CardTitle>
             <Users className="h-4 w-4 text-gray-500" />
@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Workspaces</CardTitle>
             <Building2 className="h-4 w-4 text-gray-500" />
@@ -71,7 +71,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Published Apps</CardTitle>
             <Puzzle className="h-4 w-4 text-gray-500" />
@@ -81,12 +81,12 @@ export default function AdminDashboardPage() {
               {loading ? '...' : stats?.totalApps || 0}
             </div>
             <p className="text-xs text-gray-500">
-              <span className="text-[#22c55e]">{stats?.systemApps || 0}</span> system apps
+              <span className="text-green-500">{stats?.systemApps || 0}</span> system apps
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">App Installations</CardTitle>
             <Activity className="h-4 w-4 text-gray-500" />
@@ -101,7 +101,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+      <Card className="bg-collab-950 border-collab-700">
         <CardHeader>
           <CardTitle className="text-white">Quick Actions</CardTitle>
           <CardDescription className="text-gray-500">Common administrative tasks</CardDescription>
@@ -110,11 +110,11 @@ export default function AdminDashboardPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Link
               href="/admin/system-apps"
-              className="group flex items-center justify-between p-4 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 hover:border-[#22c55e]/30 transition-all"
+              className="group flex items-center justify-between p-4 rounded-lg border border-collab-700 hover:bg-collab-700/50 hover:border-green-500/30 transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#22c55e]/10 flex items-center justify-center">
-                  <Puzzle className="h-5 w-5 text-[#22c55e]" />
+                <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <Puzzle className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
                   <h3 className="font-medium text-white">Manage System Apps</h3>
@@ -123,16 +123,16 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
-              <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-[#22c55e] transition-colors" />
+              <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-green-500 transition-colors" />
             </Link>
 
             <Link
               href="/dev/manage"
-              className="group flex items-center justify-between p-4 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 hover:border-[#22c55e]/30 transition-all"
+              className="group flex items-center justify-between p-4 rounded-lg border border-collab-700 hover:bg-collab-700/50 hover:border-green-500/30 transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#22c55e]/10 flex items-center justify-center">
-                  <Activity className="h-5 w-5 text-[#22c55e]" />
+                <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <Activity className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
                   <h3 className="font-medium text-white">Review App Submissions</h3>
@@ -141,16 +141,16 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
-              <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-[#22c55e] transition-colors" />
+              <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-green-500 transition-colors" />
             </Link>
 
             <Link
               href="/admin/users"
-              className="group flex items-center justify-between p-4 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 hover:border-[#22c55e]/30 transition-all"
+              className="group flex items-center justify-between p-4 rounded-lg border border-collab-700 hover:bg-collab-700/50 hover:border-green-500/30 transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#22c55e]/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-[#22c55e]" />
+                <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
                   <h3 className="font-medium text-white">User Management</h3>
@@ -159,7 +159,7 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
-              <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-[#22c55e] transition-colors" />
+              <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-green-500 transition-colors" />
             </Link>
           </div>
         </CardContent>
