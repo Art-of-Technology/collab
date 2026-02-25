@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getDefaultAgent } from '@/lib/ai/agents/registry';
-import { getMcpToken, getMcpServerUrl } from '@/lib/ai/mcp-token';
+import { getMcpToken, getMcpServerUrl, invalidateMcpToken } from '@/lib/ai/mcp-token';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = process.env.AI_MODEL || 'claude-sonnet-4-20250514';
@@ -66,6 +66,12 @@ export async function POST(req: Request) {
       );
     }
 
+    // Token refresh callback — invalidates cached/DB tokens and provisions fresh one
+    const refreshMcpToken = async (): Promise<string> => {
+      await invalidateMcpToken(prisma, currentUser.id, workspace.id);
+      return getMcpToken(prisma, currentUser.id, workspace.id);
+    };
+
     // Save user message to conversation
     let convoId = conversationId;
     try {
@@ -128,15 +134,17 @@ export async function POST(req: Request) {
       });
     }
 
-    // Build MCP servers array
+    // Build MCP servers array (mutable — retry logic may update the token)
     const mcpServers = [
       {
-        type: 'url',
+        type: 'url' as const,
         url: `${getMcpServerUrl()}/api/mcp`,
         name: 'collab',
         authorization_token: mcpToken,
       },
     ];
+
+    console.log(`[stream] MCP server: ${mcpServers[0].url}, token: ${mcpToken.slice(0, 20)}...`);
 
     // Create the streaming response
     const stream = createAnthropicStream(
@@ -145,7 +153,8 @@ export async function POST(req: Request) {
       tools,
       mcpServers,
       convoId,
-      agent
+      agent,
+      refreshMcpToken
     );
 
     return new Response(stream, {
@@ -216,9 +225,10 @@ function createAnthropicStream(
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   tools: any[],
-  mcpServers: any[],
+  mcpServers: Array<{ type: string; url: string; name: string; authorization_token: string }>,
   conversationId: string | undefined,
-  agent: { slug: string; name: string; color: string; avatar?: string }
+  agent: { slug: string; name: string; color: string; avatar?: string },
+  refreshMcpToken?: () => Promise<string>
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
@@ -240,8 +250,9 @@ function createAnthropicStream(
         let fullTextContent = '';
         let allMessages = [...messages];
         let continueLoop = true;
+        let mcpRetried = false;
 
-        // Loop to handle pause_turn (Anthropic may pause long-running turns)
+        // Loop to handle pause_turn (Anthropic may pause) and MCP token retry
         while (continueLoop) {
           continueLoop = false;
 
@@ -269,7 +280,24 @@ function createAnthropicStream(
           if (!response.ok) {
             const errorText = await response.text();
             console.error('Anthropic API error:', response.status, errorText);
-            // Include actual error details so we can debug
+
+            // Retry ONCE on MCP-related errors (stale/invalid token)
+            const isMcpError = /mcp|permission|insufficient/i.test(errorText);
+            if (isMcpError && refreshMcpToken && !mcpRetried) {
+              mcpRetried = true;
+              console.log('[stream] MCP auth error detected — refreshing token and retrying...');
+              try {
+                const freshToken = await refreshMcpToken();
+                mcpServers[0].authorization_token = freshToken;
+                console.log(`[stream] Retrying with fresh token: ${freshToken.slice(0, 20)}...`);
+                continueLoop = true;
+                continue;
+              } catch (refreshError) {
+                console.error('[stream] Token refresh failed:', refreshError);
+              }
+            }
+
+            // Send error to client
             let detail = `AI service error (${response.status}).`;
             try {
               const parsed = JSON.parse(errorText);

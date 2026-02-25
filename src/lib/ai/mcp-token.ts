@@ -4,6 +4,11 @@
  * Automatically generates/retrieves MCP access tokens for authenticated users.
  * These tokens are used to authenticate with the Collab MCP server via
  * Anthropic's MCP connector, giving the AI agent access to all workspace tools.
+ *
+ * Resilience: If decryption fails (e.g. APP_TOKENS_KEY rotation), ALL stale
+ * tokens for the user+workspace are batch-revoked and a fresh one is issued.
+ * The stream route can call invalidateMcpToken() to force re-provisioning
+ * when Anthropic reports MCP errors.
  */
 
 import { randomBytes } from 'crypto';
@@ -64,49 +69,110 @@ export async function getMcpToken(
     );
   }
 
-  // 3. Look for existing valid token
-  const existingToken = await prisma.appToken.findFirst({
+  // 3. Find ALL existing non-revoked tokens for this user+workspace+app
+  const existingTokens = await prisma.appToken.findMany({
     where: {
       appId: mcpApp.id,
       userId,
       workspaceId,
-      installationId: null, // System app tokens have no installation
+      installationId: null,
       isRevoked: false,
-      OR: [
-        { tokenExpiresAt: null },
-        { tokenExpiresAt: { gt: new Date() } },
-      ],
     },
     orderBy: { createdAt: 'desc' },
   });
 
-  if (existingToken) {
+  // Try to decrypt the newest token first
+  for (const token of existingTokens) {
     try {
       const decrypted = await decryptToken(
-        Buffer.from(existingToken.accessToken, 'base64')
+        Buffer.from(token.accessToken, 'base64')
       );
+
+      // Check if it hasn't expired
+      if (token.tokenExpiresAt && token.tokenExpiresAt < new Date()) {
+        continue; // expired, skip
+      }
+
       tokenCache.set(cacheKey, {
         token: decrypted,
         expiresAt: Date.now() + CACHE_TTL,
       });
       return decrypted;
     } catch {
-      // Token decryption failed — revoke and create a new one
-      await prisma.appToken.update({
-        where: { id: existingToken.id },
-        data: { isRevoked: true, revokedAt: new Date() },
-      });
+      // Decryption failed (likely key rotation) — continue to next
     }
   }
 
-  // 4. Generate a new token
+  // 4. No valid token found — batch-revoke ALL stale ones
+  if (existingTokens.length > 0) {
+    const staleIds = existingTokens.map((t: any) => t.id);
+    await prisma.appToken.updateMany({
+      where: { id: { in: staleIds } },
+      data: { isRevoked: true, revokedAt: new Date() },
+    });
+    console.log(`[mcp-token] Revoked ${staleIds.length} stale token(s) for user=${userId} workspace=${workspaceId}`);
+  }
+
+  // 5. Generate a fresh token
+  return createFreshToken(prisma, mcpApp.id, userId, workspaceId, cacheKey);
+}
+
+/**
+ * Invalidate the cached MCP token and revoke it in DB.
+ * Call this when Anthropic reports an MCP-related error so the next
+ * getMcpToken() call creates a fresh one.
+ */
+export async function invalidateMcpToken(
+  prisma: any,
+  userId: string,
+  workspaceId: string
+): Promise<void> {
+  const cacheKey = `${userId}:${workspaceId}`;
+  tokenCache.delete(cacheKey);
+
+  const mcpApp = await findMcpApp(prisma);
+  if (!mcpApp) return;
+
+  // Revoke ALL tokens for this user+workspace
+  const result = await prisma.appToken.updateMany({
+    where: {
+      appId: mcpApp.id,
+      userId,
+      workspaceId,
+      installationId: null,
+      isRevoked: false,
+    },
+    data: { isRevoked: true, revokedAt: new Date() },
+  });
+
+  if (result.count > 0) {
+    console.log(`[mcp-token] Invalidated ${result.count} token(s) for user=${userId} workspace=${workspaceId}`);
+  }
+}
+
+/**
+ * Get the MCP server URL for the Anthropic MCP connector.
+ */
+export function getMcpServerUrl(): string {
+  return MCP_SERVER_URL;
+}
+
+// ── Internal helpers ──
+
+async function createFreshToken(
+  prisma: any,
+  appId: string,
+  userId: string,
+  workspaceId: string,
+  cacheKey: string
+): Promise<string> {
   const accessToken = generateAccessToken();
   const encrypted = await encryptToken(accessToken);
   const expiresAt = new Date(Date.now() + 365 * 24 * 3600 * 1000); // 1 year
 
   await prisma.appToken.create({
     data: {
-      appId: mcpApp.id,
+      appId,
       workspaceId,
       userId,
       installationId: null,
@@ -122,14 +188,8 @@ export async function getMcpToken(
     expiresAt: Date.now() + CACHE_TTL,
   });
 
+  console.log(`[mcp-token] Created fresh token for user=${userId} workspace=${workspaceId}`);
   return accessToken;
-}
-
-/**
- * Get the MCP server URL for the Anthropic MCP connector.
- */
-export function getMcpServerUrl(): string {
-  return MCP_SERVER_URL;
 }
 
 // Cache the MCP app lookup
