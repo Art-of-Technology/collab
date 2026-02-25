@@ -119,11 +119,9 @@ export async function POST(req: Request) {
       {
         type: 'mcp_toolset',
         mcp_server_name: 'collab',
-        default_config: {
-          defer_loading: true,
-        },
+        // NOTE: defer_loading removed — it hides ALL tool definitions from Claude
+        // unless a tool_search_tool_* is also present in the tools array.
       },
-    ];
 
     // Add web search if enabled
     if (webSearchEnabled) {
@@ -145,6 +143,7 @@ export async function POST(req: Request) {
     ];
 
     console.log(`[stream] MCP server: ${mcpServers[0].url}, token: ${mcpToken.slice(0, 20)}...`);
+    console.log(`[stream] Tools config:`, JSON.stringify(tools, null, 2));
 
     // Create the streaming response
     const stream = createAnthropicStream(
